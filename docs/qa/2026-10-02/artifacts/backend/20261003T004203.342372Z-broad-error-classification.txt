@@ -1,0 +1,192 @@
+UTC: 2026-10-03T00:42:03.342372+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/backend/20261003T004038.332020Z-broad-ingestion-existing.txt"); text=p.read_text(); start=text.find("==================================== ERRORS"); end=text.find("=================================== FAILURES"); print(text[start:end][:12000]); print("COVERAGE",[(p.name,p.stat().st_size) for p in Path("docs/qa/2026-10-02/artifacts/backend").glob("coverage*.json")])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+==================================== ERRORS ====================================
+_ ERROR collecting services/ingestion/tests/test_ingest_upload_streaming_size.py _
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_ingest_upload_streaming_size.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_ingest_upload_streaming_size.py:20: in <module>
+    from app import routes_ingest
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+______ ERROR collecting services/ingestion/tests/test_kafka_utils_1342.py ______
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_kafka_utils_1342.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_kafka_utils_1342.py:32: in <module>
+    from app import kafka_utils as ku
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_ ERROR collecting services/ingestion/tests/test_routes_regulation_task_queue.py _
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_routes_regulation_task_queue.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_routes_regulation_task_queue.py:20: in <module>
+    import app.routes_ingest as routes_ingest
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_____ ERROR collecting services/ingestion/tests/test_routes_status_1342.py _____
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_routes_status_1342.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_routes_status_1342.py:27: in <module>
+    from app import routes_status as rs
+services/ingestion/app/routes_status.py:23: in <module>
+    from .routes import get_db_manager
+services/ingestion/app/routes.py:26: in <module>
+    from .routes_ingest import (  # noqa: F401
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_________ ERROR at setup of TestValidateUrl.test_https_scheme_allowed __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_http_scheme_allowed __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_ftp_scheme_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_file_scheme_blocked __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_______ ERROR at setup of TestValidateUrl.test_javascript_scheme_blocked _______
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+__________ ERROR at setup of TestValidateUrl.test_data_scheme_blocked __________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+_____ ERROR at setup of TestValidateUrl.test_url_with_credentials_blocked ______
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+____ ERROR at setup of TestValidateUrl.test_url_with_username_only_blocked _____
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+___________ ERROR at setup of TestValidateUrl.test_localhost_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+___________ ERROR at setup of TestValidateUrl.test_127_0_0_1_blocked ___________
+services/ingestion/tests/test_boundaries.py:92: in routes
+    import app.routes_ingest as r
+services/ingestion/app/routes_ingest.py:65: in <module>
+    from .kafka_utils import send
+services/ingestion/app/kafka_utils.py:13: in <module>
+    from shared.observability.kafka_propagation import inject_correlation_headers_tuples
+services/shared/observability/__init__.py:21: in <module>
+    from shared.observability.otel import (  # noqa: F401
+services/shared/observability/otel.py:15: in <module>
+    from opentelemetry.sdk.trace.sampling import TraceIdRatioBased
+E   ModuleNotFoundError: No module named 'opentelemetry.sdk.trace.sampling'; 'opentelemetry.sdk.trace' is not a package
+
+COVERAGE [('coverage-shared-before.json', 50951), ('coverage-ingest-before.json', 38235)]

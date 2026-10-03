@@ -1,0 +1,150 @@
+UTC: 2026-10-03T00:45:52.922047+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import json;root=Path.cwd();base=root/"docs/qa/2026-10-02/artifacts/frontend";raw=json.loads((base/"coverage-node20-final/coverage-summary.json").read_text());after={"total":raw["total"],"files":{str(Path(k).relative_to(root)):v for k,v in raw.items() if k!="total"}};(base/"coverage-node20-after-summary.json").rename(base/"coverage-node20-interim-after-summary.json");(base/"coverage-node20-after-summary.json").write_text(json.dumps(after,indent=2)+"\n");before=json.loads((base/"coverage-node20-before-summary.json").read_text());result={phase:{"total":data["total"],"files":len(data["files"]),"gs1":data["files"]["frontend/src/lib/gs1-parser.ts"]} for phase,data in [("before",before),("after",after)]};result["same_source_set"]=set(before["files"])==set(after["files"]);(base/"coverage-comparison.json").write_text(json.dumps(result,indent=2)+"\n");changed={p:{k:{"before":before["files"][p][k]["covered"],"after":after["files"][p][k]["covered"]} for k in ["lines","statements","functions","branches"] if before["files"][p][k]["covered"]!=after["files"][p][k]["covered"]} for p in before["files"] if before["files"][p]!=after["files"][p]};(base/"coverage-changed-files.json").write_text(json.dumps(changed,indent=2)+"\n");(base/"coverage-node20-final").rename(Path("/private/tmp/regengine-qa-coverage-node20-final-20261003"));print(json.dumps({"comparison":result,"changed":changed},indent=2))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{
+  "comparison": {
+    "before": {
+      "total": {
+        "lines": {
+          "total": 8327,
+          "covered": 5825,
+          "skipped": 0,
+          "pct": 69.95
+        },
+        "statements": {
+          "total": 9184,
+          "covered": 6215,
+          "skipped": 0,
+          "pct": 67.67
+        },
+        "functions": {
+          "total": 2142,
+          "covered": 1285,
+          "skipped": 0,
+          "pct": 59.99
+        },
+        "branches": {
+          "total": 7755,
+          "covered": 4664,
+          "skipped": 0,
+          "pct": 60.14
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "files": 196,
+      "gs1": {
+        "lines": {
+          "total": 96,
+          "covered": 92,
+          "skipped": 0,
+          "pct": 95.83
+        },
+        "functions": {
+          "total": 9,
+          "covered": 8,
+          "skipped": 0,
+          "pct": 88.88
+        },
+        "statements": {
+          "total": 120,
+          "covered": 108,
+          "skipped": 0,
+          "pct": 90
+        },
+        "branches": {
+          "total": 99,
+          "covered": 82,
+          "skipped": 0,
+          "pct": 82.82
+        }
+      }
+    },
+    "after": {
+      "total": {
+        "lines": {
+          "total": 8327,
+          "covered": 5827,
+          "skipped": 0,
+          "pct": 69.97
+        },
+        "statements": {
+          "total": 9184,
+          "covered": 6219,
+          "skipped": 0,
+          "pct": 67.71
+        },
+        "functions": {
+          "total": 2142,
+          "covered": 1285,
+          "skipped": 0,
+          "pct": 59.99
+        },
+        "branches": {
+          "total": 7755,
+          "covered": 4668,
+          "skipped": 0,
+          "pct": 60.19
+        },
+        "branchesTrue": {
+          "total": 0,
+          "covered": 0,
+          "skipped": 0,
+          "pct": 100
+        }
+      },
+      "files": 196,
+      "gs1": {
+        "lines": {
+          "total": 96,
+          "covered": 94,
+          "skipped": 0,
+          "pct": 97.91
+        },
+        "functions": {
+          "total": 9,
+          "covered": 8,
+          "skipped": 0,
+          "pct": 88.88
+        },
+        "statements": {
+          "total": 120,
+          "covered": 112,
+          "skipped": 0,
+          "pct": 93.33
+        },
+        "branches": {
+          "total": 99,
+          "covered": 86,
+          "skipped": 0,
+          "pct": 86.86
+        }
+      }
+    },
+    "same_source_set": true
+  },
+  "changed": {
+    "frontend/src/lib/gs1-parser.ts": {
+      "lines": {
+        "before": 92,
+        "after": 94
+      },
+      "statements": {
+        "before": 108,
+        "after": 112
+      },
+      "branches": {
+        "before": 82,
+        "after": 86
+      }
+    }
+  }
+}

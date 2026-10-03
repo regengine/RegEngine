@@ -1,0 +1,514 @@
+UTC: 2026-10-03T00:37:11.629315+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; paths=["frontend/src/lib/gs1-parser.test.ts","frontend/src/__tests__/supplier-csv.test.ts","frontend/src/lib/supplier-csv.ts","frontend/src/__tests__/lib/safe-redirect.test.ts"]; [(print("FILE",p),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p).read_text().splitlines(),1)))) for p in paths]; print(subprocess.check_output(["rg","-n","parseGS1|isFSMACompatible|safeNextPath","frontend/src","-g","!*.test.*"],text=True))'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+FILE frontend/src/lib/gs1-parser.test.ts
+1: import { describe, it, expect } from 'vitest';
+2: import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+3: 
+4: describe('GS1-128 Parser', () => {
+5:     it('should parse a standard GS1-128 with brackets', () => {
+6:         const raw = "(01)10614141000019(10)TLC-3489";
+7:         const result = parseGS1(raw);
+8:         expect(result.gtin).toBe("10614141000019");
+9:         expect(result.tlc).toBe("TLC-3489");
+10:         expect(result.sourceFormat).toBe("gs1_ai");
+11:         expect(result.isValidGTIN).toBe(true);
+12:     });
+13: 
+14:     it('should parse a literal GS1-128 without brackets', () => {
+15:         const raw = "011061414100001910LOT-BETA-77";
+16:         const result = parseGS1(raw);
+17:         expect(result.gtin).toBe("10614141000019");
+18:         expect(result.tlc).toBe("LOT-BETA-77");
+19:     });
+20: 
+21:     it('should handle barcodes with only GTIN', () => {
+22:         const raw = "0110614141000019";
+23:         const result = parseGS1(raw);
+24:         expect(result.gtin).toBe("10614141000019");
+25:         expect(result.tlc).toBeUndefined();
+26:         expect(result.isValidGTIN).toBe(true);
+27:     });
+28: 
+29:     it('should handle barcodes with only TLC (fallback match)', () => {
+30:         const raw = "10TLC-9999";
+31:         const result = parseGS1(raw);
+32:         expect(result.tlc).toBe("TLC-9999");
+33:     });
+34: 
+35:     it('should parse AI 17 (expiry), AI 13 (pack date), and AI 21 (serial)', () => {
+36:         const raw = "(01)10614141000019(17)260930(13)260801(21)SN-4458";
+37:         const result = parseGS1(raw);
+38: 
+39:         expect(result.gtin).toBe("10614141000019");
+40:         expect(result.expiryDate).toBe("2026-09-30");
+41:         expect(result.packDate).toBe("2026-08-01");
+42:         expect(result.serial).toBe("SN-4458");
+43:     });
+44: 
+45:     it('should parse AI fields separated by GS separator characters', () => {
+46:         const raw = `011061414100001910LOT-99${String.fromCharCode(29)}1726093021SER-9`;
+47:         const result = parseGS1(raw);
+48: 
+49:         expect(result.gtin).toBe("10614141000019");
+50:         expect(result.tlc).toBe("LOT-99");
+51:         expect(result.expiryDate).toBe("2026-09-30");
+52:         expect(result.serial).toBe("SER-9");
+53:     });
+54: 
+55:     it('should parse GS1 Digital Link URLs', () => {
+56:         const raw = "https://id.example.com/01/09506000134352/10/LOT-2026-44/21/SER-778/17/260930";
+57:         const result = parseGS1(raw);
+58: 
+59:         expect(result.sourceFormat).toBe("digital_link");
+60:         expect(result.gtin).toBe("09506000134352");
+61:         expect(result.tlc).toBe("LOT-2026-44");
+62:         expect(result.serial).toBe("SER-778");
+63:         expect(result.expiryDate).toBe("2026-09-30");
+64:         expect(result.isValidGTIN).toBe(true);
+65:     });
+66: 
+67:     it('should parse GS1 Digital Link path-only payloads', () => {
+68:         const raw = "/01/09506000134352/10/LOT%2FALPHA/21/SN-001";
+69:         const result = parseGS1(raw);
+70: 
+71:         expect(result.sourceFormat).toBe("digital_link");
+72:         expect(result.gtin).toBe("09506000134352");
+73:         expect(result.tlc).toBe("LOT/ALPHA");
+74:         expect(result.serial).toBe("SN-001");
+75:     });
+76: });
+77: 
+78: describe('GTIN check digit validation', () => {
+79:     it('accepts valid GTIN-14 values', () => {
+80:         expect(isValidGTINCheckDigit("09506000134352")).toBe(true);
+81:         expect(isValidGTINCheckDigit("10614141000019")).toBe(true);
+82:     });
+83: 
+84:     it('rejects invalid GTIN-14 values', () => {
+85:         expect(isValidGTINCheckDigit("09506000134359")).toBe(false);
+86:         expect(isValidGTINCheckDigit("10614141000011")).toBe(false);
+87:         expect(isValidGTINCheckDigit("ABC9506000134352")).toBe(false);
+88:     });
+89: });
+FILE frontend/src/__tests__/supplier-csv.test.ts
+1: import { describe, expect, it } from 'vitest';
+2: import { parseCSVLocally, parseCSVRecords, validateCSVLocally } from '@/lib/supplier-csv';
+3: 
+4: describe('supplier CSV local checks', () => {
+5:   it('shares complete CSV records across preview and validation', () => {
+6:     const csv = '\uFEFFevent_type,product_name,lot_number\r\nshipping,"Lettuce, \"\"green\"\"\r\norganic",LOT-1\r\n\r\n';
+7:     const preview = parseCSVLocally(csv);
+8:     const validation = validateCSVLocally(csv);
+9:     expect(preview.totalRows).toBe(1);
+10:     expect(preview.sampleRows[0]).toEqual(['shipping', 'Lettuce, "green"\r\norganic', 'LOT-1']);
+11:     expect(validation.productNames).toEqual(preview.productNames);
+12:     expect(validation.canProceed).toBe(true);
+13:     expect(validation.eventTypeCounts).toEqual({ Shipping: 1 });
+14:   });
+15: 
+16:   it.each(['"unclosed', 'a"b', '"a"x', 'R,lettuce'])('rejects malformed CSV %s', row => {
+17:     expect(() => parseCSVRecords(`event_type,product_name,lot_number\n${row}`)).toThrow();
+18:   });
+19: 
+20:   it.each(['event_type,event_type,lot_number', 'event_type,cte_type,lot_number', 'event_type,,lot_number'])('rejects ambiguous headers %s', header => {
+21:     expect(() => parseCSVRecords(`${header}\nR,Lettuce,LOT-1`)).toThrow();
+22:   });
+23: 
+24:   it.each(['shipping', 'S', 's', 'receiving', 'transformation', 'first_land_based_receiving', 'first_receiver', 'packing', 'distribution'])('accepts backend vocabulary %s and canonical headers', event => {
+25:     expect(validateCSVLocally(`cte_type,product_name,tlc_code\n${event},Lettuce,LOT-1`).canProceed).toBe(true);
+26:   });
+27: 
+28:   it('combines alias and full-name preview counts', () => {
+29:     expect(parseCSVLocally('event_type,product_name,lot_number\ns,Lettuce,L1\nshipping,Lettuce,L2').eventTypeCounts).toEqual({ Shipping: 2 });
+30:   });
+31: 
+32:   it.each(['made_up', '__proto__', 'constructor', 'toString'])('rejects unknown event type %s safely', event => {
+33:     const csv = `event_type,product_name,lot_number\n${event},Lettuce,L1`;
+34:     expect(validateCSVLocally(csv).canProceed).toBe(false);
+35:     expect(parseCSVLocally(csv).totalRows).toBe(1);
+36:   });
+37: 
+38:   it.each(['R,,L1', 'R,Lettuce,', ',Lettuce,L1'])('rejects empty required cells %s even beyond issue display cap', row => {
+39:     const csv = ['event_type,product_name,lot_number', ...Array(22).fill('R,Lettuce,L1'), row].join('\n');
+40:     expect(validateCSVLocally(csv).canProceed).toBe(false);
+41:   });
+42: 
+43:   it('rejects files without data', () => {
+44:     expect(validateCSVLocally('event_type,product_name,lot_number\r\n\r\n').canProceed).toBe(false);
+45:   });
+46: });
+47: 
+48: it.each(['D', 'd', 'depletion', 'distribution'])('previews and validates legacy shipping alias %s consistently', event => {
+49:   const csv = `event_type,product_name,lot_number\n${event},Lettuce,L1`;
+50:   expect(parseCSVLocally(csv).eventTypeCounts).toEqual({ Shipping: 1 });
+51:   const validation = validateCSVLocally(csv);
+52:   expect(validation.eventTypeCounts).toEqual({ Shipping: 1 });
+53:   expect(validation.canProceed).toBe(true);
+54: });
+FILE frontend/src/lib/supplier-csv.ts
+1: /* ── FSMA 204 client-side validation (no auth required) ── */
+2: 
+3: const EVENT_TYPE_LABELS: Record<string, string> = {
+4:   receiving: 'Receiving', shipping: 'Shipping', transforming: 'Transforming',
+5:   cooling: 'Cooling', initial_packing: 'Initial Packing', harvesting: 'Harvesting', first_receiver: 'First Receiver',
+6: };
+7: // Keep aligned with admin bulk_upload.validators.normalize_cte_type.
+8: const EVENT_ALIASES: Record<string, string> = {
+9:   r: 'receiving', s: 'shipping', d: 'shipping', depletion: 'shipping', t: 'transforming', c: 'cooling', p: 'initial_packing', h: 'harvesting',
+10:   transformation: 'transforming', first_land_based_receiving: 'first_receiver',
+11:   harvest: 'harvesting', packing: 'initial_packing', pack: 'initial_packing', receive: 'receiving',
+12:   ship: 'shipping', transform: 'transforming', cool: 'cooling', creation: 'initial_packing', holding: 'receiving',
+13:   distribute: 'shipping', distribution: 'shipping', di: 'shipping', process: 'transforming', processing: 'transforming',
+14: };
+15: const eventType = (value: string) => {
+16:   const normalized = value.trim().toLowerCase();
+17:   return Object.hasOwn(EVENT_ALIASES, normalized) ? EVENT_ALIASES[normalized] : normalized;
+18: };
+19: const columnName = (value: string) => {
+20:   const normalized = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+21:   const aliases: Record<string, string> = { cte_type: 'event_type', tlc_code: 'lot_number', traceability_lot_code: 'lot_number', lot_code: 'lot_number', tlc: 'lot_number', event_time: 'event_datetime', event_date: 'event_datetime', timestamp: 'event_datetime', cte_date: 'event_datetime' };
+22:   return Object.hasOwn(aliases, normalized) ? aliases[normalized] : normalized;
+23: };
+24: 
+25: /** Parse complete CSV records before interpreting columns. Reject ambiguous malformed input. */
+26: export function parseCSVRecords(text: string): string[][] {
+27:   const rows: string[][] = [];
+28:   let row: string[] = [], cell = '', quoted = false, closed = false;
+29:   const finishCell = () => { row.push(cell.trim()); cell = ''; closed = false; };
+30:   const finishRow = () => { finishCell(); if (row.some(value => value !== '')) rows.push(row); row = []; };
+31:   text = text.replace(/^\uFEFF/, '');
+32:   for (let i = 0; i < text.length; i++) {
+33:     const char = text[i];
+34:     if (quoted) {
+35:       if (char === '"') {
+36:         if (text[i + 1] === '"') { cell += '"'; i++; }
+37:         else { quoted = false; closed = true; }
+38:       } else { cell += char; }
+39:     } else if (char === ',') { finishCell(); }
+40:     else if (char === '\r' || char === '\n') {
+41:       finishRow(); if (char === '\r' && text[i + 1] === '\n') i++;
+42:     } else if (char === '"') {
+43:       if (cell || closed) throw new Error('Invalid quote in CSV field.');
+44:       quoted = true;
+45:     } else {
+46:       if (closed) throw new Error('Unexpected text after a quoted CSV field.');
+47:       cell += char;
+48:     }
+49:   }
+50:   if (quoted) throw new Error('Unclosed quoted CSV field.');
+51:   if (cell || row.length || closed) finishRow();
+52:   if (rows.length) {
+53:     const headers = rows[0].map(columnName);
+54:     if (headers.some(header => !header) || new Set(headers).size !== headers.length) throw new Error('CSV headers must be non-empty and unique, including column aliases.');
+55:     for (let i = 1; i < rows.length; i++) {
+56:       if (rows[i].length !== headers.length) throw new Error(`CSV record ${i + 1} has ${rows[i].length} fields; expected ${headers.length}.`);
+57:     }
+58:   }
+59:   return rows;
+60: }
+61: 
+62: const REQUIRED_COLUMNS = [
+63:   'event_type', 'product_name', 'lot_number',
+64: ];
+65: const RECOMMENDED_COLUMNS = [
+66:   'event_datetime', 'product_code', 'quantity', 'unit',
+67:   'origin_facility_code', 'origin_facility_name',
+68:   'destination_facility_code', 'destination_facility_name',
+69: ];
+70: 
+71: interface ValidationIssue {
+72:   severity: 'error' | 'warning';
+73:   row?: number;
+74:   column?: string;
+75:   message: string;
+76: }
+77: 
+78: export interface ClientValidationResult {
+79:   totalRows: number;
+80:   columnsFound: string[];
+81:   requiredColumnsPresent: string[];
+82:   requiredColumnsMissing: string[];
+83:   recommendedColumnsPresent: string[];
+84:   recommendedColumnsMissing: string[];
+85:   eventTypeCounts: Record<string, number>;
+86:   invalidEventTypes: { row: number; value: string }[];
+87:   issues: ValidationIssue[];
+88:   completenessScore: number; // 0-100
+89:   canProceed: boolean; // true if no errors (warnings ok)
+90:   productNames: string[];
+91:   lotNumbers: string[];
+92:   facilityNames: string[];
+93:   dateRange: { earliest: string | null; latest: string | null };
+94: }
+95: 
+96: export function validateCSVLocally(text: string): ClientValidationResult {
+97:   const lines = parseCSVRecords(text);
+98:   const result: ClientValidationResult = {
+99:     totalRows: 0, columnsFound: [], requiredColumnsPresent: [], requiredColumnsMissing: [],
+100:     recommendedColumnsPresent: [], recommendedColumnsMissing: [], eventTypeCounts: {},
+101:     invalidEventTypes: [], issues: [], completenessScore: 0, canProceed: true,
+102:     productNames: [], lotNumbers: [], facilityNames: [], dateRange: { earliest: null, latest: null },
+103:   };
+104: 
+105:   if (lines.length < 2) {
+106:     result.issues.push({ severity: 'error', message: 'File contains no data rows.' });
+107:     result.canProceed = false;
+108:     return result;
+109:   }
+110: 
+111:   const columns = lines[0].map(columnName);
+112:   result.columnsFound = lines[0];
+113:   const dataLines = lines.slice(1);
+114:   result.totalRows = dataLines.length;
+115: 
+116:   // Column presence checks
+117:   for (const req of REQUIRED_COLUMNS) {
+118:     if (columns.includes(req)) { result.requiredColumnsPresent.push(req); }
+119:     else { result.requiredColumnsMissing.push(req); result.issues.push({ severity: 'error', column: req, message: `Required FSMA 204 column "${req}" is missing.` }); }
+120:   }
+121:   for (const rec of RECOMMENDED_COLUMNS) {
+122:     if (columns.includes(rec)) { result.recommendedColumnsPresent.push(rec); }
+123:     else { result.recommendedColumnsMissing.push(rec); result.issues.push({ severity: 'warning', column: rec, message: `Recommended column "${rec}" not found. Data may be incomplete for full FSMA 204 compliance.` }); }
+124:   }
+125: 
+126:   // Index lookups
+127:   const idx = (name: string) => columns.indexOf(name);
+128:   const eventTypeIdx = idx('event_type');
+129:   const productNameIdx = idx('product_name');
+130:   const lotIdx = idx('lot_number');
+131:   const datetimeIdx = idx('event_datetime');
+132:   const origFacIdx = idx('origin_facility_name');
+133:   const destFacIdx = idx('destination_facility_name');
+134:   const qtyIdx = idx('quantity');
+135: 
+136:   const productSet = new Set<string>();
+137:   const lotSet = new Set<string>();
+138:   const facSet = new Set<string>();
+139:   const dates: string[] = [];
+140:   let emptyRequiredCells = 0;
+141:   let totalRequiredCells = 0;
+142: 
+143:   for (let i = 0; i < dataLines.length; i++) {
+144:     const cells = dataLines[i];
+145:     const rowNum = i + 2; // 1-indexed, header is row 1
+146: 
+147:     // Event type validation
+148:     if (eventTypeIdx >= 0) {
+149:       const et = cells[eventTypeIdx]?.trim();
+150:       totalRequiredCells++;
+151:       if (!et) {
+152:         emptyRequiredCells++;
+153:         if (i < 20) result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: 'Empty event_type.' });
+154:       } else if (!Object.hasOwn(EVENT_TYPE_LABELS, eventType(et))) {
+155:         result.invalidEventTypes.push({ row: rowNum, value: et });
+156:         if (result.invalidEventTypes.length <= 10) {
+157:           result.issues.push({ severity: 'error', row: rowNum, column: 'event_type', message: `Invalid event type "${et}". Expected a supported event name or code: R, S, T, C, D (shipping), P, H, first_receiver.` });
+158:         }
+159:       } else {
+160:         const label = EVENT_TYPE_LABELS[eventType(et)] || et;
+161:         result.eventTypeCounts[label] = (result.eventTypeCounts[label] || 0) + 1;
+162:       }
+163:     }
+164: 
+165:     // Product name
+166:     if (productNameIdx >= 0) {
+167:       totalRequiredCells++;
+168:       const val = cells[productNameIdx]?.trim();
+169:       if (!val) { emptyRequiredCells++; }
+170:       else { productSet.add(val); }
+171:     }
+172: 
+173:     // Lot number
+174:     if (lotIdx >= 0) {
+175:       totalRequiredCells++;
+176:       const val = cells[lotIdx]?.trim();
+177:       if (!val) { emptyRequiredCells++; }
+178:       else { lotSet.add(val); }
+179:     }
+180: 
+181:     // Datetime
+182:     if (datetimeIdx >= 0) {
+183:       const val = cells[datetimeIdx]?.trim();
+184:       if (val) dates.push(val);
+185:     }
+186: 
+187:     // Facilities
+188:     if (origFacIdx >= 0) { const v = cells[origFacIdx]?.trim(); if (v) facSet.add(v); }
+189:     if (destFacIdx >= 0) { const v = cells[destFacIdx]?.trim(); if (v) facSet.add(v); }
+190: 
+191:     // Quantity should be numeric
+192:     if (qtyIdx >= 0) {
+193:       const val = cells[qtyIdx]?.trim();
+194:       if (val && isNaN(Number(val))) {
+195:         if (i < 10) result.issues.push({ severity: 'warning', row: rowNum, column: 'quantity', message: `Non-numeric quantity "${val}".` });
+196:       }
+197:     }
+198:   }
+199: 
+200:   if (emptyRequiredCells > 0) result.issues.push({ severity: 'error', message: `${emptyRequiredCells} required cells are empty.` });
+201: 
+202:   // Summary stats
+203:   result.productNames = Array.from(productSet).slice(0, 15);
+204:   result.lotNumbers = Array.from(lotSet).slice(0, 15);
+205:   result.facilityNames = Array.from(facSet).slice(0, 15);
+206: 
+207:   if (dates.length > 0) {
+208:     dates.sort();
+209:     result.dateRange = { earliest: dates[0], latest: dates[dates.length - 1] };
+210:   }
+211: 
+212:   // Truncation notices
+213:   if (result.invalidEventTypes.length > 10) {
+214:     result.issues.push({ severity: 'error', message: `${result.invalidEventTypes.length - 10} additional invalid event_type rows not shown.` });
+215:   }
+216: 
+217:   // Completeness score
+218:   const colScore = (result.requiredColumnsPresent.length / Math.max(REQUIRED_COLUMNS.length, 1)) * 40;
+219:   const recColScore = (result.recommendedColumnsPresent.length / Math.max(RECOMMENDED_COLUMNS.length, 1)) * 20;
+220:   const cellScore = totalRequiredCells > 0 ? ((totalRequiredCells - emptyRequiredCells) / totalRequiredCells) * 30 : 30;
+221:   const eventScore = result.invalidEventTypes.length === 0 ? 10 : Math.max(0, 10 - result.invalidEventTypes.length);
+222:   result.completenessScore = Math.round(colScore + recColScore + cellScore + eventScore);
+223: 
+224:   // Can proceed if no errors
+225:   result.canProceed = !result.issues.some(i => i.severity === 'error');
+226: 
+227:   return result;
+228: }
+229: 
+230: /* ── Client-side CSV preview (no auth required) ── */
+231: export interface CsvPreview {
+232:   totalRows: number;
+233:   columns: string[];
+234:   sampleRows: string[][];
+235:   eventTypeCounts: Record<string, number>;
+236:   productNames: string[];
+237:   lotNumbers: string[];
+238: }
+239: 
+240: export function parseCSVLocally(text: string): CsvPreview {
+241:   const lines = parseCSVRecords(text);
+242:   if (lines.length < 2) return { totalRows: 0, columns: [], sampleRows: [], eventTypeCounts: {}, productNames: [], lotNumbers: [] };
+243: 
+244:   const columns = lines[0];
+245:   const dataLines = lines.slice(1);
+246: 
+247:   const eventTypeIdx = columns.findIndex(c => columnName(c) === 'event_type');
+248:   const productIdx = columns.findIndex(c => columnName(c) === 'product_name');
+249:   const lotIdx = columns.findIndex(c => columnName(c) === 'lot_number');
+250: 
+251:   const eventTypeCounts: Record<string, number> = Object.create(null);
+252:   const productSet = new Set<string>();
+253:   const lotSet = new Set<string>();
+254: 
+255:   const sampleRows: string[][] = [];
+256: 
+257:   for (let i = 0; i < dataLines.length; i++) {
+258:     const cells = dataLines[i];
+259:     if (i < 5) sampleRows.push(cells);
+260: 
+261:     if (eventTypeIdx >= 0 && cells[eventTypeIdx]) {
+262:       const et = eventType(cells[eventTypeIdx]);
+263:       eventTypeCounts[et] = (eventTypeCounts[et] || 0) + 1;
+264:     }
+265:     if (productIdx >= 0 && cells[productIdx]) productSet.add(cells[productIdx]);
+266:     if (lotIdx >= 0 && cells[lotIdx]) lotSet.add(cells[lotIdx]);
+267:   }
+268: 
+269:   const mappedCounts: Record<string, number> = Object.create(null);
+270:   for (const [k, v] of Object.entries(eventTypeCounts)) {
+271:     mappedCounts[Object.hasOwn(EVENT_TYPE_LABELS, k) ? EVENT_TYPE_LABELS[k] : k] = v;
+272:   }
+273: 
+274:   return {
+275:     totalRows: dataLines.length,
+276:     columns,
+277:     sampleRows,
+278:     eventTypeCounts: mappedCounts,
+279:     productNames: Array.from(productSet).slice(0, 10),
+280:     lotNumbers: Array.from(lotSet).slice(0, 10),
+281:   };
+282: }
+FILE frontend/src/__tests__/lib/safe-redirect.test.ts
+1: /**
+2:  * Tests for safeNextPath — the `next` query-param validator used by
+3:  * relative-redirect call sites.
+4:  *
+5:  * Closes RE-FE-AUDIT-002 / OQ-2 (next-param redirect hygiene).
+6:  */
+7: import { describe, it, expect } from 'vitest';
+8: import { safeNextPath } from '@/lib/safe-redirect';
+9: 
+10: const FALLBACK = '/dashboard';
+11: 
+12: describe('safeNextPath', () => {
+13:     describe('accepts clean same-app paths', () => {
+14:         it.each([
+15:             '/dashboard',
+16:             '/foo/bar',
+17:             '/foo/bar?x=y&z=1',
+18:             '/foo#anchor',
+19:             '/developer/portal',
+20:             '/'.padEnd(256, 'a'), // exactly 256 chars — boundary
+21:         ])('returns input for %s', (input) => {
+22:             expect(safeNextPath(input, FALLBACK)).toBe(input);
+23:         });
+24:     });
+25: 
+26:     describe('rejects empty / nullish inputs', () => {
+27:         it('returns fallback for null', () => {
+28:             expect(safeNextPath(null, FALLBACK)).toBe(FALLBACK);
+29:         });
+30:         it('returns fallback for undefined', () => {
+31:             expect(safeNextPath(undefined, FALLBACK)).toBe(FALLBACK);
+32:         });
+33:         it('returns fallback for empty string', () => {
+34:             expect(safeNextPath('', FALLBACK)).toBe(FALLBACK);
+35:         });
+36:     });
+37: 
+38:     describe('rejects open-redirect bypass attempts', () => {
+39:         it.each([
+40:             ['protocol-relative //evil.com', '//evil.com'],
+41:             ['protocol-relative with path', '//evil.com/path'],
+42:             ['absolute https URL', 'https://evil.com'],
+43:             ['absolute http URL', 'http://evil.com'],
+44:             ['javascript: scheme', 'javascript:alert(1)'],
+45:             ['data: scheme', 'data:text/html,<script>alert(1)</script>'],
+46:             ['backslash double', '\\\\evil.com'],
+47:             ['embedded backslash', '/foo\\bar'],
+48:             ['relative path no leading slash', 'relative-path'],
+49:             ['leading dot-dot', '../etc/passwd'],
+50:         ])('returns fallback for %s', (_label, input) => {
+51:             expect(safeNextPath(input, FALLBACK)).toBe(FALLBACK);
+52:         });
+53:     });
+54: 
+55:     describe('length cap (defense in depth)', () => {
+56:         it('returns fallback for a 257-char path', () => {
+57:             const tooLong = '/' + 'a'.repeat(256);
+58:             expect(tooLong.length).toBe(257);
+59:             expect(safeNextPath(tooLong, FALLBACK)).toBe(FALLBACK);
+60:         });
+61:     });
+62: });
+frontend/src/lib/gs1-parser.ts:140:export function parseGS1(raw: string): GS1ParsedData {
+frontend/src/lib/gs1-parser.ts:199:export function isFSMACompatible(data: GS1ParsedData): boolean {
+frontend/src/lib/scan-match.ts:5: * upstream by parseGS1) or as a bare GTIN / lot code typed by hand — the
+frontend/src/lib/scan-match.ts:12:    /** GTIN extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/lib/scan-match.ts:14:    /** Lot/TLC extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/components/mobile/FieldCaptureClient.tsx:39:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/components/mobile/FieldCaptureClient.tsx:73:    parsed: ReturnType<typeof parseGS1>,
+frontend/src/components/mobile/FieldCaptureClient.tsx:192:        const parsed = parseGS1(rawScan);
+frontend/src/lib/safe-redirect.ts:15:export function safeNextPath(next: string | null | undefined, fallback: string): string {
+frontend/src/app/tools/scan/page.tsx:8:import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:30:    const result = parseGS1(barcode);
+frontend/src/app/tools/scan/page.tsx:89:  const isCompatible = parsed ? isFSMACompatible(parsed) : false;
+frontend/src/app/dashboard/receiving/page.tsx:30:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/app/dashboard/receiving/page.tsx:158:        const parsed = parseGS1(raw);
+frontend/src/app/dashboard/receiving/page.tsx:161:        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+

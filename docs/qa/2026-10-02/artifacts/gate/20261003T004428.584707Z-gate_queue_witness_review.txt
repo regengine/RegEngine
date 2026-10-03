@@ -1,0 +1,202 @@
+UTC: 2026-10-03T00:44:28.584707+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=list(Path("frontend/src").rglob("*useSync.test.tsx")); [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(p.read_text().splitlines(),1) if 1<=i<=235))) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/__tests__/hooks/useSync.test.tsx
+1: import { beforeEach, describe, expect, it, vi } from 'vitest';
+2: import { act, renderHook, waitFor } from '@testing-library/react';
+3: 
+4: const fetchWithCsrfMock = vi.hoisted(() => vi.fn());
+5: const mockUseAuth = vi.hoisted(() => vi.fn());
+6: const mockToast = vi.hoisted(() => vi.fn());
+7: const mockMutateAsync = vi.hoisted(() => vi.fn());
+8: const dbMocks = vi.hoisted(() => ({
+9:     markScanSynced: vi.fn(),
+10:     markPhotoSynced: vi.fn(),
+11:     markScanSyncFailed: vi.fn(),
+12:     markPhotoSyncFailed: vi.fn(),
+13:     getPendingUploads: vi.fn(),
+14:     cleanupOfflineRecords: vi.fn(),
+15: }));
+16: 
+17: vi.mock('@/lib/fetch-with-csrf', () => ({
+18:     fetchWithCsrf: (...args: any[]) => fetchWithCsrfMock(...args),
+19: }));
+20: 
+21: vi.mock('@/lib/auth-context', () => ({
+22:     useAuth: () => mockUseAuth(),
+23: }));
+24: 
+25: vi.mock('@/components/ui/use-toast', () => ({
+26:     useToast: () => ({ toast: mockToast }),
+27: }));
+28: 
+29: vi.mock('@/hooks/use-api', () => ({
+30:     useIngestFile: () => ({
+31:         mutateAsync: (...args: any[]) => mockMutateAsync(...args),
+32:     }),
+33: }));
+34: 
+35: vi.mock('@/lib/db', () => ({
+36:     markScanSynced: (...args: any[]) => dbMocks.markScanSynced(...args),
+37:     markPhotoSynced: (...args: any[]) => dbMocks.markPhotoSynced(...args),
+38:     markScanSyncFailed: (...args: any[]) => dbMocks.markScanSyncFailed(...args),
+39:     markPhotoSyncFailed: (...args: any[]) => dbMocks.markPhotoSyncFailed(...args),
+40:     getPendingUploads: (...args: any[]) => dbMocks.getPendingUploads(...args),
+41:     cleanupOfflineRecords: (...args: any[]) => dbMocks.cleanupOfflineRecords(...args),
+42: }));
+43: 
+44: vi.mock('@/lib/api-config', () => ({
+45:     getServiceURL: () => '/api/ingestion',
+46: }));
+47: 
+48: import { useSync } from '@/hooks/use-sync';
+49: 
+50: function setOnlineState(isOnline: boolean) {
+51:     Object.defineProperty(window.navigator, 'onLine', {
+52:         configurable: true,
+53:         value: isOnline,
+54:     });
+55: }
+56: 
+57: describe('useSync', () => {
+58:     beforeEach(() => {
+59:         vi.clearAllMocks();
+60:         setOnlineState(false);
+61:         mockUseAuth.mockReturnValue({
+62:             isAuthenticated: true,
+63:             tenantId: 'tenant-123',
+64:         });
+65:         dbMocks.cleanupOfflineRecords.mockResolvedValue(undefined);
+66:         dbMocks.markScanSynced.mockResolvedValue(undefined);
+67:         dbMocks.markPhotoSynced.mockResolvedValue(undefined);
+68:         dbMocks.markScanSyncFailed.mockResolvedValue(undefined);
+69:         dbMocks.markPhotoSyncFailed.mockResolvedValue(undefined);
+70:         dbMocks.getPendingUploads.mockResolvedValue({
+71:             scans: [],
+72:             photos: [],
+73:         });
+74:         fetchWithCsrfMock.mockResolvedValue({
+75:             ok: true,
+76:         });
+77:         mockMutateAsync.mockResolvedValue({ job_id: 'job-123' });
+78:     });
+79: 
+80:     it('replays pending scans through the cookie-backed ingest proxy without browser auth headers', async () => {
+81:         dbMocks.getPendingUploads.mockResolvedValue({
+82:             scans: [
+83:                 {
+84:                     id: 1,
+85:                     payload: JSON.stringify({
+86:                         source: 'mobile_scanner_pwa',
+87:                         tenant_id: 'tenant-123',
+88:                         events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-123' }],
+89:                     }),
+90:                     timestamp: Date.now(),
+91:                     cteType: 'receiving',
+92:                     content: 'LOT-123',
+93:                 },
+94:             ],
+95:             photos: [],
+96:         });
+97: 
+98:         const { result } = renderHook(() => useSync());
+99: 
+100:         setOnlineState(true);
+101:         await act(async () => {
+102:             await result.current.manualSync();
+103:         });
+104: 
+105:         await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+106: 
+107:         const [url, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+108:         const headers = new Headers(init?.headers);
+109:         expect(url).toBe('/api/ingestion/api/v1/webhooks/ingest');
+110:         expect(init?.method).toBe('POST');
+111:         expect(init?.credentials).toBe('include');
+112:         expect(headers.get('Content-Type')).toBe('application/json');
+113:         expect(headers.get('X-RegEngine-API-Key')).toBeNull();
+114:         expect(headers.get('X-Tenant-ID')).toBeNull();
+115:     });
+116: 
+117:     it('uploads pending photos without requiring an apiKey argument', async () => {
+118:         dbMocks.getPendingUploads.mockResolvedValue({
+119:             scans: [],
+120:             photos: [
+121:                 {
+122:                     id: 7,
+123:                     blob: new Blob(['fake-photo'], { type: 'image/jpeg' }),
+124:                     timestamp: Date.now(),
+125:                 },
+126:             ],
+127:         });
+128: 
+129:         const { result } = renderHook(() => useSync());
+130: 
+131:         setOnlineState(true);
+132:         await act(async () => {
+133:             await result.current.manualSync();
+134:         });
+135: 
+136:         await waitFor(() => expect(mockMutateAsync).toHaveBeenCalledTimes(1));
+137: 
+138:         const uploadArgs = mockMutateAsync.mock.calls[0]?.[0] as {
+139:             apiKey?: string | null;
+140:             file: File;
+141:             sourceSystem: string;
+142:         };
+143:         expect(uploadArgs.file).toBeInstanceOf(File);
+144:         expect(uploadArgs.sourceSystem).toBe('mobile_capture_pwa_offline');
+145:         expect('apiKey' in uploadArgs).toBe(false);
+146:     });
+147: 
+148:     it('does not sync when the user is signed out', async () => {
+149:         mockUseAuth.mockReturnValue({
+150:             isAuthenticated: false,
+151:             tenantId: 'tenant-123',
+152:         });
+153:         setOnlineState(true);
+154: 
+155:         const { result } = renderHook(() => useSync());
+156: 
+157:         await act(async () => {
+158:             await result.current.manualSync();
+159:         });
+160: 
+161:         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
+162:         expect(mockMutateAsync).not.toHaveBeenCalled();
+163:         expect(dbMocks.getPendingUploads).not.toHaveBeenCalled();
+164:     });
+165: 
+166:     it.fails('FE-004 does not replay a previous tenant photo after an account switch', async () => {
+167:         // PhotoRecord/savePhoto currently persist no owner. The same IndexedDB
+168:         // queue survives logout, so this fixture models a photo captured by A.
+169:         dbMocks.getPendingUploads.mockResolvedValue({
+170:             scans: [],
+171:             photos: [{
+172:                 id: 9,
+173:                 blob: new Blob(['tenant-a-label'], { type: 'image/jpeg' }),
+174:                 timestamp: Date.now(),
+175:             }],
+176:         });
+177:         mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-a' });
+178:         const previousAccount = renderHook(() => useSync());
+179:         previousAccount.unmount();
+180: 
+181:         // A signs out while offline; B next opens field capture on the same
+182:         // browser. No product code partitions or clears the photo queue.
+183:         mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-b' });
+184:         const { result } = renderHook(() => useSync());
+185:         setOnlineState(true);
+186:         await act(async () => {
+187:             await result.current.manualSync();
+188:         });
+189: 
+190:         // Ownerless legacy entries must be quarantined until ownership can be
+191:         // established; never submit them with the next account's session.
+192:         expect(mockMutateAsync).not.toHaveBeenCalled();
+193:     });
+194: });

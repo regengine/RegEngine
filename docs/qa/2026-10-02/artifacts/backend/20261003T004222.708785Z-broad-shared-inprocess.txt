@@ -1,0 +1,271 @@
+UTC: 2026-10-03T00:42:22.708785+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests '--ignore-glob=*live*' --ignore=services/shared/tests/test_auth_fail_closed.py --ignore=services/shared/tests/test_secrets_fail_closed.py -m 'not integration' --continue-on-collection-errors --maxfail=15 --tb=short --cov=shared --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-broad.json
+Exit: 1
+Duration: 8.99s
+Timeout: False
+
+........................................................................ [  7%]
+........................................................................ [ 15%]
+........................................................................ [ 23%]
+........................................................................ [ 31%]
+.........................................s.............................. [ 39%]
+........................................................................ [ 47%]
+........................................................................ [ 55%]
+........................................................................ [ 63%]
+........................................................................ [ 71%]
+........................................................................ [ 79%]
+.........................................ss.sssssssssssss............... [ 87%]
+........................................................................ [ 95%]
+....................................FFF../Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/coverage/inorout.py:577: CoverageWarning: Module shared was previously imported, but not measured (module-not-measured); see https://coverage.readthedocs.io/en/7.13.5/messages.html#warning-module-not-measured
+  self.warn(msg, slug="module-not-measured")
+                                [100%]
+=================================== FAILURES ===================================
+______ test_alternate_loopback_encodings_are_blocked[http://2130706433/] _______
+services/shared/tests/test_url_validation.py:85: in test_alternate_loopback_encodings_are_blocked
+    validate_url(url)
+services/shared/url_validation.py:120: in validate_url
+    _check_resolved_ip(hostname)
+services/shared/url_validation.py:145: in _check_resolved_ip
+    infos = socket.getaddrinfo(hostname, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+______ test_alternate_loopback_encodings_are_blocked[http://0x7f000001/] _______
+services/shared/tests/test_url_validation.py:85: in test_alternate_loopback_encodings_are_blocked
+    validate_url(url)
+services/shared/url_validation.py:120: in validate_url
+    _check_resolved_ip(hostname)
+services/shared/url_validation.py:145: in _check_resolved_ip
+    infos = socket.getaddrinfo(hostname, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+_________ test_alternate_loopback_encodings_are_blocked[http://127.1/] _________
+services/shared/tests/test_url_validation.py:85: in test_alternate_loopback_encodings_are_blocked
+    validate_url(url)
+services/shared/url_validation.py:120: in validate_url
+    _check_resolved_ip(hostname)
+services/shared/url_validation.py:145: in _check_resolved_ip
+    infos = socket.getaddrinfo(hostname, None)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+================================ tests coverage ================================
+______________ coverage: platform darwin, python 3.11.15-final-0 _______________
+
+Name                                                         Stmts   Miss  Cover
+--------------------------------------------------------------------------------
+services/shared/__init__.py                                      0      0   100%
+services/shared/agent_artifacts.py                              85      8    91%
+services/shared/agent_operator_models.py                        87     87     0%
+services/shared/agent_operator_view.py                         168    168     0%
+services/shared/agent_org/__init__.py                            1      0   100%
+services/shared/agent_org/authz.py                              23      0   100%
+services/shared/agent_org/keys.py                               14      0   100%
+services/shared/agent_org/onboarding.py                        107      3    97%
+services/shared/agent_org/providers.py                          25      0   100%
+services/shared/agent_org/router.py                             40      0   100%
+services/shared/agent_org/slugs.py                               6      0   100%
+services/shared/agent_org/suppression.py                        19      0   100%
+services/shared/agent_risk_engine.py                            79     79     0%
+services/shared/agent_task_bridge.py                           125    125     0%
+services/shared/api_key_store.py                               418    170    59%
+services/shared/audit_logging/__init__.py                        4      4     0%
+services/shared/audit_logging/integrity.py                      64     64     0%
+services/shared/audit_logging/schema.py                        149    149     0%
+services/shared/audit_logging/storage.py                       166    166     0%
+services/shared/audit_logging/writer.py                        103    103     0%
+services/shared/auth.py                                        215     52    76%
+services/shared/base_config.py                                  14      0   100%
+services/shared/blocked_email_domains.py                        12     12     0%
+services/shared/build_info.py                                   95     21    78%
+services/shared/canonical_event.py                             478    228    52%
+services/shared/canonical_persistence/__init__.py                3      0   100%
+services/shared/canonical_persistence/legacy_dual_write.py      90     58    36%
+services/shared/canonical_persistence/models.py                  8      1    88%
+services/shared/canonical_persistence/verification.py           84     69    18%
+services/shared/canonical_persistence/writer.py                297    101    66%
+services/shared/circuit_breaker.py                             142     85    40%
+services/shared/circuit_breaker_store.py                        77     38    51%
+services/shared/cors.py                                         52      0   100%
+services/shared/cte_persistence/__init__.py                      4      4     0%
+services/shared/cte_persistence/batch.py                       147    147     0%
+services/shared/cte_persistence/core.py                         85     85     0%
+services/shared/cte_persistence/exports.py                      24     24     0%
+services/shared/cte_persistence/hashing.py                      38     38     0%
+services/shared/cte_persistence/models.py                       30     30     0%
+services/shared/cte_persistence/queries.py                     200    200     0%
+services/shared/cte_persistence/verification.py                 93     93     0%
+services/shared/cte_persistence/writes.py                       62     62     0%
+services/shared/data_retention.py                              257    257     0%
+services/shared/database.py                                    244     87    64%
+services/shared/db_liveness.py                                   8      0   100%
+services/shared/db_type_assertions.py                          106    106     0%
+services/shared/db_url.py                                       15      0   100%
+services/shared/dlq.py                                           2      0   100%
+services/shared/env.py                                          45      2    96%
+services/shared/env_validation.py                               22     22     0%
+services/shared/error_handling.py                              143     75    48%
+services/shared/event_backbone.py                                4      0   100%
+services/shared/exception_queue.py                             168    168     0%
+services/shared/external_connectors/__init__.py                  2      2     0%
+services/shared/external_connectors/base.py                    170    170     0%
+services/shared/external_connectors/csv_sftp.py                126    126     0%
+services/shared/external_connectors/food_safety.py             155    155     0%
+services/shared/external_connectors/inflow_lab.py               26     26     0%
+services/shared/external_connectors/register_all.py             17     17     0%
+services/shared/external_connectors/registry.py                 59     59     0%
+services/shared/external_connectors/retailers.py                86     86     0%
+services/shared/external_connectors/safetyculture.py           161    161     0%
+services/shared/fda_export/__init__.py                           7      0   100%
+services/shared/fda_export/csv_safety.py                        15      0   100%
+services/shared/fda_export/filenames.py                         37      2    95%
+services/shared/fda_export/pagination.py                        21      0   100%
+services/shared/fda_export/pii.py                               49      1    98%
+services/shared/fda_export/windows.py                           47      6    87%
+services/shared/fsma_plan_builder.py                           158    158     0%
+services/shared/fsma_rules.py                                   59     59     0%
+services/shared/fsma_validation.py                             123     80    35%
+services/shared/funnel_events.py                               107    107     0%
+services/shared/idempotency.py                                 183    183     0%
+services/shared/identity_resolution/__init__.py                  2      2     0%
+services/shared/identity_resolution/constants.py                 5      5     0%
+services/shared/identity_resolution/matching.py                 60     60     0%
+services/shared/identity_resolution/merging.py                  67     67     0%
+services/shared/identity_resolution/normalization.py             9      9     0%
+services/shared/identity_resolution/registration.py             52     52     0%
+services/shared/identity_resolution/resolver.py                 82     82     0%
+services/shared/identity_resolution/review.py                   88     88     0%
+services/shared/identity_resolution/service.py                  28     28     0%
+services/shared/input_validation.py                            214    214     0%
+services/shared/internal_caller.py                              23     14    39%
+services/shared/jev/__init__.py                                  4      0   100%
+services/shared/jev/client.py                                  190      8    96%
+services/shared/jev/cte_classification.py                      115      1    99%
+services/shared/jev/header_mapping.py                          235      7    97%
+services/shared/jev/routing.py                                  24      0   100%
+services/shared/jev/settings.py                                 97      0   100%
+services/shared/jwt_key_registry.py                            258    258     0%
+services/shared/kafka_auth.py                                  249     38    85%
+services/shared/kafka_compat.py                                179     59    67%
+services/shared/kafka_consumer_base.py                         129    129     0%
+services/shared/logging_config.py                                1      1     0%
+services/shared/maintenance_tenants.py                          20     15    25%
+services/shared/merkle_tree.py                                  86     57    34%
+services/shared/metrics.py                                       1      1     0%
+services/shared/metrics_auth.py                                  1      1     0%
+services/shared/middleware/__init__.py                           4      0   100%
+services/shared/middleware/request_id.py                        23     12    48%
+services/shared/middleware/security.py                          20      1    95%
+services/shared/middleware/tenant_context.py                   111     22    80%
+services/shared/neo4j_tenant_context.py                         53     53     0%
+services/shared/observability/__init__.py                        4      0   100%
+services/shared/observability/context.py                       117     57    51%
+services/shared/observability/correlation.py                    34     17    50%
+services/shared/observability/dlq_producer.py                   58     23    60%
+services/shared/observability/fastapi_metrics.py                48     36    25%
+services/shared/observability/health.py                         40     40     0%
+services/shared/observability/kafka_propagation.py             111    111     0%
+services/shared/observability/log_config.py                     41     41     0%
+services/shared/observability/metrics.py                         4      4     0%
+services/shared/observability/metrics_auth.py                   10     10     0%
+services/shared/observability/otel.py                          109     18    83%
+services/shared/pagination.py                                   14     14     0%
+services/shared/paths.py                                        40     40     0%
+services/shared/permissions.py                                  46     21    54%
+services/shared/pii.py                                          46     30    35%
+services/shared/proxy_ip_attestation.py                         81     61    25%
+services/shared/rate_limit.py                                  136     99    27%
+services/shared/recall_reconstruction/__init__.py                6      6     0%
+services/shared/recall_reconstruction/chain.py                 278    278     0%
+services/shared/recall_reconstruction/labels.py                 14     14     0%
+services/shared/recall_reconstruction/loader.py                176    176     0%
+services/shared/recall_reconstruction/package.py               127    127     0%
+services/shared/recall_reconstruction/records.py               160    160     0%
+services/shared/recall_reconstruction/worksheet.py             145    145     0%
+services/shared/redis_health.py                                 19     19     0%
+services/shared/request_safety.py                               39     39     0%
+services/shared/request_workflow/__init__.py                     3      3     0%
+services/shared/request_workflow/assembly.py                   177    177     0%
+services/shared/request_workflow/collection.py                  61     61     0%
+services/shared/request_workflow/constants.py                    8      8     0%
+services/shared/request_workflow/intake.py                      51     51     0%
+services/shared/request_workflow/queries.py                     24     24     0%
+services/shared/request_workflow/submission.py                  62     62     0%
+services/shared/request_workflow/utils.py                       99     99     0%
+services/shared/request_workflow/workflow.py                    11     11     0%
+services/shared/resilient_http.py                               74     52    30%
+services/shared/route_introspection.py                          34     34     0%
+services/shared/rules/__init__.py                                5      0   100%
+services/shared/rules/deadletter_replay.py                      50      2    96%
+services/shared/rules/enforcement.py                            88     21    76%
+services/shared/rules/engine.py                                267    143    46%
+services/shared/rules/evaluators/__init__.py                     3      0   100%
+services/shared/rules/evaluators/relational.py                 161    147     9%
+services/shared/rules/evaluators/stateless.py                  126    111    12%
+services/shared/rules/ftl.py                                    46     12    74%
+services/shared/rules/rejection_audit.py                        55     55     0%
+services/shared/rules/seeds.py                                  20     11    45%
+services/shared/rules/types.py                                  72      0   100%
+services/shared/rules/uom.py                                    92     75    18%
+services/shared/rules/utils.py                                   9      0   100%
+services/shared/rules/verdict.py                                43      0   100%
+services/shared/rules_engine.py                                  7      7     0%
+services/shared/run_ledger.py                                  114    114     0%
+services/shared/safe_http.py                                   151     69    54%
+services/shared/schemas.py                                     208    208     0%
+services/shared/secrets_manager.py                              92     92     0%
+services/shared/supabase_client.py                              23     23     0%
+services/shared/task_queue.py                                  223    147    34%
+services/shared/task_types.py                                   14     14     0%
+services/shared/tenant_context.py                              195     19    90%
+services/shared/tenant_models.py                                69     69     0%
+services/shared/tenant_rate_limiting.py                        173    109    37%
+services/shared/tenant_settings.py                             110    110     0%
+services/shared/url_validation.py                              103     41    60%
+services/shared/validators/__init__.py                           2      0   100%
+services/shared/validators/tenant_validator.py                  39     12    69%
+services/shared/webhook_security.py                             91     91     0%
+services/shared/workflows/__init__.py                            0      0   100%
+services/shared/workflows/evaluate_compliance.py                 0      0   100%
+services/shared/workflows/export_output.py                       0      0   100%
+services/shared/workflows/ingest_event.py                        0      0   100%
+services/shared/workflows/produce_audit.py                       0      0   100%
+services/shared/workflows/resolve_identity.py                    0      0   100%
+--------------------------------------------------------------------------------
+TOTAL                                                        14143   9743    31%
+Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-shared-broad.json
+=========================== short test summary info ============================
+SKIPPED [1] services/shared/tests/test_db_url.py:58: DATABASE_URL is not Postgres in this run
+SKIPPED [1] services/shared/tests/test_task_queue.py:267: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:296: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:336: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:372: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:412: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:452: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:479: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:541: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:595: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:630: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:659: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:692: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:727: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:760: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+SKIPPED [1] services/shared/tests/test_task_queue.py:813: integration tests require Docker + testcontainers[postgres] + psycopg[binary]
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://2130706433/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://0x7f000001/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+FAILED services/shared/tests/test_url_validation.py::test_alternate_loopback_encodings_are_blocked[http://127.1/] - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+3 failed, 886 passed, 16 skipped in 8.22s

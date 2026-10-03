@@ -1,0 +1,27 @@
+UTC: 2026-10-03T00:45:15.429423+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs python3 -c 'from pathlib import Path; import json,subprocess,sys; root=Path.cwd();tmp=Path("/private/tmp/regengine-qa-fe004-witness");tmp.mkdir(exist_ok=True); modules=tmp/"node_modules";
+if not modules.exists():modules.symlink_to(root/"frontend/node_modules",target_is_directory=True)
+source=(root/"frontend/src/__tests__/hooks/useSync.test.tsx").read_text();(tmp/"fe004.test.tsx").write_text(source.replace("it.fails(","it(")); config="import {defineConfig} from \"vitest/config\"; export default defineConfig({test:{environment:\"jsdom\",globals:true,setupFiles:["+json.dumps(str(root/"frontend/src/__tests__/setup.ts"))+"],include:[\"fe004.test.tsx\"]},resolve:{alias:{\"@\":"+json.dumps(str(root/"frontend/src"))+"}}});";(tmp/"vitest.config.mts").write_text(config);print("Negative control: temporary copy removes expected-fail wrapper; assertion failure is required. No repository test modified.",flush=True);sys.exit(subprocess.run(["/private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node",str(root/"frontend/node_modules/vitest/vitest.mjs"),"run","--config",str(tmp/"vitest.config.mts"),"--root",str(tmp),"-t","FE-004"],cwd=tmp).returncode)'
+Exit: 1
+Duration: 0.93s
+Timeout: False
+
+Negative control: temporary copy removes expected-fail wrapper; assertion failure is required. No repository test modified.
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.11 [39m[90m/private/tmp/regengine-qa-fe004-witness[39m
+
+ [31m❯[39m fe004.test.tsx [2m([22m[2m0 test[22m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m fe004.test.tsx[2m [ fe004.test.tsx ][22m
+[31m[1mError[22m: Cannot find module '/@fs/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/src/__tests__/setup.ts'[39m
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [2mno tests[22m
+[2m   Start at [22m 17:45:15
+[2m   Duration [22m 536ms[2m (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 453ms)[22m
+

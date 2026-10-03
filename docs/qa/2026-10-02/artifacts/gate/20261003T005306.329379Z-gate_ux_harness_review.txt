@@ -1,0 +1,306 @@
+UTC: 2026-10-03T00:53:06.329379+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; names=["ux-server.py","ux-local-proxy.py","ux-browser-pass.cjs"]; p=Path("docs/qa/2026-10-02/scripts"); [(print("FILE",n),print("\n".join(f"{i}: {l}" for i,l in enumerate((p/n).read_text().splitlines(),1)))) for n in names]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE ux-server.py
+1: """Start an isolated localhost-only UI mirror; stop when its stop file appears."""
+2: from pathlib import Path
+3: import hashlib
+4: import os
+5: import shutil
+6: import secrets
+7: import subprocess
+8: import sys
+9: import threading
+10: import time
+11: 
+12: from run_logged import redact
+13: 
+14: root = Path(__file__).resolve().parents[4]
+15: base = Path('/private/tmp/regengine-qa-ux-u2059hm8')
+16: app = base / 'app-built'
+17: if not app.exists():
+18:     shutil.copytree(root / 'frontend', app, ignore=lambda directory, names: [
+19:         name for name in names if name in {'node_modules', '.next', 'coverage', 'test-results', 'playwright-report', '.git', '.npmrc', '.netrc', 'credentials'} or name.startswith('.env')
+20:     ])
+21:     (app / 'node_modules').symlink_to(root / 'frontend/node_modules', target_is_directory=True)
+22:     shutil.copytree(root / 'frontend/.next', app / '.next', ignore=lambda directory, names: [name for name in names if name in {'cache', 'dev'}])
+23: guard = root / 'docs/qa/2026-10-02/scripts/node-isolation.cjs'
+24: artifacts = root / 'docs/qa/2026-10-02/artifacts/ux'
+25: env = dict(os.environ, NODE_OPTIONS=f'--require={guard}',
+26:            CSRF_SECRET=[REDACTED],
+27:            ADMIN_SERVICE_URL='http://127.0.0.1:3103',
+28:            INGESTION_SERVICE_URL='http://127.0.0.1:3103',
+29:            COMPLIANCE_SERVICE_URL='http://127.0.0.1:3103')
+30: command = ['node', str(root / 'frontend/node_modules/next/dist/bin/next'), 'start', '-H', '127.0.0.1', '-p', '3104']
+31: process = subprocess.Popen(command, cwd=app, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+32: (artifacts / 'ready-server-metadata.txt').write_text(f'PID={process.pid}\nPort=3104\nGuard SHA256={hashlib.sha256(guard.read_bytes()).hexdigest()}\nMirror={app}\nCommand={command}\nCSRF runtime value: ephemeral synthetic, never recorded\n')
+33: 
+34: def capture():
+35:     with (artifacts / 'ready-server-output.txt').open('w') as log:
+36:         for line in process.stdout:
+37:             log.write(redact(line))
+38:             log.flush()
+39: 
+40: thread = threading.Thread(target=capture, daemon=True)
+41: thread.start()
+42: try:
+43:     deadline = time.monotonic() + 1500
+44:     while process.poll() is None and time.monotonic() < deadline and not (base / 'stop-ready-server').exists():
+45:         time.sleep(0.25)
+46: finally:
+47:     if process.poll() is None:
+48:         process.terminate()
+49:     try:
+50:         process.wait(timeout=10)
+51:     except subprocess.TimeoutExpired:
+52:         process.kill()
+53:         process.wait(timeout=5)
+54:     thread.join(timeout=5)
+55:     print(f'QA server stopped; exit {process.returncode}; redacted output saved')
+FILE ux-local-proxy.py
+1: """QA-only proxy for the managed Chrome fallback; all nonlocal resources denied.
+2: 
+3: Preserves the built app HTML while adding same-origin axe instrumentation.
+4: All API routes are synthetic. The report/save UI stores screenshots locally.
+5: """
+6: from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+7: from pathlib import Path
+8: import base64
+9: import datetime
+10: import json
+11: import re
+12: import threading
+13: import urllib.error
+14: import urllib.request
+15: from urllib.parse import parse_qs, urlsplit
+16: 
+17: ROOT = Path(__file__).resolve().parents[4]
+18: OUT = ROOT / 'docs/qa/2026-10-02/artifacts/ux'
+19: BASE = Path('/private/tmp/regengine-qa-ux-u2059hm8')
+20: OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+21: COUNTERS = {}
+22: INSTRUMENT = r"""
+23: const qa = {errors:[], csp:[], requests:[], startedAt:new Date().toISOString(), lcp:null, cls:0};
+24: window.addEventListener('error',e=>qa.errors.push(e.message));
+25: window.addEventListener('securitypolicyviolation',e=>qa.csp.push({directive:e.violatedDirective,uri:e.blockedURI}));
+26: try{new PerformanceObserver(l=>qa.lcp=l.getEntries().at(-1).startTime).observe({type:'largest-contentful-paint',buffered:true});}catch{}
+27: try{new PerformanceObserver(l=>{for(const e of l.getEntries())if(!e.hadRecentInput)qa.cls+=e.value;}).observe({type:'layout-shift',buffered:true});}catch{}
+28: window.addEventListener('load',()=>setTimeout(async()=>{
+29:  const result=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']}});
+30:  const visible=e=>!!(e.offsetWidth||e.offsetHeight||e.getClientRects().length);
+31:  const report={...qa,url:location.pathname,width:innerWidth,height:innerHeight,documentWidth:document.documentElement.scrollWidth,title:document.title,cameraAllowed:document.featurePolicy?.allowsFeature('camera'),headings:[...document.querySelectorAll('h1,h2,h3')].map(e=>({level:e.tagName,text:e.textContent.trim()})),inputs:[...document.querySelectorAll('input,textarea,select')].filter(visible).map(e=>({tag:e.tagName,id:e.id,type:e.type,required:e.required,labels:[...(e.labels||[])].map(l=>l.textContent.trim())})),buttons:[...document.querySelectorAll('button')].filter(visible).map(e=>({text:e.textContent.trim(),name:e.getAttribute('aria-label'),disabled:e.disabled})),navigation:performance.getEntriesByType('navigation').map(e=>({responseStart:e.responseStart,domContentLoaded:e.domContentLoadedEventEnd,duration:e.duration})),paint:performance.getEntriesByType('paint').map(e=>({name:e.name,startTime:e.startTime})),resources:performance.getEntriesByType('resource').map(e=>({name:e.name.split('?')[0],duration:e.duration})),axe:{version:result.testEngine.version,violations:result.violations,incomplete:result.incomplete,passes:result.passes.map(e=>e.id)}};
+32:  await fetch('/__qa/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report)});
+33: },1200));
+34: """
+35: SAVE_UI = b'''<!doctype html><title>Local QA artifact saver</title><h1>Local QA artifact saver</h1><p>Only writes the named audit artifact on this localhost process.</p><form method="post" action="/__qa/screenshot"><label>Name <input name="name" required></label><label>Screenshot bytes <textarea name="data" required></textarea></label><button>Save screenshot</button></form>'''
+36: 
+37: class Handler(BaseHTTPRequestHandler):
+38:     def log_message(self, fmt, *args):
+39:         print(datetime.datetime.now(datetime.timezone.utc).isoformat(), fmt % args, flush=True)
+40: 
+41:     def send(self, status, data, kind='text/html', headers=None):
+42:         self.send_response(status)
+43:         self.send_header('Content-Type', kind)
+44:         self.send_header('Content-Length', str(len(data)))
+45:         self.send_header('Cache-Control', 'no-store')
+46:         for k,v in (headers or {}).items():
+47:             self.send_header(k,v)
+48:         self.end_headers()
+49:         self.wfile.write(data)
+50: 
+51:     def do_GET(self):
+52:         target = self.path.split('?',1)[0]
+53:         if target == '/__qa/save':
+54:             name=parse_qs(urlsplit(self.path).query).get('name',[''])[0]
+55:             name=name if re.fullmatch('[a-zA-Z0-9_-]*',name) else ''
+56:             return self.send(200,SAVE_UI.replace(b'name="name" required',f'name="name" required value="{name}"'.encode()))
+57:         if target == '/__qa/frame':
+58:             route=parse_qs(urlsplit(self.path).query).get('route',['/login'])[0]
+59:             if route not in {'/','/login','/verify','/demo','/contact','/tools/ftl-checker'}:
+60:                 return self.send(400,b'Unsupported local QA route')
+61:             width=parse_qs(urlsplit(self.path).query).get('width',['390'])[0]
+62:             if width not in {'320','390','768'}:
+63:                 return self.send(400,b'Unsupported QA width')
+64:             return self.send(200,(f'<!doctype html><title>QA constrained viewport</title><style>body{{margin:0}}iframe{{border:0;width:{width}px;height:844px}}</style><iframe title="Actual product in {width}px QA viewport" src="{route}"></iframe>').encode())
+65:         if target == '/__qa/axe.js':
+66:             return self.send(200,(BASE/'qa-tools/node_modules/axe-core/axe.min.js').read_bytes(),'application/javascript')
+67:         if target == '/__qa/instrument.js':
+68:             return self.send(200,INSTRUMENT.encode(),'application/javascript')
+69:         if target.startswith('/api/'):
+70:             if 'csrf' in target:
+71:                 return self.send(200,b'{"csrf_token":"synthetic-qa"}','application/json')
+72:             return self.send(401,b'{"detail":"Synthetic QA unauthenticated response"}','application/json')
+73:         if not target.startswith('/') or target.startswith('//'):
+74:             return self.send(400,b'Local paths only')
+75:         request = urllib.request.Request('http://127.0.0.1:3104'+self.path,headers={'Accept-Encoding':'identity'})
+76:         try:
+77:             response=OPENER.open(request,timeout=30)
+78:         except urllib.error.HTTPError as error:
+79:             response=error
+80:         data=response.read()
+81:         headers={k:v for k,v in response.headers.items() if k.lower() not in {'content-length','content-type','transfer-encoding','connection','content-encoding','content-security-policy','set-cookie','cache-control','x-dns-prefetch-control','x-frame-options'}}
+82:         kind=response.headers.get('content-type','application/octet-stream')
+83:         if 'text/html' in kind:
+84:             html=data.decode()
+85:             html=re.sub(r'<link[^>]+(?:rel="preconnect"|rel="dns-prefetch")[^>]*>','',html)
+86:             nonces=re.findall(r'nonce="([^\"]+)"',html)
+87:             nonce=nonces[0] if nonces else ''
+88:             scripts=f'<script nonce="{nonce}" src="/__qa/axe.js"></script><script nonce="{nonce}" src="/__qa/instrument.js"></script>'
+89:             html=html.replace('</head>',scripts+'</head>')
+90:             data=html.encode()
+91:             headers['Content-Security-Policy']="default-src 'self'; script-src 'self' 'nonce-"+nonce+"'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'none'; worker-src 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+92:         headers['X-DNS-Prefetch-Control']='off'
+93:         return self.send(response.status,data,kind,headers)
+94: 
+95:     def do_POST(self):
+96:         length=int(self.headers.get('Content-Length','0'))
+97:         if length>30000000:
+98:             return self.send(413,b'Too large')
+99:         body=self.rfile.read(length)
+100:         target=self.path.split('?',1)[0]
+101:         if target=='/__qa/report':
+102:             payload=json.loads(body)
+103:             name=re.sub(r'[^a-zA-Z0-9_-]','_',payload['url'])+'-'+str(payload['width'])
+104:             COUNTERS[name]=COUNTERS.get(name,0)+1
+105:             stamp=datetime.datetime.now(datetime.timezone.utc).strftime('%H%M%S%f')
+106:             (OUT/f'chrome-axe{name}-{stamp}.json').write_text(json.dumps(payload,indent=2))
+107:             return self.send(200,b'{"saved":true}','application/json')
+108:         if target=='/__qa/screenshot':
+109:             from urllib.parse import parse_qs
+110:             values=parse_qs(body.decode())
+111:             name=values['name'][0]
+112:             if not re.fullmatch('[a-zA-Z0-9_-]+',name):
+113:                 return self.send(400,b'Invalid artifact name')
+114:             raw=base64.b64decode(values['data'][0],validate=True)
+115:             if not raw.startswith(b'\xff\xd8'):
+116:                 return self.send(400,b'Expected JPEG screenshot')
+117:             (OUT/(name+'.jpg')).write_bytes(raw)
+118:             return self.send(200,('<h1>Saved '+name+'.jpg</h1>').encode())
+119:         if target.startswith('/api/'):
+120:             if target=='/api/contact':
+121:                 return self.send(503,b'{"detail":"Synthetic QA service unavailable"}','application/json')
+122:             if 'proof' in target:
+123:                 return self.send(429,b'{"detail":"Synthetic QA rate limit"}','application/json')
+124:             return self.send(503,b'{"detail":"Synthetic QA service unavailable"}','application/json')
+125:         return self.send(404,b'No such QA endpoint')
+126: 
+127: server=ThreadingHTTPServer(('127.0.0.1',3105),Handler)
+128: thread=threading.Thread(target=server.serve_forever,daemon=True)
+129: thread.start()
+130: import time
+131: deadline=time.monotonic()+1200
+132: while time.monotonic()<deadline and not (BASE/'stop-proxy-v2').exists():
+133:     time.sleep(.25)
+134: server.shutdown()
+135: server.server_close()
+136: print('QA proxy stopped')
+FILE ux-browser-pass.cjs
+1: // QA-only local browser audit. No production calls; API requests are intercepted.
+2: // Usage: QA_MIRROR=/private/tmp/... node this-file.cjs [smoke|audit]
+3: const fs = require('node:fs');
+4: const path = require('node:path');
+5: const root = path.resolve(__dirname, '../../../..');
+6: const { chromium, firefox, webkit } = require(path.join(root, 'frontend/node_modules/playwright'));
+7: const mirror = process.env.QA_MIRROR;
+8: if (!mirror || !mirror.startsWith('/private/tmp/regengine-qa-ux-')) throw new Error('Set QA_MIRROR to the isolated QA directory');
+9: const out = path.join(root, 'docs/qa/2026-10-02/artifacts/ux');
+10: const baseURL = 'http://127.0.0.1:3104';
+11: const mode = process.argv[2] || 'smoke';
+12: const results = { startedAt: new Date().toISOString(), mode, baseURL, syntheticApi: true, browsers: [] };
+13: const safe = text => String(text).replace(/\b(?:sk-[\w-]{20,}|gh[pousr]_[\w]+|github_pat_[\w]+)\b/g, '[REDACTED]');
+14: const pause = ms => new Promise(r => setTimeout(r, ms));
+15: 
+16: async function configure(context, evidence) {
+17:   await context.route('**/*', async route => {
+18:     const url = new URL(route.request().url());
+19:     if (!['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
+20:       evidence.blockedHosts.add(url.hostname);
+21:       return route.abort('blockedbyclient');
+22:     }
+23:     if (url.pathname.startsWith('/api/')) {
+24:       evidence.stubbedApis.add(url.pathname);
+25:       if (url.pathname.includes('/csrf')) return route.fulfill({ status: 200, json: { csrf_token: 'synthetic-qa-csrf' } });
+26:       return route.fulfill({ status: 401, json: { detail: 'Synthetic QA unauthenticated response' } });
+27:     }
+28:     return route.continue();
+29:   });
+30:   await context.addInitScript(() => {
+31:     window.__qaPerformance = { lcp: null, cls: 0, longTasks: [] };
+32:     try { new PerformanceObserver(l => { window.__qaPerformance.lcp = l.getEntries().at(-1).startTime; }).observe({ type: 'largest-contentful-paint', buffered: true }); } catch {}
+33:     try { new PerformanceObserver(l => { for (const e of l.getEntries()) if (!e.hadRecentInput) window.__qaPerformance.cls += e.value; }).observe({ type: 'layout-shift', buffered: true }); } catch {}
+34:     try { new PerformanceObserver(l => { window.__qaPerformance.longTasks.push(...l.getEntries().map(e => e.duration)); }).observe({ type: 'longtask', buffered: true }); } catch {}
+35:   });
+36: }
+37: 
+38: async function snapshot(page, label, accessibility) {
+39:   await page.screenshot({ path: path.join(out, label + '.png'), fullPage: true });
+40:   const data = await page.evaluate(() => ({
+41:     title: document.title,
+42:     headings: [...document.querySelectorAll('h1,h2,h3')].map(el => ({ level: el.tagName, text: el.textContent.trim() })),
+43:     horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+44:     viewportWidth: innerWidth,
+45:     documentWidth: document.documentElement.scrollWidth,
+46:     inputs: [...document.querySelectorAll('input,textarea,select')].map(el => ({ tag: el.tagName, type: el.type, id: el.id, name: el.name, labels: [...(el.labels || [])].map(x => x.textContent.trim()), required: el.required, disabled: el.disabled })),
+47:     cameraAllowed: document.featurePolicy?.allowsFeature('camera') ?? null,
+48:     performance: { ...window.__qaPerformance, navigation: performance.getEntriesByType('navigation').map(e => ({ duration: e.duration, domContentLoaded: e.domContentLoadedEventEnd, responseStart: e.responseStart })), paint: performance.getEntriesByType('paint').map(e => ({ name: e.name, startTime: e.startTime })) },
+49:   }));
+50:   data.url = page.url();
+51:   data.screenshot = label + '.png';
+52:   data.ariaSnapshot = await page.locator('body').ariaSnapshot();
+53:   if (accessibility) {
+54:     await page.evaluate(fs.readFileSync(path.join(mirror, 'qa-tools/node_modules/axe-core/axe.min.js'), 'utf8'));
+55:     const axe = await page.evaluate(async () => window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] } }));
+56:     data.axe = { version: axe.testEngine.version, violations: axe.violations, incomplete: axe.incomplete, passes: axe.passes.map(x => x.id) };
+57:   }
+58:   fs.writeFileSync(path.join(out, label + '.json'), JSON.stringify(data, null, 2));
+59:   return { url: data.url, screenshot: data.screenshot, title: data.title, h1: data.headings.filter(x => x.level === 'H1').map(x => x.text), overflow: data.horizontalOverflow, cameraAllowed: data.cameraAllowed, axe: data.axe?.violations.map(x => ({ id: x.id, impact: x.impact, nodes: x.nodes.length })), performance: data.performance };
+60: }
+61: 
+62: (async () => {
+63:   for (const [name, engine] of Object.entries(mode === 'smoke' ? { chromium, firefox, webkit } : { chromium })) {
+64:     const result = { name, startedAt: new Date().toISOString(), pages: [], errors: [], consoleErrors: [], networkErrors: [], blockedHosts: new Set(), stubbedApis: new Set() };
+65:     let browser;
+66:     try {
+67:       browser = await engine.launch({ headless: true,
+68:         ...(name === 'chromium' ? { args: ['--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1', '--disable-background-networking'] } : {}),
+69:         ...(name === 'firefox' ? { firefoxUserPrefs: { 'network.dns.disablePrefetch': true, 'network.prefetch-next': false, 'network.http.speculative-parallel-limit': 0 } } : {}),
+70:       });
+71:       result.version = browser.version();
+72:       for (const width of mode === 'smoke' ? [1440] : [1440, 390, 320]) {
+73:         const context = await browser.newContext({ viewport: { width, height: 900 }, serviceWorkers: 'block' });
+74:         await configure(context, result);
+75:         const page = await context.newPage();
+76:         page.on('pageerror', e => result.errors.push(safe(e.message)));
+77:         page.on('console', e => { if (e.type() === 'error') result.consoleErrors.push(safe(e.text())); });
+78:         page.on('response', r => { if (r.status() >= 400) result.networkErrors.push({ status: r.status(), url: new URL(r.url()).pathname }); });
+79:         const routes = mode === 'smoke' ? ['/', '/login', '/verify', '/tools/scan'] : ['/', '/login', '/verify', '/demo', '/contact', '/tools/ftl-checker'];
+80:         for (const route of routes) {
+81:           try {
+82:             const response = await page.goto(baseURL + route, { waitUntil: 'networkidle', timeout: 90000 });
+83:             await pause(300);
+84:             const label = `${mode}-${name}-${width}-${route.replace(/\//g, '_') || 'home'}`;
+85:             const data = await snapshot(page, label, mode === 'audit');
+86:             data.status = response.status();
+87:             data.permissionsPolicy = response.headers()['permissions-policy'];
+88:             result.pages.push(data);
+89:             console.log(JSON.stringify({ browser: name, width, route, status: data.status, title: data.title, h1: data.h1, overflow: data.overflow, axe: data.axe }));
+90:           } catch (error) { result.errors.push(safe(`${width} ${route}: ${error.message}`)); }
+91:         }
+92:         await context.close();
+93:       }
+94:     } catch (error) { result.errors.push(safe(error.message)); }
+95:     finally { if (browser) await browser.close(); }
+96:     result.blockedHosts = [...result.blockedHosts];
+97:     result.stubbedApis = [...result.stubbedApis];
+98:     result.completedAt = new Date().toISOString();
+99:     results.browsers.push(result);
+100:     fs.writeFileSync(path.join(out, `${mode}-results.json`), JSON.stringify(results, null, 2));
+101:     console.log(JSON.stringify({ browser: name, errors: result.errors, blockedHosts: result.blockedHosts }));
+102:   }
+103:   results.completedAt = new Date().toISOString();
+104:   fs.writeFileSync(path.join(out, `${mode}-results.json`), JSON.stringify(results, null, 2));
+105: })().catch(error => { console.error(safe(error.stack)); process.exitCode = 1; });

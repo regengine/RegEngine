@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:35:57.257409+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund --registry https://registry.npmjs.org
+Exit: 0
+Duration: 6.95s
+Timeout: False
+
+
+added 793 packages in 7s

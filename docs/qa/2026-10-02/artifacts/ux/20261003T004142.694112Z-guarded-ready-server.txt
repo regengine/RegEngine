@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:41:42.694112+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 docs/qa/2026-10-02/scripts/ux-server.py
+Exit: 0
+Duration: 738.57s
+Timeout: False
+
+QA server stopped; exit 143; redacted output saved

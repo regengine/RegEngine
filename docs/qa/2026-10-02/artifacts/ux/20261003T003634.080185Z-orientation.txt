@@ -1,0 +1,116 @@
+UTC: 2026-10-03T00:36:34.080185+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import os,pathlib,subprocess; print("cwd",os.getcwd()); [subprocess.run(c,check=False) for c in [["git","branch","--show-current"],["git","remote","get-url","origin"],["git","worktree","list"],["git","status","--short"]]]; [print("FILE",str(p),"\n",p.read_text()) for p in [pathlib.Path("frontend/AGENTS.md"),pathlib.Path("docs/qa/2026-10-02/META-SESSION-LOG.md"),pathlib.Path("docs/qa/2026-10-02/scripts/run_logged.py")] if p.exists()]'
+Exit: 0
+Duration: 0.12s
+Timeout: False
+
+qa/2026-10-02-sweep
+https://github.com/regengine/RegEngine.git
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine 0927b85a [qa/2026-10-02-sweep]
+?? docs/qa/2026-10-02/
+cwd /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+FILE frontend/AGENTS.md 
+ <!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+FILE docs/qa/2026-10-02/META-SESSION-LOG.md 
+ 
+- **2026-10-02T23:46:05.036682+00:00** `inventory` — `sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261002T234605.036682Z-inventory.txt).
+
+- **2026-10-02T23:46:05.182552+00:00** `guides` — `sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/meta/20261002T234605.182552Z-guides.txt).
+
+- **2026-10-03T00:35:16.224243+00:00** `resume-inspection` — `sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/meta/20261003T003516.224243Z-resume-inspection.txt).
+
+- **2026-10-03T00:36:02.391499+00:00** `scope-map` — `sh -c 'git rev-parse HEAD; git ls-files "**/AGENTS.md"; sed -n "1,170p" frontend/AGENTS.md; sed -n "1,90p" README.md; sed -n "1,140p" docs/specs/FSMA_204_MVP_SPEC.md; cat /Users/sellers/.codex/skills/security-best-practices/SKILL.md; rg --files tests services frontend/src frontend/tests server -g "!**/.env*" -g "!**/node_modules/**" -g "!**/package-lock.json" | awk -F/ "{print \$1\"/\"\$2}" | sort | uniq -c'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261003T003602.391499Z-scope-map.txt).
+
+FILE docs/qa/2026-10-02/scripts/run_logged.py 
+ #!/usr/bin/env python3
+"""Run an explicitly selected local QA command with UTC timing and redacted output.
+
+Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+Set QA_TIMEOUT_SECONDS for the time limit (default 900 seconds).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+QA = ROOT / "docs/qa/2026-10-02"
+
+
+def redact(text: str) -> str:
+    text = re.sub(r"(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,\"']+", r"\1[REDACTED]", text)
+    text = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk_(?:live|test)_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})", "[REDACTED]", text)
+    text = re.sub(r"(?i)((?:api[_-]?key|access[_-]?token|secret|password)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(\w+://)[^/@\s]+:[^/@\s]+@", r"\1[REDACTED]@", text)
+    return text
+
+
+def main() -> int:
+    group, label, *command = sys.argv[1:]
+    if command and command[0] == "--":
+        command.pop(0)
+    if not command or not re.fullmatch(r"[a-z0-9_-]+", group + label):
+        raise SystemExit("Expected GROUP LABEL -- COMMAND, using lowercase safe labels")
+    now = dt.datetime.now(dt.timezone.utc)
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    artifacts = QA / "artifacts" / group
+    artifacts.mkdir(parents=True, exist_ok=True)
+    report = artifacts / f"{stamp}-{label}.txt"
+    log = QA / f"{group.upper()}-SESSION-LOG.md"
+    env = {k: v for k, v in os.environ.items() if k in {
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TERM", "SHELL",
+        "SYSTEMROOT", "WINDIR", "COMSPEC",
+    }}
+    env.update({"PYTHON_DOTENV_DISABLED": "1", "NEXT_TELEMETRY_DISABLED": "1",
+                "DO_NOT_TRACK": "1", "CI": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1"})
+    started = time.monotonic()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               env=env, start_new_session=True)
+    timed_out = False
+    try:
+        output, _ = process.communicate(timeout=int(os.environ.get("QA_TIMEOUT_SECONDS", "900")))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            output, _ = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            output, _ = process.communicate()
+    result = 124 if timed_out else process.returncode
+    safe = redact(output.decode("utf-8", errors="replace"))
+    cmd = redact(shlex.join(command))
+    duration = time.monotonic() - started
+    header = (f"UTC: {now.isoformat()}\nCWD: {Path.cwd()}\nCommand: {cmd}\n"
+              f"Exit: {result}\nDuration: {duration:.2f}s\nTimeout: {timed_out}\n\n")
+    report.write_text(header + safe)
+    with log.open("a") as handle:
+        handle.write(f"\n- **{now.isoformat()}** `{label}` — `{cmd}`; "
+                     f"cwd `{Path.cwd().relative_to(ROOT) if Path.cwd().is_relative_to(ROOT) else Path.cwd()}`; "
+                     f"exit {result}, {duration:.2f}s. "
+                     f"[Output]({report.relative_to(QA)}).\n")
+    print(header + safe[-20000:])
+    print(f"Full redacted report: {report.relative_to(ROOT)}")
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+

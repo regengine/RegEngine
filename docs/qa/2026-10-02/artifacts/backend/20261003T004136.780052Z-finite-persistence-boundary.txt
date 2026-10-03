@@ -1,0 +1,610 @@
+UTC: 2026-10-03T00:41:36.780052+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -A12 -B6 'quantity|isfinite|allow_inf_nan' services/shared/canonical_event.py services/shared/cte_persistence/hashing.py services/ingestion/app/webhook_compat.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/shared/cte_persistence/hashing.py-64-
+services/shared/cte_persistence/hashing.py-65-def compute_event_hash(
+services/shared/cte_persistence/hashing.py-66-    event_id: str,
+services/shared/cte_persistence/hashing.py-67-    event_type: str,
+services/shared/cte_persistence/hashing.py-68-    tlc: str,
+services/shared/cte_persistence/hashing.py-69-    product_description: str,  # retained in signature for backward compat — NOT hashed (#1323)
+services/shared/cte_persistence/hashing.py:70:    quantity: float,
+services/shared/cte_persistence/hashing.py-71-    unit_of_measure: str,
+services/shared/cte_persistence/hashing.py-72-    location_gln: Optional[str],
+services/shared/cte_persistence/hashing.py-73-    location_name: Optional[str],
+services/shared/cte_persistence/hashing.py-74-    timestamp: str,
+services/shared/cte_persistence/hashing.py-75-    kdes: Dict[str, Any],
+services/shared/cte_persistence/hashing.py-76-) -> str:
+services/shared/cte_persistence/hashing.py-77-    """
+services/shared/cte_persistence/hashing.py-78-    Compute SHA-256 hash of an event using pipe-delimited canonical form.
+services/shared/cte_persistence/hashing.py-79-
+services/shared/cte_persistence/hashing.py-80-    This is the same algorithm as the original webhook_router, now centralized.
+services/shared/cte_persistence/hashing.py-81-
+services/shared/cte_persistence/hashing.py-82-    KDE values are normalized through ``_normalize_for_hashing`` so that
+--
+services/shared/cte_persistence/hashing.py-84-    deterministically and survive Python-version upgrades. See #1313.
+services/shared/cte_persistence/hashing.py-85-
+services/shared/cte_persistence/hashing.py-86-    ``product_description`` is intentionally excluded from the hash (#1323).
+services/shared/cte_persistence/hashing.py-87-    It is free-text that operators may reformat, translate, or correct over time
+services/shared/cte_persistence/hashing.py-88-    without changing the underlying regulatory event identity.  Including it
+services/shared/cte_persistence/hashing.py-89-    caused re-verification to fail whenever a description was updated.  The
+services/shared/cte_persistence/hashing.py:90:    stable KDE fields (event_type, TLC, timestamp, location GLN, quantity, UoM,
+services/shared/cte_persistence/hashing.py-91-    KDE keys/values) fully identify the event for FDA audit purposes.
+services/shared/cte_persistence/hashing.py-92-    """
+services/shared/cte_persistence/hashing.py-93-    # KDE values that may contain free-text descriptions are excluded from the
+services/shared/cte_persistence/hashing.py-94-    # canonical string to keep the hash stable across reformatting (#1323).
+services/shared/cte_persistence/hashing.py-95-    # Only keys and non-description scalar values participate.
+services/shared/cte_persistence/hashing.py-96-    stable_kdes = {k: v for k, v in kdes.items() if k not in ("product_description", "description", "item_description")}
+services/shared/cte_persistence/hashing.py-97-    canonical = "|".join(
+services/shared/cte_persistence/hashing.py-98-        [
+services/shared/cte_persistence/hashing.py-99-            event_id,
+services/shared/cte_persistence/hashing.py-100-            event_type,
+services/shared/cte_persistence/hashing.py-101-            tlc,
+services/shared/cte_persistence/hashing.py-102-            # product_description excluded — see #1323
+services/shared/cte_persistence/hashing.py:103:            str(quantity),
+services/shared/cte_persistence/hashing.py-104-            unit_of_measure,
+services/shared/cte_persistence/hashing.py-105-            location_gln or "",
+services/shared/cte_persistence/hashing.py-106-            timestamp,
+services/shared/cte_persistence/hashing.py-107-            json.dumps(_normalize_for_hashing(stable_kdes), sort_keys=True),
+services/shared/cte_persistence/hashing.py-108-        ]
+services/shared/cte_persistence/hashing.py-109-    )
+services/shared/cte_persistence/hashing.py-110-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+services/shared/cte_persistence/hashing.py-111-
+services/shared/cte_persistence/hashing.py-112-
+services/shared/cte_persistence/hashing.py-113-def compute_canonical_event_hash(event_id: str, tenant_id: str, event: Any) -> str:
+services/shared/cte_persistence/hashing.py-114-    """Hash the server-normalized webhook projection using the persisted ID.
+services/shared/cte_persistence/hashing.py-115-
+--
+services/shared/canonical_event.py-333-    event_timezone: str = "UTC"
+services/shared/canonical_event.py-334-
+services/shared/canonical_event.py-335-    # Product + Lot
+services/shared/canonical_event.py-336-    product_reference: Optional[str] = None
+services/shared/canonical_event.py-337-    lot_reference: Optional[str] = None
+services/shared/canonical_event.py-338-    traceability_lot_code: str = Field(..., min_length=3)
+services/shared/canonical_event.py:339:    # #1249: ge=0 (not gt=0). A zero quantity is a legitimate FSMA value —
+services/shared/canonical_event.py-340-    # empty-pallet receipt, full-recall correction, zero-loss inspection —
+services/shared/canonical_event.py-341-    # and must round-trip through the canonical store. The old gt=0
+services/shared/canonical_event.py-342-    # constraint caused silent divergence between ``fsma.cte_events``
+services/shared/canonical_event.py-343-    # (which stored the true zero) and ``traceability_events`` (where
+services/shared/canonical_event.py-344-    # the validator raised and the write was swallowed by a best-effort
+services/shared/canonical_event.py-345-    # try/except). FDA exports run off the canonical store, so a zero
+services/shared/canonical_event.py-346-    # event that vanished from canonical was a regulator-visible gap.
+services/shared/canonical_event.py:347:    quantity: float = Field(..., ge=0)
+services/shared/canonical_event.py-348-    unit_of_measure: str
+services/shared/canonical_event.py-349-
+services/shared/canonical_event.py-350-    # Entity + Facility references
+services/shared/canonical_event.py-351-    from_entity_reference: Optional[str] = None
+services/shared/canonical_event.py-352-    to_entity_reference: Optional[str] = None
+services/shared/canonical_event.py-353-    from_facility_reference: Optional[str] = None
+services/shared/canonical_event.py-354-    to_facility_reference: Optional[str] = None
+services/shared/canonical_event.py-355-
+services/shared/canonical_event.py-356-    # Transport
+services/shared/canonical_event.py-357-    transport_reference: Optional[str] = None
+services/shared/canonical_event.py-358-
+services/shared/canonical_event.py-359-    # Structured KDEs
+--
+services/shared/canonical_event.py-466-        canonical = "|".join(
+services/shared/canonical_event.py-467-            [
+services/shared/canonical_event.py-468-                str(self.event_id),
+services/shared/canonical_event.py-469-                self.event_type.value,
+services/shared/canonical_event.py-470-                self.traceability_lot_code,
+services/shared/canonical_event.py-471-                self.product_reference or "",
+services/shared/canonical_event.py:472:                str(self.quantity),
+services/shared/canonical_event.py-473-                self.unit_of_measure,
+services/shared/canonical_event.py-474-                self.from_facility_reference or "",
+services/shared/canonical_event.py-475-                self.to_facility_reference or "",
+services/shared/canonical_event.py-476-                self.event_timestamp.isoformat(),
+services/shared/canonical_event.py-477-                json.dumps(self.kdes, sort_keys=True, default=str),
+services/shared/canonical_event.py-478-            ]
+services/shared/canonical_event.py-479-        )
+services/shared/canonical_event.py-480-        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+services/shared/canonical_event.py-481-
+services/shared/canonical_event.py-482-    def compute_idempotency_key(self) -> str:
+services/shared/canonical_event.py-483-        """Compute deduplication key from content-addressable fields.
+services/shared/canonical_event.py-484-
+--
+services/shared/canonical_event.py-523-        return {
+services/shared/canonical_event.py-524-            "event_id": str(self.event_id),
+services/shared/canonical_event.py-525-            "event_type": self.event_type.value,
+services/shared/canonical_event.py-526-            "traceability_lot_code": self.traceability_lot_code,
+services/shared/canonical_event.py-527-            "product_reference": self.product_reference,
+services/shared/canonical_event.py-528-            "lot_reference": self.lot_reference,
+services/shared/canonical_event.py:529:            "quantity": self.quantity,
+services/shared/canonical_event.py-530-            "unit_of_measure": self.unit_of_measure,
+services/shared/canonical_event.py-531-            "event_timestamp": self.event_timestamp.isoformat(),
+services/shared/canonical_event.py-532-            "event_timezone": self.event_timezone,
+services/shared/canonical_event.py-533-            "from_entity_reference": self.from_entity_reference,
+services/shared/canonical_event.py-534-            "to_entity_reference": self.to_entity_reference,
+services/shared/canonical_event.py-535-            "from_facility_reference": self.from_facility_reference,
+services/shared/canonical_event.py-536-            "to_facility_reference": self.to_facility_reference,
+services/shared/canonical_event.py-537-            "transport_reference": self.transport_reference,
+services/shared/canonical_event.py-538-            "kdes": self.kdes,
+services/shared/canonical_event.py-539-            "schema_version": self.schema_version,
+services/shared/canonical_event.py-540-        }
+services/shared/canonical_event.py-541-
+--
+services/shared/canonical_event.py-758-    if raw_payload is None:
+services/shared/canonical_event.py-759-        raw_payload = {
+services/shared/canonical_event.py-760-            "cte_type": event.cte_type.value if hasattr(event.cte_type, "value") else event.cte_type,
+services/shared/canonical_event.py-761-            "source": source,
+services/shared/canonical_event.py-762-            "traceability_lot_code": event.traceability_lot_code,
+services/shared/canonical_event.py-763-            "product_description": event.product_description,
+services/shared/canonical_event.py:764:            "quantity": event.quantity,
+services/shared/canonical_event.py-765-            "unit_of_measure": event.unit_of_measure,
+services/shared/canonical_event.py-766-            "location_gln": event.location_gln,
+services/shared/canonical_event.py-767-            "location_name": event.location_name,
+services/shared/canonical_event.py-768-            "timestamp": event.timestamp,
+services/shared/canonical_event.py-769-            "kdes": event.kdes,
+services/shared/canonical_event.py-770-        }
+services/shared/canonical_event.py-771-        if hasattr(event, "input_traceability_lot_codes") and event.input_traceability_lot_codes:
+services/shared/canonical_event.py-772-            raw_payload["input_traceability_lot_codes"] = event.input_traceability_lot_codes
+services/shared/canonical_event.py-773-
+services/shared/canonical_event.py-774-    # Extract facility references from KDEs
+services/shared/canonical_event.py-775-    kdes = dict(event.kdes) if event.kdes else {}
+services/shared/canonical_event.py-776-    kdes.setdefault("ingest_source", source)
+--
+services/shared/canonical_event.py-807-        ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
+services/shared/canonical_event.py-808-        event_type=CTEType(event_type_val),
+services/shared/canonical_event.py-809-        event_timestamp=event.timestamp,
+services/shared/canonical_event.py-810-        product_reference=event.product_description,
+services/shared/canonical_event.py-811-        lot_reference=event.traceability_lot_code,
+services/shared/canonical_event.py-812-        traceability_lot_code=event.traceability_lot_code,
+services/shared/canonical_event.py:813:        quantity=event.quantity,
+services/shared/canonical_event.py-814-        unit_of_measure=event.unit_of_measure,
+services/shared/canonical_event.py-815-        from_facility_reference=from_facility,
+services/shared/canonical_event.py-816-        to_facility_reference=to_facility,
+services/shared/canonical_event.py-817-        from_entity_reference=kdes.get("ship_from_entity") or kdes.get("harvester_business_name"),
+services/shared/canonical_event.py-818-        to_entity_reference=kdes.get("ship_to_entity") or kdes.get("immediate_previous_source"),
+services/shared/canonical_event.py-819-        transport_reference=kdes.get("carrier") or kdes.get("transport_reference"),
+services/shared/canonical_event.py-820-        kdes=kdes,
+services/shared/canonical_event.py-821-        raw_payload=raw_payload,
+services/shared/canonical_event.py-822-        provenance_metadata=provenance,
+services/shared/canonical_event.py-823-    )
+services/shared/canonical_event.py-824-
+services/shared/canonical_event.py-825-    return canonical.prepare_for_persistence()
+services/shared/canonical_event.py-826-
+services/shared/canonical_event.py-827-
+services/shared/canonical_event.py:828:def _epcis_quantity_element(epcis_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+services/shared/canonical_event.py-829-    """The first ``QuantityElement`` an EPCIS event carries, or ``None``.
+services/shared/canonical_event.py-830-
+services/shared/canonical_event.py-831-    Precedence (kept in sync with ``epcis/normalization.py``): the EPCIS 1.x
+services/shared/canonical_event.py:832:    ``extension.quantityList`` wrapper, the EPCIS 2.0 top-level
+services/shared/canonical_event.py:833:    ``quantityList``, then a TransformationEvent's output and input lists.
+services/shared/canonical_event.py-834-    """
+services/shared/canonical_event.py:835:    quantity_list = (
+services/shared/canonical_event.py:836:        epcis_data.get("extension", {}).get("quantityList")
+services/shared/canonical_event.py:837:        or epcis_data.get("quantityList")
+services/shared/canonical_event.py-838-        or epcis_data.get("outputQuantityList")
+services/shared/canonical_event.py-839-        or epcis_data.get("inputQuantityList")
+services/shared/canonical_event.py-840-        or []
+services/shared/canonical_event.py-841-    )
+services/shared/canonical_event.py:842:    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
+services/shared/canonical_event.py:843:        return quantity_list[0]
+services/shared/canonical_event.py-844-    return None
+services/shared/canonical_event.py-845-
+services/shared/canonical_event.py-846-
+services/shared/canonical_event.py-847-def _epcis_unit_of_measure(epcis_data: Dict[str, Any]) -> str:
+services/shared/canonical_event.py:848:    """Unit for the quantity :func:`_require_epcis_quantity` returns.
+services/shared/canonical_event.py-849-
+services/shared/canonical_event.py-850-    EPCIS CBV defines a ``QuantityElement`` without ``uom`` as a count of
+services/shared/canonical_event.py-851-    instances, so ``each`` is the standard's own meaning for that case, not a
+services/shared/canonical_event.py-852-    substitute for a missing value. The flattened legacy shape
+services/shared/canonical_event.py:853:    (``quantity.value``) has no such rule: a missing unit there raises rather
+services/shared/canonical_event.py-854-    than being guessed.
+services/shared/canonical_event.py-855-    """
+services/shared/canonical_event.py:856:    element = _epcis_quantity_element(epcis_data)
+services/shared/canonical_event.py:857:    if element is not None and element.get("quantity") is not None:
+services/shared/canonical_event.py-858-        return str(element.get("uom") or "each")
+services/shared/canonical_event.py:859:    flat = epcis_data.get("quantity")
+services/shared/canonical_event.py-860-    if isinstance(flat, dict) and flat.get("uom"):
+services/shared/canonical_event.py-861-        return str(flat["uom"])
+services/shared/canonical_event.py:862:    raise ValueError("EPCIS event carries a quantity but no unit of measure (quantity.uom); refusing to assume one")
+services/shared/canonical_event.py-863-
+services/shared/canonical_event.py-864-
+services/shared/canonical_event.py:865:def _extract_epcis_quantity(
+services/shared/canonical_event.py-866-    epcis_data: Dict[str, Any],
+services/shared/canonical_event.py-867-) -> tuple[Optional[float], Optional[str]]:
+services/shared/canonical_event.py:868:    """Extract (quantity, uom) from an EPCIS event.
+services/shared/canonical_event.py-869-
+services/shared/canonical_event.py-870-    Handles the EPCIS 2.0 shape — a top-level
+services/shared/canonical_event.py:871:    ``quantityList[0].quantity`` — the EPCIS 1.x
+services/shared/canonical_event.py:872:    ``extension.quantityList`` wrapper the XML parser still writes, and
+services/shared/canonical_event.py:873:    the flattened ``quantity.value`` shape used by some test harnesses
+services/shared/canonical_event.py:874:    and legacy webhook shims. Returns ``(None, None)`` when no quantity
+services/shared/canonical_event.py-875-    is present so the caller can decide how to respond (reject vs.
+services/shared/canonical_event.py-876-    preserve vs. default). #1249: this function must never fabricate a
+services/shared/canonical_event.py-877-    value — the whole point of the fix is that silent 1.0 defaulting
+services/shared/canonical_event.py-878-    falsified FDA traceability records.
+services/shared/canonical_event.py-879-    """
+services/shared/canonical_event.py:880:    # #2968: the EPCIS 1.x XML wrapper (``extension.quantityList``) is
+services/shared/canonical_event.py-881-    # checked first for backward compatibility; the top-level member is
+services/shared/canonical_event.py-882-    # the real EPCIS 2.0 JSON/JSON-LD shape. Keep this precedence in sync
+services/shared/canonical_event.py-883-    # with ``_normalize_epcis_to_cte`` so the two writers cannot disagree
+services/shared/canonical_event.py-884-    # about the same event.
+services/shared/canonical_event.py-885-    # #2970 follow-up: a conformant EPCIS 2.0 ``TransformationEvent`` has
+services/shared/canonical_event.py:886:    # no ``quantityList`` at all — its quantities live in the input/output
+services/shared/canonical_event.py-887-    # lists. Before #2970 such an event was rejected at validation for its
+services/shared/canonical_event.py-888-    # missing ``action``, so this writer never saw one; making the required
+services/shared/canonical_event.py-889-    # fields event-type-dependent opened that path and left this function
+services/shared/canonical_event.py-890-    # raising on a *conformant* event. Prefer the output list: for a
+services/shared/canonical_event.py:891:    # transformation CTE the FSMA quantity is the lot it creates. This
+services/shared/canonical_event.py-892-    # mirrors ``epcis/normalization.py`` exactly — that module's comment
+services/shared/canonical_event.py-893-    # already claims the two agree on every event, and this is what makes
+services/shared/canonical_event.py-894-    # that true.
+services/shared/canonical_event.py:895:    element = _epcis_quantity_element(epcis_data)
+services/shared/canonical_event.py-896-    if element is not None:
+services/shared/canonical_event.py:897:        raw = element.get("quantity")
+services/shared/canonical_event.py-898-        uom = element.get("uom")
+services/shared/canonical_event.py-899-        if raw is not None:
+services/shared/canonical_event.py-900-            try:
+services/shared/canonical_event.py-901-                return float(raw), uom
+services/shared/canonical_event.py-902-            except (TypeError, ValueError):
+services/shared/canonical_event.py-903-                return None, uom
+services/shared/canonical_event.py-904-
+services/shared/canonical_event.py:905:    # Flattened legacy / test shape — quantity.value
+services/shared/canonical_event.py:906:    flat = epcis_data.get("quantity")
+services/shared/canonical_event.py-907-    if isinstance(flat, dict):
+services/shared/canonical_event.py-908-        raw = flat.get("value")
+services/shared/canonical_event.py-909-        uom = flat.get("uom")
+services/shared/canonical_event.py-910-        if raw is not None:
+services/shared/canonical_event.py-911-            try:
+services/shared/canonical_event.py-912-                return float(raw), uom
+services/shared/canonical_event.py-913-            except (TypeError, ValueError):
+services/shared/canonical_event.py-914-                return None, uom
+services/shared/canonical_event.py-915-
+services/shared/canonical_event.py-916-    return None, None
+services/shared/canonical_event.py-917-
+services/shared/canonical_event.py-918-
+services/shared/canonical_event.py:919:def _require_epcis_quantity(epcis_data: Dict[str, Any]) -> float:
+services/shared/canonical_event.py:920:    """Return the EPCIS quantity or raise :class:`ValueError`.
+services/shared/canonical_event.py-921-
+services/shared/canonical_event.py:922:    Callers that need a definitive numeric quantity (the canonical
+services/shared/canonical_event.py-923-    store, FDA export, rules engine) use this wrapper so a missing or
+services/shared/canonical_event.py-924-    non-numeric value is loud rather than silently defaulted. #1249.
+services/shared/canonical_event.py-925-    """
+services/shared/canonical_event.py:926:    value, _uom = _extract_epcis_quantity(epcis_data)
+services/shared/canonical_event.py-927-    if value is None:
+services/shared/canonical_event.py-928-        raise ValueError(
+services/shared/canonical_event.py:929:            "EPCIS event has no numeric quantity — cannot emit canonical "
+services/shared/canonical_event.py:930:            "TraceabilityEvent. Supply quantity via extension.quantityList "
+services/shared/canonical_event.py-931-            "or reject the event before normalization (#1249)."
+services/shared/canonical_event.py-932-        )
+services/shared/canonical_event.py-933-    return value
+services/shared/canonical_event.py-934-
+services/shared/canonical_event.py-935-
+services/shared/canonical_event.py-936-class UnmappedBizStepError(ValueError):
+services/shared/canonical_event.py-937-    """Raised when an EPCIS ``bizStep`` has no canonical CTE mapping.
+services/shared/canonical_event.py-938-
+services/shared/canonical_event.py-939-    Subclasses :class:`ValueError` so existing callers that catch
+services/shared/canonical_event.py-940-    ``ValueError`` around :func:`normalize_epcis_event` (the #1249
+services/shared/canonical_event.py:941:    quantity contract) keep working unchanged.
+services/shared/canonical_event.py-942-    """
+services/shared/canonical_event.py-943-
+services/shared/canonical_event.py-944-
+services/shared/canonical_event.py-945-# ---------------------------------------------------------------------------
+services/shared/canonical_event.py-946-# #2815 — EPCIS bizStep -> canonical CTEType
+services/shared/canonical_event.py-947-# ---------------------------------------------------------------------------
+services/shared/canonical_event.py-948-#
+services/shared/canonical_event.py-949-# THIS MAP MUST STAY BYTE-FOR-BYTE KEY-COMPATIBLE WITH
+services/shared/canonical_event.py-950-# ``services/ingestion/app/epcis/normalization.py::_EVENT_TYPE_MAP``.
+services/shared/canonical_event.py-951-#
+services/shared/canonical_event.py-952-# Both maps run against the SAME event inside a single transaction
+services/shared/canonical_event.py-953-# (``epcis/persistence.py`` writes the legacy ``fsma.cte_events`` row from
+--
+services/shared/canonical_event.py-1021-      3. A bare canonical CTE token, e.g. ``"shipping"`` -- the
+services/shared/canonical_event.py-1022-         "or direct value" form this function has always documented and
+services/shared/canonical_event.py-1023-         which non-EPCIS callers/tests rely on. Still an exact match
+services/shared/canonical_event.py-1024-         against the ``CTEType`` value set, never a substring.
+services/shared/canonical_event.py-1025-
+services/shared/canonical_event.py-1026-    Anything else raises :class:`UnmappedBizStepError`. We do NOT fall back
+services/shared/canonical_event.py:1027:    to ``CTEType.RECEIVING``: for the same reason the quantity default was
+services/shared/canonical_event.py-1028-    removed in #1249, a silent default fabricates an FDA traceability
+services/shared/canonical_event.py-1029-    record that says something the supplier never reported.
+services/shared/canonical_event.py-1030-    """
+services/shared/canonical_event.py-1031-    raw = "" if biz_step is None else str(biz_step).strip()
+services/shared/canonical_event.py-1032-    if not raw:
+services/shared/canonical_event.py-1033-        raise UnmappedBizStepError(
+services/shared/canonical_event.py-1034-            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. "
+services/shared/canonical_event.py-1035-            "Supply a CBV or FSMA bizStep URI. (#2815)"
+services/shared/canonical_event.py-1036-        )
+services/shared/canonical_event.py-1037-
+services/shared/canonical_event.py-1038-    lowered = raw.lower()
+services/shared/canonical_event.py-1039-
+--
+services/shared/canonical_event.py-1107-    extension = epcis_data.get("extension")
+services/shared/canonical_event.py-1108-    extension = extension if isinstance(extension, dict) else {}
+services/shared/canonical_event.py-1109-    classes = [
+services/shared/canonical_event.py-1110-        q.get("epcClass")
+services/shared/canonical_event.py-1111-        for q in (
+services/shared/canonical_event.py-1112-            _epcis_list(epcis_data, "outputQuantityList")
+services/shared/canonical_event.py:1113:            + _epcis_list(epcis_data, "quantityList")
+services/shared/canonical_event.py:1114:            + (list(extension.get("quantityList") or []) if isinstance(extension.get("quantityList"), list) else [])
+services/shared/canonical_event.py-1115-        )
+services/shared/canonical_event.py-1116-        if isinstance(q, dict) and q.get("epcClass")
+services/shared/canonical_event.py-1117-    ]
+services/shared/canonical_event.py-1118-    gtin = next((g for g in (_epc_gtin(e) for e in epcs + classes) if g), None)
+services/shared/canonical_event.py-1119-
+services/shared/canonical_event.py-1120-    for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
+services/shared/canonical_event.py-1121-        value = ilmd.get(key)
+services/shared/canonical_event.py-1122-        if value is not None and str(value).strip():
+services/shared/canonical_event.py-1123-            return str(value).strip(), gtin
+services/shared/canonical_event.py-1124-    for epc in epcs + classes:
+services/shared/canonical_event.py-1125-        if "lgtin" in str(epc).lower():
+services/shared/canonical_event.py-1126-            segment = _epc_last_segment(epc)
+--
+services/shared/canonical_event.py-1139-        "EPCIS event carries no lot identifier (ILMD traceabilityLotCode or lotNumber, an LGTIN or SGTIN "
+services/shared/canonical_event.py-1140-        "EPC, or traceability_lot_code); refusing to fabricate one"
+services/shared/canonical_event.py-1141-    )
+services/shared/canonical_event.py-1142-
+services/shared/canonical_event.py-1143-
+services/shared/canonical_event.py-1144-def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+services/shared/canonical_event.py:1145:    """Per-input lot, quantity and unit for a TransformationEvent.
+services/shared/canonical_event.py-1146-
+services/shared/canonical_event.py-1147-    ``inputQuantityList`` carries class-level (LGTIN) inputs with an explicit
+services/shared/canonical_event.py:1148:    quantity; a quantityElement without ``uom`` is a count of instances in
+services/shared/canonical_event.py-1149-    EPCIS, recorded as ``each``. ``inputEPCList`` carries instance EPCs, each
+services/shared/canonical_event.py-1150-    of which is exactly one item. Lots are not merged or summed.
+services/shared/canonical_event.py-1151-    """
+services/shared/canonical_event.py-1152-    inputs: List[Dict[str, Any]] = []
+services/shared/canonical_event.py-1153-    seen: set = set()
+services/shared/canonical_event.py-1154-    for element in _epcis_list(epcis_data, "inputQuantityList"):
+services/shared/canonical_event.py-1155-        if not isinstance(element, dict):
+services/shared/canonical_event.py-1156-            continue
+services/shared/canonical_event.py-1157-        lot = _epc_last_segment(element.get("epcClass"))
+services/shared/canonical_event.py-1158-        if not lot or lot in seen:
+services/shared/canonical_event.py-1159-            continue
+services/shared/canonical_event.py:1160:        raw_quantity = element.get("quantity")
+services/shared/canonical_event.py-1161-        try:
+services/shared/canonical_event.py:1162:            quantity = float(raw_quantity) if raw_quantity is not None else None
+services/shared/canonical_event.py-1163-        except (TypeError, ValueError):
+services/shared/canonical_event.py:1164:            quantity = None
+services/shared/canonical_event.py-1165-        inputs.append(
+services/shared/canonical_event.py-1166-            {
+services/shared/canonical_event.py-1167-                "traceability_lot_code": lot,
+services/shared/canonical_event.py:1168:                "quantity": quantity,
+services/shared/canonical_event.py:1169:                "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
+services/shared/canonical_event.py-1170-                "epc_class": element.get("epcClass"),
+services/shared/canonical_event.py-1171-            }
+services/shared/canonical_event.py-1172-        )
+services/shared/canonical_event.py-1173-        seen.add(lot)
+services/shared/canonical_event.py-1174-    for epc in _epcis_list(epcis_data, "inputEPCList"):
+services/shared/canonical_event.py-1175-        segment = _epc_last_segment(epc)
+services/shared/canonical_event.py-1176-        if not segment or segment in seen:
+services/shared/canonical_event.py-1177-            continue
+services/shared/canonical_event.py:1178:        inputs.append({"traceability_lot_code": segment, "quantity": 1.0, "unit_of_measure": "each", "epc": str(epc)})
+services/shared/canonical_event.py-1179-        seen.add(segment)
+services/shared/canonical_event.py-1180-    return inputs
+services/shared/canonical_event.py-1181-
+services/shared/canonical_event.py-1182-
+services/shared/canonical_event.py-1183-def normalize_epcis_event(
+services/shared/canonical_event.py-1184-    epcis_data: Dict[str, Any],
+services/shared/canonical_event.py-1185-    tenant_id: str,
+services/shared/canonical_event.py-1186-    ingestion_run_id: Optional[str] = None,
+services/shared/canonical_event.py-1187-) -> TraceabilityEvent:
+services/shared/canonical_event.py-1188-    """
+services/shared/canonical_event.py-1189-    Normalize an EPCIS 2.0 event dict into a canonical TraceabilityEvent.
+services/shared/canonical_event.py-1190-
+services/shared/canonical_event.py-1191-    Maps EPCIS vocabulary (bizStep, readPoint, bizLocation) to canonical fields.
+services/shared/canonical_event.py-1192-
+services/shared/canonical_event.py:1193:    #1249 — quantity handling:
+services/shared/canonical_event.py:1194:      * Extracts quantity from ``extension.quantityList[0]`` (real EPCIS
+services/shared/canonical_event.py:1195:        shape) OR ``quantity.value`` (flattened shape). Either path can
+services/shared/canonical_event.py-1196-        carry the value; whichever is present wins.
+services/shared/canonical_event.py:1197:      * If no quantity is present or the value is non-numeric, raises
+services/shared/canonical_event.py-1198-        :class:`ValueError`. We no longer default to 1 — the old default
+services/shared/canonical_event.py-1199-        silently fabricated FDA traceability records.
+services/shared/canonical_event.py-1200-      * Zero is preserved (consistent with FSMAEvent ``ge=0`` and the
+services/shared/canonical_event.py-1201-        updated canonical constraint).
+services/shared/canonical_event.py-1202-
+services/shared/canonical_event.py-1203-    #2815 — bizStep handling:
+services/shared/canonical_event.py-1204-      * ``bizStep`` is resolved by EXACT lookup against
+services/shared/canonical_event.py-1205-        :data:`BIZSTEP_TO_CTE_TYPE` (see :func:`_resolve_bizstep_to_cte_type`),
+services/shared/canonical_event.py-1206-        the same key set ``epcis/normalization.py::_EVENT_TYPE_MAP`` uses.
+services/shared/canonical_event.py-1207-      * An unmapped bizStep raises :class:`UnmappedBizStepError` (a
+services/shared/canonical_event.py-1208-        ``ValueError``). The previous fuzzy substring match with a
+services/shared/canonical_event.py-1209-        ``CTEType.RECEIVING`` default silently fabricated FDA traceability
+services/shared/canonical_event.py-1210-        records for five real bizSteps — same reasoning as the #1249
+services/shared/canonical_event.py:1211:        quantity default above.
+services/shared/canonical_event.py-1212-    """
+services/shared/canonical_event.py-1213-    # Map EPCIS bizStep to CTE type — EXACT lookup against the single
+services/shared/canonical_event.py-1214-    # authoritative map, raising on anything unmapped (#2815). The old
+services/shared/canonical_event.py-1215-    # 6-entry fuzzy substring loop silently defaulted to CTEType.RECEIVING
+services/shared/canonical_event.py-1216-    # and disagreed with epcis/normalization.py on five real bizSteps.
+services/shared/canonical_event.py-1217-    biz_step = epcis_data.get("bizStep", "")
+services/shared/canonical_event.py-1218-    cte_type = _resolve_bizstep_to_cte_type(biz_step)
+services/shared/canonical_event.py-1219-
+services/shared/canonical_event.py-1220-    # Extract identifiers. The lot code follows the same precedence as the
+services/shared/canonical_event.py-1221-    # legacy path (epcis/extraction._extract_lot_data): ILMD first. The old
+services/shared/canonical_event.py-1222-    # code read only epcList, so a TransformationEvent (which carries
+services/shared/canonical_event.py-1223-    # input/output lists instead) or any event naming its lot in ILMD was
+--
+services/shared/canonical_event.py-1240-    extensions = dict(epcis_data.get("ilmd") or {})
+services/shared/canonical_event.py-1241-    extensions.update(epcis_data.get("extension") or {})
+services/shared/canonical_event.py-1242-    for k, v in extensions.items():
+services/shared/canonical_event.py-1243-        kdes[k] = v
+services/shared/canonical_event.py-1244-
+services/shared/canonical_event.py-1245-    # Transformation inputs (21 CFR 1.1350(a)(1)): each input lot with its
+services/shared/canonical_event.py:1246:    # quantity and unit from inputQuantityList, plus instance EPCs from
+services/shared/canonical_event.py-1247-    # inputEPCList. Feeds fsma.transformation_links via kdes.inputs and the
+services/shared/canonical_event.py-1248-    # lot-linkage rule via kdes.input_lot_codes.
+services/shared/canonical_event.py-1249-    if cte_type == CTEType.TRANSFORMATION:
+services/shared/canonical_event.py-1250-        inputs = _epcis_transformation_inputs(epcis_data)
+services/shared/canonical_event.py-1251-        if inputs:
+services/shared/canonical_event.py-1252-            kdes["inputs"] = inputs
+services/shared/canonical_event.py-1253-            kdes.setdefault("input_lot_codes", [entry["traceability_lot_code"] for entry in inputs])
+services/shared/canonical_event.py-1254-
+services/shared/canonical_event.py-1255-    provenance = ProvenanceMetadata(
+services/shared/canonical_event.py-1256-        mapper_name="epcis_normalizer",
+services/shared/canonical_event.py-1257-        mapper_version="1.0.0",
+services/shared/canonical_event.py-1258-        original_format="epcis_json" if not epcis_data.get("_xml_source") else "epcis_xml",
+--
+services/shared/canonical_event.py-1269-        event_timezone=epcis_data.get("eventTimeZoneOffset", "UTC"),
+services/shared/canonical_event.py-1270-        product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
+services/shared/canonical_event.py-1271-        lot_reference=tlc,
+services/shared/canonical_event.py-1272-        traceability_lot_code=tlc,
+services/shared/canonical_event.py-1273-        # #1249: extract from real EPCIS shape; do NOT fabricate on missing.
+services/shared/canonical_event.py-1274-        # Raising here forces ingestion code to surface the problem rather
+services/shared/canonical_event.py:1275:        # than silently producing a 1.0-quantity canonical row.
+services/shared/canonical_event.py:1276:        quantity=_require_epcis_quantity(epcis_data),
+services/shared/canonical_event.py-1277-        unit_of_measure=_epcis_unit_of_measure(epcis_data),
+services/shared/canonical_event.py-1278-        from_facility_reference=epcis_data.get("readPoint", {}).get("id")
+services/shared/canonical_event.py-1279-        if isinstance(epcis_data.get("readPoint"), dict)
+services/shared/canonical_event.py-1280-        else epcis_data.get("readPoint"),
+services/shared/canonical_event.py-1281-        to_facility_reference=epcis_data.get("bizLocation", {}).get("id")
+services/shared/canonical_event.py-1282-        if isinstance(epcis_data.get("bizLocation"), dict)
+services/shared/canonical_event.py-1283-        else epcis_data.get("bizLocation"),
+services/shared/canonical_event.py-1284-        kdes=kdes,
+services/shared/canonical_event.py-1285-        raw_payload=epcis_data,
+services/shared/canonical_event.py-1286-        provenance_metadata=provenance,
+services/shared/canonical_event.py-1287-        epcis_event_type=epcis_data.get("type", epcis_data.get("eventType")),
+services/shared/canonical_event.py-1288-        epcis_action=epcis_data.get("action"),
+--
+services/shared/canonical_event.py-1293-
+services/shared/canonical_event.py-1294-
+services/shared/canonical_event.py-1295-class CSVRowNormalizationError(ValueError):
+services/shared/canonical_event.py-1296-    """A CSV row lacks a required KDE or names an unrecognised event type.
+services/shared/canonical_event.py-1297-
+services/shared/canonical_event.py-1298-    The canonical normalizer never invents a value for a missing field. A
+services/shared/canonical_event.py:1299:    fabricated timestamp, lot code, quantity, unit, or event type would enter
+services/shared/canonical_event.py-1300-    the hash chain as evidence, so the row is rejected and the caller reports
+services/shared/canonical_event.py-1301-    ``missing`` / ``invalid`` back to the uploader (row-level, not file-level).
+services/shared/canonical_event.py-1302-    """
+services/shared/canonical_event.py-1303-
+services/shared/canonical_event.py-1304-    def __init__(
+services/shared/canonical_event.py-1305-        self,
+services/shared/canonical_event.py-1306-        message: str,
+services/shared/canonical_event.py-1307-        *,
+services/shared/canonical_event.py-1308-        row_number: Optional[int] = None,
+services/shared/canonical_event.py-1309-        missing: Optional[List[str]] = None,
+services/shared/canonical_event.py-1310-        invalid: Optional[List[str]] = None,
+services/shared/canonical_event.py-1311-    ) -> None:
+--
+services/shared/canonical_event.py-1346-
+services/shared/canonical_event.py-1347-    column_mapping maps source column names to canonical field names.
+services/shared/canonical_event.py-1348-    Unmapped columns are stored in kdes.
+services/shared/canonical_event.py-1349-
+services/shared/canonical_event.py-1350-    Required after mapping: ``event_type`` (a recognised CTE), ``event_timestamp``
+services/shared/canonical_event.py-1351-    (or ``timestamp``), ``traceability_lot_code`` (or ``tlc``), a numeric
+services/shared/canonical_event.py:1352:    ``quantity``, and ``unit_of_measure``. A blank or unrecognised required
+services/shared/canonical_event.py-1353-    field raises :class:`CSVRowNormalizationError`; nothing is defaulted.
+services/shared/canonical_event.py-1354-    Earlier versions silently substituted ``now()``, ``"UNKNOWN"``, ``1``,
+services/shared/canonical_event.py-1355-    ``"each"`` and ``receiving`` for those fields.
+services/shared/canonical_event.py-1356-    """
+services/shared/canonical_event.py-1357-    # Apply column mapping
+services/shared/canonical_event.py-1358-    mapped: Dict[str, Any] = {}
+services/shared/canonical_event.py-1359-    kdes: Dict[str, Any] = {}
+services/shared/canonical_event.py-1360-    for src_col, value in row.items():
+services/shared/canonical_event.py-1361-        if src_col in column_mapping:
+services/shared/canonical_event.py-1362-            mapped[column_mapping[src_col]] = value
+services/shared/canonical_event.py-1363-        else:
+services/shared/canonical_event.py-1364-            # Unmapped columns become KDEs
+--
+services/shared/canonical_event.py-1390-        missing.append("event_timestamp")
+services/shared/canonical_event.py-1391-
+services/shared/canonical_event.py-1392-    tlc_raw = _first("traceability_lot_code", "tlc")
+services/shared/canonical_event.py-1393-    if tlc_raw is None:
+services/shared/canonical_event.py-1394-        missing.append("traceability_lot_code")
+services/shared/canonical_event.py-1395-
+services/shared/canonical_event.py:1396:    quantity: Optional[float] = None
+services/shared/canonical_event.py:1397:    quantity_raw = _first("quantity")
+services/shared/canonical_event.py:1398:    if quantity_raw is None:
+services/shared/canonical_event.py:1399:        missing.append("quantity")
+services/shared/canonical_event.py-1400-    else:
+services/shared/canonical_event.py-1401-        try:
+services/shared/canonical_event.py:1402:            quantity = float(str(quantity_raw).strip())
+services/shared/canonical_event.py-1403-        except ValueError:
+services/shared/canonical_event.py:1404:            invalid.append(f"quantity={str(quantity_raw).strip()!r} (not a number)")
+services/shared/canonical_event.py-1405-
+services/shared/canonical_event.py-1406-    uom_raw = _first("unit_of_measure")
+services/shared/canonical_event.py-1407-    if uom_raw is None:
+services/shared/canonical_event.py-1408-        missing.append("unit_of_measure")
+services/shared/canonical_event.py-1409-
+services/shared/canonical_event.py-1410-    if missing or invalid:
+services/shared/canonical_event.py-1411-        where = f"row {row_number}" if row_number is not None else "row"
+services/shared/canonical_event.py-1412-        parts = []
+services/shared/canonical_event.py-1413-        if missing:
+services/shared/canonical_event.py-1414-            parts.append("missing " + ", ".join(missing))
+services/shared/canonical_event.py-1415-        if invalid:
+services/shared/canonical_event.py-1416-            parts.append("invalid " + "; ".join(invalid))
+services/shared/canonical_event.py-1417-        raise CSVRowNormalizationError(
+services/shared/canonical_event.py-1418-            f"CSV {where} cannot be normalized: " + " | ".join(parts),
+services/shared/canonical_event.py-1419-            row_number=row_number,
+services/shared/canonical_event.py-1420-            missing=missing,
+services/shared/canonical_event.py-1421-            invalid=invalid,
+services/shared/canonical_event.py-1422-        )
+services/shared/canonical_event.py:1423:    assert event_type is not None and quantity is not None  # narrowed above
+services/shared/canonical_event.py-1424-
+services/shared/canonical_event.py-1425-    provenance = ProvenanceMetadata(
+services/shared/canonical_event.py-1426-        source_file_name=source_file_name,
+services/shared/canonical_event.py-1427-        mapper_name="csv_normalizer",
+services/shared/canonical_event.py-1428-        mapper_version="1.1.0",
+services/shared/canonical_event.py-1429-        original_format="csv",
+services/shared/canonical_event.py-1430-        normalization_rules_applied=["csv_column_mapping"],
+services/shared/canonical_event.py-1431-        extraction_confidence=1.0,
+services/shared/canonical_event.py-1432-    )
+services/shared/canonical_event.py-1433-
+services/shared/canonical_event.py-1434-    canonical = TraceabilityEvent(
+services/shared/canonical_event.py-1435-        tenant_id=UUID(tenant_id) if isinstance(tenant_id, str) else tenant_id,
+--
+services/shared/canonical_event.py-1438-        ingestion_run_id=UUID(ingestion_run_id) if ingestion_run_id else None,
+services/shared/canonical_event.py-1439-        event_type=CTEType(event_type),
+services/shared/canonical_event.py-1440-        event_timestamp=timestamp_raw,
+services/shared/canonical_event.py-1441-        product_reference=mapped.get("product_description", mapped.get("product_reference", "")),
+services/shared/canonical_event.py-1442-        lot_reference=_first("lot_reference") or str(tlc_raw).strip(),
+services/shared/canonical_event.py-1443-        traceability_lot_code=str(tlc_raw).strip(),
+services/shared/canonical_event.py:1444:        quantity=quantity,
+services/shared/canonical_event.py-1445-        unit_of_measure=str(uom_raw).strip().lower(),
+services/shared/canonical_event.py-1446-        from_facility_reference=mapped.get(
+services/shared/canonical_event.py-1447-            "from_facility_reference", mapped.get("ship_from_location", mapped.get("location_gln"))
+services/shared/canonical_event.py-1448-        ),
+services/shared/canonical_event.py-1449-        to_facility_reference=mapped.get("to_facility_reference", mapped.get("ship_to_location")),
+services/shared/canonical_event.py-1450-        from_entity_reference=mapped.get("from_entity_reference"),
+services/shared/canonical_event.py-1451-        to_entity_reference=mapped.get("to_entity_reference"),
+services/shared/canonical_event.py-1452-        transport_reference=mapped.get("transport_reference", mapped.get("carrier")),
+services/shared/canonical_event.py-1453-        kdes=kdes,
+services/shared/canonical_event.py-1454-        raw_payload=row,
+services/shared/canonical_event.py-1455-        provenance_metadata=provenance,
+services/shared/canonical_event.py-1456-        confidence_score=1.0,
+--
+services/ingestion/app/webhook_compat.py-295-            try:
+services/ingestion/app/webhook_compat.py-296-                store_result = persistence.store_event(
+services/ingestion/app/webhook_compat.py-297-                    tenant_id=tenant_id,
+services/ingestion/app/webhook_compat.py-298-                    event_type=event.cte_type.value,
+services/ingestion/app/webhook_compat.py-299-                    traceability_lot_code=event.traceability_lot_code,
+services/ingestion/app/webhook_compat.py-300-                    product_description=event.product_description,
+services/ingestion/app/webhook_compat.py:301:                    quantity=event.quantity,
+services/ingestion/app/webhook_compat.py-302-                    unit_of_measure=event.unit_of_measure,
+services/ingestion/app/webhook_compat.py-303-                    event_timestamp=event.timestamp,
+services/ingestion/app/webhook_compat.py-304-                    source=payload.source,
+services/ingestion/app/webhook_compat.py-305-                    location_gln=event.location_gln,
+services/ingestion/app/webhook_compat.py-306-                    location_name=event.location_name,
+services/ingestion/app/webhook_compat.py-307-                    kdes=event.kdes,
+services/ingestion/app/webhook_compat.py-308-                    alerts=alerts,
+services/ingestion/app/webhook_compat.py-309-                )
+services/ingestion/app/webhook_compat.py-310-
+services/ingestion/app/webhook_compat.py-311-                # Canonical normalization + rule evaluation (best-effort).
+services/ingestion/app/webhook_compat.py-312-                # Runs BEFORE the primary savepoint commits so a rule
+services/ingestion/app/webhook_compat.py-313-                # rejection (under RULES_ENGINE_ENFORCE=cte_only|all) can
+--
+services/ingestion/app/webhook_compat.py-329-                    engine = RulesEngine(db_session)
+services/ingestion/app/webhook_compat.py-330-                    event_data = {
+services/ingestion/app/webhook_compat.py-331-                        "event_id": str(canonical.event_id),
+services/ingestion/app/webhook_compat.py-332-                        "event_type": canonical.event_type.value,
+services/ingestion/app/webhook_compat.py-333-                        "traceability_lot_code": canonical.traceability_lot_code,
+services/ingestion/app/webhook_compat.py-334-                        "product_reference": canonical.product_reference,
+services/ingestion/app/webhook_compat.py:335:                        "quantity": canonical.quantity,
+services/ingestion/app/webhook_compat.py-336-                        "unit_of_measure": canonical.unit_of_measure,
+services/ingestion/app/webhook_compat.py-337-                        "from_facility_reference": canonical.from_facility_reference,
+services/ingestion/app/webhook_compat.py-338-                        "to_facility_reference": canonical.to_facility_reference,
+services/ingestion/app/webhook_compat.py-339-                        "from_entity_reference": canonical.from_entity_reference,
+services/ingestion/app/webhook_compat.py-340-                        "to_entity_reference": canonical.to_entity_reference,
+services/ingestion/app/webhook_compat.py-341-                        "kdes": canonical.kdes,
+services/ingestion/app/webhook_compat.py-342-                    }
+services/ingestion/app/webhook_compat.py-343-                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+services/ingestion/app/webhook_compat.py-344-                    canon_sp.commit()
+services/ingestion/app/webhook_compat.py-345-                except (ImportError, ValueError, TypeError, RuntimeError) as canon_err:
+services/ingestion/app/webhook_compat.py-346-                    canon_sp.rollback()
+services/ingestion/app/webhook_compat.py-347-                    summary = None

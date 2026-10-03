@@ -1,0 +1,313 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:50:41.891Z",
+  "lcp": 532,
+  "cls": 0,
+  "url": "/demo",
+  "width": 390,
+  "height": 844,
+  "documentWidth": 390,
+  "title": "Interactive Demo \u2014 RegEngine FSMA 204 Compliance Platform",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "Compliance Dashboard"
+    },
+    {
+      "level": "H2",
+      "text": "Compliance by CTE Type"
+    },
+    {
+      "level": "H2",
+      "text": "Top Rule Violations"
+    },
+    {
+      "level": "H2",
+      "text": "Recent CTE Events"
+    },
+    {
+      "level": "H2",
+      "text": "Supplier Compliance"
+    },
+    {
+      "level": "H2",
+      "text": "This could be your data"
+    },
+    {
+      "level": "H2",
+      "text": "Product"
+    },
+    {
+      "level": "H2",
+      "text": "Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Developers"
+    },
+    {
+      "level": "H2",
+      "text": "Company"
+    },
+    {
+      "level": "H2",
+      "text": "We use cookies"
+    }
+  ],
+  "inputs": [],
+  "buttons": [
+    {
+      "text": "",
+      "name": "Open navigation menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Close menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "Cookie Preferences",
+      "name": "Manage cookie preferences",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    },
+    {
+      "text": "AcceptAccept analytics",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "EssentialEssential only",
+      "name": null,
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 21.69999999552965,
+      "domContentLoaded": 84.69999999552965,
+      "duration": 131.89999999850988
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 532
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 532
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 4.800000004470348
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 17
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 17.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 35.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 36.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 36.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 36.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 37.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 37.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 39.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 39.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/276ewxhwbmqpf.js",
+      "duration": 39.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 39.899999998509884
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 3.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 42
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 41.79999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 42.100000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 2.6999999955296516
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [],
+    "incomplete": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscuring",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it partially overlaps other elements"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<p class=\"text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed\">Essential sessions. Analytics only if accepted. <a class=\"text-[var(--re-brand)] underline hover:opacity-90\" href=\"/privacy\">Privacy Policy</a>.</p>",
+            "target": [
+              ".text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it partially overlaps other elements"
+          }
+        ]
+      }
+    ],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-dialog-name",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "landmark-contentinfo-is-top-level",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-contentinfo",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-in-text-block",
+      "link-name",
+      "list",
+      "listitem",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "scrollable-region-focusable",
+      "skip-link",
+      "tabindex",
+      "target-size"
+    ]
+  }
+}

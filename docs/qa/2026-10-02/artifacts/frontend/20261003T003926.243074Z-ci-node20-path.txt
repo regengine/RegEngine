@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:39:26.243074+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env HOME=/private/tmp/regengine-qa-npm-home NPM_CONFIG_USERCONFIG=/dev/null npm exec --offline --package=node@20 -- node -p process.execPath
+Exit: 0
+Duration: 1.24s
+Timeout: False
+
+npm warn exec The following package was not found and will be installed: node@20.20.2
+/private/tmp/regengine-qa-npm-home/.npm/_npx/ebaba8b9e55fd0a9/node_modules/node/bin/node

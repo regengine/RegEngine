@@ -1,0 +1,5 @@
+PID=31057
+Port=3104
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Mirror=/private/tmp/regengine-qa-ux-u2059hm8/app-built
+Command=['node', '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3104']

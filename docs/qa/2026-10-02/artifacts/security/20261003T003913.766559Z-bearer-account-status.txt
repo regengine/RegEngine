@@ -1,0 +1,139 @@
+UTC: 2026-10-03T00:39:13.766559+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'nl -ba services/admin/app/dependencies.py | sed -n "239,303p"; nl -ba services/admin/app/dependencies.py | sed -n "409,440p"; rg -n "suspend|status|global_status|disabled|inactive|deactiv" services/admin/tests/test_get_current_user* services/admin/tests/test_auth_runtime_hardening.py services/admin/tests/test_tenant_session_guard_2696.py services/admin/tests/test_auth_revocation_strict.py | head -100; rg -n "global_status|status.*suspend|suspend.*status" services/admin/app -g "*.py" | head -100'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+   239	            )
+   240	        finally:
+   241	            disarm_global_admin_context(db)
+   242	        user_id = str(context.user.id)
+   243	        session_cookie_auth = True
+   244	
+   245	    # 1. Retain Supabase bearer compatibility only outside production.
+   246	    # RegEngine also issues its own signed JWTs from passwordless auth flows,
+   247	    # so a Supabase rejection in local/staging may still be a valid RegEngine
+   248	    # token and falls through to the local verifier.
+   249	    # Production/consolidated runtime accepts only RegEngine-issued local
+   250	    # bearer tokens, whose JTI, session row, and token_version all participate
+   251	    # in the local revocation domain. Do not even send bearer material to the
+   252	    # independent Supabase verifier in that runtime.
+   253	    sb = get_supabase() if token and not requires_strict_auth_runtime() else None
+   254	    if sb:
+   255	        try:
+   256	            # Supabase validates the JWT signature and expiration against the project
+   257	            user_response = sb.auth.get_user(token)
+   258	            if user_response and user_response.user:
+   259	                sb_user = user_response.user
+   260	                user_id = sb_user.id
+   261	                # SECURITY (#1345): tenant_id MUST come from app_metadata
+   262	                # (service-role-only writable), NEVER from user_metadata
+   263	                # (user-writable via supabase.auth.updateUser). Reading
+   264	                # user_metadata lets a multi-tenant user silently switch
+   265	                # which tenant they act as from the browser.
+   266	                app_meta = getattr(sb_user, "app_metadata", None) or {}
+   267	                tenant_id = app_meta.get("tenant_id")
+   268	                tv_raw = app_meta.get("tv")
+   269	                if tv_raw is None:
+   270	                    tv_raw = app_meta.get("token_version")
+   271	                token_version_claim = _parse_token_version(tv_raw)
+   272	
+   273	                # User existence verified below (db.get raises if missing)
+   274	        except Exception as e:
+   275	            if _is_supabase_token_rejection(e):
+   276	                logger.warning(
+   277	                    "supabase_auth_token_rejected",
+   278	                    error=str(e),
+   279	                    error_type=e.__class__.__name__,
+   280	                )
+   281	                # Continue to the local RegEngine JWT verifier. If this token
+   282	                # is not a valid RegEngine session token either, the local
+   283	                # decode path below returns the same 401.
+   284	            else:
+   285	                # httpx transport failures (ConnectError, timeouts, …) are
+   286	                # infrastructure errors, not token verdicts — without this
+   287	                # they re-raise as 500s on every JWT-authed route whenever
+   288	                # Supabase is unreachable, instead of the fail-closed 401
+   289	                # (prod) / local-JWT fallback (dev) below.
+   290	                if not (
+   291	                    _is_supabase_transient_exception(e)
+   292	                    or isinstance(
+   293	                        e, (OSError, TimeoutError, ConnectionError, ValueError, AttributeError, httpx.HTTPError)
+   294	                    )
+   295	                ):
+   296	                    raise
+   297	                logger.warning("supabase_auth_failed", error=str(e))
+   298	
+   299	    # 2. Fallback to local RegEngine JWT.
+   300	    # Reached when Supabase is not configured, or when Supabase rejects a token
+   301	    # that may be a RegEngine-issued session token. This is the only production
+   302	    # bearer path, so all production principals share one revocation domain.
+   303	    if not user_id:
+   409	    # SECURITY (#1860): enforce token_version. /auth/logout-all and
+   410	    # logout-all and account security events bump user.token_version expecting this check;
+   411	    # without it, stolen access tokens survive both for their full TTL.
+   412	    user_tv = _parse_token_version(getattr(user, "token_version", None)) or 0
+   413	    if token_version_claim is not None:
+   414	        if token_version_claim < user_tv:
+   415	            logger.warning(
+   416	                "stale_token_version_rejected",
+   417	                user_id=user_id,
+   418	                token_tv=token_version_claim,
+   419	                user_tv=user_tv,
+   420	            )
+   421	            raise credentials_exception
+   422	    elif user_tv > 0 and not session_cookie_auth:
+   423	        # Cookie sessions never carry a version claim; logout-all kills
+   424	        # them by revoking their SessionModel row instead (sessions_router).
+   425	        logger.warning(
+   426	            "missing_token_version_rejected",
+   427	            user_id=user_id,
+   428	            user_tv=user_tv,
+   429	        )
+   430	        raise credentials_exception
+   431	
+   432	    logger.info("user_authenticated", user_id=user_id)
+   433	
+   434	    # SECURITY (#1345): if no trusted tenant claim is present, derive from
+   435	    # the DB — but only when there is exactly one active membership. Users
+   436	    # who belong to multiple tenants must have tenant_id written into
+   437	    # app_metadata (or the local JWT) by the server; we refuse to guess.
+   438	    if not tenant_id:
+   439	        try:
+   440	            # Selecting a tenant is the final pre-tenant bootstrap query.  The
+services/admin/tests/test_get_current_user_tenant_source.py:205:    assert exc.value.status_code == 401
+services/admin/tests/test_get_current_user_tenant_source.py:234:        status="active",
+services/admin/tests/test_get_current_user_tenant_source.py:274:    assert exc.value.status_code == 503
+services/admin/tests/test_get_current_user_tenant_source.py:316:    assert exc.value.status_code == 401
+services/admin/tests/test_get_current_user_tenant_required.py:120:    assert exc.value.status_code == 401
+services/admin/tests/test_auth_revocation_strict.py:158:    assert result == {"status": "success"}
+services/admin/tests/test_auth_revocation_strict.py:186:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:231:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:276:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:297:        status="active",
+services/admin/tests/test_auth_revocation_strict.py:319:    assert logout_exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:326:    assert replay_exc.value.status_code == 401
+services/admin/tests/test_auth_revocation_strict.py:709:    assert key_exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:718:    assert all_exc.value.status_code == 503
+services/admin/tests/test_auth_revocation_strict.py:730:    assert result == {"status": "revoked", "jti": "canonical-jti"}
+services/admin/tests/test_auth_runtime_hardening.py:338:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:357:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:385:        status="active",
+services/admin/tests/test_auth_runtime_hardening.py:398:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:443:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:467:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:489:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:515:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:551:    assert exc.value.status_code == 503
+services/admin/tests/test_auth_runtime_hardening.py:570:    assert exc.value.status_code == 503
+services/admin/app/models.py:18:    status: str = "active"  # active, suspended, archived
+services/admin/app/erasure_routes.py:273:    user.global_status = "erased"
+services/admin/app/auth/session_auth.py:81:            UserModel.global_status == "active",
+services/admin/app/sqlalchemy_models.py:80:    status = Column(String, nullable=False, default="active")  # active, suspended, archived
+services/admin/app/sqlalchemy_models.py:95:    global_status = Column(String, nullable=False, default="active", server_default="active")
+services/admin/app/auth/webauthn_router.py:301:            UserModel.global_status == "active",
+services/admin/app/auth/webauthn_router.py:323:            UserModel.global_status == "active",
+services/admin/app/auth/challenges_router.py:319:            UserModel.global_status == "active",
+services/admin/app/user_routes.py:67:      ``users.global_status == 'active'`` and ``users.status == 'active'``, so a
+services/admin/app/user_routes.py:94:            UserModel.global_status == "active",

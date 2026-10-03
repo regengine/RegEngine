@@ -1,0 +1,16 @@
+UTC: 2026-10-03T00:48:54.688299+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n '^(fastapi|starlette|pydantic|pydantic-core|typing-extensions|typing-inspection|annotated-types|annotated-doc|anyio)==' requirements.lock
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+146:annotated-doc==0.0.5 \
+152:annotated-types==0.8.0 \
+156:anyio==4.14.2 \
+913:fastapi==0.141.1 \
+2895:pydantic==2.13.5 \
+2915:pydantic-core==2.46.5 \
+3631:starlette==1.6.0 \
+3695:typing-extensions==4.16.0 \
+3733:typing-inspection==0.4.4 \

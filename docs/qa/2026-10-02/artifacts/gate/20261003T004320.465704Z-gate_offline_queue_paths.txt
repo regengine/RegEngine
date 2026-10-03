@@ -1,0 +1,31 @@
+UTC: 2026-10-03T00:43:20.465704+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'getPendingUploads|useSync|indexedDB|pendingUploads|logout|signOut' frontend/src/lib frontend/src/hooks frontend/src/components/mobile frontend/src/app/dashboard frontend/src/components -g '*.ts' -g '*.tsx'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+frontend/src/components/mobile/FieldCaptureClient.tsx:35:import { useSync } from '@/hooks/use-sync';
+frontend/src/components/mobile/FieldCaptureClient.tsx:102:    const { isOnline, isSyncing } = useSync();
+frontend/src/hooks/use-sync.ts:9:    getPendingUploads,
+frontend/src/hooks/use-sync.ts:17:export function useSync() {
+frontend/src/hooks/use-sync.ts:52:            const { scans, photos } = await getPendingUploads();
+frontend/src/lib/db.ts:95:export async function getPendingUploads() {
+frontend/src/components/mobile/FieldCaptureClient.tsx:35:import { useSync } from '@/hooks/use-sync';
+frontend/src/components/mobile/FieldCaptureClient.tsx:102:    const { isOnline, isSyncing } = useSync();
+frontend/src/lib/csrf.ts:170:    // Pre-auth passwordless and passkey ceremonies. Registration, logout,
+frontend/src/lib/csrf.ts:171:    // logout-all, and session revocation intentionally do not appear here.
+frontend/src/lib/auth-context.tsx:28:  logout: () => Promise<void>;
+frontend/src/lib/auth-context.tsx:235:  const logoutInProgressRef = useRef(false);
+frontend/src/lib/auth-context.tsx:395:    logoutInProgressRef.current = false;
+frontend/src/lib/auth-context.tsx:464:  const logout = useCallback(async () => {
+frontend/src/lib/auth-context.tsx:465:    logoutInProgressRef.current = true;
+frontend/src/lib/auth-context.tsx:467:    logoutInProgressRef.current = false;
+frontend/src/lib/auth-context.tsx:504:        logout,
+frontend/src/app/dashboard/scan/page.tsx:3:import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+frontend/src/app/dashboard/scan/page.tsx:74:    // useSyncExternalStore is the SSR-safe way to read a browser-only value:
+frontend/src/app/dashboard/scan/page.tsx:77:    return useSyncExternalStore(
+frontend/src/app/dashboard/layout.tsx:442:    const { demoMode, isAuthenticated, isHydrated, logout, user } = useAuth();
+frontend/src/app/dashboard/layout.tsx:616:                                    await logout();
+frontend/src/components/developer/DeveloperPortalShell.tsx:75:    const { logout } = useAuth();
+frontend/src/components/developer/DeveloperPortalShell.tsx:83:            await logout();

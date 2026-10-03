@@ -1,0 +1,23 @@
+UTC: 2026-10-03T00:38:39.949420+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02"); print("DOCS"); print("\n".join(str(f) for f in p.glob("*.md"))); print("QA_HARNESSES"); print("\n".join(str(f) for f in p.rglob("*.py") if "coverage" not in str(f))); print("JS_HARNESSES"); print("\n".join(str(f) for f in p.rglob("*.cjs") if "coverage" not in str(f))); print("MJS_HARNESSES"); print("\n".join(str(f) for f in p.rglob("*.mjs") if "coverage" not in str(f)))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+DOCS
+docs/qa/2026-10-02/BACKEND-SESSION-LOG.md
+docs/qa/2026-10-02/FRONTEND-SESSION-LOG.md
+docs/qa/2026-10-02/GATE-SESSION-LOG.md
+docs/qa/2026-10-02/SECURITY-SESSION-LOG.md
+docs/qa/2026-10-02/META-SESSION-LOG.md
+docs/qa/2026-10-02/PLAN.md
+docs/qa/2026-10-02/UX-SESSION-LOG.md
+docs/qa/2026-10-02/SESSION-LOG.md
+QA_HARNESSES
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/run_logged.py
+JS_HARNESSES
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+MJS_HARNESSES
+

@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:38:58.351825+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const net=require("net"),assert=require("assert"),dns=require("dns");let called=0;net.Socket.prototype.connect=function(){called++;return this};require("./docs/qa/2026-10-02/scripts/node-isolation.cjs");for(const run of [()=>new net.Socket().connect({host:"198.51.100.5",port:443}),()=>new net.Socket().connect([{host:"198.51.100.5",port:443}]),()=>net.connect(443,"198.51.100.5"),()=>net.connect({port:443,host:"198.51.100.5"}),()=>require("http").request("http://198.51.100.5/"),()=>require("https").request("https://198.51.100.5/")]){assert.throws(run,/off-host/)}assert.equal(called,0);console.log("6 off-host call forms blocked before mocked socket connect; zero network performed");'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+6 off-host call forms blocked before mocked socket connect; zero network performed

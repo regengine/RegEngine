@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:42:04.593007+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Security report required sections present; added test syntax valid; charter outcomes appended.

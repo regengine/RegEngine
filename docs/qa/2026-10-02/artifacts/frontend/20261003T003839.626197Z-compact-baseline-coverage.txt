@@ -1,0 +1,44 @@
+UTC: 2026-10-03T00:38:39.626197+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: node -e 'const fs=require("fs"),path=require("path"),cov=require("./frontend/node_modules/istanbul-lib-coverage");const dir="docs/qa/2026-10-02/artifacts/frontend/coverage-before";const data=JSON.parse(fs.readFileSync(dir+"/coverage-final.json","utf8"));const map=cov.createCoverageMap(data),out={total:map.getCoverageSummary().toJSON(),files:{}}; for(const p of map.files())out.files[path.relative(process.cwd(),p)]=map.fileCoverageFor(p).toSummary().toJSON();const retained=dir+"-summary.json";fs.writeFileSync(retained,JSON.stringify(out,null,2)+"\n");const moved="/private/tmp/regengine-qa-coverage-before-20261003";fs.renameSync(dir,moved);console.log(JSON.stringify({total:out.total,fileCount:map.files().length,retained,fullReportMovedTo:moved},null,2));'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+{
+  "total": {
+    "lines": {
+      "total": 8327,
+      "covered": 5826,
+      "skipped": 0,
+      "pct": 69.96
+    },
+    "statements": {
+      "total": 9184,
+      "covered": 6216,
+      "skipped": 0,
+      "pct": 67.68
+    },
+    "functions": {
+      "total": 2142,
+      "covered": 1285,
+      "skipped": 0,
+      "pct": 59.99
+    },
+    "branches": {
+      "total": 7755,
+      "covered": 4663,
+      "skipped": 0,
+      "pct": 60.12
+    },
+    "branchesTrue": {
+      "total": 0,
+      "covered": 0,
+      "skipped": 0,
+      "pct": "Unknown"
+    }
+  },
+  "fileCount": 196,
+  "retained": "docs/qa/2026-10-02/artifacts/frontend/coverage-before-summary.json",
+  "fullReportMovedTo": "/private/tmp/regengine-qa-coverage-before-20261003"
+}

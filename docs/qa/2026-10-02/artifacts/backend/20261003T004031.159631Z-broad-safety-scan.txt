@@ -1,0 +1,201 @@
+UTC: 2026-10-03T00:40:31.159631+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["rg","-l","RequestSizeLimitMiddleware","tests","services/shared/tests"],check=False); subprocess.run(["rg","-n","load_dotenv|dotenv_values|read_env|subprocess|create_engine|connect\(","services/admin/tests/test_privileged_auth.py","services/admin/tests/test_session_auth.py","tests/security/test_route_security_manifest.py"],check=False); print("SELECTED TEST HEADS"); [(print("FILE",f),print(Path(f).read_text()[:1800])) for f in ["services/admin/tests/test_privileged_auth.py","services/admin/tests/test_session_auth.py","tests/security/test_route_security_manifest.py"] if Path(f).exists()]'
+Exit: 0
+Duration: 0.09s
+Timeout: False
+
+<string>:1: SyntaxWarning: "\(" is an invalid escape sequence. Such sequences will not work in the future. Did you mean "\\("? A raw string is also an option.
+tests/qa_sweep_20261002/test_request_safety.py
+tests/test_server_idempotency_middleware.py
+tests/security/test_security_audit_fixes.py
+tests/security/test_route_security_manifest.py:7:import subprocess
+tests/security/test_route_security_manifest.py:491:    result = subprocess.run(
+SELECTED TEST HEADS
+FILE services/admin/tests/test_privileged_auth.py
+"""Security regression tests for human and workload privileged auth."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi import FastAPI, HTTPException
+from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore, RateLimitInfo
+from starlette.requests import Request
+
+from services.admin.app import privileged_auth as mod
+from services.admin.app.auth.session_auth import ActiveSessionContext
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _request(
+    path: str = "/v1/admin/keys",
+    *,
+    headers: dict[str, str] | None = None,
+) -> Request:
+    raw_headers = [(name.lower().encode(), value.encode()) for name, value in (headers or {}).items()]
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": raw_headers,
+            "client": ("203.0.113.50", 12345),
+            "server": ("testserver", 443),
+            "scheme": "https",
+            "query_string": b"",
+            "http_version": "1.1",
+            "root_path": "",
+            "state": {},
+            "app": SimpleNamespace(state=SimpleNamespace()),
+        }
+    )
+
+
+class _Throttle:
+    def __init__(self) -> None:
+        self.limited = False
+        self.failures = 0
+        self.resets = 0
+        self.failure_subjects: list[str] = []
+        self.reset_subjects: list[str] = []
+
+    async def is_limited(self, _subject: str) -> bool:
+        return self.limited
+
+    async def record_failure(self, subject: str) -> int:
+        self.failures += 1
+        self.failure_subjects.append(subject)
+        return self.failures
+
+    async def reset(self, subject: str) -> 
+FILE services/admin/tests/test_session_auth.py
+"""Tests for cookie-backed session auth dependency."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+import pytest
+from fastapi import HTTPException
+from starlette.requests import Request
+
+from services.admin.app.auth import session_auth
+
+
+def _request(*, session_token: str | None = "session-token") -> Request:
+    raw_headers = []
+    if session_token is not None:
+        raw_headers.append((b"cookie", f"{session_auth.AUTH_SESSION_COOKIE}={session_token}".encode("latin-1")))
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/admin/organizations",
+        "headers": raw_headers,
+        "client": ("203.0.113.50", 12345),
+        "server": ("testserver", 80),
+        "scheme": "https",
+        "query_string": b"",
+        "http_version": "1.1",
+        "root_path": "",
+        "state": {},
+        "app": SimpleNamespace(state=SimpleNamespace()),
+    }
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    return Request(scope, receive)
+
+
+def test_get_current_active_user_hashes_cookie_and_filters_active_session_user():
+    user = SimpleNamespace(id="user-id", is_sysadmin=True)
+    session = SimpleNamespace(id="session-id", auth_method="email_otp")
+    db = MagicMock()
+    db.execute.return_value.one_or_none.return_value = (user, session)
+    crypto = MagicMock()
+    crypto.hash_session_token.return_value = "stored-token-hash"
+
+    result = session_auth.get_current_active_session_context(
+        request=_request(session_token="raw-session-token"),
+        db=db,
+        crypto_service=crypto,
+    )
+
+    assert result.user is user
+    assert result.session is session
+    crypto.hash_session_token.assert_called_once_with("raw-session-t
+FILE tests/security/test_route_security_manifest.py
+"""Release-gate tests for the consolidated route security manifest."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from fastapi import APIRouter, FastAPI
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+
+import server.route_security_manifest as route_security_manifest
+from server.route_ownership import include_owned_router, route_owner
+from server.route_security_manifest import (
+    PRODUCTION_OWNERS,
+    RouteManifestError,
+    build_route_security_manifest,
+    probe_omitted_paths_exact_404,
+)
+from server.route_security_policy import (
+    TENANT_API_KEY_OPERATION_POLICIES,
+    TENANT_API_KEY_OWNER_POLICIES,
+    TenantApiKeyRoutePolicy,
+    classify_operation,
+)
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MANIFEST_PATH = REPO_ROOT / "docs" / "security" / "route-security-manifest.json"
+
+
+@pytest.fixture(scope="module")
+def inventory_app():
+    from server.main import app
+
+    return app
+
+
+@pytest.fixture(scope="module")
+def manifest(inventory_app) -> dict:
+    return build_route_security_manifest(inventory_app)
+
+
+@pytest.fixture(scope="module")
+def production_route_app(inventory_app) -> FastAPI:
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app.router.routes.extend(
+        route
+        for route in inventory_app.routes
+        if isinstance(route, APIRoute) and route_owner(route) in PRODUCTION_OWNERS
+    )
+    return app
+
+
+def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
+    checked_in = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+
+    assert checked_in == manifest
+    assert checked_in["summary"] == {
+  

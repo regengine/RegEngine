@@ -1,0 +1,20 @@
+UTC: 2026-10-03T00:40:16.906152+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend"); print("app candidates",[(str(x),x.is_dir()) for x in [p/"app",p/"src/app",p/"src/app/page.tsx"]]); print("page file bytes",(p/"src/app/page.tsx").stat().st_size); print("manifest",(p/".next/server/app-paths-manifest.json").read_text()[:2000]); print("package scripts",json.loads((p/"package.json").read_text())["scripts"])'
+Exit: 1
+Duration: 0.04s
+Timeout: False
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    from pathlib import Path; import json; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend"); print("app candidates",[(str(x),x.is_dir()) for x in [p/"app",p/"src/app",p/"src/app/page.tsx"]]); print("page file bytes",(p/"src/app/page.tsx").stat().st_size); print("manifest",(p/".next/server/app-paths-manifest.json").read_text()[:2000]); print("package scripts",json.loads((p/"package.json").read_text())["scripts"])
+                                                                                                                                                                                                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 787, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.14/3.14.5/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/private/tmp/regengine-qa-ux-u2059hm8/frontend/.next/server/app-paths-manifest.json'
+app candidates [('/private/tmp/regengine-qa-ux-u2059hm8/frontend/app', False), ('/private/tmp/regengine-qa-ux-u2059hm8/frontend/src/app', True), ('/private/tmp/regengine-qa-ux-u2059hm8/frontend/src/app/page.tsx', False)]
+page file bytes 15447

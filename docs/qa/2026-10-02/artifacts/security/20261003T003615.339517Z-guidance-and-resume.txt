@@ -1,0 +1,3572 @@
+UTC: 2026-10-03T00:36:15.339517+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["/Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md","/Users/sellers/.codex/skills/security-best-practices/references/javascript-typescript-nextjs-web-server-security.md","/Users/sellers/.codex/skills/security-best-practices/references/javascript-typescript-react-web-frontend-security.md","docs/qa/2026-10-02/META-SESSION-LOG.md","server/route_security_manifest.py"]; [(print("FILE",p),print(Path(p).read_text())) for p in files if Path(p).exists()]'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+FILE /Users/sellers/.codex/skills/security-best-practices/references/python-fastapi-web-server-security.md
+# FastAPI (Python) Web Security Spec (FastAPI 0.128.x, Python 3.x) ([PyPI][1])
+
+This document is designed as a **security spec** that supports:
+
+1. **Secure-by-default code generation** for new FastAPI code.
+2. **Security review / vulnerability hunting** in existing FastAPI code (passive “notice issues while working” and active “scan the repo and report findings”).
+
+It is intentionally written as a set of **normative requirements** (“MUST/SHOULD/MAY”) plus **audit rules** (what bad patterns look like, how to detect them, and how to fix/mitigate them).
+
+FastAPI is commonly deployed with an ASGI server (e.g., Uvicorn) and is built on Starlette + Pydantic, so this spec covers those layers where they affect security. ([PyPI][1])
+
+---
+
+## 0) Safety, boundaries, and anti-abuse constraints (MUST FOLLOW)
+
+* MUST NOT request, output, log, or commit secrets (API keys, passwords, private keys, session cookies, signing keys, database URLs with credentials).
+* MUST NOT “fix” security by disabling protections (e.g., weakening auth, making CORS permissive, skipping signature checks, disabling validation, turning off TLS verification, adding `allow_origins=["*"]` with credentials).
+* MUST provide **evidence-based findings** during audits: cite file paths, code snippets, and configuration values that justify the claim.
+* MUST treat uncertainty honestly: if a protection might exist in infrastructure (reverse proxy, WAF, CDN, service mesh), report it as “not visible in app code; verify at runtime/config”.
+* MUST treat browser controls correctly:
+
+  * CORS is **not** an auth mechanism; it only affects browsers.
+  * CSRF defenses apply when the browser automatically attaches credentials (cookies); they are usually not relevant for purely header-token APIs. ([OWASP Cheat Sheet Series][2])
+
+---
+
+## 1) Operating modes
+
+### 1.1 Generation mode (default)
+
+When asked to write new FastAPI code or modify existing code:
+
+* MUST follow every **MUST** requirement in this spec.
+* SHOULD follow every **SHOULD** requirement unless the user explicitly says otherwise.
+* MUST prefer safe-by-default APIs and proven libraries over custom security code.
+* MUST avoid introducing new risky sinks (shell execution, unsafe deserialization, dynamic eval, untrusted template rendering, unsafe file serving, unsafe redirects, arbitrary outbound fetching).
+
+### 1.2 Passive review mode (always on while editing)
+
+While working anywhere in a FastAPI repo (even if the user did not ask for a security scan):
+
+* MUST “notice” violations of this spec in touched/nearby code.
+* SHOULD mention issues as they come up, with a brief explanation + safe fix.
+
+### 1.3 Active audit mode (explicit scan request)
+
+When the user asks to “scan”, “audit”, or “hunt for vulns”:
+
+* MUST systematically search the codebase for violations of this spec.
+* MUST output findings in a structured format (see §2.3).
+
+Recommended audit order:
+
+1. App entrypoints / deployment scripts / Dockerfiles / Procfiles / Helm/terraform.
+2. ASGI server configuration (Uvicorn/Gunicorn), proxy settings, debug/reload settings.
+3. FastAPI app configuration (docs exposure, middleware, trusted hosts, CORS).
+4. Authn/Authz design (dependencies, JWT/session handling, password storage).
+5. Cookie/session usage + CSRF (if cookies are used).
+6. Input validation and output shaping (Pydantic models, mass assignment, excessive data exposure).
+7. Template rendering and XSS/SSTI (if HTML is served).
+8. File handling (uploads + downloads), StaticFiles, Range support.
+9. Injection classes (SQL, command execution, unsafe deserialization).
+10. Outbound requests (SSRF), redirect handling, WebSockets security.
+
+---
+
+## 2) Definitions and review guidance
+
+### 2.1 Untrusted input (treat as attacker-controlled unless proven otherwise)
+
+Examples include:
+
+* Query parameters / path parameters
+* JSON bodies (including nested fields)
+* Headers (including `Host`, `Origin`, `X-Forwarded-*`)
+* Cookies (including session cookies)
+* File uploads (multipart parts)
+* WebSocket messages, query params, and headers during handshake ([Starlette][3])
+* Any data from external systems (webhooks, third-party APIs, message queues)
+* Any persisted user content (DB rows) that originated from users
+
+### 2.2 State-changing request
+
+A request is state-changing if it can create/update/delete data, change auth/session state, trigger side effects (purchase, email send, webhook send), or initiate privileged actions.
+
+### 2.3 Required audit finding format
+
+For each issue found, output:
+
+* Rule ID:
+* Severity: Critical / High / Medium / Low
+* Location: file path + function/route name + line(s)
+* Evidence: the exact code/config snippet
+* Impact: what could go wrong, who can exploit it
+* Fix: safe change (prefer minimal diff)
+* Mitigation: defense-in-depth if immediate fix is hard
+* False positive notes: what to verify if uncertain
+
+---
+
+## 3) Secure baseline: minimum production configuration (MUST in production)
+
+This is the smallest “production baseline” that prevents common FastAPI/ASGI misconfigurations.
+
+Baseline goals:
+
+* No debug tracebacks or auto-reload in production. ([PyPI][4])
+* Run under a production ASGI server configuration (workers, timeouts, resource controls). ([PyPI][4])
+* Host header validation enabled (TrustedHostMiddleware or equivalent). ([PyPI][5])
+* CORS disabled unless explicitly needed; if enabled, it is strict and least-privilege. ([OWASP Cheat Sheet Series][6])
+* Auth is enforced consistently via dependencies (no “oops, forgot auth on this route”). ([FastAPI][7])
+* If cookies/sessions are used, cookie flags are secure and CSRF is addressed. ([OWASP Cheat Sheet Series][8])
+* Request size limits and multipart limits exist at the edge and are validated in app as needed (to mitigate memory/CPU DoS). ([advisories.gitlab.com][9])
+* Dependencies are patched promptly, especially Starlette/python-multipart (multiple DoS and traversal advisories exist historically). ([advisories.gitlab.com][10])
+
+---
+
+## 4) Rules (generation + audit)
+
+Each rule contains: required practice, insecure patterns, detection hints, and remediation.
+
+### FASTAPI-DEPLOY-001: Do not use auto-reload / dev-only server modes in production
+
+Severity: High (if production)
+
+Required:
+
+* MUST NOT run production using auto-reload/watch mode (e.g., Uvicorn reload).
+* MUST run with a production process model (e.g., multiple workers where appropriate) and stable server settings. ([PyPI][4])
+
+Insecure patterns:
+
+* `uvicorn ... --reload` (or equivalent “reload=True” configs) in production entrypoints.
+* Docker/Procfile/systemd commands that run with `--reload` in production.
+
+Detection hints:
+
+* Search for `--reload`, `reload=True`, `watchfiles`, `fastapi dev`, “development” run scripts.
+* Check Docker CMD/ENTRYPOINT, Procfile, systemd units, shell scripts.
+
+Fix:
+
+* Remove reload in production; run Uvicorn/Gunicorn with stable settings and explicit worker configuration. ([PyPI][4])
+
+Note:
+
+* Reload is fine for local development. Only flag when it is clearly used as a production entrypoint.
+
+---
+
+### FASTAPI-DEPLOY-002: Debug mode MUST be disabled in production
+
+Severity: Critical
+
+Required:
+
+* MUST NOT enable debug tracebacks in production (FastAPI/Starlette debug mode can expose sensitive internals and make some exploit chains easier). ([PyPI][5])
+* MUST treat any configuration that returns detailed stack traces to clients as sensitive.
+
+Insecure patterns:
+
+* `app = FastAPI(debug=True)` (or Starlette `debug=True`), or equivalent environment toggles enabling debug in production. ([PyPI][5])
+* Server/log config that exposes tracebacks to end users.
+
+Detection hints:
+
+* Search for `debug=True`, `DEBUG = True`, environment flags mapped to debug.
+* Review exception middleware and error handler setup.
+
+Fix:
+
+* Ensure debug is only enabled in local dev/test.
+* Return generic error responses to clients; log details internally.
+
+---
+
+### FASTAPI-OPENAPI-001: OpenAPI and interactive docs MUST be disabled or protected in production
+
+Severity: Medium (can be High in sensitive/internal apps)
+
+Required:
+
+* SHOULD disable `/docs`, `/redoc`, and `/openapi.json` in production for public-facing services unless there is an explicit business need.
+* If enabled, MUST protect them (e.g., auth, network allowlists, or internal-only routing).
+* MUST NOT assume “security through obscurity”; treat docs exposure as an information disclosure amplifier.
+
+Insecure patterns:
+
+* Publicly reachable `/docs` and `/openapi.json` for internal/admin APIs.
+* Docs enabled on the same hostname as production without access control.
+
+Detection hints:
+
+* Look for `FastAPI(docs_url=..., redoc_url=..., openapi_url=...)` or defaults.
+* Check reverse proxy routing and allowlists.
+
+Fix:
+
+* Disable docs endpoints in prod (`docs_url=None`, `redoc_url=None`, `openapi_url=None`) or restrict access at the edge.
+
+---
+
+### FASTAPI-AUTH-001: Authentication MUST be explicit and consistently enforced via dependencies
+
+Severity: High
+
+Required:
+
+* MUST implement authentication as a dependency (or router-level dependency) so that protected endpoints cannot “forget” auth.
+* MUST default to “deny” for privileged routers/endpoints; explicitly mark truly public routes.
+* SHOULD centralize auth enforcement at router boundaries (e.g., protected `APIRouter` for authenticated endpoints). ([FastAPI][7])
+
+Insecure patterns:
+
+* Per-route ad-hoc auth checks scattered through handlers (easy to miss).
+* A mix of protected/unprotected endpoints with no clear policy.
+
+Detection hints:
+
+* Identify routers and endpoints; check whether protected ones include `Depends(...)`/`Security(...)`.
+* Search for patterns like `if user is None: raise ...` inside handlers (instead of dependencies).
+
+Fix:
+
+* Move authentication into a dependency and attach it to the router/endpoint consistently using `Depends()`/`Security()`. ([FastAPI][7])
+
+---
+
+### FASTAPI-AUTH-002: Use standard auth transports; avoid secrets in URLs
+
+Severity: High
+
+Required:
+
+* SHOULD use the `Authorization: Bearer [REDACTED] header for token auth, not query parameters. ([FastAPI][11])
+* MUST NOT place secrets (tokens, reset links containing long-lived secrets, API keys) in query strings when avoidable.
+
+Insecure patterns:
+
+* `?token=...`, `?api_key=[REDACTED], `?auth=...` used for primary auth.
+* Long-lived access tokens embedded in URLs (leak via logs, referrers, caches).
+
+Detection hints:
+
+* Search for parameter names like `token`, `api_key`, `key`, `secret`, `password`.
+* Look for security schemes that use query API keys without justification.
+
+Fix:
+
+* Move tokens to Authorization headers; rotate/shorten lifetimes; use POST bodies for sensitive values.
+
+---
+
+### FASTAPI-AUTH-003: Password storage MUST be strongly hashed; never store plaintext passwords
+
+Severity: Critical
+
+Required:
+
+* MUST store passwords using a strong, slow password hashing scheme (e.g., Argon2id, bcrypt).
+* MUST NOT store plaintext passwords, or reversible encryption as the primary protection.
+* SHOULD use established libraries for hashing and verification (do not roll your own).
+
+Insecure patterns:
+
+* Storing plaintext passwords in DB.
+* Using fast hashes (e.g., SHA256) without a proper password hashing KDF.
+* Returning password hashes in API responses.
+
+Detection hints:
+
+* Search for `password=[REDACTED] persisted fields, and look for `hashlib.md5/sha1/sha256` usage on passwords.
+* Inspect response models for password/hash fields.
+
+Fix:
+
+* Migrate to a proper password hashing library; add a re-hash-on-login upgrade path.
+
+---
+
+### FASTAPI-AUTH-004: JWT validation MUST be strict; JWTs MUST NOT carry secrets
+
+Severity: High
+
+Required:
+
+* MUST validate JWT signature and enforce an algorithm allowlist.
+* MUST validate standard claims appropriate to your system (at least `exp`; typically also `iss`/`aud` if multi-service or multi-tenant).
+* MUST treat JWT contents as readable by the client; do not put secrets in JWT payloads. ([FastAPI][12])
+
+Insecure patterns:
+
+* `jwt.decode(..., options={"verify_signature": False})` or equivalent.
+* Accepting `alg=none` / algorithm confusion.
+* Using JWT payload to store sensitive secrets (API keys, passwords).
+
+Detection hints:
+
+* Search for `jwt.decode`, `python-jose`, `PyJWT`, `verify_signature`.
+* Check for missing exp validation or long expirations.
+
+Fix:
+
+* Enforce strict validation (signature, allowed algorithms, exp, and any required issuer/audience constraints).
+* Store only identifiers/claims you are comfortable exposing to the client. ([FastAPI][12])
+
+---
+
+### FASTAPI-AUTHZ-001: Authorization MUST be enforced per-object and per-property
+
+Severity: High
+
+Required:
+
+* MUST perform object-level authorization whenever accessing a resource by user-controlled identifier (ID in path/query/body).
+* MUST perform property-level authorization and response shaping to prevent “excessive data exposure” (e.g., admin-only fields). ([OWASP Foundation][13])
+
+Insecure patterns:
+
+* `GET /users/{id}` returns user record without verifying caller can access that `id`.
+* Response models include internal fields (roles, permissions, billing data, password hashes).
+
+Detection hints:
+
+* Enumerate endpoints that accept IDs; trace whether an authz check is performed.
+* Compare response models for public vs internal fields.
+
+Fix:
+
+* Add object-level checks (ownership, ACLs, tenant boundaries).
+* Use dedicated response models that include only allowed fields.
+
+---
+
+### FASTAPI-SESS-001: If using cookie-based sessions and TLS, cookie attributes MUST be secure in production
+
+Severity: High (only if TLS is enabled)
+
+Required (production, HTTPS):
+
+* MUST set session cookies to be sent only over HTTPS (secure). IMPORTANT NOTE: Only set `Secure` in production environment when TLS is configured. When running in a local dev environment over HTTP, do not set `Secure` property on cookies. You should do this conditionally based on if the app is running in production mode. You should also include a property like `SESSION_COOKIE_SECURE` which can be used to disable `Secure` cookies when testing over HTTP.
+* MUST set HttpOnly for session cookies (not accessible to JS).
+* SHOULD use `SameSite=Lax` (or `Strict` if UX allows); if you require cross-site cookies, document the CSRF implications and add compensating controls. ([OWASP Cheat Sheet Series][8])
+* If using Starlette `SessionMiddleware`, MUST set `https_only=True` in production and choose an appropriate `same_site`. ([PyPI][5])
+
+Insecure patterns:
+
+* Session cookies without Secure/HttpOnly.
+* `SameSite=None` cookies used for authenticated state-changing endpoints without CSRF protections.
+
+Detection hints:
+
+* Search for `SessionMiddleware(` and inspect parameters like `https_only`, `same_site`.
+* Search for `set_cookie(` usage and cookie flags.
+
+Fix:
+
+* Set secure cookie attributes; prefer short lifetimes for high-privilege sessions. ([OWASP Cheat Sheet Series][8])
+
+---
+
+### FASTAPI-SESS-002: Do not store sensitive secrets in signed session cookies
+
+Severity: High
+
+Required:
+
+* MUST assume cookie-based session data is readable by the client (signed ≠ encrypted); do not store secrets/PII unless encrypted server-side.
+* Store only opaque identifiers (e.g., session ID) or non-sensitive state in the cookie; store sensitive session state server-side. ([OWASP Cheat Sheet Series][8])
+
+Insecure patterns:
+
+* Storing access tokens, refresh tokens, or PII directly in cookie session payloads.
+* Treating “signed cookies” as confidential storage.
+
+Detection hints:
+
+* Search for `request.session[...] =` or `session[...] =`-equivalent patterns; identify what is stored.
+* Identify use of `SessionMiddleware` or other cookie session mechanisms.
+
+Fix:
+
+* Move sensitive values to server-side storage; keep cookie minimal.
+
+---
+
+### FASTAPI-CSRF-001: Cookie-authenticated state-changing requests MUST be CSRF-protected
+
+Severity: High
+
+Note: This only applies if using cookie based auth. If the application uses header or token based auth such as Authorization header, then CSRF is not an issue.
+
+Required:
+
+* MUST protect all state-changing endpoints (POST/PUT/PATCH/DELETE) that rely on cookies for authentication.
+* SHOULD use a proven CSRF approach (synchronizer token pattern, or well-reviewed middleware) rather than rolling your own. ([OWASP Cheat Sheet Series][2])
+* MAY add defense-in-depth (Origin/Referer checks, SameSite cookies, Fetch Metadata), but tokens are the primary defense for cookie-authenticated apps. ([OWASP Cheat Sheet Series][2])
+* IMPORTANT NOTE: If cookies are not used for auth (auth is via `Authorization` header), CSRF is usually not applicable. ([FastAPI][11])
+
+Insecure patterns:
+
+* Cookie-authenticated endpoints that change state with no CSRF validation.
+* Using GET for state-changing actions (amplifies CSRF risk).
+
+Detection hints:
+
+* Enumerate routes with methods other than GET; identify whether cookies are used for auth.
+* Look for CSRF token generation/verification or middleware.
+
+Fix:
+
+* Add CSRF tokens (and validate them) on state-changing actions when cookie auth is in use. ([OWASP Cheat Sheet Series][2])
+
+---
+
+### FASTAPI-VALID-001: Request parsing and validation MUST be schema-driven; prevent mass assignment
+
+Severity: Medium (especially for APIs that write to DB)
+
+Required:
+
+* SHOULD use Pydantic models for request bodies instead of accepting arbitrary `dict`/`Any`.
+* SHOULD configure models to reject unexpected fields where appropriate (prevents “mass assignment” style bugs).
+* MUST validate and normalize identifiers (IDs, email, URLs) before using them for access control or side effects. ([OWASP Cheat Sheet Series][14])
+
+Insecure patterns:
+
+* `payload = await request.json()` followed by `Model(**payload)` or direct DB writes with `payload` (no allowlist).
+* Models that silently accept unknown fields for write endpoints.
+
+Detection hints:
+
+* Search for `await request.json()`, `request.body()`, `dict`-typed bodies, `Any`-typed bodies.
+* Look for endpoints that do `db.update(**payload)` or `Model(**payload)` with unfiltered input.
+
+Fix:
+
+* Use explicit Pydantic models with allowlisted fields; reject extras for write endpoints. ([OWASP Cheat Sheet Series][14])
+
+---
+
+### FASTAPI-RESP-001: Prevent excessive data exposure via response models and explicit serialization
+
+Severity: Medium
+
+Required:
+
+* MUST define response models that include only intended fields (especially for user objects, auth-related objects, billing objects).
+* SHOULD use separate models for “create input”, “db/internal”, and “public output” to avoid leaking sensitive fields. ([FastAPI][15])
+
+Insecure patterns:
+
+* Returning ORM objects or dicts that include internal columns.
+* Reusing “DB model” as the response model (includes `password_hash`, `is_admin`, etc).
+
+Detection hints:
+
+* Look for endpoints that `return user` where `user` is an ORM instance.
+* Check for `response_model` omissions on endpoints that return sensitive resources.
+
+Fix:
+
+* Add explicit response models; create “public” schemas that exclude sensitive fields. ([FastAPI][15])
+
+---
+
+### FASTAPI-XSS-001: Prevent reflected/stored XSS in HTML responses and templates
+
+Severity: High (if the service serves HTML)
+
+Required:
+
+* MUST use templating with auto-escaping enabled for HTML.
+* MUST NOT mark untrusted content as safe (no unsafe “raw HTML” rendering of user-controlled data).
+* SHOULD deploy a CSP when serving HTML that includes any user content. ([OWASP Cheat Sheet Series][16])
+
+Insecure patterns:
+
+* Rendering user content directly into HTML without escaping/sanitization.
+* Disabling auto-escaping or using “raw HTML” features without sanitization.
+
+Detection hints:
+
+* Search for template rendering and string concatenation that builds HTML.
+* Review templates for “unsafe” filters/constructs and unquoted attributes.
+
+Fix:
+
+* Keep auto-escaping on; sanitize user HTML only if absolutely required using a trusted sanitizer; add CSP. ([OWASP Cheat Sheet Series][16])
+
+Note:
+
+* If the app is a pure JSON API, XSS is usually a client/app concern, but error pages/docs pages might still render HTML.
+
+---
+
+### FASTAPI-SSTI-001: Never render untrusted templates (Server-Side Template Injection)
+
+Severity: Critical
+
+Required:
+
+* MUST NOT render templates that contain user-controlled template syntax.
+* MUST treat “template-from-string” rendering as dangerous if influenced by untrusted input.
+* If untrusted templates are absolutely required (rare, high-risk):
+
+  * MUST use a sandboxed templating approach and restrict capabilities.
+  * MUST assume sandbox escapes are possible; add isolation and strict allowlists. ([OWASP Foundation][17])
+
+Insecure patterns:
+
+* Rendering templates loaded from user input or DB via a normal Jinja environment.
+* Building templates dynamically using user-controlled strings.
+
+Detection hints:
+
+* Grep for Jinja `Environment.from_string`, `Template(...)`, or similar.
+* Trace origin of template string (request, DB, uploads, admin panels).
+
+Fix:
+
+* Replace with non-executable templating (simple string substitution).
+* If truly needed, use Jinja’s sandbox environment plus strong isolation. ([jinja.palletsprojects.com][18])
+
+---
+
+### FASTAPI-HEADERS-001: Set essential security headers (in app or at the edge)
+
+Severity: Medium
+
+Required (typical API/web app):
+
+* SHOULD set:
+
+  * `X-Content-Type-Options: nosniff`
+  * Clickjacking protection (`X-Frame-Options` and/or CSP `frame-ancestors`) if HTML is served
+  * `Referrer-Policy` and `Permissions-Policy` as appropriate
+
+NOTE:
+
+* Headers may be set by a proxy/CDN. If not visible in app code, flag as “verify at edge”. ([OWASP Cheat Sheet Series][6])
+
+Insecure patterns:
+
+* No security headers anywhere (app or edge) for apps serving HTML or sensitive APIs.
+
+Detection hints:
+
+* Search for middleware that sets headers; check reverse proxy config.
+
+Fix:
+
+* Set headers centrally (middleware) or via reverse proxy/CDN.
+
+---
+
+### FASTAPI-CORS-001: CORS MUST be explicit and least-privilege
+
+Severity: Medium (High if misconfigured with credentials)
+
+Required:
+
+* If CORS is not needed, MUST keep it disabled.
+* If CORS is needed:
+
+  * MUST allowlist trusted origins (do not reflect arbitrary origins).
+  * MUST NOT combine credentialed requests with wildcard origins (this is unsafe and commonly rejected by compliant middleware). ([OWASP Cheat Sheet Series][6])
+  * SHOULD restrict allowed methods and headers.
+
+Insecure patterns:
+
+* `allow_origins=["*"]` together with `allow_credentials=True`.
+* Reflecting `Origin` without validation.
+* `allow_origin_regex=".*"` used broadly.
+
+Detection hints:
+
+* Search for `CORSMiddleware` configuration.
+* Look for `allow_origins=["*"]`, `allow_credentials=True`, `allow_origin_regex`.
+
+Fix:
+
+* Use an explicit origin allowlist and minimal methods/headers; keep credentials off unless required. ([OWASP Cheat Sheet Series][6])
+
+---
+
+### FASTAPI-HOST-001: Host header MUST be validated in production
+
+Severity: Low
+
+Required:
+
+* SHOULD use `TrustedHostMiddleware` (or equivalent at edge) to restrict accepted Host values. ([PyPI][5])
+* MUST NOT trust the `Host` header for security-sensitive decisions without validation.
+
+Insecure patterns:
+
+* No Host validation while generating external URLs (password reset links, callback URLs) from request host.
+* Allowing arbitrary Host headers in apps behind permissive proxies.
+
+Detection hints:
+
+* Search for `TrustedHostMiddleware` usage.
+* Search for logic that uses `request.url`, `request.base_url`, or host-derived values to build external URLs.
+
+Fix:
+
+* Configure a strict allowed-hosts list in production; enforce at edge too if possible.
+
+---
+
+### FASTAPI-PROXY-001: Reverse proxy trust MUST be configured correctly
+
+Severity: High (when behind a proxy)
+
+Required:
+
+* If behind a reverse proxy, MUST configure forwarded-header trust correctly.
+* MUST NOT blindly trust `X-Forwarded-*` headers from the open internet.
+* If using Uvicorn proxy header support, MUST restrict which IPs are allowed to provide forwarded headers. ([PyPI][4])
+
+Insecure patterns:
+
+* Enabling proxy headers broadly without restricting trusted proxy IPs.
+* Using forwarded headers to decide “is secure” / “is internal” / “client IP” without proper trust boundaries.
+
+Detection hints:
+
+* Search for `--proxy-headers`, `--forwarded-allow-ips`, or equivalent config.
+* Search for security-sensitive use of `request.client.host`, `request.url.scheme`, `request.headers["x-forwarded-for"]`.
+
+Fix:
+
+* Configure Uvicorn with proxy headers only when behind a known proxy, and restrict `forwarded_allow_ips` to that proxy. ([PyPI][4])
+* Keep Host allowlisting in place even behind proxies.
+
+---
+
+### FASTAPI-LIMITS-001: Request and multipart limits MUST be enforced to prevent DoS
+
+Severity: Low
+
+Required:
+
+* MUST enforce request size limits at the edge (reverse proxy/load balancer) and validate in app where needed.
+* MUST apply special scrutiny to multipart/form-data handling; historical vulnerabilities include unbounded buffering and DoS vectors. ([advisories.gitlab.com][9])
+* SHOULD rate limit and/or add per-IP/per-user throttles for expensive endpoints.
+
+Insecure patterns:
+
+* Accepting arbitrarily large JSON bodies or multipart forms.
+* Parsing multipart forms without size/field-count controls.
+
+Detection hints:
+
+* Identify file upload endpoints and `multipart/form-data` usage.
+* Look for missing proxy-level limits (nginx `client_max_body_size`, ALB limits, etc.) and missing app-level checks.
+
+Fix:
+
+* Enforce strict body limits and multipart constraints; keep Starlette and python-multipart updated to patched versions. ([advisories.gitlab.com][9])
+
+---
+
+### FASTAPI-FILES-001: Prevent path traversal and unsafe static file exposure
+
+Severity: High
+
+Required:
+
+* MUST NOT pass user-controlled file paths to `FileResponse`/filesystem calls without strict validation and safe base directories.
+* If using `StaticFiles`, MUST keep Starlette updated and understand the security history (path traversal advisory exists for older versions). ([advisories.gitlab.com][10])
+* MUST NOT serve user uploads as executable/active content (especially HTML/JS) from a static root without safe handling.
+
+Insecure patterns:
+
+* `FileResponse(request.query_params["path"])`
+* Mounting `StaticFiles(directory="uploads")` where uploads include HTML/JS/SVG and are served inline.
+
+Detection hints:
+
+* Search for `FileResponse(`, `StaticFiles(`, `open(` in routes.
+* Trace whether the path originates from untrusted input.
+
+Fix:
+
+* Use opaque IDs for files; map IDs to server-side stored paths.
+* Serve untrusted content as attachment downloads where appropriate.
+
+---
+
+### FASTAPI-FILES-002: Mitigate Range-header DoS on file-serving endpoints
+
+Severity: Low (if affected versions and file serving is enabled)
+
+Required:
+
+* MUST keep Starlette patched against known file-serving DoS issues if using `FileResponse`/`StaticFiles`.
+* MUST treat unusual `Range` header handling and file serving as a DoS surface. ([advisories.gitlab.com][19])
+
+Insecure patterns:
+
+* Serving large files with vulnerable Starlette versions.
+* No rate limiting / CDN shielding for file endpoints.
+
+Detection hints:
+
+* Identify Starlette version; if in affected range, flag.
+* Find uses of `FileResponse` and `StaticFiles`.
+
+Fix:
+
+* Upgrade Starlette to a fixed version per advisory guidance. ([advisories.gitlab.com][19])
+* Add edge caching/rate limiting for file endpoints where appropriate.
+
+---
+
+### FASTAPI-UPLOAD-001: File uploads MUST be validated, stored safely, and served safely
+
+Severity: Medium
+
+Required:
+
+* MUST enforce upload size limits (app + edge).
+* MUST validate file type using allowlists and content checks (not only extension). ([OWASP Cheat Sheet Series][20])
+* SHOULD generate server-side filenames (random IDs) and avoid trusting original names.
+* MUST serve potentially active formats safely (download attachment) unless explicitly intended.
+
+Insecure patterns:
+
+* Accepting arbitrary file types and serving them back inline.
+* Using user-supplied filename as storage path.
+
+Detection hints:
+
+* Look for upload handlers and where/how files are written.
+* Look for direct exposure of upload directories.
+
+Fix:
+
+* Implement allowlist validation + safe storage + safe serving; add scanning/quarantine if applicable. ([OWASP Cheat Sheet Series][20])
+
+---
+
+### FASTAPI-INJECT-001: Prevent SQL injection (use parameterized queries / ORM)
+
+Severity: High
+
+Required:
+
+* MUST use parameterized queries or an ORM that parameterizes under the hood.
+* MUST NOT build SQL by string concatenation / f-strings with untrusted input. ([OWASP Cheat Sheet Series][21])
+
+Insecure patterns:
+
+* `f"SELECT ... WHERE id={user_id}"`
+* `"... WHERE name = '%s'" % user_input`
+
+Detection hints:
+
+* Grep for SQL keywords in Python strings near `.execute(...)`.
+* Trace untrusted data into DB calls.
+
+Fix:
+
+* Replace with parameterized queries / ORM query APIs; validate types before querying. ([OWASP Cheat Sheet Series][21])
+
+---
+
+### FASTAPI-INJECT-002: Prevent OS command injection
+
+Severity: Critical to High (depends on exposure)
+
+Required:
+
+* MUST avoid executing shell commands with untrusted input.
+* If subprocess is necessary:
+
+  * MUST pass args as a list (not a string)
+  * MUST NOT use `shell=True` with attacker-influenced strings
+  * SHOULD use strict allowlists for any variable component ([OWASP Cheat Sheet Series][22])
+
+Insecure patterns:
+
+* `os.system(user_input)`
+* `subprocess.run(f"cmd {user}", shell=True)`
+* Passing user strings into `bash -c`, `sh -c`, PowerShell, etc.
+
+Detection hints:
+
+* Search for `os.system`, `subprocess`, `Popen`, `shell=True`.
+* Trace data from request/DB into these calls.
+
+Fix:
+
+* Use library APIs instead of shell commands.
+* If unavoidable, hard-code the command and allowlist validated parameters; use `--` separator where supported. ([OWASP Cheat Sheet Series][22])
+
+---
+
+### FASTAPI-SSRF-001: Prevent server-side request forgery (SSRF) in outbound HTTP
+
+Severity: Medium (can be High in cloud/VPC environments)
+
+- Note: For small stand alone projects this is less important. It is most important when deploying into an LAN or with other services listening on the same server.
+
+Required:
+
+* MUST treat outbound requests to user-provided URLs as high risk.
+* SHOULD validate and restrict destinations (allowlist hosts/domains) for any user-influenced URL fetch.
+* SHOULD block access to localhost/private IP ranges/link-local and cloud metadata endpoints.
+* MUST restrict protocols to http/https.
+* SHOULD set timeouts and carefully control redirects. ([OWASP Cheat Sheet Series][23])
+
+Insecure patterns:
+
+* `httpx.get(request.query_params["url"])`
+* “URL preview/import/webhook tester” features that accept arbitrary URLs.
+
+Detection hints:
+
+* Search for `requests`, `httpx`, `urllib`, `aiohttp` calls with URLs derived from requests/DB.
+* Identify endpoints named `fetch`, `preview`, `proxy`, `webhook`, `import`.
+
+Fix:
+
+* Implement strict URL parsing + allowlists; add egress controls; set short timeouts; disable redirects if not required. ([OWASP Cheat Sheet Series][23])
+
+---
+
+### FASTAPI-REDIRECT-001: Prevent open redirects
+
+Severity: Low
+
+Required:
+
+* MUST validate redirect targets derived from untrusted input (`next`, `redirect`, `return_to`).
+* SHOULD prefer redirecting only to same-site relative paths or an allowlist of domains. ([OWASP Cheat Sheet Series][24])
+
+Insecure patterns:
+
+* Returning `RedirectResponse(next)` where `next` is user-controlled with no validation.
+
+Detection hints:
+
+* Search for `RedirectResponse(` or redirect logic and examine the source of the target.
+
+Fix:
+
+* Allow only relative paths or allowlisted domains; fall back to a safe default. ([OWASP Cheat Sheet Series][24])
+
+---
+
+### FASTAPI-WS-001: WebSocket endpoints MUST be authenticated and protected against cross-site abuse
+
+Severity: Medium to High (depends on data/privilege)
+
+Required:
+
+* MUST authenticate WebSocket connections for any non-public channel (WebSockets don’t inherently provide auth). ([OWASP Cheat Sheet Series][25])
+* SHOULD enforce origin/CSRF-like protections appropriate for browser-based WebSocket clients (Origin validation is a common control).
+* SHOULD rate limit message frequency and connection attempts; close idle/abusive connections.
+
+Insecure patterns:
+
+* `@app.websocket(...)` accepts and trusts the connection with no auth check.
+* Using query-string tokens for auth without considering leakage/rotation.
+
+Detection hints:
+
+* Search for `@app.websocket` / `websocket_endpoint` and inspect whether auth is performed before accepting sensitive operations.
+* Review origin checks, token parsing, and per-connection authorization.
+
+Fix:
+
+* Require authentication during handshake (e.g., a token or session) and enforce authorization for actions/messages.
+* Validate Origin for browser-based clients where appropriate; apply rate limits and timeouts. ([OWASP Cheat Sheet Series][25])
+
+---
+
+### FASTAPI-SUPPLY-001: Dependency and patch hygiene (focus on security-relevant deps)
+
+Severity: Low
+
+Required:
+
+* SHOULD pin and regularly update security-critical dependencies (FastAPI, Starlette, Uvicorn, Pydantic, python-multipart, auth/JWT libs).
+* MUST respond to known security advisories promptly.
+* MUST treat file serving and multipart parsing dependencies as security-sensitive due to historical CVEs. ([advisories.gitlab.com][10])
+
+Audit focus examples (historical):
+
+* Starlette StaticFiles path traversal (fixed in 0.27.0). ([advisories.gitlab.com][10])
+* Starlette multipart/form-data DoS (fixed in 0.40.0). ([advisories.gitlab.com][9])
+* Starlette FileResponse Range header DoS (fixed in 0.49.1). ([advisories.gitlab.com][19])
+
+Detection hints:
+
+* Check `requirements.txt`, lockfiles, container images, and runtime environments for actual installed versions.
+* Map file upload/file serving features to dependency versions.
+
+Fix:
+
+* Upgrade to patched versions per advisories; add regression tests around affected behavior.
+
+---
+
+## 5) Practical scanning heuristics (how to “hunt”)
+
+When actively scanning, use these high-signal patterns:
+
+* Dev server / debug:
+
+  * `--reload`, `reload=True`, `debug=True`, `FastAPI(debug=True)` ([PyPI][4])
+* OpenAPI/docs exposure:
+
+  * `/docs`, `/redoc`, `/openapi.json`, `docs_url=`, `openapi_url=`
+* Auth enforcement gaps:
+
+  * Endpoints missing `Depends()`/`Security()` where expected; routers without a consistent dependency boundary ([FastAPI][7])
+  * Tokens in query params (`token=`, `api_key=[REDACTED], `key=`) ([FastAPI][11])
+* Session/cookies + CSRF:
+
+  * `SessionMiddleware(` and cookie flags (`https_only`, `same_site`) ([PyPI][5])
+  * POST/PUT/PATCH/DELETE handlers using cookie auth with no CSRF checks ([OWASP Cheat Sheet Series][2])
+* Input validation & mass assignment:
+
+  * `await request.json()` and direct DB writes from dicts; models accepting extra fields ([OWASP Cheat Sheet Series][14])
+* Excessive data exposure:
+
+  * Returning ORM objects or dicts without `response_model`; responses containing password/role/internal fields ([FastAPI][15])
+* CORS:
+
+  * `CORSMiddleware` with `allow_origins=["*"]`, `allow_origin_regex=".*"`, `allow_credentials=True` ([OWASP Cheat Sheet Series][6])
+* Files:
+
+  * `FileResponse(` with user-controlled paths; `StaticFiles(` exposing uploads ([advisories.gitlab.com][10])
+* Uploads / multipart:
+
+  * `multipart/form-data` endpoints with no size/field constraints; outdated Starlette/python-multipart ([advisories.gitlab.com][9])
+* Injection:
+
+  * SQL strings with f-strings/concatenation into `.execute(...)` ([OWASP Cheat Sheet Series][21])
+  * `subprocess.*`, `shell=True`, `os.system` ([OWASP Cheat Sheet Series][22])
+* SSRF:
+
+  * `httpx.get/post` or `requests.*` with URL from request/DB, no allowlist/timeouts ([OWASP Cheat Sheet Series][23])
+* Redirect:
+
+  * `RedirectResponse(next)` with no validation ([OWASP Cheat Sheet Series][24])
+* WebSockets:
+
+  * `@app.websocket` handlers without auth/origin checks; use of `ws://` in prod configs ([FastAPI][27])
+
+Always try to confirm:
+
+* data origin (untrusted vs trusted)
+* sink type (SQL/subprocess/files/template/http/redirect/ws)
+* protective controls present (validation, allowlists, middleware, edge controls)
+* installed dependency versions vs vulnerable ranges ([advisories.gitlab.com][10])
+
+---
+
+## 6) Sources (accessed 2026-01-27)
+
+Primary framework documentation:
+
+* FastAPI (PyPI metadata, versioning) — `https://pypi.org/project/fastapi/` ([PyPI][1])
+* FastAPI docs: Security “First Steps” (Authorization Bearer header conventions) — `https://fastapi.tiangolo.com/tutorial/security/first-steps/` ([FastAPI][11])
+* FastAPI reference: Dependencies (`Depends`, `Security`) — `https://fastapi.tiangolo.com/reference/dependencies/` ([FastAPI][7])
+* FastAPI reference: APIRouter (router-level dependencies) — `https://fastapi.tiangolo.com/reference/apirouter/` ([FastAPI][28])
+* FastAPI docs: WebSockets — `https://fastapi.tiangolo.com/advanced/websockets/` ([FastAPI][27])
+
+ASGI/server stack documentation:
+
+* Starlette (PyPI, general capabilities) — `https://pypi.org/project/starlette/` ([PyPI][5])
+* Starlette docs: WebSockets — `https://starlette.dev/websockets/` ([Starlette][3])
+* Uvicorn (PyPI metadata) — `https://pypi.org/project/uvicorn/` ([PyPI][4])
+* Pydantic docs (v2.12.x) — `https://docs.pydantic.dev/latest/` ([Pydantic][29])
+
+Security standards and cheat sheets:
+
+* OWASP Cheat Sheet Series: Session Management — `https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][8])
+* OWASP Cheat Sheet Series: CSRF Prevention — `https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][2])
+* OWASP Cheat Sheet Series: XSS Prevention — `https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][16])
+* OWASP Cheat Sheet Series: Mass Assignment — `https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][14])
+* OWASP API Security Top 10 (2023) — `https://owasp.org/API-Security/editions/2023/en/0x11-t10/` ([OWASP Foundation][13])
+* OWASP Cheat Sheet Series: SQL Injection Prevention — `https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][21])
+* OWASP Cheat Sheet Series: OS Command Injection Defense — `https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][22])
+* OWASP Cheat Sheet Series: SSRF Prevention — `https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][23])
+* OWASP Cheat Sheet Series: File Upload — `https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][20])
+* OWASP Cheat Sheet Series: Unvalidated Redirects and Forwards — `https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][24])
+* OWASP Cheat Sheet Series: HTTP Security Response Headers — `https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][6])
+* OWASP Cheat Sheet Series: WebSocket Security — `https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][25])
+* OWASP WSTG: Testing for Server-Side Template Injection — `https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server_Side_Template_Injection` ([OWASP Foundation][17])
+* OWASP WSTG: Testing WebSockets — `https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/10-Testing_WebSockets` ([OWASP Foundation][26])
+
+Template safety references:
+
+* Jinja: Sandbox — `https://jinja.palletsprojects.com/en/stable/sandbox/` ([jinja.palletsprojects.com][18])
+
+Selected supply-chain/advisory references (Starlette examples):
+
+* CVE-2023-29159 (StaticFiles path traversal; fixed 0.27.0) — `https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2023-29159/` ([advisories.gitlab.com][10])
+* CVE-2024-47874 (multipart/form-data DoS; fixed 0.40.0) — `https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2024-47874/` ([advisories.gitlab.com][9])
+* CVE-2025-62727 (FileResponse Range header DoS; fixed 0.49.1) — `https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2025-62727/` ([advisories.gitlab.com][19])
+
+[1]: https://pypi.org/project/fastapi/ "https://pypi.org/project/fastapi/"
+[2]: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html"
+[3]: https://starlette.dev/websockets/?utm_source=chatgpt.com "Websockets"
+[4]: https://pypi.org/project/uvicorn/ "https://pypi.org/project/uvicorn/"
+[5]: https://pypi.org/project/starlette/ "https://pypi.org/project/starlette/"
+[6]: https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html?utm_source=chatgpt.com "HTTP Security Response Headers Cheat Sheet"
+[7]: https://fastapi.tiangolo.com/reference/dependencies/?utm_source=chatgpt.com "Dependencies - Depends() and Security() - FastAPI"
+[8]: https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html"
+[9]: https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2024-47874/ "Starlette Denial of service (DoS) via multipart/form-data | GitLab Advisory Database"
+[10]: https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2023-29159/ "Starlette has Path Traversal vulnerability in StaticFiles | GitLab Advisory Database"
+[11]: https://fastapi.tiangolo.com/tutorial/security/first-steps/?utm_source=chatgpt.com "Security - First Steps - FastAPI"
+[12]: https://fastapi.tiangolo.com/tutorial/response-model/ "https://fastapi.tiangolo.com/tutorial/response-model/"
+[13]: https://owasp.org/API-Security/editions/2023/en/0x11-t10/ "https://owasp.org/API-Security/editions/2023/en/0x11-t10/"
+[14]: https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html"
+[15]: https://fastapi.tiangolo.com/tutorial/extra-models/ "https://fastapi.tiangolo.com/tutorial/extra-models/"
+[16]: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html"
+[17]: https://owasp.org/www-project-web-security-testing-guide/v41/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server_Side_Template_Injection?utm_source=chatgpt.com "Testing for Server Side Template Injection"
+[18]: https://jinja.palletsprojects.com/en/stable/sandbox/?utm_source=chatgpt.com "Sandbox — Jinja Documentation (3.1.x)"
+[19]: https://advisories.gitlab.com/pkg/pypi/starlette/CVE-2025-62727/ "Starlette vulnerable to O(n^2) DoS via Range header merging in ``starlette.responses.FileResponse`` | GitLab Advisory Database"
+[20]: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+[21]: https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+[22]: https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/OS_Command_Injection_Defense_Cheat_Sheet.html"
+[23]: https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html "https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html"
+[24]: https://cheatsheetseries.owasp.org/cheatsheets/Unvalidated_Redirects_and_Forwards_Cheat_Sheet.html?utm_source=chatgpt.com "Unvalidated Redirects and Forwards Cheat Sheet"
+[25]: https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html?utm_source=chatgpt.com "WebSocket Security - OWASP Cheat Sheet Series"
+[26]: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/10-Testing_WebSockets?utm_source=chatgpt.com "WSTG - Latest | OWASP Foundation"
+[27]: https://fastapi.tiangolo.com/advanced/websockets/?utm_source=chatgpt.com "WebSockets - FastAPI"
+[28]: https://fastapi.tiangolo.com/reference/apirouter/?utm_source=chatgpt.com "APIRouter class - FastAPI"
+[29]: https://docs.pydantic.dev/latest/ "https://docs.pydantic.dev/latest/"
+
+FILE /Users/sellers/.codex/skills/security-best-practices/references/javascript-typescript-nextjs-web-server-security.md
+# Next.js (TypeScript/JavaScript) Web Security Spec (Next.js 16.1.x, Node.js 20.9+)
+
+This document is designed as a **security spec** that supports:
+
+1. **Secure-by-default code generation** for new Next.js backend code (Route Handlers, API Routes, Server Actions, Proxy/Middleware).
+2. **Security review / vulnerability hunting** in existing Next.js repos (passive “notice issues while working” and active “scan the repo and report findings”).
+
+It is intentionally written as a set of **normative requirements** (“MUST/SHOULD/MAY”) plus **audit rules** (what bad patterns look like, how to detect them, and how to fix/mitigate them).
+
+Target scope: Next.js **16.1.x** (latest line shown in the App Router docs) ([Next.js][1]), running on Node.js **20.9+** (per Next.js system requirements). ([Next.js][2])
+
+---
+
+## 0) Safety, boundaries, and anti-abuse constraints (MUST FOLLOW)
+
+* MUST NOT request, output, log, or commit secrets (API keys, passwords, private keys, session cookies, OAuth tokens, `process.env` dumps, database URLs with credentials).
+* MUST NOT “fix” security by disabling protections (e.g., disabling origin checks, relaxing CORS to `*`, skipping authz checks, turning off cookie security flags, turning off CSP because it’s “hard”).
+* MUST provide **evidence-based findings** during audits: cite file paths, code snippets, and configuration values that justify each claim.
+* MUST treat uncertainty honestly: if a protection might exist in infrastructure (reverse proxy, CDN, WAF, platform headers), report it as “not visible in app code; verify at runtime/config”.
+* MUST assume all request-facing server code is reachable by attackers unless there is a clearly enforced auth boundary (not just “the UI doesn’t link to it”).
+* MUST treat TypeScript types as **non-security boundaries**: types do not validate runtime input; runtime checks are required. ([Next.js][3])
+
+---
+
+## 1) Operating modes
+
+### 1.1 Generation mode (default)
+
+When asked to write new Next.js code or modify existing code:
+
+* MUST follow every **MUST** requirement in this spec.
+* SHOULD follow every **SHOULD** requirement unless the user explicitly says otherwise.
+* MUST prefer safe-by-default APIs and proven libraries over custom security code.
+* MUST avoid introducing new risky sinks (dynamic code execution, unsafe redirects, serving user files as HTML, SSRF URL fetchers, building SQL strings, etc.).
+
+### 1.2 Passive review mode (always on while editing)
+
+While working anywhere in a Next.js repo (even if the user did not ask for a security scan):
+
+* MUST “notice” violations of this spec in touched/nearby code.
+* SHOULD mention issues as they come up, with a brief explanation + safe fix.
+
+### 1.3 Active audit mode (explicit scan request)
+
+When the user asks to “scan”, “audit”, or “hunt for vulns”:
+
+* MUST systematically search the codebase for violations of this spec.
+* MUST output findings in a structured format (see §2.3).
+
+Recommended audit order:
+
+1. Deployment entrypoints and environment (Dockerfiles, `package.json` scripts, hosting config).
+2. Next.js config (`next.config.*`), Proxy/Middleware, routing patterns.
+3. Authentication, sessions, cookies.
+4. CSRF protections and state-changing endpoints (Server Actions, Route Handlers, API Routes).
+5. XSS (React + CSP) and unsafe HTML rendering.
+6. Cache/data-leak hazards (static rendering + caching + “use cache”).
+7. File handling (uploads/downloads) and path traversal.
+8. Injection classes (SQL/ORM misuse, command execution, unsafe deserialization).
+9. Outbound requests (SSRF).
+10. Redirect handling (open redirects).
+11. CORS and security headers.
+
+---
+
+## 2) Definitions and review guidance
+
+### 2.1 Untrusted input (treat as attacker-controlled unless proven otherwise)
+
+In Next.js backends, untrusted input includes:
+
+App Router:
+
+* Route Handler params and request data:
+
+  * `context.params` (dynamic segments), search params (`request.url`, `new URL(request.url).searchParams`)
+  * `request.headers`, `request.cookies`
+  * `await request.json()`, `await request.formData()`, `await request.text()`
+* Dynamic APIs used in Server Components/Server Functions:
+
+  * `headers()` and `cookies()` values ([Next.js][4])
+
+Pages Router:
+
+* `req.query`, `req.cookies`, `req.body` in `pages/api/*` handlers ([Next.js][3])
+
+Plus:
+
+* Anything from external systems (webhooks, third-party APIs, message queues)
+* Any persisted user content (DB rows) that originated from users
+
+### 2.2 State-changing request
+
+A request is state-changing if it can create/update/delete data, change auth/session state, trigger side effects (purchase, email send, webhook send), or initiate privileged actions.
+
+Special note for Next.js:
+
+* **Server Actions** are invoked via network requests and can mutate state; treat them as state-changing endpoints. ([Next.js][5])
+
+### 2.3 Required audit finding format
+
+For each issue found, output:
+
+* Rule ID:
+* Severity: Critical / High / Medium / Low
+* Location: file path + function/route name + line(s)
+* Evidence: the exact code/config snippet
+* Impact: what could go wrong, who can exploit it
+* Fix: safe change (prefer minimal diff)
+* Mitigation: defense-in-depth if immediate fix is hard
+* False positive notes: what to verify if uncertain
+
+---
+
+## 3) Secure baseline: minimum production configuration (MUST in production)
+
+This is the smallest “production baseline” that prevents common Next.js backend misconfigurations.
+
+### 3.1 Run Next.js in production mode (MUST)
+
+* MUST run `next build` + `next start` (or the managed platform equivalent), not `next dev`. Dev mode has different error/reporting behavior and is not designed for production exposure. ([Next.js][6])
+* MUST ensure `NODE_ENV=production` in production (Next.js defaults `NODE_ENV` based on command; verify the runtime environment). ([Next.js][7])
+
+### 3.2 Put a reverse proxy / edge layer in front when self-hosting (MUST for public internet)
+
+* If self-hosting, MUST place a reverse proxy (e.g., nginx) or equivalent edge layer in front of the Next.js server to handle malformed requests, slow attacks, payload size limits, rate limiting, and similar concerns. ([Next.js][8])
+
+### 3.3 Baseline header/cookie posture (SHOULD)
+
+* SHOULD set a baseline of security headers globally (CSP, `X-Content-Type-Options`, clickjacking defense via CSP `frame-ancestors` and/or `X-Frame-Options`, etc.). Next.js provides guidance for implementing CSP via Proxy/headers. ([Next.js][7])
+* MUST ensure auth/session cookies use secure attributes (`Secure`, `HttpOnly`, `SameSite`) as appropriate. ([Next.js][9])
+IMPORTANT NOTE: Only set `Secure` in production environment. When running in a local dev environment over HTTP, do not set `Secure` property on cookies. You should do this conditionally based on if the app is running in production mode. You should also include a property like `SESSION_COOKIE_SECURE` which can be used to disable `Secure` cookies when testing over HTTP.
+
+### 3.4 Clear separation between server-only and client code (MUST)
+
+* MUST prevent secrets and privileged logic from being bundled into client code.
+* MUST treat `NEXT_PUBLIC_*` environment variables as public (browser-exposed and inlined at build time). ([Next.js][7])
+
+---
+
+## 4) Rules (generation + audit)
+
+Each rule contains: required practice, insecure patterns, detection hints, and remediation.
+
+### NEXT-DEPLOY-001: Do not run `next dev` in production; ensure production mode behavior
+
+Severity: High (if production)
+
+NOTE: If they are deploying to a specific Next.js hosting provider, they do not need to worry about this.
+
+Required:
+
+* MUST NOT deploy `next dev` or any development server mode to production.
+* MUST ensure production builds and production runtime are used for any public deployment. ([Next.js][6])
+
+Insecure patterns:
+
+* `next dev` in Docker `CMD`, Procfile, platform start command.
+* `NODE_ENV=development` in production environment config.
+* Debug/dev-only endpoints or flags exposed publicly.
+
+Detection hints:
+
+* Search `package.json` scripts and deployment manifests for `next dev`.
+* Search infra for `NODE_ENV=development` or missing `NODE_ENV`.
+* Check Kubernetes/PM2/systemd entrypoints for `next dev`.
+
+Fix:
+
+* Use `next build` during CI/build and `next start` at runtime (or platform-native build/run).
+* Ensure environment sets `NODE_ENV=production`.
+
+Note:
+
+* Dev mode is fine for local development. Only flag if it is being used as a production entrypoint.
+
+---
+
+### NEXT-SUPPLY-001: Stay on supported Next.js releases; patch quickly for security advisories
+
+Severity: High (Critical if known-vulnerable version)
+
+Required:
+
+* MUST run a supported Next.js version line and apply security updates promptly. Next.js documents an LTS/support policy. ([Next.js][10])
+* MUST treat published advisories as urgent upgrade signals (e.g., update to a patched release). ([GitHub][11])
+
+Insecure patterns:
+
+* Running EOL Next.js major/minor without backported security fixes.
+* Ignoring advisories, or pinning `next` to a vulnerable range.
+
+Detection hints:
+
+* Check `package.json` and lockfiles for `next` version.
+* Compare against Next.js support policy and advisories.
+
+IMPORTANT: Any versions older than these minor versions are vulnerable to "react2shell" vulnerability (https://nextjs.org/blog/CVE-2025-66478):
+15.0.5
+15.1.9
+15.2.6
+15.3.6
+15.4.8
+15.5.7
+16.0.7
+
+Fix:
+
+* Upgrade `next` to a supported and patched version.
+* Add a dependency update process + CI checks.
+
+
+---
+
+### NEXT-SECRETS-001: Secrets MUST NOT be committed or exposed to the browser
+
+Severity: High (Critical if secret is client-exposed)
+
+Required:
+
+* MUST store secrets in environment variables or a secret manager; MUST NOT commit `.env*` files.
+* MUST treat `.env*` as sensitive; Next.js warns you “almost never want to commit these files.” ([Next.js][7])
+* MUST treat any `NEXT_PUBLIC_*` environment variable as public and browser-visible (inlined into the client bundle at build time). ([Next.js][7])
+
+Insecure patterns:
+
+* `.env`, `.env.local`, `.env.production` committed to git.
+* `NEXT_PUBLIC_API_KEY`, `NEXT_PUBLIC_SECRET`, `NEXT_PUBLIC_DATABASE_URL`, etc.
+* Rendering `process.env` values into HTML or returning them from API routes.
+
+Detection hints:
+
+* Scan git history and repo files for `.env` content, `DB_PASS=`, `API_KEY=[REDACTED], `SECRET=[REDACTED]
+* Grep for `NEXT_PUBLIC_` and review any sensitive-looking names.
+* Search for `process.env` usage in Client Components (`"use client"`) and shared modules.
+
+Fix:
+
+* Move secrets to server-only env vars (no `NEXT_PUBLIC_` prefix).
+* Ensure `.env*` is ignored and secrets are injected at deploy time.
+* Rotate leaked keys.
+
+---
+
+### NEXT-SECRETS-002: Avoid server-only → client bundling mistakes (server/client boundary is a security boundary)
+
+Severity: High
+
+Required:
+
+* MUST ensure server-only modules (DB clients, secret-dependent code) are not imported into Client Components or other client-bundled code paths.
+* SHOULD use server-only patterns/layers (e.g., a dedicated DAL and server-only modules) and treat boundary violations as security bugs. Next.js explicitly discusses the “server-only” concept for sensitive modules. ([Next.js][6])
+
+Insecure patterns:
+
+* Importing DB clients, admin SDKs, or secret-reading modules into `"use client"` components.
+* Shared `lib/` modules imported by both server and client code that reference secrets.
+
+Detection hints:
+
+* Search for `"use client"` and examine its imports for server-only dependencies.
+* Look for DB client packages (`pg`, `mysql2`, `mongoose`, `prisma`, admin SDKs) imported from `components/` or other client paths.
+* Search for `process.env` access in UI components.
+
+Fix:
+
+* Refactor into `lib/server/*` and only import from server contexts (Route Handlers, Server Components, Server Actions).
+* Add an explicit “server-only” guard pattern (and/or tests) to prevent accidental imports.
+
+---
+
+### NEXT-AUTH-001: Authentication/authorization MUST be enforced server-side for every protected action
+
+Severity: High
+
+Required:
+
+* MUST enforce authn/authz in server-side code for:
+
+  * Route Handlers (`app/**/route.ts`) ([Next.js][1])
+  * API Routes (`pages/api/**`) ([Next.js][3])
+  * Server Actions (`"use server"` functions invoked by clients) ([Next.js][6])
+* MUST NOT rely on client-side checks (hiding UI, route guards on the client) as the only protection.
+
+Insecure patterns:
+
+* Sensitive Route Handlers with no session verification.
+* Server Actions that mutate data but do not validate user identity/permissions.
+* “Authorization” checks in React components only.
+
+Detection hints:
+
+* Enumerate all Route Handlers and API Routes; for each, identify whether it requires auth.
+* Grep for `"use server"` and review all exported actions for auth checks.
+* Search for admin actions triggered by query params / form submits.
+
+Fix:
+
+* Centralize auth helpers and call them in every protected endpoint/action.
+* Implement least-privilege authorization checks (role/resource ownership) per action.
+
+---
+
+### NEXT-AUTH-002: Proxy/Middleware-based auth MUST NOT create route coverage gaps
+
+Severity: High
+
+Required:
+
+* If using **Proxy** or **Middleware** for authentication checks, MUST ensure it covers every route that needs protection.
+* Next.js documentation notes Proxy can use a `matcher`, and for auth it’s recommended Proxy runs on all routes. ([Next.js][12])
+* MUST treat `matcher` mistakes as an auth bypass risk.
+
+Insecure patterns:
+
+* Proxy/Middleware only matches “pages” but not `/api/*`, or only matches some route groups.
+* “Denylist” style matchers that miss alternative request forms (framework-internal variants, RSC navigations, etc.).
+
+Detection hints:
+
+* Inspect `proxy.ts` / `middleware.ts` and its `matcher`.
+* Compare matchers to the full set of routes (including `app/api/**` and `pages/api/**`).
+* Ensure static assets and Next internals are excluded only intentionally, and that sensitive routes are included.
+
+Fix:
+
+* Prefer allowlisting protected route prefixes or running Proxy globally and doing internal allow/deny logic.
+* Add integration tests: request protected route without auth and assert denial.
+
+Notes:
+
+* Proxy is commonly used for “optimistic checks”; it is not a complete authorization system by itself. ([Next.js][12])
+
+---
+
+### NEXT-CSRF-001: Cookie-authenticated state-changing endpoints MUST be CSRF-protected
+
+Severity: High
+
+- IMPORTANT NOTE: If cookies are not being used for auth (ie auth is via Authentication header or other passed token), then there is no CSRF risk.
+
+Required:
+
+* MUST protect every state-changing endpoint that relies on cookies for auth (POST/PUT/PATCH/DELETE).
+* For **Server Actions**, Next.js performs an Origin/Host comparison to help prevent CSRF; do not disable or weaken it. ([Next.js][5])
+* If Server Actions must be callable from additional trusted origins (e.g., a trusted proxy domain), MUST use `allowedOrigins` with a strict allowlist. ([Next.js][5])
+* For **Route Handlers** and **API Routes**, MUST implement CSRF protections explicitly (tokens and/or strict Origin/Referer + SameSite + custom headers). Route Handlers are an “escape hatch” and require application-level security decisions. ([Next.js][6])
+
+Insecure patterns:
+
+* POST endpoints (including Server Actions) that mutate state and accept cross-site requests with no token/origin checks.
+* `allowedOrigins: ['*']` (or broad wildcards) or “reflect Origin” logic.
+* Using GET requests to change state.
+
+Detection hints:
+
+* Enumerate all state-changing endpoints and determine auth mechanism.
+* Search for `allowedOrigins` and confirm the list is small, specific, and justified. ([Next.js][5])
+* In Route Handlers/API Routes: look for missing CSRF token validation or missing Origin/Referer checks.
+
+Fix:
+
+* Implement a CSRF token strategy for cookie-auth endpoints.
+* Keep cookies `SameSite=Lax` or `Strict` when compatible; don’t treat SameSite alone as sufficient.
+* Use strict Origin validation for JSON API endpoints, especially when not using CSRF tokens.
+
+Notes:
+
+* XSS can defeat CSRF protections; CSRF defenses do not replace XSS prevention.
+
+---
+
+### NEXT-SESS-001: Session cookies MUST use secure attributes in production
+
+Severity: Medium
+
+Required (production, HTTPS):
+
+* MUST set session/auth cookies with:
+
+  * `Secure: true` (HTTPS-only) IMPORTANT NOTE: Only set `Secure` in production environment. When running in a local dev environment over HTTP, do not set `Secure` property on cookies. You should do this conditionally based on if the app is running in production mode. You should also include a property like `SESSION_COOKIE_SECURE` which can be used to disable `Secure` cookies when testing over HTTP.
+  * `HttpOnly: true` (not readable by JS)
+  * `SameSite: 'Lax'` (recommended) or `'Strict'` if compatible
+* Only use `SameSite: 'none'` when you truly need cross-site cookies, and then MUST also set `Secure`. Cookie options are supported in Next.js cookie APIs. ([Next.js][9])
+
+Insecure patterns:
+
+* `secure: false` in production.
+* `httpOnly: false` for auth cookies.
+* `sameSite: 'none'` without a clear need, especially on cookie-authenticated state-changing endpoints.
+
+Detection hints:
+
+* Search for cookie setting sites (`cookies().set(...)`, `Set-Cookie` headers, auth library cookie config).
+* Review cookie options used in Route Handlers and Server Actions. ([Next.js][9])
+
+Fix:
+
+* Set secure cookie attributes at the auth/session layer.
+* Reduce cookie scope: avoid wide `domain` unless you explicitly need subdomain-wide cookies.
+
+---
+
+### NEXT-SESS-002: Sessions MUST be bounded and resistant to fixation/replay
+
+Severity: Low
+
+Required:
+
+* SHOULD set bounded session lifetimes appropriate to the app.
+* SHOULD rotate session identifiers on login and privilege changes.
+* MUST NOT store sensitive secrets directly in client-readable storage (including cookies that are not encrypted).
+
+Insecure patterns:
+
+* Long-lived admin sessions with no rotation.
+* “Remember me forever” for privileged roles without additional risk controls.
+* Storing access tokens/refresh tokens in non-HttpOnly cookies or localStorage.
+
+Detection hints:
+
+* Review auth library configuration for expiration and rotation.
+* Search for `localStorage.setItem('token'...)` and non-HttpOnly cookie usage.
+
+Fix:
+
+* Use short lifetimes for privileged sessions; refresh with rotation.
+* Store only opaque session IDs in cookies; keep sensitive material server-side.
+
+---
+
+### NEXT-INPUT-001: Runtime input validation is mandatory (TypeScript is not validation)
+
+Severity: High
+
+Required:
+
+* MUST validate and normalize all attacker-controlled input at runtime (schemas, type checks, bounds).
+* Next.js API Routes explicitly note `req.body` is `any` and must be validated before use. ([Next.js][3])
+* MUST validate Server Action arguments (treat as hostile). ([Next.js][6])
+
+Insecure patterns:
+
+* Trusting `req.body` shape directly.
+* Passing `params.id`/`searchParams` directly into DB queries or file paths.
+* Parsing JSON and then assuming types without validation.
+
+Detection hints:
+
+* Identify endpoints that accept JSON/form input and check for schema validation.
+* Grep for `req.body.` usage and for `await request.json()` usage in Route Handlers; verify validation exists.
+
+Fix:
+
+* Add schema validation (e.g., zod/yup/valibot) and reject invalid input with 4xx.
+* Validate IDs as strict types (UUID/int) and enforce length/charset constraints.
+
+---
+
+### NEXT-HEADERS-001: Essential security headers MUST be set (in app or at the edge)
+
+Severity: Low
+
+Required (typical web app):
+
+* SHOULD set:
+
+  * CSP (`Content-Security-Policy`) (see NEXT-CSP-001)
+  * `X-Content-Type-Options: nosniff`
+  * Clickjacking defense (`frame-ancestors` in CSP and/or `X-Frame-Options`)
+  * `Referrer-Policy` and `Permissions-Policy` when appropriate
+* MUST ensure cookies are set with secure attributes (see NEXT-SESS-001). ([Next.js][9])
+
+Insecure patterns:
+
+* No security headers anywhere (app or edge).
+* Allowing iframing unintentionally.
+* `Content-Type` sniffing possible due to missing `nosniff`.
+
+Detection hints:
+
+* Check `proxy.ts` / middleware for `response.headers.set(...)`. ([Next.js][7])
+* If not visible in app code, flag as “verify at edge/CDN”.
+
+Fix:
+
+* Set headers centrally (Proxy/Middleware or other centralized mechanism).
+* Ensure consistent headers across routes.
+
+---
+
+### NEXT-CSP-001: Use a CSP to reduce XSS impact; prefer nonces for scripts
+
+Severity: Medium
+
+NOTE: It is most important to set the CSP's script-src. All other directives are not as important and can generally be excluded for the ease of development.
+
+Required:
+
+* SHOULD deploy a CSP, ideally with nonces for scripts.
+* SHOULD follow Next.js guidance for CSP implementation (including nonce generation and header application). ([Next.js][7])
+* MUST avoid loosening CSP as a “fix” (e.g., `script-src 'unsafe-inline'`) without explicit risk acceptance.
+
+Insecure patterns:
+
+* CSP missing on apps that display user-generated HTML/markdown.
+* CSP that broadly enables inline scripts or eval without strict justification.
+
+Detection hints:
+
+* Search for `Content-Security-Policy` header setting and examine its directives.
+* Check use of `next/script` and whether a nonce is provided when CSP requires it.
+
+Fix:
+
+* Implement CSP per Next.js guidance; use a nonce and apply it consistently.
+* Reduce inline scripts; avoid `eval`.
+
+Notes:
+
+* CSP is defense-in-depth; it does not replace proper output encoding and sanitization.
+
+---
+
+### NEXT-XSS-001: Prevent reflected/stored XSS in React/Next rendering
+
+Severity: High
+
+Required:
+
+* MUST rely on React’s default escaping; MUST NOT insert untrusted HTML into the DOM without sanitization.
+* MUST treat these as high-risk sinks:
+
+  * `dangerouslySetInnerHTML`
+  * rendering user-controlled strings into `<script>` tags or event handler attributes
+* MUST avoid serving uploaded HTML as active HTML (serve as attachment or sanitize/transform).
+
+Insecure patterns:
+
+* `<div dangerouslySetInnerHTML={{ __html: userContent }} />` with no sanitizer.
+* Markdown renderers configured to allow raw HTML with no sanitizer.
+* Returning user content with `Content-Type: text/html` from a Route Handler.
+
+Detection hints:
+
+* Search for `dangerouslySetInnerHTML`, `__html:`.
+* Search for template-like string concatenation that builds HTML.
+* Review any “render HTML” or “preview” features.
+
+Fix:
+
+* Sanitize untrusted HTML with a well-maintained sanitizer; prefer strict allowlists.
+* Prefer rendering user content as text, not HTML.
+* Add CSP to reduce impact.
+
+---
+
+### NEXT-ACTION-001: Server Actions MUST be treated like public endpoints
+
+Severity: High (Critical for privileged actions)
+
+Required:
+
+* MUST apply the same controls as for Route Handlers:
+
+  * authn/authz
+  * input validation
+  * CSRF/origin protections
+  * rate limiting for sensitive actions
+* MUST NOT assume Server Actions are “not reachable” or “internal”.
+* MUST understand Server Action request protections:
+
+  * Next.js compares Origin with host to mitigate CSRF; extra origins must be explicitly allowlisted via `allowedOrigins`. ([Next.js][5])
+
+Insecure patterns:
+
+* `"use server"` functions that update DB state with no auth check.
+* Adding overly broad `allowedOrigins` to “make it work”.
+
+Detection hints:
+
+* Grep for `"use server"` and inventory all exported actions.
+* Identify any action doing privileged writes; confirm it checks identity and permission.
+
+Fix:
+
+* Wrap actions with an authz helper (fail closed).
+* Keep `allowedOrigins` minimal and audited.
+
+---
+
+### NEXT-ACTION-002: Do not accidentally leak secrets through Server Action closure/binding patterns
+
+Severity: Medium (High if important secrets are exposed)
+
+Required:
+
+* MUST treat Server Action closed-over values as sensitive and design intentionally.
+* Next.js notes that closed-over values are encrypted/signed, but values passed through `.bind` are not encrypted; do not rely on `.bind` to protect secrets. ([Next.js][6])
+* If using a stable encryption key for Server Actions across deployments, MUST treat it as a secret and store securely (do not commit/log it). ([Next.js][6])
+
+Insecure patterns:
+
+* `myAction.bind(null, process.env.SECRET)` or binding sensitive tokens/IDs that should not be client-influenced.
+* Logging action arguments that include secrets.
+
+Detection hints:
+
+* Search for `.bind(` on Server Action functions.
+* Search for `process.env` usage near Server Actions.
+
+Fix:
+
+* Avoid binding secrets into actions; fetch secrets server-side inside the action.
+* Keep action arguments minimal and validated.
+
+---
+
+### NEXT-CACHE-001: Prevent data leaks via static rendering and shared caching
+
+Severity: High (Critical if cross-user data leak)
+
+Required:
+
+* MUST ensure pages/endpoints that return user-specific or sensitive data are not statically generated or cached in a shared way.
+* Route Handlers are not cached by default, but GET handlers can opt into caching/static behavior; do not do this for per-user data. ([Next.js][1])
+* MUST treat `use cache` and similar caching mechanisms as potentially cross-user unless explicitly proven private; do not cache per-user DB results in shared caches. ([Next.js][1])
+* SHOULD set explicit `Cache-Control: no-store` / `private` for sensitive responses (auth/session/user data APIs).
+
+Insecure patterns:
+
+* `export const dynamic = 'force-static'` on a route that returns user-specific data. ([Next.js][1])
+* Using `use cache` around a function that queries user-specific data without a per-user cache key. ([Next.js][1])
+* Returning auth/session responses from GET endpoints with caching enabled.
+
+Detection hints:
+
+* Search for `dynamic = 'force-static'`, `revalidate`, `use cache`, `cacheLife`, `unstable_cache`.
+* Inspect all GET Route Handlers that are cached/static and confirm they only return public data.
+* Confirm that use of `cookies()`/`headers()` (dynamic APIs) is not accidentally removed in ways that make a route static. ([Next.js][1])
+
+Fix:
+
+* Mark sensitive routes as dynamic and set `Cache-Control: no-store`.
+* Ensure caching keys include user identity if caching is truly needed (and store it in a user-private cache).
+
+---
+
+### NEXT-FILES-001: User uploads MUST be validated, stored safely, and served safely
+
+Severity: Medium
+
+Required:
+
+* MUST enforce upload size limits at the edge and in application logic.
+* MUST validate file type using allowlists and content checks (not only extension).
+* MUST store uploads outside the `public/` directory (anything under `public/` is served as static content by default).
+* MUST serve potentially active formats safely (`Content-Disposition: attachment`) unless explicitly intended.
+
+Insecure patterns:
+
+* Accepting arbitrary file types and serving them back inline.
+* Using user-supplied filename as the storage path.
+* Writing uploads into `public/uploads/` and serving them directly.
+
+Detection hints:
+
+* Search for `formData()` / multipart parsing, `fs.writeFile`, storage SDK usage.
+* Look for any write path under `public/`.
+* Look for “download” endpoints that set `Content-Type: text/html` or serve user files inline.
+
+Fix:
+
+* Use a dedicated object store (S3/GCS) or a safe server-side directory outside static roots.
+* Generate random server-side filenames; store metadata separately.
+
+---
+
+### NEXT-PATH-001: Prevent path traversal and unsafe file access
+
+Severity: High
+
+Required:
+
+* MUST NOT use user-controlled strings as filesystem paths.
+* MUST validate and normalize identifiers; use allowlists and safe base directories.
+* MUST avoid reading arbitrary files based on request parameters.
+
+Insecure patterns:
+
+* `fs.readFile(request.nextUrl.searchParams.get('path'))`
+* `path.join(base, userPath)` without normalization + boundary checks
+
+Detection hints:
+
+* Search for `fs.` usage in Route Handlers/API Routes.
+* Search for `path.join`/`path.resolve` fed by request params.
+
+Fix:
+
+* Use opaque IDs that map to server-side stored paths.
+* Enforce that resolved paths remain within an intended base directory.
+* Sanitize and disallow `..` from being used when creating urls
+
+---
+
+### NEXT-SSRF-001: Outbound requests using user-influenced URLs MUST be restricted
+
+Severity: Medium (High in internal networks)
+
+NOTE: This is mostly only applicable to apps which will be deployed in a cloud/LAN setup or have other http services on the same box. Sometimes the feature requires this functionality unavoidably (webhooks).
+
+Required:
+
+* MUST treat any server-side `fetch()` to a user-provided URL as high-risk.
+* SHOULD allowlist destinations (hosts/domains) for URL fetch features.
+* SHOULD block:
+
+  * localhost / private IP ranges / link-local
+  * cloud metadata endpoints
+* MUST restrict protocols to `http:` and `https:`.
+* SHOULD set strict timeouts and restrict redirects.
+
+Insecure patterns:
+
+* `await fetch(req.query.url)` or `await fetch((await request.json()).url)`
+* “URL preview” endpoints that fetch arbitrary URLs.
+
+Detection hints:
+
+* Search for `fetch(` in server code and trace where the URL comes from.
+* Look for “webhook tester”, “preview”, “import from URL” features.
+
+Fix:
+
+* Parse URL, enforce `http/https`, allowlist hostnames, re-resolve DNS/IP to block private ranges.
+* Set timeouts (AbortSignal) and limit redirects.
+
+---
+
+### NEXT-REDIRECT-001: Prevent open redirects (including auth flows)
+
+Severity: Low
+
+Required:
+
+* MUST validate redirect targets derived from untrusted input (e.g., `next`, `redirect`, `returnTo`).
+* SHOULD prefer redirecting only to same-site relative paths.
+* MUST validate any absolute URL against an allowlist.
+* MUST ensure urls are `http` or `https:` schema, disallowing `javascript:` schema
+
+Insecure patterns:
+
+* `redirect(searchParams.get('next')!)`
+* `NextResponse.redirect(new URL(req.nextUrl.searchParams.get('to')!, req.url))` without checks
+
+Detection hints:
+
+* Search for `redirect(` (server components/actions) and `NextResponse.redirect`.
+* Search for `res.redirect(` in API Routes. ([Next.js][3])
+
+Fix:
+
+* Only allow relative paths (`/path`) and reject protocol-relative (`//evil.com`) or absolute URLs.
+* If invalid, fall back to a safe default (home/dashboard).
+
+---
+
+### NEXT-CORS-001: CORS must be explicit and least-privilege
+
+Severity: Medium (High if misconfigured with credentials)
+
+Required:
+
+* If CORS is not needed, MUST keep it disabled.
+* Next.js API Routes do not set CORS headers by default, meaning they are same-origin by default; only enable CORS when you truly need it. ([Next.js][3])
+* If enabling CORS:
+
+  * MUST allowlist trusted origins (no reflection of arbitrary Origin)
+  * MUST be careful with credentialed requests (cookies); never combine broad origins with credentials.
+  * SHOULD restrict methods and headers.
+
+Insecure patterns:
+
+* `Access-Control-Allow-Origin: *` with `Access-Control-Allow-Credentials: true`
+* Reflecting `Origin` without validation.
+
+Detection hints:
+
+* Search for `Access-Control-Allow-Origin`, `cors`, “CORS” middleware/wrappers.
+* Review preflight `OPTIONS` handlers.
+
+Fix:
+
+* Implement strict origin allowlist and minimal methods/headers.
+* Ensure cookies aren’t exposed cross-origin unless necessary and reviewed.
+
+---
+
+### NEXT-WEBHOOK-001: Webhook endpoints MUST verify authenticity using the raw body
+
+Severity: Medium
+
+Required:
+
+* MUST verify webhook signatures using the **raw request body** (not a re-serialized parsed object).
+* Next.js notes a use case for disabling body parsing is verifying the raw body of a webhook request. ([Next.js][3])
+
+Insecure patterns:
+
+* Verifying webhook signatures over `JSON.stringify(req.body)` (can change formatting).
+* Accepting webhooks with no signature verification and no allowlist.
+
+Detection hints:
+
+* Find webhook endpoints (`/api/webhook`, `/app/api/**/webhook`).
+* Check whether they use raw body verification.
+
+Fix:
+
+* Disable Next.js automatic body parsing only for those webhook routes, read raw bytes safely, verify signature, then parse.
+
+---
+
+### NEXT-INJECT-001: Prevent SQL injection (use parameterized queries / ORM)
+
+Severity: High
+
+Required:
+
+* MUST use parameterized queries or an ORM that parameterizes under the hood.
+* MUST NOT build SQL by string concatenation / template strings with untrusted input.
+
+Insecure patterns:
+
+* ``db.query(`SELECT * FROM users WHERE id = ${id}`)``
+* `"WHERE name = '" + user + "'"`
+
+Detection hints:
+
+* Grep for `SELECT`, `INSERT`, `UPDATE`, `DELETE` strings.
+* Trace untrusted input (`params`, `searchParams`, `req.query`, `req.body`, `request.json()`) into DB calls.
+
+Fix:
+
+* Use prepared statements / ORM query APIs.
+* Validate and coerce types before querying.
+
+---
+
+### NEXT-INJECT-002: Prevent OS command injection and unsafe subprocess use
+
+Severity: Critical to High
+
+Required:
+
+* MUST avoid executing OS commands with attacker-controlled input.
+* If subprocess is necessary:
+
+  * MUST pass args as an array (not a single shell string)
+  * MUST NOT use `shell: true` with attacker-influenced strings
+  * SHOULD use strict allowlists for any variable component
+
+Insecure patterns:
+
+* `exec("convert " + filename)`
+* `spawn("bash", ["-c", userInput])`
+* `spawn(userInput, ["foo"])`
+
+Detection hints:
+
+* Search for `child_process`, `exec`, `spawn`, `shell: true`.
+
+Fix:
+
+* Use library APIs instead of shell commands.
+* Hard-code commands and allowlist validated parameters (and use `--` to separate flags where supported).
+
+---
+
+### NEXT-INJECT-003: Avoid dynamic code execution and unsafe deserialization
+
+Severity: High to Critical
+
+Required:
+
+* MUST NOT use `eval`, `new Function`, `vm.runIn*` on untrusted strings.
+* MUST treat deserializing complex formats (YAML, XML, custom serialization) as risky; use safe parsers and strict schemas.
+
+Insecure patterns:
+
+* `eval(req.body.code)`
+* Parsing YAML from user input with a non-safe schema.
+
+Detection hints:
+
+* Search for `eval(`, `new Function`, `vm.`, `require(` with non-literals.
+* Search for `js-yaml`, XML parsers, custom serializer usage on untrusted input.
+
+Fix:
+
+* Remove dynamic execution; use safe interpreters or strict parsers.
+* Validate and constrain input.
+
+---
+
+### NEXT-LOG-001: Logging MUST NOT leak secrets or sensitive headers
+
+Severity: Medium
+
+Required:
+
+* MUST NOT log:
+
+  * `Authorization` headers
+  * cookies / session tokens
+  * request bodies containing credentials
+  * environment variables or configuration dumps
+* SHOULD implement structured logging with redaction.
+
+Insecure patterns:
+
+* `console.log(req.headers)` in auth endpoints
+* `console.log(process.env)` in server code
+
+Detection hints:
+
+* Search for `console.log(`, `logger.info(`, `debug(` in server routes/actions.
+* Check for logs of headers/cookies/body.
+
+Fix:
+
+* Redact sensitive fields; log only what is needed for debugging.
+* Use safe error messages for clients; keep detail server-side only.
+
+---
+
+### NEXT-ERROR-001: Error handling MUST avoid leaking implementation details in production
+
+Severity: Low
+
+Required:
+
+* MUST not expose stack traces or internal error details to end users in production.
+* Ensure production mode behavior (Next.js production error handling differs from dev). ([Next.js][6])
+
+Insecure patterns:
+
+* Returning `err.stack` in JSON responses.
+* Showing detailed exception data to unauthenticated users.
+
+Detection hints:
+
+* Search for `res.status(500).json(err)` or `return Response.json(err)`.
+* Verify error responses are sanitized.
+
+Fix:
+
+* Return generic error messages to clients; log details server-side with redaction.
+
+---
+
+### NEXT-PROXY-001: Proxy/Middleware must not introduce header smuggling or unsafe header forwarding
+
+Severity: Medium
+
+Required:
+
+* MUST be careful when copying/forwarding request headers upstream:
+
+  * Do not forward attacker-controlled `x-forwarded-*` headers unless you have a trusted proxy chain.
+  * Do not forward `Authorization`/cookies to unrelated outbound services.
+* Next.js Proxy patterns often mutate headers; ensure this doesn’t create security issues.
+
+Insecure patterns:
+
+* Blindly cloning all request headers to an outbound `fetch()` call.
+* Trusting `x-forwarded-host` or `host` to construct sensitive absolute URLs without allowlisting.
+
+Detection hints:
+
+* Search `headers()` and `request.headers` usage (especially for URL building). ([Next.js][4])
+* Search Proxy/Middleware for header rewrites.
+
+Fix:
+
+* Allowlist forwarded headers explicitly.
+* Validate hostnames before using them to build callback URLs or redirects.
+
+---
+
+### NEXT-HOST-001: Host/Origin-derived URL construction MUST be allowlisted
+
+Severity: Medium
+
+Required:
+
+* MUST NOT generate security-sensitive absolute URLs (password reset links, OAuth callback URLs, email verification links) directly from unvalidated `Host` headers.
+* For Server Actions, Origin/Host matching is part of CSRF mitigation; do not weaken it. ([Next.js][5])
+
+Insecure patterns:
+
+* `const base = "https://" + request.headers.get("host")`
+* Using unvalidated `x-forwarded-host` for absolute URL generation.
+
+Detection hints:
+
+* Grep for `.get('host')`, `.get('x-forwarded-host')`, and absolute URL building.
+* Review auth-related email link generation code.
+
+Fix:
+
+* Use a configured, allowlisted canonical app origin (e.g., `APP_ORIGIN=https://example.com`).
+* Allowlist hostnames; fail closed.
+
+---
+
+### NEXT-DOS-001: Rate limiting and resource controls MUST exist for abuse-prone endpoints
+
+Severity: Medium
+
+Required:
+
+* SHOULD implement rate limiting/throttling for:
+
+  * login, password reset, signup
+  * expensive Server Actions
+  * webhook ingestion
+* MUST implement request size limits (see NEXT-LIMITS-001).
+* If self-hosting, MUST rely on reverse proxy for additional protections. ([Next.js][8])
+
+Insecure patterns:
+
+* No throttling on login/reset endpoints.
+* Expensive actions callable without auth or with unlimited frequency.
+
+Detection hints:
+
+* Identify auth endpoints and check for rate limiting.
+* Search for “send email”, “charge”, “generate report” flows.
+
+Fix:
+
+* Add edge rate limiting and app-level user/IP throttles.
+* Add job queues for heavy work; return 202 when appropriate.
+
+---
+
+## 5) Practical scanning heuristics (how to “hunt”)
+
+When actively scanning, use these high-signal patterns:
+
+* Production misconfig:
+
+  * `next dev`, `NODE_ENV=development`, dev-only start commands ([Next.js][7])
+* Secrets exposure:
+
+  * `.env` committed, `NEXT_PUBLIC_` on sensitive variables ([Next.js][7])
+  * `process.env` used in `"use client"` modules
+* Auth coverage:
+
+  * `app/**/route.ts` or `pages/api/**` with no auth checks ([Next.js][1])
+  * `"use server"` actions with DB writes and no authz ([Next.js][6])
+  * `proxy.ts` / `middleware.ts` matchers that exclude sensitive routes ([Next.js][12])
+* CSRF:
+
+  * cookie-auth POST/PUT/PATCH/DELETE with no token/origin checks
+  * `serverActions.allowedOrigins` too broad ([Next.js][5])
+* XSS:
+
+  * `dangerouslySetInnerHTML`, raw HTML markdown rendering
+  * missing CSP / overly permissive CSP ([Next.js][7])
+* Caching/data leak:
+
+  * `dynamic = 'force-static'` on sensitive GET handlers ([Next.js][1])
+  * `use cache`, `cacheLife`, `unstable_cache` around user-specific data ([Next.js][1])
+* Files:
+
+  * writing uploads under `public/`
+  * `fs.readFile` / `path.join` with request input
+* SSRF:
+
+  * `fetch(userProvidedUrl)` from Route Handlers / Server Actions
+* Redirect:
+
+  * `redirect(searchParams.get('next'))`, `NextResponse.redirect(...)`, `res.redirect(req.query.next)` ([Next.js][3])
+* CORS:
+
+  * wildcard origins, origin reflection, credentials + broad origins ([Next.js][3])
+* Limits:
+
+  * API routes with `bodyParser: false` and no raw-body verification for webhooks ([Next.js][3])
+  * `serverActions.bodySizeLimit` raised without justification ([Next.js][5])
+* Dependency hygiene:
+
+  * old `next` versions that conflict with support policy/advisories ([Next.js][10])
+
+Always try to confirm:
+
+* data origin (untrusted vs trusted)
+* sink type (HTML/DOM, SQL, subprocess, files, redirect, outbound HTTP)
+* protective controls present (schema validation, allowlists, middleware/proxy checks, authz helpers, edge protections)
+
+---
+
+## 6) Sources (accessed 2026-01-27)
+
+Primary framework documentation (Next.js):
+
+* Next.js Docs: Installation (system requirements / Node version) — `https://nextjs.org/docs/app/getting-started/installation`
+* Next.js Docs: Route Handlers — `https://nextjs.org/docs/app/getting-started/route-handlers`
+* Next.js Docs: API Routes (Pages Router) — `https://nextjs.org/docs/pages/building-your-application/routing/api-routes`
+* Next.js Docs: Environment Variables — `https://nextjs.org/docs/pages/guides/environment-variables`
+* Next.js Docs: Data Security — `https://nextjs.org/docs/app/guides/data-security`
+* Next.js Docs: Content Security Policy — `https://nextjs.org/docs/app/guides/content-security-policy`
+* Next.js Docs: Proxy — `https://nextjs.org/docs/app/getting-started/proxy`
+* Next.js Docs: `serverActions.allowedOrigins` and `serverActions.bodySizeLimit` — `https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions`
+* Next.js Docs: `cookies()` — `https://nextjs.org/docs/app/api-reference/functions/cookies`
+* Next.js Docs: `headers()` — `https://nextjs.org/docs/app/api-reference/functions/headers`
+* Next.js Docs: Self-hosting (reverse proxy guidance) — `https://nextjs.org/docs/pages/guides/self-hosting`
+* Next.js Docs: Support policy (supported versions/LTS) — `https://nextjs.org/docs/support-policy`
+
+Next.js security guidance & advisories:
+
+* Next.js Blog: How to think about security in Next.js — `https://nextjs.org/blog/security-nextjs-server-components-actions`
+* GitHub Security Advisory: Next.js DoS via Server Components / Server Actions (CVE-2026-23864) — `https://github.com/advisories/GHSA-fq29-rrrv-cq2m`
+* Next.js Blog: Security update (example security advisory context) — `https://nextjs.org/blog/security-update`
+
+General web security references (recommended baseline):
+
+* OWASP Cheat Sheet Series (CSRF, Session Management, XSS Prevention, SSRF Prevention, File Upload, HTTP Headers) — `https://cheatsheetseries.owasp.org/`
+
+[1]: https://nextjs.org/docs/app/getting-started/route-handlers "Getting Started: Route Handlers | Next.js"
+[2]: https://nextjs.org/docs/app/getting-started/deploying?utm_source=chatgpt.com "Getting Started: Deploying"
+[3]: https://nextjs.org/docs/pages/building-your-application/routing/api-routes "Routing: API Routes | Next.js"
+[4]: https://nextjs.org/docs/app/api-reference/functions/headers "Functions: headers | Next.js"
+[5]: https://nextjs.org/docs/app/api-reference/config/next-config-js/serverActions "next.config.js: serverActions | Next.js"
+[6]: https://nextjs.org/blog/security-nextjs-server-components-actions "How to Think About Security in Next.js | Next.js"
+[7]: https://nextjs.org/docs/pages/guides/environment-variables "Guides: Environment Variables | Next.js"
+[8]: https://nextjs.org/docs/pages/guides/self-hosting?utm_source=chatgpt.com "Guides: Self-Hosting"
+[9]: https://nextjs.org/docs/app/api-reference/functions/cookies "Functions: cookies | Next.js"
+[10]: https://nextjs.org/blog/next-16?utm_source=chatgpt.com "Next.js 16"
+[11]: https://github.com/vercel/next.js/security/advisories/GHSA-9g9p-9gw9-jx7f?utm_source=chatgpt.com "Denial of Service in Image Optimizer · Advisory"
+[12]: https://nextjs.org/docs/pages/guides/authentication "Guides: Authentication | Next.js"
+
+FILE /Users/sellers/.codex/skills/security-best-practices/references/javascript-typescript-react-web-frontend-security.md
+# React (JavaScript/TypeScript) Web Security Spec (React 19.x, TypeScript 5.x)
+
+This document is designed as a **security spec** that supports:
+
+1. **Secure-by-default code generation** for new React code.
+2. **Security review / vulnerability hunting** in existing React code (passive “notice issues while working” and active “scan the repo and report findings”).
+
+It is intentionally written as a set of **normative requirements** (“MUST/SHOULD/MAY”) plus **audit rules** (what bad patterns look like, how to detect them, and how to fix/mitigate them).
+
+---
+
+## 0) Safety, boundaries, and anti-abuse constraints (MUST FOLLOW)
+
+* MUST NOT request, output, log, or commit secrets (API keys, OAuth client secrets, private keys, session cookies, JWTs, signing keys).
+
+  * Frontend note: anything shipped to the browser is observable by end users and attackers (view-source, devtools, proxies); never treat client code or “env vars in the bundle” as secret. ([create-react-app.dev][1])
+* MUST NOT “fix” security by disabling protections (e.g., turning off CSP to “make it work”, adding `unsafe-inline`/`unsafe-eval` without a documented, constrained plan, disabling CSRF protections when using cookies, widening CORS, skipping sanitization, or “temporary” bypasses that ship). ([OWASP Cheat Sheet Series][2])
+* MUST provide **evidence-based findings** during audits: cite file paths, code snippets, and configuration values that justify the claim.
+* MUST treat uncertainty honestly: if a protection might exist in infra (CDN/WAF/reverse proxy), report it as “not visible in app code; verify via runtime headers / edge config”.
+* MUST assume any data that crosses a trust boundary (URL, storage, network, postMessage, third-party scripts) can be attacker-influenced unless proven otherwise (see §2.1).
+
+---
+
+## 1) Operating modes
+
+### 1.1 Generation mode (default)
+
+When asked to write new React code or modify existing code:
+
+* MUST follow every **MUST** requirement in this spec.
+* SHOULD follow every **SHOULD** requirement unless the user explicitly says otherwise.
+* MUST prefer safe-by-default APIs and proven libraries over custom security code.
+* MUST avoid introducing new risky sinks (raw HTML insertion, direct DOM sinks like `innerHTML`, dynamic code execution, untrusted redirects/navigation, third‑party script injection, unsafe token storage, etc.). ([MDN Web Docs][3])
+
+### 1.2 Passive review mode (always on while editing)
+
+While working anywhere in a React repo (even if the user did not ask for a security scan):
+
+* MUST “notice” violations of this spec in touched/nearby code.
+* SHOULD mention issues as they come up, with a brief explanation + safe fix.
+
+### 1.3 Active audit mode (explicit scan request)
+
+When the user asks to “scan”, “audit”, or “hunt for vulns”:
+
+* MUST systematically search the codebase for violations of this spec.
+* MUST output findings in a structured format (see §2.3).
+
+Recommended audit order:
+
+1. App entrypoints, build tooling (Vite/Webpack/CRA/Next), deployment configs, CDN/static hosting config.
+2. Secrets & configuration exposure (env vars, runtime config injection, source maps).
+3. Rendering of untrusted data (XSS/DOM XSS), especially `dangerouslySetInnerHTML`, markdown/HTML renderers, URL attributes.
+4. Direct DOM usage and dangerous JS execution (`innerHTML`, `eval`, `new Function`, `document.write`, etc.).
+5. Auth & session patterns (token storage, cookies, CSRF interactions, OAuth flows).
+6. Network layer (axios/fetch wrappers, dynamic base URLs, credentialed requests, data exfil risks).
+7. Navigation & redirect handling (open redirects, `window.location`, `target=_blank`, `window.open`).
+8. Third-party scripts/tags/analytics and integrity controls (CSP, SRI).
+9. Service worker/PWA behavior (HTTPS, caching rules, update strategy).
+10. Security headers posture (CSP, clickjacking, nosniff, referrer policy) in app or at the edge. ([OWASP Cheat Sheet Series][2])
+
+---
+
+## 2) Definitions and review guidance
+
+### 2.1 Untrusted input (treat as attacker-controlled unless proven otherwise)
+
+Examples include:
+
+* URL-derived data: `window.location`, query params, hash fragments, route params.
+* Any data from browser storage: `localStorage`, `sessionStorage`, `IndexedDB` (including data previously written by the app—because XSS or extensions can tamper with it). ([OWASP Cheat Sheet Series][4])
+* Any data from cross-window messaging: `window.postMessage` payloads. ([OWASP Cheat Sheet Series][4])
+* Any data from remote APIs, webhooks proxied to the client, GraphQL responses, CMS content, feature flag services.
+* Any persisted user content (profiles, comments, rich text, markdown) rendered in the UI.
+* Any data produced by third-party scripts or tag managers (treat as untrusted unless strongly controlled). ([OWASP Cheat Sheet Series][5])
+
+### 2.2 State-changing request (frontend perspective)
+
+A request is state-changing if it can create/update/delete data, change auth/session state, trigger side effects (purchase, email send, webhook), or initiate privileged actions.
+
+Frontend-specific note:
+
+* State changes are often triggered by `fetch/axios` calls or form submissions. If authentication is cookie-based, these calls can be CSRF-relevant (§4 REACT-CSRF-001). ([OWASP Cheat Sheet Series][6])
+
+### 2.3 Required audit finding format
+
+For each issue found, output:
+
+* Rule ID:
+* Severity: Critical / High / Medium / Low
+* Location: file path + component/function + line(s)
+* Evidence: the exact code/config snippet
+* Impact: what could go wrong, who can exploit it
+* Fix: safe change (prefer minimal diff)
+* Mitigation: defense-in-depth if immediate fix is hard
+* False positive notes: what to verify if uncertain
+
+---
+
+## 3) Secure baseline: minimum production configuration (MUST in production)
+
+This is the smallest “production baseline” that prevents common React frontend misconfigurations.
+
+### 3.1 Production build and configuration hygiene (MUST)
+
+* MUST ship a production build (minified, no dev-only overlays/tools, correct mode flags).
+* MUST ensure build-time configuration does not embed secrets into the shipped JS/HTML/CSS. Build-time “environment variables” are not secret; treat them as public. ([create-react-app.dev][1])
+* SHOULD treat source maps as sensitive operational artifacts:
+
+  * Either don’t publish them publicly, or publish them only where intended (e.g., behind auth or to an error-reporting provider), because they can reveal code structure and internal URLs.
+
+### 3.2 Browser-enforced protections (SHOULD, but baseline expectation for modern apps)
+
+* SHOULD deploy a CSP as defense-in-depth against XSS, and keep it compatible with your React build (avoid `unsafe-inline` and `unsafe-eval` unless strictly necessary and documented). ([OWASP Cheat Sheet Series][2])
+* SHOULD use Subresource Integrity (SRI) for any third-party script/style loaded from a CDN (or self-host instead). ([MDN Web Docs][7])
+* SHOULD enable clickjacking defenses via `frame-ancestors` (CSP) and/or `X-Frame-Options`, unless embedding is an explicit product requirement. ([MDN Web Docs][8])
+
+### 3.3 High-risk features baseline (MUST if used)
+
+* If rendering any user-provided HTML/markdown/rich text:
+
+  * MUST sanitize before insertion and avoid raw DOM sinks. ([OWASP Cheat Sheet Series][9])
+* If using service workers / PWA:
+
+  * MUST serve over HTTPS and implement a safe caching/update strategy (service workers are powerful request/response proxies). ([MDN Web Docs][10])
+
+---
+
+## 4) Rules (generation + audit)
+
+Each rule contains: required practice, insecure patterns, detection hints, and remediation.
+
+### REACT-CONFIG-001: Never embed secrets in the client bundle (env vars are public)
+
+Severity: Critical (if secrets exposed)
+
+Required:
+
+* MUST NOT place secrets in React code, in `public/` assets, or in build-time environment variables intended for client consumption.
+* MUST assume any value available to the React app at runtime can be extracted by an attacker.
+
+Insecure patterns:
+
+* Using build-time env vars for secrets:
+
+  * `process.env.REACT_APP_*` containing private keys or credentials.
+  * `import.meta.env.VITE_*` containing secrets.
+* Hard-coded secrets in JS/TS, `.env` committed, or secrets in `public/config.json` served to all users.
+
+Detection hints:
+
+* Search for:
+
+  * `REACT_APP_`, `VITE_`, `NEXT_PUBLIC_`, `process.env.`, `import.meta.env.`
+  * `apiKey`, `secret`, `token`, `private`, `password`, `client_secret`
+* Inspect `public/` for runtime config JSON.
+
+Fix:
+
+* Move secrets server-side (API, BFF, serverless function).
+* Use a backend to mint short-lived, scoped tokens if the browser needs to call third-party APIs.
+
+Notes:
+
+* CRA explicitly warns not to store secrets and notes env vars are embedded into the build and visible to anyone inspecting files. ([create-react-app.dev][1])
+* Vite explicitly notes that variables exposed to client code end up in the client bundle and should not contain sensitive info. ([vitejs][11])
+
+---
+
+### REACT-XSS-001: Do not use `dangerouslySetInnerHTML` with untrusted content (sanitize or avoid)
+
+Severity: High (Only if you can prove attacker-controlled HTML reaches it)
+
+Required:
+
+* MUST avoid `dangerouslySetInnerHTML` unless absolutely necessary.
+* If it must be used:
+
+  * MUST sanitize untrusted HTML with a proven sanitizer (e.g., DOMPurify) and an allowlist-oriented configuration.
+  * MUST keep the sanitization logic centralized and heavily reviewed.
+  * SHOULD add a CSP and consider Trusted Types (see REACT-TT-001).
+
+Insecure patterns:
+
+* `<div dangerouslySetInnerHTML={{ __html: userHtml }} />` where `userHtml` is from API/URL/storage.
+* “Sanitization” done with regexes, ad-hoc stripping, or incomplete allowlists.
+
+Detection hints:
+
+* Grep: `dangerouslySetInnerHTML`, `__html:`
+* Trace the origin of the HTML string (API/CMS/URL/localStorage).
+
+Fix:
+
+* Replace with safe rendering:
+
+  * Render structured data as React elements/components instead of HTML strings.
+  * If rich text is required, sanitize with DOMPurify (or equivalent) and render the sanitized output.
+* Add CSP; remove dangerous sinks where possible.
+
+Notes:
+
+* React explicitly warns that `dangerouslySetInnerHTML` is dangerous and can introduce XSS if misused. ([React][12])
+* OWASP explicitly calls out React’s `dangerouslySetInnerHTML` without sanitization as a common framework “escape hatch” pitfall. ([OWASP Cheat Sheet Series][9])
+* DOMPurify describes itself as an XSS sanitizer for HTML/SVG/MathML. ([GitHub][13])
+
+---
+
+### REACT-XSS-002: Rely on React’s escaping-by-default behavior; do not bypass it
+
+Severity: High (when bypassed)
+
+Required:
+
+* MUST render untrusted strings via normal JSX interpolation (`{value}`) and React props, which are escaped by default.
+* MUST NOT build HTML strings from untrusted data and then inject them into the DOM via any means.
+* SHOULD treat any “escape hatch” as high risk and require review.
+
+Insecure patterns:
+
+* Converting untrusted text into HTML and injecting it:
+
+  * `element.innerHTML = userValue`
+  * `document.write(userValue)`
+  * `insertAdjacentHTML(..., userValue)`
+
+Detection hints:
+
+* Grep for DOM sinks: `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `DOMParser`, `createContextualFragment`.
+
+Fix:
+
+* Render text content through React (JSX) so it is escaped.
+* If you truly need HTML, sanitize and apply REACT-XSS-001 + REACT-TT-001.
+
+Notes:
+
+* React documentation (JSX) states that React DOM escapes values embedded in JSX before rendering to help prevent injection attacks. ([React][14])
+
+---
+
+### REACT-DOM-001: Avoid DOM XSS injection sinks in React code (use safe alternatives)
+
+Severity: High
+
+Required:
+
+* MUST avoid direct DOM injection sinks, even outside React rendering, unless strongly controlled.
+* If a DOM sink is required:
+
+  * MUST ensure inputs are trusted/validated/sanitized.
+  * SHOULD enforce Trusted Types (REACT-TT-001).
+
+Insecure patterns:
+
+* `someEl.innerHTML = untrusted`
+* `document.write(untrusted)`
+* `new DOMParser().parseFromString(untrusted, 'text/html')` followed by insertion
+
+Detection hints:
+
+* Grep for: `innerHTML`, `outerHTML`, `document.write`, `DOMParser`, `Range().createContextualFragment`, `insertAdjacentHTML`
+
+Fix:
+
+* Prefer:
+
+  * `textContent` for text insertion.
+  * React rendering rather than manual DOM manipulation.
+  * A vetted sanitizer for any required HTML parsing.
+
+Notes:
+
+* Trusted Types documentation defines HTML sinks like `Element.innerHTML` and `document.write()` as injection sinks that can execute script when given attacker-controlled input. ([MDN Web Docs][3])
+* OWASP HTML5 guidance recommends using `textContent` instead of `innerHTML` for assigning untrusted data. ([OWASP Cheat Sheet Series][4])
+
+---
+
+### REACT-URL-001: Validate and constrain untrusted URLs used in `href`, `src`, navigation, and redirects
+
+Severity: High Only when you can prove they are attacker controlled
+
+Required:
+
+* MUST treat any URL derived from untrusted input as dangerous.
+* MUST allowlist schemes and (when applicable) hosts:
+
+  * Typically allow only `https:` (and maybe `http:` for localhost/dev) and relative URLs for in-app navigation.
+  * MUST explicitly block `javascript:` and dangerous `data:` uses unless you have specialized validation and a clear use case.
+* SHOULD prefer same-site relative paths (e.g., `/settings`) over absolute URLs.
+* MUST validate “returnTo/next/redirect” parameters (see REACT-REDIRECT-001).
+
+Insecure patterns:
+
+* `<img src={userProvidedUrl}>...` (can be used for tracking / data exfil; also risky if used for scripts/iframes)
+* `window.location = next`
+* `navigate(next)` where `next` comes from query params without validation
+
+Detection hints:
+
+* Search for:
+
+  * `href={`, `src={`, `window.location`, `location.href`, `window.open`, `navigate(`, `redirectTo`, `returnTo`, `next=`
+* Track whether the value is derived from URL/query/storage/API.
+
+Fix:
+
+* Implement a shared `safeUrl()` utility:
+
+  * Parse with `new URL(value, base)`
+  * Enforce scheme allowlist and host allowlist (or enforce same-origin)
+  * For redirects: allow only relative paths (starting with `/`) or a strict allowlist of absolute origins.
+* Fall back to a safe default when validation fails.
+
+Notes:
+
+* OWASP explicitly notes React’s `dangerouslySetInnerHTML` risk and also states React cannot safely handle `javascript:` or `data:` URLs without specialized validation. ([OWASP Cheat Sheet Series][9])
+
+---
+
+### REACT-MARKUP-001: Markdown / rich text rendering must be configured safely
+
+Severity: Medium
+
+Required:
+
+* MUST assume markdown/rich text can be attacker-controlled if it comes from users or CMS.
+* MUST ensure raw HTML is not rendered unless sanitized.
+* SHOULD prefer markdown renderers that:
+
+  * Do not allow raw HTML by default, or
+  * Can be configured to disallow raw HTML, or
+  * Sanitize HTML output before rendering.
+
+Insecure patterns:
+
+* Markdown rendering with “raw HTML passthrough” enabled (e.g., options/plugins that allow HTML).
+* Rendering user-provided SVG/MathML/HTML inline without sanitization.
+
+Detection hints:
+
+* Search for common libraries and risky options:
+
+  * `marked`, `markdown-it`, `react-markdown`, `rehype-raw`, `sanitize: false`, `allowDangerousHtml`, etc.
+* Look for `dangerouslySetInnerHTML` used with “markdown output”.
+
+Fix:
+
+* Disable raw HTML passthrough.
+* Sanitize output with a proven sanitizer (e.g., DOMPurify) before rendering.
+
+Notes:
+
+* OWASP XSS guidance emphasizes that framework escape hatches require output encoding and/or HTML sanitization. ([OWASP Cheat Sheet Series][9])
+
+---
+
+### REACT-TT-001: Use Trusted Types (with CSP) to harden DOM XSS sinks where feasible
+
+Severity: Low
+
+Required:
+
+* SHOULD consider enabling Trusted Types in report-only mode first, then enforce once violations are addressed.
+* SHOULD centralize Trusted Types policies and treat them as high-risk code requiring review.
+* MUST NOT create permissive policies that simply “pass through” untrusted strings.
+
+Insecure patterns:
+
+* A Trusted Types policy that returns the raw string without sanitization for HTML sinks.
+* Many scattered policies across the codebase (hard to audit).
+
+Detection hints:
+
+* Search for:
+
+  * `trustedTypes.createPolicy`
+  * CSP directives: `require-trusted-types-for`, `trusted-types`
+* Search for remaining DOM sinks (REACT-DOM-001).
+
+Fix:
+
+* Implement a small number of tightly scoped policies:
+
+  * HTML policy uses sanitizer (DOMPurify or equivalent).
+  * Script URL policy uses strict allowlists.
+* Run in report-only mode, fix violations, then enforce.
+
+Notes:
+
+* MDN describes Trusted Types as a way to ensure input is transformed (commonly sanitized) before being passed to injection sinks, and highlights HTML sinks (`innerHTML`, `document.write`) and JS URL sinks (`script.src`). ([MDN Web Docs][3])
+* The W3C Trusted Types spec frames this as reducing DOM XSS risk by locking down sinks to typed values created by reviewed policies. ([W3C][15])
+
+---
+
+### REACT-CSP-001: Deploy and maintain a CSP as defense-in-depth (especially when rendering untrusted content)
+
+Severity: Medium to High
+
+Required:
+
+* SHOULD deploy CSP in production; MUST do so for apps that render untrusted content or integrate third-party scripts.
+* SHOULD avoid `unsafe-inline` and `unsafe-eval` when possible.
+* SHOULD use CSP nonces/hashes for inline scripts if needed, and keep policy realistic.
+* SHOULD use CSP to require/encourage SRI where appropriate.
+
+Insecure patterns:
+
+* No CSP at all on the app shell (SPA entry HTML).
+* CSP that relies on `unsafe-inline`/`unsafe-eval` broadly without justification.
+* `script-src *` or overly broad sources.
+
+Detection hints:
+
+* Look for CSP configuration:
+
+  * Server/CDN config, headers in `index.html` responses, or framework config.
+* If absent in repo, mark as “verify at edge”.
+
+Fix:
+
+* Add CSP via HTTP response headers (preferred).
+* Start with report-only to reduce breakage, then enforce.
+
+Notes:
+
+* OWASP describes CSP as “defense in depth” against XSS and notes it can help enforce SRI even on static sites, but should not be the only defense. ([OWASP Cheat Sheet Series][2])
+
+---
+
+### REACT-SRI-001: Use Subresource Integrity (SRI) for third-party scripts and styles (or self-host)
+
+Severity: Low
+
+Required:
+
+* MUST treat third-party JS as equivalent to running arbitrary code in your origin.
+* If loading from a CDN or third party:
+
+  * SHOULD use SRI (`integrity=...`) and `crossorigin` where applicable.
+  * SHOULD pin exact versions (avoid “latest” URLs).
+  * SHOULD prefer self-hosting for critical code.
+
+Insecure patterns:
+
+* `<script src="https://cdn.example.com/lib/latest.js"></script>` with no integrity.
+* Tag managers that dynamically load arbitrary scripts without governance.
+
+Detection hints:
+
+* Search in `public/index.html`, templates, or SSR wrappers for:
+
+  * `<script src=`, `<link rel="stylesheet" href=`
+  * Tag manager snippets (GTM, Segment, etc.)
+* Identify scripts loaded dynamically in runtime JS.
+
+Fix:
+
+* Add SRI hashes for stable third-party assets or self-host.
+* Apply governance controls for tag managers (see REACT-3P-001).
+
+Notes:
+
+* MDN describes SRI as a security feature enabling browsers to verify fetched resources (e.g., from a CDN) haven’t been manipulated by checking a cryptographic hash. ([MDN Web Docs][7])
+* OWASP CSP guidance notes CSP can enforce SRI and is useful even on static sites. ([OWASP Cheat Sheet Series][2])
+
+---
+
+### REACT-3P-001: Third-party JavaScript and tag managers must be minimized and governed
+
+Severity: High
+
+Required:
+
+* MUST minimize third-party scripts and treat each as a supply-chain risk.
+* MUST know exactly what third-party JS executes in your origin and why.
+* SHOULD implement governance:
+
+  * Review and pin versions (or mirror in-house).
+  * Restrict data access (data-layer approach).
+  * Use SRI and CSP; consider sandboxing untrusted UI in iframes where possible.
+
+Insecure patterns:
+
+* Unreviewed analytics/ads scripts running with full access to DOM, cookies, storage, and user data.
+* Tag managers that can be changed by non-engineering roles with no change control.
+
+Detection hints:
+
+* Search for common vendor snippets in HTML/JS:
+
+  * GTM, Segment, Hotjar, FullStory, etc.
+* Look for dynamic script insertion:
+
+  * `document.createElement('script')`, `.src = ...`, `.appendChild(script)`
+
+Fix:
+
+* Reduce to only necessary vendors.
+* Where feasible:
+
+  * Self-host or mirror scripts.
+  * Use SRI.
+  * Limit data exposure via a controlled data layer.
+
+Notes:
+
+* OWASP notes third-party JS server compromise can inject malicious JS, and highlights risks like arbitrary code execution and disclosure of sensitive info to third parties. ([OWASP Cheat Sheet Series][5])
+
+---
+
+### REACT-AUTH-001: Token and session handling must be resilient to XSS (avoid sensitive storage in Web Storage)
+
+Severity: Medium
+
+Required:
+
+* SHOULD avoid storing session identifiers or long-lived tokens in `localStorage` (and generally in Web Storage) because XSS can exfiltrate them.
+* If tokens must exist client-side:
+
+  * SHOULD prefer in-memory storage with short lifetimes and refresh mechanisms.
+  * MUST scope and rotate tokens; avoid long-lived bearer tokens in persistent storage.
+* SHOULD prefer HTTPOnly cookies for session tokens when possible (requires CSRF strategy: see REACT-CSRF-001).
+
+Insecure patterns:
+
+* `localStorage.setItem('token', ...)` / `sessionStorage.setItem('token', ...)` for auth tokens.
+* Persisting refresh tokens in `localStorage`.
+* Treating data from Web Storage as trusted.
+
+Detection hints:
+
+* Grep for: `localStorage.`, `sessionStorage.`, `setItem(`, `getItem(`, `token`, `jwt`, `refresh`
+* Search auth code for “remember me” storing tokens persistently.
+
+Fix:
+
+* Move to HTTPOnly cookies (server change) + CSRF protections, or use short-lived in-memory tokens.
+* Reduce token scope and lifetime.
+
+Notes:
+
+* OWASP HTML5 guidance recommends avoiding sensitive info and session identifiers in local storage and warns that a single XSS can steal all data in Web Storage. ([OWASP Cheat Sheet Series][4])
+* OAuth browser-based apps guidance discusses that tokens stored in persistent browser storage like localStorage can be accessible to malicious JS (e.g., via XSS). ([IETF Datatracker][16])
+
+---
+
+### REACT-CSRF-001: Cookie-authenticated, state-changing requests MUST be CSRF-protected
+
+Severity: High
+
+NOTE: If the application does not use cookie based auth (using Authentication header for example), then CSRF is not a concern.
+
+Required:
+
+* If the app relies on cookies for authentication:
+
+  * MUST protect state-changing requests (POST/PUT/PATCH/DELETE) against CSRF.
+  * SHOULD include a CSRF token mechanism (synchronizer token or double-submit cookie) or other robust pattern appropriate to the backend.
+  * SHOULD use SameSite cookies as defense-in-depth, not as the sole defense.
+
+Insecure patterns:
+
+* `fetch('/api/transfer', { method: 'POST', credentials: 'include' })` with no CSRF token/header, relying only on cookies.
+* Using GET for state-changing operations.
+
+Detection hints:
+
+* Enumerate state-changing network calls and check:
+
+  * Is `credentials: 'include'` or `withCredentials: true` used?
+  * Is a CSRF token header included (e.g., `X-CSRF-Token`)?
+* Search for “csrf” utilities; if absent, treat as suspicious.
+
+Fix:
+
+* Add CSRF token flow:
+
+  * Fetch token from a safe endpoint and attach to state-changing requests.
+  * Validate server-side.
+* Keep SameSite cookies and Origin/Referer validation as defense-in-depth.
+
+Notes:
+
+* OWASP CSRF guidance explains SameSite behavior (Lax/Strict/None) as a defense-in-depth technique and why Lax is often the usability/security balance, but it is not a complete substitute for CSRF protections. ([OWASP Cheat Sheet Series][6])
+
+---
+
+### REACT-AUTHZ-001: Do not rely on frontend-only authorization
+
+Severity: High (only if used as primary protection)
+
+Required:
+
+* MUST treat all frontend authorization checks as UX only.
+* MUST enforce authorization on the server for any protected resource or action.
+
+Insecure patterns:
+
+* “Protected” actions hidden in UI but callable by API without server checks.
+* Client checks like `if (user.isAdmin) { showAdminPanel(); }` with no server-side enforcement.
+
+Detection hints:
+
+* Look for UI gating around sensitive actions and verify server endpoints enforce authorization.
+* In a frontend-only audit, report as “client checks are not security; verify backend”.
+
+Fix:
+
+* Add/confirm server-side authorization checks.
+* Keep frontend gating only as convenience.
+
+Notes:
+
+* This is a general web app security property; React cannot protect server resources by itself.
+
+---
+
+### REACT-NET-001: Prevent data exfiltration and credential leakage via dynamic outbound requests
+
+Severity: Medium to High
+
+Required:
+
+* MUST avoid making authenticated requests to attacker-controlled origins.
+* SHOULD avoid allowing user input to control request destination (scheme/host/port).
+* SHOULD centralize network clients (fetch/axios) with:
+
+  * fixed `baseURL` (or strict allowlist),
+  * strict handling of redirects,
+  * explicit `credentials` usage.
+
+Insecure patterns:
+
+* `fetch(userProvidedUrl, { credentials: 'include' })`
+* `axios.create({ baseURL: userProvidedBase })`
+* “URL fetch/preview” features in the client that hit arbitrary domains with sensitive headers.
+
+Detection hints:
+
+* Search for `fetch(` / `axios(` where the first argument or `baseURL` is derived from:
+
+  * query params, localStorage, API responses, postMessage
+* Search for `credentials: 'include'`, `withCredentials: true`.
+
+Fix:
+
+* Enforce destination allowlists; disallow cross-origin requests unless explicitly required.
+* Strip credentials/Authorization headers for any non-allowlisted destination.
+
+Notes:
+
+* Even if the browser limits some cross-origin behavior, leaking tokens/headers to untrusted endpoints is still a common failure mode.
+
+---
+
+### REACT-REDIRECT-001: Prevent open redirects and untrusted navigation
+
+Severity: Medium
+
+Required:
+
+* MUST validate redirect/navigation targets derived from untrusted input (`next`, `returnTo`, `redirect`).
+* SHOULD only allow same-site relative paths, or a strict allowlist of trusted origins for absolute URLs.
+
+Insecure patterns:
+
+* `window.location.href = new URLSearchParams(location.search).get('next')`
+* `navigate(next)` where `next` comes from query params.
+
+Detection hints:
+
+* Search for: `next`, `returnTo`, `redirect`, `window.location`, `navigate(`
+* Trace origin of the redirect target.
+
+Fix:
+
+* Only allow relative paths (`/^\/[^\s]*$/`) or allowlisted origins.
+* Fall back to a safe default (e.g., `/`) when invalid.
+
+Notes:
+
+* Open redirects are frequently used in phishing and can undermine SSO/OAuth flows.
+
+---
+
+### REACT-SW-001: Service workers are high-privilege; require HTTPS and safe caching/update rules
+
+Severity: Medium
+
+Required:
+
+* MUST serve service workers over HTTPS (except `localhost` dev), and deploy only in secure contexts.
+* MUST avoid caching sensitive authenticated API responses unless explicitly designed and threat-modeled.
+* SHOULD implement safe update strategy (prompt reload, versioned caches, remove old caches on activate).
+
+Insecure patterns:
+
+* Registering a service worker for an authenticated app and caching “everything” indiscriminately.
+* Long-lived caches containing PII or user-specific content shared across accounts.
+
+Detection hints:
+
+* Search for:
+
+  * `navigator.serviceWorker.register`
+  * `workbox`, `precacheAndRoute`, custom `fetch` handlers
+* Inspect caching patterns (`caches.open`, `cache.put`, `respondWith`).
+
+Fix:
+
+* Restrict caching to static assets only (JS/CSS/images) unless you have a designed offline model.
+* Ensure cache keys are user-scoped if user-specific data must be cached.
+* Provide a clear update mechanism.
+
+Notes:
+
+* MDN notes service workers require HTTPS for security reasons and act like a proxy for requests/responses. ([MDN Web Docs][10])
+* “Secure contexts” exist to prevent MITM attackers from accessing powerful APIs; service workers are an example of such a powerful feature. ([MDN Web Docs][18])
+
+---
+
+### REACT-HEADERS-001: Ensure essential security headers are set for the React app shell (app or edge)
+
+Severity: Medium
+
+Required (typical SPA served from an origin):
+
+* SHOULD set:
+
+  * CSP (`Content-Security-Policy`)
+  * `X-Content-Type-Options: nosniff`
+  * Clickjacking protection (`frame-ancestors` in CSP and/or `X-Frame-Options`)
+  * `Referrer-Policy`
+  * `Permissions-Policy` as appropriate
+* MUST ensure these are set somewhere (CDN/edge/server), even if not in repo.
+
+Insecure patterns:
+
+* No security headers anywhere (app or edge).
+* CSP missing on apps that render untrusted content or use third-party scripts.
+
+Detection hints:
+
+* Check server/CDN config in repo (nginx, Cloudflare, Vercel config, etc.).
+* If absent, flag as “verify at runtime/edge”.
+
+Fix:
+
+* Set headers centrally at the edge.
+* Keep CSP realistic and iterative (report-only → enforce).
+
+Notes:
+
+* MDN clickjacking guidance discusses defenses including `X-Frame-Options` and CSP `frame-ancestors`. ([MDN Web Docs][8])
+* OWASP CSP guidance explains delivery via response headers and recommends headers as the preferred mechanism. ([OWASP Cheat Sheet Series][2])
+
+---
+
+### REACT-POSTMSG-001: `postMessage` must validate origin and treat payload as untrusted data
+
+Severity: Medium to High (depends on what messages can do)
+
+Required:
+
+* MUST specify exact `targetOrigin` when sending messages (not `*`) unless there is a strict reason.
+* MUST validate `event.origin` on receipt and validate message shape.
+* MUST NOT evaluate message data as code or insert it into the DOM as HTML.
+
+Insecure patterns:
+
+* `window.postMessage(data, '*')` to unknown targets.
+* Receiving:
+
+  * `window.addEventListener('message', (e) => { eval(e.data) })`
+  * `element.innerHTML = e.data`
+
+Detection hints:
+
+* Search: `postMessage(`, `addEventListener('message'`
+* Check for origin checks and safe handling.
+
+Fix:
+
+* Add strict origin allowlists and schema validation (e.g., zod).
+* Treat message payload strictly as data; render safely via React.
+
+Notes:
+
+* OWASP HTML5 guidance recommends specifying expected origin for `postMessage`, checking sender origin, validating data, and avoiding eval/innerHTML with message content. ([OWASP Cheat Sheet Series][4])
+
+---
+
+### REACT-FILE-001: File uploads and previews must not create client-side active content vulnerabilities
+
+Severity: Medium (can be High if stored-XSS possible)
+
+Required:
+
+* MUST treat user-uploaded files and previews as potentially malicious.
+* MUST NOT render uploaded HTML/SVG/other active content inline unless sanitized and explicitly required.
+* SHOULD validate file types client-side for UX, but MUST rely on server-side validation for security.
+
+Insecure patterns:
+
+* Rendering user-uploaded HTML as content.
+* Inline rendering of untrusted SVG/HTML via `dangerouslySetInnerHTML` or `<iframe srcdoc=...>` without sanitization.
+
+Detection hints:
+
+* Search for upload components and preview logic:
+
+  * `input type="file"`, `FileReader`, `URL.createObjectURL`, `<iframe>`, `<object>`, `<embed>`.
+* Trace where uploaded content is later displayed.
+
+Fix:
+
+* Restrict accepted types, sanitize where needed, and prefer download/attachment flows for risky types.
+* Ensure server enforces the real policy (type checking, renaming, scanning, storing outside webroot).
+
+Notes:
+
+* OWASP file upload guidance highlights allowlisting extensions, validating file type, generating filenames, limiting size, storing outside webroot, and considering “client-side active content (XSS, CSRF, etc.)” when files are publicly retrievable. ([OWASP Cheat Sheet Series][19])
+
+---
+
+### REACT-SUPPLY-001: Dependency and supply-chain hygiene (frontend + build tooling)
+
+Severity: Low
+
+Required:
+
+* MUST use a lockfile and enforce reproducible installs in CI.
+* SHOULD regularly audit dependencies and respond quickly to advisories for:
+
+  * React, react-dom, router libs, build tooling (Vite/Webpack), sanitizers, auth libs, etc.
+* SHOULD reduce exposure to install-time script attacks and typosquatting risk.
+
+Audit focus:
+
+* CI should use `npm ci` (or Yarn frozen lockfile / pnpm equivalent) to prevent drift.
+* Use vulnerability scanning (`npm audit`, GitHub Dependabot/alerts, etc.).
+
+Insecure patterns:
+
+* No lockfile or lockfile ignored in CI.
+* `npm install` in CI producing non-reproducible builds.
+* Unpinned or unreviewed high-risk deps; sudden major updates without review.
+* Blindly running install scripts from third-party packages.
+
+Detection hints:
+
+* Check for lockfiles: `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`.
+* Check CI scripts for `npm install` vs `npm ci`.
+* Search for `postinstall` scripts and suspicious build steps.
+
+Fix:
+
+* Use lockfile and enforce it in CI (e.g., `npm ci`).
+* Run audits regularly; pin/upgrade responsibly.
+* Consider restricting install scripts where feasible.
+
+Notes:
+
+* npm docs describe `npm audit` as submitting the project dependency tree to the registry to receive a report of known vulnerabilities and (optionally) applying remediations via `npm audit fix`, while noting some vulns require manual review. ([npm Docs][20])
+* npm docs describe `npm ci` as intended for automated/CI environments, requiring an existing lockfile and failing if `package.json` and lockfile do not match. ([npm Docs][21])
+* OWASP NPM security guidance recommends enforcing the lockfile and explicitly calls out `npm ci` / `yarn install --frozen-lockfile` to abort on inconsistencies, and highlights the risk of install-time scripts and the option to use `--ignore-scripts` to reduce attack surface. ([OWASP Cheat Sheet Series][22])
+
+---
+
+## 5) Practical scanning heuristics (how to “hunt”)
+
+When actively scanning, use these high-signal patterns:
+
+* Raw HTML / XSS escape hatches:
+
+  * `dangerouslySetInnerHTML`, `__html:`
+  * Markdown HTML passthrough flags: `rehype-raw`, `allowDangerousHtml`, `sanitize: false`
+* DOM XSS sinks:
+
+  * `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write`, `DOMParser`, `createContextualFragment`
+* Dangerous JS execution:
+
+  * `eval(`, `new Function(`, `setTimeout("`, `setInterval("`
+* Untrusted URL injection / navigation:
+
+  * `href={` / `src={` with untrusted values
+  * `window.location`, `location.href`, `window.open`, `navigate(`
+  * Query params: `next`, `returnTo`, `redirect`
+* Token/session risk:
+
+  * `localStorage.setItem`, `sessionStorage.setItem`, `getItem(` with `token`, `jwt`, `refresh`
+* Cookie/CSRF coupling:
+
+  * `credentials: 'include'`, `withCredentials: true` on state-changing requests without CSRF headers
+* Third-party scripts:
+
+  * `<script src=...>` in `public/index.html`
+  * Tag manager snippets and dynamic script insertion
+* Service workers:
+
+  * `navigator.serviceWorker.register`, Workbox usage, custom `fetch` handlers
+* postMessage:
+
+  * `postMessage(` with `*`, missing `event.origin` checks
+* Supply chain:
+
+  * Missing lockfile, CI uses `npm install`, no audit step, risky postinstall scripts
+
+Always try to confirm:
+
+* data origin (untrusted vs trusted)
+* sink type (React escape hatch vs DOM sink vs navigation vs storage)
+* protective controls present (sanitization, allowlists, CSP/Trusted Types, CSRF tokens, headers, governance)
+
+---
+
+## 6) Sources (accessed 2026-01-26)
+
+Primary React documentation:
+
+* React 19 stable announcement — `https://react.dev/blog/2024/12/05/react-19` ([React][23])
+* React DOM docs: `dangerouslySetInnerHTML` warning — `https://react.dev/reference/react-dom/components/common#dangerouslysetting-the-inner-html` ([React][12])
+* React (legacy) JSX escaping statement — `https://legacy.reactjs.org/docs/introducing-jsx.html` ([React][14])
+
+OWASP Cheat Sheet Series:
+
+* Cross Site Scripting Prevention (framework escape hatches; React `dangerouslySetInnerHTML`; URL validation notes) — `https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][9])
+* Content Security Policy — `https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][2])
+* Cross-Site Request Forgery Prevention — `https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][6])
+* HTML5 Security (Web Storage, postMessage, tabnabbing, sandboxed frames) — `https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][4])
+* Third Party JavaScript Management — `https://cheatsheetseries.owasp.org/cheatsheets/Third_Party_Javascript_Management_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][5])
+* File Upload — `https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][19])
+* NPM Security best practices — `https://cheatsheetseries.owasp.org/cheatsheets/NPM_Security_Cheat_Sheet.html` ([OWASP Cheat Sheet Series][22])
+
+Browser / platform references (MDN, W3C):
+
+* Trusted Types API — `https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API` ([MDN Web Docs][3])
+* W3C Trusted Types spec — `https://www.w3.org/TR/trusted-types/` ([W3C][15])
+* Subresource Integrity — `https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity` ([MDN Web Docs][7])
+* Clickjacking defenses overview — `https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/Clickjacking` ([MDN Web Docs][8])
+* Using Service Workers (HTTPS requirement; proxy-like behavior) — `https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers` ([MDN Web Docs][10])
+* Secure contexts (powerful APIs restricted to HTTPS) — `https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts` ([MDN Web Docs][18])
+* Link `rel` values (noopener/noreferrer) — `https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel` ([MDN Web Docs][17])
+
+Build tooling / env exposure references:
+
+* Create React App env variables warning — `https://create-react-app.dev/docs/adding-custom-environment-variables/` ([create-react-app.dev][1])
+* Vite env variables security notes — `https://vite.dev/guide/env-and-mode` ([vitejs][11])
+
+Auth/token storage guidance:
+
+* OAuth 2.0 for Browser-Based Apps (token storage discussion) — `https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps` ([IETF Datatracker][16])
+
+Dependency tooling references:
+
+* npm audit docs — `https://docs.npmjs.com/cli/v10/commands/npm-audit/` ([npm Docs][20])
+* npm ci docs — `https://docs.npmjs.com/cli/v10/commands/npm-ci/` ([npm Docs][21])
+
+Sanitizer reference:
+
+* DOMPurify — `https://github.com/cure53/DOMPurify` ([GitHub][13])
+
+[1]: https://create-react-app.dev/docs/adding-custom-environment-variables/ "Adding Custom Environment Variables | Create React App"
+[2]: https://cheatsheetseries.owasp.org/cheatsheets/Content_Security_Policy_Cheat_Sheet.html "Content Security Policy - OWASP Cheat Sheet Series"
+[3]: https://developer.mozilla.org/en-US/docs/Web/API/Trusted_Types_API "Trusted Types API - Web APIs | MDN"
+[4]: https://cheatsheetseries.owasp.org/cheatsheets/HTML5_Security_Cheat_Sheet.html "HTML5 Security - OWASP Cheat Sheet Series"
+[5]: https://cheatsheetseries.owasp.org/cheatsheets/Third_Party_Javascript_Management_Cheat_Sheet.html "Third Party Javascript Management - OWASP Cheat Sheet Series"
+[6]: https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html "Cross-Site Request Forgery Prevention - OWASP Cheat Sheet Series"
+[7]: https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Subresource_Integrity "Subresource Integrity - Security | MDN"
+[8]: https://developer.mozilla.org/en-US/docs/Web/Security/Attacks/Clickjacking "Clickjacking - Security | MDN"
+[9]: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html "Cross Site Scripting Prevention - OWASP Cheat Sheet Series"
+[10]: https://developer.mozilla.org/en-US/docs/Web/API/Service_Worker_API/Using_Service_Workers "Using Service Workers - Web APIs | MDN"
+[11]: https://vite.dev/guide/env-and-mode "Env Variables and Modes | Vite"
+[12]: https://react.dev/reference/react-dom/components/common "Common components (e.g. <div>) – React"
+[13]: https://github.com/cure53/DOMPurify "GitHub - cure53/DOMPurify: DOMPurify - a DOM-only, super-fast, uber-tolerant XSS sanitizer for HTML, MathML and SVG. DOMPurify works with a secure default, but offers a lot of configurability and hooks. Demo:"
+[14]: https://legacy.reactjs.org/docs/introducing-jsx.html "Introducing JSX – React"
+[15]: https://www.w3.org/TR/trusted-types/ "Trusted Types"
+[16]: https://datatracker.ietf.org/doc/html/draft-ietf-oauth-browser-based-apps "
+            
+                draft-ietf-oauth-browser-based-apps-26
+            
+        "
+[17]: https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel "HTML attribute: rel - HTML | MDN"
+[18]: https://developer.mozilla.org/en-US/docs/Web/Security/Defenses/Secure_Contexts "Secure contexts - Security | MDN"
+[19]: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html "File Upload - OWASP Cheat Sheet Series"
+[20]: https://docs.npmjs.com/cli/v10/commands/npm-audit "npm-audit | npm Docs"
+[21]: https://docs.npmjs.com/cli/v10/commands/npm-ci "npm-ci | npm Docs"
+[22]: https://cheatsheetseries.owasp.org/cheatsheets/NPM_Security_Cheat_Sheet.html "NPM Security - OWASP Cheat Sheet Series"
+[23]: https://react.dev/blog/2024/12/05/react-19 "React v19 – React"
+
+FILE docs/qa/2026-10-02/META-SESSION-LOG.md
+
+- **2026-10-02T23:46:05.036682+00:00** `inventory` — `sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261002T234605.036682Z-inventory.txt).
+
+- **2026-10-02T23:46:05.182552+00:00** `guides` — `sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/meta/20261002T234605.182552Z-guides.txt).
+
+- **2026-10-03T00:35:16.224243+00:00** `resume-inspection` — `sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/meta/20261003T003516.224243Z-resume-inspection.txt).
+
+- **2026-10-03T00:36:02.391499+00:00** `scope-map` — `sh -c 'git rev-parse HEAD; git ls-files "**/AGENTS.md"; sed -n "1,170p" frontend/AGENTS.md; sed -n "1,90p" README.md; sed -n "1,140p" docs/specs/FSMA_204_MVP_SPEC.md; cat /Users/sellers/.codex/skills/security-best-practices/SKILL.md; rg --files tests services frontend/src frontend/tests server -g "!**/.env*" -g "!**/node_modules/**" -g "!**/package-lock.json" | awk -F/ "{print \$1\"/\"\$2}" | sort | uniq -c'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261003T003602.391499Z-scope-map.txt).
+
+FILE server/route_security_manifest.py
+"""Generate, validate, and probe the production route security manifest."""
+
+from __future__ import annotations
+
+import re
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Sequence
+from dataclasses import asdict, dataclass
+from typing import Any
+
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
+from starlette.routing import Match
+
+from server.route_ownership import excluded_owned_routes, route_owner
+from server.route_security_policy import (
+    ALL_ROUTE_OWNERS,
+    ALWAYS_MOUNTED_OWNERS,
+    OMITTED_ROUTER_OWNERS,
+    PRODUCTION_OWNERS,
+    PUBLIC_OPERATIONS,
+    REQUIRED_EXACT_TENANT_API_KEY_POLICIES,
+    STRIPE_WEBHOOK_OPERATIONS,
+    TENANT_API_KEY_OPERATION_POLICIES,
+    TENANT_API_KEY_OWNER_POLICIES,
+    Classification,
+    RouteManifestError,
+    classify_operation,
+    operation_id,
+    operation_key,
+)
+from server.router_policy import PRODUCTION_ENABLED_ROUTERS, VALID_ROUTER_NAMES
+
+_FRAMEWORK_DOC_ROUTE_SIGNATURES = frozenset(
+    {
+        ("starlette.routing", "Route", "/docs", "swagger_ui_html", ("GET", "HEAD")),
+        (
+            "starlette.routing",
+            "Route",
+            "/docs/oauth2-redirect",
+            "swagger_ui_redirect",
+            ("GET", "HEAD"),
+        ),
+        ("starlette.routing", "Route", "/openapi.json", "openapi", ("GET", "HEAD")),
+        ("starlette.routing", "Route", "/redoc", "redoc_html", ("GET", "HEAD")),
+    }
+)
+
+
+@dataclass(frozen=True)
+class OperationManifestEntry:
+    operation: str
+    owner: str
+    method: str
+    path: str
+    classification: Classification
+    authentication: str
+    required_permissions: tuple[str, ...]
+    storage_boundary: str
+    test_adapter: str
+
+
+@dataclass(frozen=True)
+class DisabledOperationEntry:
+    operation: str
+    owner: str
+    method: str
+    path: str
+    inventory_source: str
+    probe_method: str
+    probe_path: str
+
+
+def _route_operations(route: APIRoute) -> Iterable[tuple[str, str]]:
+    for method in sorted((route.methods or set()) - {"HEAD", "OPTIONS"}):
+        yield method, route.path
+
+
+def _concrete_probe_path(path_template: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        parameter = match.group(1)
+        converter = match.group(2) or ""
+        lowered = parameter.lower()
+        if converter == "int" or lowered.endswith(("_index", "_number")):
+            return "1"
+        if converter == "float":
+            return "1.0"
+        if converter == "uuid" or lowered.endswith("_id") or lowered in {"id", "tenant"}:
+            return "00000000-0000-4000-8000-000000000000"
+        if converter == "path":
+            return "disabled-probe/segment"
+        return "disabled-probe"
+
+    return re.sub(r"\{([^}:]+)(?::([^}]+))?\}", replace, path_template)
+
+
+def _choose_probe(operations: Sequence[tuple[str, APIRoute]]) -> tuple[str, str]:
+    preference = {"GET": 0, "HEAD": 1, "OPTIONS": 2, "POST": 3, "PUT": 4, "PATCH": 5, "DELETE": 6}
+    method, route = min(operations, key=lambda pair: (preference.get(pair[0], 99), pair[0]))
+    return method, _concrete_probe_path(route.path)
+
+
+def _validate_owner_and_collision_invariants(routes: Sequence[APIRoute]) -> None:
+    unowned = [f"{sorted(route.methods or set())} {route.path}" for route in routes if route_owner(route) is None]
+    if unowned:
+        raise RouteManifestError(f"Operations bypassed ownership registration: {unowned}")
+
+    unknown_owners = sorted({owner for route in routes if (owner := route_owner(route)) not in ALL_ROUTE_OWNERS})
+    if unknown_owners:
+        raise RouteManifestError(f"Orphaned/unknown route owners: {unknown_owners}")
+
+    observed_router_owners = {route_owner(route) for route in routes if route_owner(route) in VALID_ROUTER_NAMES}
+    orphaned_catalog_owners = VALID_ROUTER_NAMES - observed_router_owners
+    if orphaned_catalog_owners:
+        raise RouteManifestError(
+            "Router catalog entries registered no operations; remove or explicitly mount them: "
+            f"{sorted(orphaned_catalog_owners)}"
+        )
+
+    by_operation: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for route in routes:
+        owner = route_owner(route)
+        for method, path in _route_operations(route):
+            by_operation[(method, path)].append(owner or "<unowned>")
+    duplicates = {f"{method} {path}": owners for (method, path), owners in by_operation.items() if len(owners) > 1}
+    if duplicates:
+        raise RouteManifestError(f"Duplicate method/path ownership: {duplicates}")
+
+
+def _validate_route_types(app: FastAPI, *, allow_framework_docs: bool) -> None:
+    """Reject HTTP mounts/routes which bypass APIRoute ownership metadata."""
+
+    unexpected: list[str] = []
+    for route in app.routes:
+        if isinstance(route, APIRoute):
+            continue
+        signature = (
+            type(route).__module__,
+            type(route).__name__,
+            getattr(route, "path", None),
+            getattr(route, "name", None),
+            tuple(sorted(getattr(route, "methods", None) or ())),
+        )
+        if allow_framework_docs and signature in _FRAMEWORK_DOC_ROUTE_SIGNATURES:
+            continue
+        unexpected.append(repr(signature))
+    if unexpected:
+        raise RouteManifestError(
+            "Route surfaces bypassed APIRoute ownership/classification: "
+            f"{unexpected}"
+        )
+
+
+def build_route_security_manifest(app: FastAPI) -> dict[str, Any]:
+    """Return the deterministic, sanitized manifest for ``app``."""
+
+    _validate_route_types(app, allow_framework_docs=True)
+    routes = [route for route in app.routes if isinstance(route, APIRoute)]
+    _validate_owner_and_collision_invariants(routes)
+
+    enabled_entries: list[OperationManifestEntry] = []
+    enabled_routes: dict[tuple[str, str], APIRoute] = {}
+    omitted_by_path: dict[str, list[tuple[str, APIRoute]]] = defaultdict(list)
+    disabled_operations: list[tuple[str, str, str, APIRoute, str]] = []
+
+    for route in routes:
+        owner = route_owner(route)
+        if owner is None:  # guarded above; keeps type checkers honest
+            continue
+        for method, path in _route_operations(route):
+            if owner in PRODUCTION_OWNERS:
+                classification, auth, permissions, boundary, adapter_name = classify_operation(
+                    route,
+                    owner=owner,
+                    method=method,
+                )
+                enabled_entries.append(
+                    OperationManifestEntry(
+                        operation=operation_id(owner, method, path),
+                        owner=owner,
+                        method=method,
+                        path=path,
+                        classification=classification,
+                        authentication=auth,
+                        required_permissions=permissions,
+                        storage_boundary=boundary,
+                        test_adapter=adapter_name,
+                    )
+                )
+                enabled_routes[(method, path)] = route
+            elif owner in OMITTED_ROUTER_OWNERS:
+                disabled_operations.append((owner, method, path, route, "development-route-table"))
+                omitted_by_path[path].append((method, route))
+            else:
+                raise RouteManifestError(f"Operation {operation_id(owner, method, path)} has no release disposition")
+
+    # Some service-local diagnostics are deliberately filtered while an
+    # optional router is copied because another optional service registered
+    # the same compatibility path first. They are absent from the executable
+    # broad table (so ownership stays unique) but remain part of the exhaustive
+    # omitted-source inventory and exact-404 proof.
+    for route in excluded_owned_routes(app):
+        owner = route_owner(route)
+        if owner not in OMITTED_ROUTER_OWNERS:
+            continue
+        for method, path in _route_operations(route):
+            disabled_operations.append((owner, method, path, route, "source-excluded-shadow"))
+            omitted_by_path[path].append((method, route))
+
+    observed_production_owners = {entry.owner for entry in enabled_entries}
+    missing_production_owners = set(PRODUCTION_OWNERS) - observed_production_owners
+    if missing_production_owners:
+        raise RouteManifestError(
+            f"Production owners with no executable operations: {sorted(missing_production_owners)}"
+        )
+
+    observed_enabled_keys = {operation_key(entry.owner, entry.method, entry.path) for entry in enabled_entries}
+    missing_required_exact_policies = REQUIRED_EXACT_TENANT_API_KEY_POLICIES - set(
+        TENANT_API_KEY_OPERATION_POLICIES
+    )
+    if missing_required_exact_policies:
+        raise RouteManifestError(
+            "Required exact tenant API-key policies are missing: "
+            f"{sorted(missing_required_exact_policies)}"
+        )
+    stale_policy_rules = (PUBLIC_OPERATIONS | STRIPE_WEBHOOK_OPERATIONS) - observed_enabled_keys
+    if stale_policy_rules:
+        raise RouteManifestError(f"Explicit operation policy rules are orphaned: {sorted(stale_policy_rules)}")
+
+    tenant_api_key_entries = [
+        entry
+        for entry in enabled_entries
+        if entry.classification == "tenant-scoped" and entry.authentication.startswith("x-regengine-api-key")
+    ]
+    observed_owner_policy_names = {
+        entry.owner
+        for entry in tenant_api_key_entries
+        if operation_key(entry.owner, entry.method, entry.path) not in TENANT_API_KEY_OPERATION_POLICIES
+    }
+    stale_tenant_owner_policies = set(TENANT_API_KEY_OWNER_POLICIES) - observed_owner_policy_names
+    stale_tenant_operation_policies = set(TENANT_API_KEY_OPERATION_POLICIES) - observed_enabled_keys
+    if stale_tenant_owner_policies or stale_tenant_operation_policies:
+        raise RouteManifestError(
+            "Explicit tenant API-key policies are orphaned: "
+            f"owners={sorted(stale_tenant_owner_policies)}, "
+            f"operations={sorted(stale_tenant_operation_policies)}"
+        )
+
+    collisions = sorted(
+        f"{method} {path} ({owner} vs {route_owner(enabled_routes[(method, path)])})"
+        for owner, method, path, _route, _source in disabled_operations
+        if (method, path) in enabled_routes
+    )
+    if collisions:
+        raise RouteManifestError(f"Enabled/omitted method-path collisions: {collisions}")
+
+    disabled_entries = [
+        DisabledOperationEntry(
+            operation=operation_id(owner, method, path),
+            owner=owner,
+            method=method,
+            path=path,
+            inventory_source=source,
+            probe_method=method,
+            probe_path=_concrete_probe_path(path),
+        )
+        for owner, method, path, _route, source in disabled_operations
+    ]
+
+    enabled_entries.sort(key=lambda entry: (entry.path, entry.method, entry.owner))
+    disabled_entries.sort(key=lambda entry: (entry.path, entry.method, entry.owner))
+    classifications = Counter(entry.classification for entry in enabled_entries)
+
+    return {
+        "schema_version": 1,
+        "source": "server/main.py FastAPI route table",
+        "production_router_groups": sorted(PRODUCTION_ENABLED_ROUTERS),
+        "always_mounted_owners": sorted(ALWAYS_MOUNTED_OWNERS),
+        "enabled_operations": [
+            {**asdict(entry), "required_permissions": list(entry.required_permissions)} for entry in enabled_entries
+        ],
+        "disabled_operations": [asdict(entry) for entry in disabled_entries],
+        "summary": {
+            "enabled_operation_count": len(enabled_entries),
+            "disabled_operation_count": len(disabled_entries),
+            "disabled_unique_path_count": len(omitted_by_path),
+            "enabled_by_classification": dict(sorted(classifications.items())),
+        },
+    }
+
+
+def production_operation_snapshot(app: FastAPI) -> list[dict[str, str]]:
+    """Return the owned operation table from an actual production import."""
+
+    _validate_route_types(app, allow_framework_docs=False)
+    operations: list[dict[str, str]] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        owner = route_owner(route)
+        if owner is None:
+            raise RouteManifestError(f"Production operation {route.path} is unowned")
+        for method, path in _route_operations(route):
+            operations.append(
+                {
+                    "operation": operation_id(owner, method, path),
+                    "owner": owner,
+                    "method": method,
+                    "path": path,
+                }
+            )
+    return sorted(operations, key=lambda item: (item["path"], item["method"], item["owner"]))
+
+
+def probe_omitted_paths_exact_404(app: FastAPI, manifest: dict[str, Any]) -> int:
+    """Probe every omitted operation against an actual production table.
+
+    A middleware-free app measures routing only. Before each request Starlette's
+    matcher proves no enabled route would consume it; a match fails closed and
+    the request is never issued.
+    """
+
+    from fastapi.testclient import TestClient
+
+    _validate_route_types(app, allow_framework_docs=False)
+    production_routes = [route for route in app.routes if isinstance(route, APIRoute)]
+    probe_app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    probe_app.router.routes.extend(production_routes)
+
+    probes = [
+        (item["probe_method"], item["path"], item["probe_path"], item["operation"])
+        for item in manifest["disabled_operations"]
+    ]
+
+    with TestClient(probe_app, raise_server_exceptions=True) as client:
+        for method, template, concrete_path, operation in sorted(probes):
+            scope = {
+                "type": "http",
+                "asgi": {"version": "3.0", "spec_version": "2.3"},
+                "http_version": "1.1",
+                "method": method,
+                "scheme": "http",
+                "path": concrete_path,
+                "raw_path": concrete_path.encode("ascii"),
+                "query_string": b"",
+                "root_path": "",
+                "headers": [],
+                "client": ("127.0.0.1", 1),
+                "server": ("testserver", 80),
+            }
+            matching = [
+                f"{sorted(route.methods or set())} {route.path}"
+                for route in production_routes
+                if route.matches(scope)[0] is Match.FULL
+            ]
+            if matching:
+                raise RouteManifestError(
+                    f"Omitted probe {method} {concrete_path} for {operation} ({template}) would execute "
+                    f"an enabled route: {matching}"
+                )
+            response = client.request(method, concrete_path)
+            if response.status_code != 404:
+                raise RouteManifestError(
+                    f"Omitted probe {method} {concrete_path} for {operation} ({template}) returned "
+                    f"{response.status_code}, expected exact 404"
+                )
+    return len(probes)
+
+
+__all__ = [
+    "ALWAYS_MOUNTED_OWNERS",
+    "PRODUCTION_OWNERS",
+    "RouteManifestError",
+    "build_route_security_manifest",
+    "probe_omitted_paths_exact_404",
+    "production_operation_snapshot",
+]
+

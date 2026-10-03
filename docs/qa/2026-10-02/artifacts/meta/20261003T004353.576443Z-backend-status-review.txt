@@ -1,0 +1,36 @@
+UTC: 2026-10-03T00:43:53.576443+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/BACKEND-REPORT.md"); print(p.read_text() if p.exists() else "Backend report pending"); p=Path("docs/qa/2026-10-02/BACKEND-SESSION-LOG.md"); print(p.read_text()[-6500:])'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Backend report pending
+rvices/ingestion/tests/test_qa_sweep_20261002_contract.py`; cwd `.`; exit 0, 0.24s. [Output](artifacts/backend/20261003T004114.745845Z-static-bug-gate.txt).
+
+- **2026-10-03T00:41:15.045419+00:00** `typecheck-focus` — `mypy --follow-imports=skip --ignore-missing-imports --cache-dir /private/tmp/regengine-qa-mypy-cache services/ingestion/app/webhook_models.py services/ingestion/app/csv_templates.py services/shared/request_safety.py`; cwd `.`; exit 1, 1.00s. [Output](artifacts/backend/20261003T004115.045419Z-typecheck-focus.txt).
+
+- **2026-10-03T00:41:36.780052+00:00** `finite-persistence-boundary` — `rg -n -A12 -B6 'quantity|isfinite|allow_inf_nan' services/shared/canonical_event.py services/shared/cte_persistence/hashing.py services/ingestion/app/webhook_compat.py`; cwd `.`; exit 0, 0.01s. [Output](artifacts/backend/20261003T004136.780052Z-finite-persistence-boundary.txt).
+
+- **2026-10-03T00:41:46.950681+00:00** `added-tests-import-order` — `ruff check --no-cache --select I --fix services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.05s. [Output](artifacts/backend/20261003T004146.950681Z-added-tests-import-order.txt).
+
+- **2026-10-03T00:41:47.082115+00:00** `added-tests-format` — `ruff format --no-cache services/ingestion/tests/test_qa_sweep_20261002_contract.py tests/qa_sweep_20261002 docs/qa/2026-10-02/scripts/backend_pytest.py`; cwd `.`; exit 0, 0.01s. [Output](artifacts/backend/20261003T004147.082115Z-added-tests-format.txt).
+
+- **2026-10-03T00:40:38.332020+00:00** `broad-ingestion-existing` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests --ignore=services/ingestion/tests/test_qa_sweep_20261002_contract.py -m 'not integration' --continue-on-collection-errors --maxfail=20 --tb=short --cov=app --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingestion-broad.json`; cwd `.`; exit 1, 71.91s. [Output](artifacts/backend/20261003T004038.332020Z-broad-ingestion-existing.txt).
+
+- **2026-10-03T00:42:03.342372+00:00** `broad-error-classification` — `python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/backend/20261003T004038.332020Z-broad-ingestion-existing.txt"); text=p.read_text(); start=text.find("==================================== ERRORS"); end=text.find("=================================== FAILURES"); print(text[start:end][:12000]); print("COVERAGE",[(p.name,p.stat().st_size) for p in Path("docs/qa/2026-10-02/artifacts/backend").glob("coverage*.json")])'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/backend/20261003T004203.342372Z-broad-error-classification.txt).
+
+- **2026-10-03T00:42:08.391967+00:00** `telemetry-stub-trace` — `rg -n 'opentelemetry.sdk.trace|sys.modules.*opentelemetry|types.ModuleType.*opentelemetry' services/ingestion/tests`; cwd `.`; exit 0, 0.02s. [Output](artifacts/backend/20261003T004208.391967Z-telemetry-stub-trace.txt).
+
+- **2026-10-03T00:42:02.181410+00:00** `broad-shared-existing` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests '--ignore-glob=*live*' -m 'not integration' --continue-on-collection-errors --maxfail=15 --tb=short --cov=shared --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-broad.json`; cwd `.`; exit 1, 10.08s. [Output](artifacts/backend/20261003T004202.181410Z-broad-shared-existing.txt).
+
+- **2026-10-03T00:42:22.708785+00:00** `broad-shared-inprocess` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests '--ignore-glob=*live*' --ignore=services/shared/tests/test_auth_fail_closed.py --ignore=services/shared/tests/test_secrets_fail_closed.py -m 'not integration' --continue-on-collection-errors --maxfail=15 --tb=short --cov=shared --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-broad.json`; cwd `.`; exit 1, 8.99s. [Output](artifacts/backend/20261003T004222.708785Z-broad-shared-inprocess.txt).
+
+- **2026-10-03T00:42:43.697135+00:00** `quantity-constraints` — `python3 -c 'from pathlib import Path; p=Path("services/shared/canonical_event.py"); lines=p.read_text().splitlines(); hits=[i for i,l in enumerate(lines) if "quantity:" in l and i<500]; print("\n".join(f"{j+1}: {lines[j]}" for i in hits for j in range(max(0,i-3), min(len(lines),i+8)))); p=Path("services/ingestion/tests/test_boundaries.py"); print("\n".join(f"{i+1}: {l}" for i,l in enumerate(p.read_text().splitlines()) if 25<=i<70))'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/backend/20261003T004243.697135Z-quantity-constraints.txt).
+
+- **2026-10-03T00:42:57.713724+00:00** `admin-auth-matrix` — `env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/admin/tests/test_privileged_auth.py services/admin/tests/test_session_auth.py tests/security/test_route_security_manifest.py --continue-on-collection-errors --maxfail=10 --tb=short --cov=services.admin.app.privileged_auth --cov=services.admin.app.auth.session_auth --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-admin-auth.json`; cwd `.`; exit 1, 7.67s. [Output](artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt).
+
+- **2026-10-03T00:43:31.377606+00:00** `db-guard-check` — `python3 -c 'from pathlib import Path; p=Path("services/ingestion/tests/remediation/conftest.py"); print(p.read_text()[:5000] if p.exists() else "no remediation conftest"); print("\n".join(str(p) for p in Path("services/ingestion/tests/remediation").glob("*")))'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/backend/20261003T004331.377606Z-db-guard-check.txt).
+
+- **2026-10-03T00:43:38.733675+00:00** `manifest-diff-summary` — `python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt"); lines=p.read_text().splitlines(); print("\n".join(l for l in lines if l.lstrip().startswith(("+","-")) and not l.lstrip().startswith(("---","+++")))[:14000])'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/backend/20261003T004338.733675Z-manifest-diff-summary.txt).
+

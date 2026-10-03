@@ -1,0 +1,23 @@
+UTC: 2026-10-03T00:40:31.182068+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; print(subprocess.check_output(["git","diff","--","frontend/next-env.d.ts"],text=True)); Path("frontend/next-env.d.ts").write_bytes(subprocess.check_output(["git","show","HEAD:frontend/next-env.d.ts"])); print("Restored only build-generated next-env.d.ts baseline bytes")'
+Exit: 0
+Duration: 0.13s
+Timeout: False
+
+diff --git a/frontend/next-env.d.ts b/frontend/next-env.d.ts
+index a419cbe4..ce4e94a6 100644
+--- a/frontend/next-env.d.ts
++++ b/frontend/next-env.d.ts
+@@ -1,7 +1,7 @@
+ /// <reference types="next" />
+ /// <reference types="next/image-types/global" />
+-import "./.next/dev/types/routes.d.ts";
+-import "./.next/dev/types/root-params.d.ts";
++import "./.next/types/routes.d.ts";
++import "./.next/types/root-params.d.ts";
+ 
+ // NOTE: This file should not be edited
+ // see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+
+Restored only build-generated next-env.d.ts baseline bytes

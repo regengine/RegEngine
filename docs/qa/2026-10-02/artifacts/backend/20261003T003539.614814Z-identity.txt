@@ -1,0 +1,13 @@
+UTC: 2026-10-03T00:35:39.614814+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess; from pathlib import Path; print(Path.cwd()); [subprocess.run(c, check=False) for c in [["git","status","--short"],["git","branch","--show-current"],["git","remote","get-url","origin"],["git","worktree","list"]]]; print("Bootstrap: pwd and read run_logged.py executed immediately before this logged identity check.")'
+Exit: 0
+Duration: 0.10s
+Timeout: False
+
+?? docs/qa/2026-10-02/
+qa/2026-10-02-sweep
+https://github.com/regengine/RegEngine.git
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine 0927b85a [qa/2026-10-02-sweep]
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Bootstrap: pwd and read run_logged.py executed immediately before this logged identity check.

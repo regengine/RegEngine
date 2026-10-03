@@ -1,0 +1,113 @@
+UTC: 2026-10-03T00:53:08.615187+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx"); print("\n".join(f"{i}: {l}" for i,l in enumerate(p.read_text().splitlines(),1) if 760<=i<=865))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+760:                                         {(['All', 'Seafood', 'Produce', 'Dairy', 'Eggs', 'Other'] as const).map(f => {
+761:                                             const FilterIcon = FILTER_ICONS[f];
+762:                                             return (
+763:                                                 <Button
+764:                                                     key={f}
+765:                                                     variant="secondary"
+766:                                                     size="sm"
+767:                                                     aria-pressed={activeFilter === f}
+768:                                                     onClick={() => setActiveFilter(f)}
+769:                                                     className={cn(activeFilter === f && 'bg-re-surface-inset font-semibold text-re-text-primary')}
+770:                                                     leadingIcon={FilterIcon ? <FilterIcon strokeWidth={1.75} aria-hidden="true" /> : undefined}
+771:                                                 >
+772:                                                     {f}
+773:                                                 </Button>
+774:                                             );
+775:                                         })}
+776:                                     </div>
+777:                                 </div>
+778: 
+779:                                 <div className="re-scrollbar grid max-h-[500px] grid-cols-1 gap-3 overflow-y-auto pr-2 sm:grid-cols-2">
+780:                                     {FTL_CATEGORIES
+781:                                         .filter(c => {
+782:                                             const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+783:                                                 c.examples.toLowerCase().includes(searchTerm.toLowerCase());
+784:                                             const matchesFilter = activeFilter === 'All' || c.category === activeFilter;
+785:                                             return matchesSearch && matchesFilter;
+786:                                         })
+787:                                         .map(category => {
+788:                                             const Icon = category.icon;
+789:                                             const isSelected = selectedCategories.includes(category.id);
+790:                                             return (
+791:                                                 <button
+792:                                                     key={category.id}
+793:                                                     type="button"
+794:                                                     aria-pressed={isSelected}
+795:                                                     onClick={() => toggleCategory(category.id)}
+796:                                                     className={pickClasses(isSelected)}
+797:                                                 >
+798:                                                     <div className="flex items-start gap-3">
+799:                                                         <span
+800:                                                             className={cn(
+801:                                                                 'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border',
+802:                                                                 isSelected ? 'border-re-border-strong bg-re-surface-card' : 'border-re-border'
+803:                                                             )}
+804:                                                             aria-hidden="true"
+805:                                                         >
+806:                                                             {isSelected && <CheckCircle2 size={12} strokeWidth={1.75} className="text-re-text-primary" />}
+807:                                                         </span>
+808:                                                         <div className="min-w-0 flex-1">
+809:                                                             <div className="flex flex-wrap items-center gap-2">
+810:                                                                 <Icon size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-re-text-tertiary" />
+811:                                                                 <span className="text-ui font-medium text-re-text-primary">{category.name}</span>
+812:                                                                 <Badge tone={category.covered ? 'success' : 'neutral'} size="sm">
+813:                                                                     {category.covered ? 'Listed' : 'Not listed'}
+814:                                                                 </Badge>
+815:                                                             </div>
+816:                                                             <p className="mt-1 text-small text-re-text-tertiary">{category.examples}</p>
+817:                                                         </div>
+818:                                                     </div>
+819:                                                 </button>
+820:                                             );
+821:                                         })}
+822:                                 </div>
+823: 
+824:                                 <div className="mt-6 flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
+825:                                     <span className="text-small tabular-nums text-re-text-tertiary">{selectedCategories.length} categories selected</span>
+826:                                     <Button
+827:                                         size="lg"
+828:                                         onClick={handleCheck}
+829:                                         disabled={selectedCategories.length === 0}
+830:                                         trailingIcon={<ArrowRight size={16} strokeWidth={1.75} aria-hidden="true" />}
+831:                                     >
+832:                                         Check Listed Groupings
+833:                                     </Button>
+834:                                 </div>
+835:                             </Card>
+836:                         </motion.div>
+837:                     )}
+838: 
+839:                     {/* Step 2: Exemption Wizard */}
+840:                     {currentStep === 'exemptions' && (
+841:                         <motion.div key="exemptions" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+842:                             <Card padding="spacious" className="mb-6">
+843:                                 <div className="mb-6">
+844:                                     <h2 className="flex items-center gap-2.5 text-heading text-re-text-primary">
+845:                                         <ShieldCheck size={20} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> Check for Exemptions
+846:                                     </h2>
+847:                                     <p className="mt-1 text-ui text-re-text-secondary">Answer these questions to see if you qualify for any FSMA 204 exemptions</p>
+848:                                 </div>
+849: 
+850:                                 <div className="flex flex-col gap-3">
+851:                                     {EXEMPTION_QUESTIONS.map((q, index) => {
+852:                                         const Icon = q.icon;
+853:                                         const answer = exemptionAnswers[q.id];
+854:                                         const isExpanded = showExemptionHelp === q.id;
+855:                                         const alreadyExempt = Object.entries(exemptionAnswers).some(([id, val]) => val === true && EXEMPTION_QUESTIONS.findIndex(x => x.id === id) < index);
+856:                                         if (alreadyExempt && answer !== true) return null;
+857: 
+858:                                         return (
+859:                                             <div
+860:                                                 key={q.id}
+861:                                                 className={cn(
+862:                                                     'rounded-lg border p-5',
+863:                                                     answer === true ? 'border-re-border-strong bg-re-surface-inset' : 'border-re-border bg-re-surface-card'
+864:                                                 )}
+865:                                             >

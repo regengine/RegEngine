@@ -1,0 +1,44 @@
+UTC: 2026-10-03T00:52:21.061039+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'Escape|keydown|keyDown|focus\(|inert|mobileOpen|MobileMenu' frontend/src/components/layout/header frontend/src/components/layout/marketing-header.tsx frontend/src/components/layout/site-header.tsx
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: frontend/src/components/layout/site-header.tsx: No such file or directory (os error 2)
+frontend/src/components/layout/marketing-header.tsx:10:import { DesktopNav, MobileMenu, MobileHamburger } from '@/components/layout/header';
+frontend/src/components/layout/marketing-header.tsx:14:    const [mobileOpen, setMobileOpen] = useState(false);
+frontend/src/components/layout/marketing-header.tsx:31:        window.dispatchEvent(new CustomEvent('re:mobile-menu-state', { detail: { open: mobileOpen } }));
+frontend/src/components/layout/marketing-header.tsx:32:        if (mobileOpen) {
+frontend/src/components/layout/marketing-header.tsx:41:    }, [mobileOpen]);
+frontend/src/components/layout/marketing-header.tsx:66:            firstItem?.focus();
+frontend/src/components/layout/marketing-header.tsx:71:        if (e.key === 'Escape') {
+frontend/src/components/layout/marketing-header.tsx:73:            toolsButtonRef.current?.focus();
+frontend/src/components/layout/marketing-header.tsx:91:            menuItems[fallbackIndex]?.focus();
+frontend/src/components/layout/marketing-header.tsx:99:        menuItems[nextIndex]?.focus();
+frontend/src/components/layout/marketing-header.tsx:158:                    <MobileHamburger mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+frontend/src/components/layout/marketing-header.tsx:162:            <MobileMenu
+frontend/src/components/layout/marketing-header.tsx:166:                mobileOpen={mobileOpen}
+frontend/src/components/layout/header/MobileMenuCTA.tsx:8:interface MobileMenuCTAProps {
+frontend/src/components/layout/header/MobileMenuCTA.tsx:19:export function MobileMenuCTA({ user, showLoggedIn, setMobileOpen }: MobileMenuCTAProps) {
+frontend/src/components/layout/header/MobileMenu.tsx:10:import { MobileMenuCTA } from './MobileMenuCTA';
+frontend/src/components/layout/header/MobileMenu.tsx:11:import type { MobileMenuProps } from './types';
+frontend/src/components/layout/header/MobileMenu.tsx:32:export function MobileMenu({ user, showLoggedIn, pathname, mobileOpen, setMobileOpen }: MobileMenuProps) {
+frontend/src/components/layout/header/MobileMenu.tsx:39:                    mobileOpen ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+frontend/src/components/layout/header/MobileMenu.tsx:49:                    mobileOpen ? 'visible translate-x-0' : 'invisible translate-x-full pointer-events-none'
+frontend/src/components/layout/header/MobileMenu.tsx:52:                aria-modal={mobileOpen ? true : undefined}
+frontend/src/components/layout/header/MobileMenu.tsx:53:                aria-hidden={!mobileOpen}
+frontend/src/components/layout/header/MobileMenu.tsx:134:                <MobileMenuCTA user={user} showLoggedIn={showLoggedIn} setMobileOpen={setMobileOpen} />
+frontend/src/components/layout/header/types.ts:23:export interface MobileMenuProps extends AuthNavProps {
+frontend/src/components/layout/header/types.ts:24:    mobileOpen: boolean;
+frontend/src/components/layout/header/index.ts:2:export { MobileMenu } from './MobileMenu';
+frontend/src/components/layout/header/index.ts:3:export { MobileMenuCTA } from './MobileMenuCTA';
+frontend/src/components/layout/header/index.ts:6:export type { AuthNavProps, ToolsDropdownProps, MobileMenuProps, DesktopNavProps } from './types';
+frontend/src/components/layout/header/MobileHamburger.tsx:6:    mobileOpen: boolean;
+frontend/src/components/layout/header/MobileHamburger.tsx:17:export function MobileHamburger({ mobileOpen, setMobileOpen }: MobileHamburgerProps) {
+frontend/src/components/layout/header/MobileHamburger.tsx:22:            onClick={() => setMobileOpen(!mobileOpen)}
+frontend/src/components/layout/header/MobileHamburger.tsx:23:            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+frontend/src/components/layout/header/MobileHamburger.tsx:24:            aria-expanded={mobileOpen}
+frontend/src/components/layout/header/MobileHamburger.tsx:26:            {mobileOpen ? (
+frontend/src/components/layout/header/NavDropdown.tsx:13: * -click listener, the roving ArrowUp/ArrowDown handler and the Escape
+frontend/src/components/layout/header/NavDropdown.tsx:61:                    if (e.key === 'Escape') {

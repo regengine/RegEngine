@@ -1,0 +1,48 @@
+UTC: 2026-10-03T00:39:25.103731+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'kdes|IngestEvent|persist|event_type' services/ingestion/app/webhook_router.py services/ingestion/app/webhook_router_v2.py services/shared/canonical_ingestion.py services/ingestion/app/fda_export_service.py
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: services/ingestion/app/webhook_router.py: No such file or directory (os error 2)
+rg: services/ingestion/app/webhook_router_v2.py: No such file or directory (os error 2)
+rg: services/shared/canonical_ingestion.py: No such file or directory (os error 2)
+services/ingestion/app/fda_export_service.py:172:    """Convert a persisted CTE event to an FDA spreadsheet row.
+services/ingestion/app/fda_export_service.py:189:    kdes = event.get("kdes", {})
+services/ingestion/app/fda_export_service.py:213:        "Event Type (CTE)": sanitize_cell(event.get("event_type", "")),
+services/ingestion/app/fda_export_service.py:222:        "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+services/ingestion/app/fda_export_service.py:224:            sanitize_cell(kdes.get("ship_from_location", "") or ""),
+services/ingestion/app/fda_export_service.py:228:        "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+services/ingestion/app/fda_export_service.py:230:            sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+services/ingestion/app/fda_export_service.py:235:            sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+services/ingestion/app/fda_export_service.py:239:        "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+services/ingestion/app/fda_export_service.py:240:        "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
+services/ingestion/app/fda_export_service.py:249:        raw = kdes.get(kde_key)
+services/ingestion/app/fda_export_service.py:274:    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES}
+services/ingestion/app/fda_export_service.py:275:    if extra_kdes and not include_pii:
+services/ingestion/app/fda_export_service.py:276:        extra_kdes = _redact_extra_kde_pii(extra_kdes)
+services/ingestion/app/fda_export_service.py:277:    row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
+services/ingestion/app/fda_export_service.py:306:def _redact_extra_kde_pii(extra_kdes: dict) -> dict:
+services/ingestion/app/fda_export_service.py:316:    for key, value in extra_kdes.items():
+services/ingestion/app/fda_export_service.py:474:    kdes = event.get("kdes", {})
+services/ingestion/app/fda_export_service.py:478:        return event.get("location_name") or kdes.get("location_name")
+services/ingestion/app/fda_export_service.py:479:    return kdes.get(required_field)
+services/ingestion/app/fda_export_service.py:493:    unchecked_event_types: set[str] = set()
+services/ingestion/app/fda_export_service.py:496:        raw_event_type = str(event.get("event_type", "")).upper()
+services/ingestion/app/fda_export_service.py:498:        if raw_event_type in WebhookCTEType.__members__:
+services/ingestion/app/fda_export_service.py:499:            required_fields = REQUIRED_KDES_BY_CTE[WebhookCTEType[raw_event_type]]
+services/ingestion/app/fda_export_service.py:505:            unchecked_event_types.add(str(event.get("event_type", "")))
+services/ingestion/app/fda_export_service.py:521:                    "event_type": event.get("event_type"),
+services/ingestion/app/fda_export_service.py:548:        "unchecked_event_types": sorted(unchecked_event_types),
+services/ingestion/app/fda_export_service.py:583:        event_type = entry.get("event_type") or "UNKNOWN"
+services/ingestion/app/fda_export_service.py:585:        lines.append(f"Event TLC: {tlc} | Type: {event_type} | Missing: {missing}")
+services/ingestion/app/fda_export_service.py:651:            "unchecked_event_types": completeness_summary.get("unchecked_event_types", []),
+services/ingestion/app/fda_export_service.py:662:            "assertion": "Package generated from persisted fsma.cte_events with chain verification.",
+services/ingestion/app/fda_export_service.py:729:        "- VERIFIED means the persisted chain check passed and row hashes are present.\n"
+services/ingestion/app/fda_export_service.py:730:        "- PARTIAL means the persisted chain check passed but one or more row hashes are missing.\n"
+services/ingestion/app/fda_export_service.py:755:    event_types: dict[str, int] = {}
+services/ingestion/app/fda_export_service.py:758:        event_type = str(event.get("event_type") or "")
+services/ingestion/app/fda_export_service.py:759:        if event_type:
+services/ingestion/app/fda_export_service.py:760:            event_types[event_type] = event_types.get(event_type, 0) + 1
+services/ingestion/app/fda_export_service.py:777:            "event_type_breakdown": event_types,

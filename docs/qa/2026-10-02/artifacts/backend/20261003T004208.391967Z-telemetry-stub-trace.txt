@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:42:08.391967+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'opentelemetry.sdk.trace|sys.modules.*opentelemetry|types.ModuleType.*opentelemetry' services/ingestion/tests
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+services/ingestion/tests/test_boundaries.py:53:    "opentelemetry.sdk.trace",
+services/ingestion/tests/test_boundaries.py:54:    "opentelemetry.sdk.trace.export",

@@ -1,0 +1,10 @@
+UTC: 2026-10-03T00:41:09.105323+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import shutil; print("ruff",shutil.which("ruff")); print("mypy",shutil.which("mypy")); print("uv",shutil.which("uv"))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+ruff /Library/Frameworks/Python.framework/Versions/3.12/bin/ruff
+mypy /Library/Frameworks/Python.framework/Versions/3.12/bin/mypy
+uv /Users/sellers/.local/bin/uv

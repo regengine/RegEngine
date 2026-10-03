@@ -1,0 +1,409 @@
+UTC: 2026-10-03T00:39:08.149005+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "https?|private|redirect|resolve|DNS|ipaddress|validate|SSRF|allowed" services/ingestion/app/models.py services/ingestion/app/routes_ingest.py services/ingestion/app/http_client.py | head -125; nl -ba services/admin/app/dependencies.py | sed -n "301,425p"; nl -ba services/admin/app/dependencies.py | sed -n "437,560p"; nl -ba services/shared/idempotency.py | sed -n "75,133p"'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+rg: services/ingestion/app/http_client.py: No such file or directory (os error 2)
+services/ingestion/app/models.py:5:import ipaddress
+services/ingestion/app/models.py:13:# SSRF protection (#549)
+services/ingestion/app/models.py:14:# Block requests to private IP ranges and well-known metadata endpoints.
+services/ingestion/app/models.py:25:_SSRF_BLOCKED_NETWORKS = [
+services/ingestion/app/models.py:26:    ipaddress.ip_network("10.0.0.0/8"),
+services/ingestion/app/models.py:27:    ipaddress.ip_network("172.16.0.0/12"),
+services/ingestion/app/models.py:28:    ipaddress.ip_network("192.168.0.0/16"),
+services/ingestion/app/models.py:29:    ipaddress.ip_network("127.0.0.0/8"),
+services/ingestion/app/models.py:30:    ipaddress.ip_network("169.254.0.0/16"),  # Link-local / IMDS
+services/ingestion/app/models.py:31:    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+services/ingestion/app/models.py:32:    ipaddress.ip_network("fc00::/7"),  # IPv6 ULA
+services/ingestion/app/models.py:33:    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+services/ingestion/app/models.py:37:def _reject_private_host(url: HttpUrl) -> None:
+services/ingestion/app/models.py:38:    """Raise ValueError if the URL resolves to a private or metadata IP address."""
+services/ingestion/app/models.py:44:    # (``https://[fd00:ec2::254]/`` -> ``host == "[fd00:ec2::254]"``).
+services/ingestion/app/models.py:56:    # IPv6 address, don't bother with DNS — apply the private-range
+services/ingestion/app/models.py:57:    # check directly. This catches ``https://10.0.0.1/`` and
+services/ingestion/app/models.py:58:    # ``https://[fd00::1]/`` even in environments where the resolver
+services/ingestion/app/models.py:62:        literal_ip = ipaddress.ip_address(host_bare)
+services/ingestion/app/models.py:66:        _reject_if_private_ip(literal_ip, host)
+services/ingestion/app/models.py:73:        # If DNS resolution fails we cannot verify safety — reject
+services/ingestion/app/models.py:74:        raise ValueError(f"Unable to resolve hostname '{host}'.")
+services/ingestion/app/models.py:79:            addr = ipaddress.ip_address(ip_str)
+services/ingestion/app/models.py:82:        _reject_if_private_ip(addr, host, resolved_as=ip_str)
+services/ingestion/app/models.py:85:def _reject_if_private_ip(
+services/ingestion/app/models.py:86:    addr: "ipaddress.IPv4Address | ipaddress.IPv6Address",
+services/ingestion/app/models.py:89:    resolved_as: Optional[str] = None,
+services/ingestion/app/models.py:93:    Shared tail of :func:`_reject_private_host` so the literal-IP
+services/ingestion/app/models.py:94:    short-circuit and the DNS-resolved path use exactly the same
+services/ingestion/app/models.py:95:    classifier. ``resolved_as`` is the DNS-observed IP literal for
+services/ingestion/app/models.py:99:    detail = f"resolved '{host}' → {resolved_as}" if resolved_as else f"host '{host}'"
+services/ingestion/app/models.py:100:    if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved:
+services/ingestion/app/models.py:101:        raise ValueError(f"Requests to private or reserved IP addresses are not permitted ({detail}).")
+services/ingestion/app/models.py:102:    for network in _SSRF_BLOCKED_NETWORKS:
+services/ingestion/app/models.py:104:            raise ValueError(f"Requests to private or reserved IP addresses are not permitted ({detail}).")
+services/ingestion/app/models.py:116:    def url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
+services/ingestion/app/models.py:117:        _reject_private_host(v)
+services/ingestion/app/models.py:165:    def source_url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
+services/ingestion/app/models.py:166:        _reject_private_host(v)
+services/ingestion/app/models.py:317:    # #2921: requested indices that resolved to no queue entry. Always
+services/ingestion/app/models.py:318:    # present (empty when everything resolved) so a caller can tell
+services/ingestion/app/routes_ingest.py:5:(``_process_and_emit``, ``_fetch``, ``_validate_url``, ``_resolve_and_validate``,
+services/ingestion/app/routes_ingest.py:8:and the SSRF/payload-size constants.
+services/ingestion/app/routes_ingest.py:23:from ipaddress import ip_address, ip_network
+services/ingestion/app/routes_ingest.py:28:import httpx
+services/ingestion/app/routes_ingest.py:82:    validate_regulation_upload_content,
+services/ingestion/app/routes_ingest.py:92:ALLOWED_SCHEMES = {"https", "http"}
+services/ingestion/app/routes_ingest.py:201:        allowed, remaining = consume_tenant_rate_limit(
+services/ingestion/app/routes_ingest.py:207:        if not allowed:
+services/ingestion/app/routes_ingest.py:275:                # SSRF-safe: re-validates URL + pins to validated IP per hop.
+services/ingestion/app/routes_ingest.py:276:                from shared.safe_http import safe_httpx_post_async
+services/ingestion/app/routes_ingest.py:278:                await safe_httpx_post_async(
+services/ingestion/app/routes_ingest.py:288:            except (httpx.HTTPError, OSError, ValueError) as e:
+services/ingestion/app/routes_ingest.py:296:                from shared.safe_http import safe_httpx_post_async
+services/ingestion/app/routes_ingest.py:298:                await safe_httpx_post_async(
+services/ingestion/app/routes_ingest.py:302:            except (httpx.HTTPError, OSError, ValueError) as e:
+services/ingestion/app/routes_ingest.py:324:    allowed = set(api_key.allowed_jurisdictions or [])
+services/ingestion/app/routes_ingest.py:325:    if "US" not in allowed and "GLOBAL" not in allowed:
+services/ingestion/app/routes_ingest.py:328:    # Validate webhook URL early to prevent SSRF (#990)
+services/ingestion/app/routes_ingest.py:330:        _validate_url(webhook)
+services/ingestion/app/routes_ingest.py:349:        validate_regulation_upload_content(file_type, prefix, path=file_path)
+services/ingestion/app/routes_ingest.py:529:            doc_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, document_id))
+services/ingestion/app/routes_ingest.py:714:            url_str=f"http://upload.internal/{safe_filename}",
+services/ingestion/app/routes_ingest.py:767:    allowed_jurisdictions = api_key.allowed_jurisdictions or []
+services/ingestion/app/routes_ingest.py:769:    if ".gov" in url_str.lower() and "US" not in allowed_jurisdictions:
+services/ingestion/app/routes_ingest.py:773:    _validate_url(url_str)  # SSRF guard: scheme, port, credential, and private IP checks (#991)
+services/ingestion/app/routes_ingest.py:799:            audit_logger.log_fetch(url_str, "success", http_status=200)
+services/ingestion/app/routes_ingest.py:894:                    content_type=source_metadata.http_headers.get("Content-Type", "application/octet-stream"),
+services/ingestion/app/routes_ingest.py:928:    except (ConnectionError, OSError, ValueError, httpx.HTTPError) as e:
+services/ingestion/app/routes_ingest.py:954:    # Resolve and validate IP addresses immediately before fetch to prevent TOCTOU
+services/ingestion/app/routes_ingest.py:955:    addresses = _resolve_and_validate(host)
+services/ingestion/app/routes_ingest.py:972:    # SSRF defense (RE-SEC-001/002): follow redirects manually, re-validating
+services/ingestion/app/routes_ingest.py:973:    # each hop and pinning the connection to a validated IP via safe_httpx_client.
+services/ingestion/app/routes_ingest.py:976:    from shared.safe_http import safe_httpx_client
+services/ingestion/app/routes_ingest.py:981:        import httpx
+services/ingestion/app/routes_ingest.py:985:            # allowlist / port checks consistently with non-redirect paths).
+services/ingestion/app/routes_ingest.py:986:            _validate_url(current_url)
+services/ingestion/app/routes_ingest.py:987:            async with safe_httpx_client(url=current_url, timeout=60.0, http2=True, headers=headers) as client:
+services/ingestion/app/routes_ingest.py:989:                    if response.is_redirect:
+services/ingestion/app/routes_ingest.py:998:                            "ingest_fetch_redirect",
+services/ingestion/app/routes_ingest.py:1029:        raise HTTPException(status_code=502, detail="Too many redirects")
+services/ingestion/app/routes_ingest.py:1031:    except httpx.RequestError as exc:
+services/ingestion/app/routes_ingest.py:1036:def _validate_url(url: str) -> None:
+services/ingestion/app/routes_ingest.py:1043:        raise HTTPException(status_code=400, detail="URLs with credentials not allowed")
+services/ingestion/app/routes_ingest.py:1049:        raise HTTPException(status_code=400, detail="Host not allowed")
+services/ingestion/app/routes_ingest.py:1054:        port = 443 if parsed.scheme == "https" else 80
+services/ingestion/app/routes_ingest.py:1056:        raise HTTPException(status_code=400, detail="Port not allowed")
+services/ingestion/app/routes_ingest.py:1058:    _resolve_and_validate(host)
+services/ingestion/app/routes_ingest.py:1061:def _resolve_and_validate(host: str) -> set[str]:
+services/ingestion/app/routes_ingest.py:1062:    """Resolve hostname and validate all IPs are not in prohibited networks."""
+services/ingestion/app/routes_ingest.py:1065:    except socket.gaierror as exc:  # pragma: no cover - depends on DNS
+services/ingestion/app/routes_ingest.py:1067:        raise HTTPException(status_code=400, detail="Failed to resolve host") from exc
+services/ingestion/app/routes_ingest.py:1073:            raise HTTPException(status_code=400, detail="Host resolved to a private network")
+   301	    # that may be a RegEngine-issued session token. This is the only production
+   302	    # bearer path, so all production principals share one revocation domain.
+   303	    if not user_id:
+   304	        try:
+   305	            # Production workers refresh their verification cache before every
+   306	            # local-JWT verdict. A rotation or emergency key revocation on one
+   307	            # replica is therefore observed by every other replica on its next
+   308	            # request instead of waiting for a process restart.
+   309	            if requires_strict_auth_runtime():
+   310	                await sync_keys_from_registry()
+   311	            payload = decode_access_token(token)
+   312	            user_id = payload.get("sub")
+   313	            # ``payload`` is a verified JWT (decode_access_token validates
+   314	            # signature + expiry), not a request body. The tenant_id claim is
+   315	            # cryptographically signed by the auth issuer — this is the
+   316	            # canonical EPIC-A path for JWT auth.
+   317	            tenant_id = payload.get("tenant_id") or payload.get("tid")  # nosemgrep: tenant-id-from-request-body
+   318	            # #1349 / #1375 — capture the version the token was minted against.
+   319	            # The live user row carries the current version; a mismatch means
+   320	            # this token was invalidated by a password reset or logout-all.
+   321	            token_version_claim = _parse_token_version(payload.get("tv"))
+   322	            sid_raw = payload.get("sid")
+   323	            session_id_raw = payload.get("session_id")
+   324	            if sid_raw and session_id_raw and str(sid_raw) != str(session_id_raw):
+   325	                logger.warning(
+   326	                    "mismatched_session_claims_rejected",
+   327	                    user_id=user_id,
+   328	                    sid=str(sid_raw),
+   329	                    session_id=str(session_id_raw),
+   330	                )
+   331	                raise credentials_exception
+   332	            session_id_claim = sid_raw or session_id_raw
+   333	            if session_id_claim:
+   334	                try:
+   335	                    local_session_id = UUID(str(session_id_claim))
+   336	                except (TypeError, ValueError) as exc:
+   337	                    logger.warning(
+   338	                        "invalid_session_claim_rejected",
+   339	                        user_id=user_id,
+   340	                        session_id=str(session_id_claim),
+   341	                    )
+   342	                    raise credentials_exception from exc
+   343	
+   344	            if user_id is None:
+   345	                raise credentials_exception
+   346	
+   347	            # SECURITY (#1071): async Redis revocation check. The sync
+   348	            # `_check_revoked` inside `decode_access_token` only looks at
+   349	            # this worker's in-memory set — it cannot see a revocation
+   350	            # written by another worker because it is a sync function
+   351	            # called under a running event loop. We must re-check here
+   352	            # on the async path so a /logout on worker A immediately
+   353	            # blocks subsequent requests on every other worker, not just
+   354	            # A itself.
+   355	            jti = payload.get("jti")
+   356	            if jti and await check_revoked_async(jti):
+   357	                logger.warning(
+   358	                    "revoked_jti_rejected",
+   359	                    user_id=user_id,
+   360	                    jti=jti,
+   361	                )
+   362	                raise credentials_exception
+   363	
+   364	        except (RevocationBackendUnavailable, JWTKeyRegistryBackendUnavailable) as exc:
+   365	            logger.error("jwt_auth_backend_unavailable", error_type=type(exc).__name__)
+   366	            raise _session_store_exception() from exc
+   367	        except JWTError:
+   368	            raise credentials_exception
+   369	
+   370	    # SECURITY (#1383): clear any stale tenant context that may be lingering
+   371	    # on this pooled connection from a prior request. If this request's JWT
+   372	    # has no resolvable tenant and the user is not a sysadmin, we want RLS
+   373	    # to fail closed, not inherit the previous caller's scope.
+   374	    if db.bind:
+   375	        try:
+   376	            TenantContext.clear_tenant_context(db)
+   377	        except (RuntimeError, OSError, AttributeError) as exc:  # pragma: no cover
+   378	            # If the clear call itself fails we still proceed — the
+   379	            # subsequent set_tenant_context (or, absent that, the RLS
+   380	            # fail-closed default from #1091) is the primary guard.
+   381	            # #2696: but never silently — a failing hygiene clear on a
+   382	            # pooled connection is exactly the #1383 condition.
+   383	            logger.warning(
+   384	                "stale_tenant_context_clear_failed",
+   385	                error=str(exc),
+   386	                error_type=type(exc).__name__,
+   387	            )
+   388	
+   389	    # Set a transaction-local user context so self-service RLS can load the
+   390	    # authenticated row without opening the global sysadmin branch.
+   391	    bind_authenticated_user_context(db, user_id)
+   392	
+   393	    user = db.get(UserModel, UUID(user_id))
+   394	    if user is None:
+   395	        logger.warning("user_not_found_in_db", user_id=user_id)
+   396	        raise credentials_exception
+   397	
+   398	    if local_session_id is not None:
+   399	        store = session_store
+   400	        if store is None or not hasattr(store, "get_session"):
+   401	            store = get_session_store()
+   402	        await _enforce_session_bound_token(
+   403	            local_session_id=local_session_id,
+   404	            token_user_id=user_id,
+   405	            user=user,
+   406	            session_store=store,
+   407	        )
+   408	
+   409	    # SECURITY (#1860): enforce token_version. /auth/logout-all and
+   410	    # logout-all and account security events bump user.token_version expecting this check;
+   411	    # without it, stolen access tokens survive both for their full TTL.
+   412	    user_tv = _parse_token_version(getattr(user, "token_version", None)) or 0
+   413	    if token_version_claim is not None:
+   414	        if token_version_claim < user_tv:
+   415	            logger.warning(
+   416	                "stale_token_version_rejected",
+   417	                user_id=user_id,
+   418	                token_tv=token_version_claim,
+   419	                user_tv=user_tv,
+   420	            )
+   421	            raise credentials_exception
+   422	    elif user_tv > 0 and not session_cookie_auth:
+   423	        # Cookie sessions never carry a version claim; logout-all kills
+   424	        # them by revoking their SessionModel row instead (sessions_router).
+   425	        logger.warning(
+   437	    # app_metadata (or the local JWT) by the server; we refuse to guess.
+   438	    if not tenant_id:
+   439	        try:
+   440	            # Selecting a tenant is the final pre-tenant bootstrap query.  The
+   441	            # global arm is removed before any tenant-scoped route work.
+   442	            arm_global_admin_context(db)
+   443	            active_memberships = (
+   444	                db.execute(
+   445	                    select(MembershipModel).where(
+   446	                        MembershipModel.user_id == UUID(user_id),
+   447	                        MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+   448	                    )
+   449	                )
+   450	                .scalars()
+   451	                .all()
+   452	            )
+   453	        finally:
+   454	            disarm_global_admin_context(db)
+   455	        if len(active_memberships) == 1:
+   456	            tenant_id = str(active_memberships[0].tenant_id)
+   457	            logger.info(
+   458	                "tenant_derived_from_sole_membership",
+   459	                user_id=user_id,
+   460	                tenant_id=tenant_id,
+   461	            )
+   462	        elif len(active_memberships) > 1 and not user.is_sysadmin:
+   463	            logger.warning(
+   464	                "ambiguous_tenant_no_trusted_claim",
+   465	                user_id=user_id,
+   466	                membership_count=len(active_memberships),
+   467	            )
+   468	            raise HTTPException(
+   469	                status_code=status.HTTP_401_UNAUTHORIZED,
+   470	                detail="Tenant selection required — no app_metadata.tenant_id set",
+   471	                headers={"WWW-Authenticate": "Bearer"},
+   472	            )
+   473	        elif not user.is_sysadmin:
+   474	            # SECURITY (#1383): zero memberships AND not a sysadmin AND no
+   475	            # tenant claim means this token cannot be bound to any tenant
+   476	            # scope. Previously we returned the user with tenant_context
+   477	            # unset, which — combined with fail-open RLS on pooled
+   478	            # connections — could leak data across tenants. Reject at the
+   479	            # auth layer so tenant-scoped routes never see this request.
+   480	            logger.warning(
+   481	                "tenant_required_no_membership",
+   482	                user_id=user_id,
+   483	            )
+   484	            raise HTTPException(
+   485	                status_code=status.HTTP_401_UNAUTHORIZED,
+   486	                detail="Tenant required — no tenant claim and no active memberships",
+   487	                headers={"WWW-Authenticate": "Bearer"},
+   488	            )
+   489	
+   490	    # Store tenant context in request state or handle via DB session context
+   491	    if tenant_id:
+   492	        try:
+   493	            # PostgreSQL uses session-scoped RLS state; SQLite stores the same
+   494	            # tenant context in session.info so local/dev parity is preserved.
+   495	            TenantContext.set_tenant_context(db, UUID(tenant_id))
+   496	            # #2461: also seed the RLS contextvar so the Engine begin-hook
+   497	            # re-applies app.tenant_id on every transaction (the legacy
+   498	            # session-scoped GUC above survives commits, the hook makes the
+   499	            # transaction-scoped layer idempotent with it). Async dependency
+   500	            # — the set is visible downstream.
+   501	            set_rls_tenant_id(tenant_id)
+   502	            # Verify membership exists for this tenant
+   503	            membership = db.execute(
+   504	                select(MembershipModel).where(
+   505	                    MembershipModel.user_id == UUID(user_id), MembershipModel.tenant_id == UUID(tenant_id)
+   506	                )
+   507	            ).scalar_one_or_none()
+   508	
+   509	            if not membership:
+   510	                logger.warning("invalid_tenant_context", user_id=user_id, tenant_id=tenant_id)
+   511	                raise credentials_exception
+   512	
+   513	            if not membership.is_active:
+   514	                logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
+   515	                raise credentials_exception
+   516	
+   517	        except (RuntimeError, OSError, ValueError, KeyError, AttributeError) as e:
+   518	            logger.error("tenant_context_error", error=str(e))
+   519	            raise credentials_exception
+   520	
+   521	        # SECURITY (#2687 follow-up): enforce live tenant status on the opaque
+   522	        # __Host-regengine_session path. JWT paths carry a mint-time
+   523	        # tenant_status claim that the edge middleware checks, but an opaque
+   524	        # cookie is unreadable at the edge and carries no claims — without
+   525	        # this check a suspended tenant's browser session retained full
+   526	        # access. Fail closed: a status read error denies (503), it never
+   527	        # allows. Global sysadmins are exempt — suspension is a tenant-level
+   528	        # control, not an operator control, and sysadmins must retain access
+   529	        # to manage suspended tenants.
+   530	        if session_cookie_auth and not user.is_sysadmin:
+   531	            try:
+   532	                # populate_existing: always read live status from the DB —
+   533	                # an identity-map hit could serve a stale "active".
+   534	                tenant = db.get(TenantModel, UUID(tenant_id), populate_existing=True)
+   535	            except Exception as exc:
+   536	                logger.error(
+   537	                    "tenant_status_lookup_failed",
+   538	                    user_id=user_id,
+   539	                    tenant_id=tenant_id,
+   540	                    error=str(exc),
+   541	                )
+   542	                raise HTTPException(
+   543	                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+   544	                    detail="Authentication service temporarily unavailable",
+   545	                ) from exc
+   546	            tenant_status = getattr(tenant, "status", None) if tenant is not None else None
+   547	            if tenant_status not in ("active", "trial"):
+   548	                # Uniform 401 body — same as every other credential failure,
+   549	                # so responses expose no tenant-existence or status oracle.
+   550	                logger.warning(
+   551	                    "suspended_tenant_session_rejected",
+   552	                    user_id=user_id,
+   553	                    tenant_id=tenant_id,
+   554	                    tenant_status=tenant_status,
+   555	                )
+   556	                raise credentials_exception
+   557	
+   558	    return user
+   559	
+   560	
+    75	    return None
+    76	
+    77	
+    78	def _lookup_api_key_context(raw_api_key: [REDACTED] -> Optional[tuple[str, str]]:
+    79	    """Resolve a scoped API key to its tenant before route dependencies run.
+    80	
+    81	    The production monolith installs this middleware outside FastAPI route
+    82	    dependencies, so ``request.state.principal`` is not available yet for
+    83	    API-key-authenticated requests. This best-effort lookup uses the same key
+    84	    hash candidates as the auth path and only returns enabled, unexpired keys.
+    85	    """
+    86	    try:
+    87	        from shared.api_key_store import set_api_key_lookup_context
+    88	        from shared.database import SessionLocal
+    89	        from sqlalchemy import bindparam, text
+    90	
+    91	        db_session = SessionLocal()
+    92	        try:
+    93	            lookup_proof = set_api_key_lookup_context(db_session, raw_api_key)
+    94	            if lookup_proof is None:
+    95	                return None
+    96	            _key_id, key_hashes = lookup_proof
+    97	            stmt = text(
+    98	                """
+    99	                SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions
+   100	                FROM api_keys
+   101	                WHERE key_hash IN :key_hashes
+   102	                LIMIT 1
+   103	                """
+   104	            ).bindparams(bindparam("key_hashes", expanding=True))
+   105	            row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
+   106	        finally:
+   107	            db_session.close()
+   108	
+   109	        if not row:
+   110	            return None
+   111	        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
+   112	        if enabled is False:
+   113	            return None
+   114	        if expires_at and expires_at < datetime.now(timezone.utc):
+   115	            return None
+   116	        if not tenant_id:
+   117	            return None
+   118	        # Permission narrowing may retain the same raw key. Bind the current
+   119	        # authoritative authorization state so an older response cannot survive it.
+   120	        snapshot = json.dumps(
+   121	            [
+   122	                str(tenant_id),
+   123	                str(key_id),
+   124	                sorted(scopes or []),
+   125	                sorted(jurisdictions or []),
+   126	            ]
+   127	        )
+   128	        return str(tenant_id), hashlib.sha256(snapshot.encode()).hexdigest()
+   129	    except Exception:  # pragma: no cover - environment-specific fallback
+   130	        logger.debug("idempotency_api_key_context_lookup_failed")
+   131	        return None
+   132	
+   133	

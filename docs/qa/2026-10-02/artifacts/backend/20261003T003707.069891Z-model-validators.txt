@@ -1,0 +1,377 @@
+UTC: 2026-10-03T00:37:07.069891+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/app/webhook_models.py"); print("\n".join(f"{i+1}: {line}" for i,line in enumerate(p.read_text().splitlines()) if 190<=i<360)); p=Path("services/ingestion/app/csv_templates.py"); print("\n".join(f"{i+1}: {line}" for i,line in enumerate(p.read_text().splitlines()) if 900<=i<1100))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+191:             "combined/transformed into the new traceability_lot_code. Required per "
+192:             "§1.1350(a)(1) to link each new TLC to all input TLCs."
+193:         ),
+194:     )
+195: 
+196:     @field_validator("timestamp")
+197:     @classmethod
+198:     def validate_timestamp(cls, v: str) -> str:
+199:         """Ensure timestamp is parseable and within reasonable bounds."""
+200:         try:
+201:             dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+202:         except (ValueError, AttributeError):
+203:             raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
+204: 
+205:         now = datetime.now(timezone.utc)
+206:         # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.
+207:         # Events older than 90 days are accepted but flagged via _historical_warning.
+208:         # Reject events more than 24 hours in the future (clock skew)
+209:         if dt > now + timedelta(hours=24):
+210:             raise ValueError(f"Event timestamp {v} is more than 24 hours in the future.")
+211:         return v
+212: 
+213:     @field_validator("location_gln")
+214:     @classmethod
+215:     def validate_gln_format(cls, v: Optional[str]) -> Optional[str]:
+216:         """Validate GLN is 13 digits with valid GS1 check digit.
+217: 
+218:         Warning-only: logs invalid GLNs but accepts them to avoid
+219:         breaking existing imports. Use validate_gln() for strict checks.
+220:         """
+221:         if v is None or v.strip() == "":
+222:             return v
+223:         clean = re.sub(r"\D", "", v)
+224:         is_valid, error_msg = (
+225:             validate_gln(clean) if len(clean) == 13 else (False, f"GLN must be exactly 13 digits, got {len(clean)}")
+226:         )
+227:         if not is_valid:
+228:             strict = os.getenv("STRICT_GLN_VALIDATION", "true").lower() == "true"
+229:             if strict:
+230:                 raise ValueError(f"Invalid GLN: {error_msg}")
+231:             _gln_logger.warning("invalid_gln value=%s error=%s (strict mode disabled)", v, error_msg)
+232:             return clean if len(clean) == 13 else v
+233:         return clean
+234: 
+235:     @field_validator("unit_of_measure")
+236:     @classmethod
+237:     def validate_unit_of_measure(cls, v: str) -> str:
+238:         """Validate unit of measure against known FSMA 204 units.
+239: 
+240:         Warning-only: unknown units are logged but accepted so that
+241:         abbreviated or misspelled values (e.g. "bx", "ea", "lbs.")
+242:         don't crash the entire row. The CSV ingest layer normalises
+243:         common aliases before reaching this validator; this guard exists
+244:         for direct API callers.
+245:         """
+246:         normalized = v.strip().lower()
+247:         if normalized not in VALID_UNITS_OF_MEASURE:
+248:             import logging as _logging
+249: 
+250:             _logging.getLogger("uom-validation").warning(
+251:                 "unknown_unit value=%s accepted_as_is=true valid=%s",
+252:                 v,
+253:                 ",".join(sorted(VALID_UNITS_OF_MEASURE)),
+254:             )
+255:             # Accept it — KDE completeness checks will flag it to the user
+256:             return normalized
+257:         return normalized
+258: 
+259:     @model_validator(mode="after")
+260:     def require_location(self) -> "IngestEvent":
+261:         """FSMA 204 requires location description for every CTE (§1.1325–§1.1350)."""
+262:         has_gln = self.location_gln and self.location_gln.strip()
+263:         has_name = self.location_name and self.location_name.strip()
+264:         if not has_gln and not has_name:
+265:             # Also check KDEs for location fields
+266:             kde_locations = [
+267:                 "ship_from_location",
+268:                 "ship_to_location",
+269:                 "receiving_location",
+270:                 "ship_from_gln",
+271:                 "ship_to_gln",
+272:             ]
+273:             has_kde_location = any(
+274:                 self.kdes.get(k) for k in kde_locations if self.kdes.get(k) and str(self.kdes[k]).strip()
+275:             )
+276:             if not has_kde_location:
+277:                 raise ValueError(
+278:                     "FSMA 204 requires at least one location identifier per CTE. "
+279:                     "Provide location_gln, location_name, or a location KDE "
+280:                     "(ship_from_location, receiving_location, etc.)"
+281:                 )
+282:         return self
+283: 
+284: 
+285: class WebhookPayload(BaseModel):
+286:     """Webhook ingestion payload — the top-level request body."""
+287: 
+288:     source: str = Field(
+289:         ...,
+290:         description="Source system identifier (sensitech, tive, erp, manual, custom)",
+291:         min_length=1,
+292:     )
+293:     events: List[IngestEvent] = Field(
+294:         ...,
+295:         description="List of CTE events to ingest (max 500 per batch)",
+296:         min_length=1,
+297:         max_length=500,
+298:     )
+299:     tenant_id: Optional[str] = Field(None, description="Tenant identifier (auto-detected from API key if not provided)")
+300: 
+301: 
+302: class EventResult(BaseModel):
+303:     """Result for a single ingested event."""
+304: 
+305:     traceability_lot_code: str
+306:     cte_type: str
+307:     status: str  # "accepted" or "rejected"
+308:     event_id: Optional[str] = None
+309:     sha256_hash: Optional[str] = None
+310:     chain_hash: Optional[str] = None
+311:     errors: List[str] = Field(default_factory=list)
+312: 
+313: 
+314: class IngestResponse(BaseModel):
+315:     """Response from the webhook ingestion endpoint."""
+316: 
+317:     accepted: int = 0
+318:     rejected: int = 0
+319:     total: int = 0
+320:     events: List[EventResult] = Field(default_factory=list)
+321:     ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+322:     ingestion_run_id: Optional[str] = Field(
+323:         None,
+324:         description=(
+325:             "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
+326:             "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."
+327:         ),
+328:     )
+329: 
+330: 
+331: class HeaderMappingSuggestionResult(BaseModel):
+332:     """One Jev suggestion for a CSV column the parser did not recognise.
+333: 
+334:     ``applied`` is true only when deterministic code copied the column under
+335:     ``canonical_field`` for this upload (see ``shared.jev.header_mapping``);
+336:     otherwise ``blocked_reason`` says why the suggestion stayed advisory.
+337:     """
+338: 
+339:     source_header: str = Field(..., description="Column header as it appeared in the file.")
+340:     source_key: str = Field(..., description="Normalised column key the parser sees.")
+341:     canonical_field: Optional[str] = Field(None, description="Suggested canonical FSMA 204 field; null for no match.")
+342:     confidence: float = Field(..., ge=0.0, le=1.0, description="Jev confidence in the selected field.")
+343:     band: str = Field(..., description="Confidence band: auto_apply, review, or reject.")
+344:     applied: bool = Field(False, description="Whether the mapping was applied to this upload's rows.")
+345:     blocked_reason: Optional[str] = Field(None, description="Why the mapping was not applied, when it was not.")
+346: 
+347: 
+348: class HeaderMappingEngineResult(BaseModel):
+349:     """Provenance for the header-mapping suggestions on a CSV upload."""
+350: 
+351:     provider: str = Field("typesafe", description="Suggestion provider.")
+352:     status: str = Field(..., description="ok, no_unrecognized_headers, unavailable:<reason>, or error.")
+353:     model: Optional[str] = Field(None, description="Model that answered, as reported by the provider.")
+354:     request_id: Optional[str] = Field(None, description="Provider request id for the call.")
+355:     questions_version: Optional[str] = Field(None, description="Version of the question set that was asked.")
+356:     apply_enabled: bool = Field(False, description="Whether auto-apply of AUTO_APPLY-band mappings is switched on.")
+357:     auto_apply_confidence: Optional[float] = Field(None, description="Lower bound of the auto_apply band.")
+358:     review_confidence: Optional[float] = Field(None, description="Lower bound of the review band.")
+359:     artifacts_recorded: int = Field(0, description="Advisory field_mapping_suggestion artifacts queued for review.")
+360: 
+901:             # Log the detail server-side; return a generic per-row message so
+902:             # raw exception text (library internals) isn't echoed to callers.
+903:             logger.warning("csv_row_parse_failed row=%s error=%s", row_num, str(e))
+904:             parse_errors.append(f"Row {row_num}: could not be parsed (see server logs)")
+905: 
+906:     return events, parse_errors, kde_warnings
+907: 
+908: 
+909: # ---------------------------------------------------------------------------
+910: # Jev header-mapping suggestions (shared.jev.header_mapping)
+911: #
+912: # Optional: without TYPESAFE_API_KEY every helper below is a no-op and the
+913: # route behaves exactly as before. With it, unrecognised column headers are
+914: # sent to Jev once per upload, each answer is recorded as an advisory
+915: # ``field_mapping_suggestion`` agent artifact for the review queue, and only
+916: # with REGENGINE_JEV_APPLY_HEADER_MAPPINGS are AUTO_APPLY-band answers copied
+917: # onto the rows. No failure in this block can fail the upload.
+918: # ---------------------------------------------------------------------------
+919: 
+920: 
+921: def _read_header_row(reader: csv.DictReader) -> tuple[list[str], Optional[str]]:
+922:     """The header row as the parser reads it, and why it cannot be a real one (``None`` if it can).
+923: 
+924:     An unterminated quote in the header row makes the reader take everything
+925:     up to the next closing quote, often the rest of the file, as one header.
+926:     Such a row spans more than one physical line; ``malformed_header_reason``
+927:     also refuses line breaks and over-long headers. The reason never quotes
+928:     the header, which may hold row data.
+929:     """
+930:     headers = [header or "" for header in (reader.fieldnames or [])]
+931:     if reader.line_num > 1:
+932:         return headers, f"the header row spans {reader.line_num} lines"
+933:     return headers, malformed_header_reason(headers)
+934: 
+935: 
+936: def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]], Optional[str]]:
+937:     """The header row, PII-redacted sample values when enabled, and why the header row is malformed.
+938: 
+939:     When the header row is malformed no samples are collected: the caller
+940:     must send nothing (``_suggest_header_mappings_for_upload``).
+941:     """
+942:     reader = csv.DictReader(io.StringIO(text))
+943:     headers, malformed = _read_header_row(reader)
+944:     if malformed or sample_limit <= 0 or not headers:
+945:         return headers, {}, malformed
+946:     unknown = unrecognized_headers(headers, _RECOGNIZED_COLUMNS)
+947:     if not unknown:
+948:         return headers, {}, None
+949:     data_rows = (row for row in reader if not str(next(iter(row.values()), "") or "").startswith("#"))
+950:     return headers, collect_sample_values(data_rows, unknown, sample_limit), None
+951: 
+952: 
+953: def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
+954:     """The first header ``_detect_row_cte_type`` reads a row's CTE from, or ``None``.
+955: 
+956:     Headers are normalised with ``normalize_csv_header``, exactly as
+957:     ``parse_csv_rows`` normalises row keys before ``_detect_row_cte_type``
+958:     looks up ``_CTE_TYPE_COLUMNS``, so ``Event Type`` or ``CTE`` match here
+959:     precisely when the parser would read them.
+960:     """
+961:     for header in headers:
+962:         if normalize_csv_header(header) in _CTE_TYPE_COLUMNS:
+963:             return (header or "").strip()
+964:     return None
+965: 
+966: 
+967: def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+968:     """``(file_cte_type to send, reason a declared one was withheld)``.
+969: 
+970:     Jev is told "every row in the file records <cte_type>" only when no row
+971:     can contradict it. The declared ``cte_type`` is only the parser's
+972:     fallback: ``_detect_row_cte_type`` reads a row's own CTE first, and that
+973:     can come from two places.
+974: 
+975:     * A per-row CTE column the parser reads (``_CTE_TYPE_COLUMNS`` after
+976:       ``normalize_csv_header``): withheld on the header alone.
+977:     * An unrecognised column that Jev may map onto ``cte_type`` (``Activity``,
+978:       ``Event Kind``, ...): withheld when any of its values, normalised the
+979:       way ``_detect_row_cte_type`` normalises them, resolves through
+980:       ``_CTE_TYPE_ALIASES`` to a different CTE.
+981: 
+982:     It reads exactly the rows ``parse_csv_rows`` reads (the first
+983:     :data:`MAX_CSV_ROWS` the same ``csv.DictReader`` yields) and skips comment
+984:     rows exactly as it does; a value in a row the parser discards cannot
+985:     become a row's CTE. Recognised columns are never sent to Jev, so they
+986:     cannot be mapped and are not scanned. Headers are normalised once per
+987:     file, not per cell, and the scan stops at the first contradiction. It
+988:     errs on withholding, which only costs Jev a hint: a single-letter alias
+989:     (``S``, ``R``, ``H``, ...) in any unrecognised column counts, and so does
+990:     a file whose rows cannot be read.
+991: 
+992:     Synchronous CPU work: the route runs it in the threadpool
+993:     (``_read_upload_for_jev``).
+994:     """
+995:     if not cte_type:
+996:         return None, None
+997:     reader = csv.DictReader(io.StringIO(text))
+998:     try:
+999:         headers, malformed = _read_header_row(reader)
+1000:         if malformed:
+1001:             # Never scan, and never name, headers that may be row data.
+1002:             return None, "the header row is malformed"
+1003:         column = _per_row_cte_column(headers)
+1004:         if column is not None:
+1005:             return None, f"file has a per-row CTE column: {column}"
+1006:         # The keys every DictReader row carries, normalised once.
+1007:         raw_keys = list(dict.fromkeys(reader.fieldnames or []))
+1008:         normalized = {key: normalize_csv_header(key) for key in raw_keys}
+1009:         # Every raw column whose normalised form is unrecognised, including
+1010:         # both of two headers that normalise alike: the parser keeps only the
+1011:         # later one, so scanning both only errs on withholding.
+1012:         scan_keys = [key for key in raw_keys if normalized[key] and normalized[key] not in _RECOGNIZED_COLUMNS]
+1013:         if not scan_keys:
+1014:             return cte_type, None
+1015:         # parse_csv_rows tests the first value of {normalize(key): value}: the
+1016:         # first key's normalised form, holding the value of the last raw key
+1017:         # that normalises the same way.
+1018:         comment_key = [key for key in raw_keys if normalized[key] == normalized[raw_keys[0]]][-1]
+1019:         for raw_row in itertools.islice(reader, MAX_CSV_ROWS):
+1020:             first = raw_row.get(comment_key)
+1021:             if isinstance(first, str) and first.strip().startswith("#"):
+1022:                 continue
+1023:             for key in scan_keys:
+1024:                 value = raw_row.get(key)
+1025:                 if not value or not isinstance(value, str):
+1026:                     continue
+1027:                 row_cte = _CTE_TYPE_ALIASES.get(value.strip().lower().replace(" ", "_"))
+1028:                 if row_cte and row_cte != cte_type:
+1029:                     return None, f"column {key.strip()} holds per-row CTE values"
+1030:     except csv.Error:
+1031:         return None, "rows could not be read to rule out per-row CTE values"
+1032:     return cte_type, None
+1033: 
+1034: 
+1035: class _UploadRead(NamedTuple):
+1036:     """What the Jev request needs from the upload (see ``_read_upload_for_jev``)."""
+1037: 
+1038:     headers: list[str]
+1039:     samples: dict[str, list[str]]
+1040:     malformed: Optional[str]
+1041:     file_cte_type: Optional[str]
+1042:     file_cte_type_dropped: Optional[str]
+1043: 
+1044: 
+1045: def _read_upload_for_jev(text: str, sample_limit: int, cte_type: Optional[str]) -> _UploadRead:
+1046:     """Read the header row, sample values and the file-CTE decision in one synchronous call.
+1047: 
+1048:     All the CPU work on the upload's text (the header row, up to 50 rows of
+1049:     samples, and up to ``MAX_CSV_ROWS`` rows of CTE scan) happens here, so the
+1050:     route can run it in the threadpool instead of on the event loop. A
+1051:     malformed header row stops before anything else reads the file.
+1052:     """
+1053:     headers, samples, malformed = _csv_headers_and_samples(text, sample_limit)
+1054:     if malformed or not headers:
+1055:         return _UploadRead(headers, samples, malformed, None, None)
+1056:     file_cte_type, dropped = _file_cte_type_for_jev(text, cte_type)
+1057:     return _UploadRead(headers, samples, None, file_cte_type, dropped)
+1058: 
+1059: 
+1060: async def _suggest_header_mappings_for_upload(
+1061:     text: str, *, decider: Optional[JevDecider] = None, cte_type: Optional[str] = None
+1062: ) -> HeaderMappingResult:
+1063:     """Ask Jev about the upload's unrecognised headers, off the event loop. Never raises.
+1064: 
+1065:     ``decider`` defaults to the process-wide one (what the route uses).
+1066:     ``scripts/jev_header_preview.py`` passes its own so operators can preview
+1067:     this exact path against a local file without running the service.
+1068:     ``cte_type`` is the canonical CTE declared for the whole file (the
+1069:     route's normalised ``cte_type`` form field), or ``None``. Jev sees it as
+1070:     ``file_cte_type`` only when no row can contradict it
+1071:     (``_file_cte_type_for_jev``); otherwise the result's
+1072:     ``file_cte_type_dropped`` says why it was withheld.
+1073:     """
+1074:     decider = decider if decider is not None else get_jev_decider()
+1075:     if not decider.enabled:
+1076:         return HeaderMappingResult(status="disabled", thresholds=decider.settings.thresholds)
+1077:     try:
+1078:         # Off the event loop: reading a 5 MiB upload is CPU work.
+1079:         upload = await run_in_threadpool(_read_upload_for_jev, text, decider.settings.header_sample_values, cte_type)
+1080:         if upload.malformed:
+1081:             # Checked before anything else reads the file for Jev: the "header"
+1082:             # may be whole rows, so nothing about it may leave the process.
+1083:             logger.warning("csv_header_mapping_malformed_header reason=%s", upload.malformed)
+1084:             return HeaderMappingResult(
+1085:                 status=MALFORMED_HEADER,
+1086:                 thresholds=decider.settings.thresholds,
+1087:                 apply_enabled=decider.settings.apply_header_mappings,
+1088:             )
+1089:         if not upload.headers:
+1090:             return HeaderMappingResult(status="no_headers", thresholds=decider.settings.thresholds)
+1091:         result = await run_in_threadpool(
+1092:             suggest_header_mappings,
+1093:             upload.headers,
+1094:             recognized=_RECOGNIZED_COLUMNS,
+1095:             samples=upload.samples,
+1096:             decider=decider,
+1097:             precedence=_COLUMN_PRECEDENCE,
+1098:             cte_type=upload.file_cte_type,
+1099:         )
+1100:         if upload.file_cte_type_dropped:

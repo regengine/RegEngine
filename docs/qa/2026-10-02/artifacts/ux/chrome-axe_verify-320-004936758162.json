@@ -1,0 +1,916 @@
+{
+  "errors": [],
+  "csp": [
+    {
+      "directive": "connect-src",
+      "uri": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    }
+  ],
+  "requests": [],
+  "startedAt": "2026-10-03T00:49:33.176Z",
+  "lcp": 968,
+  "cls": 0,
+  "url": "/verify",
+  "width": 320,
+  "height": 844,
+  "documentWidth": 320,
+  "title": "RegEngine \u2014 Food Traceability That Protects Your Brand",
+  "cameraAllowed": false,
+  "headings": [
+    {
+      "level": "H1",
+      "text": "Verify, Don't Trust"
+    },
+    {
+      "level": "H2",
+      "text": "Verify an export bundle"
+    },
+    {
+      "level": "H3",
+      "text": "Deterministic File Hashing"
+    },
+    {
+      "level": "H3",
+      "text": "Open Source"
+    },
+    {
+      "level": "H3",
+      "text": "Offline Capable"
+    },
+    {
+      "level": "H2",
+      "text": "What It Looks Like"
+    },
+    {
+      "level": "H2",
+      "text": "Get Started in 30 Seconds"
+    },
+    {
+      "level": "H2",
+      "text": "Usage Examples"
+    },
+    {
+      "level": "H2",
+      "text": "How the Bundle Check Works"
+    },
+    {
+      "level": "H2",
+      "text": "Manifest Fields (Hash Inputs)"
+    },
+    {
+      "level": "H2",
+      "text": "Math Trust > Process Trust"
+    },
+    {
+      "level": "H2",
+      "text": "Product"
+    },
+    {
+      "level": "H2",
+      "text": "Free Tools"
+    },
+    {
+      "level": "H2",
+      "text": "Developers"
+    },
+    {
+      "level": "H2",
+      "text": "Company"
+    },
+    {
+      "level": "H2",
+      "text": "We use cookies"
+    }
+  ],
+  "inputs": [
+    {
+      "tag": "INPUT",
+      "id": "verify-bundle-file",
+      "type": "file",
+      "required": false,
+      "labels": [
+        "Drop your export bundle hereor click to browse \u2014 accepts .zip or .json"
+      ]
+    }
+  ],
+  "buttons": [
+    {
+      "text": "",
+      "name": "Open navigation menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Close menu",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Switch to dark mode",
+      "disabled": false
+    },
+    {
+      "text": "Verify bundle",
+      "name": null,
+      "disabled": true
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Copy to clipboard",
+      "disabled": false
+    },
+    {
+      "text": "Cookie Preferences",
+      "name": "Manage cookie preferences",
+      "disabled": false
+    },
+    {
+      "text": "",
+      "name": "Open accessibility settings",
+      "disabled": false
+    },
+    {
+      "text": "AcceptAccept analytics",
+      "name": null,
+      "disabled": false
+    },
+    {
+      "text": "EssentialEssential only",
+      "name": null,
+      "disabled": false
+    }
+  ],
+  "navigation": [
+    {
+      "responseStart": 12.799999997019768,
+      "domContentLoaded": 83.09999999403954,
+      "duration": 136.19999999552965
+    }
+  ],
+  "paint": [
+    {
+      "name": "first-paint",
+      "startTime": 968
+    },
+    {
+      "name": "first-contentful-paint",
+      "startTime": 968
+    }
+  ],
+  "resources": [
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/33z6z3yqdhczo.css",
+      "duration": 3.8000000044703484
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2opt17kb2-y1b.js",
+      "duration": 3.7000000029802322
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0if-vqkhyn-zc.js",
+      "duration": 14.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2jje5iww_qd69.js",
+      "duration": 15.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/turbopack-0f7399f4d3jo7.js",
+      "duration": 34.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0vpy0j91tkt0g.js",
+      "duration": 34.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1rp06u4aestqa.js",
+      "duration": 35.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1bp3h27_--af5.js",
+      "duration": 35.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3ayr3xiw5ibws.js",
+      "duration": 35.600000001490116
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vgpv7vwitdbl.js",
+      "duration": 34.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1vwbp_e08hcyw.js",
+      "duration": 37
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/2t9axac3ndvlm.js",
+      "duration": 37.20000000298023
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/0495weyrij_jb.js",
+      "duration": 37.5
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3nu692rt2eook.js",
+      "duration": 38.899999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/01k1n-h64sgdy.js",
+      "duration": 39.29999999701977
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/instrument.js",
+      "duration": 2
+    },
+    {
+      "name": "http://127.0.0.1:3105/__qa/axe.js",
+      "duration": 2.399999998509884
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/1jd45o61lrffn.js",
+      "duration": 39.29999999701977
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3c62jcaf4y1oz.js",
+      "duration": 41.69999999552965
+    },
+    {
+      "name": "http://127.0.0.1:3105/_next/static/chunks/3mmrg7---us36.js",
+      "duration": 41.79999999701977
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    },
+    {
+      "name": "https://fonts.googleapis.com/css2",
+      "duration": 0
+    }
+  ],
+  "axe": {
+    "version": "4.13.0",
+    "violations": [
+      {
+        "id": "scrollable-region-focusable",
+        "impact": "serious",
+        "tags": [
+          "cat.keyboard",
+          "wcag2a",
+          "wcag211",
+          "wcag213",
+          "TTv5",
+          "TT4.a",
+          "EN-301-549",
+          "EN-9.2.1.1",
+          "EN-9.2.1.3",
+          "RGAAv4",
+          "RGAA-7.3.2"
+        ],
+        "description": "Ensure elements that have scrollable content are accessible by keyboard in Safari",
+        "help": "Scrollable region must have keyboard access",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/scrollable-region-focusable?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<pre class=\"m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary\">",
+            "target": [
+              ".max-h-\\[480px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          },
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/sdk/verify_chain.py</code>",
+            "target": [
+              ".p-5.items-start.gap-4:nth-child(1) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          },
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">curl -O https://regengine.co/proof/audit-bundle.zip</code>",
+            "target": [
+              ".p-5.items-start.gap-4:nth-child(2) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          },
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<code class=\"min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary\">python verify_chain.py audit-bundle.zip</code>",
+            "target": [
+              ".p-5.items-start.gap-4:nth-child(3) > .flex-1.min-w-0 > .py-1.pl-3.pr-1 > .overflow-x-auto"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          },
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<pre class=\"m-0 overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary\">",
+            "target": [
+              ".sm\\:pb-\\[60px\\].pb-10:nth-child(6) > .overflow-hidden.border-re-border.rounded-lg > pre"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          },
+          {
+            "any": [
+              {
+                "id": "focusable-content",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should have focusable content"
+              },
+              {
+                "id": "focusable-element",
+                "data": null,
+                "relatedNodes": [],
+                "impact": "serious",
+                "message": "Element should be focusable"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<div class=\"relative w-full overflow-x-auto\">",
+            "target": [
+              ".overflow-x-auto.relative.w-full"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element should have focusable content\n  Element should be focusable"
+          }
+        ]
+      }
+    ],
+    "incomplete": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=axeAPI",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Evidence file inside the ZIP</td>",
+            "target": [
+              "tr:nth-child(1) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">fsma-204-sample.csv</td>",
+            "target": [
+              "tr:nth-child(1) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared SHA-256 digest for that file</td>",
+            "target": [
+              "tr:nth-child(2) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">ab250df1f9ed...</td>",
+            "target": [
+              "tr:nth-child(2) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared byte length</td>",
+            "target": [
+              "tr:nth-child(3) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">1524</td>",
+            "target": [
+              "tr:nth-child(3) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Ordered file hashes used as tree leaves</td>",
+            "target": [
+              "tr:nth-child(4) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">ab250df1f9ed...</td>",
+            "target": [
+              "tr:nth-child(4) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Declared root of the evidence tree</td>",
+            "target": [
+              "tr:nth-child(5) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">a320428f4057...</td>",
+            "target": [
+              "tr:nth-child(5) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5\">Code revision that produced the sample bundle</td>",
+            "target": [
+              "tr:nth-child(6) > td:nth-child(2)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "contrastRatio": 0,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": "elmPartiallyObscured",
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border border-re-border bg-re-surface-card\">",
+                    "target": [
+                      ".sm\\:pb-\\[60px\\].pb-10:nth-child(8) > .border-re-border.rounded-lg.bg-re-surface-card"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element's background color could not be determined because it's partially obscured by another element"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<td class=\"px-3 align-middle text-re-text-secondary first:pl-4 last:pr-4 [&amp;:first-child]:font-medium [&amp;:first-child]:text-re-text-primary [&amp;:has([role=checkbox])]:pr-0 py-2.5 font-mono text-[0.8125rem]\">64542033f908...</td>",
+            "target": [
+              "tr:nth-child(6) > td:nth-child(3)"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element's background color could not be determined because it's partially obscured by another element"
+          }
+        ]
+      }
+    ],
+    "passes": [
+      "aria-allowed-attr",
+      "aria-allowed-role",
+      "aria-conditional-attr",
+      "aria-deprecated-role",
+      "aria-dialog-name",
+      "aria-hidden-body",
+      "aria-hidden-focus",
+      "aria-prohibited-attr",
+      "aria-required-attr",
+      "aria-roles",
+      "aria-valid-attr-value",
+      "aria-valid-attr",
+      "avoid-inline-spacing",
+      "button-name",
+      "bypass",
+      "color-contrast",
+      "document-title",
+      "duplicate-id-aria",
+      "empty-heading",
+      "empty-table-header",
+      "form-field-multiple-labels",
+      "heading-order",
+      "html-has-lang",
+      "html-lang-valid",
+      "label-title-only",
+      "label",
+      "landmark-contentinfo-is-top-level",
+      "landmark-main-is-top-level",
+      "landmark-no-duplicate-contentinfo",
+      "landmark-no-duplicate-main",
+      "landmark-one-main",
+      "landmark-unique",
+      "link-in-text-block",
+      "link-name",
+      "list",
+      "meta-viewport-large",
+      "meta-viewport",
+      "nested-interactive",
+      "page-has-heading-one",
+      "region",
+      "scrollable-region-focusable",
+      "skip-link",
+      "tabindex",
+      "table-duplicate-name",
+      "target-size",
+      "td-headers-attr",
+      "th-has-data-cells"
+    ]
+  }
+}

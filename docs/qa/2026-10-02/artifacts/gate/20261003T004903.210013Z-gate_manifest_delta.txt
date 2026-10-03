@@ -1,0 +1,107 @@
+UTC: 2026-10-03T00:49:03.210013+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 7 'by-request|short test summary|test_committed|Unexpectedly|AssertionError' docs/qa/2026-10-02/artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+6-Timeout: False
+7-
+8-..................................F........F.............F               [100%]
+9-=================================== FAILURES ===================================
+10-_______ test_checked_in_manifest_matches_live_route_and_dependency_graph _______
+11-tests/security/test_route_security_manifest.py:63: in test_checked_in_manifest_matches_live_route_and_dependency_graph
+12-    assert checked_in == manifest
+13:E   AssertionError: assert {'always_moun...n', ...], ...} == {'always_moun...n', ...], ...}
+14-E     
+15-E     Omitting 5 identical items, use -vv to show
+16-E     Differing items:
+17-E     {'summary': {'disabled_operation_count': 180, 'disabled_unique_path_count': 163, 'enabled_by_classification': {'global-sysadmin': 15, 'public': 29, 'tenant-scoped': 199, 'workload-only': 7}, 'enabled_operation_count': 250}} != {'summary': {'disabled_operation_count': 179, 'disabled_unique_path_count': 162, 'enabled_by_classification': {'global-sysadmin': 15, 'public': 29, 'tenant-scoped': 199, 'workload-only': 7}, 'enabled_operation_count': 250}}
+18-E     {'disabled_operations': [{'inventory_source': 'development-route-table', 'method': 'POST', 'operation': 'agent_org:POS...-table', 'method': 'GET', 'operation': 'audit_log:GET:/api/v1/audit-log/{tenant_id}', 'owner': 'audit_log', ...}, ...]} != {'disabled_operations': [{'inventory_source': 'development-route-table', 'method': 'POST', 'operation': 'agent_org:POS...-table', 'method': 'GET', 'operation': 'audit_log:GET:/api/v1/audit-log/{tenant_id}', 'owner': 'audit_log', ...}, ...]}
+19-E     
+20-E     Full diff:
+--
+938-E                   'path': '/api/v1/products/{tenant_id}/{product_id}',
+939-E                   'probe_method': 'PUT',
+940-E                   'probe_path': '/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000',
+941-E     +         },
+942-E     +         {
+943-E     +             'inventory_source': 'development-route-table',
+944-E     +             'method': 'GET',
+945:E     +             'operation': 'graph:GET:/api/v1/provisions/by-request',
+946-E     +             'owner': 'graph',
+947:E     +             'path': '/api/v1/provisions/by-request',
+948-E     +             'probe_method': 'GET',
+949:E     +             'probe_path': '/api/v1/provisions/by-request',
+950-E               },
+951-E               {
+952-E                   'inventory_source': 'development-route-table',
+953-E                   'method': 'POST',
+954-E                   'operation': 'qr_decoder:POST:/api/v1/qr/decode',
+955-E                   'owner': 'qr_decoder',
+956-E                   'path': '/api/v1/qr/decode',
+--
+4894-E       }
+4895------------------------------- Captured log setup ------------------------------
+4896-ERROR    auth:auth.py:61 {"issue": "AUTH_SECRET_KEY is a known default \u2014 change it before production", "event": "auth_config_validation_failed", "trace_sampled": false, "logger": "auth", "level": "error", "timestamp": "2026-10-03T00:43:00.134170Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+4897-WARNING  tool_verification:tool_verification_routes.py:65 {"message": "TOOL_ACCESS_SECRET not set \u2014 using ephemeral dev key. Tool-access cookies will NOT survive process restarts.", "event": "tool_access_secret_ephemeral", "trace_sampled": false, "logger": "tool_verification", "level": "warning", "timestamp": "2026-10-03T00:43:03.442777Z", "service": "regengine", "tenant_id": "unknown", "request_id": "unknown"}
+4898-_______________ test_every_omitted_router_path_returns_exact_404 _______________
+4899-tests/security/test_route_security_manifest.py:258: in test_every_omitted_router_path_returns_exact_404
+4900-    assert probe_omitted_paths_exact_404(production_route_app, manifest) == 180
+4901:E   AssertionError: assert 179 == 180
+4902-E    +  where 179 = probe_omitted_paths_exact_404(<fastapi.applications.FastAPI object at 0x11d254990>, {'always_mounted_owners': ['core_ingest', 'features', 'health', 'metrics', 'root', 'scheduler', ...], 'disabled_operat...uter_groups': ['admin', 'audit_export_log', 'auditor', 'billing', 'canonical_records', 'chain_verification', ...], ...})
+4903-____________ test_disabling_readiness_removes_compatibility_routes _____________
+4904-tests/security/test_route_security_manifest.py:491: in test_disabling_readiness_removes_compatibility_routes
+4905-    result = subprocess.run(
+4906-../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+4907-    with Popen(*popenargs, **kwargs) as process:
+4908-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+--
+4919-Name                                      Stmts   Miss  Cover
+4920--------------------------------------------------------------
+4921-services/admin/app/auth/session_auth.py      58     12    79%
+4922-services/admin/app/privileged_auth.py       312     57    82%
+4923--------------------------------------------------------------
+4924-TOTAL                                       370     69    81%
+4925-Coverage JSON written to file docs/qa/2026-10-02/artifacts/backend/coverage-admin-auth.json
+4926:=========================== short test summary info ============================
+4927:FAILED tests/security/test_route_security_manifest.py::test_checked_in_manifest_matches_live_route_and_dependency_graph - AssertionError: assert {'always_moun...n', ...], ...} == {'always_moun...n', ...], ...}
+4928-  
+4929-  Omitting 5 identical items, use -vv to show
+4930-  Differing items:
+4931-  {'summary': {'disabled_operation_count': 180, 'disabled_unique_path_count': 163, 'enabled_by_classification': {'global-sysadmin': 15, 'public': 29, 'tenant-scoped': 199, 'workload-only': 7}, 'enabled_operation_count': 250}} != {'summary': {'disabled_operation_count': 179, 'disabled_unique_path_count': 162, 'enabled_by_classification': {'global-sysadmin': 15, 'public': 29, 'tenant-scoped': 199, 'workload-only': 7}, 'enabled_operation_count': 250}}
+4932-  {'disabled_operations': [{'inventory_source': 'development-route-table', 'method': 'POST', 'operation': 'agent_org:POS...-table', 'method': 'GET', 'operation': 'audit_log:GET:/api/v1/audit-log/{tenant_id}', 'owner': 'audit_log', ...}, ...]} != {'disabled_operations': [{'inventory_source': 'development-route-table', 'method': 'POST', 'operation': 'agent_org:POS...-table', 'method': 'GET', 'operation': 'audit_log:GET:/api/v1/audit-log/{tenant_id}', 'owner': 'audit_log', ...}, ...]}
+4933-  
+4934-  Full diff:
+--
+5852-                'path': '/api/v1/products/{tenant_id}/{product_id}',
+5853-                'probe_method': 'PUT',
+5854-                'probe_path': '/api/v1/products/00000000-0000-4000-8000-000000000000/00000000-0000-4000-8000-000000000000',
+5855-  +         },
+5856-  +         {
+5857-  +             'inventory_source': 'development-route-table',
+5858-  +             'method': 'GET',
+5859:  +             'operation': 'graph:GET:/api/v1/provisions/by-request',
+5860-  +             'owner': 'graph',
+5861:  +             'path': '/api/v1/provisions/by-request',
+5862-  +             'probe_method': 'GET',
+5863:  +             'probe_path': '/api/v1/provisions/by-request',
+5864-            },
+5865-            {
+5866-                'inventory_source': 'development-route-table',
+5867-                'method': 'POST',
+5868-                'operation': 'qr_decoder:POST:/api/v1/qr/decode',
+5869-                'owner': 'qr_decoder',
+5870-                'path': '/api/v1/qr/decode',
+--
+9802-                'public': 29,
+9803-                'tenant-scoped': 199,
+9804-                'workload-only': 7,
+9805-            },
+9806-            'enabled_operation_count': 250,
+9807-        },
+9808-    }
+9809:FAILED tests/security/test_route_security_manifest.py::test_every_omitted_router_path_returns_exact_404 - AssertionError: assert 179 == 180
+9810- +  where 179 = probe_omitted_paths_exact_404(<fastapi.applications.FastAPI object at 0x11d254990>, {'always_mounted_owners': ['core_ingest', 'features', 'health', 'metrics', 'root', 'scheduler', ...], 'disabled_operat...uter_groups': ['admin', 'audit_export_log', 'auditor', 'billing', 'canonical_records', 'chain_verification', ...], ...})
+9811-FAILED tests/security/test_route_security_manifest.py::test_disabling_readiness_removes_compatibility_routes - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+9812-3 failed, 55 passed in 6.13s

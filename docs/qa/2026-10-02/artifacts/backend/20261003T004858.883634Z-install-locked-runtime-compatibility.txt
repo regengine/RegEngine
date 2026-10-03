@@ -1,0 +1,22 @@
+UTC: 2026-10-03T00:48:58.883634+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: uv --cache-dir /private/tmp/regengine-qa-uv-cache pip install --python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python --target /private/tmp/regengine-qa-locked-deps --no-deps fastapi==0.141.1 starlette==1.6.0 pydantic==2.13.5 pydantic-core==2.46.5 typing-extensions==4.16.0 typing-inspection==0.4.4 annotated-types==0.8.0 annotated-doc==0.0.5 anyio==4.14.2
+Exit: 0
+Duration: 0.56s
+Timeout: False
+
+Using CPython 3.11.15 interpreter at: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python
+Resolved 9 packages in 223ms
+Downloading pydantic-core (1.8MiB)
+ Downloaded pydantic-core
+Prepared 9 packages in 247ms
+Installed 9 packages in 38ms
+ + annotated-doc==0.0.5
+ + annotated-types==0.8.0
+ + anyio==4.14.2
+ + fastapi==0.141.1
+ + pydantic==2.13.5
+ + pydantic-core==2.46.5
+ + starlette==1.6.0
+ + typing-extensions==4.16.0
+ + typing-inspection==0.4.4

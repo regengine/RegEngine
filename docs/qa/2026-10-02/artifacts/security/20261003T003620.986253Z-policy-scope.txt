@@ -1,0 +1,1346 @@
+UTC: 2026-10-03T00:36:20.986253+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; files=["server/route_security_policy.py","server/router_policy.py"]; [(print("FILE",p),print("\n".join(f"{n}: {s}" for n,s in enumerate(Path(p).read_text().splitlines(),1)))) for p in files]; d=json.loads(Path("docs/security/route-security-manifest.json").read_text()); print("MANIFEST",d.get("summary")); print("\n".join(str(x) for x in d.get("enabled_operations",[])))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE server/route_security_policy.py
+1: """Operation-level security classification and executable route adapters."""
+2: 
+3: from __future__ import annotations
+4: 
+5: import ast
+6: import inspect
+7: import textwrap
+8: from collections.abc import Callable
+9: from dataclasses import dataclass
+10: from pathlib import Path
+11: from typing import Any, Literal
+12: 
+13: from fastapi.dependencies.models import Dependant
+14: from fastapi.routing import APIRoute
+15: 
+16: from server.router_policy import PRODUCTION_ENABLED_ROUTERS, VALID_ROUTER_NAMES
+17: 
+18: Classification = Literal["public", "tenant-scoped", "global-sysadmin", "workload-only"]
+19: 
+20: ALWAYS_MOUNTED_OWNERS = frozenset(
+21:     {"core_ingest", "features", "health", "metrics", "root", "scheduler", "status", "webhook"}
+22: )
+23: PRODUCTION_OWNERS = PRODUCTION_ENABLED_ROUTERS | ALWAYS_MOUNTED_OWNERS
+24: OMITTED_ROUTER_OWNERS = VALID_ROUTER_NAMES - PRODUCTION_ENABLED_ROUTERS
+25: ALL_ROUTE_OWNERS = VALID_ROUTER_NAMES | ALWAYS_MOUNTED_OWNERS
+26: 
+27: # Public operations are approved one at a time. Owner is part of the key so a
+28: # move between subsystems is security-review-visible too.
+29: PUBLIC_OPERATIONS = frozenset(
+30:     {
+31:         ("health", "GET", "/api/health"),
+32:         ("health", "GET", "/health"),
+33:         ("health", "GET", "/healthz"),
+34:         ("health", "GET", "/readiness"),
+35:         ("root", "GET", "/"),
+36:         ("proof_verify", "POST", "/api/v1/proof/verify"),
+37:         ("proof_recall", "POST", "/api/v1/proof/recall-drill"),
+38:         ("csv", "GET", "/api/v1/templates"),
+39:         ("csv", "GET", "/api/v1/templates/{cte_type}"),
+40:         ("portal", "GET", "/api/v1/portal/{portal_id}"),
+41:         ("portal", "POST", "/api/v1/portal/{portal_id}/preflight"),
+42:         ("portal", "POST", "/api/v1/portal/{portal_id}/submit"),
+43:         ("billing", "GET", "/api/v1/billing/plans"),
+44:         ("billing", "POST", "/api/v1/billing/checkout"),
+45:         ("billing", "GET", "/billing/plans"),
+46:         ("onboarding", "GET", "/api/v1/onboarding/steps"),
+47:         ("readiness", "GET", "/api/v1/fsma/export-jobs"),
+48:         ("readiness", "GET", "/api/v1/fsma/mappings"),
+49:         ("admin", "GET", "/ready"),
+50:         ("admin", "POST", "/auth/challenges"),
+51:         ("admin", "POST", "/auth/challenges/{challenge_id}/verify"),
+52:         ("admin", "POST", "/auth/refresh"),
+53:         ("admin", "POST", "/auth/webauthn/login/generate-options"),
+54:         ("admin", "POST", "/auth/webauthn/login/verify"),
+55:         ("admin", "POST", "/v1/auth/accept-invite"),
+56:         ("admin", "POST", "/api/v1/tools/verify-email"),
+57:         ("admin", "POST", "/api/v1/tools/confirm-code"),
+58:         ("admin", "POST", "/api/v1/tools/lead-erasure/request"),
+59:         ("admin", "POST", "/api/v1/tools/lead-erasure/confirm"),
+60:     }
+61: )
+62: 
+63: OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS = frozenset(
+64:     {
+65:         ("billing", "POST", "/api/v1/billing/checkout"),
+66:     }
+67: )
+68: 
+69: # These authenticate inside the endpoint rather than FastAPI's dependency
+70: # graph. Their adapter validates the declared header and handler delegation.
+71: STRIPE_WEBHOOK_OPERATIONS = frozenset(
+72:     {
+73:         ("billing", "POST", "/api/v1/billing/webhooks"),
+74:         ("billing", "POST", "/api/v1/billing/webhook/stripe"),
+75:     }
+76: )
+77: 
+78: # Tenant-bound actors whose reviewed operation has an identity-global storage
+79: # effect. These routes remain tenant-scoped at the HTTP authority boundary,
+80: # while their dedicated adapters prove that the broader transaction target is
+81: # derived only from the authenticated identity.
+82: IDENTITY_GLOBAL_SELF_SERVICE_OPERATIONS = frozenset(
+83:     {
+84:         ("admin", "POST", "/v1/account/erasure"),
+85:     }
+86: )
+87: 
+88: 
+89: @dataclass(frozen=True)
+90: class TenantApiKeyRoutePolicy:
+91:     """Reviewed storage/test contract for tenant API-key operations."""
+92: 
+93:     storage_boundary: str
+94:     test_adapter: str
+95: 
+96: 
+97: # Tenant API-key routes do not receive a generic fallback. Each production
+98: # owner must select an explicit storage boundary and executable adapter here;
+99: # promoting an optional owner therefore fails manifest generation until its
+100: # storage model and test adapter have been reviewed. Exact operation policies
+101: # below override an owner contract when a router spans storage systems.
+102: TENANT_API_KEY_OWNER_POLICIES: dict[str, TenantApiKeyRoutePolicy] = {
+103:     "audit_export_log": TenantApiKeyRoutePolicy(
+104:         "postgres-rls:credential-bound-tenant",
+105:         "tenant_api_key_postgres_rls",
+106:     ),
+107:     "auditor": TenantApiKeyRoutePolicy(
+108:         "postgres-rls:credential-bound-tenant",
+109:         "tenant_api_key_postgres_rls",
+110:     ),
+111:     "billing": TenantApiKeyRoutePolicy(
+112:         "stripe+postgres-rls:credential-bound-tenant",
+113:         "tenant_api_key_postgres_rls",
+114:     ),
+115:     "canonical_records": TenantApiKeyRoutePolicy(
+116:         "postgres-rls:credential-bound-tenant",
+117:         "tenant_api_key_postgres_rls",
+118:     ),
+119:     "chain_verification": TenantApiKeyRoutePolicy(
+120:         "postgres-rls:credential-bound-tenant",
+121:         "tenant_api_key_postgres_rls",
+122:     ),
+123:     "compliance_metrics": TenantApiKeyRoutePolicy(
+124:         "postgres-rls:credential-bound-tenant",
+125:         "tenant_api_key_postgres_rls",
+126:     ),
+127:     "core_ingest": TenantApiKeyRoutePolicy(
+128:         "postgres-rls+redis+object-storage:credential-bound-tenant",
+129:         "tenant_api_key_mixed_storage",
+130:     ),
+131:     "csv": TenantApiKeyRoutePolicy(
+132:         "postgres-rls:credential-bound-tenant",
+133:         "tenant_api_key_postgres_rls",
+134:     ),
+135:     "edi": TenantApiKeyRoutePolicy(
+136:         "postgres-rls:credential-bound-tenant",
+137:         "tenant_api_key_postgres_rls",
+138:     ),
+139:     "epcis_ingestion": TenantApiKeyRoutePolicy(
+140:         "postgres-rls:credential-bound-tenant",
+141:         "tenant_api_key_postgres_rls",
+142:     ),
+143:     "exceptions": TenantApiKeyRoutePolicy(
+144:         "postgres-rls:credential-bound-tenant",
+145:         "tenant_api_key_postgres_rls",
+146:     ),
+147:     "export_monitoring": TenantApiKeyRoutePolicy(
+148:         "postgres-rls:credential-bound-tenant",
+149:         "tenant_api_key_postgres_rls",
+150:     ),
+151:     "fda_export": TenantApiKeyRoutePolicy(
+152:         "postgres-rls+generated-artifact:credential-bound-tenant",
+153:         "tenant_api_key_postgres_rls",
+154:     ),
+155:     "fsma_compliance": TenantApiKeyRoutePolicy(
+156:         "postgres-rls+generated-artifact:credential-bound-tenant",
+157:         "tenant_api_key_postgres_rls",
+158:     ),
+159:     "inflow_workbench": TenantApiKeyRoutePolicy(
+160:         "postgres-rls:credential-bound-tenant",
+161:         "tenant_api_key_postgres_rls",
+162:     ),
+163:     "onboarding": TenantApiKeyRoutePolicy(
+164:         "postgres-rls:credential-bound-tenant",
+165:         "tenant_api_key_postgres_rls",
+166:     ),
+167:     "portal": TenantApiKeyRoutePolicy(
+168:         "postgres-rls:credential-bound-tenant",
+169:         "tenant_api_key_postgres_rls",
+170:     ),
+171:     "readiness": TenantApiKeyRoutePolicy(
+172:         "postgres-rls:credential-bound-tenant",
+173:         "tenant_api_key_postgres_rls",
+174:     ),
+175:     "recall": TenantApiKeyRoutePolicy(
+176:         "postgres-rls+generated-artifact:credential-bound-tenant",
+177:         "tenant_api_key_postgres_rls",
+178:     ),
+179:     "request_workflow": TenantApiKeyRoutePolicy(
+180:         "postgres-rls:credential-bound-tenant",
+181:         "tenant_api_key_postgres_rls",
+182:     ),
+183:     "rules": TenantApiKeyRoutePolicy(
+184:         "postgres-rls:credential-bound-tenant",
+185:         "tenant_api_key_postgres_rls",
+186:     ),
+187:     "score": TenantApiKeyRoutePolicy(
+188:         "postgres-rls:credential-bound-tenant",
+189:         "tenant_api_key_postgres_rls",
+190:     ),
+191:     "sla_tracking": TenantApiKeyRoutePolicy(
+192:         "postgres-rls:credential-bound-tenant",
+193:         "tenant_api_key_postgres_rls",
+194:     ),
+195:     "status": TenantApiKeyRoutePolicy(
+196:         "ingestion-postgres:explicit-tenant-filter",
+197:         "tenant_api_key_ingestion_postgres_filter",
+198:     ),
+199:     "webhook": TenantApiKeyRoutePolicy(
+200:         "postgres-rls+webhook-ledger:credential-bound-tenant",
+201:         "tenant_api_key_mixed_storage",
+202:     ),
+203: }
+204: 
+205: TENANT_API_KEY_OPERATION_POLICIES: dict[tuple[str, str, str], TenantApiKeyRoutePolicy] = {
+206:     (
+207:         "status",
+208:         "GET",
+209:         "/v1/ingest/status/{job_id}",
+210:     ): TenantApiKeyRoutePolicy(
+211:         "redis:tenant-owner-key",
+212:         "tenant_api_key_redis_job_owner",
+213:     ),
+214:     (
+215:         "status",
+216:         "GET",
+217:         "/v1/ingest/documents/{document_id}/analysis",
+218:     ): TenantApiKeyRoutePolicy(
+219:         "redis:tenant-owner-key",
+220:         "tenant_api_key_redis_job_owner",
+221:     ),
+222: }
+223: 
+224: # Independent of the mutable policy mapping so deleting a security-critical
+225: # exact override cannot silently fall back to its owner's generic storage
+226: # contract during manifest generation.
+227: REQUIRED_EXACT_TENANT_API_KEY_POLICIES = frozenset(
+228:     {
+229:         ("status", "GET", "/v1/ingest/status/{job_id}"),
+230:         ("status", "GET", "/v1/ingest/documents/{document_id}/analysis"),
+231:     }
+232: )
+233: 
+234: _METRICS_DEP = "shared.observability.metrics_auth:require_metrics_key"
+235: _WORKLOAD_DEP = "services.admin.app.privileged_auth:require_tenant_provisioner_key"
+236: _HIGH_ASSURANCE_SYSADMIN_DEPS = frozenset(
+237:     {
+238:         "services.admin.app.privileged_auth:require_sysadmin_high_assurance",
+239:     }
+240: )
+241: _HIGH_ASSURANCE_SESSION_DEPS = frozenset(
+242:     {
+243:         "services.admin.app.auth.session_auth:require_high_assurance_session",
+244:     }
+245: )
+246: _SCOPED_OPAQUE_SESSION_DEP = (
+247:     "services.admin.app.auth.session_auth:get_scoped_active_session_context"
+248: )
+249: _REVIEW_DEPS = frozenset(
+250:     {
+251:         "services.admin.app.privileged_auth:require_review_read",
+252:         "services.admin.app.privileged_auth:require_review_decide",
+253:     }
+254: )
+255: _OPAQUE_SESSION_DEPS = frozenset(
+256:     {
+257:         _SCOPED_OPAQUE_SESSION_DEP,
+258:         "services.admin.app.auth.session_auth:get_current_active_user",
+259:     }
+260: )
+261: _DUAL_SESSION_DEP = "services.admin.app.dependencies:get_current_user"
+262: _TENANT_API_KEY_DEPS = frozenset(
+263:     {
+264:         "shared.auth:require_api_key",
+265:         "services.ingestion.app.authz:get_ingestion_principal",
+266:         "services.ingestion.app.webhook_compat:require_tenant_context",
+267:         "services.ingestion.app.webhook_compat:_verify_api_key",
+268:     }
+269: )
+270: _OPTIONAL_TENANT_API_KEY_DEP = "services.ingestion.app.authz:get_optional_ingestion_principal"  # pragma: allowlist secret
+271: _CHECKOUT_RATE_LIMIT_DEP = (
+272:     "services.ingestion.app.stripe_billing.rate_limiting:_check_stripe_checkout_rate_limit"
+273: )
+274: _ALL_AUTH_DEPS = (
+275:     {_METRICS_DEP, _WORKLOAD_DEP}
+276:     | _HIGH_ASSURANCE_SYSADMIN_DEPS
+277:     | _HIGH_ASSURANCE_SESSION_DEPS
+278:     | _REVIEW_DEPS
+279:     | _OPAQUE_SESSION_DEPS
+280:     | {_DUAL_SESSION_DEP}
+281:     | _TENANT_API_KEY_DEPS
+282:     | {_OPTIONAL_TENANT_API_KEY_DEP}
+283: )
+284: 
+285: 
+286: class RouteManifestError(RuntimeError):
+287:     """Raised when the production route contract is incomplete or inconsistent."""
+288: 
+289: 
+290: def operation_key(owner: str, method: str, path: str) -> tuple[str, str, str]:
+291:     return owner, method.upper(), path
+292: 
+293: 
+294: def operation_id(owner: str, method: str, path: str) -> str:
+295:     return f"{owner}:{method.upper()}:{path}"
+296: 
+297: 
+298: def _callable_key(call: Any) -> str:
+299:     module = getattr(call, "__module__", None) or call.__class__.__module__
+300:     name = getattr(call, "__name__", None) or call.__class__.__name__
+301:     return f"{module}:{name}"
+302: 
+303: 
+304: def _dependency_calls(dependant: Dependant) -> list[Any]:
+305:     calls: list[Any] = []
+306:     for child in dependant.dependencies:
+307:         calls.append(child.call)
+308:         calls.extend(_dependency_calls(child))
+309:     return calls
+310: 
+311: 
+312: def _dependency_keys(route: APIRoute) -> set[str]:
+313:     return {_callable_key(call) for call in _dependency_calls(route.dependant)}
+314: 
+315: 
+316: def _closure_strings(call: Any) -> list[str]:
+317:     values: list[str] = []
+318:     for cell in getattr(call, "__closure__", None) or ():
+319:         try:
+320:             value = cell.cell_contents
+321:         except ValueError:
+322:             continue
+323:         if isinstance(value, str) and "." in value and value not in values:
+324:             values.append(value)
+325:     return values
+326: 
+327: 
+328: def _required_permissions(route: APIRoute, dependency_keys: set[str]) -> tuple[str, ...]:
+329:     permissions: list[str] = []
+330:     for call in _dependency_calls(route.dependant):
+331:         explicit = getattr(call, "required_permission", None)
+332:         if isinstance(explicit, str) and explicit not in permissions:
+333:             permissions.append(explicit)
+334:         if _callable_key(call) in {
+335:             "services.ingestion.app.authz:_dependency",
+336:             "services.ingestion.app.routes_ingest:_check",
+337:         }:
+338:             permissions.extend(value for value in _closure_strings(call) if value not in permissions)
+339: 
+340:     special = (
+341:         (_WORKLOAD_DEP, "internal.tenants.create"),
+342:         (_METRICS_DEP, "metrics.read"),
+343:         ("services.admin.app.privileged_auth:require_review_read", "review.read"),
+344:         ("services.admin.app.privileged_auth:require_review_decide", "review.decide"),
+345:     )
+346:     for dependency, permission in special:
+347:         if dependency in dependency_keys and permission not in permissions:
+348:             permissions.append(permission)
+349:     if dependency_keys & _HIGH_ASSURANCE_SYSADMIN_DEPS and "sysadmin" not in permissions:
+350:         permissions.append("sysadmin")
+351:     if not permissions and dependency_keys & (
+352:         _TENANT_API_KEY_DEPS
+353:         | _OPAQUE_SESSION_DEPS
+354:         | _HIGH_ASSURANCE_SESSION_DEPS
+355:         | {_DUAL_SESSION_DEP}
+356:     ):
+357:         permissions.append("authenticated")
+358:     return tuple(sorted(permissions))
+359: 
+360: 
+361: def _public_storage_boundary(owner: str, path: str) -> str:
+362:     if owner == "portal":
+363:         return "postgres-rls:opaque-portal-capability"
+364:     if owner in {"proof_verify", "proof_recall"}:
+365:         return "public-proof-store:non-secret"
+366:     if owner == "admin" and path.startswith(("/auth/", "/v1/auth/", "/api/v1/tools/")):
+367:         return "admin-postgres:identity-bound-public-flow"
+368:     return "public-static-or-health:no-tenant-secret"
+369: 
+370: 
+371: def _tenant_api_key_policy(
+372:     *,
+373:     owner: str,
+374:     method: str,
+375:     path: str,
+376: ) -> TenantApiKeyRoutePolicy:
+377:     key = operation_key(owner, method, path)
+378:     policy = TENANT_API_KEY_OPERATION_POLICIES.get(key)
+379:     if policy is not None:
+380:         return policy
+381:     if key in REQUIRED_EXACT_TENANT_API_KEY_POLICIES:
+382:         raise RouteManifestError(
+383:             f"Required exact tenant API-key policy is missing for {operation_id(owner, method, path)}"
+384:         )
+385:     policy = TENANT_API_KEY_OWNER_POLICIES.get(owner)
+386:     if policy is not None:
+387:         return policy
+388:     raise RouteManifestError(
+389:         f"No explicit tenant API-key storage/test policy for {operation_id(owner, method, path)}. "
+390:         "Add a reviewed owner or exact-operation policy before enabling this router."
+391:     )
+392: 
+393: 
+394: def classify_operation(
+395:     route: APIRoute,
+396:     *,
+397:     owner: str,
+398:     method: str,
+399: ) -> tuple[Classification, str, tuple[str, ...], str, str]:
+400:     """Classify one operation, execute its adapter, and return its contract."""
+401: 
+402:     key = operation_key(owner, method, route.path)
+403:     dependencies = _dependency_keys(route)
+404:     permissions = _required_permissions(route, dependencies)
+405: 
+406:     if key in STRIPE_WEBHOOK_OPERATIONS:
+407:         result = (
+408:             "workload-only",
+409:             "stripe-signature",
+410:             ("stripe.webhook.deliver",),
+411:             "stripe-event-to-credential-bound-tenant",
+412:             "workload_stripe_signature",
+413:         )
+414:     elif key in OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS:
+415:         result = (
+416:             "public",
+417:             "optional-x-regengine-api-key",
+418:             (),
+419:             "stripe+redis:anonymous-or-credential-bound-tenant",
+420:             "public_optional_tenant_checkout",
+421:         )
+422:     elif key in PUBLIC_OPERATIONS:
+423:         result = ("public", "none", (), _public_storage_boundary(owner, route.path), "public_no_auth")
+424:     elif _WORKLOAD_DEP in dependencies:
+425:         result = (
+426:             "workload-only",
+427:             "x-regengine-api-key:[REDACTED],
+428:             permissions,
+429:             "admin-postgres:tenantless-workload",
+430:             "workload_tenant_provisioner",
+431:         )
+432:     elif _METRICS_DEP in dependencies:
+433:         result = (
+434:             "workload-only",
+435:             "x-metrics-key",
+436:             permissions,
+437:             "process-observability:no-tenant-data",
+438:             "workload_metrics_key",
+439:         )
+440:     elif key in IDENTITY_GLOBAL_SELF_SERVICE_OPERATIONS:
+441:         result = (
+442:             "tenant-scoped",
+443:             "bearer-token-or-opaque-session-cookie",
+444:             permissions,
+445:             "admin-postgres+graph-outbox:authenticated-user-global-identity",
+446:             "tenant_identity_global_self_erasure",
+447:         )
+448:     elif dependencies & _HIGH_ASSURANCE_SYSADMIN_DEPS:
+449:         result = (
+450:             "global-sysadmin",
+451:             "opaque-session-cookie:webauthn-or-sso",
+452:             permissions,
+453:             "admin-postgres:audited-global",
+454:             "global_sysadmin_high_assurance",
+455:         )
+456:     elif dependencies & _HIGH_ASSURANCE_SESSION_DEPS:
+457:         result = (
+458:             "tenant-scoped",
+459:             "opaque-session-cookie:webauthn-or-sso",
+460:             permissions,
+461:             "admin-postgres:session-membership-tenant",
+462:             "tenant_high_assurance_session",
+463:         )
+464:     elif dependencies & _REVIEW_DEPS:
+465:         high_assurance = "services.admin.app.privileged_auth:require_review_decide" in dependencies
+466:         result = (
+467:             "tenant-scoped",
+468:             "opaque-session-cookie:webauthn-or-sso" if high_assurance else "opaque-session-cookie",
+469:             permissions,
+470:             "admin-postgres:session-membership-tenant",
+471:             "tenant_review_session",
+472:         )
+473:     elif dependencies & _OPAQUE_SESSION_DEPS:
+474:         result = (
+475:             "tenant-scoped",
+476:             "opaque-session-cookie",
+477:             permissions,
+478:             "admin-postgres:session-membership-tenant",
+479:             "tenant_opaque_session",
+480:         )
+481:     elif _DUAL_SESSION_DEP in dependencies:
+482:         result = (
+483:             "tenant-scoped",
+484:             "bearer-token-or-opaque-session-cookie",
+485:             permissions,
+486:             "admin-postgres:jwt-tenant-or-session-membership-tenant",
+487:             "tenant_dual_session_csrf",
+488:         )
+489:     elif dependencies & _TENANT_API_KEY_DEPS:
+490:         policy = _tenant_api_key_policy(owner=owner, method=method, path=route.path)
+491:         signed = "services.ingestion.app.webhook_router_v2.security:_verify_webhook_signature" in dependencies
+492:         result = (
+493:             "tenant-scoped",
+494:             "x-regengine-api-key+hmac-signature" if signed else "x-regengine-api-key",
+495:             permissions,
+496:             policy.storage_boundary,
+497:             policy.test_adapter,
+498:         )
+499:     else:
+500:         observed = sorted(dependencies & _ALL_AUTH_DEPS)
+501:         raise RouteManifestError(
+502:             f"Unclassified production operation {operation_id(owner, method, route.path)}; "
+503:             f"recognized auth dependencies={observed}. Add an exact rule or an authenticated adapter."
+504:         )
+505: 
+506:     adapter = TEST_ADAPTERS.get(result[4])
+507:     if adapter is None:
+508:         raise RouteManifestError(
+509:             f"Missing executable test adapter {result[4]!r} for {operation_id(owner, method, route.path)}"
+510:         )
+511:     adapter(route)
+512:     return result
+513: 
+514: 
+515: def _assert_dependencies(route: APIRoute, *, required_any=(), forbidden=()) -> None:
+516:     observed = _dependency_keys(route)
+517:     required = set(required_any)
+518:     if required and not observed & required:
+519:         raise RouteManifestError(
+520:             f"Adapter for {route.path} expected one of {sorted(required)}, observed {sorted(observed)}"
+521:         )
+522:     overlap = observed & set(forbidden)
+523:     if overlap:
+524:         raise RouteManifestError(f"Adapter for {route.path} found forbidden dependencies {sorted(overlap)}")
+525: 
+526: 
+527: def _adapt_public_no_auth(route: APIRoute) -> None:
+528:     _assert_dependencies(route, forbidden=_ALL_AUTH_DEPS)
+529: 
+530: 
+531: def _adapt_public_optional_tenant_checkout(route: APIRoute) -> None:
+532:     _assert_dependencies(
+533:         route,
+534:         required_any={_OPTIONAL_TENANT_API_KEY_DEP},
+535:         forbidden=_ALL_AUTH_DEPS - {_OPTIONAL_TENANT_API_KEY_DEP},
+536:     )
+537:     _assert_dependencies(route, required_any={_CHECKOUT_RATE_LIMIT_DEP})
+538: 
+539:     source = textwrap.dedent(inspect.getsource(route.endpoint))
+540:     tree = ast.parse(source)
+541: 
+542:     def catches_auth_failure(exception_type: ast.expr | None) -> bool:
+543:         if exception_type is None:
+544:             return True
+545:         if isinstance(exception_type, ast.Name):
+546:             return exception_type.id in {"BaseException", "Exception", "HTTPException"}
+547:         if isinstance(exception_type, ast.Attribute):
+548:             return exception_type.attr == "HTTPException"
+549:         if isinstance(exception_type, ast.Tuple):
+550:             return any(catches_auth_failure(item) for item in exception_type.elts)
+551:         return False
+552: 
+553:     catches_auth_failure_exception = any(
+554:         isinstance(node, ast.ExceptHandler) and catches_auth_failure(node.type)
+555:         for node in ast.walk(tree)
+556:     )
+557:     if catches_auth_failure_exception:
+558:         raise RouteManifestError(
+559:             f"Optional-auth checkout {route.path} catches an auth failure and could downgrade a rejected credential"
+560:         )
+561: 
+562:     def is_authenticated_principal_guard(node: ast.If) -> bool:
+563:         test = node.test
+564:         return (
+565:             isinstance(test, ast.Compare)
+566:             and isinstance(test.left, ast.Name)
+567:             and test.left.id == "safe_principal"
+568:             and len(test.ops) == 1
+569:             and isinstance(test.ops[0], ast.IsNot)
+570:             and len(test.comparators) == 1
+571:             and isinstance(test.comparators[0], ast.Constant)
+572:             and test.comparators[0].value is None
+573:         )
+574: 
+575:     tenant_resolution_is_guarded = any(
+576:         is_authenticated_principal_guard(node)
+577:         and any(
+578:             isinstance(descendant, ast.Call)
+579:             and isinstance(descendant.func, ast.Attribute)
+580:             and descendant.func.attr == "_resolve_tenant_context"
+581:             for descendant in ast.walk(node)
+582:         )
+583:         for node in ast.walk(tree)
+584:         if isinstance(node, ast.If)
+585:     )
+586:     if not tenant_resolution_is_guarded:
+587:         raise RouteManifestError(
+588:             f"Optional-auth checkout {route.path} no longer gates tenant resolution on an authenticated principal"
+589:         )
+590: 
+591: 
+592: def _adapt_tenant_api_key_dependency(route: APIRoute) -> None:
+593:     _assert_dependencies(route, required_any=_TENANT_API_KEY_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+594: 
+595: 
+596: def _adapt_tenant_api_key_postgres_rls(route: APIRoute) -> None:
+597:     _adapt_tenant_api_key_dependency(route)
+598: 
+599: 
+600: def _adapt_tenant_api_key_mixed_storage(route: APIRoute) -> None:
+601:     _adapt_tenant_api_key_dependency(route)
+602: 
+603: 
+604: def _adapt_tenant_api_key_ingestion_postgres_filter(route: APIRoute) -> None:
+605:     _adapt_tenant_api_key_dependency(route)
+606:     if route.endpoint.__module__ != "services.ingestion.app.routes_status":
+607:         raise RouteManifestError(f"Ingestion PostgreSQL adapter is not bound to the status owner: {route.path}")
+608:     if "api_key.tenant_id" not in inspect.getsource(route.endpoint):
+609:         raise RouteManifestError(
+610:             f"Ingestion PostgreSQL operation {route.path} no longer passes the credential-bound tenant filter"
+611:         )
+612: 
+613: 
+614: def _adapt_tenant_api_key_redis_job_owner(route: APIRoute) -> None:
+615:     _adapt_tenant_api_key_dependency(route)
+616:     if route.endpoint.__module__ != "services.ingestion.app.routes_status":
+617:         raise RouteManifestError(f"Redis job-owner adapter is not bound to the status owner: {route.path}")
+618:     source = textwrap.dedent(inspect.getsource(route.endpoint))
+619:     tree = ast.parse(source)
+620:     resource_parameter = "document_id" if "{document_id}" in route.path else "job_id"
+621: 
+622:     def is_expected_owner_call(node: ast.AST) -> bool:
+623:         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+624:             return False
+625:         if node.func.id != "_job_owned_by_tenant" or len(node.args) != 3:
+626:             return False
+627:         redis_arg, resource_arg, tenant_arg = node.args
+628:         return (
+629:             isinstance(redis_arg, ast.Name)
+630:             and redis_arg.id == "r"
+631:             and isinstance(resource_arg, ast.Name)
+632:             and resource_arg.id == resource_parameter
+633:             and isinstance(tenant_arg, ast.Attribute)
+634:             and isinstance(tenant_arg.value, ast.Name)
+635:             and tenant_arg.value.id == "api_key"
+636:             and tenant_arg.attr == "tenant_id"
+637:         )
+638: 
+639:     def raises_not_found(node: ast.If) -> bool:
+640:         for child in ast.walk(ast.Module(body=node.body, type_ignores=[])):
+641:             if not isinstance(child, ast.Raise) or not isinstance(child.exc, ast.Call):
+642:                 continue
+643:             if not isinstance(child.exc.func, ast.Name) or child.exc.func.id != "HTTPException":
+644:                 continue
+645:             for keyword in child.exc.keywords:
+646:                 if (
+647:                     keyword.arg == "status_code"
+648:                     and isinstance(keyword.value, ast.Constant)
+649:                     and keyword.value.value == 404
+650:                 ):
+651:                     return True
+652:         return False
+653: 
+654:     guarded = any(
+655:         isinstance(node, ast.If)
+656:         and isinstance(node.test, ast.UnaryOp)
+657:         and isinstance(node.test.op, ast.Not)
+658:         and is_expected_owner_call(node.test.operand)
+659:         and raises_not_found(node)
+660:         for node in ast.walk(tree)
+661:     )
+662:     if not guarded:
+663:         raise RouteManifestError(
+664:             f"Redis operation {route.path} no longer denies a failed credential-bound owner check with 404"
+665:         )
+666: 
+667: 
+668: def _adapt_tenant_dual_session_csrf(route: APIRoute) -> None:
+669:     _assert_dependencies(route, required_any={_DUAL_SESSION_DEP}, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+670:     if route.methods & {"POST", "PUT", "PATCH", "DELETE"}:
+671:         repo_root = Path(__file__).resolve().parents[1]
+672:         try:
+673:             proxy_source = (repo_root / "frontend" / "src" / "proxy.ts").read_text(encoding="utf-8")
+674:             csrf_source = (repo_root / "frontend" / "src" / "lib" / "csrf.ts").read_text(encoding="utf-8")
+675:         except OSError as exc:
+676:             raise RouteManifestError("Frontend CSRF sources are missing; cookie mutations fail closed") from exc
+677:         if "CSRF_PROTECTED_METHODS.has(request.method)" not in proxy_source:
+678:             raise RouteManifestError("Frontend proxy no longer gates cookie-authenticated mutation methods with CSRF")
+679:         for method in route.methods & {"POST", "PUT", "PATCH", "DELETE"}:
+680:             if f"'{method}'" not in csrf_source and f'"{method}"' not in csrf_source:
+681:                 raise RouteManifestError(f"Frontend CSRF method set no longer covers {method}")
+682: 
+683: 
+684: def _adapt_tenant_identity_global_self_erasure(route: APIRoute) -> None:
+685:     """Prove that the identity-global erasure target is authenticated-user bound."""
+686: 
+687:     _adapt_tenant_dual_session_csrf(route)
+688:     if route.endpoint.__name__ != "request_erasure":
+689:         raise RouteManifestError(
+690:             f"Identity-global self-erasure adapter is not bound to request_erasure: {route.path}"
+691:         )
+692: 
+693:     source = textwrap.dedent(inspect.getsource(route.endpoint))
+694:     tree = ast.parse(source)
+695:     assignments: dict[str, ast.expr] = {}
+696:     for node in ast.walk(tree):
+697:         if (
+698:             isinstance(node, ast.Assign)
+699:             and len(node.targets) == 1
+700:             and isinstance(node.targets[0], ast.Name)
+701:         ):
+702:             assignments[node.targets[0].id] = node.value
+703: 
+704:     raw_user_id = assignments.get("user_id")
+705:     authenticated_user_binding = (
+706:         isinstance(raw_user_id, ast.Attribute)
+707:         and raw_user_id.attr == "id"
+708:         and isinstance(raw_user_id.value, ast.Name)
+709:         and raw_user_id.value.id == "current_user"
+710:     )
+711: 
+712:     normalized_user_id = assignments.get("user_uuid")
+713:     normalized_authenticated_user = (
+714:         isinstance(normalized_user_id, ast.Call)
+715:         and isinstance(normalized_user_id.func, ast.Attribute)
+716:         and isinstance(normalized_user_id.func.value, ast.Name)
+717:         and normalized_user_id.func.value.id == "uuid"
+718:         and normalized_user_id.func.attr == "UUID"
+719:         and len(normalized_user_id.args) == 1
+720:         and isinstance(normalized_user_id.args[0], ast.Call)
+721:         and isinstance(normalized_user_id.args[0].func, ast.Name)
+722:         and normalized_user_id.args[0].func.id == "str"
+723:         and len(normalized_user_id.args[0].args) == 1
+724:         and isinstance(normalized_user_id.args[0].args[0], ast.Name)
+725:         and normalized_user_id.args[0].args[0].id == "user_id"
+726:     )
+727: 
+728:     erasure_calls = [
+729:         node
+730:         for node in ast.walk(tree)
+731:         if isinstance(node, ast.Call)
+732:         and isinstance(node.func, ast.Name)
+733:         and node.func.id == "_apply_account_erasure"
+734:     ]
+735:     erasure_target_is_normalized_user = (
+736:         len(erasure_calls) == 1
+737:         and any(
+738:             keyword.arg == "user_id"
+739:             and isinstance(keyword.value, ast.Name)
+740:             and keyword.value.id == "user_uuid"
+741:             for keyword in erasure_calls[0].keywords
+742:         )
+743:     )
+744: 
+745:     if not (
+746:         authenticated_user_binding
+747:         and normalized_authenticated_user
+748:         and erasure_target_is_normalized_user
+749:     ):
+750:         raise RouteManifestError(
+751:             "Identity-global self-erasure must normalize current_user.id and bind it "
+752:             "as _apply_account_erasure(..., user_id=...)"
+753:         )
+754: 
+755: 
+756: def _adapt_tenant_opaque_session(route: APIRoute) -> None:
+757:     _assert_dependencies(
+758:         route,
+759:         required_any={_SCOPED_OPAQUE_SESSION_DEP},
+760:         forbidden={_METRICS_DEP, _WORKLOAD_DEP},
+761:     )
+762: 
+763: 
+764: def _adapt_tenant_high_assurance_session(route: APIRoute) -> None:
+765:     _assert_dependencies(
+766:         route,
+767:         required_any=_HIGH_ASSURANCE_SESSION_DEPS,
+768:         forbidden={_METRICS_DEP, _WORKLOAD_DEP},
+769:     )
+770:     _assert_dependencies(route, required_any={_SCOPED_OPAQUE_SESSION_DEP})
+771: 
+772: 
+773: def _adapt_tenant_review_session(route: APIRoute) -> None:
+774:     _assert_dependencies(route, required_any=_REVIEW_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+775: 
+776: 
+777: def _adapt_global_sysadmin_high_assurance(route: APIRoute) -> None:
+778:     _assert_dependencies(route, required_any=_HIGH_ASSURANCE_SYSADMIN_DEPS, forbidden={_METRICS_DEP, _WORKLOAD_DEP})
+779: 
+780: 
+781: def _adapt_workload_metrics_key(route: APIRoute) -> None:
+782:     _assert_dependencies(route, required_any={_METRICS_DEP}, forbidden=_TENANT_API_KEY_DEPS | {_WORKLOAD_DEP})
+783: 
+784: 
+785: def _adapt_workload_tenant_provisioner(route: APIRoute) -> None:
+786:     _assert_dependencies(route, required_any={_WORKLOAD_DEP}, forbidden=_TENANT_API_KEY_DEPS | {_METRICS_DEP})
+787: 
+788: 
+789: def _adapt_workload_stripe_signature(route: APIRoute) -> None:
+790:     aliases = {str(getattr(field, "alias", "")).lower() for field in route.dependant.header_params}
+791:     if "stripe-signature" not in aliases:
+792:         raise RouteManifestError(f"Stripe webhook {route.path} does not declare the Stripe-Signature header")
+793:     if not route.endpoint.__module__.startswith("services.ingestion.app.stripe_billing"):
+794:         raise RouteManifestError(f"Stripe webhook {route.path} is not owned by the billing implementation")
+795:     if "_process_stripe_webhook" not in inspect.getsource(route.endpoint):
+796:         raise RouteManifestError(f"Stripe webhook {route.path} no longer delegates to signature validation")
+797: 
+798: 
+799: TEST_ADAPTERS: dict[str, Callable[[APIRoute], None]] = {
+800:     "public_no_auth": _adapt_public_no_auth,
+801:     "public_optional_tenant_checkout": _adapt_public_optional_tenant_checkout,
+802:     "tenant_api_key_postgres_rls": _adapt_tenant_api_key_postgres_rls,
+803:     "tenant_api_key_mixed_storage": _adapt_tenant_api_key_mixed_storage,
+804:     "tenant_api_key_ingestion_postgres_filter": _adapt_tenant_api_key_ingestion_postgres_filter,
+805:     "tenant_api_key_redis_job_owner": _adapt_tenant_api_key_redis_job_owner,
+806:     "tenant_dual_session_csrf": _adapt_tenant_dual_session_csrf,
+807:     "tenant_identity_global_self_erasure": _adapt_tenant_identity_global_self_erasure,
+808:     "tenant_opaque_session": _adapt_tenant_opaque_session,
+809:     "tenant_high_assurance_session": _adapt_tenant_high_assurance_session,
+810:     "tenant_review_session": _adapt_tenant_review_session,
+811:     "global_sysadmin_high_assurance": _adapt_global_sysadmin_high_assurance,
+812:     "workload_metrics_key": _adapt_workload_metrics_key,
+813:     "workload_tenant_provisioner": _adapt_workload_tenant_provisioner,
+814:     "workload_stripe_signature": _adapt_workload_stripe_signature,
+815: }
+816: 
+817: 
+818: __all__ = [
+819:     "ALL_ROUTE_OWNERS",
+820:     "ALWAYS_MOUNTED_OWNERS",
+821:     "Classification",
+822:     "IDENTITY_GLOBAL_SELF_SERVICE_OPERATIONS",
+823:     "OMITTED_ROUTER_OWNERS",
+824:     "OPTIONAL_TENANT_API_KEY_PUBLIC_OPERATIONS",
+825:     "PRODUCTION_OWNERS",
+826:     "PUBLIC_OPERATIONS",
+827:     "REQUIRED_EXACT_TENANT_API_KEY_POLICIES",
+828:     "RouteManifestError",
+829:     "STRIPE_WEBHOOK_OPERATIONS",
+830:     "TENANT_API_KEY_OPERATION_POLICIES",
+831:     "TENANT_API_KEY_OWNER_POLICIES",
+832:     "TenantApiKeyRoutePolicy",
+833:     "classify_operation",
+834:     "operation_id",
+835:     "operation_key",
+836: ]
+FILE server/router_policy.py
+1: """Router exposure policy for the consolidated RegEngine API.
+2: 
+3: Production uses an exact allowlist so deployment drift cannot silently expose
+4: an optional router.  Development and tests retain the historical broad
+5: surface, including the ``DISABLED_ROUTERS`` escape hatch used by focused local
+6: workflows.
+7: 
+8: This module deliberately owns policy and metadata only.  ``server.main`` owns
+9: the FastAPI wiring, while the route-security manifest owns operation-level
+10: classification and test adapters.
+11: """
+12: 
+13: from __future__ import annotations
+14: 
+15: import os
+16: from dataclasses import dataclass, field
+17: from typing import Mapping
+18: 
+19: VALID_ROUTER_NAMES = frozenset(
+20:     {
+21:         "scraping",
+22:         "discovery",
+23:         "sources",
+24:         "sandbox",
+25:         "inflow_workbench",
+26:         "fda_export",
+27:         "csv",
+28:         "sensitech",
+29:         "edi",
+30:         "score",
+31:         "portal",
+32:         "audit",
+33:         "sop",
+34:         "export",
+35:         "epcis_ingestion",
+36:         "qr_decoder",
+37:         "label_vision",
+38:         "exchange",
+39:         "billing",
+40:         "alerts",
+41:         "onboarding",
+42:         "recall",
+43:         "recall_simulations",
+44:         "supplier_mgmt",
+45:         "audit_log",
+46:         "product_catalog",
+47:         "notification_prefs",
+48:         "team_mgmt",
+49:         "settings",
+50:         "integration",
+51:         "canonical_records",
+52:         "rules",
+53:         "exceptions",
+54:         "remediation",
+55:         "request_workflow",
+56:         "identity",
+57:         "auditor",
+58:         "compliance_metrics",
+59:         "readiness",
+60:         "incidents",
+61:         "chain_verification",
+62:         "audit_export_log",
+63:         "sla_tracking",
+64:         "export_monitoring",
+65:         "supplier_validation",
+66:         "disaster_recovery",
+67:         "admin",
+68:         "graph",
+69:         "nlp",
+70:         "fsma_compliance",
+71:         "proof_verify",
+72:         "proof_recall",
+73:         "email_ingest",
+74:         "agent_org",
+75:     }
+76: )
+77: 
+78: # Release-approved production surface.  Any addition or removal is a security
+79: # decision and must update the route-complete tenant/auth gate before deploy.
+80: PRODUCTION_ENABLED_ROUTERS = frozenset(
+81:     {
+82:         "inflow_workbench",
+83:         "fda_export",
+84:         "csv",
+85:         "edi",
+86:         "epcis_ingestion",
+87:         "score",
+88:         "portal",
+89:         "billing",
+90:         "onboarding",
+91:         "recall",
+92:         "proof_verify",
+93:         "proof_recall",
+94:         "canonical_records",
+95:         "rules",
+96:         "exceptions",
+97:         "request_workflow",
+98:         "auditor",
+99:         "compliance_metrics",
+100:         "readiness",
+101:         "chain_verification",
+102:         "audit_export_log",
+103:         "sla_tracking",
+104:         "export_monitoring",
+105:         "admin",
+106:         "fsma_compliance",
+107:     }
+108: )
+109: 
+110: EXPERIMENTAL_ROUTERS = frozenset(
+111:     {
+112:         "scraping",
+113:         "discovery",
+114:         "sources",
+115:         "sandbox",
+116:         "sensitech",
+117:         "audit",
+118:         "sop",
+119:         "export",
+120:         "qr_decoder",
+121:         "label_vision",
+122:         "exchange",
+123:         "recall_simulations",
+124:         "graph",
+125:         "nlp",
+126:         "agent_org",
+127:     }
+128: )
+129: 
+130: COMPLIANCE_ROUTERS = frozenset(
+131:     {
+132:         "canonical_records",
+133:         "rules",
+134:         "exceptions",
+135:         "remediation",
+136:         "fda_export",
+137:         "chain_verification",
+138:     }
+139: )
+140: 
+141: 
+142: def _csv_names(raw: str) -> frozenset[str]:
+143:     return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
+144: 
+145: 
+146: def _truthy(raw: str | None) -> bool:
+147:     return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+148: 
+149: 
+150: @dataclass
+151: class RouterPolicy:
+152:     """Resolved router policy plus the routers actually mounted by FastAPI."""
+153: 
+154:     production: bool
+155:     enabled_routers: frozenset[str]
+156:     configured_disabled: frozenset[str]
+157:     unknown_disabled: frozenset[str]
+158:     experimental_bypass_enabled: bool
+159:     mounted_routers: list[str] = field(default_factory=list)
+160: 
+161:     @classmethod
+162:     def from_environment(
+163:         cls,
+164:         *,
+165:         production: bool,
+166:         environ: Mapping[str, str] | None = None,
+167:     ) -> "RouterPolicy":
+168:         env = os.environ if environ is None else environ
+169:         configured_disabled = _csv_names(env.get("DISABLED_ROUTERS", ""))
+170:         experimental_bypass = _truthy(env.get("ENABLE_EXPERIMENTAL_ROUTERS"))
+171: 
+172:         if production:
+173:             if configured_disabled:
+174:                 raise RuntimeError(
+175:                     "Production router policy rejects DISABLED_ROUTERS; configure the exact "
+176:                     "release-approved ENABLED_ROUTERS allowlist instead."
+177:                 )
+178:             if experimental_bypass:
+179:                 raise RuntimeError(
+180:                     "Production router policy rejects ENABLE_EXPERIMENTAL_ROUTERS; optional "
+181:                     "routers require release-gate promotion into ENABLED_ROUTERS."
+182:                 )
+183: 
+184:             raw_enabled = env.get("ENABLED_ROUTERS", "")
+185:             if not raw_enabled.strip():
+186:                 raise RuntimeError("ENABLED_ROUTERS is required in production and must match the approved set exactly.")
+187: 
+188:             enabled = _csv_names(raw_enabled)
+189:             unknown = enabled - VALID_ROUTER_NAMES
+190:             missing = PRODUCTION_ENABLED_ROUTERS - enabled
+191:             extra = enabled - PRODUCTION_ENABLED_ROUTERS
+192:             if unknown or missing or extra:
+193:                 details: list[str] = []
+194:                 if missing:
+195:                     details.append(f"missing={sorted(missing)}")
+196:                 if extra:
+197:                     details.append(f"extra={sorted(extra)}")
+198:                 if unknown:
+199:                     details.append(f"unknown={sorted(unknown)}")
+200:                 raise RuntimeError(
+201:                     "Production ENABLED_ROUTERS does not match the release-approved set exactly: "
+202:                     + "; ".join(details)
+203:                 )
+204: 
+205:             return cls(
+206:                 production=True,
+207:                 enabled_routers=enabled,
+208:                 configured_disabled=frozenset(),
+209:                 unknown_disabled=frozenset(),
+210:                 experimental_bypass_enabled=False,
+211:             )
+212: 
+213:         unknown_disabled = configured_disabled - VALID_ROUTER_NAMES
+214:         disabled_compliance = configured_disabled & COMPLIANCE_ROUTERS
+215:         if disabled_compliance and not _truthy(env.get("ALLOW_DISABLE_COMPLIANCE_ROUTERS")):
+216:             raise RuntimeError(
+217:                 "CRITICAL: Compliance-critical routers disabled without "
+218:                 f"ALLOW_DISABLE_COMPLIANCE_ROUTERS=true: {sorted(disabled_compliance)}. "
+219:                 "This violates FSMA 204 requirements."
+220:             )
+221: 
+222:         return cls(
+223:             production=False,
+224:             enabled_routers=VALID_ROUTER_NAMES - configured_disabled,
+225:             configured_disabled=configured_disabled,
+226:             unknown_disabled=unknown_disabled,
+227:             experimental_bypass_enabled=experimental_bypass,
+228:         )
+229: 
+230:     @property
+231:     def disabled_routers(self) -> frozenset[str]:
+232:         return VALID_ROUTER_NAMES - self.enabled_routers
+233: 
+234:     @property
+235:     def auto_disabled_routers(self) -> frozenset[str]:
+236:         if self.production:
+237:             return self.disabled_routers
+238:         return frozenset()
+239: 
+240:     def enable(self, name: str) -> bool:
+241:         """Return whether a router is enabled and record an actual mount."""
+242:         router_name = name.lower()
+243:         enabled = router_name in self.enabled_routers
+244:         if enabled and router_name not in self.mounted_routers:
+245:             self.mounted_routers.append(router_name)
+246:         return enabled
+247: 
+248:     def is_enabled(self, name: str) -> bool:
+249:         """Pure predicate used by readiness checks after app construction."""
+250:         return name.lower() in self.enabled_routers
+MANIFEST {'enabled_operation_count': 250, 'disabled_operation_count': 180, 'disabled_unique_path_count': 163, 'enabled_by_classification': {'global-sysadmin': 15, 'public': 29, 'tenant-scoped': 199, 'workload-only': 7}}
+{'operation': 'root:GET:/', 'owner': 'root', 'method': 'GET', 'path': '/', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:PUT:/admin/organizations/{org_id}/sso-policy', 'owner': 'admin', 'method': 'PUT', 'path': '/admin/organizations/{org_id}/sso-policy', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'health:GET:/api/health', 'owner': 'health', 'method': 'GET', 'path': '/api/health', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'audit_export_log:GET:/api/v1/audit/activity/{tenant_id}', 'owner': 'audit_export_log', 'method': 'GET', 'path': '/api/v1/audit/activity/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/chain', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/chain', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/events', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/events', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/events/{event_id}', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/events/{event_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/exceptions', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/exceptions', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/export-log', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/export-log', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'audit_export_log:POST:/api/v1/audit/exports/{tenant_id}', 'owner': 'audit_export_log', 'method': 'POST', 'path': '/api/v1/audit/exports/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/requests', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/requests', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/rules', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/rules', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'auditor:GET:/api/v1/audit/summary', 'owner': 'auditor', 'method': 'GET', 'path': '/api/v1/audit/summary', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['audit.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'audit_export_log:POST:/api/v1/audit/verifications/{tenant_id}', 'owner': 'audit_export_log', 'method': 'POST', 'path': '/api/v1/audit/verifications/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:POST:/api/v1/billing/checkout', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/checkout', 'classification': 'public', 'authentication': 'optional-x-regengine-api-key', 'required_permissions': [], 'storage_boundary': 'stripe+redis:anonymous-or-credential-bound-tenant', 'test_adapter': 'public_optional_tenant_checkout'}
+{'operation': 'billing:GET:/api/v1/billing/invoices', 'owner': 'billing', 'method': 'GET', 'path': '/api/v1/billing/invoices', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.invoices.read'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:GET:/api/v1/billing/invoices/{invoice_id}/pdf', 'owner': 'billing', 'method': 'GET', 'path': '/api/v1/billing/invoices/{invoice_id}/pdf', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.invoices.read'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:GET:/api/v1/billing/plans', 'owner': 'billing', 'method': 'GET', 'path': '/api/v1/billing/plans', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'billing:POST:/api/v1/billing/portal', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/portal', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:POST:/api/v1/billing/portal/{tenant_id}', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/portal/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:GET:/api/v1/billing/subscription/{tenant_id}', 'owner': 'billing', 'method': 'GET', 'path': '/api/v1/billing/subscription/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.subscription.read'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:GET:/api/v1/billing/usage', 'owner': 'billing', 'method': 'GET', 'path': '/api/v1/billing/usage', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.usage.read'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:DELETE:/api/v1/billing/usage/opt-in', 'owner': 'billing', 'method': 'DELETE', 'path': '/api/v1/billing/usage/opt-in', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.usage.manage'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:POST:/api/v1/billing/usage/opt-in', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/usage/opt-in', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.usage.manage'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:POST:/api/v1/billing/usage/report', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/usage/report', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['billing.usage.report'], 'storage_boundary': 'stripe+postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'billing:POST:/api/v1/billing/webhook/stripe', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/webhook/stripe', 'classification': 'workload-only', 'authentication': 'stripe-signature', 'required_permissions': ['stripe.webhook.deliver'], 'storage_boundary': 'stripe-event-to-credential-bound-tenant', 'test_adapter': 'workload_stripe_signature'}
+{'operation': 'billing:POST:/api/v1/billing/webhooks', 'owner': 'billing', 'method': 'POST', 'path': '/api/v1/billing/webhooks', 'classification': 'workload-only', 'authentication': 'stripe-signature', 'required_permissions': ['stripe.webhook.deliver'], 'storage_boundary': 'stripe-event-to-credential-bound-tenant', 'test_adapter': 'workload_stripe_signature'}
+{'operation': 'chain_verification:POST:/api/v1/chain/verify-all', 'owner': 'chain_verification', 'method': 'POST', 'path': '/api/v1/chain/verify-all', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'chain_verification:GET:/api/v1/chain/verify-all/{job_id}', 'owner': 'chain_verification', 'method': 'GET', 'path': '/api/v1/chain/verify-all/{job_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'score:GET:/api/v1/compliance/pending-reviews/{tenant_id}', 'owner': 'score', 'method': 'GET', 'path': '/api/v1/compliance/pending-reviews/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'score:GET:/api/v1/compliance/score/{tenant_id}', 'owner': 'score', 'method': 'GET', 'path': '/api/v1/compliance/score/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:POST:/api/v1/epcis/events', 'owner': 'epcis_ingestion', 'method': 'POST', 'path': '/api/v1/epcis/events', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:POST:/api/v1/epcis/events/batch', 'owner': 'epcis_ingestion', 'method': 'POST', 'path': '/api/v1/epcis/events/batch', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:POST:/api/v1/epcis/events/xml', 'owner': 'epcis_ingestion', 'method': 'POST', 'path': '/api/v1/epcis/events/xml', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:GET:/api/v1/epcis/events/{event_id}', 'owner': 'epcis_ingestion', 'method': 'GET', 'path': '/api/v1/epcis/events/{event_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:GET:/api/v1/epcis/export', 'owner': 'epcis_ingestion', 'method': 'GET', 'path': '/api/v1/epcis/export', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'epcis_ingestion:POST:/api/v1/epcis/validate', 'owner': 'epcis_ingestion', 'method': 'POST', 'path': '/api/v1/epcis/validate', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:GET:/api/v1/exceptions', 'owner': 'exceptions', 'method': 'GET', 'path': '/api/v1/exceptions', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:POST:/api/v1/exceptions', 'owner': 'exceptions', 'method': 'POST', 'path': '/api/v1/exceptions', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:GET:/api/v1/exceptions/stats/blocking', 'owner': 'exceptions', 'method': 'GET', 'path': '/api/v1/exceptions/stats/blocking', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:GET:/api/v1/exceptions/{case_id}', 'owner': 'exceptions', 'method': 'GET', 'path': '/api/v1/exceptions/{case_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:PATCH:/api/v1/exceptions/{case_id}/assign', 'owner': 'exceptions', 'method': 'PATCH', 'path': '/api/v1/exceptions/{case_id}/assign', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:GET:/api/v1/exceptions/{case_id}/comments', 'owner': 'exceptions', 'method': 'GET', 'path': '/api/v1/exceptions/{case_id}/comments', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:POST:/api/v1/exceptions/{case_id}/comments', 'owner': 'exceptions', 'method': 'POST', 'path': '/api/v1/exceptions/{case_id}/comments', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:PATCH:/api/v1/exceptions/{case_id}/resolve', 'owner': 'exceptions', 'method': 'PATCH', 'path': '/api/v1/exceptions/{case_id}/resolve', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'exceptions:PATCH:/api/v1/exceptions/{case_id}/waive', 'owner': 'exceptions', 'method': 'PATCH', 'path': '/api/v1/exceptions/{case_id}/waive', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['exceptions.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.export'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/all', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/all', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.export'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/history', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/history', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.read'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/merkle-proof', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/merkle-proof', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.verify'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/merkle-root', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/merkle-root', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.verify'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/recall', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/recall', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.export'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/export/v2', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/export/v2', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.export'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:POST:/api/v1/fda/export/verify', 'owner': 'fda_export', 'method': 'POST', 'path': '/api/v1/fda/export/verify', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.verify'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fda_export:GET:/api/v1/fda/trace/{tlc}', 'owner': 'fda_export', 'method': 'GET', 'path': '/api/v1/fda/trace/{tlc}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['fda.read'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'features:GET:/api/v1/features', 'owner': 'features', 'method': 'GET', 'path': '/api/v1/features', 'classification': 'workload-only', 'authentication': 'x-metrics-key', 'required_permissions': ['metrics.read'], 'storage_boundary': 'process-observability:no-tenant-data', 'test_adapter': 'workload_metrics_key'}
+{'operation': 'readiness:GET:/api/v1/fsma/export-jobs', 'owner': 'readiness', 'method': 'GET', 'path': '/api/v1/fsma/export-jobs', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'readiness:GET:/api/v1/fsma/mappings', 'owner': 'readiness', 'method': 'GET', 'path': '/api/v1/fsma/mappings', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'inflow_workbench:POST:/api/v1/inflow-workbench/commit-gate', 'owner': 'inflow_workbench', 'method': 'POST', 'path': '/api/v1/inflow-workbench/commit-gate', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:GET:/api/v1/inflow-workbench/fix-queue', 'owner': 'inflow_workbench', 'method': 'GET', 'path': '/api/v1/inflow-workbench/fix-queue', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:PATCH:/api/v1/inflow-workbench/fix-queue/{item_id}', 'owner': 'inflow_workbench', 'method': 'PATCH', 'path': '/api/v1/inflow-workbench/fix-queue/{item_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:POST:/api/v1/inflow-workbench/readiness/preview', 'owner': 'inflow_workbench', 'method': 'POST', 'path': '/api/v1/inflow-workbench/readiness/preview', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:GET:/api/v1/inflow-workbench/readiness/summary', 'owner': 'inflow_workbench', 'method': 'GET', 'path': '/api/v1/inflow-workbench/readiness/summary', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:POST:/api/v1/inflow-workbench/runs', 'owner': 'inflow_workbench', 'method': 'POST', 'path': '/api/v1/inflow-workbench/runs', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:GET:/api/v1/inflow-workbench/runs/{run_id}', 'owner': 'inflow_workbench', 'method': 'GET', 'path': '/api/v1/inflow-workbench/runs/{run_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:GET:/api/v1/inflow-workbench/scenarios', 'owner': 'inflow_workbench', 'method': 'GET', 'path': '/api/v1/inflow-workbench/scenarios', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'inflow_workbench:POST:/api/v1/inflow-workbench/scenarios', 'owner': 'inflow_workbench', 'method': 'POST', 'path': '/api/v1/inflow-workbench/scenarios', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['inflow.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'csv:POST:/api/v1/ingest/csv', 'owner': 'csv', 'method': 'POST', 'path': '/api/v1/ingest/csv', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['webhooks.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'edi:POST:/api/v1/ingest/edi', 'owner': 'edi', 'method': 'POST', 'path': '/api/v1/ingest/edi', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['edi.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'edi:POST:/api/v1/ingest/edi/document', 'owner': 'edi', 'method': 'POST', 'path': '/api/v1/ingest/edi/document', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['edi.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'compliance_metrics:GET:/api/v1/metrics/compliance', 'owner': 'compliance_metrics', 'method': 'GET', 'path': '/api/v1/metrics/compliance', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['metrics.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'export_monitoring:GET:/api/v1/monitoring/alerts/{tenant_id}', 'owner': 'export_monitoring', 'method': 'GET', 'path': '/api/v1/monitoring/alerts/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'export_monitoring:GET:/api/v1/monitoring/exports/{tenant_id}', 'owner': 'export_monitoring', 'method': 'GET', 'path': '/api/v1/monitoring/exports/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'export_monitoring:GET:/api/v1/monitoring/health/{tenant_id}', 'owner': 'export_monitoring', 'method': 'GET', 'path': '/api/v1/monitoring/health/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'onboarding:GET:/api/v1/onboarding/steps', 'owner': 'onboarding', 'method': 'GET', 'path': '/api/v1/onboarding/steps', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'onboarding:GET:/api/v1/onboarding/{tenant_id}/progress', 'owner': 'onboarding', 'method': 'GET', 'path': '/api/v1/onboarding/{tenant_id}/progress', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'onboarding:POST:/api/v1/onboarding/{tenant_id}/step/{step_id}', 'owner': 'onboarding', 'method': 'POST', 'path': '/api/v1/onboarding/{tenant_id}/step/{step_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'portal:POST:/api/v1/portal/links', 'owner': 'portal', 'method': 'POST', 'path': '/api/v1/portal/links', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['webhooks.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'portal:GET:/api/v1/portal/links/list', 'owner': 'portal', 'method': 'GET', 'path': '/api/v1/portal/links/list', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['webhooks.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'portal:PATCH:/api/v1/portal/links/{portal_id}/revoke', 'owner': 'portal', 'method': 'PATCH', 'path': '/api/v1/portal/links/{portal_id}/revoke', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['webhooks.ingest'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'portal:GET:/api/v1/portal/{portal_id}', 'owner': 'portal', 'method': 'GET', 'path': '/api/v1/portal/{portal_id}', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'postgres-rls:opaque-portal-capability', 'test_adapter': 'public_no_auth'}
+{'operation': 'portal:POST:/api/v1/portal/{portal_id}/preflight', 'owner': 'portal', 'method': 'POST', 'path': '/api/v1/portal/{portal_id}/preflight', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'postgres-rls:opaque-portal-capability', 'test_adapter': 'public_no_auth'}
+{'operation': 'portal:POST:/api/v1/portal/{portal_id}/submit', 'owner': 'portal', 'method': 'POST', 'path': '/api/v1/portal/{portal_id}/submit', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'postgres-rls:opaque-portal-capability', 'test_adapter': 'public_no_auth'}
+{'operation': 'proof_recall:POST:/api/v1/proof/recall-drill', 'owner': 'proof_recall', 'method': 'POST', 'path': '/api/v1/proof/recall-drill', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-proof-store:non-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'proof_verify:POST:/api/v1/proof/verify', 'owner': 'proof_verify', 'method': 'POST', 'path': '/api/v1/proof/verify', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-proof-store:non-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'readiness:GET:/api/v1/readiness/assessment', 'owner': 'readiness', 'method': 'GET', 'path': '/api/v1/readiness/assessment', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['readiness.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'readiness:GET:/api/v1/readiness/checklist', 'owner': 'readiness', 'method': 'GET', 'path': '/api/v1/readiness/checklist', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['readiness.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'readiness:GET:/api/v1/readiness/gaps', 'owner': 'readiness', 'method': 'GET', 'path': '/api/v1/readiness/gaps', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['readiness.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'recall:GET:/api/v1/recall/{tenant_id}/report', 'owner': 'recall', 'method': 'GET', 'path': '/api/v1/recall/{tenant_id}/report', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/ingestion-runs', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/ingestion-runs', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/ingestion-runs/{run_id}', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/ingestion-runs/{run_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/trace/backward/{tlc}', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/trace/backward/{tlc}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/trace/forward/{tlc}', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/trace/forward/{tlc}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/{event_id}', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/{event_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'canonical_records:GET:/api/v1/records/{event_id}/history', 'owner': 'canonical_records', 'method': 'GET', 'path': '/api/v1/records/{event_id}/history', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['records.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'core_ingest:POST:/api/v1/regulatory/ingest/url', 'owner': 'core_ingest', 'method': 'POST', 'path': '/api/v1/regulatory/ingest/url', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.url'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'core_ingest:POST:/api/v1/regulatory/v1/ingest', 'owner': 'core_ingest', 'method': 'POST', 'path': '/api/v1/regulatory/v1/ingest', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.direct'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'core_ingest:POST:/api/v1/regulatory/v1/ingest/file', 'owner': 'core_ingest', 'method': 'POST', 'path': '/api/v1/regulatory/v1/ingest/file', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.file'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'core_ingest:POST:/api/v1/regulatory/v1/ingest/regulation', 'owner': 'core_ingest', 'method': 'POST', 'path': '/api/v1/regulatory/v1/ingest/regulation', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.regulation'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'core_ingest:POST:/api/v1/regulatory/v1/ingest/url', 'owner': 'core_ingest', 'method': 'POST', 'path': '/api/v1/regulatory/v1/ingest/url', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.url'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'request_workflow:GET:/api/v1/requests', 'owner': 'request_workflow', 'method': 'GET', 'path': '/api/v1/requests', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:GET:/api/v1/requests/deadlines', 'owner': 'request_workflow', 'method': 'GET', 'path': '/api/v1/requests/deadlines', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:GET:/api/v1/requests/{request_case_id}', 'owner': 'request_workflow', 'method': 'GET', 'path': '/api/v1/requests/{request_case_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/amend', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/amend', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/assemble', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/assemble', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:GET:/api/v1/requests/{request_case_id}/blockers', 'owner': 'request_workflow', 'method': 'GET', 'path': '/api/v1/requests/{request_case_id}/blockers', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/collect', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/collect', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/gap-analysis', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/gap-analysis', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:GET:/api/v1/requests/{request_case_id}/packages', 'owner': 'request_workflow', 'method': 'GET', 'path': '/api/v1/requests/{request_case_id}/packages', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:PATCH:/api/v1/requests/{request_case_id}/scope', 'owner': 'request_workflow', 'method': 'PATCH', 'path': '/api/v1/requests/{request_case_id}/scope', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/signoff', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/signoff', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'request_workflow:POST:/api/v1/requests/{request_case_id}/submit', 'owner': 'request_workflow', 'method': 'POST', 'path': '/api/v1/requests/{request_case_id}/submit', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['requests.write'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'rules:GET:/api/v1/rules', 'owner': 'rules', 'method': 'GET', 'path': '/api/v1/rules', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['rules.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'rules:POST:/api/v1/rules/evaluate', 'owner': 'rules', 'method': 'POST', 'path': '/api/v1/rules/evaluate', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['rules.evaluate'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'rules:POST:/api/v1/rules/evaluate-batch', 'owner': 'rules', 'method': 'POST', 'path': '/api/v1/rules/evaluate-batch', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['rules.evaluate'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'rules:GET:/api/v1/rules/evaluations/{event_id}', 'owner': 'rules', 'method': 'GET', 'path': '/api/v1/rules/evaluations/{event_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['rules.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'rules:GET:/api/v1/rules/{rule_id}', 'owner': 'rules', 'method': 'GET', 'path': '/api/v1/rules/{rule_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['rules.read'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'sla_tracking:GET:/api/v1/sla/alerts/{tenant_id}', 'owner': 'sla_tracking', 'method': 'GET', 'path': '/api/v1/sla/alerts/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'sla_tracking:GET:/api/v1/sla/dashboard/{tenant_id}', 'owner': 'sla_tracking', 'method': 'GET', 'path': '/api/v1/sla/dashboard/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'sla_tracking:POST:/api/v1/sla/requests', 'owner': 'sla_tracking', 'method': 'POST', 'path': '/api/v1/sla/requests', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'sla_tracking:PATCH:/api/v1/sla/requests/{request_id}/complete', 'owner': 'sla_tracking', 'method': 'PATCH', 'path': '/api/v1/sla/requests/{request_id}/complete', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'sla_tracking:GET:/api/v1/sla/requests/{tenant_id}', 'owner': 'sla_tracking', 'method': 'GET', 'path': '/api/v1/sla/requests/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'csv:GET:/api/v1/templates', 'owner': 'csv', 'method': 'GET', 'path': '/api/v1/templates', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'csv:GET:/api/v1/templates/{cte_type}', 'owner': 'csv', 'method': 'GET', 'path': '/api/v1/templates/{cte_type}', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/api/v1/tools/confirm-code', 'owner': 'admin', 'method': 'POST', 'path': '/api/v1/tools/confirm-code', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/api/v1/tools/lead-erasure/confirm', 'owner': 'admin', 'method': 'POST', 'path': '/api/v1/tools/lead-erasure/confirm', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/api/v1/tools/lead-erasure/request', 'owner': 'admin', 'method': 'POST', 'path': '/api/v1/tools/lead-erasure/request', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/api/v1/tools/verify-email', 'owner': 'admin', 'method': 'POST', 'path': '/api/v1/tools/verify-email', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'webhook:GET:/api/v1/webhooks/chain/verify', 'owner': 'webhook', 'method': 'GET', 'path': '/api/v1/webhooks/chain/verify', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+webhook-ledger:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'webhook:POST:/api/v1/webhooks/ingest', 'owner': 'webhook', 'method': 'POST', 'path': '/api/v1/webhooks/ingest', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key+hmac-signature', 'required_permissions': ['webhooks.ingest'], 'storage_boundary': 'postgres-rls+webhook-ledger:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'webhook:GET:/api/v1/webhooks/recent', 'owner': 'webhook', 'method': 'GET', 'path': '/api/v1/webhooks/recent', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+webhook-ledger:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'admin:POST:/auth/challenges', 'owner': 'admin', 'method': 'POST', 'path': '/auth/challenges', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/auth/challenges/{challenge_id}/verify', 'owner': 'admin', 'method': 'POST', 'path': '/auth/challenges/{challenge_id}/verify', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:GET:/auth/check-permission', 'owner': 'admin', 'method': 'GET', 'path': '/auth/check-permission', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['admin.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/auth/logout', 'owner': 'admin', 'method': 'POST', 'path': '/auth/logout', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/auth/logout-all', 'owner': 'admin', 'method': 'POST', 'path': '/auth/logout-all', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/auth/me', 'owner': 'admin', 'method': 'GET', 'path': '/auth/me', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_opaque_session'}
+{'operation': 'admin:POST:/auth/refresh', 'owner': 'admin', 'method': 'POST', 'path': '/auth/refresh', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/auth/session/logout', 'owner': 'admin', 'method': 'POST', 'path': '/auth/session/logout', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_opaque_session'}
+{'operation': 'admin:GET:/auth/sessions', 'owner': 'admin', 'method': 'GET', 'path': '/auth/sessions', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/auth/sessions/{session_id}/revoke', 'owner': 'admin', 'method': 'POST', 'path': '/auth/sessions/{session_id}/revoke', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/auth/webauthn/login/generate-options', 'owner': 'admin', 'method': 'POST', 'path': '/auth/webauthn/login/generate-options', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/auth/webauthn/login/verify', 'owner': 'admin', 'method': 'POST', 'path': '/auth/webauthn/login/verify', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/auth/webauthn/register/generate-options', 'owner': 'admin', 'method': 'POST', 'path': '/auth/webauthn/register/generate-options', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_high_assurance_session'}
+{'operation': 'admin:POST:/auth/webauthn/register/verify', 'owner': 'admin', 'method': 'POST', 'path': '/auth/webauthn/register/verify', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_high_assurance_session'}
+{'operation': 'billing:GET:/billing/plans', 'owner': 'billing', 'method': 'GET', 'path': '/billing/plans', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'fsma_compliance:GET:/checklists', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/checklists', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/checklists/{checklist_id}', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/checklists/{checklist_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'health:GET:/health', 'owner': 'health', 'method': 'GET', 'path': '/health', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:GET:/health/consumer', 'owner': 'admin', 'method': 'GET', 'path': '/health/consumer', 'classification': 'workload-only', 'authentication': 'x-metrics-key', 'required_permissions': ['metrics.read'], 'storage_boundary': 'process-observability:no-tenant-data', 'test_adapter': 'workload_metrics_key'}
+{'operation': 'health:GET:/healthz', 'owner': 'health', 'method': 'GET', 'path': '/healthz', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'fsma_compliance:GET:/industries', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/industries', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'core_ingest:POST:/ingest/url', 'owner': 'core_ingest', 'method': 'POST', 'path': '/ingest/url', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.url'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'metrics:GET:/metrics', 'owner': 'metrics', 'method': 'GET', 'path': '/metrics', 'classification': 'workload-only', 'authentication': 'x-metrics-key', 'required_permissions': ['metrics.read'], 'storage_boundary': 'process-observability:no-tenant-data', 'test_adapter': 'workload_metrics_key'}
+{'operation': 'health:GET:/readiness', 'owner': 'health', 'method': 'GET', 'path': '/readiness', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:GET:/ready', 'owner': 'admin', 'method': 'GET', 'path': '/ready', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'public-static-or-health:no-tenant-secret', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:POST:/v1/account/erasure', 'owner': 'admin', 'method': 'POST', 'path': '/v1/account/erasure', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres+graph-outbox:authenticated-user-global-identity', 'test_adapter': 'tenant_identity_global_self_erasure'}
+{'operation': 'admin:GET:/v1/account/export', 'owner': 'admin', 'method': 'GET', 'path': '/v1/account/export', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/admin/funnel', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/funnel', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['admin.funnel.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/admin/invites', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/invites', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/admin/invites', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/invites', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.invite'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/admin/invites/{invite_id}/revoke', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/invites/{invite_id}/revoke', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.invite'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/admin/keys', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/keys', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:POST:/v1/admin/keys', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/keys', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:DELETE:/v1/admin/keys/{key_id}', 'owner': 'admin', 'method': 'DELETE', 'path': '/v1/admin/keys/{key_id}', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/admin/review/flagged-extractions', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/review/flagged-extractions', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['review.read'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:POST:/v1/admin/review/flagged-extractions/{review_id}/approve', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/review/flagged-extractions/{review_id}/approve', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['review.decide'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:POST:/v1/admin/review/flagged-extractions/{review_id}/reject', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/review/flagged-extractions/{review_id}/reject', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['review.decide'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:GET:/v1/admin/review/hallucinations', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/review/hallucinations', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['review.read'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:POST:/v1/admin/review/{review_id}/approve', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/review/{review_id}/approve', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['review.decide'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:POST:/v1/admin/review/{review_id}/reject', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/review/{review_id}/reject', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['review.decide'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:GET:/v1/admin/roles', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/roles', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/admin/tenants', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/tenants', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/admin/users', 'owner': 'admin', 'method': 'GET', 'path': '/v1/admin/users', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/admin/users/{user_id}/deactivate', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/users/{user_id}/deactivate', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.disable'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/admin/users/{user_id}/reactivate', 'owner': 'admin', 'method': 'POST', 'path': '/v1/admin/users/{user_id}/reactivate', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.manage_roles'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:PATCH:/v1/admin/users/{user_id}/role', 'owner': 'admin', 'method': 'PATCH', 'path': '/v1/admin/users/{user_id}/role', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['users.manage_roles'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/agent-reviews/items', 'owner': 'admin', 'method': 'GET', 'path': '/v1/agent-reviews/items', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['review.read'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:POST:/v1/agent-reviews/items/{artifact_id}/review', 'owner': 'admin', 'method': 'POST', 'path': '/v1/agent-reviews/items/{artifact_id}/review', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['review.decide'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:GET:/v1/agent-reviews/items/{artifact_id}/timeline', 'owner': 'admin', 'method': 'GET', 'path': '/v1/agent-reviews/items/{artifact_id}/timeline', 'classification': 'tenant-scoped', 'authentication': 'opaque-session-cookie', 'required_permissions': ['review.read'], 'storage_boundary': 'admin-postgres:session-membership-tenant', 'test_adapter': 'tenant_review_session'}
+{'operation': 'admin:GET:/v1/audit/export', 'owner': 'admin', 'method': 'GET', 'path': '/v1/audit/export', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'status:GET:/v1/audit/jobs/{job_id}', 'owner': 'status', 'method': 'GET', 'path': '/v1/audit/jobs/{job_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'ingestion-postgres:explicit-tenant-filter', 'test_adapter': 'tenant_api_key_ingestion_postgres_filter'}
+{'operation': 'status:GET:/v1/audit/logs/{job_id}', 'owner': 'status', 'method': 'GET', 'path': '/v1/audit/logs/{job_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'ingestion-postgres:explicit-tenant-filter', 'test_adapter': 'tenant_api_key_ingestion_postgres_filter'}
+{'operation': 'admin:POST:/v1/auth/accept-invite', 'owner': 'admin', 'method': 'POST', 'path': '/v1/auth/accept-invite', 'classification': 'public', 'authentication': 'none', 'required_permissions': [], 'storage_boundary': 'admin-postgres:identity-bound-public-flow', 'test_adapter': 'public_no_auth'}
+{'operation': 'admin:GET:/v1/compliance/alerts/{tenant_id}', 'owner': 'admin', 'method': 'GET', 'path': '/v1/compliance/alerts/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/compliance/alerts/{tenant_id}', 'owner': 'admin', 'method': 'POST', 'path': '/v1/compliance/alerts/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.create'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/compliance/alerts/{tenant_id}/{alert_id}', 'owner': 'admin', 'method': 'GET', 'path': '/v1/compliance/alerts/{tenant_id}/{alert_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge', 'owner': 'admin', 'method': 'POST', 'path': '/v1/compliance/alerts/{tenant_id}/{alert_id}/acknowledge', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.create'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/compliance/alerts/{tenant_id}/{alert_id}/resolve', 'owner': 'admin', 'method': 'POST', 'path': '/v1/compliance/alerts/{tenant_id}/{alert_id}/resolve', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.create'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/compliance/profile/{tenant_id}', 'owner': 'admin', 'method': 'GET', 'path': '/v1/compliance/profile/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:PUT:/v1/compliance/profile/{tenant_id}', 'owner': 'admin', 'method': 'PUT', 'path': '/v1/compliance/profile/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.create'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}', 'owner': 'fsma_compliance', 'method': 'POST', 'path': '/v1/compliance/snapshots/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/diff', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}/diff', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/attest', 'owner': 'fsma_compliance', 'method': 'POST', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/attest', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/audit-pack', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/audit-pack', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/export', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/export', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/fda-response', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/fda-response', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:POST:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/refreeze', 'owner': 'fsma_compliance', 'method': 'POST', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/refreeze', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'fsma_compliance:GET:/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/verify', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/compliance/snapshots/{tenant_id}/{snapshot_id}/verify', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'admin:GET:/v1/compliance/status/{tenant_id}', 'owner': 'admin', 'method': 'GET', 'path': '/v1/compliance/status/{tenant_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['analysis.read'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'fsma_compliance:GET:/v1/fsma/audit/spreadsheet', 'owner': 'fsma_compliance', 'method': 'GET', 'path': '/v1/fsma/audit/spreadsheet', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}
+{'operation': 'core_ingest:POST:/v1/ingest', 'owner': 'core_ingest', 'method': 'POST', 'path': '/v1/ingest', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.direct'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'status:GET:/v1/ingest/documents', 'owner': 'status', 'method': 'GET', 'path': '/v1/ingest/documents', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'ingestion-postgres:explicit-tenant-filter', 'test_adapter': 'tenant_api_key_ingestion_postgres_filter'}
+{'operation': 'status:GET:/v1/ingest/documents/{document_id}/analysis', 'owner': 'status', 'method': 'GET', 'path': '/v1/ingest/documents/{document_id}/analysis', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'redis:tenant-owner-key', 'test_adapter': 'tenant_api_key_redis_job_owner'}
+{'operation': 'core_ingest:POST:/v1/ingest/file', 'owner': 'core_ingest', 'method': 'POST', 'path': '/v1/ingest/file', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.file'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'core_ingest:POST:/v1/ingest/regulation', 'owner': 'core_ingest', 'method': 'POST', 'path': '/v1/ingest/regulation', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.regulation'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'status:GET:/v1/ingest/status/{job_id}', 'owner': 'status', 'method': 'GET', 'path': '/v1/ingest/status/{job_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'redis:tenant-owner-key', 'test_adapter': 'tenant_api_key_redis_job_owner'}
+{'operation': 'core_ingest:POST:/v1/ingest/url', 'owner': 'core_ingest', 'method': 'POST', 'path': '/v1/ingest/url', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['ingest.url'], 'storage_boundary': 'postgres-rls+redis+object-storage:credential-bound-tenant', 'test_adapter': 'tenant_api_key_mixed_storage'}
+{'operation': 'admin:POST:/v1/internal/tenants', 'owner': 'admin', 'method': 'POST', 'path': '/v1/internal/tenants', 'classification': 'workload-only', 'authentication': 'x-regengine-api-key:[REDACTED], 'required_permissions': ['internal.tenants.create'], 'storage_boundary': 'admin-postgres:tenantless-workload', 'test_adapter': 'workload_tenant_provisioner'}
+{'operation': 'scheduler:GET:/v1/scheduler/status', 'owner': 'scheduler', 'method': 'GET', 'path': '/v1/scheduler/status', 'classification': 'workload-only', 'authentication': 'x-metrics-key', 'required_permissions': ['metrics.read'], 'storage_boundary': 'process-observability:no-tenant-data', 'test_adapter': 'workload_metrics_key'}
+{'operation': 'admin:POST:/v1/supplier/bulk-upload/commit', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/bulk-upload/commit', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/bulk-upload/parse', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/bulk-upload/parse', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/bulk-upload/status/{session_id}', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/bulk-upload/status/{session_id}', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/bulk-upload/template', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/bulk-upload/template', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/bulk-upload/validate', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/bulk-upload/validate', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/compliance-score', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/compliance-score', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/demo/reset', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/demo/reset', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['supplier.demo.reset'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/export/fda-records', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/export/fda-records', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/export/fda-records/preview', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/export/fda-records/preview', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/facilities', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/facilities', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/facilities', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/facilities', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/facilities/{facility_id}/cte-events', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/facilities/{facility_id}/cte-events', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:PUT:/v1/supplier/facilities/{facility_id}/ftl-categories', 'owner': 'admin', 'method': 'PUT', 'path': '/v1/supplier/facilities/{facility_id}/ftl-categories', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/facilities/{facility_id}/required-ctes', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/facilities/{facility_id}/required-ctes', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/ftl-categories', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/ftl-categories', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/funnel-events', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/funnel-events', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/funnel-summary', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/funnel-summary', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/gaps', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/gaps', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/social-proof', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/social-proof', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/supplier/tlcs', 'owner': 'admin', 'method': 'GET', 'path': '/v1/supplier/tlcs', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/supplier/tlcs', 'owner': 'admin', 'method': 'POST', 'path': '/v1/supplier/tlcs', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/system/dlq/replay', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/dlq/replay', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/system/jwt/keys', 'owner': 'admin', 'method': 'GET', 'path': '/v1/system/jwt/keys', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:POST:/v1/system/jwt/revoke', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/jwt/revoke', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:POST:/v1/system/jwt/revoke-all', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/jwt/revoke-all', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:POST:/v1/system/jwt/revoke-key', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/jwt/revoke-key', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:POST:/v1/system/jwt/rotate', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/jwt/rotate', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/system/metrics', 'owner': 'admin', 'method': 'GET', 'path': '/v1/system/metrics', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:GET:/v1/system/qa-health', 'owner': 'admin', 'method': 'GET', 'path': '/v1/system/qa-health', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/system/status', 'owner': 'admin', 'method': 'GET', 'path': '/v1/system/status', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:POST:/v1/system/task-queue/replay', 'owner': 'admin', 'method': 'POST', 'path': '/v1/system/task-queue/replay', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/system/task-queue/summary', 'owner': 'admin', 'method': 'GET', 'path': '/v1/system/task-queue/summary', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:GET:/v1/tenants/{tenant_id}/onboarding', 'owner': 'admin', 'method': 'GET', 'path': '/v1/tenants/{tenant_id}/onboarding', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'admin:PATCH:/v1/tenants/{tenant_id}/partner-status', 'owner': 'admin', 'method': 'PATCH', 'path': '/v1/tenants/{tenant_id}/partner-status', 'classification': 'global-sysadmin', 'authentication': 'opaque-session-cookie:webauthn-or-sso', 'required_permissions': ['sysadmin'], 'storage_boundary': 'admin-postgres:audited-global', 'test_adapter': 'global_sysadmin_high_assurance'}
+{'operation': 'admin:PATCH:/v1/tenants/{tenant_id}/settings', 'owner': 'admin', 'method': 'PATCH', 'path': '/v1/tenants/{tenant_id}/settings', 'classification': 'tenant-scoped', 'authentication': 'bearer-token-or-opaque-session-cookie', 'required_permissions': ['authenticated'], 'storage_boundary': 'admin-postgres:jwt-tenant-or-session-membership-tenant', 'test_adapter': 'tenant_dual_session_csrf'}
+{'operation': 'status:GET:/v1/verify/{document_id}', 'owner': 'status', 'method': 'GET', 'path': '/v1/verify/{document_id}', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'ingestion-postgres:explicit-tenant-filter', 'test_adapter': 'tenant_api_key_ingestion_postgres_filter'}
+{'operation': 'fsma_compliance:POST:/validate', 'owner': 'fsma_compliance', 'method': 'POST', 'path': '/validate', 'classification': 'tenant-scoped', 'authentication': 'x-regengine-api-key', 'required_permissions': ['authenticated'], 'storage_boundary': 'postgres-rls+generated-artifact:credential-bound-tenant', 'test_adapter': 'tenant_api_key_postgres_rls'}

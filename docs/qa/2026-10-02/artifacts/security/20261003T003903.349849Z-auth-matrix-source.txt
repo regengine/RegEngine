@@ -1,0 +1,531 @@
+UTC: 2026-10-03T00:39:03.349849+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "def get_current_user|Bearer|csrf|tenant|membership|is_active|permission" services/admin/app/dependencies.py | head -105; nl -ba services/admin/app/auth/session_auth.py | sed -n "1,195p"; nl -ba services/admin/app/privileged_auth.py | sed -n "1,200p"; rg -n "def .*|tenant_id|api_key|path_params" services/ingestion/app/fda_export/router.py | head -85'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+13:from shared.permissions import has_permission
+17:from shared.tenant_context import set_rls_tenant_id
+37:    get_tenant_session,
+56:    ``OAuth2PasswordBearer`` dependency produced a stale token URL and leaked
+57:    a misleading Bearer scheme into generated documentation.
+120:        headers={"WWW-Authenticate": "Bearer"},
+206:async def get_current_user(
+217:    tenant_id = None
+223:    # __Host-regengine_session cookie — no Bearer token is ever issued to
+226:    # then fall through to the shared tenant/RLS binding below.
+229:        # (WWW-Authenticate: Bearer) that API clients and tests expect.
+261:                # SECURITY (#1345): tenant_id MUST come from app_metadata
+264:                # user_metadata lets a multi-tenant user silently switch
+265:                # which tenant they act as from the browser.
+267:                tenant_id = app_meta.get("tenant_id")
+314:            # signature + expiry), not a request body. The tenant_id claim is
+317:            tenant_id = payload.get("tenant_id") or payload.get("tid")  # nosemgrep: tenant-id-from-request-body
+370:    # SECURITY (#1383): clear any stale tenant context that may be lingering
+372:    # has no resolvable tenant and the user is not a sysadmin, we want RLS
+376:            TenantContext.clear_tenant_context(db)
+379:            # subsequent set_tenant_context (or, absent that, the RLS
+384:                "stale_tenant_context_clear_failed",
+434:    # SECURITY (#1345): if no trusted tenant claim is present, derive from
+435:    # the DB — but only when there is exactly one active membership. Users
+436:    # who belong to multiple tenants must have tenant_id written into
+438:    if not tenant_id:
+440:            # Selecting a tenant is the final pre-tenant bootstrap query.  The
+441:            # global arm is removed before any tenant-scoped route work.
+443:            active_memberships = (
+447:                        MembershipModel.is_active == True,  # noqa: E712  (SQLAlchemy needs ==)
+455:        if len(active_memberships) == 1:
+456:            tenant_id = str(active_memberships[0].tenant_id)
+458:                "tenant_derived_from_sole_membership",
+460:                tenant_id=tenant_id,
+462:        elif len(active_memberships) > 1 and not user.is_sysadmin:
+464:                "ambiguous_tenant_no_trusted_claim",
+466:                membership_count=len(active_memberships),
+470:                detail="Tenant selection required — no app_metadata.tenant_id set",
+471:                headers={"WWW-Authenticate": "Bearer"},
+474:            # SECURITY (#1383): zero memberships AND not a sysadmin AND no
+475:            # tenant claim means this token cannot be bound to any tenant
+476:            # scope. Previously we returned the user with tenant_context
+478:            # connections — could leak data across tenants. Reject at the
+479:            # auth layer so tenant-scoped routes never see this request.
+481:                "tenant_required_no_membership",
+486:                detail="Tenant required — no tenant claim and no active memberships",
+487:                headers={"WWW-Authenticate": "Bearer"},
+490:    # Store tenant context in request state or handle via DB session context
+491:    if tenant_id:
+494:            # tenant context in session.info so local/dev parity is preserved.
+495:            TenantContext.set_tenant_context(db, UUID(tenant_id))
+497:            # re-applies app.tenant_id on every transaction (the legacy
+501:            set_rls_tenant_id(tenant_id)
+502:            # Verify membership exists for this tenant
+503:            membership = db.execute(
+505:                    MembershipModel.user_id == UUID(user_id), MembershipModel.tenant_id == UUID(tenant_id)
+509:            if not membership:
+510:                logger.warning("invalid_tenant_context", user_id=user_id, tenant_id=tenant_id)
+513:            if not membership.is_active:
+514:                logger.warning("deactivated_user_access_attempt", user_id=user_id, tenant_id=tenant_id)
+518:            logger.error("tenant_context_error", error=str(e))
+521:        # SECURITY (#2687 follow-up): enforce live tenant status on the opaque
+523:        # tenant_status claim that the edge middleware checks, but an opaque
+525:        # this check a suspended tenant's browser session retained full
+527:        # allows. Global sysadmins are exempt — suspension is a tenant-level
+529:        # to manage suspended tenants.
+534:                tenant = db.get(TenantModel, UUID(tenant_id), populate_existing=True)
+537:                    "tenant_status_lookup_failed",
+539:                    tenant_id=tenant_id,
+546:            tenant_status = getattr(tenant, "status", None) if tenant is not None else None
+547:            if tenant_status not in ("active", "trial"):
+549:                # so responses expose no tenant-existence or status oracle.
+551:                    "suspended_tenant_session_rejected",
+553:                    tenant_id=tenant_id,
+554:                    tenant_status=tenant_status,
+562:    def __init__(self, required_permission: str):
+563:        self.required_permission = required_permission
+566:        # Inspect current tenant context from session?
+567:        # Since set_tenant_context was called in get_current_user, RLS is active.
+568:        # But we need to check the Roles/Permissions for the current tenant.
+570:        # We need to retrieve the tenant_id embedded in the current RLS context
+572:        # We can also get it from `db` if we trust `get_tenant_context`.
+574:        current_tenant_id = TenantContext.get_tenant_context(db)
+575:        if not current_tenant_id:
+578:            # `user.is_sysadmin`, granting access to tenant-scoped endpoints
+579:            # with no bound tenant. That breaks the fail-closed invariant:
+580:            # a sysadmin performing a tenant-scoped operation MUST supply a
+581:            # tenant context (X-Tenant-ID / JWT claim). Global sysadmin
+583:            # tenant is bound.
+586:                detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID",
+595:                MembershipModel.tenant_id == current_tenant_id,
+597:                    RoleModel.tenant_id.is_(None),
+598:                    RoleModel.tenant_id == current_tenant_id,
+607:        # Check permissions with wildcard and namespace support.
+608:        if has_permission(role.permissions or [], self.required_permission):
+611:        raise HTTPException(status_code=403, detail="Insufficient permissions")
+614:def verify_path_tenant_matches(
+615:    tenant_id: str = Path(...),
+619:    """Reject a request when the URL path ``tenant_id`` does not match the
+620:    caller's authenticated tenant context.
+622:    Without this, routes shaped as ``/v1/compliance/{tenant_id}/...`` accept
+624:    a trivial IDOR: caller in tenant A supplies tenant B's UUID and reads or
+625:    mutates tenant B's data. See #1328.
+628:        path_tenant = UUID(tenant_id)
+630:        raise HTTPException(status_code=400, detail="Invalid tenant_id format")
+     1	"""Cookie-backed session authentication dependencies."""
+     2	
+     3	from __future__ import annotations
+     4	
+     5	from dataclasses import dataclass
+     6	from datetime import datetime, timezone
+     7	
+     8	import structlog
+     9	from fastapi import Depends, HTTPException, Request, status
+    10	from sqlalchemy import select
+    11	from sqlalchemy.orm import Session
+    12	
+    13	from ..auth_crypto import AuthCryptoService
+    14	from ..database import (
+    15	    arm_global_admin_context,
+    16	    bind_authenticated_user_context,
+    17	    disarm_global_admin_context,
+    18	    get_session,
+    19	)
+    20	from ..sqlalchemy_models import SessionModel, UserModel
+    21	
+    22	AUTH_SESSION_COOKIE = "__Host-regengine_session"
+    23	HIGH_ASSURANCE_AUTH_METHODS = frozenset({"webauthn", "sso"})
+    24	STEP_UP_ERROR_CODE = "requires_step_up"
+    25	
+    26	logger = structlog.get_logger("auth.session")
+    27	
+    28	
+    29	@dataclass(frozen=True)
+    30	class ActiveSessionContext:
+    31	    user: UserModel
+    32	    session: SessionModel
+    33	
+    34	
+    35	def get_auth_crypto_service() -> AuthCryptoService:
+    36	    return AuthCryptoService()
+    37	
+    38	
+    39	def _unauthenticated() -> HTTPException:
+    40	    return HTTPException(
+    41	        status_code=status.HTTP_401_UNAUTHORIZED,
+    42	        detail="Authentication required.",
+    43	    )
+    44	
+    45	
+    46	def _requires_step_up(auth_method: str | None) -> HTTPException:
+    47	    return HTTPException(
+    48	        status_code=status.HTTP_403_FORBIDDEN,
+    49	        detail={
+    50	            "code": STEP_UP_ERROR_CODE,
+    51	            "message": "High assurance authentication required.",
+    52	            "auth_method": auth_method,
+    53	        },
+    54	    )
+    55	
+    56	
+    57	def get_current_active_session_context(
+    58	    request: Request,
+    59	    db: Session = Depends(get_session),
+    60	    crypto_service: AuthCryptoService = Depends(get_auth_crypto_service),
+    61	) -> ActiveSessionContext:
+    62	    """Authenticate the current user and DB session from the opaque cookie."""
+    63	    session_token = request.cookies.get(AUTH_SESSION_COOKIE)
+    64	    if not session_token:
+    65	        raise _unauthenticated()
+    66	
+    67	    try:
+    68	        token_hash = crypto_service.hash_session_token(session_token)
+    69	    except ValueError as exc:
+    70	        raise _unauthenticated() from exc
+    71	
+    72	    now = datetime.now(timezone.utc)
+    73	    stmt = (
+    74	        select(UserModel, SessionModel)
+    75	        .join(SessionModel, SessionModel.user_id == UserModel.id)
+    76	        .where(
+    77	            SessionModel.token_hash == token_hash,
+    78	            SessionModel.is_revoked.is_(False),
+    79	            SessionModel.revoked_at.is_(None),
+    80	            SessionModel.expires_at > now,
+    81	            UserModel.global_status == "active",
+    82	            UserModel.status == "active",
+    83	        )
+    84	        .limit(1)
+    85	    )
+    86	
+    87	    try:
+    88	        row = db.execute(stmt).one_or_none()
+    89	    except Exception as exc:
+    90	        logger.error("session_lookup_failed", error=str(exc))
+    91	        raise HTTPException(
+    92	            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    93	            detail="Authentication service temporarily unavailable.",
+    94	        ) from exc
+    95	
+    96	    if row is None:
+    97	        raise _unauthenticated()
+    98	
+    99	    user, session = row
+   100	    return ActiveSessionContext(user=user, session=session)
+   101	
+   102	
+   103	def get_scoped_active_session_context(
+   104	    request: Request,
+   105	    db: Session = Depends(get_session),
+   106	    crypto_service: AuthCryptoService = Depends(get_auth_crypto_service),
+   107	) -> ActiveSessionContext:
+   108	    """Resolve an opaque session from a baseline-denied admin connection.
+   109	
+   110	    The cookie-to-user lookup is necessarily pre-tenant.  Global authority is
+   111	    transaction-local and exists only around that lookup; the returned session
+   112	    retains a user-self GUC, not the global sysadmin arm.
+   113	    """
+   114	
+   115	    try:
+   116	        arm_global_admin_context(db)
+   117	        context = get_current_active_session_context(
+   118	            request=request,
+   119	            db=db,
+   120	            crypto_service=crypto_service,
+   121	        )
+   122	    finally:
+   123	        disarm_global_admin_context(db)
+   124	
+   125	    bind_authenticated_user_context(db, context.user.id)
+   126	    return context
+   127	
+   128	
+   129	def get_current_active_user(
+   130	    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
+   131	) -> UserModel:
+   132	    """Authenticate the current user from the opaque browser session cookie."""
+   133	    return context.user
+   134	
+   135	
+   136	def require_high_assurance_session(
+   137	    context: ActiveSessionContext = Depends(get_scoped_active_session_context),
+   138	) -> UserModel:
+   139	    """Require an active WebAuthn or SSO-backed browser session."""
+   140	    auth_method = getattr(context.session, "auth_method", None)
+   141	    if auth_method not in HIGH_ASSURANCE_AUTH_METHODS:
+   142	        logger.info(
+   143	            "step_up_required",
+   144	            user_id=str(getattr(context.user, "id", "")),
+   145	            auth_method=auth_method,
+   146	        )
+   147	        raise _requires_step_up(auth_method)
+   148	    return context.user
+     1	"""Authentication boundaries for privileged human and workload routes.
+     2	
+     3	Human administration is authenticated only with the opaque browser session
+     4	cookie.  Workload tenant provisioning is authenticated only with a
+     5	database-backed, tenantless API key carrying one exact scope. Privileged
+     6	authentication realms use Redis-backed failure budgets in staging/cloud and
+     7	production; only explicit non-cloud local/test runs may use process memory.
+     8	"""
+     9	
+    10	from __future__ import annotations
+    11	
+    12	import hashlib
+    13	import os
+    14	import threading
+    15	import time
+    16	import uuid
+    17	from collections import defaultdict
+    18	from dataclasses import dataclass
+    19	from datetime import datetime, timedelta, timezone
+    20	from typing import Optional
+    21	
+    22	import structlog
+    23	from fastapi import Depends, Header, HTTPException, Request, status
+    24	from shared.api_key_store import APIKeyResponse, DatabaseAPIKeyStore
+    25	from shared.auth import get_key_store
+    26	from shared.env import CLOUD_ENV_VARS, get_environment
+    27	from shared.permissions import has_permission
+    28	from sqlalchemy import or_, select
+    29	from sqlalchemy.orm import Session
+    30	
+    31	from .auth.session_auth import (
+    32	    HIGH_ASSURANCE_AUTH_METHODS,
+    33	    ActiveSessionContext,
+    34	    get_auth_crypto_service,
+    35	    get_current_active_session_context,
+    36	)
+    37	from .auth_crypto import AuthCryptoService
+    38	from .database import (
+    39	    arm_global_admin_context,
+    40	    bind_authenticated_user_context,
+    41	    disarm_global_admin_context,
+    42	    get_session,
+    43	)
+    44	from .sqlalchemy_models import (
+    45	    MembershipModel,
+    46	    OrganizationMembershipModel,
+    47	    RoleModel,
+    48	    SessionModel,
+    49	    UserModel,
+    50	)
+    51	
+    52	logger = structlog.get_logger("admin.privileged_auth")
+    53	
+    54	PRIVILEGED_AUTH_MAX_FAILURES = 5
+    55	PRIVILEGED_AUTH_WINDOW_SECONDS = 60
+    56	TENANT_PROVISIONER_SCOPE = "internal.tenants.create"
+    57	TENANT_PROVISIONER_MAX_TTL = timedelta(days=90)
+    58	TENANT_PROVISIONER_MAX_RATE_PER_MINUTE = 10
+    59	_LOCAL_THROTTLE_ENVIRONMENTS = {"development", "local", "test"}
+    60	_ADMIN_AUTH_REALM = "human-admin"
+    61	_REVIEW_READ_AUTH_REALM = "review-read"
+    62	_REVIEW_DECIDE_AUTH_REALM = "review-decide"
+    63	_WORKLOAD_AUTH_REALM = "workload-tenant-provisioner"
+    64	
+    65	
+    66	def _authentication_service_unavailable() -> HTTPException:
+    67	    return HTTPException(
+    68	        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    69	        detail="Authentication service temporarily unavailable.",
+    70	    )
+    71	
+    72	
+    73	def _rate_limited() -> HTTPException:
+    74	    return HTTPException(
+    75	        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+    76	        detail="Too many failed privileged authentication attempts.",
+    77	        headers={"Retry-After": str(PRIVILEGED_AUTH_WINDOW_SECONDS)},
+    78	    )
+    79	
+    80	
+    81	_REDIS_CLIENT_UNSET = object()
+    82	
+    83	
+    84	class PrivilegedAuthThrottle:
+    85	    """Shared invalid-authentication counter with a local-development fallback.
+    86	
+    87	    Restricted staging/cloud and production never fall back to process memory.
+    88	    If Redis is missing or an operation fails, privileged authentication
+    89	    returns 503 rather than serving a request with an unverifiable
+    90	    cross-replica failure budget.
+    91	    """
+    92	
+    93	    def __init__(self, redis_client: object = _REDIS_CLIENT_UNSET) -> None:
+    94	        self._redis = None if redis_client is _REDIS_CLIENT_UNSET else redis_client
+    95	        self._redis_initialized = redis_client is not _REDIS_CLIENT_UNSET
+    96	        self._memory: dict[str, list[float]] = defaultdict(list)
+    97	        self._memory_lock = threading.Lock()
+    98	        self._degraded_logged = False
+    99	
+   100	    @staticmethod
+   101	    def _redis_url() -> str | None:
+   102	        return os.getenv("REGENGINE_REDIS_URL") or os.getenv("REDIS_URL")
+   103	
+   104	    async def _get_redis(self):
+   105	        if self._redis_initialized:
+   106	            return self._redis
+   107	
+   108	        self._redis_initialized = True
+   109	        redis_url = self._redis_url()
+   110	        if not redis_url:
+   111	            return None
+   112	
+   113	        try:
+   114	            import redis.asyncio as redis
+   115	
+   116	            self._redis = redis.from_url(
+   117	                redis_url,
+   118	                socket_connect_timeout=1,
+   119	                socket_timeout=1,
+   120	            )
+   121	        except Exception as exc:  # pragma: no cover - import/config environment dependent
+   122	            self._backend_failure("initialize", exc)
+   123	        return self._redis
+   124	
+   125	    @staticmethod
+   126	    def _memory_fallback_allowed() -> bool:
+   127	        environment = get_environment()
+   128	        cloud_deployment = any(os.getenv(name) for name in CLOUD_ENV_VARS)
+   129	        return not cloud_deployment and environment in _LOCAL_THROTTLE_ENVIRONMENTS
+   130	
+   131	    def _backend_failure(self, operation: str, exc: Exception | None = None) -> None:
+   132	        fail_closed = not self._memory_fallback_allowed()
+   133	        if not self._degraded_logged:
+   134	            self._degraded_logged = True
+   135	            log = logger.error if fail_closed else logger.warning
+   136	            log(
+   137	                "privileged_auth_throttle_unavailable",
+   138	                operation=operation,
+   139	                error_class=type(exc).__name__ if exc else "Unavailable",
+   140	                fail_mode="closed" if fail_closed else "local_memory",
+   141	            )
+   142	        if fail_closed:
+   143	            raise _authentication_service_unavailable() from exc
+   144	
+   145	    @staticmethod
+   146	    def _key(subject: str) -> str:
+   147	        # Avoid retaining a source IP verbatim in the Redis keyspace.
+   148	        digest = hashlib.sha256(subject.encode("utf-8")).hexdigest()
+   149	        return f"privileged_auth:failures:{digest}"
+   150	
+   151	    def _memory_is_limited(self, subject: str) -> bool:
+   152	        now = time.monotonic()
+   153	        with self._memory_lock:
+   154	            recent = [
+   155	                timestamp
+   156	                for timestamp in self._memory[subject]
+   157	                if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
+   158	            ]
+   159	            self._memory[subject] = recent
+   160	            return len(recent) >= PRIVILEGED_AUTH_MAX_FAILURES
+   161	
+   162	    def _memory_record_failure(self, subject: str) -> int:
+   163	        now = time.monotonic()
+   164	        with self._memory_lock:
+   165	            recent = [
+   166	                timestamp
+   167	                for timestamp in self._memory[subject]
+   168	                if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
+   169	            ]
+   170	            recent.append(now)
+   171	            self._memory[subject] = recent[-(PRIVILEGED_AUTH_MAX_FAILURES * 2) :]
+   172	            return len(recent)
+   173	
+   174	    async def is_limited(self, subject: str) -> bool:
+   175	        client = await self._get_redis()
+   176	        if client is None:
+   177	            self._backend_failure("read")
+   178	            return self._memory_is_limited(subject)
+   179	
+   180	        try:
+   181	            raw_count = await client.get(self._key(subject))
+   182	            if raw_count is None:
+   183	                self._degraded_logged = False
+   184	                return False
+   185	            count = int(raw_count)
+   186	            self._degraded_logged = False
+   187	            return count >= PRIVILEGED_AUTH_MAX_FAILURES
+   188	        except HTTPException:
+   189	            raise
+   190	        except Exception as exc:
+   191	            self._backend_failure("read", exc)
+   192	            return self._memory_is_limited(subject)
+   193	
+   194	    async def record_failure(self, subject: str) -> int:
+   195	        client = await self._get_redis()
+   196	        if client is None:
+   197	            self._backend_failure("increment")
+   198	            return self._memory_record_failure(subject)
+   199	
+   200	        try:
+104:def _authorize_pii_access(
+109:    tenant_id: str,
+132:                "tenant_id": tenant_id,
+156:            "tenant_id": tenant_id,
+168:def _audit_identity(
+221:def export_fda_spreadsheet(
+230:    tenant_id: str = Query(..., description="Tenant identifier"),
+253:    # #2461 / EPIC-A: bind the ?tenant_id= query param to the authenticated
+257:    tenant_id = resolve_tenant(tenant_id, principal)
+280:        tenant_id=tenant_id,
+294:            tenant_id=tenant_id,
+309:        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+318:            tenant_id=tenant_id,
+332:                tenant_id=tenant_id,
+348:                    "tenant_id": tenant_id,
+370:                "tenant_id": tenant_id,
+399:                "tenant_id": tenant_id,
+417:                tenant_id=tenant_id,
+431:                tenant_id=tenant_id,
+516:def export_all_events(
+525:    tenant_id: str = Query(..., description="Tenant identifier"),
+542:    tenant_id = resolve_tenant(tenant_id, principal)
+566:        tenant_id=tenant_id,
+585:                tenant_id=tenant_id,
+607:                    "No traceability records found for the requested window. Widen the date range or verify tenant_id."
+613:        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+621:            tenant_id=tenant_id,
+630:                tenant_id=tenant_id,
+646:                    "tenant_id": tenant_id,
+667:                "tenant_id": tenant_id,
+704:                tenant_id=tenant_id,
+718:                tenant_id=tenant_id,
+791:async def export_history(
+792:    tenant_id: str = Query(..., description="Tenant identifier"),
+799:    tenant_id = resolve_tenant(tenant_id, principal)
+806:        rows = fetch_export_log_history(db_session, tenant_id, limit)
+807:        return format_export_log_rows(rows, tenant_id)
+836:async def export_recall_filtered(
+838:    tenant_id: str = Query(..., description="Tenant identifier"),
+865:    tenant_id = resolve_tenant(tenant_id, principal)
+881:        tenant_id=tenant_id,
+886:        tenant_id=tenant_id,
+913:async def verify_export(
+915:    tenant_id: str = Query(..., description="Tenant identifier"),
+921:    tenant_id = resolve_tenant(tenant_id, principal)
+924:        tenant_id=tenant_id,
+956:def export_fda_spreadsheet_v2(
+958:    tenant_id: str = Query(..., description="Tenant identifier"),
+983:    tenant_id = resolve_tenant(tenant_id, principal)
+1009:        tenant_id=tenant_id,
+1022:            tenant_id=tenant_id,
+1041:            detail_parts = [f"tenant_id='{tenant_id}'"]
+1060:        chain_verification = _verify_chain_for_export(persistence, db_session, tenant_id)
+1066:            tenant_id=tenant_id,
+1095:            tenant_id=tenant_id,
+1118:                "tenant_id": tenant_id,
+1163:                tenant_id=tenant_id,
+1199:                "tenant_id": tenant_id,
+1214:        logger.error("fda_export_v2_failed", extra={"error": str(e), "tenant_id": tenant_id})
+1235:async def get_merkle_root(
+1236:    tenant_id: str = Query(..., description="Tenant identifier"),
+1242:    tenant_id = resolve_tenant(tenant_id, principal)
+1243:    return await get_merkle_root_handler(tenant_id)
+1255:async def get_merkle_proof(
+1256:    tenant_id: str = Query(..., description="Tenant identifier"),
+1263:    tenant_id = resolve_tenant(tenant_id, principal)
+1264:    return await get_merkle_proof_handler(tenant_id, event_id)
+1286:def trace_transformation_graph(
+1288:    tenant_id: str = Query(..., description="Tenant identifier"),
+1297:    tenant_id = resolve_tenant(tenant_id, principal)
+1309:            tenant_id=tenant_id,
