@@ -92,6 +92,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
     if db_session is None:
         return []
 
+    rules_ok = True
     try:
         from sqlalchemy import text
 
@@ -115,7 +116,10 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             nested.commit()
         except (SQLAlchemyError, ValueError, TypeError, RuntimeError) as exc:
             nested.rollback()
-            _pkg.logger.debug("obligation_query_rollback: %s", str(exc))
+            rules_ok = False
+            # M-5: a skipped obligation pass must be loud, not silent.
+            _pkg.logger.warning("obligation_query_rollback: %s", str(exc))
+            _pkg._record_obligation_skip()
             return []
 
         if not rows:
@@ -237,6 +241,18 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
                     alert_sp.rollback()
                     _pkg.logger.warning("obligation_alert_write_failed: %s", str(alert_err))
+
+        if not alerts and rules_ok and rows:
+            # Jev second-judgment (M-5): the rules ran clean, but does the
+            # event still look review-worthy? A flag here is observability,
+            # not a compliance determination — it is returned to the caller
+            # and never written to fsma.compliance_alerts.
+            review_flag = _pkg.review_event_for_alert_worthiness(
+                event, rules_evaluated=len(rows)
+            )
+            if review_flag is not None:
+                _pkg._record_jev_review_flag(tenant_id)
+                alerts.append(review_flag)
 
         return alerts
 

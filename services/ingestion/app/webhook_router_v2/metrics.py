@@ -60,11 +60,24 @@ try:  # pragma: no cover - metrics are best-effort; never break ingest on regist
         "WEBHOOK_HMAC_SECRET is unset (F-5, fail-open visibility).",
         ["reason"],
     )
+    # Jev obligation second-judgment + M-5 silent-skip observability.
+    JEV_REVIEW_FLAGGED = _get_or_create_counter(
+        "webhook_jev_review_flagged_total",
+        "Events flagged by the Jev obligation second-judgment review Noul",
+        ["tenant_id"],
+    )
+    OBLIGATION_CHECK_SKIPPED = _get_or_create_counter(
+        "webhook_obligation_check_skipped_total",
+        "Obligation-check passes skipped after a DB error (M-5)",
+        ["reason"],
+    )
     _WEBHOOK_METRICS_ENABLED = True
 except Exception as _wh_metrics_exc:  # pragma: no cover
     _pkg.logger.debug("webhook_replay_metric_init_failed: %s", _wh_metrics_exc)
     WEBHOOK_REPLAY_REJECTED = None
     WEBHOOK_HMAC_SKIPPED = None
+    JEV_REVIEW_FLAGGED = None
+    OBLIGATION_CHECK_SKIPPED = None
     _WEBHOOK_METRICS_ENABLED = False
 
 
@@ -147,3 +160,25 @@ def _record_replay_rejection(timestamp: str) -> None:
         ).inc()
     except Exception:  # pragma: no cover
         pass
+
+
+def _record_obligation_skip() -> None:
+    """M-5: count obligation passes skipped after a DB error. Never raises."""
+    if _pkg.OBLIGATION_CHECK_SKIPPED is not None:
+        try:
+            _pkg.OBLIGATION_CHECK_SKIPPED.labels(reason="db_error").inc()
+        except Exception:  # pragma: no cover
+            pass
+
+
+def _record_jev_review_flag(tenant_id: str) -> None:
+    """Count Jev second-judgment review flags. Never raises.
+
+    ``tenant_id`` labels are operator-provisioned tenants (bounded), not
+    per-request user input.
+    """
+    if _pkg.JEV_REVIEW_FLAGGED is not None:
+        try:
+            _pkg.JEV_REVIEW_FLAGGED.labels(tenant_id=tenant_id).inc()
+        except Exception:  # pragma: no cover
+            pass
