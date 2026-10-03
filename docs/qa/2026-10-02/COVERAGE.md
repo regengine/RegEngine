@@ -46,7 +46,41 @@ A separate backend compatibility retest overlaid the exact locked FastAPI, Starl
 - The full FSMA rule catalog, every CTE variant, full FDA export golden-file matrix, MFA/WebAuthn lifecycle and all authenticated dashboard workflows were not exhaustively validated. The sweep emphasizes the selected ingest/auth/evidence boundaries and does not certify regulatory correctness of the whole product.
 - Broad backend collection contains optional-dependency/module-stub and isolated-process issues. Network and subprocess fixtures cannot pass under the sweep guard. A complete green backend suite is not established; exact failed attempts are retained in the backend log.
 - Vitest measured 196 product files; the inventory includes 672 non-test TS/TSX files (including type-only modules). Uninstrumented files are absent from these percentages. Low measured areas include dashboard heartbeat, alerts, API hooks and API-client branches.
-- Cross-browser Playwright launches were attempted but blocked by macOS sandbox restrictions. Native Chrome fallback provides local rendered-page evidence; it does not replace Chromium/Firefox/WebKit parity, real mobile-device testing, or authenticated end-to-end persistence.
+- Browser follow-up supersedes the earlier macOS launch blocker: Playwright 1.63.0 connected to the supplied server and exercised actual Chromium 153.0.8010.12, Firefox 155.0 and WebKit 26.6. The existing E2E selection completed with 59 passed, 28 failed and 183 skipped; true desktop/mobile viewport scans cover seven routes in each engine. Database-dependent setup, WebKit Blob storage for FE-004, real devices and authenticated persistence remain gaps; see the detailed follow-up below.
 - Axe and semantics checks are sampled page/state evidence, not complete WCAG 2.2 AA certification or a real screen-reader speech session. [UX-REPORT.md](UX-REPORT.md) records exact route/state coverage, screenshots and responsive limitations.
 - Current dependency vulnerability advisories were not queried because allowed network use is limited to public package/browser downloads and no offline advisory database was supplied. Package inventory is not an assurance that dependencies have no vulnerabilities.
 - No production system, paid service, deployment, remote CI or real customer workflow was validated. CI status remains pending at time of writing.
+
+## Browser follow-up pass
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+This pass adds browser coverage only. Earlier unit/statement/branch denominators remain unchanged; no backend, static or security pass was rerun. No fresh code-coverage percentage is inferred from browser test counts.
+
+| Browser scope | Chromium | Firefox | WebKit |
+| --- | --- | --- | --- |
+| Engine verified through supplied connection | 153.0.8010.12 | 155.0 | 26.6 |
+| Existing E2E cases discovered | 90 | 90 | 90 |
+| Existing E2E passed / failed / skipped | 21 / 8 / 61 | 20 / 9 / 61 | 18 / 11 / 61 |
+| Failure classes: environment / harness / product | 6 / 2 / 0 | 6 / 3 / 0 | 7 / 3 / 1 |
+| FE-001 browser witness | Confirmed | Confirmed | Confirmed |
+| FE-004 browser replay witness | Confirmed; upload rejected by stub | Confirmed; upload rejected by stub | Still unverified: native IndexedDB Blob preparation fails before replay |
+| New regression selection: expected failures / environment skips | 2 / 0 | 2 / 0 | 1 / 1 |
+| Main route/viewport scans | 14 | 14 | 14 |
+| Keyboard navigation | Tab / Shift+Tab / Enter / Escape | Tab / Shift+Tab / Enter / Escape | Option/Alt+Tab variant for macOS full-control traversal; Escape/Enter |
+
+Existing-suite timeouts are included in the failed counts, not added again. All 270 cases and their per-test classifications are retained in [the E2E report](artifacts/browser/existing-e2e-results.md). Stock local database bootstrap was deliberately blocked before it could contact a database. The browser-only fallback keeps existing specifications unchanged; it does not claim a full local authenticated stack. Initial port, redirect and platform test-harness failures are preserved separately from the corrected final run.
+
+The [new regression selection](artifacts/browser/fe-regressions-summary.md) exits 0 with 5 strict expected failures, 1 environment skip and no unexpected failures. The skip is restricted to WebKit's exact native Blob-storage error and requires an independent successful string-storage control; it cannot mask the hook's isolation assertion.
+
+Screenshots and `@axe-core/playwright` 4.13.0 scans cover `/`, `/login`, `/verify`, `/tools/scan`, `/contact`, `/demo` and `/tools/ftl-checker` at **1440×900 and 390×844 top-level viewports** in all three engines. PNG dimensions and browser `innerWidth`/`innerHeight` were verified. The [browser UX index](artifacts/browser/browser-ux-summary.md) links every route's screenshots, raw axe (including incomplete rules), keyboard focus snapshots, console errors, failed requests, HTTP responses and synthetic/blocked classifications. Eight corrected Chromium state scans additionally cover desktop/mobile login/contact/verifier error recovery and FTL empty search.
+
+Axe reports one scanner heading-order best-practice node on each initial scanner page (UX-006), and 5/5/6 nonfocusable scroll regions on the narrow verifier (UX-003). Other initial route/viewport scans have zero axe violations. Keyboard checks across engines reconfirm UX-001/002 and add UX-007; successful manual scanner input and continued tab traversal provide a positive control. A zero automated count is not WCAG certification or a screen-reader test.
+
+All 42 initial combinations have zero uncaught page errors, zero unexpected local failed requests and zero nonstub local HTTP errors. The 112 console errors, 42 blocked font requests and 42 synthetic session 401 responses are deliberate harness/network effects, categorized per route; synthetic 503 recovery states are separate. External fonts remain blocked, so visual evidence uses fallback fonts. Browser contexts block service workers and off-origin traffic; document resource/connect CSP is deliberately restricted.
+
+**Not covered:** Lighthouse (explicitly excluded), physical mobile devices, screen-reader speech, real camera capture, real login/logout and authenticated backend flows, successful cross-tenant persistence, live database/provider behavior, production fonts/performance, remote PR or CI. FE-004 directly seeds a synthetic legacy record into IndexedDB; it does not verify acquisition of a photo through the camera UI. Prior unavailable checks stay unavailable unless explicitly superseded above.
+
+Final QA review found that Playwright routing alone does not re-intercept every redirect hop. Earlier existing-suite runs are therefore not proof of complete redirected-document isolation. The authoritative **02:15:32 UTC rerun** uses a fixed-loopback proxy that validates every Location, never auto-follows redirects, and sanitizes every HTML document before returning it. A transport-spy probe verifies off-origin rejection without an external call. All 270 test identities retain the same outcomes and failure classifications. [Proxy safety evidence](artifacts/browser/existing-e2e-proxy-safety-check.json), [authoritative suite results](artifacts/browser/existing-e2e-proxy-local-browser-summary.json). This QA transport changes CSP/Host/compression behavior and does not validate production headers.

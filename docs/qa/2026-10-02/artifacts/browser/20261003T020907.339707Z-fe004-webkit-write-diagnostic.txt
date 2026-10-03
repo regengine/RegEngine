@@ -1,0 +1,30 @@
+UTC: 2026-10-03T02:09:07.339707+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ node frontend/node_modules/playwright/cli.js test --config frontend/tests/e2e/qa-2026-10-02/fe-regressions.config.ts --project=webkit --grep FE-004
+Exit: 1
+Duration: 1.00s
+Timeout: False
+
+
+Running 1 test using 1 worker
+
+  ✘  1 [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests (371ms)
+
+
+  1) [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 
+
+    Error: page.evaluate: Error: Photo fixture request failed: UnknownError: Error preparing Blob/File data to be stored in object store
+
+      78 |   // into REAL IndexedDB. Camera acquisition and data-URL capture are not part of
+      79 |   // this replay witness; all reads and upload/retry behavior use the built app.
+    > 80 |   await page.evaluate(async () => {
+         |              ^
+      81 |     const canvas = document.createElement('canvas');
+      82 |     canvas.width = 96; canvas.height = 64;
+      83 |     const drawing = canvas.getContext('2d')!;
+        at /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:80:14
+
+    Error Context: ../../../../../private/tmp/regengine-qa-fe-regression-test-results-2026-10-03T02-09-07-788Z/fe-004-offline-photo-FE-00-e39a2-f-account-B-replay-requests-webkit/error-context.md
+
+  1 failed
+    [webkit] › frontend/tests/e2e/qa-2026-10-02/fe-004-offline-photo.spec.ts:28:5 › FE-004 keeps account A offline photos out of account B replay requests 

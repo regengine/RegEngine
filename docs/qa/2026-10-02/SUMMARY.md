@@ -4,7 +4,7 @@ PR: opened by orchestrator
 
 CI status: pending at time of writing
 
-Counts: Critical=0 High=3 Medium=10 Low=2
+Counts: Critical=0 High=3 Medium=11 Low=4
 
 The three QA passes found **15 confirmed issues**. Product behavior is unchanged. Test additions, QA scripts, reports, logs and screenshots remain uncommitted on `qa/2026-10-02-sweep` for the orchestrator's review, secret scan, commit, push and single draft PR. No PR was opened by the QA agent; its URL and actual CI result are not yet available. The required PR line above identifies the publishing owner.
 
@@ -68,3 +68,32 @@ Local handoff validation passed: mandatory docs/counts/branch/scope, QA script s
 - [Independent gate review](GATE-REPORT.md)
 
 Keep all changes uncommitted for the orchestrator. No product, dependency lock, deployment, migration, environment file, secret-scan baseline or protected PR branch was changed. Build-generated `next-env.d.ts` changes were restored to baseline. Previously known leaked keys were not investigated or rotated.
+
+## Browser follow-up pass
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+The current count line now includes **18 findings: the original 15 plus UX-006 Low, UX-007 Medium and UX-008 Low**. The earlier report sections above describe the first sweep; its browser-launch and top-level viewport blockers are superseded by this follow-up. Product code is unchanged.
+
+**FE-001 is confirmed in Chromium, Firefox and WebKit. FE-004 is confirmed in Chromium and Firefox using real IndexedDB and the real replay hook with synthetic sessions.** FE-004 proves an attempted client upload of A's photo under B's cookie; a local 422 stub prevents persistence. WebKit's native Blob storage fails before replay and remains unverified for that scenario. New test witnesses and their setup boundaries are in the [regression evidence index](artifacts/browser/fe-regressions-summary.md).
+
+The new regression selection exits **0: 5 strict expected failures, 1 environment skip, 0 unexpected failures**. Controls and prerequisites execute before each `test.fail()` marker; the WebKit skip requires an independent native storage control. These expected failures document unfixed defects.
+
+| Existing E2E project | Passed | Failed | Skipped | Failure classification |
+| --- | ---: | ---: | ---: | --- |
+| Chromium | 21 | 8 | 61 | 6 environment, 2 test harness |
+| Firefox | 20 | 9 | 61 | 6 environment, 3 test harness |
+| WebKit | 18 | 11 | 61 | 7 environment, 3 test harness, 1 product (UX-008) |
+| Total | 59 | 28 | 183 | 19 environment, 8 test harness, 1 product |
+
+These are all 270 discovered cases from the unchanged existing suite, run through an isolated local browser configuration. **The existing suite is not green.** The stock local configuration stops at prohibited database bootstrap; authenticated/backend scenarios are not end-to-end verified. The 183 skips comprise 180 missing auth/backend/key prerequisites and 3 opposite sandbox-branch conditions. [Attempts, exact commands and triage](artifacts/browser/existing-e2e-results.md).
+
+**42 initial route/viewport combinations** cover seven routes across all three actual engines at desktop 1440×900 and mobile 390×844, with screenshots, axe, console and network evidence. All return 200 without uncaught page errors, unexpected local network failures or whole-page horizontal overflow. Eight additional synthetic error/empty states and keyboard navigation were checked. Axe reconfirms narrow verifier scrolling gaps; keyboard checks reconfirm the mobile menu and upload-focus defects. New findings are scanner heading order (UX-006), invisible global skip-link focus (UX-007), and a clipped WebKit tour tooltip (UX-008). [Screenshots and per-route evidence](artifacts/browser/browser-ux-summary.md).
+
+External fonts were deliberately blocked; synthetic 401/503 responses and CSP console errors are excluded from product failures. Lighthouse remains **not covered**, as do real mobile devices, screen-reader speech and authenticated flows against a real backend. No backend/static/security pass, production call, commit, push or PR operation was repeated. The orchestrator owns the final secret scan and publishing.
+
+Final review corrected a redirect-isolation gap in the QA wrapper. The existing suite was rerun through a proxy that validates each redirect hop; **all 270 outcomes and the counts above are unchanged**. The [authoritative result](artifacts/browser/existing-e2e-proxy-local-browser-summary.json) supersedes earlier isolation claims. No product fix or original-test modification was needed.
+
+Independent review and [local handoff validation](artifacts/browser/20261003T022030.966307Z-final-browser-handoff-validation-corrected.txt) passed. All five required reports are updated; earlier content/artifacts are preserved. Follow-up servers 3114/3115 are stopped, and the earlier 3102 listener is also absent; browser server 3950 is left with the orchestrator. [Cleanup readback](artifacts/browser/20261003T021959.765139Z-final-browser-listener-readback.txt). All follow-up changes remain uncommitted on `qa/2026-10-02-sweep`.

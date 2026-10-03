@@ -81,3 +81,18 @@ Use the test pyramid: many isolated unit/schema/security checks, a smaller local
 Produce `PLAN.md`, `SESSION-LOG.md`, `FINDINGS.md`, `COVERAGE.md`, `SUMMARY.md`, group reports/logs and focused tests. Independently review finding severity, repros, expected failures, scope and artifact hygiene. Leave everything uncommitted for orchestrator review, secret scan, commit, push and creation of the single draft PR. PR URL and CI result are unavailable until that handoff occurs.
 
 Out of scope: deployed behavior, live RLS/database migrations, real email/payment/provider integrations, real credentials, production load/penetration testing, full WCAG certification, external review APIs, and already-known leaked-key investigation. Missing coverage of these surfaces is a limitation, not a passing result.
+
+## Browser follow-up pass
+
+Bootstrap preceded the first recorded server command at 2026-10-03 02:02:45 UTC (2026-10-02 in America/Los_Angeles); the exact first-tool timestamp was not retained. Checkout identity reverified: sole worktree `/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine`, branch `qa/2026-10-02-sweep`, RegEngine origin, HEAD `c98e1a30`, initially clean. Earlier QA artifacts are already present at this HEAD; this follow-up leaves its own changes uncommitted.
+
+Only previously blocked browser coverage is in scope. Preserve the earlier reports and artifacts; append follow-up results, except the explicitly requested current coverage status and summary count-line updates. Three independent work lanes own existing E2E execution, FE-001/FE-004 browser regressions, and screenshots/accessibility/keyboard/console/network evidence. The coordinator owns the isolated server, consolidated documents and evidence review.
+
+1. Run the existing E2E inventory for Chromium, Firefox and WebKit through Playwright 1.63.0 and the orchestrator's loopback browser server; distinguish blocked database-dependent local setup from individual browser assertions.
+2. Add browser witnesses for FE-001 and FE-004 under `frontend/tests/e2e/qa-2026-10-02/`. Mark only the intended product assertions as expected failures after prerequisites/controls succeed. No product fixes.
+3. Capture real top-level 1440×900 and 390×844 viewports, run `@axe-core/playwright` on main public routes, and exercise primary keyboard navigation. Record console errors, failed requests and deliberately blocked/stubbed traffic per route.
+4. Append statuses, exact commands, artifacts, limitations and reconciled finding counts to the five mandatory reports; review test validity and artifact scope before handoff.
+
+Reuse the existing production build in a disposable mirror, the existing `node-isolation.cjs` guard and `run_logged.py` command ledger. All credentials/auth/backend responses used by witnesses are synthetic; no database or deployed service is permitted. No direct browser launch, persistent context, browser installation, Lighthouse, real device, screen-reader, backend/static/security repeat, commit, push or PR operation. Public npm package retrieval is allowed only for missing QA tooling. Jev and remote reviewers remain excluded by the orchestrator's network restriction.
+
+Completed with the unchanged existing suite exercised in all three engines, both requested browser witnesses, 42 initial route/viewport scans and additional state/keyboard evidence. Independent review required a per-hop redirect proxy repair and an unchanged-outcome suite rerun; both are recorded. The final local handoff passes document/count/link/scope validation. Remaining limitations and exact nonpassing tests are retained in `COVERAGE.md` and the browser evidence indexes.

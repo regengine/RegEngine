@@ -1,0 +1,2510 @@
+{
+  "startedAt": "2026-10-03T02:06:35.724Z",
+  "baseURL": "http://127.0.0.1:3114",
+  "playwrightVersion": "1.63.0",
+  "axePlaywrightVersion": "4.13.0",
+  "restrictions": [
+    "All APIs intercepted with synthetic responses; no backend",
+    "Exact local origin only; external resources/websockets blocked",
+    "Service workers blocked",
+    "HTML preconnect/dns-prefetch links removed and same-origin resource/connect CSP added",
+    "Synthetic login/contact errors; no email sent",
+    "Desktop and mobile are top-level browser viewport emulation, not physical devices"
+  ],
+  "pages": [],
+  "keyboard": [
+    {
+      "browser": "chromium",
+      "viewport": "mobile",
+      "route": "/",
+      "startedAt": "2026-10-03T02:06:35.816Z",
+      "consoleErrors": [
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/scan",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/scan",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Connecting to 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"connect-src 'self'\". The action has been blocked.",
+          "location": {
+            "url": "",
+            "line": 19985,
+            "column": 0,
+            "lineNumber": 19985,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Loading the stylesheet 'https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap' violates the following Content Security Policy directive: \"style-src 'self' 'unsafe-inline'\". Note that 'style-src-elem' was not explicitly set, so 'style-src' is used as a fallback. The action has been blocked.",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        },
+        {
+          "url": "https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
+          "error": "csp",
+          "classification": "intentional-external-block"
+        }
+      ],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/tools/check-access",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        }
+      ],
+      "checks": {
+        "skipLink": {
+          "focus": {
+            "tag": "A",
+            "id": "",
+            "role": null,
+            "name": "Skip to content",
+            "href": "#main-content",
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 15,
+              "y": 15,
+              "width": 1,
+              "height": 1
+            },
+            "outline": "rgb(4, 120, 87) none 2px",
+            "boxShadow": "none",
+            "clip": "rect(0px, 0px, 0px, 0px)"
+          },
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 7815,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — FSMA 204 traceability evidence layer",
+          "h1": [
+            "FSMA 204 traceability evidence layer."
+          ],
+          "cameraAllowed": false,
+          "screenshot": "chromium-mobile-skip-link-focus.png",
+          "fullScreenshot": "chromium-mobile-skip-link-focus-full.png"
+        },
+        "mobileMenu": {
+          "tabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 21,
+                "width": 114.140625,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Open navigation menu",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 326,
+                "y": 8,
+                "width": 44,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            }
+          ],
+          "afterOpen": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close navigation menu",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 326,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) none 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "afterTab": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close menu",
+            "href": null,
+            "insideMenu": true,
+            "focusVisible": true,
+            "rect": {
+              "x": 334,
+              "y": 16,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) none 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(4, 120, 87) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "openAfterEscape": true,
+          "afterShiftTab": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close navigation menu",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 326,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) none 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 7815,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — FSMA 204 traceability evidence layer",
+          "h1": [
+            "FSMA 204 traceability evidence layer."
+          ],
+          "cameraAllowed": false,
+          "screenshot": "chromium-mobile-menu-keyboard.png",
+          "fullScreenshot": "chromium-mobile-menu-keyboard-full.png"
+        },
+        "scanner": {
+          "steps": "Tab from initial page until manual barcode input, type valid barcode, Enter, continue ten Tabs",
+          "scannerTabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Skip to content",
+              "href": "#main-content",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 15,
+                "y": 15,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 21,
+                "width": 114.140625,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Open navigation menu",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 326,
+                "y": 8,
+                "width": 44,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Home",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 85,
+                "width": 33.296875,
+                "height": 15
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Free Tools",
+              "href": "/tools",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 68.953125,
+                "y": 85,
+                "width": 58.28125,
+                "height": 15
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Start Camera",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 677,
+                "width": 129.484375,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-manual-input",
+              "role": null,
+              "name": "Paste or type barcode string…",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 220.953125,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgb(230, 242, 238) 0px 0px 0px 2px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            }
+          ],
+          "inputFocus": {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "innerWidth": 390,
+            "innerHeight": 844,
+            "devicePixelRatio": 1,
+            "documentWidth": 390,
+            "documentHeight": 3642,
+            "horizontalOverflow": false,
+            "topLevel": true,
+            "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+            "h1": [
+              "RegEngine • Scan & Ingest"
+            ],
+            "cameraAllowed": false,
+            "screenshot": "chromium-mobile-scanner-input-focus.png",
+            "fullScreenshot": "chromium-mobile-scanner-input-focus-full.png"
+          },
+          "afterParse": {
+            "tag": "INPUT",
+            "id": "scan-manual-input",
+            "role": null,
+            "name": "Paste or type barcode string…",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 41,
+              "y": 400,
+              "width": 220.953125,
+              "height": 44
+            },
+            "outline": "rgb(20, 24, 31) none 3px",
+            "boxShadow": "rgb(230, 242, 238) 0px 0px 0px 2px",
+            "clip": "auto",
+            "labelOutline": "rgb(20, 24, 31) none 3px",
+            "labelBoxShadow": "none"
+          },
+          "nextTabs": [
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Parse",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 269.953125,
+                "y": 400,
+                "width": 79.046875,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "010950600013435210BATCH-ABC",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 542,
+                "width": 308,
+                "height": 38
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "SELECT",
+              "id": "scan-event-type",
+              "role": null,
+              "name": "Harvesting (§1.1325)Cooling (§1.1325)Initial Packing (§1.1330)First Land-Based Receiving — Seafood (§1.1335)Sh",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-quantity",
+              "role": null,
+              "name": "0",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 716,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "SELECT",
+              "id": "scan-uom",
+              "role": null,
+              "name": "caseslbskgeach",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 800,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-location-gln",
+              "role": null,
+              "name": "Global Location Number",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Ingest Event",
+              "href": "/onboarding",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 614,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "FTL List CheckerLook at the Food Traceability List. This page does not decide if you are a covered person.",
+              "href": "/tools/ftl-checker",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 391,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "KDE Field ChecklistCheck which CTE/KDE fields you need for each FTL product and CTE type.",
+              "href": "/tools/kde-checker",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 454,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "CTE MapperMap the 7 Critical Tracking Events your supply chain often records under FSMA 204.",
+              "href": "/tools/cte-mapper",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 517,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) none 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            }
+          ],
+          "result": "BATCH-ABC visible; keyboard can leave parser",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 5350,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+          "h1": [
+            "RegEngine • Scan & Ingest"
+          ],
+          "cameraAllowed": false,
+          "screenshot": "chromium-mobile-scanner-result.png",
+          "fullScreenshot": "chromium-mobile-scanner-result-full.png",
+          "resultFocused": {
+            "note": "After recorded keyboard traversal; dismissed cookie banner with Essential, then scrolled lot result into view",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "innerWidth": 390,
+            "innerHeight": 844,
+            "devicePixelRatio": 1,
+            "documentWidth": 390,
+            "documentHeight": 5218,
+            "horizontalOverflow": false,
+            "topLevel": true,
+            "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+            "h1": [
+              "RegEngine • Scan & Ingest"
+            ],
+            "cameraAllowed": false,
+            "screenshot": "chromium-mobile-scanner-result-focused.png",
+            "fullScreenshot": "chromium-mobile-scanner-result-focused-full.png"
+          },
+          "headings": [
+            {
+              "tag": "H1",
+              "text": "RegEngine • Scan & Ingest"
+            },
+            {
+              "tag": "H3",
+              "text": "Camera Scanner"
+            },
+            {
+              "tag": "H3",
+              "text": "Manual Input"
+            },
+            {
+              "tag": "H3",
+              "text": "Scan History"
+            },
+            {
+              "tag": "H3",
+              "text": "Parsed Fields"
+            },
+            {
+              "tag": "H3",
+              "text": "Auto-filled CTE Form Preview"
+            },
+            {
+              "tag": "H3",
+              "text": "Raw Barcode String"
+            },
+            {
+              "tag": "H3",
+              "text": "Related Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Save your GS1 scan result"
+            },
+            {
+              "tag": "H2",
+              "text": "Related Free Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Product"
+            },
+            {
+              "tag": "H2",
+              "text": "Free Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Developers"
+            },
+            {
+              "tag": "H2",
+              "text": "Company"
+            }
+          ],
+          "axe": {
+            "version": "4.13.0",
+            "violations": [
+              {
+                "id": "heading-order",
+                "impact": "moderate",
+                "tags": [
+                  "cat.semantics",
+                  "best-practice"
+                ],
+                "description": "Ensure the order of headings is semantically correct",
+                "help": "Heading levels should only increase by one",
+                "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/heading-order?application=playwright",
+                "nodes": [
+                  {
+                    "any": [
+                      {
+                        "id": "heading-order",
+                        "data": null,
+                        "relatedNodes": [],
+                        "impact": "moderate",
+                        "message": "Heading order invalid"
+                      }
+                    ],
+                    "all": [],
+                    "none": [],
+                    "impact": "moderate",
+                    "html": "<h3 class=\"scan-module__ar4Tua__sectionTitle\">Camera Scanner</h3>",
+                    "target": [
+                      ".scan-module__ar4Tua__section:nth-child(1) > .scan-module__ar4Tua__sectionTitle"
+                    ],
+                    "failureSummary": "Fix any of the following:\n  Heading order invalid"
+                  }
+                ]
+              }
+            ],
+            "incomplete": [
+              {
+                "id": "color-contrast",
+                "impact": "serious",
+                "tags": [
+                  "cat.color",
+                  "wcag2aa",
+                  "wcag143",
+                  "TTv5",
+                  "TT13.c",
+                  "EN-301-549",
+                  "EN-9.1.4.3",
+                  "ACT",
+                  "RGAAv4",
+                  "RGAA-3.2.1"
+                ],
+                "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+                "help": "Elements must meet minimum color contrast ratio thresholds",
+                "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+                "nodes": [
+                  {
+                    "any": [
+                      {
+                        "id": "color-contrast",
+                        "data": {
+                          "messageKey": "nonBmp"
+                        },
+                        "relatedNodes": [],
+                        "impact": "serious",
+                        "message": "Element content contains only non-text characters"
+                      }
+                    ],
+                    "all": [],
+                    "none": [],
+                    "impact": "serious",
+                    "html": "<span class=\"scan-module__ar4Tua__validIndicator\"> ✓</span>",
+                    "target": [
+                      ".scan-module__ar4Tua__validIndicator"
+                    ],
+                    "failureSummary": "Fix any of the following:\n  Element content contains only non-text characters"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "verifier": {
+          "verifyTabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Skip to content",
+              "href": "#main-content",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 15,
+                "y": 15,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 21,
+                "width": 114.140625,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Product",
+              "href": "/product",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 487.140625,
+                "y": 20,
+                "width": 52.359375,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Integrations",
+              "href": "/integrations",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 551.5,
+                "y": 20,
+                "width": 79.34375,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Readiness",
+              "href": "/retailer-readiness",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 642.84375,
+                "y": 20,
+                "width": 67.65625,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Pricing",
+              "href": "/pricing",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 722.5,
+                "y": 20,
+                "width": 45.9375,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "FSMA 204",
+              "href": "/fsma-204",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 780.4375,
+                "y": 20,
+                "width": 68.875,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Tools",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 861.3125,
+                "y": 21,
+                "width": 52.984375,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Developers",
+              "href": "/developer/portal",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 926.296875,
+                "y": 20,
+                "width": 74.34375,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Docs",
+              "href": "/docs",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1012.640625,
+                "y": 20,
+                "width": 33.578125,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Switch to dark mode",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1062.21875,
+                "y": 12,
+                "width": 36,
+                "height": 36
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Log In",
+              "href": "/login",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1110.21875,
+                "y": 20,
+                "width": 40.140625,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Free Tools",
+              "href": "/tools",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1158.359375,
+                "y": 14,
+                "width": 89.640625,
+                "height": 32
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Download verify_chain.py",
+              "href": "/sdk/verify_chain.py",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 371.1875,
+                "width": 234.84375,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "See How It Works",
+              "href": "#how-it-works",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 438.84375,
+                "y": 371.1875,
+                "width": 181.765625,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) none 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Download verify_chain.py",
+              "href": "/sdk/verify_chain.py",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 589.1875,
+                "width": 164.546875,
+                "height": 17
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "INPUT",
+              "id": "verify-bundle-file",
+              "role": null,
+              "name": null,
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 224,
+                "y": 782.1875,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)",
+              "labelOutline": "rgb(20, 24, 31) none 3px",
+              "labelBoxShadow": "none"
+            }
+          ],
+          "focusedInput": {
+            "tag": "INPUT",
+            "id": "verify-bundle-file",
+            "role": null,
+            "name": null,
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 224,
+              "y": 782.1875,
+              "width": 1,
+              "height": 1
+            },
+            "outline": "rgb(4, 120, 87) solid 2px",
+            "boxShadow": "none",
+            "clip": "rect(0px, 0px, 0px, 0px)",
+            "labelOutline": "rgb(20, 24, 31) none 3px",
+            "labelBoxShadow": "none"
+          },
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "innerWidth": 1440,
+          "innerHeight": 900,
+          "devicePixelRatio": 1,
+          "documentWidth": 1440,
+          "documentHeight": 4756,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — Food Traceability That Protects Your Brand",
+          "h1": [
+            "Verify, Don't Trust"
+          ],
+          "cameraAllowed": false,
+          "screenshot": "chromium-desktop-verifier-file-focus.png",
+          "fullScreenshot": "chromium-desktop-verifier-file-focus-full.png",
+          "nextTab": {
+            "tag": "A",
+            "id": "",
+            "role": null,
+            "name": "Grab a sample on the proof page",
+            "href": "/proof",
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 402.390625,
+              "y": 440.1875,
+              "width": 227.96875,
+              "height": 20
+            },
+            "outline": "rgb(4, 120, 87) solid 3px",
+            "boxShadow": "none",
+            "clip": "auto"
+          }
+        }
+      }
+    },
+    {
+      "browser": "firefox",
+      "viewport": "mobile",
+      "route": "/",
+      "startedAt": "2026-10-03T02:06:44.037Z",
+      "consoleErrors": [
+        {
+          "text": "[JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap from being applied because it violates the following directive: “style-src 'self' 'unsafe-inline'”\" {file: \"http://127.0.0.1:3114/\" line: 0}]",
+          "location": {
+            "url": "http://127.0.0.1:3114/",
+            "line": 0,
+            "column": 1,
+            "lineNumber": 0,
+            "columnNumber": 1
+          }
+        },
+        {
+          "text": "[JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap from being applied because it violates the following directive: “style-src 'self' 'unsafe-inline'”\" {file: \"http://127.0.0.1:3114/tools/scan\" line: 0}]",
+          "location": {
+            "url": "http://127.0.0.1:3114/tools/scan",
+            "line": 0,
+            "column": 1,
+            "lineNumber": 0,
+            "columnNumber": 1
+          }
+        },
+        {
+          "text": "[JavaScript Error: \"Content-Security-Policy: The page’s settings blocked a style (style-src-elem) at https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap from being applied because it violates the following directive: “style-src 'self' 'unsafe-inline'”\" {file: \"http://127.0.0.1:3114/verify\" line: 0}]",
+          "location": {
+            "url": "http://127.0.0.1:3114/verify",
+            "line": 0,
+            "column": 1,
+            "lineNumber": 0,
+            "columnNumber": 1
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        },
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        },
+        {
+          "path": "/api/tools/check-access",
+          "method": "GET",
+          "status": 200
+        },
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        }
+      ],
+      "checks": {
+        "skipLink": {
+          "focus": {
+            "tag": "A",
+            "id": "",
+            "role": null,
+            "name": "Skip to content",
+            "href": "#main-content",
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 15,
+              "y": 15,
+              "width": 1,
+              "height": 1
+            },
+            "outline": "rgb(4, 120, 87) 2px",
+            "boxShadow": "none",
+            "clip": "rect(0px, 0px, 0px, 0px)"
+          },
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 7815,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — FSMA 204 traceability evidence layer",
+          "h1": [
+            "FSMA 204 traceability evidence layer."
+          ],
+          "cameraAllowed": null,
+          "screenshot": "firefox-mobile-skip-link-focus.png",
+          "fullScreenshot": "firefox-mobile-skip-link-focus-full.png"
+        },
+        "mobileMenu": {
+          "tabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 21,
+                "width": 114.14999389648438,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Open navigation menu",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 326,
+                "y": 8,
+                "width": 44,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            }
+          ],
+          "afterOpen": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close navigation menu",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 326,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "afterTab": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close menu",
+            "href": null,
+            "insideMenu": true,
+            "focusVisible": true,
+            "rect": {
+              "x": 334,
+              "y": 16,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(4, 120, 87) 0px 0px 0px 2px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "openAfterEscape": true,
+          "afterShiftTab": {
+            "tag": "BUTTON",
+            "id": "",
+            "role": null,
+            "name": "Close navigation menu",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 326,
+              "y": 8,
+              "width": 44,
+              "height": 44
+            },
+            "outline": "rgb(4, 120, 87) 2px",
+            "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+            "clip": "auto"
+          },
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 7815,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — FSMA 204 traceability evidence layer",
+          "h1": [
+            "FSMA 204 traceability evidence layer."
+          ],
+          "cameraAllowed": null,
+          "screenshot": "firefox-mobile-menu-keyboard.png",
+          "fullScreenshot": "firefox-mobile-menu-keyboard-full.png"
+        },
+        "scanner": {
+          "steps": "Tab from initial page until manual barcode input, type valid barcode, Enter, continue ten Tabs",
+          "scannerTabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Skip to content",
+              "href": "#main-content",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 15,
+                "y": 15,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 21,
+                "width": 114.14999389648438,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Open navigation menu",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 326,
+                "y": 8,
+                "width": 44,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Home",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 85.5,
+                "width": 33.26666259765625,
+                "height": 15
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Free Tools",
+              "href": "/tools",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 68.91667175292969,
+                "y": 85.5,
+                "width": 58.26666259765625,
+                "height": 15
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Start Camera",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 677,
+                "width": 129.46665954589844,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-manual-input",
+              "role": null,
+              "name": "Paste or type barcode string…",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 220.9499969482422,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgb(230, 242, 238) 0px 0px 0px 2px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            }
+          ],
+          "inputFocus": {
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "innerWidth": 390,
+            "innerHeight": 844,
+            "devicePixelRatio": 1,
+            "documentWidth": 390,
+            "documentHeight": 3642,
+            "horizontalOverflow": false,
+            "topLevel": true,
+            "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+            "h1": [
+              "RegEngine • Scan & Ingest"
+            ],
+            "cameraAllowed": null,
+            "screenshot": "firefox-mobile-scanner-input-focus.png",
+            "fullScreenshot": "firefox-mobile-scanner-input-focus-full.png"
+          },
+          "afterParse": {
+            "tag": "INPUT",
+            "id": "scan-manual-input",
+            "role": null,
+            "name": "Paste or type barcode string…",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 41,
+              "y": 400,
+              "width": 220.9499969482422,
+              "height": 44
+            },
+            "outline": "rgb(20, 24, 31) 3px",
+            "boxShadow": "rgb(230, 242, 238) 0px 0px 0px 2px",
+            "clip": "auto",
+            "labelOutline": "rgb(20, 24, 31) 3px",
+            "labelBoxShadow": "none"
+          },
+          "nextTabs": [
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Parse",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 269.95001220703125,
+                "y": 400,
+                "width": 79.05000305175781,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "010950600013435210BATCH-ABC",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 542,
+                "width": 308,
+                "height": 38
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "SELECT",
+              "id": "scan-event-type",
+              "role": null,
+              "name": "Harvesting (§1.1325)Cooling (§1.1325)Initial Packing (§1.1330)First Land-Based Receiving — Seafood (§1.1335)Sh",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-quantity",
+              "role": null,
+              "name": "0",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 716,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "SELECT",
+              "id": "scan-uom",
+              "role": null,
+              "name": "caseslbskgeach",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 820,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "INPUT",
+              "id": "scan-location-gln",
+              "role": null,
+              "name": "Global Location Number",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 400,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Ingest Event",
+              "href": "/onboarding",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 41,
+                "y": 614,
+                "width": 308,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "FTL List CheckerLook at the Food Traceability List. This page does not decide if you are a covered person.",
+              "href": "/tools/ftl-checker",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 391,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "KDE Field ChecklistCheck which CTE/KDE fields you need for each FTL product and CTE type.",
+              "href": "/tools/kde-checker",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 454,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "CTE MapperMap the 7 Critical Tracking Events your supply chain often records under FSMA 204.",
+              "href": "/tools/cte-mapper",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 20,
+                "y": 517,
+                "width": 350,
+                "height": 62
+              },
+              "outline": "rgb(20, 24, 31) 3px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            }
+          ],
+          "result": "BATCH-ABC visible; keyboard can leave parser",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 5218,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+          "h1": [
+            "RegEngine • Scan & Ingest"
+          ],
+          "cameraAllowed": null,
+          "screenshot": "firefox-mobile-scanner-result.png",
+          "fullScreenshot": "firefox-mobile-scanner-result-full.png",
+          "resultFocused": {
+            "note": "After recorded keyboard traversal; dismissed cookie banner with Essential, then scrolled lot result into view",
+            "viewport": {
+              "width": 390,
+              "height": 844
+            },
+            "innerWidth": 390,
+            "innerHeight": 844,
+            "devicePixelRatio": 1,
+            "documentWidth": 390,
+            "documentHeight": 5218,
+            "horizontalOverflow": false,
+            "topLevel": true,
+            "title": "GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine",
+            "h1": [
+              "RegEngine • Scan & Ingest"
+            ],
+            "cameraAllowed": null,
+            "screenshot": "firefox-mobile-scanner-result-focused.png",
+            "fullScreenshot": "firefox-mobile-scanner-result-focused-full.png"
+          },
+          "headings": [
+            {
+              "tag": "H1",
+              "text": "RegEngine • Scan & Ingest"
+            },
+            {
+              "tag": "H3",
+              "text": "Camera Scanner"
+            },
+            {
+              "tag": "H3",
+              "text": "Manual Input"
+            },
+            {
+              "tag": "H3",
+              "text": "Scan History"
+            },
+            {
+              "tag": "H3",
+              "text": "Parsed Fields"
+            },
+            {
+              "tag": "H3",
+              "text": "Auto-filled CTE Form Preview"
+            },
+            {
+              "tag": "H3",
+              "text": "Raw Barcode String"
+            },
+            {
+              "tag": "H3",
+              "text": "Related Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Save your GS1 scan result"
+            },
+            {
+              "tag": "H2",
+              "text": "Related Free Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Product"
+            },
+            {
+              "tag": "H2",
+              "text": "Free Tools"
+            },
+            {
+              "tag": "H2",
+              "text": "Developers"
+            },
+            {
+              "tag": "H2",
+              "text": "Company"
+            }
+          ],
+          "axe": {
+            "version": "4.13.0",
+            "violations": [
+              {
+                "id": "heading-order",
+                "impact": "moderate",
+                "tags": [
+                  "cat.semantics",
+                  "best-practice"
+                ],
+                "description": "Ensure the order of headings is semantically correct",
+                "help": "Heading levels should only increase by one",
+                "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/heading-order?application=playwright",
+                "nodes": [
+                  {
+                    "any": [
+                      {
+                        "id": "heading-order",
+                        "data": null,
+                        "relatedNodes": [],
+                        "impact": "moderate",
+                        "message": "Heading order invalid"
+                      }
+                    ],
+                    "all": [],
+                    "none": [],
+                    "impact": "moderate",
+                    "html": "<h3 class=\"scan-module__ar4Tua__sectionTitle\">Camera Scanner</h3>",
+                    "target": [
+                      ".scan-module__ar4Tua__section:nth-child(1) > .scan-module__ar4Tua__sectionTitle"
+                    ],
+                    "failureSummary": "Fix any of the following:\n  Heading order invalid"
+                  }
+                ]
+              }
+            ],
+            "incomplete": [
+              {
+                "id": "color-contrast",
+                "impact": "serious",
+                "tags": [
+                  "cat.color",
+                  "wcag2aa",
+                  "wcag143",
+                  "TTv5",
+                  "TT13.c",
+                  "EN-301-549",
+                  "EN-9.1.4.3",
+                  "ACT",
+                  "RGAAv4",
+                  "RGAA-3.2.1"
+                ],
+                "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+                "help": "Elements must meet minimum color contrast ratio thresholds",
+                "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+                "nodes": [
+                  {
+                    "any": [
+                      {
+                        "id": "color-contrast",
+                        "data": {
+                          "messageKey": "nonBmp"
+                        },
+                        "relatedNodes": [],
+                        "impact": "serious",
+                        "message": "Element content contains only non-text characters"
+                      }
+                    ],
+                    "all": [],
+                    "none": [],
+                    "impact": "serious",
+                    "html": "<span class=\"scan-module__ar4Tua__validIndicator\"> ✓</span>",
+                    "target": [
+                      ".scan-module__ar4Tua__validIndicator"
+                    ],
+                    "failureSummary": "Fix any of the following:\n  Element content contains only non-text characters"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "verifier": {
+          "verifyTabs": [
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Skip to content",
+              "href": "#main-content",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 15,
+                "y": 15,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "RegEngine",
+              "href": "/",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 21,
+                "width": 114.14999389648438,
+                "height": 18
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Product",
+              "href": "/product",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 487.41668701171875,
+                "y": 20,
+                "width": 52.33332824707031,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Integrations",
+              "href": "/integrations",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 551.75,
+                "y": 20,
+                "width": 79.31666564941406,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Readiness",
+              "href": "/retailer-readiness",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 643.066650390625,
+                "y": 20,
+                "width": 67.63333129882812,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Pricing",
+              "href": "/pricing",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 722.7000122070312,
+                "y": 20,
+                "width": 45.93333435058594,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "FSMA 204",
+              "href": "/fsma-204",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 780.63330078125,
+                "y": 20,
+                "width": 68.86666870117188,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Tools",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 861.5,
+                "y": 20.5,
+                "width": 52.96665954589844,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Developers",
+              "href": "/developer/portal",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 926.4666748046875,
+                "y": 20,
+                "width": 74.33334350585938,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Docs",
+              "href": "/docs",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1012.7999877929688,
+                "y": 20,
+                "width": 33.56666564941406,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "BUTTON",
+              "id": "",
+              "role": null,
+              "name": "Switch to dark mode",
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1062.36669921875,
+                "y": 12,
+                "width": 36,
+                "height": 36
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Log In",
+              "href": "/login",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1110.36669921875,
+                "y": 20,
+                "width": 40.116668701171875,
+                "height": 20
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Free Tools",
+              "href": "/tools",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 1158.4833984375,
+                "y": 14,
+                "width": 89.51666259765625,
+                "height": 32
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Download verify_chain.py",
+              "href": "/sdk/verify_chain.py",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 371.20001220703125,
+                "width": 234.8333282470703,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "See How It Works",
+              "href": "#how-it-works",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 438.83331298828125,
+                "y": 371.20001220703125,
+                "width": 181.7666778564453,
+                "height": 44
+              },
+              "outline": "rgb(4, 120, 87) 2px",
+              "boxShadow": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 246, 248) 0px 0px 0px 2px, rgb(4, 120, 87) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+              "clip": "auto"
+            },
+            {
+              "tag": "A",
+              "id": "",
+              "role": null,
+              "name": "Download verify_chain.py",
+              "href": "/sdk/verify_chain.py",
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 192,
+                "y": 589.7000122070312,
+                "width": 164.51666259765625,
+                "height": 17
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "auto"
+            },
+            {
+              "tag": "INPUT",
+              "id": "verify-bundle-file",
+              "role": null,
+              "name": null,
+              "href": null,
+              "insideMenu": false,
+              "focusVisible": true,
+              "rect": {
+                "x": 224,
+                "y": 782.2000122070312,
+                "width": 1,
+                "height": 1
+              },
+              "outline": "rgb(4, 120, 87) solid 2px",
+              "boxShadow": "none",
+              "clip": "rect(0px, 0px, 0px, 0px)",
+              "labelOutline": "rgb(20, 24, 31) 3px",
+              "labelBoxShadow": "none"
+            }
+          ],
+          "focusedInput": {
+            "tag": "INPUT",
+            "id": "verify-bundle-file",
+            "role": null,
+            "name": null,
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 224,
+              "y": 782.2000122070312,
+              "width": 1,
+              "height": 1
+            },
+            "outline": "rgb(4, 120, 87) solid 2px",
+            "boxShadow": "none",
+            "clip": "rect(0px, 0px, 0px, 0px)",
+            "labelOutline": "rgb(20, 24, 31) 3px",
+            "labelBoxShadow": "none"
+          },
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "innerWidth": 1440,
+          "innerHeight": 900,
+          "devicePixelRatio": 1,
+          "documentWidth": 1440,
+          "documentHeight": 4756,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — Food Traceability That Protects Your Brand",
+          "h1": [
+            "Verify, Don't Trust"
+          ],
+          "cameraAllowed": null,
+          "screenshot": "firefox-desktop-verifier-file-focus.png",
+          "fullScreenshot": "firefox-desktop-verifier-file-focus-full.png",
+          "nextTab": {
+            "tag": "A",
+            "id": "",
+            "role": null,
+            "name": "Grab a sample on the proof page",
+            "href": "/proof",
+            "insideMenu": false,
+            "focusVisible": true,
+            "rect": {
+              "x": 402.3500061035156,
+              "y": 440.20001220703125,
+              "width": 227.91665649414062,
+              "height": 20
+            },
+            "outline": "rgb(4, 120, 87) solid 3px",
+            "boxShadow": "none",
+            "clip": "auto"
+          }
+        }
+      }
+    },
+    {
+      "browser": "webkit",
+      "viewport": "mobile",
+      "route": "/",
+      "startedAt": "2026-10-03T02:06:52.616Z",
+      "consoleErrors": [
+        {
+          "text": "Refused to load https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap because it does not appear in the style-src directive of the Content Security Policy.",
+          "location": {
+            "url": "",
+            "line": 0,
+            "column": 2610,
+            "lineNumber": 0,
+            "columnNumber": 2610
+          }
+        },
+        {
+          "text": "Refused to load https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap because it does not appear in the style-src directive of the Content Security Policy.",
+          "location": {
+            "url": "",
+            "line": 0,
+            "column": 4540,
+            "lineNumber": 0,
+            "columnNumber": 4540
+          }
+        },
+        {
+          "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+          "location": {
+            "url": "http://127.0.0.1:3114/api/session",
+            "line": 0,
+            "column": 0,
+            "lineNumber": 0,
+            "columnNumber": 0
+          }
+        }
+      ],
+      "pageErrors": [],
+      "failedRequests": [],
+      "httpErrors": [
+        {
+          "url": "http://127.0.0.1:3114/api/session",
+          "status": 401,
+          "classification": "synthetic-api-response"
+        }
+      ],
+      "blockedRequests": [],
+      "blockedWebSockets": [],
+      "stubbedRequests": [
+        {
+          "path": "/api/session",
+          "method": "GET",
+          "status": 401
+        }
+      ],
+      "checks": {
+        "skipLink": {
+          "focus": {
+            "tag": "BODY",
+            "id": "",
+            "role": null,
+            "name": "Skip to content((a,b,c,d,e,f,g,h)=>{let i=document.documentElement,j=[\"light\",\"dark\"];function k(b){var c;(Arr",
+            "href": null,
+            "insideMenu": false,
+            "focusVisible": false,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 390,
+              "height": 7814.953125
+            },
+            "outline": "3px none rgb(20, 24, 31)",
+            "boxShadow": "none",
+            "clip": "auto"
+          },
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "devicePixelRatio": 1,
+          "documentWidth": 390,
+          "documentHeight": 7815,
+          "horizontalOverflow": false,
+          "topLevel": true,
+          "title": "RegEngine — FSMA 204 traceability evidence layer",
+          "h1": [
+            "FSMA 204 traceability evidence layer."
+          ],
+          "cameraAllowed": null,
+          "screenshot": "webkit-mobile-skip-link-focus.png",
+          "fullScreenshot": "webkit-mobile-skip-link-focus-full.png"
+        }
+      },
+      "error": "Error: Target was not reachable within keyboard tab budget\n    at tabUntil (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/browser-ux-followup.cjs:102:9)\n    at async keyboardChecks (/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/browser-ux-followup.cjs:117:5)\n    at async /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/browser-ux-followup.cjs:240:30"
+    }
+  ],
+  "errors": [],
+  "completedAt": "2026-10-03T02:07:01.490Z"
+}

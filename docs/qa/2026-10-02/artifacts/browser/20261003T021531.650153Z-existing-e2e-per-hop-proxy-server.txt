@@ -1,0 +1,9 @@
+UTC: 2026-10-03T02:15:31.650153+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 docs/qa/2026-10-02/scripts/existing-e2e-proxy.py
+Exit: 0
+Duration: 165.10s
+Timeout: False
+
+{"event": "started", "public": "http://127.0.0.1:3115", "upstream": "http://127.0.0.1:3114"}
+{"event": "stopped"}

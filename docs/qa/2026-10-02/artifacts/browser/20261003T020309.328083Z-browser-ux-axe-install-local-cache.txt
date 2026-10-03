@@ -1,0 +1,9 @@
+UTC: 2026-10-03T02:03:09.328083+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env NPM_CONFIG_USERCONFIG=/private/tmp/regengine-browser-ux-tools/empty-npm-user NPM_CONFIG_GLOBALCONFIG=/private/tmp/regengine-browser-ux-tools/empty-npm-global npm install --cache /private/tmp/regengine-browser-ux-tools/npm-cache --prefix /private/tmp/regengine-browser-ux-tools --no-audit --no-fund --ignore-scripts @axe-core/playwright
+Exit: 0
+Duration: 1.27s
+Timeout: False
+
+
+added 3 packages in 1s

@@ -1,0 +1,8 @@
+UTC: 2026-10-03T02:19:21.829814+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=sorted(Path("docs/qa/2026-10-02/artifacts/browser").glob("followup-server-*-metadata.txt")); p=files[-1]; data=p.read_text(); stop=next(line.split("=",1)[1] for line in data.splitlines() if line.startswith("StopFile=")); Path(stop).touch(); print("Requested cooperative stop using",p.name)'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Requested cooperative stop using followup-server-20261003T021356Z-metadata.txt

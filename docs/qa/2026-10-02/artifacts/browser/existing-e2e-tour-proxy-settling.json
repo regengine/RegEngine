@@ -1,0 +1,224 @@
+[
+  {
+    "engine": "chromium",
+    "route": "/tools/inflow-lab-dashboard-preview",
+    "step": 1,
+    "screenshot": "existing-e2e-tour-proxy-chromium-settled.png",
+    "samples": [
+      {
+        "elapsedMs": 900,
+        "delayMs": 900,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.25,
+          "y": 843,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 2900,
+        "delayMs": 2000,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.25,
+          "y": 843,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 7900,
+        "delayMs": 5000,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.25,
+          "y": 843,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      }
+    ]
+  },
+  {
+    "engine": "firefox",
+    "route": "/tools/inflow-lab-dashboard-preview",
+    "step": 1,
+    "screenshot": "existing-e2e-tour-proxy-firefox-settled.png",
+    "samples": [
+      {
+        "elapsedMs": 900,
+        "delayMs": 900,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.2833251953125,
+          "y": 843,
+          "width": 82.7166748046875,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 2900,
+        "delayMs": 2000,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.2833251953125,
+          "y": 843,
+          "width": 82.7166748046875,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 7900,
+        "delayMs": 5000,
+        "box": {
+          "x": 560,
+          "y": 556,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 892,
+        "next": {
+          "x": 780.2833251953125,
+          "y": 843,
+          "width": 82.7166748046875,
+          "height": 32
+        },
+        "nextBottom": 875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      }
+    ]
+  },
+  {
+    "engine": "webkit",
+    "route": "/tools/inflow-lab-dashboard-preview",
+    "step": 1,
+    "screenshot": "existing-e2e-tour-proxy-webkit-settled.png",
+    "samples": [
+      {
+        "elapsedMs": 900,
+        "delayMs": 900,
+        "box": {
+          "x": 571.40625,
+          "y": 579.96875,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 915.96875,
+        "next": {
+          "x": 791.65625,
+          "y": 866.96875,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 898.96875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 2900,
+        "delayMs": 2000,
+        "box": {
+          "x": 571.40625,
+          "y": 579.96875,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 915.96875,
+        "next": {
+          "x": 791.65625,
+          "y": 866.96875,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 898.96875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      {
+        "elapsedMs": 7900,
+        "delayMs": 5000,
+        "box": {
+          "x": 571.40625,
+          "y": 579.96875,
+          "width": 320,
+          "height": 336
+        },
+        "bottom": 915.96875,
+        "next": {
+          "x": 791.65625,
+          "y": 866.96875,
+          "width": 82.75,
+          "height": 32
+        },
+        "nextBottom": 898.96875,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      }
+    ]
+  }
+]
