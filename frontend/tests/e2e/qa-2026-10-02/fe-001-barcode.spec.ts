@@ -47,7 +47,5 @@ test('FE-001 preserves complete GS1 lot identifiers in the real scanner form', a
   });
   await page.screenshot({ path: screenshot, fullPage: true });
 
-  // Setup/controls/evidence are outside expected failure; only defect assertion is marked.
-  test.fail(true, 'FE-001: variable-length GS1 lot is truncated at AI-like digits.');
   expect(observations.map(value => value.actualLot)).toEqual(observations.map(value => value.expectedLot));
 });
