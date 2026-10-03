@@ -1385,7 +1385,13 @@ async def ingest_csv(
 
     # Read and parse CSV
     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
-    text = content.decode("utf-8-sig")  # Handle BOM
+    try:
+        text = content.decode("utf-8-sig")  # Handle BOM
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
+        ) from exc
     file_cte: Optional[CteClassificationResult] = None
     if fallback_cte is None:
         # Independent questions over the same upload: ask both at once.

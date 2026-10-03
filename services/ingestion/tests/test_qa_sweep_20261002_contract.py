@@ -197,18 +197,15 @@ def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quan
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
-)
+# BE-004: unsupported encodings get actionable client feedback before persistence.
 @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
 def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
     upload, captured = csv_upload
     response = upload(raw)
     if captured:
         pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
-    assert response.status_code in (400, 415, 422), response.text
+    assert response.status_code == 400, response.text
+    assert "UTF-8 CSV" in response.json()["detail"]
 
 
 def test_csv_utf8_bom_is_accepted(csv_upload):
@@ -216,6 +213,15 @@ def test_csv_utf8_bom_is_accepted(csv_upload):
     response = upload(b"\xef\xbb\xbf" + _csv(HEADER, ROW).encode())
     assert response.status_code == 200
     assert len(captured) == 1
+
+
+def test_csv_utf8_non_ascii_product_is_accepted(csv_upload):
+    upload, captured = csv_upload
+    row = list(ROW)
+    row[1] = "Café kale"
+    response = upload(_csv(HEADER, row))
+    assert response.status_code == 200
+    assert captured[0].product_description == row[1]
 
 
 @given(st.integers(min_value=1, max_value=1_000_000))
