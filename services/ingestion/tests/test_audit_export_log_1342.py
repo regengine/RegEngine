@@ -3,7 +3,8 @@
 Locks:
 - Pydantic response models (ExportRecord/VerificationRecord/ActivityEntry)
 - _query_exports: happy path with date filters, DB exception returns None,
-  missing columns handled, non-datetime created_at stringified
+  missing columns handled, non-datetime created_at stringified, statement
+  names only real fsma.fda_export_log columns
 - _query_verifications: happy path, exception returns None, JSON-string
   errors unpacked, list errors passthrough
 - _get_verification_fallback: in-memory store merge, ordering
@@ -18,7 +19,9 @@ Issue: #1342
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -75,15 +78,24 @@ class _FakeSession:
     def __init__(self, *, rows=None, raises=False):
         self._rows = rows or []
         self._raises = raises
+        self.calls: list[tuple[str, dict]] = []
         self.closed = False
 
     def execute(self, stmt, params=None):
+        self.calls.append((str(stmt), dict(params or {})))
         if self._raises:
             raise RuntimeError("DB down")
         return SimpleNamespace(fetchall=lambda: self._rows)
 
     def close(self):
         self.closed = True
+
+
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
 
 
 # ---------------------------------------------------------------------------
@@ -106,7 +118,6 @@ class TestPydanticModels:
             sha256_hash="abc",
             created_at="2026-01-01",
             traceability_lot_code="TLC",
-            format="json",
         )
         assert r.export_type == "fda"
         assert r.record_count == 5
@@ -170,19 +181,25 @@ class TestPydanticModels:
 class TestQueryExports:
     def test_happy_path(self, monkeypatch):
         dt = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
-        row = ("e1", "t", "fda", 5, "hash", dt, "TLC-1", "json")
+        row = ("e1", "t", "fda", 5, "hash", dt, "TLC-1")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
 
         monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
         result = _query_exports("t", None, None, 50)
-        assert result[0]["id"] == "e1"
-        assert result[0]["created_at"].startswith("2026-01-15")
-        assert result[0]["record_count"] == 5
+        assert result[0] == {
+            "id": "e1",
+            "tenant_id": "t",
+            "export_type": "fda",
+            "record_count": 5,
+            "sha256_hash": "hash",
+            "created_at": "2026-01-15T12:00:00+00:00",
+            "traceability_lot_code": "TLC-1",
+        }
         assert sess.closed is True
 
     def test_record_count_none_normalized(self, monkeypatch):
-        row = ("e1", "t", "fda", None, "h", None, "TLC", "json")
+        row = ("e1", "t", "fda", None, "h", None, "TLC")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
 
@@ -192,7 +209,7 @@ class TestQueryExports:
         assert result[0]["created_at"] is None
 
     def test_created_at_non_datetime_stringified(self, monkeypatch):
-        row = ("e1", "t", "fda", 1, "h", "2026-01-15T00:00:00", "TLC", "json")
+        row = ("e1", "t", "fda", 1, "h", "2026-01-15T00:00:00", "TLC")
         sess = _FakeSession(rows=[row])
         import shared.database as shared_db
 
@@ -237,6 +254,43 @@ class TestQueryExports:
 
         monkeypatch.setattr(shared_db, "SessionLocal", _boom)
         assert _query_exports("t", None, None, 50) is None
+
+    @pytest.mark.parametrize("dates", [(None, None), ("2026-01-01", "2026-01-31")])
+    def test_statement_references_only_real_columns(self, monkeypatch, dates):
+        """The export statement names ``fsma.fda_export_log`` columns as V002 declares them.
+
+        It read ``sha256_hash``, ``created_at``, ``traceability_lot_code``
+        and ``format`` and filtered on ``created_at``. The columns are
+        ``export_hash``, ``generated_at`` and ``query_tlc``; no column
+        records a file format. Postgres raised ``UndefinedColumn``, the
+        except returned ``None``, and the audit trail and activity feed
+        showed no exports for any tenant. ``auditor_router.audit_export_log``,
+        ``audit_log._query_exports`` and ``fda_export.queries`` read the real
+        columns. The fake session above never parses SQL.
+        ``test_audit_export_log_pg.py`` runs the statement on a live cluster;
+        this is the copy that needs no database.
+        """
+        columns = _ddl_columns("V002__fsma_cte_persistence.sql", "fsma.fda_export_log")
+        assert {"export_hash", "generated_at", "query_tlc"} <= columns  # the DDL parse itself still works
+        assert not {"sha256_hash", "created_at", "traceability_lot_code", "format"} & columns
+
+        sess = _FakeSession(rows=[])
+        import shared.database as shared_db
+
+        monkeypatch.setattr(shared_db, "SessionLocal", lambda: sess)
+        _query_exports("t", *dates, 25)
+        sql, params = sess.calls[0]
+
+        assert "FROM fsma.fda_export_log" in sql
+        assert "WHERE tenant_id = :tid" in sql
+        assert "ORDER BY generated_at DESC" in sql
+        assert params == {"tid": "t", "lim": 25, **({"start": dates[0], "end": dates[1]} if dates[0] else {})}
+
+        # Keywords are upper-case in the statement, so every lower-case word
+        # is an identifier. These are the ones that are not columns.
+        not_columns = {*("fsma", "fda_export_log"), *("tid", "lim", "start", "end")}
+        referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
+        assert referenced <= columns, f"not columns of fsma.fda_export_log: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------
@@ -462,7 +516,6 @@ class TestExportsEndpoint:
                     "sha256_hash": None,
                     "created_at": None,
                     "traceability_lot_code": None,
-                    "format": None,
                 },
             ],
         )
@@ -575,7 +628,6 @@ class TestActivityFeedEndpoint:
                     "sha256_hash": "h",
                     "created_at": "2026-01-10",
                     "traceability_lot_code": "T",
-                    "format": "json",
                 },
             ],
         )
@@ -628,7 +680,6 @@ class TestActivityFeedEndpoint:
                     "sha256_hash": None,
                     "created_at": f"2026-01-{i:02d}",
                     "traceability_lot_code": None,
-                    "format": None,
                 }
                 for i in range(1, 11)
             ]
