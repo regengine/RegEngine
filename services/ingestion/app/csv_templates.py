@@ -742,6 +742,20 @@ def parse_csv_rows(
     records: list[dict] = []
     try:
         header = reader.fieldnames
+        if header and any(name.strip() for name in header):
+            seen_columns: dict[str, int] = {}
+            for position, name in enumerate(header, start=1):
+                normalized = normalize_csv_header(name)
+                if normalized in seen_columns:
+                    return (
+                        [],
+                        [
+                            f"CSV has duplicate column {normalized!r} at positions "
+                            f"{seen_columns[normalized]} and {position}; column names must be unique"
+                        ],
+                        [],
+                    )
+                seen_columns[normalized] = position
         for record in reader:
             records.append(record)
             if len(records) > MAX_CSV_ROWS:

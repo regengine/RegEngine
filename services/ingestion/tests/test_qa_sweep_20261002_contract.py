@@ -155,9 +155,7 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
-)
+# BE-003: ambiguous columns must be rejected before quantities can be overwritten.
 @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
 def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
     upload, captured = csv_upload
@@ -165,6 +163,8 @@ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header)
     assert response.status_code == 400, (
         f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
     )
+    [error] = response.json()["detail"]["errors"]
+    assert "duplicate column" in error and "quantity" in error and "3 and 8" in error
     assert not captured
 
 

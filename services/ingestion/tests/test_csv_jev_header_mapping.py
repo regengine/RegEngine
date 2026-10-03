@@ -570,13 +570,12 @@ def test_scan_reads_at_most_max_csv_rows(monkeypatch):
 @pytest.mark.parametrize(
     "text,withheld",
     [
-        # {normalize(k): v} keeps the first key's slot but the last same-named
-        # key's value: "TLC-1" is tested, so this is not a comment row.
-        ("Lot,lot,Activity\n# x,TLC-1,receiving\n", True),
-        # ...and here the tested value is "# x": a comment row, skipped.
-        ("lot,Lot,Activity\nTLC-1,# x,receiving\n", False),
+        # Only the first column marks a comment; a later hash-prefixed
+        # value must not hide a data row from either the scan or parser.
+        ("Lot,Notes,Activity\nTLC-1,# x,receiving\n", True),
+        ("Lot,Notes,Activity\n# x,TLC-1,receiving\n", False),
     ],
-    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
+    ids=["first-column-is-data", "first-column-is-comment"],
 )
 def test_comment_rows_are_the_ones_the_parser_skips(text, withheld):
     events, errors, _ = ct.parse_csv_rows(text, "shipping")
