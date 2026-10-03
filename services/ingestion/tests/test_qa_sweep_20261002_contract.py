@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import math
+from unittest.mock import AsyncMock
 
 import pytest
 from app import csv_templates as ct
@@ -19,6 +21,7 @@ from app.webhook_router_v2 import routes
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hypothesis import given, settings, strategies as st
+from shared.error_handling import install_exception_handlers
 
 HEADER = [
     "traceability_lot_code",
@@ -78,6 +81,7 @@ def csv_upload(monkeypatch):
 def webhook_client():
     app = FastAPI()
     app.include_router(routes.router)
+    install_exception_handlers(app)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
         key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
     )
@@ -129,9 +133,7 @@ def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timest
     assert response.status_code == 422, response.text
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
-)
+# BE-002: quantities reaching persistence must be finite.
 @pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
 def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -142,9 +144,7 @@ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
-)
+# BE-002: quantities reaching persistence must be finite.
 @pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
 def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -153,6 +153,25 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     response = upload(_csv(header, row), cte="transformation")
     assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
     assert not captured
+
+
+@pytest.mark.parametrize("raw_quantity", ["1e309", "-1e309", "NaN"])
+def test_webhook_nonfinite_quantity_returns_validation_error_before_ingest(webhook_client, monkeypatch, raw_quantity):
+    # BE-002: numeric overflow in valid JSON must retain the structured 422.
+    enter_ingest = AsyncMock(side_effect=AssertionError("Invalid quantity reached ingestion"))
+    monkeypatch.setattr(routes._pkg, "resolve_tenant_context", enter_ingest)
+    raw = json.dumps(_payload("2026-04-17T12:00:00Z")).replace('"quantity": 10', f'"quantity": {raw_quantity}')
+    response = webhook_client.post(
+        "/api/v1/webhooks/ingest",
+        content=raw,
+        headers={"Content-Type": "application/json", "Idempotency-Key": "qa-nonfinite-quantity"},
+    )
+    assert response.status_code == 422, response.text
+    [error] = response.json()["error"]["details"]
+    assert error["type"] == "finite_number"
+    assert error["loc"] == ["body", "events", 0, "quantity"]
+    assert isinstance(error["input"], str)
+    enter_ingest.assert_not_called()
 
 
 # BE-003: ambiguous columns must be rejected before quantities can be overwritten.

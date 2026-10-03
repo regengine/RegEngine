@@ -14,6 +14,7 @@ import dataclasses
 import io
 import itertools
 import logging
+import math
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
@@ -696,6 +697,8 @@ def _parse_input_quantities(
             quantity = float(quantity_text)
         except ValueError:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+        if not math.isfinite(quantity):
+            return [], f"input quantity {quantity_text!r} for input lot {lot} must be finite", None
         if quantity < 0:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
         if not unit_text:
