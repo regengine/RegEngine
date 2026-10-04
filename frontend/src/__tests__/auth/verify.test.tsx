@@ -11,6 +11,10 @@ import userEvent from '@testing-library/user-event';
 
 import VerifyClient from '@/app/auth/verify/VerifyClient';
 import VerifyPage from '@/app/auth/verify/page';
+import {
+  OTP_CHALLENGE_STORAGE_KEY,
+  saveOtpChallengeState,
+} from '@/lib/passwordless-auth';
 
 const mocks = vi.hoisted(() => ({
   seedPasswordlessClientUser: vi.fn(),
@@ -18,12 +22,21 @@ const mocks = vi.hoisted(() => ({
   clearOtpChallengeState: vi.fn(),
 }));
 
-vi.mock('@/lib/passwordless-auth', () => ({
-  seedPasswordlessClientUser: mocks.seedPasswordlessClientUser,
-  verifyEmailChallenge: mocks.verifyEmailChallenge,
-  clearOtpChallengeState: mocks.clearOtpChallengeState,
-  loadOtpChallengeState: vi.fn(() => null),
-}));
+// Only the network call and the profile seeding are stubbed. The sessionStorage
+// helpers stay real: that is how /login hands the challenge to /auth/verify,
+// and the production path (?next= with no email in the URL) depends on it.
+vi.mock('@/lib/passwordless-auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/passwordless-auth')>();
+  return {
+    ...actual,
+    seedPasswordlessClientUser: mocks.seedPasswordlessClientUser,
+    verifyEmailChallenge: mocks.verifyEmailChallenge,
+    // A spy that still clears the real storage, so the tests can see it cleared.
+    clearOtpChallengeState: mocks.clearOtpChallengeState.mockImplementation(
+      actual.clearOtpChallengeState,
+    ),
+  };
+});
 
 const CHALLENGE_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -232,5 +245,77 @@ describe('/auth/verify page: validates next from the query string', () => {
     const client = (element.props as { children: { props: { nextPath?: string } } }).children;
 
     expect(client.props.nextPath).toBe('/dashboard');
+  });
+});
+
+// This is the path production takes. /login saves the challenge to
+// sessionStorage and pushes /auth/verify?next=... with no email or
+// challenge_id in the URL, so VerifyClient gets initialEmail='' and must load
+// the challenge from sessionStorage in its effect. The tests above always put
+// the email in the URL and never reach that effect.
+describe('/auth/verify page: the challenge comes from sessionStorage, as after /login', () => {
+  const EMAIL = 'user@example.com';
+
+  /** The page exactly as /login leaves it: only ?next= in the URL. */
+  async function renderPageAsAfterLogin(next?: string) {
+    const element = await VerifyPage({
+      searchParams: Promise.resolve(next === undefined ? {} : { next }),
+    });
+    return render(element);
+  }
+
+  function storeChallengeAsLoginDoes() {
+    saveOtpChallengeState({ email: EMAIL, challengeId: CHALLENGE_ID, createdAt: Date.now() });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.sessionStorage.clear();
+    mocks.verifyEmailChallenge.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    window.sessionStorage.clear();
+    Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+  });
+
+  it('forwards ?next=/developer/portal using the stored challenge, then clears it', async () => {
+    storeChallengeAsLoginDoes();
+    const assign = mockLocationAssign();
+    await renderPageAsAfterLogin('/developer/portal');
+
+    await enterCode();
+
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalledWith('/developer/portal');
+    });
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(mocks.verifyEmailChallenge).toHaveBeenCalledWith(CHALLENGE_ID, '123456');
+    expect(mocks.seedPasswordlessClientUser).toHaveBeenCalledWith(EMAIL);
+    expect(window.sessionStorage.getItem(OTP_CHALLENGE_STORAGE_KEY)).toBeNull();
+  });
+
+  it('assigns /dashboard using the stored challenge when there is no ?next=', async () => {
+    storeChallengeAsLoginDoes();
+    const assign = mockLocationAssign();
+    await renderPageAsAfterLogin();
+
+    await enterCode();
+
+    await waitFor(() => {
+      expect(assign).toHaveBeenCalledWith('/dashboard');
+    });
+    expect(assign).toHaveBeenCalledTimes(1);
+    expect(mocks.verifyEmailChallenge).toHaveBeenCalledWith(CHALLENGE_ID, '123456');
+  });
+
+  it('cannot submit and does not navigate when ?next= is set but no challenge is stored', async () => {
+    const assign = mockLocationAssign();
+    await renderPageAsAfterLogin('/developer/portal');
+
+    expect(screen.getByRole('button', { name: /verify and continue/i })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(/could not find a challenge id/i);
+    expect(mocks.verifyEmailChallenge).not.toHaveBeenCalled();
+    expect(assign).not.toHaveBeenCalled();
   });
 });
