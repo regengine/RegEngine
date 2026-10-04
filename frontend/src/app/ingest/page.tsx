@@ -417,7 +417,7 @@ export default function IngestPage() {
                         className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                       >
                         <span>API Key</span>
-                        <HelpTooltip content="Your RegEngine API key starting with 'rge_'. Get one from the Admin page or setup wizard." />
+                        <HelpTooltip content="Your RegEngine API key, starting with 'rge_'. RegEngine issues live keys for your workspace; the developer portal explains how to request one." />
                       </label>
                       <Input
                         id="ingest-api-key"

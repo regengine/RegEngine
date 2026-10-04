@@ -85,6 +85,22 @@ describe('developer portal static guards', () => {
         }
     });
 
+    it('nothing links to the retired /developer/login or /developer/register routes', () => {
+        // Both now redirect to /login, which has no sign-up. A link to either
+        // sends a prospect to a sign-in page for an account they cannot create.
+        // (Comments may mention them; only quoted route strings count.)
+        const offenders = all.filter((file) => /['"`]\/developer\/(register|login)\b/.test(read(file)));
+        expect(offenders.map(rel)).toEqual([]);
+    });
+
+    it('the ingest page does not send customers to the Admin page or a setup wizard for a key', () => {
+        // The admin key route needs a high-assurance sysadmin, and the
+        // onboarding wizard has no key step. RegEngine issues live keys.
+        const ingest = read(path.join(SRC, 'app', 'ingest', 'page.tsx'));
+        expect(ingest).not.toMatch(/Admin page|setup wizard/i);
+        expect(ingest).toMatch(/RegEngine issues live (API )?keys/);
+    });
+
     it('the dead portal surfaces stay deleted', () => {
         const gone = [
             'app/developer/portal/playground',
