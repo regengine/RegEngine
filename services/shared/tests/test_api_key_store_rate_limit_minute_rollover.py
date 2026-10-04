@@ -22,8 +22,8 @@ with a TTL-aware fake Redis and an injectable clock so windows roll by advancing
 time rather than sleeping.
 """
 
-from datetime import datetime, timezone
-from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from shared.api_key_store import DatabaseAPIKeyStore
@@ -497,3 +497,71 @@ async def test_invalid_window_is_rejected_even_when_redis_is_absent(monkeypatch,
 
     with pytest.raises(ValueError):
         await limiter.check_rate_limit("k", 5, 0)
+
+
+def _integrator_client(monkeypatch, store):
+    """A ``require_api_key`` route backed by ``store``, behind the shared error handlers."""
+    from fastapi import Depends, FastAPI
+    from fastapi.testclient import TestClient
+    from shared import auth
+    from shared.api_key_store import APIKeyResponse
+    from shared.error_handling import install_exception_handlers
+
+    principal = APIKeyResponse(
+        key_id="rge_live_e2e",
+        key_prefix="rge_live_e2e",
+        name="e2e",
+        tenant_id="11111111-2222-3333-4444-555555555555",
+        scopes=["records.read"],
+        rate_limit_per_minute=3,
+        created_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    store.validate_key = AsyncMock(return_value=principal)
+    for var in ("AUTH_TEST_BYPASS_TOKEN", "AUTH_TEST_BYPASS_TENANT_ID"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setattr(auth, "_db_store_instance", store)
+
+    app = FastAPI()
+
+    @app.get("/ping")
+    async def ping(_principal=Depends(auth.require_api_key)):
+        return {"ok": True}
+
+    install_exception_handlers(app)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+_E2E_HEADERS = {"X-RegEngine-API-Key": "rge_live_e2e.not-a-real-secret"}  # pragma: allowlist secret
+
+
+def test_per_key_429_tells_the_client_when_to_retry(monkeypatch, store, clock):
+    """Limiter -> require_api_key -> exception handler, as an integrator sees it."""
+    client = _integrator_client(monkeypatch, store)
+
+    clock.advance(10)
+    assert [client.get("/ping", headers=_E2E_HEADERS).status_code for _ in range(3)] == [200, 200, 200]
+
+    blocked = client.get("/ping", headers=_E2E_HEADERS)
+    assert blocked.status_code == 429
+    assert blocked.json() == {"error": {"type": "http_429", "message": "Rate limit exceeded"}}
+    assert blocked.headers["Retry-After"] == "50"  # seconds left in the bucket, not a fixed 60
+
+    clock.advance(50)
+    assert client.get("/ping", headers=_E2E_HEADERS).status_code == 200
+
+
+def test_per_key_429_falls_back_to_the_full_window_without_a_retry_after(monkeypatch, store):
+    from shared.api_key_store import RateLimitInfo
+
+    client = _integrator_client(monkeypatch, store)
+    store.check_rate_limit = AsyncMock(
+        return_value=RateLimitInfo(
+            allowed=False, limit=3, remaining=0, reset_at=datetime.now(timezone.utc), retry_after=None
+        )
+    )
+
+    blocked = client.get("/ping", headers=_E2E_HEADERS)
+
+    assert blocked.status_code == 429
+    assert blocked.headers["Retry-After"] == "60"
