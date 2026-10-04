@@ -28,9 +28,10 @@ export const AUTHENTICATED_APP_ROUTE_PREFIXES = [
 ] as const;
 
 /**
- * Routes that carry their own chrome (the developer portal shell) but are NOT
- * middleware-auth-gated app routes — keep them out of
- * AUTHENTICATED_APP_ROUTE_PREFIXES, which proxy.ts uses for server-side auth.
+ * Routes that carry their own chrome (the developer portal renders inside the
+ * dashboard shell) but are NOT in AUTHENTICATED_APP_ROUTE_PREFIXES, which
+ * proxy.ts uses for server-side auth. The portal is gated by GATED_DEV_ROUTES
+ * in proxy.ts instead.
  * Note "/developer" does not prefix-match "/developers" (the public marketing
  * page), which keeps its marketing header.
  */

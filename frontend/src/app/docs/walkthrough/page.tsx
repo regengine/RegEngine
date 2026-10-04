@@ -5,6 +5,13 @@ import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 import { PageHeader } from '@/components/layout/page-header';
 import { Callout } from '@/components/ui/callout';
 import { CodeBlock } from '@/components/ui/code-block';
+import {
+  INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE,
+  INGEST_WALKTHROUGH_SHIPPING_CURL_SAMPLE,
+  INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE,
+  WALKTHROUGH_BAGGED_LOT,
+  WALKTHROUGH_RECEIVED_LOT,
+} from '@/lib/api-samples/ingest-samples';
 
 export const metadata: Metadata = {
   title: 'End-to-End Walkthrough | RegEngine',
@@ -57,9 +64,9 @@ export default function WalkthroughPage() {
         <Section title="Before you start">
           <p className="mb-3 text-body text-re-text-secondary">You should have completed the Quickstart and have:</p>
           <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
-            <li><code className={CODE}>$REGENGINE_API_KEY</code> in your shell</li>
-            <li><code className={CODE}>$REGENGINE_TENANT_ID</code> in your shell</li>
-            <li>A working <code className={CODE}>curl</code> and ~15 minutes</li>
+            <li><code className={CODE}>$REGENGINE_API_KEY</code> and <code className={CODE}>$REGENGINE_SIGNING_SECRET</code> in your shell</li>
+            <li>A test workspace. Accepted events are permanent and can be billed, so every lot below starts with <code className={CODE}>TEST-</code></li>
+            <li>A working <code className={CODE}>curl</code> with <code className={CODE}>openssl</code>, and ~15 minutes</li>
           </ul>
           <p className="mt-3 text-ui text-re-text-tertiary">
             The scenario: you&apos;re a fresh-cut produce processor. One supplier sent you a romaine
@@ -71,40 +78,15 @@ export default function WalkthroughPage() {
         {/* Step 1 */}
         <Step n={1} title="Post the Receiving event">
           <p className="mb-3 text-body text-re-text-secondary">
-            You receive lot <code className={CODE}>LOT-2026-001</code> from
+            You receive lot <code className={CODE}>{WALKTHROUGH_RECEIVED_LOT}</code> from
             Supplier A. This is a Receiving CTE — the starting anchor for the chain.
           </p>
-          <CodeBlock
-            language="bash"
-            code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
-  -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "manual-walkthrough",
-    "events": [{
-      "cte_type": "receiving",
-      "traceability_lot_code": "00012345678901-LOT-2026-001",
-      "product_description": "Romaine Lettuce, whole heads",
-      "quantity": 500,
-      "unit_of_measure": "cases",
-      "location_gln": "0012345600007",
-      "location_name": "DC-4 Receiving Dock",
-      "timestamp": "2026-05-13T08:00:00Z",
-      "kdes": {
-        "receive_date": "2026-05-13",
-        "supplier_name": "Supplier A",
-        "supplier_gln": "0012345600001"
-      }
-    }]
-  }'`}
-          />
+          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE} />
           <ExpectedResponse>
             <CodeBlock
               language="json"
               code={`{ "accepted": 1, "rejected": 0, "total": 1, "events": [
-  { "traceability_lot_code": "00012345678901-LOT-2026-001",
+  { "traceability_lot_code": "${WALKTHROUGH_RECEIVED_LOT}",
     "cte_type": "receiving", "status": "accepted",
     "event_id": "...", "sha256_hash": "...", "chain_hash": "..." }
 ] }`}
@@ -117,11 +99,21 @@ export default function WalkthroughPage() {
               path; ping support.
             </li>
             <li>
-              <strong className="font-medium text-re-text-primary">401/403</strong> — recheck <code className={CODE}>$REGENGINE_API_KEY</code>. The header is{' '}
-              <code className={CODE}>X-RegEngine-API-Key</code> (not <code className={CODE}>Authorization</code>).
+              <strong className="font-medium text-re-text-primary">401</strong> — the key is missing or not recognized, or{' '}
+              <code className={CODE}>X-Webhook-Signature</code> is missing or wrong. The key header is{' '}
+              <code className={CODE}>X-RegEngine-API-Key</code> (not <code className={CODE}>Authorization</code>). Sign the exact bytes
+              you send, which is why the sample uses <code className={CODE}>--data-binary</code>.{' '}
+              <strong className="font-medium text-re-text-primary">403</strong> — the key lacks the{' '}
+              <code className={CODE}>webhooks.ingest</code> scope.
             </li>
             <li>
-              <strong className="font-medium text-re-text-primary">422 validation error</strong> — the response body lists which KDE failed; fix and resubmit. Lot codes follow GS1 GTIN-14 + lot suffix.
+              <strong className="font-medium text-re-text-primary">200 with <code className={CODE}>status: &quot;rejected&quot;</code></strong> — read{' '}
+              <code className={CODE}>errors</code> on that event, for example a missing KDE. Fix it and resend with a new{' '}
+              <code className={CODE}>Idempotency-Key</code>.
+            </li>
+            <li>
+              <strong className="font-medium text-re-text-primary">422</strong> — the whole request failed validation and nothing was stored.{' '}
+              <code className={CODE}>error.details</code> names the field, for example a missing <code className={CODE}>quantity</code> or a timestamp more than 24 hours ahead.
             </li>
           </Troubleshoot>
         </Step>
@@ -132,36 +124,7 @@ export default function WalkthroughPage() {
             You wash and bag the lot — that&apos;s a Transformation CTE. The input lot is the
             Receiving lot from Step 1; the output lot is new.
           </p>
-          <CodeBlock
-            language="bash"
-            code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
-  -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "manual-walkthrough",
-    "events": [{
-      "cte_type": "transformation",
-      "traceability_lot_code": "00012345678901-LOT-2026-001-BAGGED",
-      "product_description": "Romaine, washed + bagged, 10oz consumer pack",
-      "quantity": 4800,
-      "unit_of_measure": "units",
-      "location_gln": "0012345600007",
-      "location_name": "DC-4 Processing Line 2",
-      "timestamp": "2026-05-13T14:00:00Z",
-      "kdes": {
-        "input_lot_codes": ["00012345678901-LOT-2026-001"],
-        "inputs": [
-          { "traceability_lot_code": "00012345678901-LOT-2026-001", "quantity": 480, "unit_of_measure": "cases" }
-        ],
-        "transformation_type": "wash_and_bag",
-        "process_start": "2026-05-13T09:30:00Z",
-        "process_end": "2026-05-13T13:45:00Z"
-      }
-    }]
-  }'`}
-          />
+          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE} />
           <ExpectedResponse>
             <p className="text-ui text-re-text-secondary">
               Same shape as Step 1. The new event chains to the receiving event via{' '}
@@ -175,32 +138,7 @@ export default function WalkthroughPage() {
           <p className="mb-3 text-body text-re-text-secondary">
             The bagged lot ships to a distributor. This closes the chain for this lot.
           </p>
-          <CodeBlock
-            language="bash"
-            code={`curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
-  -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "manual-walkthrough",
-    "events": [{
-      "cte_type": "shipping",
-      "traceability_lot_code": "00012345678901-LOT-2026-001-BAGGED",
-      "product_description": "Romaine, washed + bagged, 10oz consumer pack",
-      "quantity": 4800,
-      "unit_of_measure": "units",
-      "location_gln": "0012345600007",
-      "location_name": "DC-4 Outbound",
-      "timestamp": "2026-05-13T18:00:00Z",
-      "kdes": {
-        "ship_date": "2026-05-13",
-        "receiver_name": "Distributor B",
-        "receiver_gln": "0012345600002"
-      }
-    }]
-  }'`}
-          />
+          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_SHIPPING_CURL_SAMPLE} />
         </Step>
 
         {/* Step 4 */}
@@ -210,13 +148,13 @@ export default function WalkthroughPage() {
             /dashboard/compliance</Link>. You should see:
           </p>
           <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
-            <li>3 events for tenant <code className={CODE}>$REGENGINE_TENANT_ID</code></li>
+            <li>3 events in your workspace, with lot codes that start <code className={CODE}>{WALKTHROUGH_RECEIVED_LOT}</code></li>
             <li>The traceability lot code visible in the events list</li>
             <li>A compliance score (early-stage; will improve as more lots flow through)</li>
           </ul>
           <p className="mt-3 text-ui text-re-text-tertiary">
-            Empty dashboard? Confirm the tenant ID in the URL matches the one you posted with.
-            Different tenant = different scope.
+            Empty dashboard? Confirm you are signed in to the workspace your API key belongs to.
+            Events are scoped to that workspace.
           </p>
         </Step>
 
@@ -227,19 +165,23 @@ export default function WalkthroughPage() {
           </p>
           <CodeBlock
             language="bash"
-            code={`curl -X POST https://regengine.co/api/v1/fda/export \\
+            code={`curl -G https://regengine.co/api/v1/fda/export \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
-  -H "X-Tenant-ID: $REGENGINE_TENANT_ID" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "traceability_lot_codes": ["00012345678901-LOT-2026-001-BAGGED"],
-    "format": "fda_sortable_csv"
-  }' \\
+  -d "tenant_id=YOUR_WORKSPACE_ID" \\
+  -d "tlc=${WALKTHROUGH_BAGGED_LOT}" \\
+  -d "format=csv" \\
   -o lot-export.csv
 
 # Inspect:
 head -20 lot-export.csv`}
           />
+          <p className="mt-3 text-ui text-re-text-tertiary">
+            The export needs the <code className={CODE}>fda.export</code> scope and an active subscription. Your workspace ID is the
+            one RegEngine sent with your key. A <code className={CODE}>409</code> with{' '}
+            <code className={CODE}>kde_coverage_below_threshold</code> means the lot&apos;s events are missing required KDEs; the response
+            lists them. Fix the data, or add <code className={CODE}>allow_incomplete=true</code> to acknowledge the gap (the bypass is
+            recorded in the audit trail).
+          </p>
           <p className="mt-3 text-ui text-re-text-tertiary">
             You should see header rows mapping to FDA&apos;s 1.1455(c) requirements, with one row per
             CTE event for the lot. Production records, not legal advice — your operation remains

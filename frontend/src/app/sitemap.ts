@@ -21,8 +21,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/pricing`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
         // /alpha, /verticals/food-safety and /developer/register are redirect
-        // stubs (the last one client-side, into robots-disallowed /signup), so
-        // they are deliberately absent: a sitemap entry must resolve to a 200.
+        // stubs (the last one a next.config.js redirect to /login), so they are
+        // deliberately absent: a sitemap entry must resolve to a 200.
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },

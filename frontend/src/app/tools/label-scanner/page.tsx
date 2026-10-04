@@ -568,7 +568,7 @@ function LabelScannerContent() {
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">
-                            <Link href="/alpha">
+                            <Link href="/contact">
                                 Become a Design Partner <ArrowRight aria-hidden="true" className="ml-2 h-3.5 w-3.5" strokeWidth={1.75} />
                             </Link>
                         </Button>

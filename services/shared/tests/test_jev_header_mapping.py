@@ -30,6 +30,7 @@ from shared.jev.header_mapping import (
     MALFORMED_HEADER,
     MAX_COLUMNS_PER_UPLOAD,
     MAX_HEADER_CHARS,
+    MAX_REQUEST_CHARS,
     NO_MATCH,
     PURPOSE,
     QUESTIONS_VERSION,
@@ -38,9 +39,11 @@ from shared.jev.header_mapping import (
     build_questions,
     build_state,
     collect_sample_values,
+    column_batches,
     malformed_header_reason,
     normalize_csv_header,
     outranked_columns,
+    reversed_criteria,
     suggest_header_mappings,
     unrecognized_headers,
 )
@@ -62,6 +65,7 @@ def _transport(answer_for: dict[str, dict], seen: dict | None = None) -> httpx2.
         body = json.loads(request.content)
         if seen is not None:
             seen["body"] = body
+            seen.setdefault("bodies", []).append(body)
         answers = {}
         for question_id in body["questions"]:
             index = int(question_id.split("_")[1])
@@ -159,7 +163,7 @@ def test_build_state_with_cte_type_names_the_file_cte():
 def test_questions_explain_file_cte_type_and_the_version_says_so():
     # The task text is what auditors read back from QUESTIONS_VERSION: a
     # change to it must come with a new version.
-    assert QUESTIONS_VERSION == "csv-header-mapping.v2"
+    assert QUESTIONS_VERSION == "csv-header-mapping.v3"
     task = build_questions(["Ship Dt"])["col_0"]["instructions"]["task"]
     assert task == (
         "Decide which canonical FSMA 204 traceability field the CSV column described in "
@@ -202,7 +206,7 @@ def test_declared_cte_type_reaches_the_request_state():
     assert result.ok
     assert seen["body"]["state"]["file_cte_type"] == "shipping"
     assert seen["body"]["state"]["csv_headers"] == HEADERS
-    assert result.evidence.questions_version == "csv-header-mapping.v2"
+    assert result.evidence.questions_version == "csv-header-mapping.v3"
     assert result.file_cte_type == "shipping"
     assert result.file_cte_type_dropped is None
 
@@ -530,8 +534,14 @@ def test_too_many_columns_are_truncated_not_rejected():
 
     assert result.ok
     assert result.truncated_columns == 5
-    assert len(seen["body"]["questions"]) == MAX_COLUMNS_PER_UPLOAD
     assert len(result.suggestions) == MAX_COLUMNS_PER_UPLOAD
+    # Asked across several requests, every one within the request budget,
+    # together covering each kept column exactly once.
+    assert sum(len(body["questions"]) for body in seen["bodies"]) == MAX_COLUMNS_PER_UPLOAD
+    assert len(seen["bodies"]) > 1
+    assert all(len(json.dumps(body)) <= MAX_REQUEST_CHARS + 200 for body in seen["bodies"])
+    assert [s.source_header for s in result.suggestions] == headers[:MAX_COLUMNS_PER_UPLOAD]
+    assert {s.request_id for s in result.suggestions} == {"req_hm"}
 
 
 # ---------------------------------------------------------------------------
@@ -617,3 +627,111 @@ def test_non_uuid_tenant_raises_value_error_for_the_caller_to_handle():
     result = suggest_header_mappings(HEADERS, recognized=RECOGNIZED, decider=_decider(_transport(DEFAULT_ANSWERS)))
     with pytest.raises(ValueError):
         build_field_mapping_artifacts(result, tenant_id="t1", source_hash=SOURCE_HASH)
+
+
+# ---------------------------------------------------------------------------
+# TypeSafe request limits and option-order consistency (questions v3)
+# ---------------------------------------------------------------------------
+
+
+def _order_aware_transport(
+    forward: dict[str, dict], reverse: dict[str, dict] | None, seen: dict
+) -> httpx2.MockTransport:
+    """Answer from ``forward`` when the vocabulary is in declared order, ``reverse`` when reversed.
+
+    ``reverse=None`` makes the reversed-order request fail with a 503.
+    """
+    first_option = next(iter(CANONICAL_FIELDS))
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        body = json.loads(request.content)
+        seen.setdefault("bodies", []).append(body)
+        reversed_order = next(iter(next(iter(body["questions"].values()))["criteria"])) != first_option
+        if reversed_order and reverse is None:
+            return httpx2.Response(503, text="down")
+        table = reverse if reversed_order else forward
+        answers = {
+            question_id: table[body["state"]["columns_to_map"][int(question_id.split("_")[1])]["header"]]
+            for question_id in body["questions"]
+        }
+        return httpx2.Response(
+            200,
+            headers={"x-typesafe-request-id": "req_rev" if reversed_order else "req_fwd"},
+            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 10, "output_tokens": 1}},
+        )
+
+    return httpx2.MockTransport(handler)
+
+
+def test_reversed_criteria_keeps_every_option_in_reverse_order():
+    flipped = reversed_criteria(CANONICAL_FIELDS)
+    assert list(flipped) == list(reversed(list(CANONICAL_FIELDS)))
+    assert flipped == CANONICAL_FIELDS
+
+
+def test_column_batches_fit_the_request_budget_and_keep_order():
+    columns = [f"Unknown {i}" for i in range(MAX_COLUMNS_PER_UPLOAD)]
+    batches = column_batches(columns, columns, None)
+    assert [c for batch in batches for c in batch] == columns
+    assert len(batches) > 1
+    for batch in batches:
+        size = len(json.dumps(build_state(columns, batch, None))) + len(json.dumps(build_questions(batch)))
+        assert size <= MAX_REQUEST_CHARS
+    # A budget smaller than one question still asks about every column.
+    assert column_batches(columns[:3], columns[:3], None, max_chars=10) == [[c] for c in columns[:3]]
+
+
+def test_order_check_runs_only_for_answers_about_to_change_rows():
+    seen: dict = {}
+    forward = dict(DEFAULT_ANSWERS)
+    result = suggest_header_mappings(
+        HEADERS,
+        recognized=RECOGNIZED,
+        decider=_decider(_order_aware_transport(forward, forward, seen), apply_header_mappings=True),
+    )
+    assert result.applied_mapping == {"lot_#": "traceability_lot_code"}
+    # Second request asks only about "Lot #" (the one AUTO_APPLY answer), options reversed.
+    assert len(seen["bodies"]) == 2
+    assert [c["header"] for c in seen["bodies"][1]["state"]["columns_to_map"]] == ["Lot #"]
+    assert len(result.evidences) == 2
+    assert {s.source_header: s.request_id for s in result.suggestions}["Lot #"] == "req_fwd"
+
+
+def test_no_order_check_when_apply_is_disabled():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS,
+        recognized=RECOGNIZED,
+        decider=_decider(_order_aware_transport(DEFAULT_ANSWERS, DEFAULT_ANSWERS, seen)),
+    )
+    assert len(seen["bodies"]) == 1
+    assert {s.blocked_reason for s in result.suggestions if s.canonical_field} >= {"apply_disabled"}
+
+
+def test_answer_that_flips_with_reversed_options_is_not_applied():
+    seen: dict = {}
+    reverse = {**DEFAULT_ANSWERS, "Lot #": _choice("reference_document", 0.6, traceability_lot_code=0.4)}
+    result = suggest_header_mappings(
+        HEADERS,
+        recognized=RECOGNIZED,
+        decider=_decider(_order_aware_transport(DEFAULT_ANSWERS, reverse, seen), apply_header_mappings=True),
+    )
+    assert result.ok
+    assert result.applied_mapping == {}
+    lot = next(s for s in result.suggestions if s.source_header == "Lot #")
+    assert lot.band is ConfidenceBand.AUTO_APPLY
+    assert lot.blocked_reason == "order_inconsistent"
+
+
+def test_failed_order_check_keeps_rows_unchanged_but_keeps_the_suggestions():
+    seen: dict = {}
+    result = suggest_header_mappings(
+        HEADERS,
+        recognized=RECOGNIZED,
+        decider=_decider(_order_aware_transport(DEFAULT_ANSWERS, None, seen), apply_header_mappings=True),
+    )
+    assert result.ok
+    assert result.applied_mapping == {}
+    lot = next(s for s in result.suggestions if s.source_header == "Lot #")
+    assert lot.blocked_reason == "order_check_unavailable"
+    assert build_field_mapping_artifacts(result, tenant_id=uuid.uuid4(), source_hash=SOURCE_HASH)

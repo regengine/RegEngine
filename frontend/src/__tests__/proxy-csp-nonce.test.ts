@@ -86,40 +86,55 @@ describe('#2821 CSP nonce reaches Next.js via request headers', () => {
 describe('#2886 gated developer routes', () => {
     // isGatedRoute() matches `pathname === route || pathname.startsWith(route + '/')`,
     // so an entry with no corresponding page under src/app gates nothing. The
-    // pages are src/app/developer/portal/keys and .../playground; the old
-    // '/api-keys' and '/playground' entries matched neither, leaving the
-    // playground (which makes real API calls with a real key) fully ungated.
-    // Unauthenticated + gated => redirect to /login.
+    // portal lives at src/app/developer/portal; GATED_DEV_ROUTES names that root,
+    // so the landing page and every sub-path (e.g. /keys) are gated.
+    // Unauthenticated + gated => redirect to /login with the path as `next`.
     async function statusFor(pathname: string): Promise<number> {
         const res = await proxy(new NextRequest(new URL(`http://localhost${pathname}`)));
         return res.status;
     }
 
-    it('gates the real playground page path', async () => {
-        expect(await statusFor('/developer/portal/playground')).toBe(307);
+    it('gates the portal landing page', async () => {
+        expect(await statusFor('/developer/portal')).toBe(307);
     });
 
-    it('gates the real keys page path', async () => {
+    it('gates the keys page', async () => {
         expect(await statusFor('/developer/portal/keys')).toBe(307);
     });
 
-    it('gates sub-paths of the gated routes', async () => {
+    it('gates sub-paths of the portal', async () => {
         expect(await statusFor('/developer/portal/keys/new')).toBe(307);
     });
 
-    it('redirects to /login preserving the intended destination', async () => {
-        const res = await proxy(
-            new NextRequest(new URL('http://localhost/developer/portal/playground')),
-        );
-        const location = new URL(res.headers.get('location') ?? '', 'http://localhost');
+    it.each([
+        ['/developer/portal', '%2Fdeveloper%2Fportal'],
+        ['/developer/portal/keys', '%2Fdeveloper%2Fportal%2Fkeys'],
+    ])('redirects %s to /login with an encoded next', async (pathname, encodedNext) => {
+        const res = await proxy(new NextRequest(new URL(`http://localhost${pathname}`)));
+        const raw = res.headers.get('location') ?? '';
+        const location = new URL(raw, 'http://localhost');
         expect(location.pathname).toBe('/login');
-        expect(location.searchParams.get('next')).toBe('/developer/portal/playground');
+        expect(location.searchParams.get('next')).toBe(pathname);
+        expect(raw).toContain(`next=${encodedNext}`);
     });
 
-    it('leaves the public developer portal ungated', async () => {
-        // Docs, codegen and the portal landing page stay public so developers
-        // can evaluate without an account.
-        expect(await statusFor('/developer/portal')).toBe(200);
+    it('lets a request with a session cookie through to the page (the page and the backend then decide)', async () => {
+        const res = await proxy(new NextRequest(new URL('http://localhost/developer/portal'), {
+            headers: { cookie: '__Host-regengine_session=opaque-test-value' },
+        }));
+        expect(res.status).toBe(200);
+    });
+
+    it('leaves public docs and the developers page ungated', async () => {
+        // Developer evaluation needs docs and the marketing page without an account.
+        expect(await statusFor('/docs')).toBe(200);
         expect(await statusFor('/docs/api')).toBe(200);
+        expect(await statusFor('/developers')).toBe(200);
+    });
+
+    it('does not gate a look-alike path that is not under the portal', async () => {
+        // '/developer/portalx' must not match '/developer/portal': the gate
+        // matches on a path-segment boundary, not a bare string prefix.
+        expect(await statusFor('/developer/portalx')).toBe(200);
     });
 });

@@ -33,7 +33,7 @@ class RegEngineClient:
 
     Args:
         api_key: Your RegEngine API key (format: rge_xxx)
-        base_url: API base URL (default: https://api.regengine.co)
+        base_url: API base URL (default: https://regengine.co)
         tenant_id: Optional tenant ID for multi-tenant isolation
         timeout: Request timeout in seconds (default: 30)
 
@@ -51,7 +51,7 @@ class RegEngineClient:
     absent from the production route table.
     """
 
-    DEFAULT_BASE_URL = "https://api.regengine.co"
+    DEFAULT_BASE_URL = "https://regengine.co"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
 
     # Client methods whose backing routes exist only when the experimental
@@ -86,7 +86,7 @@ class RegEngineClient:
         """
         Args:
             api_key: Your RegEngine API key (format: rge_xxx)
-            base_url: API base URL (default: https://api.regengine.co)
+            base_url: API base URL (default: https://regengine.co)
             tenant_id: Optional tenant ID for multi-tenant isolation
             timeout: Overall request timeout in seconds (default: 30). Ignored if connect_timeout/read_timeout are set.
             connect_timeout: Connection timeout in seconds (default: 30)

@@ -25,7 +25,7 @@ from pathlib import Path
 import httpx2
 import pytest
 import structlog
-from shared.jev.cte_classification import QUESTION_ID
+from shared.jev.cte_classification import QUESTION_ID, REVERSED_QUESTION_ID
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "jev_eval.py"
@@ -63,7 +63,7 @@ def _oracle(script, cases, *, wrong: dict | None = None, confidence: float = 0.9
         case = cte_by_headers[tuple(state["csv_headers"])]
         answers = {}
         for question_id in body["questions"]:
-            if question_id == QUESTION_ID:
+            if question_id in (QUESTION_ID, REVERSED_QUESTION_ID):
                 answer, conf = wrong.get((case.id, "(file)"), (sorted(case.cte)[0], confidence))
             else:
                 header = state["columns_to_map"][int(question_id.split("_")[1])]["header"]

@@ -391,7 +391,9 @@ async def require_api_key(
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded",
-                headers={"Retry-After": "60"},
+                # Seconds until the key's current window ends. Falls back to the
+                # full 60s window if a store ever denies without computing one.
+                headers={"Retry-After": str(rate_info.retry_after or 60)},
             )
     else:
         if not key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute):

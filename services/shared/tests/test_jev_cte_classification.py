@@ -32,6 +32,7 @@ from shared.jev.cte_classification import (
     PURPOSE,
     QUESTION_ID,
     QUESTIONS_VERSION,
+    REVERSED_QUESTION_ID,
     TARGET_FIELD,
     CteClassificationResult,
     build_cte_type_artifacts,
@@ -81,7 +82,7 @@ def _transport(answer: dict | None, seen: dict | None = None, status: int = 200)
             seen.setdefault("bodies", []).append(body)
         if status != 200:
             return httpx2.Response(status, text="down")
-        answers = {} if answer is None else {QUESTION_ID: answer}
+        answers = {} if answer is None else {QUESTION_ID: answer, REVERSED_QUESTION_ID: answer}
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_cte"},
@@ -115,7 +116,7 @@ def test_vocabulary_is_the_fda_ctes_plus_mixed_or_unclear():
 
 def test_one_choice_question_over_the_vocabulary():
     questions = build_questions()
-    assert list(questions) == [QUESTION_ID]
+    assert list(questions) == [QUESTION_ID, REVERSED_QUESTION_ID]
     question = questions[QUESTION_ID]
     assert question["type"] == "choice"
     assert question["criteria"] is CTE_CRITERIA
@@ -137,7 +138,7 @@ def test_request_carries_the_header_row_purpose_and_version():
     assert result.ok
     (body,) = seen["bodies"]
     assert body["state"] == {"csv_headers": RECEIVING_HEADERS}
-    assert list(body["questions"]) == [QUESTION_ID]
+    assert list(body["questions"]) == [QUESTION_ID, REVERSED_QUESTION_ID]
     assert body["questions"][QUESTION_ID]["criteria"].keys() == CTE_CRITERIA.keys()
     assert result.evidence.purpose == PURPOSE
     assert result.evidence.questions_version == QUESTIONS_VERSION
@@ -374,3 +375,51 @@ def test_apply_switch_is_opt_in(raw, expected):
     # Independent of the header-mapping switch in both directions.
     assert JevSettings.from_env({**env, "REGENGINE_JEV_APPLY_HEADER_MAPPINGS": "1"}).apply_file_cte_type is expected
     assert JevSettings.from_env(env).apply_header_mappings is False
+
+
+# ---------------------------------------------------------------------------
+# Option-order consistency (questions v2)
+# ---------------------------------------------------------------------------
+
+
+def test_reversed_twin_asks_the_same_question_with_the_options_reversed():
+    questions = build_questions()
+    forward, flipped = questions[QUESTION_ID], questions[REVERSED_QUESTION_ID]
+    assert flipped["instructions"] == forward["instructions"]
+    assert list(flipped["criteria"]) == list(reversed(list(forward["criteria"])))
+    assert flipped["criteria"] == forward["criteria"] == CTE_CRITERIA
+
+
+def _twin_transport(forward: dict, reverse: dict | None) -> httpx2.MockTransport:
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        answers = {QUESTION_ID: forward}
+        if reverse is not None:
+            answers[REVERSED_QUESTION_ID] = reverse
+        return httpx2.Response(
+            200,
+            headers={"x-typesafe-request-id": "req_cte"},
+            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 90, "output_tokens": 2}},
+        )
+
+    return httpx2.MockTransport(handler)
+
+
+@pytest.mark.parametrize(
+    "reverse, reason",
+    [
+        (_answer("shipping", 0.55, receiving=0.45), "order_inconsistent"),
+        (_answer(MIXED_OR_UNCLEAR, 0.6, receiving=0.4), "order_inconsistent"),
+        (None, "order_check_unavailable"),
+    ],
+)
+def test_answer_is_applied_only_when_both_orders_agree(reverse, reason):
+    decider = JevDecider(
+        JevSettings(api_key="k", max_retries=0, timeout_seconds=1.0, apply_file_cte_type=True),
+        transport=_twin_transport(_answer("receiving", 0.97), reverse),
+    )
+    result = suggest_file_cte_type(RECEIVING_HEADERS, decider=decider)
+    assert result.ok
+    assert result.suggestion.cte_type == "receiving"
+    assert result.suggestion.applied is False
+    assert result.suggestion.blocked_reason == reason
+    assert result.applied_cte_type is None
