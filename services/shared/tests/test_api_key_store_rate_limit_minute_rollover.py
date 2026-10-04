@@ -376,6 +376,20 @@ async def test_every_counter_key_has_a_ttl_and_expires(store, clock, redis):
 
 
 @pytest.mark.asyncio
+async def test_a_counter_that_lost_its_ttl_cannot_block_beyond_its_own_bucket(store, clock, redis):
+    # If EXPIRE ever failed, or a key came back from a restore without its TTL,
+    # the old single key per (key, window) would have blocked that key forever.
+    # A bucketed key only ever affects its own bucket.
+    clock.advance(10)
+    redis.seed(f"ratelimit:k:60:{int((_T0 + 10) // 60)}", 10**6)  # no TTL
+
+    assert not (await store.check_rate_limit("k", 5)).allowed
+
+    clock.advance(50)
+    assert (await store.check_rate_limit("k", 5)).allowed
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("other", ["k2", "K1", "k1 ", "k1:60", "k1:60:1", "k1*"])
 async def test_one_key_cannot_consume_another_keys_budget(store, other):
     limit = 3
