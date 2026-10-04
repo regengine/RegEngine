@@ -8,9 +8,11 @@ import DocsHomePage from '@/app/docs/page';
 import AuthenticationDocsPage from '@/app/docs/authentication/page';
 import InflowLabConnectorPage from '@/app/docs/connectors/inflow-lab/page';
 import ErrorCodesPage from '@/app/docs/errors/page';
+import FSMA204GuidePage from '@/app/docs/fsma-204/page';
 import QuickstartPage from '@/app/docs/quickstart/page';
 import RateLimitsDocsPage from '@/app/docs/rate-limits/page';
 import SDKsDocsPage, { metadata as sdksMetadata } from '@/app/docs/sdks/page';
+import WalkthroughPage from '@/app/docs/walkthrough/page';
 import WebhooksDocsPage, { metadata as webhooksMetadata } from '@/app/docs/webhooks/page';
 import { ApiReferenceClient } from '@/app/docs/api/ApiReferenceClient';
 import ingestReceiving from '@/lib/api-samples/ingest-receiving.json';
@@ -83,6 +85,17 @@ const DEVELOPER_PAGES: [string, () => ReactElement][] = [
   ['webhooks', () => <WebhooksDocsPage />],
   ['sdks', () => <SDKsDocsPage />],
   ['developers', () => <DevelopersPage />],
+  ['FSMA 204 guide', () => <FSMA204GuidePage />],
+  ['walkthrough', () => <WalkthroughPage />],
+  ['Inflow Lab connector', () => <InflowLabConnectorPage />],
+];
+
+/** Pages that show a full ingest call. Each must render it from src/lib/api-samples, never carry its own payload. */
+const INGEST_CALL_PAGES: [string, () => ReactElement][] = [
+  ['quickstart', () => <QuickstartPage />],
+  ['FSMA 204 guide', () => <FSMA204GuidePage />],
+  ['walkthrough', () => <WalkthroughPage />],
+  ['Inflow Lab connector', () => <InflowLabConnectorPage />],
 ];
 
 /** The API reference hides endpoint detail until a card is opened. */
@@ -118,6 +131,28 @@ describe('developer docs stay true against the backend', () => {
     // goes stale after 90 days and the backend rejects the event.
     expect(pageText).not.toMatch(/"timestamp":\s*"\d{4}-\d{2}-\d{2}/);
     expect(pageText).not.toMatch(/\btimestamp:\s*"\d{4}-\d{2}-\d{2}/);
+    // The same goes for the date KDEs (receive_date, ship_date, ...) in a payload.
+    expect(pageText).not.toMatch(/"\w+_date":\s*"\d{4}-\d{2}-\d{2}"/);
+  });
+
+  it.each(INGEST_CALL_PAGES)('%s: the ingest call is the shared signed sample, not a hand-written payload', (_name, page) => {
+    render(page());
+
+    const pageText = document.body.textContent ?? '';
+
+    expect(pageText).toContain('X-Webhook-Signature');
+    expect(pageText).toContain('openssl dgst -sha256 -hmac');
+    expect(pageText).toContain('--data-binary');
+    expect(pageText).toContain('Idempotency-Key: $(uuidgen)');
+    expect(pageText).toContain('"timestamp": "$NOW"');
+    // The unsigned samples sent their payload with an inline -d '{...}'.
+    expect(pageText).not.toMatch(/-d '\{/);
+    // A created lot is permanent: every lot code in a sample carries the TEST- prefix.
+    const lots = Array.from(pageText.matchAll(/"traceability_lot_code":\s*"([^"]+)"/g)).map((m) => m[1]);
+    expect(lots.length).toBeGreaterThan(0);
+    for (const lot of lots) {
+      expect(lot.startsWith('TEST-'), lot).toBe(true);
+    }
   });
 
   it('API reference: ingest is signed, has no X-Tenant-ID, and carries no fixed timestamp', () => {
