@@ -379,13 +379,13 @@ export default function IngestPage() {
             action={
               <Button size="sm" variant="secondary" asChild>
                 <Link href="/developer/portal/keys">
-                  Generate Sandbox Key
+                  How to get a key
                   <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>
               </Button>
             }
           >
-            You need an API key to ingest documents. Generate a sandbox key in the developer portal to continue with dev and test ingestion.
+            You need an API key to ingest documents. RegEngine issues live API keys for your workspace; request one and we will send it to you.
           </Callout>
         )}
 

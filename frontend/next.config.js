@@ -183,6 +183,19 @@ const nextConfig = {
                 destination: '/developer/portal',
                 permanent: true,
             },
+            // Retired Supabase-era stubs. Sign-in is the email-code flow at
+            // /login and there is no self-signup. Temporary (307), not 308,
+            // so browsers do not cache the redirect past a rollback.
+            {
+                source: '/developer/login',
+                destination: '/login',
+                permanent: false,
+            },
+            {
+                source: '/developer/register',
+                destination: '/login',
+                permanent: false,
+            },
         ];
     },
     async rewrites() {
