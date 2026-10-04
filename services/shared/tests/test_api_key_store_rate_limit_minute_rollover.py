@@ -130,10 +130,16 @@ _T0 = datetime(2026, 10, 3, 12, 0, 0, tzinfo=timezone.utc).timestamp()
 
 
 class _FakeClock:
-    """Wall clock shared by the patched ``datetime`` and the fake Redis."""
+    """Wall clock shared by the patched ``datetime`` and the fake Redis.
+
+    ``epoch`` is true time and is what Redis expires keys against. ``skew`` is
+    the calling worker's clock error: the limiter sees ``epoch + skew``. Tests
+    set it before a worker's calls to model workers whose clocks disagree.
+    """
 
     def __init__(self, epoch: float) -> None:
         self.epoch = epoch
+        self.skew = 0.0
 
     def advance(self, seconds: float) -> None:
         self.epoch += seconds
@@ -144,7 +150,7 @@ class _FakeClock:
         class _ClockDatetime(datetime):
             @classmethod
             def now(cls, tz=None):
-                value = datetime.fromtimestamp(clock.epoch, tz=timezone.utc)
+                value = datetime.fromtimestamp(clock.epoch + clock.skew, tz=timezone.utc)
                 return value if tz is None else value.astimezone(tz)
 
         return _ClockDatetime
@@ -443,6 +449,86 @@ async def test_fixed_window_edge_can_admit_twice_the_limit_but_never_more_inside
     assert before_edge == [True] * limit
     assert after_edge == [True] * limit
     assert not (await store.check_rate_limit("edge", limit)).allowed
+
+
+async def _check_as_worker(worker, clock, skew, *args):
+    """Run one limiter call on a worker whose clock is ``skew`` seconds off."""
+    clock.skew = skew
+    try:
+        return await worker.check_rate_limit(*args)
+    finally:
+        clock.skew = 0.0
+
+
+@pytest.mark.asyncio
+async def test_worker_clock_skew_lets_a_burst_reach_three_times_the_limit_in_one_window(monkeypatch, clock, redis):
+    # Two workers share one Redis; B's clock is 10 seconds behind. They place the
+    # same instant in different buckets, so within 55.5 real seconds (less than
+    # one 60 second window) the key is admitted in three buckets: B's old one, the
+    # one both share, and the one A opens at the next boundary. Workers that
+    # agree on the time are capped at 2 * limit across an edge (test above).
+    worker_a, worker_b = _make_store(monkeypatch), _make_store(monkeypatch)
+    worker_a._redis = worker_b._redis = redis
+    limit, window, behind = 4, 60, -10.0
+    started = clock.epoch
+
+    clock.advance(5)  # B's clock reads 11:59:55, one bucket behind A's
+    from_b = [(await _check_as_worker(worker_b, clock, behind, "k", limit, window)).allowed for _ in range(limit)]
+    clock.advance(1)  # A's bucket is 12:00
+    from_a = [(await _check_as_worker(worker_a, clock, 0.0, "k", limit, window)).allowed for _ in range(limit)]
+    clock.advance(54.5)  # 12:01:00.5: A has crossed into the next bucket
+    from_a_next = [(await _check_as_worker(worker_a, clock, 0.0, "k", limit, window)).allowed for _ in range(limit)]
+    span = clock.epoch - (started + 5)
+
+    assert span < window
+    assert from_b + from_a + from_a_next == [True] * (3 * limit)
+    # Every bucket still enforces its own limit: nothing beyond 3 * limit.
+    assert not (await _check_as_worker(worker_a, clock, 0.0, "k", limit, window)).allowed
+    assert not (await _check_as_worker(worker_b, clock, behind, "k", limit, window)).allowed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("worker_skews", "most_admitted_in_one_window"),
+    [
+        # Same clock: the 2x edge burst and no more.
+        ((0, 0), 2),
+        # Offsets under one window (12 s here), either direction: 3x, the ceiling.
+        ((0, -2), 3),
+        ((0, -3), 3),
+        ((0, -6), 3),
+        ((0, -11), 3),
+        ((0, 6), 3),
+        ((0, -3, 6), 3),
+        # Offsets of a window or more spread the key over more buckets still.
+        ((0, -25), 4),
+    ],
+)
+async def test_worst_case_burst_in_one_window_grows_with_worker_clock_skew(
+    monkeypatch, clock, worker_skews, most_admitted_in_one_window
+):
+    # A client that holds its requests until it can spend them all inside one
+    # window-length interval of real time, then hammers every worker at every
+    # second of it, is admitted ``limit`` per distinct bucket the workers reach.
+    # Each interval start gets a fresh Redis, so the count is exact.
+    limit, window = 2, 12
+    workers = [_make_store(monkeypatch) for _ in worker_skews]
+    worst = 0
+    for start in range(window):
+        clock.epoch = _T0 + start
+        shared_redis = _TTLRedis(clock)
+        for worker in workers:
+            worker._redis = shared_redis
+        admitted = 0
+        for _ in range(window):
+            for worker, skew in zip(workers, worker_skews):
+                for _ in range(limit):
+                    info = await _check_as_worker(worker, clock, skew, "k", limit, window)
+                    admitted += info.allowed
+            clock.advance(1)
+        worst = max(worst, admitted)
+
+    assert worst == most_admitted_in_one_window * limit
 
 
 @pytest.mark.asyncio

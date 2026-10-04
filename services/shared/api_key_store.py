@@ -833,14 +833,19 @@ class DatabaseAPIKeyStore:
 
         Known trade-offs of a fixed window:
 
-        * A client can spend ``limit`` requests at the end of one bucket and
-          ``limit`` more at the start of the next: up to ``2 * limit`` within one
-          window length straddling the edge, never more than ``limit`` inside a
-          bucket.
-        * Bucket edges come from each worker's wall clock. Clock skew only moves a
-          request into the adjacent bucket for the length of the skew; counts are
-          never lost, because every worker derives the same key for the same
-          instant.
+        * When every worker reads the same time, a client can spend ``limit``
+          requests at the end of one bucket and ``limit`` more at the start of
+          the next: up to ``2 * limit`` within one window length straddling the
+          edge, never more than ``limit`` inside a bucket.
+        * Bucket edges come from each worker's wall clock, so workers whose clocks
+          disagree put the same instant in different buckets. Every bucket still
+          admits at most ``limit``, but a client can now reach three buckets
+          within one window length: up to ``3 * limit`` when the clocks differ by
+          less than a window, more when they differ by a window or more. A clock
+          that steps backwards behaves like skew. Keep the hosts that serve this
+          limiter NTP-synced. Taking the time from Redis ``TIME`` would remove
+          the skew but costs a second round trip or a Lua script, which this
+          limiter avoids.
         * Requests rejected for being over the limit still increment the counter,
           which is harmless: the next bucket starts from zero.
 
