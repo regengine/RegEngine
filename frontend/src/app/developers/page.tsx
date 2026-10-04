@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
     ArrowRight, Webhook, Cog, Users, FileSpreadsheet,
-    BarChart3, GitBranch, Terminal, BookOpen, LogIn,
+    BarChart3, GitBranch, Terminal, BookOpen,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -210,16 +210,16 @@ export default function DevelopersPage() {
                             </Link>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
-                            <Link href="/developer/portal" className="no-underline">
-                                <LogIn className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                                Developer Portal
+                            <Link href="/docs/quickstart" className="no-underline">
+                                <BookOpen className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                                Read the Quickstart
                             </Link>
                         </Button>
                     </div>
                     <p className="mt-6 text-small text-re-text-tertiary">
-                        Already have an account?{' '}
-                        <Link href="/developer/portal" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
-                            Sign in to the portal
+                        Already a customer?{' '}
+                        <Link href="/login" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
+                            Sign in
                         </Link>
                         {' '}&middot;{' '}
                         <Link href="/docs" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
