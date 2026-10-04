@@ -6,16 +6,23 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Callout } from "@/components/ui/callout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeBlock } from "@/components/ui/code-block";
+import { API_BASE } from "@/lib/api-base";
 
 /** Inline identifier — SPEC §2.3. */
 const CODE =
     "rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary";
 
-const SCOPES = ["records.read", "webhooks.ingest", "fda.export"];
+const SCOPES: { scope: string; allows: string }[] = [
+    { scope: "records.read", allows: "GET /records and the record detail, history, ingestion-run and trace endpoints under it" },
+    { scope: "webhooks.ingest", allows: "POST /webhooks/ingest" },
+    { scope: "webhooks.read", allows: "GET /webhooks/recent and GET /webhooks/chain/verify" },
+    { scope: "fda.read", allows: "GET /fda/trace/{tlc} and GET /fda/export/history" },
+    { scope: "fda.export", allows: "GET /fda/export, /fda/export/all, /fda/export/v2 and /fda/export/recall" },
+    { scope: "fda.verify", allows: "POST /fda/export/verify and the Merkle root and proof endpoints" },
+];
 
-const EXAMPLE_REQUEST = `curl https://regengine.co/api/v1/fda/export?tlc=00012345678901-LOT-2026-001&tenant_id=YOUR_TENANT_UUID \\
-  -H "X-RegEngine-API-Key: rge_live_12345" \\
-  -H "Content-Type: application/json"`;
+const EXAMPLE_REQUEST = `curl -s "${API_BASE}/records?limit=1" \\
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY"`;
 
 export default function AuthenticationDocsPage() {
     return (
@@ -43,14 +50,15 @@ export default function AuthenticationDocsPage() {
                                 API Keys
                             </CardTitle>
                             <CardDescription>
-                                RegEngine uses API keys to authenticate requests. You can view and manage your API keys in the{" "}
+                                RegEngine uses API keys to authenticate requests. RegEngine issues keys, your workspace ID and the ingest
+                                signing secret on request.{" "}
                                 <Link
-                                    href="/api-keys"
+                                    href="/contact"
                                     className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
                                 >
-                                    API Keys Dashboard
+                                    Request access
                                 </Link>
-                                .
+                                . There is no self-serve key creation.
                             </CardDescription>
                         </div>
                     </CardHeader>
@@ -81,13 +89,15 @@ export default function AuthenticationDocsPage() {
                                 <div className="flex flex-col gap-1 border-b border-re-border-subtle py-3 sm:flex-row sm:gap-4">
                                     <dt className="w-24 shrink-0 font-medium text-re-text-muted">Create</dt>
                                     <dd className="m-0 min-w-0 text-re-text-secondary">
-                                        Live keys are provisioned by the RegEngine team during onboarding. Keys created in the developer portal sandbox cannot authenticate live API requests.
+                                        RegEngine issues live keys on request. Each key belongs to one workspace and carries the scopes
+                                        listed below.
                                     </dd>
                                 </div>
                                 <div className="flex flex-col gap-1 border-b border-re-border-subtle py-3 sm:flex-row sm:gap-4">
                                     <dt className="w-24 shrink-0 font-medium text-re-text-muted">Revoke</dt>
                                     <dd className="m-0 min-w-0 text-re-text-secondary">
-                                        Revoked keys are rejected on subsequent requests. Allow a short propagation window for in-flight cached lookups.
+                                        Ask RegEngine to revoke a key whenever you need to, for example if it leaks. A revoked key is
+                                        rejected on subsequent requests.
                                     </dd>
                                 </div>
                             </dl>
@@ -100,19 +110,35 @@ export default function AuthenticationDocsPage() {
                                 Keys carry scopes in a <code className={CODE}>resource.action</code> vocabulary.
                                 The <code className={CODE}>.</code> and <code className={CODE}>:</code> separators
                                 are equivalent — <code className={CODE}>records.read</code> and{' '}
-                                <code className={CODE}>records:read</code> name the same scope. Examples:
+                                <code className={CODE}>records:read</code> name the same scope. A key only needs the scopes for the
+                                endpoints you call:
                             </p>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                {SCOPES.map((scope) => (
-                                    <code
+                            <dl className="border-t border-re-border-subtle text-ui">
+                                {SCOPES.map(({ scope, allows }) => (
+                                    <div
                                         key={scope}
-                                        className="rounded-sm border border-re-border-subtle bg-re-surface-inset px-2 py-1 font-mono text-[0.8125rem] text-re-text-primary"
+                                        className="flex flex-col gap-1 border-b border-re-border-subtle py-3 sm:flex-row sm:gap-4"
                                     >
-                                        {scope}
-                                    </code>
+                                        <dt className="w-44 shrink-0">
+                                            <code className="rounded-sm border border-re-border-subtle bg-re-surface-inset px-2 py-1 font-mono text-[0.8125rem] text-re-text-primary">
+                                                {scope}
+                                            </code>
+                                        </dt>
+                                        <dd className="m-0 min-w-0 text-re-text-secondary">{allows}</dd>
+                                    </div>
                                 ))}
-                            </div>
+                            </dl>
                         </div>
+
+                        <Callout tone="warning" title="Scopes do not make a key read-only">
+                            <p className="text-ui text-re-text-secondary">
+                                Scopes limit which of the endpoints above a key can call. They are not a read-only guarantee: some other
+                                operations on the RegEngine backend, for example EPCIS ingest, compliance snapshots, SLA request updates
+                                and onboarding steps, accept any valid tenant key without checking a named scope. Treat every key as
+                                read-write for its workspace. Keep it on your server, never in client-side code, and ask RegEngine to
+                                revoke it if it leaks.
+                            </p>
+                        </Callout>
                     </CardContent>
                 </Card>
 
@@ -144,9 +170,22 @@ export default function AuthenticationDocsPage() {
                         </div>
 
                         <p className="text-ui text-re-text-secondary">
-                            <code className={CODE}>X-Tenant-ID</code> is optional.
-                            When supplied, it is only an assertion and must match the tenant bound to the API key;
-                            it never authenticates a request.
+                            Send the key in <code className={CODE}>X-RegEngine-API-Key</code>. An <code className={CODE}>Authorization</code>{' '}
+                            header is not accepted. RegEngine takes the workspace from the key, so do not send{' '}
+                            <code className={CODE}>X-Tenant-ID</code>: a value that differs from the key&apos;s workspace is refused with a
+                            403, and it never authenticates a request. The FDA endpoints take your workspace ID as a{' '}
+                            <code className={CODE}>tenant_id</code> query parameter, and it must match the key.
+                        </p>
+                        <p className="text-ui text-re-text-secondary">
+                            Ingest requests also carry <code className={CODE}>X-Webhook-Signature</code>, an HMAC-SHA256 of the request body
+                            made with your signing secret. See the{' '}
+                            <Link
+                                href="/docs/quickstart"
+                                className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                            >
+                                Quickstart
+                            </Link>
+                            .
                         </p>
                     </CardContent>
                 </Card>
@@ -185,7 +224,8 @@ export default function AuthenticationDocsPage() {
                                 <span className="font-medium text-re-text-primary">Unauthorized</span>
                             </p>
                             <p className="mt-1 text-ui text-re-text-secondary">
-                                The API key is missing or invalid. Check that you are sending the correct header.
+                                The API key is missing or invalid. Send it in the <code className={CODE}>X-RegEngine-API-Key</code> header.
+                                On ingest, a missing or wrong <code className={CODE}>X-Webhook-Signature</code> also returns 401.
                             </p>
                         </Callout>
                         <Callout tone="warning">
@@ -194,7 +234,8 @@ export default function AuthenticationDocsPage() {
                                 <span className="font-medium text-re-text-primary">Forbidden</span>
                             </p>
                             <p className="mt-1 text-ui text-re-text-secondary">
-                                The API key does not have permission to perform this request (e.g., mismatched scopes).
+                                The key lacks the scope this endpoint requires, or an <code className={CODE}>X-Tenant-ID</code> or{' '}
+                                <code className={CODE}>tenant_id</code> value names a different workspace than the key.
                             </p>
                         </Callout>
                     </CardContent>

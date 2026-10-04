@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cardVariants } from '@/components/ui/card';
 import { Container } from '@/components/layout/container';
-import { API_BASE } from '@/lib/api-base';
+import { INGEST_CURL_SAMPLE, INGEST_ENV_SETUP } from '@/lib/api-samples/ingest-samples';
 
 export const metadata: Metadata = {
     title: 'Developers | RegEngine — FSMA 204 Compliance API',
@@ -60,26 +60,10 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-const curlSnippet = `curl -X POST ${API_BASE}/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: rge_live_YOUR_KEY" \\
-  -H "X-Tenant-ID: your-tenant-id" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "erp",
-    "events": [{
-      "cte_type": "receiving",
-      "traceability_lot_code": "00012345678901-LOT-2026-001",
-      "product_description": "Atlantic Salmon Fillet",
-      "quantity": 500,
-      "unit_of_measure": "kg",
-      "location_name": "Cold Storage DC",
-      "timestamp": "2026-03-26T14:30:00Z",
-      "kdes": {
-        "supplier_lot": "LOT-2026-0326"
-      }
-    }]
-  }'`;
+/* Rendered from one payload: src/lib/api-samples/ingest-receiving.json. */
+const curlSnippet = `${INGEST_ENV_SETUP}
+
+${INGEST_CURL_SAMPLE}`;
 
 export default function DevelopersPage() {
     return (
@@ -101,7 +85,7 @@ export default function DevelopersPage() {
                     </p>
                     <div className="mt-8 flex flex-wrap gap-3">
                         <Button asChild size="lg">
-                            <Link href="/alpha" className="no-underline">
+                            <Link href="/contact" className="no-underline">
                                 Request Developer Access
                                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>
@@ -141,7 +125,11 @@ export default function DevelopersPage() {
             <Container as="section" width="tool" className="pb-10 sm:pb-14">
                 <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">Quick start</h2>
                 <p className="mx-auto mb-8 max-w-[60ch] text-center text-ui text-re-text-secondary">
-                    Record your first critical tracking event in one request.
+                    Record a critical tracking event with one signed request. RegEngine issues your API key, workspace ID, and
+                    signing secret on request. This call writes a permanent record and can be billed, so use a test workspace and
+                    keep the <code className="font-mono text-[0.8125rem] text-re-text-primary">TEST-</code> lot prefix. The{' '}
+                    <Link href="/docs/quickstart" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Quickstart</Link>{' '}
+                    starts with a read-only call.
                 </p>
                 <div className="overflow-hidden rounded-lg border border-re-border">
                     <div className="flex items-center gap-2 border-b border-re-border-subtle bg-re-surface-card px-4 py-2.5">
@@ -194,12 +182,12 @@ export default function DevelopersPage() {
                 <Container width="tool" className="py-16">
                     <h2 className="mb-3 text-center font-display text-heading-lg text-re-text-primary">Rate limits</h2>
                     <p className="mx-auto mb-6 max-w-[60ch] text-center text-ui text-re-text-secondary">
-                        All API requests are rate limited per API key.
-                        If you hit a limit, the API returns a <code className="font-mono text-[0.8125rem] text-re-text-primary">429</code> with a <code className="font-mono text-[0.8125rem] text-re-text-primary">Retry-After</code> header.
+                        API requests are rate limited.
+                        If you hit a limit, the API returns a <code className="font-mono text-[0.8125rem] text-re-text-primary">429</code>. Stop sending for 60 seconds, then retry.
                     </p>
                     <p className="mx-auto max-w-[60ch] text-center text-ui text-re-text-secondary">
                         Need higher throughput?{' '}
-                        <Link href="/alpha" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Contact us</Link> to discuss your requirements.
+                        <Link href="/contact" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">Contact us</Link> to discuss your requirements.
                     </p>
                 </Container>
             </section>
@@ -216,7 +204,7 @@ export default function DevelopersPage() {
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">
-                            <Link href="/alpha" className="no-underline">
+                            <Link href="/contact" className="no-underline">
                                 Request Developer Access
                                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>

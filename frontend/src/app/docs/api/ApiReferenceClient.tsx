@@ -25,6 +25,7 @@ import {
 
 import { PageHeader } from '@/components/layout/page-header';
 import { CodeBlock } from '@/components/ui/code-block';
+import { INGEST_RESPONSE_SAMPLE, ingestSamplePayload } from '@/lib/api-samples/ingest-samples';
 
 interface Endpoint {
     method: string;
@@ -49,9 +50,9 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'POST',
                 path: '/ingest',
-                description: 'Ingest one or more FSMA CTE events. Each event is SHA-256 chain-hashed and linked to the tenant audit trail. Idempotency-Key is required — safe retries replay the cached response for 24 hours per tenant.',
+                description: 'Ingest one or more FSMA CTE events (up to 500 per request). Requires the webhooks.ingest scope and an active subscription. The body must be signed: X-Webhook-Signature is "sha256=" plus the HMAC-SHA256 hex digest of the exact request bytes, keyed with the signing secret RegEngine issues to you. Idempotency-Key is required: the same key with the same bytes replays the first successful response for 24 hours, including a 200 that rejected events; the same key with different bytes returns 409. A valid request returns 200 even when some events are rejected, so check each event\'s status. Accepted events are written permanently and may be billed.',
                 auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID', 'Idempotency-Key'],
+                headers: ['X-RegEngine-API-Key', 'X-Webhook-Signature', 'Idempotency-Key'],
                 params_table: [
                     { name: 'source', type: 'string', required: true, desc: 'Source system identifier (e.g. "erp", "wms", "sensitech", "tive", "manual")' },
                     { name: 'events', type: 'CTE[]', required: true, desc: 'Array of Critical Tracking Events (max 500 per batch)' },
@@ -60,51 +61,12 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                     { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name (1–500 chars)' },
                     { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity (> 0)' },
                     { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets" | "each" — full list in docs' },
-                    { name: 'events[].location_name', type: 'string', required: true, desc: 'Facility name (or supply events[].location_gln as a 13-digit GLN)' },
-                    { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event timestamp with timezone' },
+                    { name: 'events[].location_name', type: 'string', required: false, desc: 'Facility name. Each event needs at least one location: location_name, events[].location_gln (a 13-digit GLN), or a location KDE.' },
+                    { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event time with timezone. Events older than 90 days or more than 24 hours ahead are rejected.' },
                     { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325–1.1350. RECEIVING requires receive_date, receiving_location, immediate_previous_source, reference_document, tlc_source_reference.' },
                 ],
-                body: JSON.stringify({
-                    source: "erp",
-                    events: [{
-                        cte_type: "receiving",
-                        traceability_lot_code: "00012345678901-LOT-2026-001",
-                        product_description: "Romaine Lettuce",
-                        quantity: 500,
-                        unit_of_measure: "cases",
-                        location_name: "Distribution Center #4",
-                        timestamp: "2026-02-05T14:23:00Z",
-                        kdes: {
-                            receive_date: "2026-02-05",
-                            receiving_location: "Distribution Center #4",
-                            immediate_previous_source: "GreenLeaf Farms LLC",
-                            reference_document: "ASN-2026-02-05-00123",
-                            tlc_source_reference: "GLF-2026-001"
-                        }
-                    }]
-                }, null, 2),
-                response: JSON.stringify({
-                    accepted: 1,
-                    rejected: 0,
-                    total: 1,
-                    events: [{
-                        traceability_lot_code: "00012345678901-LOT-2026-001",
-                        cte_type: "receiving",
-                        status: "accepted",
-                        event_id: "evt_9f8e7d6c5b4a",
-                        sha256_hash: "a1b2c3d4e5f6...",
-                        chain_hash: "7f6e5d4c3b2a..."
-                    }],
-                    ingestion_timestamp: "2026-02-05T14:23:01.847Z"
-                }, null, 2),
-            },
-            {
-                method: 'GET',
-                path: '/health',
-                description: 'Webhook ingestion health check',
-                auth: true,
-                headers: ['X-RegEngine-API-Key', 'X-Tenant-ID'],
-                response: '{ "service": "webhook-ingestion", "status": "healthy" }',
+                body: ingestSamplePayload('"<current UTC time, ISO 8601>"', '"<today, YYYY-MM-DD>"'),
+                response: INGEST_RESPONSE_SAMPLE,
             },
         ],
     },
@@ -117,7 +79,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '',
-                description: 'List and search canonical traceability events. Requires an API key with the records.read scope. Keys are tenant-bound — results are always scoped to your workspace.',
+                description: 'List and search canonical traceability events. Requires an API key with the records.read scope. Keys are tenant-bound — results are always scoped to your workspace, and no tenant_id or X-Tenant-ID is needed.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params_table: [
@@ -131,14 +93,22 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                     { name: 'offset', type: 'number', required: false, desc: 'Pagination offset' },
                 ],
                 response: JSON.stringify({
-                    tenant_id: "38e99859-7364-4932-99fa-b1f114bf0202",
+                    tenant_id: "<your workspace ID>",
                     events: [{
-                        event_id: "evt_9f8e7d6c5b4a",
-                        cte_type: "receiving",
-                        traceability_lot_code: "00012345678901-LOT-2026-001",
+                        event_id: "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab",
+                        event_type: "receiving",
+                        traceability_lot_code: "TEST-00012345678901-LOT-001",
+                        product_reference: "Romaine Lettuce",
+                        quantity: 500.0,
+                        unit_of_measure: "cases",
+                        from_facility_reference: "Distribution Center #4",
+                        to_facility_reference: "Distribution Center #4",
+                        event_timestamp: "<the event timestamp>",
+                        source_system: "webhook_api",
                         status: "active",
-                        source_system: "erp",
-                        event_timestamp: "2026-02-05T14:23:00Z"
+                        confidence_score: 1.0,
+                        schema_version: "<schema version>",
+                        created_at: "<when RegEngine stored it>"
                     }],
                     total: 1
                 }, null, 2),
@@ -146,18 +116,10 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/{event_id}',
-                description: 'Full record detail with provenance: source document, applied rules, evaluation results, and amendment chain.',
+                description: 'Full record detail: the normalized fields, kdes, provenance_metadata, raw_payload, rule_evaluations, exception_cases, and the amendment_chain when the record amends an earlier one.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "cte_type": "receiving", "kdes": {...}, "provenance": {...} }',
-            },
-            {
-                method: 'GET',
-                path: '/{event_id}/evaluations',
-                description: 'Rule evaluations for a record — which FSMA 204 rules were applied and their outcomes',
-                auth: true,
-                headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "evaluations": [{ "rule_id": "...", "outcome": "pass" }] }',
+                response: '{ "event_id": "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab", "event_type": "receiving", "kdes": {...}, "provenance_metadata": {...}, "raw_payload": {...}, "rule_evaluations": [...], "exception_cases": [...] }',
             },
             {
                 method: 'GET',
@@ -165,7 +127,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                 description: 'Amendment chain for a record — every correction with who, when, and why',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                response: '{ "event_id": "evt_9f8e7d6c5b4a", "history": [{ "amended_at": "...", "reason": "..." }] }',
+                response: '{ "event_id": "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab", "amendment_chain": [...] }',
             },
         ],
     },
@@ -173,68 +135,92 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'FDA Trace & Export API',
         baseUrl: '/api/v1/fda',
         icon: FileDown,
-        description: 'Lot tracing and FDA-oriented exports from stored tenant evidence, with cryptographic verification',
+        description: 'Lot tracing and FDA-oriented exports from stored tenant evidence, with cryptographic verification. Every endpoint here needs an active subscription and returns 402 without one.',
         endpoints: [
             {
                 method: 'GET',
                 path: '/trace/{tlc}',
-                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s tenant).',
+                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-tenant-uuid}'],
+                params: ['tenant_id={your-workspace-uuid}'],
                 response: JSON.stringify({
-                    seed_tlc: "00012345678901-LOT-2026-001",
-                    tenant_id: "38e99859-7364-4932-99fa-b1f114bf0202",
+                    seed_tlc: "TEST-00012345678901-LOT-001",
+                    tenant_id: "<your workspace ID>",
                     traversal_depth: 5,
                     node_count: 1,
                     edge_count: 0,
-                    nodes: [{ tlc: "00012345678901-LOT-2026-001", is_seed: true, role: "seed", event_count: 0 }]
+                    nodes: [{ tlc: "TEST-00012345678901-LOT-001", is_seed: true, role: "seed", event_count: 1 }],
+                    edges: [],
+                    total_events: 1
                 }, null, 2),
             },
             {
                 method: 'GET',
                 path: '/export',
-                description: 'Generate an FDA export for a traceability lot code (the 24-hour traceability request format). Requires the fda.export scope and an active subscription.',
+                description: 'Generate an FDA-oriented export for a traceability lot code (the 24-hour traceability request format). Requires the fda.export scope. format is "package" (a ZIP bundle, the default), "csv", or "pdf".',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-tenant-uuid}', 'tlc=00012345678901-LOT-2026-001', 'format=csv'],
-                response: 'CSV / JSON export with FSMA 204-required KDE columns',
+                params: ['tenant_id={your-workspace-uuid}', 'tlc=TEST-00012345678901-LOT-001', 'format=csv'],
+                response: 'A file download: text/csv, application/pdf, or application/zip, depending on format',
             },
             {
                 method: 'GET',
                 path: '/export/v2',
-                description: 'Generate an FDA export from the canonical record model (v2) — includes provenance and rule-evaluation status per row',
+                description: 'Generate an FDA export from the canonical record model (v2) — includes provenance and rule-evaluation status per row. Requires the fda.export scope.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-tenant-uuid}', 'start_date=2026-01-01', 'end_date=2026-01-31'],
-                response: 'CSV / JSON export derived from canonical records',
+                params: ['tenant_id={your-workspace-uuid}', 'start_date=2026-01-01', 'end_date=2026-01-31'],
+                response: 'A file download (CSV or ZIP package) derived from canonical records',
             },
             {
                 method: 'GET',
                 path: '/export/recall',
-                description: 'Recall-filtered FDA export — only events linked to the recalled lot and its trace graph',
+                description: 'Recall-filtered FDA export — only events matching the product, location, lot code, or event type you filter on. Requires the fda.export scope.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-tenant-uuid}', 'tlc=00012345678901-LOT-2026-001'],
-                response: 'CSV / JSON export scoped to the recall trace',
+                params: ['tenant_id={your-workspace-uuid}', 'tlc=TEST-00012345678901-LOT-001'],
+                response: 'A file download (CSV or ZIP package) scoped to the filters',
             },
             {
                 method: 'POST',
                 path: '/export/verify',
-                description: 'Verify the hash chain of a previously generated export. Requires the fda.verify scope. Pair with the public verify_chain.py script for independent verification.',
+                description: 'Re-generate a previous export with the same parameters and compare its hash to the original. Requires the fda.verify scope. Both values go in the query string; there is no request body.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                body: JSON.stringify({ export_id: "exp_1a2b3c4d" }, null, 2),
-                response: '{ "export_id": "exp_1a2b3c4d", "chain_valid": true, "events_verified": 1204 }',
+                params: ['tenant_id={your-workspace-uuid}', 'export_id={id from /export/history}'],
+                response: JSON.stringify({
+                    export_id: "<export id>",
+                    original_hash: "<hash recorded at export time>",
+                    regenerated_hash: "<hash of the regenerated export>",
+                    hashes_match: true,
+                    original_record_count: 1,
+                    current_record_count: 1,
+                    data_integrity: "VERIFIED",
+                    original_generated_at: "<when the export was generated>",
+                    verified_at: "<now>"
+                }, null, 2),
             },
             {
                 method: 'GET',
                 path: '/export/history',
-                description: 'List previously generated exports with their verification status',
+                description: 'List previously generated exports with their hashes. Requires the fda.read scope.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
-                params: ['tenant_id={your-tenant-uuid}'],
-                response: '{ "tenant_id": "38e99859-...", "exports": [{ "export_id": "exp_1a2b3c4d", "created_at": "...", "chain_valid": true }], "total": 0 }',
+                params: ['tenant_id={your-workspace-uuid}'],
+                response: JSON.stringify({
+                    tenant_id: "<your workspace ID>",
+                    exports: [{
+                        id: "<export id>",
+                        export_type: "<export type>",
+                        query_tlc: "TEST-00012345678901-LOT-001",
+                        record_count: 1,
+                        export_hash: "<hash of the export>",
+                        generated_by: "<who generated it>",
+                        generated_at: "<when>"
+                    }],
+                    total: 1
+                }, null, 2),
             },
         ],
     },
@@ -383,10 +369,13 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 }
 
 const ERROR_CODES = [
-    { code: '400', desc: 'Bad Request - Invalid parameters' },
-    { code: '401', desc: 'Unauthorized - Missing or invalid API key' },
-    { code: '403', desc: 'Forbidden - Insufficient permissions' },
+    { code: '400', desc: 'Bad Request - Missing Idempotency-Key or invalid parameters' },
+    { code: '401', desc: 'Unauthorized - Missing or invalid API key, or a missing or wrong ingest signature' },
+    { code: '402', desc: 'Payment Required - No active subscription for the workspace' },
+    { code: '403', desc: 'Forbidden - Key lacks the required scope, or tenant_id / X-Tenant-ID names a different workspace' },
     { code: '404', desc: "Not Found - Resource doesn't exist" },
+    { code: '409', desc: 'Conflict - Idempotency-Key reused with different request bytes' },
+    { code: '422', desc: 'Unprocessable - Request body failed validation' },
     { code: '429', desc: 'Too Many Requests - Rate limited' },
     { code: '500', desc: 'Internal Error - Contact support' },
 ];
@@ -430,20 +419,23 @@ export function ApiReferenceClient() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <p className="text-ui text-re-text-secondary">
-                            All authenticated endpoints require one of the following headers:
+                            Authenticated endpoints require this header:
                         </p>
                         <div>
                             <div className={WELL}>
                                 <code className="font-mono text-[0.8125rem] text-re-text-primary">
-                                    X-RegEngine-API-Key: rge_your_api_key
+                                    X-RegEngine-API-Key: rge_live_...
                                 </code>
                                 <p className="mt-1 text-small text-re-text-tertiary">
-                                    Standard API access (tenant-scoped)
+                                    Standard API access (tenant-scoped). An Authorization header is not accepted.
                                 </p>
                             </div>
                         </div>
                         <p className="text-ui text-re-text-secondary">
-                            Optional tenant assertion: <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">X-Tenant-ID: tenant_uuid</code>. If supplied, it must match the API key&apos;s tenant; it does not authenticate the request.
+                            RegEngine issues the key, your workspace ID, and the ingest signing secret on request. The workspace is taken from the key,
+                            so do not send <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">X-Tenant-ID</code>:
+                            a value that differs from the key&apos;s workspace is refused with a 403. Ingest also needs{' '}
+                            <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">X-Webhook-Signature</code>.
                         </p>
                     </CardContent>
                 </Card>
@@ -520,7 +512,10 @@ export function ApiReferenceClient() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <p className="text-ui text-re-text-secondary">
-                            List endpoints support cursor-based pagination for efficient traversal of large datasets.
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">GET /api/v1/records</code> pages with{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">limit</code> and{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">offset</code>. The response carries{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">total</code>, the number of matching records.
                         </p>
                         <div className="space-y-4">
                             <div>
@@ -534,28 +529,20 @@ export function ApiReferenceClient() {
                                         </p>
                                     </div>
                                     <div className={WELL}>
-                                        <code className="font-mono text-[0.8125rem] text-re-text-primary">cursor</code>
-                                        <span className="ml-2 text-small text-re-text-tertiary">(optional)</span>
+                                        <code className="font-mono text-[0.8125rem] text-re-text-primary">offset</code>
+                                        <span className="ml-2 text-small text-re-text-tertiary">(default: 0)</span>
                                         <p className="mt-1 text-small text-re-text-tertiary">
-                                            Opaque cursor from previous response's <code className="font-mono">next_cursor</code>
+                                            Number of items to skip
                                         </p>
                                     </div>
                                 </div>
-                            </div>
-                            <div>
-                                <h4 className={`${PANEL_LABEL} mb-2`}>Response Format</h4>
-                                <CodeBlock code={`{
-  "items": [...],        // Array of results
-  "next_cursor": "abc",  // Use this for next page (null if no more)
-  "has_more": true       // Boolean indicating more pages exist
-}`} language="json" />
                             </div>
                             <div>
                                 <h4 className={`${PANEL_LABEL} mb-2`}>Example: Paginating Records</h4>
                                 <CodeBlock code={`# First page
 GET /api/v1/records?limit=20
 
-# Next page (Records uses limit/offset)
+# Next page
 GET /api/v1/records?limit=20&offset=20`} language="http" />
                             </div>
                         </div>
@@ -571,7 +558,9 @@ GET /api/v1/records?limit=20&offset=20`} language="http" />
                     </CardHeader>
                     <CardContent className="space-y-3">
                         <p className="text-ui text-re-text-secondary">
-                            API requests are rate-limited per API key. Check response headers:
+                            API requests are rate limited. When you exceed a limit the API returns a 429. Stop sending for
+                            60 seconds, then retry. Some successful responses also carry these headers; treat them as optional and
+                            do not rely on them being present, and do not rely on any header on a 429.
                         </p>
                         <div className="grid gap-3 md:grid-cols-3">
                             {RATE_LIMIT_HEADERS.map((item) => (
@@ -584,7 +573,6 @@ GET /api/v1/records?limit=20&offset=20`} language="http" />
                             ))}
                         </div>
                         <p className="mt-3 text-small text-re-text-tertiary">
-                            Limits are enforced per API key; your current window is reported in the headers above.
                             See <a href="/docs/rate-limits" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">Rate Limits</a> for details.
                         </p>
                     </CardContent>
