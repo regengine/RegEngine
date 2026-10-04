@@ -99,23 +99,26 @@ function setSysadminCached(userId: string, isSysadmin: boolean): void {
 // Only FSMA verticals are supported — all others redirect to home.
 const ALLOWED_VERTICALS = ['food-safety', 'fsma', 'fsma-204'];
 
-// Developer-facing routes that require portal auth.
-// Documentation and developer portal are PUBLIC to enable developer evaluation.
-// Only key generation and playground (makes real API calls) are gated.
+// Developer-facing routes that require a signed-in session.
+// Documentation (/docs) and the public developers page (/developers) are PUBLIC
+// to enable developer evaluation. The developer portal at /developer/portal
+// (and everything under it) is gated.
+//
+// This is a UX gate, not an authority: for the opaque __Host-regengine_session
+// cookie, requireAppAuth() below only checks that the cookie is present, not
+// that it is valid. The portal layout (DashboardLayout, via useAuth) is the
+// second UX gate, and the backend authorizes every API call the page makes.
 //
 // #2886 These MUST be the real rendered page paths. isGatedRoute() matches on
 // `pathname === route || pathname.startsWith(route + '/')`, so a route listed
-// here that has no corresponding page under src/app gates nothing. The pages
-// live at src/app/developer/portal/keys and src/app/developer/portal/playground;
-// the previous '/api-keys' and '/playground' entries matched neither. (The
-// leftover src/app/api-keys/page.tsx is a bare redirect() to
-// /developer/portal/keys, so it is gated transitively by its destination.)
-// Exported for the structural guard in
+// here that has no corresponding page under src/app gates nothing. The portal
+// lives at src/app/developer/portal. (The leftover src/app/api-keys/page.tsx is
+// a bare redirect() to /developer/portal/keys, so it is gated transitively by
+// its destination.) Exported for the structural guard in
 // src/__tests__/proxy-gated-dev-routes.test.ts, which fails the build if an
-// entry here stops naming a real page. Runtime behavior is unchanged.
+// entry here stops naming a real page.
 export const GATED_DEV_ROUTES = [
-    '/developer/portal/keys',
-    '/developer/portal/playground',
+    '/developer/portal',
 ];
 
 // All docs are public — developer evaluation requires accessible documentation.
@@ -590,7 +593,6 @@ export async function proxy(request: NextRequest) {
     // -----------------------------------------------------------------------
     // PUBLIC: /developers — API showcase page for prospective customers.
     // Bypasses all auth checks; CSP headers are still applied.
-    // (next.config.js redirects /developers → /developer/portal)
     // -----------------------------------------------------------------------
     if (pathname.startsWith('/developers')) {
         return withCsp(NextResponse.next({ request: { headers: requestHeaders } }));
@@ -601,11 +603,10 @@ export async function proxy(request: NextRequest) {
         return withCsp(await requireAppAuth(request, requestHeaders));
     }
 
-    // Developer portal: only gate key generation and playground behind auth.
-    // All docs, codegen, and portal pages are public for developer evaluation.
-    // #2886 The former `|| pathname === '/developer/portal/keys'` special case
-    // is gone — GATED_DEV_ROUTES now carries the real page paths, so
-    // isGatedRoute() covers both keys and playground (including sub-paths).
+    // Developer portal: /developer/portal and every sub-path need a session.
+    // /docs and /developers stay public for developer evaluation.
+    // #2886 GATED_DEV_ROUTES carries the real page path, so isGatedRoute()
+    // covers the portal landing page and its sub-paths (e.g. /keys).
     if (isGatedRoute(pathname)) {
         return withCsp(await requireAppAuth(request, requestHeaders));
     }

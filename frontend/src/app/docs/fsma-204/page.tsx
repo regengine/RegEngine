@@ -254,13 +254,13 @@ export default function FSMA204GuidePage() {
                     <h3 className="mb-4 text-subheading text-re-text-primary">Next Steps</h3>
                     <div className="flex flex-wrap gap-3">
                         <Button asChild variant="primary" size="lg">
-                            <Link href="/developer/register" className="no-underline">
+                            <Link href="/contact" className="no-underline">
                                 <Zap aria-hidden="true" strokeWidth={1.75} />
-                                Get Developer Access
+                                Request Developer Access
                             </Link>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
-                            <Link href="/developer/register" className="no-underline">
+                            <Link href="/docs/api" className="no-underline">
                                 Full API Reference →
                             </Link>
                         </Button>

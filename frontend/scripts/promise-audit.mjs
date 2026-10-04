@@ -10,9 +10,9 @@ const SRC_ROOT = path.join(ROOT, 'src');
 
 const BANNED_SOURCE_PATTERNS = [
   // `include` (optional) restricts a rule to files under that directory.
-  // The portal key generator and portal UI legitimately mint and label
-  // `rge_test_` sandbox keys; only docs pages must never present the sandbox
-  // prefix as a live API credential format.
+  // The portal no longer mints or labels `rge_test_` sandbox keys (guarded by
+  // src/__tests__/developer-portal-guards.test.ts); docs pages must never
+  // present the sandbox prefix as a live API credential format.
   {
     label: 'Sandbox key prefix presented in docs',
     pattern: /rge_test_/g,
@@ -72,6 +72,7 @@ const CRITICAL_INTERNAL_ROUTES = [
   '/docs/sdks',
   '/developers',
   '/developer/portal',
+  '/developer/portal/keys',
   '/about',
   '/blog',
   '/contact',
