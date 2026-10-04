@@ -22,6 +22,8 @@ const BASE_ORIGIN = 'https://regengine.co';
  *   - strings that start with one of `denyPrefixes` (e.g. the login page
  *     itself, so a `next` target cannot bounce back to the page that reads it)
  *   - strings that do not resolve to the same origin once parsed as a URL
+ *   - strings whose resolved pathname starts with `//` (dot-segment forms such
+ *     as `/.//evil.com`, `/..//evil.com` and `/%2e%2e//evil.com`)
  *
  * Closes the audit's OQ-2 / RE-FE-AUDIT-002 (next-param redirect hygiene).
  */
@@ -42,7 +44,13 @@ export function safeNextPath(
     }
     if (denyPrefixes.some((prefix) => next.startsWith(prefix))) return fallback;
     try {
-        if (new URL(next, BASE_ORIGIN).origin !== BASE_ORIGIN) return fallback;
+        const resolved = new URL(next, BASE_ORIGIN);
+        if (resolved.origin !== BASE_ORIGIN) return fallback;
+        // Dot-segments collapse before the origin check, so `/.//evil.com`
+        // and `/%2e%2e//evil.com` stay on our origin yet leave a pathname that
+        // starts with `//`. Any consumer that hands that pathname to
+        // location.assign() would treat it as a protocol-relative URL.
+        if (resolved.pathname.startsWith('//')) return fallback;
     } catch {
         return fallback;
     }

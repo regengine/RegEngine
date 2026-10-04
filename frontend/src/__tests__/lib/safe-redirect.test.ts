@@ -31,6 +31,14 @@ describe('safeNextPath', () => {
             expect(safeNextPath(input, FALLBACK)).toBe(input);
         });
 
+        it.each([
+            '/a//b', // `//` inside the path is fine; only a leading `//` is hostile
+            '/?//evil.com', // `//` in the query does not touch the pathname
+            '/x#//evil.com',
+        ])('accepts %s, whose resolved pathname does not start with //', (input) => {
+            expect(safeNextPath(input, FALLBACK)).toBe(input);
+        });
+
         it('returns the input unchanged (no trimming, no normalisation)', () => {
             const input = '/developer/portal/keys?tab=a%20b#top';
             expect(safeNextPath(input, FALLBACK)).toBe(input);
@@ -70,6 +78,13 @@ describe('safeNextPath', () => {
             ['NUL byte', '/dash\u0000board'],
             ['DEL byte', '/dash\u007fboard'],
             ['absolute URL smuggled in a query', '/x?u=https://evil.com'],
+            ['dot-segment collapses to //', '/.//evil.com'],
+            ['dot-dot-segment collapses to //', '/..//evil.com'],
+            ['nested dot-dot collapses to //', '/x/..//evil.com'],
+            ['encoded dot-dot collapses to //', '/%2e%2e//evil.com'],
+            ['upper-case encoded dot-dot collapses to //', '/%2E%2E//evil.com'],
+            ['mixed encoded dot-dot collapses to //', '/.%2e//evil.com'],
+            ['nested encoded dot-dot collapses to //', '/x/%2e%2e//evil.com'],
         ])('returns fallback for %s', (_label, input) => {
             expect(safeNextPath(input, FALLBACK)).toBe(FALLBACK);
         });
@@ -114,9 +129,16 @@ describe('safeNextPath', () => {
             '/%2F/evil.com',
             '/%09/evil.com',
             '/a/../../evil.com',
+            '/..//evil.com',
+            '/x/..//evil.com',
+            '/%2e%2e//evil.com',
         ])('result for %j resolves to our origin', (input) => {
             const result = safeNextPath(input, FALLBACK);
-            expect(new URL(result, ORIGIN).origin).toBe(ORIGIN);
+            const resolved = new URL(result, ORIGIN);
+            expect(resolved.origin).toBe(ORIGIN);
+            // Origin alone is not enough: a pathname that starts with `//` is a
+            // protocol-relative URL as soon as it is passed to location.assign().
+            expect(resolved.pathname.startsWith('//')).toBe(false);
         });
     });
 
