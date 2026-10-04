@@ -76,6 +76,7 @@ export const publicOpenApiSpec = {
           '401': { $ref: '#/components/responses/Unauthorized' },
           '402': { $ref: '#/components/responses/PaymentRequired' },
           '403': { $ref: '#/components/responses/Forbidden' },
+          '422': { $ref: '#/components/responses/ValidationFailed' },
           '429': { $ref: '#/components/responses/RateLimited' },
         },
       },
@@ -270,7 +271,7 @@ export const publicOpenApiSpec = {
     },
     responses: {
       BadRequest: {
-        description: 'Request validation failed.',
+        description: 'Bad request, for example a missing Idempotency-Key header.',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
       },
       Unauthorized: {
@@ -288,6 +289,11 @@ export const publicOpenApiSpec = {
       },
       NotFound: {
         description: 'Resource not found or not visible to this tenant.',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+      },
+      ValidationFailed: {
+        description:
+          'The body failed validation, for example an event timestamp more than 24 hours ahead or a malformed event. The whole request is refused and nothing is stored. The details are in error.details.',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
       },
       RateLimited: {
@@ -345,13 +351,14 @@ export const publicOpenApiSpec = {
           timestamp: {
             type: 'string',
             format: 'date-time',
-            description: 'Events older than 90 days or more than 24 hours ahead are rejected.',
+            description:
+              'An event older than 90 days comes back with status "rejected" inside a 200. An event more than 24 hours ahead fails the whole request with a 422 and nothing is stored.',
           },
           kdes: {
             type: 'object',
             additionalProperties: true,
             description:
-              'Key Data Elements for the event type. A receiving event needs receive_date, receiving_location, immediate_previous_source, reference_document and tlc_source_reference.',
+              'Key Data Elements for the event type. A receiving event needs receive_date, receiving_location, immediate_previous_source, reference_document and tlc_source_reference. The required keys for every event type are listed at https://regengine.co/docs/api#required-kdes.',
           },
         },
       },

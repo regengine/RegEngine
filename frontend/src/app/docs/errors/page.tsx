@@ -38,7 +38,7 @@ const errorCodes = [
     { code: 404, name: 'Not Found', description: 'The resource does not exist for your workspace, or the path is not part of the public API.', fix: 'Check the path against the API reference and the resource ID.', category: 'client' },
     { code: 405, name: 'Method Not Allowed', description: 'The path exists but not for this HTTP method, for example GET on /webhooks/ingest.', fix: 'Use the method shown in the API reference.', category: 'client' },
     { code: 409, name: 'Conflict', description: 'An Idempotency-Key was reused with different request bytes, or its first request is still in progress.', fix: 'Use a new Idempotency-Key for a changed payload. For an in-progress key, see Retry Strategy.', category: 'client' },
-    { code: 422, name: 'Unprocessable Entity', description: 'The body is well-formed JSON but failed validation. The details array lists each failing field.', fix: 'Fix the fields named in error.details and send the request again.', category: 'client' },
+    { code: 422, name: 'Unprocessable Entity', description: 'The body is well-formed JSON but failed validation, for example an event timestamp more than 24 hours ahead. The whole request is refused and nothing is stored. The details array lists each failing field.', fix: 'Fix the fields named in error.details and send the request again.', category: 'client' },
     { code: 429, name: 'Too Many Requests', description: 'A rate limit was exceeded.', fix: 'Stop sending for 60 seconds, then retry. See Rate Limits.', category: 'client' },
 
     // 5xx Server Errors

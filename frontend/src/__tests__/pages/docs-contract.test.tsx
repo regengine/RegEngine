@@ -16,6 +16,7 @@ import WalkthroughPage from '@/app/docs/walkthrough/page';
 import WebhooksDocsPage, { metadata as webhooksMetadata } from '@/app/docs/webhooks/page';
 import { ApiReferenceClient } from '@/app/docs/api/ApiReferenceClient';
 import ingestReceiving from '@/lib/api-samples/ingest-receiving.json';
+import requiredKdes from '@/lib/api-samples/required-kdes.json';
 import {
   INGEST_CURL_SAMPLE,
   INGEST_JS_SAMPLE,
@@ -178,6 +179,41 @@ describe('developer docs stay true against the backend', () => {
     fireEvent.click(screen.getByRole('button', { name: /Records API/ }));
     expect(screen.queryByText('/{event_id}/evaluations')).not.toBeInTheDocument();
     expect(screen.getByText('/{event_id}/history')).toBeInTheDocument();
+  });
+
+  it('API reference: prints the required KDEs for every event type, and the quickstart links to it', () => {
+    render(<ApiReferenceClient />);
+
+    const table = document.getElementById('required-kdes');
+    expect(table).not.toBeNull();
+    const text = table?.textContent ?? '';
+    for (const [cteType, row] of Object.entries(requiredKdes)) {
+      expect(text, cteType).toContain(cteType);
+      for (const kde of [...row.top_level, ...row.kdes]) {
+        expect(text, `${cteType}: ${kde}`).toContain(kde);
+      }
+    }
+
+    document.body.innerHTML = '';
+    render(<QuickstartPage />);
+    expect(document.querySelector('a[href="/docs/api#required-kdes"]')).not.toBeNull();
+  });
+
+  it('timestamp window: only an event older than 90 days is "rejected"; more than 24 hours ahead is a 422', () => {
+    // The Pydantic model refuses a future event, so the whole request fails
+    // before the per-event loop. See tests/docs/test_ingest_samples_validate.py.
+    render(<QuickstartPage />);
+    const quickstart = document.body.textContent ?? '';
+
+    expect(quickstart).toMatch(/older than 90 days[^.]*rejected/);
+    expect(quickstart).toMatch(/24 hours ahead[^.]*422/);
+    expect(quickstart).not.toMatch(/24 hours ahead[^.]*rejected/);
+
+    document.body.innerHTML = '';
+    renderApiReferenceWithIngestOpen();
+    const reference = document.body.textContent ?? '';
+    expect(reference).toMatch(/24 hours ahead[^.]*422/);
+    expect(reference).not.toMatch(/24 hours ahead[^.]*(are|is) rejected/);
   });
 
   it('public OpenAPI example values carry no placeholder tenant id', () => {

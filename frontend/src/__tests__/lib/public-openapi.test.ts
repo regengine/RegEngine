@@ -53,6 +53,17 @@ describe('public OpenAPI spec', () => {
     expect(signature.description).toMatch(/HMAC-SHA256/);
   });
 
+  it('describes the timestamp window and the 422 a future event causes', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    const timestamp = publicOpenApiSpec.components.schemas.IngestEvent.properties.timestamp.description;
+
+    expect(ingest.responses['422'].$ref).toBe('#/components/responses/ValidationFailed');
+    expect(publicOpenApiSpec.components.responses.ValidationFailed.description).toMatch(/nothing is stored/i);
+    expect(timestamp).toMatch(/older than 90 days[^.]*rejected/);
+    expect(timestamp).toMatch(/24 hours ahead[^.]*422/);
+    expect(timestamp).not.toMatch(/24 hours ahead[^.]*rejected/);
+  });
+
   it('documents 402 and 403 and ties each operation to a scope', () => {
     const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
     expect(ingest.responses['402'].$ref).toBe('#/components/responses/PaymentRequired');

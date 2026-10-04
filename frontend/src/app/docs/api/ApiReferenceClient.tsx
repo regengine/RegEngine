@@ -26,6 +26,7 @@ import {
 import { PageHeader } from '@/components/layout/page-header';
 import { CodeBlock } from '@/components/ui/code-block';
 import { INGEST_RESPONSE_SAMPLE, ingestSamplePayload } from '@/lib/api-samples/ingest-samples';
+import requiredKdes from '@/lib/api-samples/required-kdes.json';
 
 interface Endpoint {
     method: string;
@@ -61,9 +62,9 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                     { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name (1–500 chars)' },
                     { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity (> 0)' },
                     { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets" | "each" — full list in docs' },
-                    { name: 'events[].location_name', type: 'string', required: false, desc: 'Facility name. Each event needs at least one location: location_name, events[].location_gln (a 13-digit GLN), or a location KDE.' },
-                    { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event time with timezone. Events older than 90 days or more than 24 hours ahead are rejected.' },
-                    { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325–1.1350. RECEIVING requires receive_date, receiving_location, immediate_previous_source, reference_document, tlc_source_reference.' },
+                    { name: 'events[].location_name', type: 'string', required: false, desc: 'Facility name. Each event needs at least one location: location_name, events[].location_gln (a 13-digit GLN), or a location KDE. harvesting, cooling, initial_packing and transformation events also require location_name itself.' },
+                    { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event time with timezone. An event older than 90 days comes back with status "rejected" inside a 200. An event more than 24 hours ahead fails the whole request with a 422 and nothing is stored.' },
+                    { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325–1.1350. Each cte_type has its own required keys; see Required KDEs by event type, below the endpoint list.' },
                 ],
                 body: ingestSamplePayload('"<current UTC time, ISO 8601>"', '"<today, YYYY-MM-DD>"'),
                 response: INGEST_RESPONSE_SAMPLE,
@@ -502,6 +503,51 @@ export function ApiReferenceClient() {
                         </CardContent>
                     </Card>
                 </motion.div>
+
+                {/* Required KDEs per event type: required-kdes.json is diffed against the backend table by tests/docs. */}
+                <Card id="required-kdes" className="scroll-mt-24">
+                    <CardHeader>
+                        <div>
+                            <CardTitle>Required KDEs by event type</CardTitle>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        <p className="text-ui text-re-text-secondary">
+                            Every event needs <code className="font-mono text-[0.8125rem] text-re-text-primary">traceability_lot_code</code>,{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">product_description</code>,{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">quantity</code> and{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">unit_of_measure</code> on the event itself. The
+                            rest depend on <code className="font-mono text-[0.8125rem] text-re-text-primary">cte_type</code>. Event-level fields
+                            sit beside <code className="font-mono text-[0.8125rem] text-re-text-primary">cte_type</code>; the others go inside{' '}
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">kdes</code>. A missing one rejects that event
+                            inside a 200 with <code className="font-mono text-[0.8125rem] text-re-text-primary">Missing required KDE &apos;&hellip;&apos;</code>.
+                        </p>
+                        <div className="overflow-hidden rounded-lg border border-re-border bg-re-surface-card">
+                            <Table className="min-w-[32rem] text-small">
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[14rem]">cte_type</TableHead>
+                                        <TableHead>Also required on the event</TableHead>
+                                        <TableHead>Required in kdes</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {Object.entries(requiredKdes).map(([cteType, row]) => (
+                                        <TableRow key={cteType}>
+                                            <TableCell className="break-all font-mono text-[0.8125rem]">{cteType}</TableCell>
+                                            <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">
+                                                {row.top_level.length > 0 ? row.top_level.join(', ') : '—'}
+                                            </TableCell>
+                                            <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">
+                                                {row.kdes.join(', ')}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {/* Pagination Info */}
                 <Card>

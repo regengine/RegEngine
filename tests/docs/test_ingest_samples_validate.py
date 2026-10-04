@@ -13,9 +13,16 @@ through the same checks ``POST /api/v1/webhooks/ingest`` runs:
   24 hours ahead; a stale event comes back ``rejected`` inside a 200);
 * the ``X-Webhook-Signature`` check (HMAC-SHA256 of the exact body bytes).
 
+``required-kdes.json`` is the per-event-type table the API reference prints. It
+is diffed against ``REQUIRED_KDES_BY_CTE`` so it cannot drift from the backend.
+
 A fixed date in a sample would silently start failing 90 days later, which is
 how the old docs samples broke. The negative tests prove the checks that guard
 against that actually fire.
+
+Run with an interpreter that has ``requirements.lock`` installed (for example
+``venv/bin/python``): importing ``webhook_router_v2`` needs ``typesafe-sdk``,
+which the shared ``.venv`` does not have.
 """
 
 from __future__ import annotations
@@ -31,10 +38,12 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from services.ingestion.app.webhook_models import (
     REQUIRED_KDES_BY_CTE,
+    IngestEvent,
     WebhookCTEType,
     WebhookPayload,
 )
@@ -46,6 +55,7 @@ from services.ingestion.app.webhook_router_v2 import (
 
 SAMPLE_DIR = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "api-samples"
 SAMPLE_PATH = SAMPLE_DIR / "ingest-receiving.json"
+REQUIRED_KDES_PATH = SAMPLE_DIR / "required-kdes.json"
 
 # Every payload a docs page renders. A renamed or moved file must not silently
 # drop out of coverage, so the list is checked against the files we know exist.
@@ -57,6 +67,9 @@ EXPECTED_SAMPLES = {
     "ingest-walkthrough-shipping.json",
     "ingest-walkthrough-transformation.json",
 }
+
+# Event fields that every CTE needs and that sit on the event itself, not in kdes.
+_UNIVERSAL_FIELDS = {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -141,6 +154,27 @@ def test_stale_timestamp_is_rejected_by_the_replay_window(path):
     assert "WEBHOOK_MAX_EVENT_AGE_DAYS=90" in errors[0]
 
 
+@pytest.mark.parametrize("path", SAMPLE_PATHS, ids=_sample_id)
+def test_future_timestamp_fails_the_whole_request_not_one_event(path):
+    # More than 24 hours ahead never reaches the per-event loop: the model refuses
+    # the body, so FastAPI answers 422 for the whole request and nothing is stored.
+    # The docs must say that, not "comes back rejected".
+    ahead = datetime.now(timezone.utc) + timedelta(hours=25)
+    with pytest.raises(ValidationError) as excinfo:
+        WebhookPayload.model_validate(_render(ahead, path))
+
+    locations = [error["loc"] for error in excinfo.value.errors()]
+    assert ("events", 0, "timestamp") in locations
+    assert "more than 24 hours in the future" in str(excinfo.value)
+
+
+def test_timestamp_just_inside_the_future_window_is_accepted():
+    ahead = datetime.now(timezone.utc) + timedelta(hours=23)
+    payload = WebhookPayload.model_validate(_render(ahead))
+
+    assert _validate_event_timestamp_window(payload.events[0].timestamp) is None
+
+
 @pytest.mark.parametrize(("path", "kde"), _missing_kde_cases(), ids=lambda v: v.stem if isinstance(v, Path) else v)
 def test_missing_required_kde_is_rejected(path, kde):
     payload = _render(_one_hour_ago(), path)
@@ -179,6 +213,29 @@ def test_receiving_sample_carries_every_documented_receiving_kde():
     assert documented <= set(REQUIRED_KDES_BY_CTE[WebhookCTEType.RECEIVING]), (
         "docs list a KDE the backend no longer requires"
     )
+
+
+def test_required_kdes_table_matches_the_backend():
+    documented = json.loads(REQUIRED_KDES_PATH.read_text(encoding="utf-8"))
+
+    # The docs list the 7 FDA-defined CTEs. GROWING is accepted for backwards
+    # compatibility only and has no required-KDE row; any other member without a
+    # row is a CTE the docs table is missing.
+    assert set(WebhookCTEType) - set(REQUIRED_KDES_BY_CTE) == {WebhookCTEType.GROWING}
+    assert set(documented) == {cte.value for cte in REQUIRED_KDES_BY_CTE}, (
+        "a CTE type is missing from, or extra in, the docs table"
+    )
+    event_fields = set(IngestEvent.model_fields)
+    for cte in REQUIRED_KDES_BY_CTE:
+        row = documented[cte.value]
+        top_level, in_kdes = set(row["top_level"]), set(row["kdes"])
+
+        assert not top_level & in_kdes, f"{cte.value}: a KDE is listed twice"
+        assert top_level <= event_fields, f"{cte.value}: top_level names a field IngestEvent does not have"
+        assert not in_kdes & event_fields, f"{cte.value}: a top-level event field is listed under kdes"
+        assert top_level | in_kdes | _UNIVERSAL_FIELDS == set(REQUIRED_KDES_BY_CTE[cte]), (
+            f"{cte.value}: the docs table differs from REQUIRED_KDES_BY_CTE"
+        )
 
 
 def _request_with_body(body: bytes) -> Request:

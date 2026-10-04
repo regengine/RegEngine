@@ -172,18 +172,21 @@ export default function QuickstartPage() {
                             </li>
                             <li>
                                 Each event <code className={CODE}>timestamp</code> must fall within the last 90 days and no more than
-                                24 hours ahead. Anything else comes back with <code className={CODE}>status: &quot;rejected&quot;</code>.
+                                24 hours ahead. An event older than 90 days comes back with{' '}
+                                <code className={CODE}>status: &quot;rejected&quot;</code> inside a <code className={CODE}>200</code>.
+                                An event more than 24 hours ahead fails the whole request with a <code className={CODE}>422</code>{' '}
+                                and nothing is stored.
                             </li>
                             <li>
                                 A RECEIVING event needs <code className={CODE}>receive_date</code>,{' '}
                                 <code className={CODE}>receiving_location</code>, <code className={CODE}>immediate_previous_source</code>,{' '}
                                 <code className={CODE}>reference_document</code> and <code className={CODE}>tlc_source_reference</code>{' '}
-                                (21 CFR §1.1345). Other event types need different KDEs; see the{' '}
+                                (21 CFR §1.1345). Other event types need different KDEs; the{' '}
                                 <Link
-                                    href="/docs/api"
+                                    href="/docs/api#required-kdes"
                                     className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
                                 >
-                                    API reference
+                                    API reference lists them
                                 </Link>
                                 .
                             </li>

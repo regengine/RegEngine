@@ -1,0 +1,36 @@
+{
+  "harvesting": {
+    "top_level": ["location_name"],
+    "kdes": ["harvest_date", "reference_document"]
+  },
+  "cooling": {
+    "top_level": ["location_name"],
+    "kdes": ["cooling_date", "reference_document"]
+  },
+  "initial_packing": {
+    "top_level": ["location_name"],
+    "kdes": ["packing_date", "reference_document", "harvester_business_name", "harvester_business_phone"]
+  },
+  "first_land_based_receiving": {
+    "top_level": [],
+    "kdes": ["landing_date", "receiving_location", "reference_document"]
+  },
+  "shipping": {
+    "top_level": [],
+    "kdes": ["ship_date", "ship_from_location", "ship_to_location", "reference_document", "tlc_source_reference"]
+  },
+  "receiving": {
+    "top_level": [],
+    "kdes": [
+      "receive_date",
+      "receiving_location",
+      "immediate_previous_source",
+      "reference_document",
+      "tlc_source_reference"
+    ]
+  },
+  "transformation": {
+    "top_level": ["location_name"],
+    "kdes": ["transformation_date", "reference_document"]
+  }
+}
