@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
-import { API_BASE } from "@/lib/api-base";
+import { INGEST_ENV_SETUP, INGEST_INFLOW_LAB_CURL_SAMPLE } from "@/lib/api-samples/ingest-samples";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -17,30 +17,6 @@ export const metadata: Metadata = {
     type: 'website',
   },
 };
-
-const ingestExample = `curl -X POST ${API_BASE}/webhooks/ingest \\
-  -H "Content-Type: application/json" \\
-  -H "X-RegEngine-API-Key: rge_live_..." \\
-  -H "X-Tenant-ID: 00000000-0000-0000-0000-000000000000" \\
-  -H "Idempotency-Key: inflow-lab-test-001" \\
-  -d '{
-    "tenant_id": "00000000-0000-0000-0000-000000000000",
-    "source": "inflow-lab",
-    "events": [{
-      "cte_type": "shipping",
-      "traceability_lot_code": "ROM-2026-0427-A",
-      "product_description": "Romaine Lettuce",
-      "quantity": 48,
-      "unit_of_measure": "cases",
-      "location_name": "Inflow Lab Test DC",
-      "timestamp": "2026-04-27T18:30:00Z",
-      "kdes": {
-        "ship_from_location": "Test Grower",
-        "ship_to_location": "Test Retailer",
-        "carrier": "Inflow Lab Carrier"
-      }
-    }]
-  }'`;
 
 const localRun = `git clone https://github.com/regengine/inflow-lab.git
 cd inflow-lab
@@ -155,11 +131,13 @@ export default function InflowLabDocsPage() {
         <section>
           <h2 className="mb-3 text-heading text-re-text-primary">Signed webhook payload</h2>
           <p className="mb-4 text-body text-re-text-secondary">
-            Use <code className={CODE}>source: &quot;inflow-lab&quot;</code> so dashboard and audit surfaces can distinguish test traffic from generic webhook submissions. Backend routes resolve that public slug to canonical connector id <code className={CODE}>inflow_lab</code>. Production evidence still requires authenticated persisted records.
+            Use <code className={CODE}>source: &quot;inflow-lab&quot;</code> so dashboard and audit surfaces can distinguish test traffic from generic webhook submissions. Backend routes resolve that public slug to canonical connector id <code className={CODE}>inflow_lab</code>. Production evidence still requires authenticated persisted records. RegEngine issues the API key and signing secret on request; the <Link href="/docs/quickstart" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">Quickstart</Link> explains the signature and the test workspace.
           </p>
           <div className="space-y-2">
+            <p className="font-mono text-label text-re-text-muted">Environment</p>
+            <CodeBlock code={INGEST_ENV_SETUP} language="bash" />
             <p className="font-mono text-label text-re-text-muted">POST /api/v1/webhooks/ingest</p>
-            <CodeBlock code={ingestExample} />
+            <CodeBlock code={INGEST_INFLOW_LAB_CURL_SAMPLE} language="bash" />
           </div>
         </section>
 
