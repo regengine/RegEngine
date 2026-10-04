@@ -247,6 +247,9 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": _safe_http_error_content(exc.status_code, exc.detail)},
+        # Forward headers the route attached (Retry-After and X-RateLimit-* on
+        # 429, WWW-Authenticate on 401), as Starlette's default handler does.
+        headers=getattr(exc, "headers", None),
     )
 
 
