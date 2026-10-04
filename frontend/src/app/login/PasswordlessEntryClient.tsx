@@ -11,6 +11,7 @@ import { Callout } from '@/components/ui/callout';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
+import { safeNextPath } from '@/lib/safe-redirect';
 import {
   isValidEmail,
   performPasskeyLogin,
@@ -21,14 +22,9 @@ import {
 
 const GENERIC_OTP_MESSAGE = 'If this address is eligible, a sign-in code is on its way.';
 
-function resolveSafeNextPath(nextPath: string | null): string {
-  if (!nextPath) return '/dashboard';
-  const trimmed = nextPath.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/login')) {
-    return '/dashboard';
-  }
-  return trimmed;
-}
+// Never forward back to the pages that read `next` (a /login or /auth/verify
+// target would loop).
+const NEXT_DENY_PREFIXES = ['/login', '/auth/verify'] as const;
 
 export default function PasswordlessEntryClient() {
   const router = useRouter();
@@ -43,7 +39,7 @@ export default function PasswordlessEntryClient() {
   const [isPasskeySubmitting, setIsPasskeySubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
-  const nextPath = resolveSafeNextPath(searchParams.get('next'));
+  const nextPath = safeNextPath(searchParams.get('next'), '/dashboard', NEXT_DENY_PREFIXES);
   const queryError = searchParams.get('error');
 
   useEffect(() => {

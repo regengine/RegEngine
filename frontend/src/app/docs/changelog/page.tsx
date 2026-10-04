@@ -79,7 +79,7 @@ export default function ChangelogPage() {
 
             <div className="space-y-8">
                 {/* v1.6.0 — Proof Bundle Verification */}
-                <Release version="v1.6.0" date="May 10, 2026" latest title="Proof Bundle Verification">
+                <Release version="v1.6.0" date="May 10, 2026" title="Proof Bundle Verification">
                     <div>
                         <h4 className={GROUP}>Verification</h4>
                         <ul className={LIST}>

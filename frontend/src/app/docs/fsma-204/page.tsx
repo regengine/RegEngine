@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
+import { INGEST_CURL_SAMPLE, INGEST_ENV_SETUP, INGEST_RESPONSE_SAMPLE } from '@/lib/api-samples/ingest-samples';
 import {
     Table,
     TableBody,
@@ -53,60 +54,14 @@ const CTE_ROWS = [
 const RELATED_ENDPOINTS = [
     { path: 'POST /api/v1/webhooks/ingest', desc: 'Create compliance events' },
     { path: 'GET /api/v1/fda/export/recall', desc: 'Generate §1.1455-formatted sortable spreadsheet' },
-    { path: 'GET /v1/fsma/trace/forward/{tlc}', desc: 'Forward supply chain trace' },
-    { path: 'GET /v1/fsma/trace/backward/{tlc}', desc: 'Backward supply chain trace' },
-    { path: 'GET /v1/fsma/coverage', desc: 'Coverage status and freshness' },
+    { path: 'GET /api/v1/fda/trace/{tlc}', desc: 'Upstream sources and downstream products for a lot' },
+    { path: 'GET /api/v1/records', desc: 'List stored events for your workspace' },
 ];
 
-const INGEST_SNIPPET = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
-  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "erp",
-    "events": [
-      {
-        "cte_type": "receiving",
-        "traceability_lot_code": "00012345678901-LOT-2026-001",
-        "product_description": "Romaine Lettuce",
-        "quantity": 500,
-        "unit_of_measure": "cases",
-        "location_name": "Distribution Center #4",
-        "timestamp": "2026-02-05T08:30:00Z",
-        "kdes": {
-          "receive_date": "2026-02-05",
-          "receiving_location": "Distribution Center #4",
-          "ship_from_location": "Valley Fresh Farms"
-        }
-      }
-    ]
-  }'`;
-
-const INGEST_RESPONSE = `{
-  "accepted": 1,
-  "rejected": 0,
-  "total": 1,
-  "events": [
-    {
-      "traceability_lot_code": "00012345678901-LOT-2026-001",
-      "cte_type": "receiving",
-      "status": "accepted",
-      "event_id": "a1b2c3d4-...",
-      "sha256_hash": "a3f2b891c4d5e6f7...",
-      "chain_hash": "7f6e5d4c3b2a1908..."
-    }
-  ],
-  "ingestion_timestamp": "2026-02-05T08:30:01Z"
-}`;
-
-const RECALL_SNIPPET = `curl https://regengine.co/api/v1/fda/export/recall \\
-  -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
-  -H "X-Tenant-ID: YOUR_TENANT_UUID" \\
-  -G \\
-  -d "tenant_id=YOUR_TENANT_UUID" \\
-  -d "start_date=2026-01-01" \\
-  -d "end_date=2026-02-05" \\
+const RECALL_SNIPPET = `curl -G https://regengine.co/api/v1/fda/export/recall \\
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
+  -d "tenant_id=YOUR_WORKSPACE_ID" \\
+  -d "tlc=TEST-00012345678901-LOT-001" \\
   -o fda_response.csv`;
 
 /** A labelled code well — SPEC §5.1: code sits one surface step below the page. */
@@ -180,12 +135,18 @@ export default function FSMA204GuidePage() {
                     <h2 className="mb-3 text-heading text-re-text-primary">Quick Start: Record a CTE</h2>
                     <p className="mb-4 text-body text-re-text-secondary">
                         Critical Tracking Events (CTEs) are the building blocks of FSMA 204 compliance.
-                        Here&apos;s how to record a receiving event:
+                        Here&apos;s how to record a receiving event. RegEngine issues the API key and signing secret on request;
+                        the{' '}
+                        <Link href="/docs/quickstart" className={PROSE_LINK}>Quickstart</Link>
+                        {' '}explains the signature, the idempotency key and the test workspace, and{' '}
+                        <Link href="/docs/api#required-kdes" className={PROSE_LINK}>the API reference</Link>
+                        {' '}lists the required KDEs for every event type.
                     </p>
 
                     <div className="space-y-4">
-                        <CodePanel label="POST /api/v1/webhooks/ingest" code={INGEST_SNIPPET} />
-                        <CodePanel label="201 Created" code={INGEST_RESPONSE} />
+                        <CodePanel label="Environment" code={INGEST_ENV_SETUP} />
+                        <CodePanel label="POST /api/v1/webhooks/ingest" code={INGEST_CURL_SAMPLE} />
+                        <CodePanel label="200 OK" code={INGEST_RESPONSE_SAMPLE} />
                     </div>
                 </section>
 
@@ -227,7 +188,8 @@ export default function FSMA204GuidePage() {
                     <h2 className="mb-3 text-heading text-re-text-primary">FDA Request Mode</h2>
                     <p className="mb-4 text-body text-re-text-secondary">
                         When the FDA requests traceability data during a recall, you have <strong className="font-medium text-re-text-primary">24 hours</strong> <a href="https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)" target="_blank" rel="noopener noreferrer" className={CITATION} title="21 CFR § 1.1455(c) Requirement">[FDA]</a> to
-                        provide an electronic sortable spreadsheet per 21 CFR 1.1455(c). RegEngine generates this with one API call:
+                        provide an electronic sortable spreadsheet per 21 CFR 1.1455(c). RegEngine generates this with one API call
+                        (the <code className="font-mono text-[0.8125rem] text-re-text-primary">fda.export</code> scope and an active subscription are required):
                     </p>
 
                     <CodePanel label="GET /api/v1/fda/export/recall" code={RECALL_SNIPPET} />
@@ -250,16 +212,12 @@ export default function FSMA204GuidePage() {
                         RegEngine performs graph-based tracing over your event data to trace products forward and backward through your supply chain:
                     </p>
 
-                    <div className="space-y-4">
-                        <CodePanel
-                            label="Forward Trace (where did this lot go?)"
-                            code={`GET /v1/fsma/trace/forward/LOT-2026-001`}
-                        />
-                        <CodePanel
-                            label="Backward Trace (where did this lot come from?)"
-                            code={`GET /v1/fsma/trace/backward/LOT-2026-001`}
-                        />
-                    </div>
+                    <CodePanel
+                        label="Trace a lot (where did it come from, where did it go?)"
+                        code={`curl -G https://regengine.co/api/v1/fda/trace/TEST-00012345678901-LOT-001 \\
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
+  -d "tenant_id=YOUR_WORKSPACE_ID"`}
+                    />
                 </section>
 
                 {/* Verify Don't Trust */}
@@ -296,13 +254,13 @@ export default function FSMA204GuidePage() {
                     <h3 className="mb-4 text-subheading text-re-text-primary">Next Steps</h3>
                     <div className="flex flex-wrap gap-3">
                         <Button asChild variant="primary" size="lg">
-                            <Link href="/developer/register" className="no-underline">
+                            <Link href="/contact" className="no-underline">
                                 <Zap aria-hidden="true" strokeWidth={1.75} />
-                                Get Developer Access
+                                Request Developer Access
                             </Link>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
-                            <Link href="/developer/register" className="no-underline">
+                            <Link href="/docs/api" className="no-underline">
                                 Full API Reference →
                             </Link>
                         </Button>

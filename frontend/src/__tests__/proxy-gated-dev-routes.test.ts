@@ -9,12 +9,12 @@
  * /developer/portal/keys and /developer/portal/playground, and the mismatch
  * was invisible because a stale gate entry is silently inert.
  *
- * proxy-csp-nonce.test.ts pins the behavior of the two entries that exist
- * today — it asserts those paths redirect to /login. It cannot catch the
- * failure mode this file exists for: an entry ADDED to the list that matches
- * nothing, which passes every behavioral test while gating nothing. This test
- * checks the list itself against the filesystem, so a gate that protects
- * nothing fails the build instead of failing silently.
+ * proxy-csp-nonce.test.ts pins the behavior of the entry that exists
+ * today — it asserts that path and its sub-paths redirect to /login. It cannot
+ * catch the failure mode this file exists for: an entry ADDED to the list that
+ * matches nothing, which passes every behavioral test while gating nothing.
+ * This test checks the list itself against the filesystem, so a gate that
+ * protects nothing fails the build instead of failing silently.
  */
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -56,9 +56,13 @@ describe('#2886 GATED_DEV_ROUTES structural guard', () => {
         }
     });
 
-    it('still covers the two developer surfaces that make real API calls', () => {
-        // Key generation and the playground are the reason the list exists.
-        expect(GATED_DEV_ROUTES).toContain('/developer/portal/keys');
-        expect(GATED_DEV_ROUTES).toContain('/developer/portal/playground');
+    it('gates the developer portal root, which covers every portal sub-path', () => {
+        expect(GATED_DEV_ROUTES).toEqual(['/developer/portal']);
+    });
+
+    it('does not list the deleted playground', () => {
+        // The playground page is gone. An entry for it would match no page
+        // and gate nothing.
+        expect(GATED_DEV_ROUTES).not.toContain('/developer/portal/playground');
     });
 });

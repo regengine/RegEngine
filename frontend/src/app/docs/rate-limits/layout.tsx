@@ -2,10 +2,10 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
     title: 'Rate Limits | RegEngine',
-    description: 'RegEngine API rate limits, per-response limit headers, and back-off guidance for 429 responses.',
+    description: 'How RegEngine rate limits API requests, and what to do when you get a 429.',
     openGraph: {
         title: 'Rate Limits',
-        description: 'RegEngine API rate limits, per-response limit headers, and back-off guidance for 429 responses.',
+        description: 'How RegEngine rate limits API requests, and what to do when you get a 429.',
         url: 'https://regengine.co/docs/rate-limits',
         type: 'website',
     },

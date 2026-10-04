@@ -389,7 +389,7 @@ export default function SettingsPage() {
                             <CardHeader>
                                 <div className="min-w-0">
                                     <CardTitle>API Keys</CardTitle>
-                                    <CardDescription>Credentials appear here only after API access is enabled for this workspace.</CardDescription>
+                                    <CardDescription>Live API keys are issued by RegEngine for this workspace.</CardDescription>
                                 </div>
                             </CardHeader>
                             <CardContent className="space-y-3">
@@ -397,9 +397,9 @@ export default function SettingsPage() {
                                     <div className="flex items-start gap-3">
                                         <Key className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <div className="min-w-0">
-                                            <h4 className="text-subheading text-re-text-primary">Generate a sandbox API key</h4>
+                                            <h4 className="text-subheading text-re-text-primary">Request a live API key</h4>
                                             <p className="mt-1 max-w-[70ch] text-small text-re-text-tertiary">
-                                                API credentials are provisioned with your agreement — contact us to enable API access. Once enabled for this workspace, keys appear here. Sandbox keys for exploration are available in the developer portal.
+                                                API credentials are provisioned with your agreement. Contact us to enable API access; RegEngine issues the key for this workspace and sends it to you directly.
                                             </p>
                                         </div>
                                     </div>
@@ -422,7 +422,7 @@ export default function SettingsPage() {
                                             className="w-full"
                                             leadingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                                         >
-                                            Generate Sandbox Key
+                                            About API Keys
                                         </Button>
                                     </Link>
                                 </div>

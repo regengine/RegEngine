@@ -87,10 +87,10 @@ export default function IntegrationHubPage() {
                             </div>
 
                             <Link
-                                href="/developer/register"
+                                href="/contact"
                                 className="mt-auto inline-flex items-center gap-2 text-ui font-medium text-re-brand underline-offset-[3px] hover:underline"
                             >
-                                Get Developer Access
+                                Request Developer Access
                                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                             </Link>
                         </Card>

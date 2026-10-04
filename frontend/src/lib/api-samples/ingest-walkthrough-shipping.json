@@ -1,0 +1,22 @@
+{
+  "source": "manual-walkthrough",
+  "events": [
+    {
+      "cte_type": "shipping",
+      "traceability_lot_code": "TEST-00012345678901-WALK-001-BAGGED",
+      "product_description": "Romaine, washed + bagged, 10oz consumer pack",
+      "quantity": 4800,
+      "unit_of_measure": "units",
+      "location_gln": "0012345600005",
+      "location_name": "DC-4 Outbound",
+      "timestamp": "{{EVENT_TIMESTAMP}}",
+      "kdes": {
+        "ship_date": "{{EVENT_DATE}}",
+        "ship_from_location": "DC-4 Outbound",
+        "ship_to_location": "Distributor B",
+        "reference_document": "TEST-BOL-00789",
+        "tlc_source_reference": "TEST-DC4-BAGGED-001"
+      }
+    }
+  ]
+}
