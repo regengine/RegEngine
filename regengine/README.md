@@ -19,7 +19,7 @@ from regengine import RegEngineClient
 # Initialize client
 client = RegEngineClient(
     api_key="rge_your_api_key",
-    base_url="https://api.regengine.co"  # Optional
+    base_url="https://regengine.co"  # Optional
 )
 
 # Look up a traceability record
@@ -43,7 +43,7 @@ Query traceability records by date range and optional CTE type.
 
 The methods below target the graph FSMA routers, which the production
 deployment does not mount (they are excluded from the release-approved
-router allowlist). **Against `https://api.regengine.co` they return 404.**
+router allowlist). **Against `https://regengine.co` they return 404.**
 They work only against a self-hosted deployment that mounts the
 experimental graph routers. The set is declared in
 `RegEngineClient.EXPERIMENTAL_METHODS` and kept in sync with the production

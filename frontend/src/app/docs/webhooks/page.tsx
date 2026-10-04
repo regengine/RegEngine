@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-  title: 'Webhooks | RegEngine',
-  description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
+  title: 'Outbound Webhooks (Planned) | RegEngine',
+  description: 'Planned: notifications from RegEngine to your systems. Not available yet. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
   openGraph: {
-    title: 'Webhooks',
-    description: 'Real-time event notifications for compliance changes. Planned event types and payload previews.',
+    title: 'Outbound Webhooks (Planned)',
+    description: 'Planned: notifications from RegEngine to your systems. Not available yet. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
     url: 'https://regengine.co/docs/webhooks',
     type: 'website',
   },
@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 import { ArrowLeft, Webhook, Mail } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 
 const EVENT_TYPES = [
@@ -51,11 +52,35 @@ export default function WebhooksDocsPage() {
                     </Link>
                 }
                 eyebrow="Roadmap"
-                title="Webhooks"
-                description="Real-time event notifications for compliance changes"
+                title="Outbound webhooks (planned)"
+                description="Notifications from RegEngine to your systems. These are not available yet."
             />
 
             <div className="space-y-8">
+                <Callout tone="info" title="Sending events to RegEngine?">
+                    <p className="text-ui text-re-text-secondary">
+                        That is ingestion, and it is available now:{' '}
+                        <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
+                            POST /api/v1/webhooks/ingest
+                        </code>
+                        . See the{' '}
+                        <Link
+                            href="/docs/quickstart"
+                            className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                        >
+                            Quickstart
+                        </Link>{' '}
+                        and the{' '}
+                        <Link
+                            href="/docs/api"
+                            className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+                        >
+                            API reference
+                        </Link>
+                        .
+                    </p>
+                </Callout>
+
                 {/* Event Types Preview */}
                 <section>
                     <h2 className="mb-4 text-heading text-re-text-primary">Planned Event Types</h2>
@@ -79,7 +104,7 @@ export default function WebhooksDocsPage() {
 
                 {/* Payload Preview */}
                 <section>
-                    <h2 className="mb-4 text-heading text-re-text-primary">Sample Payload</h2>
+                    <h2 className="mb-4 text-heading text-re-text-primary">Sample Payload (Planned)</h2>
 
                     <Card variant="inset" className="overflow-hidden">
                         <div className="border-b border-re-border-subtle px-4 py-2">

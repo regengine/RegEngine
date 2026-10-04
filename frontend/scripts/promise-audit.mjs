@@ -40,6 +40,19 @@ const BANNED_SOURCE_PATTERNS = [
   { label: 'Invented uptime stat', pattern: /uptime_percent/g },
   { label: 'Stale version promise: Coming in v1.1', pattern: /Coming in v1\.1/g },
   { label: 'Fake audit actor: dashboard_user', pattern: /dashboard_user/g },
+  // Developer-docs pass 2026-10: /alpha only redirects, so a link to it is a dead end.
+  // Every request-access CTA goes to /contact. Matches href="/alpha", href='/alpha',
+  // href={"/alpha"} and /alpha?...; not /alpha-signup.
+  { label: 'Dead-end CTA: href="/alpha" (use /contact)', pattern: /href=\{?\s*["']\/alpha(?=["'?#/])/g },
+  // The portal playground returned simulated responses behind a "Demo Mode" switch.
+  // `exclude` (optional, like `include` above) skips files under that directory. It
+  // skips the playground only until the portal rebuild deletes it; remove the
+  // exclusion then so the ban covers all of src.
+  {
+    label: 'Simulated responses: "Demo Mode"',
+    pattern: /Demo Mode/g,
+    exclude: path.join(APP_ROOT, 'developer', 'portal', 'playground'),
+  },
 ];
 
 const SOURCE_GLOBS = [
@@ -125,6 +138,9 @@ async function auditSourcePatterns() {
     const contents = readFileSync(file, 'utf8');
     for (const rule of BANNED_SOURCE_PATTERNS) {
       if (rule.include && !file.startsWith(rule.include + path.sep)) {
+        continue;
+      }
+      if (rule.exclude && file.startsWith(rule.exclude + path.sep)) {
         continue;
       }
       const matches = contents.match(rule.pattern);

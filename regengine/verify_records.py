@@ -146,7 +146,7 @@ def verify_record_offline(record: dict) -> VerificationResult:
         return VerificationResult(tlc=tlc, expected_hash=expected_hash, computed_hash="", valid=False, error=str(e))
 
 
-def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.regengine.co") -> VerificationResult:
+def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regengine.co") -> VerificationResult:
     """Verify a record against the RegEngine API."""
     if not HAS_REQUESTS:
         return VerificationResult(
@@ -327,10 +327,10 @@ def main():
 Examples:
   # Verify a single lot online
   regengine-verify --tlc LOT-2026-001 --api-key rge_live_xxx
-  
+
   # Verify exported records offline
   regengine-verify --file exported_records.json --offline
-  
+
   # Verify an FDA audit pack
   regengine-verify --audit-pack audit_2026_02.zip
         """,
@@ -340,7 +340,7 @@ Examples:
     parser.add_argument("--api-key", help="RegEngine API key")
     parser.add_argument("--file", type=Path, help="JSON file with records to verify")
     parser.add_argument("--offline", action="store_true", help="Verify without API calls")
-    parser.add_argument("--base-url", default="https://api.regengine.co", help="API base URL")
+    parser.add_argument("--base-url", default="https://regengine.co", help="API base URL")
     parser.add_argument("--version", action="version", version=f"regengine-verify {_sdk_version()}")
 
     args = parser.parse_args()
