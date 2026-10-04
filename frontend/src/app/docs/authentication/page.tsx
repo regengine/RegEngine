@@ -178,7 +178,7 @@ export default function AuthenticationDocsPage() {
                         </p>
                         <p className="text-ui text-re-text-secondary">
                             Ingest requests also carry <code className={CODE}>X-Webhook-Signature</code>, an HMAC-SHA256 of the request body
-                            made with your signing secret. See the{' '}
+                            made with the signing secret RegEngine issues. See the{' '}
                             <Link
                                 href="/docs/quickstart"
                                 className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"

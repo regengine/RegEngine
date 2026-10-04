@@ -76,6 +76,7 @@ export const publicOpenApiSpec = {
           '401': { $ref: '#/components/responses/Unauthorized' },
           '402': { $ref: '#/components/responses/PaymentRequired' },
           '403': { $ref: '#/components/responses/Forbidden' },
+          '409': { $ref: '#/components/responses/IdempotencyConflict' },
           '422': { $ref: '#/components/responses/ValidationFailed' },
           '429': { $ref: '#/components/responses/RateLimited' },
         },
@@ -290,6 +291,21 @@ export const publicOpenApiSpec = {
       NotFound: {
         description: 'Resource not found or not visible to this tenant.',
         content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+      },
+      IdempotencyConflict: {
+        description:
+          'The Idempotency-Key was already used with different request bytes, or the first request with this key is still in progress or ended in an uncertain state. Do not retry with the same key. Check what the first attempt did before sending again with a new key. The body is the flat shape {"error": "idempotency_key_conflict"} or {"error": "idempotency_request_in_progress"}, not the nested error envelope.',
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['error'],
+              properties: {
+                error: { type: 'string', enum: ['idempotency_key_conflict', 'idempotency_request_in_progress'] },
+              },
+            },
+          },
+        },
       },
       ValidationFailed: {
         description:

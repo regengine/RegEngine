@@ -78,8 +78,8 @@ export default function QuickstartPage() {
                             workspace from the key; the ID is only a query parameter on a few endpoints.
                         </li>
                         <li>
-                            A <strong className="font-medium text-re-text-primary">signing secret</strong> used to sign the body of every
-                            ingest request.
+                            The <strong className="font-medium text-re-text-primary">signing secret</strong> RegEngine issues for ingest.
+                            You use it to sign the body of every ingest request.
                         </li>
                     </ul>
                     <Button asChild variant="primary" size="lg">
@@ -92,8 +92,9 @@ export default function QuickstartPage() {
 
                 <Step n="2" title="Set your environment variables">
                     <p className="text-body text-re-text-secondary">
-                        Keep both values out of version control and out of client-side code. Anyone who holds the key and the
-                        signing secret can send events into your workspace.
+                        Keep both values out of version control and out of client-side code. Anyone who holds the API key and the
+                        signing secret can send events into the workspace that key belongs to. If you think either value is exposed,
+                        tell RegEngine right away.
                     </p>
                     <CodeBlock code={INGEST_ENV_SETUP} language="bash" />
                     <p className="text-ui text-re-text-secondary">
@@ -160,7 +161,7 @@ export default function QuickstartPage() {
                             </li>
                             <li>
                                 <code className={CODE}>X-Webhook-Signature</code>: <code className={CODE}>sha256=</code> followed by the
-                                HMAC-SHA256 hex digest of the exact request body bytes, keyed with your signing secret. A missing
+                                HMAC-SHA256 hex digest of the exact request body bytes, keyed with the signing secret RegEngine issues. A missing
                                 or wrong signature returns <code className={CODE}>401</code>.
                             </li>
                             <li>

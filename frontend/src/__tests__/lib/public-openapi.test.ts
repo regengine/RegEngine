@@ -64,6 +64,19 @@ describe('public OpenAPI spec', () => {
     expect(timestamp).not.toMatch(/24 hours ahead[^.]*rejected/);
   });
 
+  it('documents the idempotency 409 with the flat body the middleware returns', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    const conflict = publicOpenApiSpec.components.responses.IdempotencyConflict;
+    const schema = conflict.content['application/json'].schema;
+
+    expect(ingest.responses['409'].$ref).toBe('#/components/responses/IdempotencyConflict');
+    // services/shared/idempotency.py _error() returns json.dumps({"error": code}): flat, not nested.
+    expect(schema.type).toBe('object');
+    expect(schema.required).toEqual(['error']);
+    expect(schema.properties.error.type).toBe('string');
+    expect(schema.properties.error.enum).toEqual(['idempotency_key_conflict', 'idempotency_request_in_progress']);
+  });
+
   it('documents 402 and 403 and ties each operation to a scope', () => {
     const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
     expect(ingest.responses['402'].$ref).toBe('#/components/responses/PaymentRequired');
@@ -118,8 +131,13 @@ describe('public OpenAPI spec', () => {
     expect(schema.properties.error.required).toEqual(['type', 'message']);
     expect(schema.properties.error.additionalProperties).toBe(true);
     expect(schema.properties).not.toHaveProperty('detail');
-    for (const response of Object.values(publicOpenApiSpec.components.responses)) {
-      expect(response.content['application/json'].schema.$ref).toBe('#/components/schemas/ErrorResponse');
+    for (const [name, response] of Object.entries(publicOpenApiSpec.components.responses)) {
+      // The idempotency middleware answers before the error handlers and returns a flat
+      // {"error": code}; its shape is pinned by its own test above. Every other error
+      // response must keep the nested envelope.
+      if (name === 'IdempotencyConflict') continue;
+      const schema = response.content['application/json'].schema as { $ref?: string };
+      expect(schema.$ref).toBe('#/components/schemas/ErrorResponse');
     }
   });
 
