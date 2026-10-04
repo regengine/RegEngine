@@ -9,6 +9,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,10 +24,10 @@ from app.supplier_mgmt import (
     router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext
-from sqlalchemy.exc import DataError, OperationalError
+from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -296,6 +297,23 @@ class TestDbAddSupplier:
         session.rollback.assert_called_once()
         session.close.assert_called_once()
 
+    @pytest.mark.parametrize("code_attribute", ["sqlstate", "pgcode"])
+    @pytest.mark.parametrize("operation", ["execute", "commit"])
+    def test_permission_failure_rolls_back_and_raises(self, monkeypatch, code_attribute, operation):
+        """Driver-shaped mocks cover both psycopg versions and commit-time errors."""
+        session = _mock_db_session()
+        error = ProgrammingError("INSERT", {}, SimpleNamespace(**{code_attribute: "42501"}))
+        getattr(session, operation).side_effect = error
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+
+        with pytest.raises(HTTPException) as raised:
+            _db_add_supplier("t1", _make_supplier())
+
+        assert raised.value.status_code == 503
+        assert raised.value.detail == "Supplier changes could not be saved"
+        session.rollback.assert_called_once()
+        session.close.assert_called_once()
+
     def test_statement_references_only_real_columns(self, monkeypatch):
         """The INSERT ... ON CONFLICT names ``fsma.tenant_suppliers`` columns as V042 declares them."""
         columns = _ddl_columns("V042__tenant_feature_data_tables.sql", "fsma.tenant_suppliers")
@@ -409,6 +427,21 @@ class TestAddSupplierEndpoint:
 
 
 class TestSendPortalLinkEndpoint:
+    def test_denied_write_preserves_memory_record(self, client, monkeypatch):
+        supplier = _make_supplier()
+        _suppliers_store["t1"] = [supplier]
+        monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: None)
+        session = _mock_db_session()
+        session.execute.side_effect = ProgrammingError("INSERT", {}, SimpleNamespace(sqlstate="42501"))
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+
+        response = client.post(f"/api/v1/suppliers/t1/{supplier.id}/send-link")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Supplier changes could not be saved"}
+        assert _suppliers_store["t1"][0].portal_status == "no_link"
+        assert _suppliers_store["t1"][0].portal_link_id is None
+
     def test_send_link_db_success(self, client, monkeypatch):
         supp = _make_supplier(id="t1-sup-001")
         monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: [supp])
