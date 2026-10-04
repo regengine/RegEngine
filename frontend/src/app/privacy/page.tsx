@@ -445,7 +445,7 @@ export default function PrivacyPage() {
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/alpha">
+              <Link href="/contact">
                 Become a Founding Design Partner <ArrowRight aria-hidden="true" strokeWidth={1.75} />
               </Link>
             </Button>

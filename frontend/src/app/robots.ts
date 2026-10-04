@@ -55,7 +55,7 @@ export default function robots(): MetadataRoute.Robots {
                     '/rules',
                     '/trace',
                     '/design-system',
-                    // Client redirect into robots-blocked /signup:
+                    // Redirect stub (now to /contact); keep it out of the index:
                     '/alpha',
                 ],
             },

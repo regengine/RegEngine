@@ -477,13 +477,8 @@ body[data-inflow-lab="true"] {
           Surfaces step LIGHTER as they come forward; borders are lighter than
           what they bound; status foregrounds are 400-steps so they read as
           text; brand is bright and carries a dark foreground on fills.
-
-          The developer portal keeps its committed-dark identity by joining
-          this selector rather than defining a private 90-line token block —
-          and stays gated on :not(.a11y-high-contrast) so a user's forced
-          high-contrast choice still wins. ───────────────────────────────── */
-    .dark,
-    html:not(.a11y-high-contrast) .re-devportal {
+          ───────────────────────────────────────────────────────────────── */
+    .dark {
         color-scheme: dark;
 
         --re-surface-base: #0f1216;
@@ -585,9 +580,9 @@ body[data-inflow-lab="true"] {
         --re-state-corrected-bg: #211a3a;
         --re-state-corrected-border: #6e58b2;
 
-        /* var() aliases are resolved on the element that declares them. The
-           .re-devportal wrapper is not :root, so without these it would inherit
-           aliases already computed against the LIGHT palette above. */
+        /* var() aliases are resolved on the element that declares them. A
+           .dark scope that is not :root would otherwise inherit aliases
+           already computed against the LIGHT palette above. */
         --re-shadow-glow: 0 0 0 3px var(--re-brand-muted);
         --re-shadow-glow-strong: 0 0 0 3px var(--re-brand-muted);
         --re-nav-bg: var(--re-sticky-bg);
