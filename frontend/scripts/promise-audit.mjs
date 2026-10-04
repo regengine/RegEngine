@@ -9,8 +9,7 @@ const APP_ROOT = path.join(ROOT, 'src', 'app');
 const SRC_ROOT = path.join(ROOT, 'src');
 
 const BANNED_SOURCE_PATTERNS = [
-  // `include` (optional) restricts a rule to files under that directory;
-  // `exclude` (optional) skips files under that directory.
+  // `include` (optional) restricts a rule to files under that directory.
   // The portal key generator and portal UI legitimately mint and label
   // `rge_test_` sandbox keys; only docs pages must never present the sandbox
   // prefix as a live API credential format.
@@ -46,8 +45,9 @@ const BANNED_SOURCE_PATTERNS = [
   // href={"/alpha"} and /alpha?...; not /alpha-signup.
   { label: 'Dead-end CTA: href="/alpha" (use /contact)', pattern: /href=\{?\s*["']\/alpha(?=["'?#/])/g },
   // The portal playground returned simulated responses behind a "Demo Mode" switch.
-  // `exclude` skips that directory only until the portal rebuild deletes it; remove
-  // the exclusion then so the ban covers all of src.
+  // `exclude` (optional, like `include` above) skips files under that directory. It
+  // skips the playground only until the portal rebuild deletes it; remove the
+  // exclusion then so the ban covers all of src.
   {
     label: 'Simulated responses: "Demo Mode"',
     pattern: /Demo Mode/g,
