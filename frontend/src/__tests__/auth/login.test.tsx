@@ -221,6 +221,49 @@ describe('passwordless login', () => {
     });
   });
 
+  // Email-code sign-in carries the validated next path to /auth/verify so the
+  // visitor lands where they were headed instead of always on /dashboard.
+  async function submitEmailCode(): Promise<void> {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText(/email address/i), 'user@example.com');
+    await user.click(screen.getByRole('button', { name: /^continue/i }));
+    await waitFor(() => {
+      expect(mocks.routerPush).toHaveBeenCalled();
+    });
+  }
+
+  it.each([
+    ['/developer/portal/keys', '/auth/verify?next=%2Fdeveloper%2Fportal%2Fkeys'],
+    ['/developer/portal', '/auth/verify?next=%2Fdeveloper%2Fportal'],
+    // ? & # must be encoded, or the query would be cut short on the next page.
+    [
+      '/dashboard/settings?tab=api&x=1#keys',
+      '/auth/verify?next=%2Fdashboard%2Fsettings%3Ftab%3Dapi%26x%3D1%23keys',
+    ],
+  ])('carries next=%s to the code screen as %s', async (next, expected) => {
+    mocks.searchParamGet.mockImplementation((key: string) => (key === 'next' ? next : null));
+
+    await submitEmailCode();
+
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+    expect(mocks.routerPush).toHaveBeenCalledWith(expected);
+  });
+
+  const BARE_VERIFY_NEXT: [string, string][] = [
+    ...HOSTILE_NEXT,
+    ['an explicit /dashboard (the default needs no param)', '/dashboard'],
+  ];
+
+  it.each(BARE_VERIFY_NEXT)('pushes a bare /auth/verify when next is %s', async (_label, next) => {
+    mocks.searchParamGet.mockImplementation((key: string) => (key === 'next' ? next : null));
+
+    await submitEmailCode();
+
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+    expect(mocks.routerPush).toHaveBeenCalledWith('/auth/verify');
+  });
+
   it('does not honor identity-revealing redirect fields in a challenge response', async () => {
     const assign = mockLocationAssign();
     mocks.startEmailChallenge.mockResolvedValueOnce({

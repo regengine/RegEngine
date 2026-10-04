@@ -11,7 +11,7 @@ import { Callout } from '@/components/ui/callout';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
-import { safeNextPath } from '@/lib/safe-redirect';
+import { LOGIN_NEXT_DENY_PREFIXES, safeNextPath } from '@/lib/safe-redirect';
 import {
   isValidEmail,
   performPasskeyLogin,
@@ -21,10 +21,6 @@ import {
 } from '@/lib/passwordless-auth';
 
 const GENERIC_OTP_MESSAGE = 'If this address is eligible, a sign-in code is on its way.';
-
-// Never forward back to the pages that read `next` (a /login or /auth/verify
-// target would loop).
-const NEXT_DENY_PREFIXES = ['/login', '/auth/verify'] as const;
 
 export default function PasswordlessEntryClient() {
   const router = useRouter();
@@ -39,15 +35,16 @@ export default function PasswordlessEntryClient() {
   const [isPasskeySubmitting, setIsPasskeySubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
-  const nextPath = safeNextPath(searchParams.get('next'), '/dashboard', NEXT_DENY_PREFIXES);
+  const nextPath = safeNextPath(searchParams.get('next'), '/dashboard', LOGIN_NEXT_DENY_PREFIXES);
   const queryError = searchParams.get('error');
 
   useEffect(() => {
-    // Gate on isAuthenticated (user + cookie-backed access token), not user
-    // alone: `user` hydrates from localStorage and can outlive the
-    // re_access_token cookie. Forwarding on stale user state ping-pongs with
-    // the server-side auth gates (e.g. /developer/portal layout), producing
-    // an infinite login <-> next-path redirect loop.
+    // Gate on isAuthenticated, not user alone: `user` hydrates from
+    // localStorage and can outlive the session, while isAuthenticated also
+    // needs /api/session to have confirmed a live session. The pages this
+    // forwards to gate on the same useAuth() flag (the /developer/portal
+    // layout renders DashboardLayout), so /login and the next path cannot
+    // disagree and bounce the visitor between them.
     if (!isHydrated || !isAuthenticated) return;
     router.push(nextPath);
   }, [isHydrated, nextPath, router, isAuthenticated]);
@@ -75,7 +72,13 @@ export default function PasswordlessEntryClient() {
         createdAt: Date.now(),
       });
       setStatusMessage(response.detail || response.message || GENERIC_OTP_MESSAGE);
-      router.push('/auth/verify');
+      // Carry the validated next path to the code screen; the default needs
+      // no param because /auth/verify falls back to /dashboard.
+      router.push(
+        nextPath === '/dashboard'
+          ? '/auth/verify'
+          : `/auth/verify?next=${encodeURIComponent(nextPath)}`,
+      );
     } catch (err: unknown) {
       const apiError = err as { response?: { status?: number }; message?: string };
       if (apiError.response?.status === 429) {
@@ -89,7 +92,7 @@ export default function PasswordlessEntryClient() {
       submitInFlightRef.current = false;
       setIsEmailSubmitting(false);
     }
-  }, [email, router]);
+  }, [email, nextPath, router]);
 
   const handlePasskeySubmit = useCallback(async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();

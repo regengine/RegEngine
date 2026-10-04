@@ -10,7 +10,7 @@
  * each of them as `//evil.com` and navigated to another origin.
  */
 import { describe, it, expect } from 'vitest';
-import { safeNextPath } from '@/lib/safe-redirect';
+import { LOGIN_NEXT_DENY_PREFIXES, safeNextPath } from '@/lib/safe-redirect';
 
 const FALLBACK = '/dashboard';
 const ORIGIN = 'https://regengine.co';
@@ -156,6 +156,15 @@ describe('safeNextPath', () => {
         it('still accepts paths that do not start with a denied prefix', () => {
             expect(safeNextPath('/developer/portal', FALLBACK, LOGIN_DENY)).toBe('/developer/portal');
             expect(safeNextPath('/auth/sso/mock', FALLBACK, LOGIN_DENY)).toBe('/auth/sso/mock');
+        });
+
+        it('exports the sign-in deny list that /login and /auth/verify share', () => {
+            // Both pages read `next`; a next pointing at either would loop.
+            expect([...LOGIN_NEXT_DENY_PREFIXES]).toEqual(['/login', '/auth/verify']);
+            for (const denied of ['/login', '/login?next=%2Fx', '/auth/verify', '/auth/verify?next=%2Fx']) {
+                expect(safeNextPath(denied, FALLBACK, LOGIN_NEXT_DENY_PREFIXES)).toBe(FALLBACK);
+            }
+            expect(safeNextPath('/developer/portal', FALLBACK, LOGIN_NEXT_DENY_PREFIXES)).toBe('/developer/portal');
         });
 
         it('does not deny anything by default', () => {
