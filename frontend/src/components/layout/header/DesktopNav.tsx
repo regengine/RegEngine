@@ -70,7 +70,7 @@ export function DesktopNav({
             />
 
             {/* Developer & Docs links */}
-            <Link href="/developer/portal" className={NAV_LINK}>
+            <Link href="/developers" className={NAV_LINK}>
                 Developers
             </Link>
             <Link href="/docs" className={NAV_LINK}>
