@@ -5,6 +5,14 @@
 const BASE_ORIGIN = 'https://regengine.co';
 
 /**
+ * Pages in the sign-in flow that read `next`. A `next` that points at one of
+ * them would bounce the visitor straight back into the flow, so every sign-in
+ * call site (the login entry, the /auth/verify page and its client) passes
+ * this as `denyPrefixes`.
+ */
+export const LOGIN_NEXT_DENY_PREFIXES = ['/login', '/auth/verify'] as const;
+
+/**
  * Validate a `next`-style relative-path redirect target. Returns the input
  * unchanged if it's a same-app path; returns the fallback otherwise.
  *

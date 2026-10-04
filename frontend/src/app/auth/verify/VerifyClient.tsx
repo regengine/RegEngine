@@ -16,13 +16,20 @@ import {
   type StoredOtpChallenge,
   verifyEmailChallenge,
 } from '@/lib/passwordless-auth';
+import { LOGIN_NEXT_DENY_PREFIXES, safeNextPath } from '@/lib/safe-redirect';
 
 type VerifyClientProps = {
   initialEmail?: string;
   initialChallengeId?: string;
+  /** Where to go after a successful code. Re-validated at the sink. */
+  nextPath?: string;
 };
 
-export default function VerifyClient({ initialEmail = '', initialChallengeId = '' }: VerifyClientProps) {
+export default function VerifyClient({
+  initialEmail = '',
+  initialChallengeId = '',
+  nextPath,
+}: VerifyClientProps) {
   const [state, setState] = useState<StoredOtpChallenge | null>(() => {
     if (initialEmail) {
       return {
@@ -63,7 +70,10 @@ export default function VerifyClient({ initialEmail = '', initialChallengeId = '
       await verifyEmailChallenge(state.challengeId, normalizedCode);
       seedPasswordlessClientUser(state.email);
       clearOtpChallengeState();
-      window.location.assign('/dashboard');
+      // Validate again here, at the sink: the page already did, but this
+      // prop is the last thing between a tampered query string and
+      // location.assign().
+      window.location.assign(safeNextPath(nextPath, '/dashboard', LOGIN_NEXT_DENY_PREFIXES));
     } catch (err: unknown) {
       const apiError = err as { response?: { status?: number }; message?: string };
       if (apiError.response?.status === 401 || apiError.response?.status === 400) {
