@@ -167,6 +167,18 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("jev_config_probe_failed", error=str(exc))
 
+    # Same for LlamaIndex Extract (document extraction on the bulk-upload PDF
+    # path). Never the key: public_summary() reports key_present only.
+    try:
+        from shared.document_extract import DocumentExtractSettings
+
+        summary = DocumentExtractSettings.from_env().public_summary()
+        logging.getLogger("document_extract").info(
+            "document_extract_configured %s", " ".join(f"{name}={value}" for name, value in summary.items())
+        )
+    except Exception as exc:
+        logger.warning("document_extract_config_probe_failed", error=str(exc))
+
     # Runtime DB-role gate. Production always fails closed if either role is
     # unknown, unexpected, SUPERUSER/BYPASSRLS, or connected to a different
     # PostgreSQL database. REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 keeps the same

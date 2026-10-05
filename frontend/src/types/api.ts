@@ -502,6 +502,8 @@ export interface SupplierBulkUploadParseResponse {
     tlcs: number;
     events: number;
     warnings: string[];
+    /** Set when a table-less PDF was read by LlamaIndex Extract: job evidence, confidence summary, citations. */
+    extraction?: Record<string, unknown> | null;
 }
 
 export interface SupplierBulkUploadValidationError {
