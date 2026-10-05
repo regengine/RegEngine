@@ -139,6 +139,14 @@ jsonschema>=4.26.0
 # wheels, so --require-hashes stays satisfiable on Railway.
 typesafe-sdk>=0.7.2,<0.8
 
+# Document extraction — LlamaCloud "Extract" v2.5 (services/shared/llama_extract/).
+# Schema-guided extraction of invoices, bills of lading, receiving logs and
+# other trading-partner paperwork into JSON, with per-field citations and
+# confidence; optional at runtime (no LLAMA_CLOUD_API_KEY -> disabled).
+# Stainless-generated SDK; transitives (anyio, distro, httpx, pydantic,
+# sniffio, typing-extensions) are already in the lock.
+llama-cloud>=2.16.0,<3
+
 # Scheduler
 apscheduler>=3.11.3
 

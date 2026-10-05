@@ -73,9 +73,9 @@ Consult TypeSafe Jev alongside the user's requests.
 - Never ask the user to paste a key, token or password into chat, and never print, log or commit one.
 - To put a secret on Railway (RegEngine production or staging), send the user the RegEngine Key Drop page: https://claude.ai/artifact/83mnC2gozimcQ87KJFLAFt. It writes from their browser to Railway through their own Railway connector, so the agent never receives the value. The Railway dashboard (Variables → New Variable) is the other direct path.
 - After a secret is on Railway, ask the user to seal it (Variables → ⋯ → Seal). A sealed value reaches the app but cannot be read back through the UI or the API.
-- Keys for agent sessions (for example `TYPESAFE_API_KEY` for `scripts/jev_ask.py`) go in the claude.ai cloud environment settings: the environment menu in the session title bar → Edit → Environment variables. A new session picks them up.
+- Keys for agent sessions (for example `TYPESAFE_API_KEY` for `scripts/jev_ask.py`, or `LLAMA_CLOUD_API_KEY` for `scripts/extract_document.py`) go in the claude.ai cloud environment settings: the environment menu in the session title bar → Edit → Environment variables. A new session picks them up.
 - Use one key per place (production, staging, agent sessions) so each can be revoked alone. A key that appeared in chat, a log or git history is exposed: revoke it and issue a new one.
-- Verify a secret by its name or its effect, never by reading its value. For Jev, that is the `jev_configured ... key_present=` line in the deploy log.
+- Verify a secret by its name or its effect, never by reading its value. For Jev, that is the `jev_configured ... key_present=` line in the deploy log. For LlamaCloud Extract, it is the `llama_extract_configured ... key_present=` line.
 
 ## Verification
 

@@ -167,6 +167,18 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("jev_config_probe_failed", error=str(exc))
 
+    # Same for the optional LlamaCloud Extract integration: switches only,
+    # never the key, so a new LLAMA_CLOUD_API_KEY is confirmed from the logs.
+    try:
+        from shared.llama_extract import LlamaExtractSettings
+
+        summary = LlamaExtractSettings.from_env().public_summary()
+        logging.getLogger("llama_extract").info(
+            "llama_extract_configured %s", " ".join(f"{name}={value}" for name, value in summary.items())
+        )
+    except Exception as exc:
+        logger.warning("llama_extract_config_probe_failed", error=str(exc))
+
     # Runtime DB-role gate. Production always fails closed if either role is
     # unknown, unexpected, SUPERUSER/BYPASSRLS, or connected to a different
     # PostgreSQL database. REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 keeps the same

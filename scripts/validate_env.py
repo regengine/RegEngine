@@ -113,6 +113,9 @@ _CREDENTIAL_VARS: list[str] = [
     # Optional TypeSafe AI credential (Jev header-mapping suggestions). Never
     # required; only weak-value scanned when set.
     "TYPESAFE_API_KEY",
+    # Optional LlamaCloud credential (Extract document extraction). Never
+    # required; only weak-value scanned when set.
+    "LLAMA_CLOUD_API_KEY",
 ]
 
 
