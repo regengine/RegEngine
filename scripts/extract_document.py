@@ -42,6 +42,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import structlog
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 for entry in (REPO_ROOT, REPO_ROOT / "services"):
     if str(entry) not in sys.path:
@@ -175,9 +177,29 @@ def _print_text(result_dict: dict[str, Any], rows: list[dict[str, Any]] | None, 
             print("  " + json.dumps(row, ensure_ascii=False))
 
 
+def _configure_logging(verbose: bool) -> None:
+    """Wrapper log lines to stderr at the chosen level, so stdout carries only the report.
+
+    Unconfigured, structlog prints every event to stdout, which would put the
+    wrapper's ``document_extract.completed`` line ahead of a ``--json`` report.
+    """
+    level = logging.INFO if verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s %(message)s", stream=sys.stderr)
+    structlog.configure(
+        processors=[
+            structlog.processors.add_log_level,
+            structlog.processors.format_exc_info,
+            structlog.dev.ConsoleRenderer(colors=False, exception_formatter=structlog.dev.plain_traceback),
+        ],
+        wrapper_class=structlog.make_filtering_bound_logger(level),
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+        cache_logger_on_first_use=False,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
+    _configure_logging(args.verbose)
 
     try:
         content = _read_document(args.document, args.max_bytes)
