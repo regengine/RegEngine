@@ -195,6 +195,47 @@ def test_vendor_failure_leaves_deterministic_result_with_one_warning():
     ]
 
 
+def test_unexpected_exception_is_fail_open_and_logged(caplog):
+    """Anything that is not a vendor error (a bug, an odd response shape) must not 500 the upload."""
+    extractor = FakeExtractor(error=AttributeError("'NoneType' object has no attribute 'id'"))
+    with caplog.at_level("ERROR", logger="bulk_upload.parsers"):
+        parsed = _parse(PROSE, extractor)
+    assert parsed["facilities"] == [] and parsed["events"] == []
+    assert "extraction" not in parsed
+    assert parsed["warnings"] == [
+        PDF_NO_ROWS_WARNING,
+        "Document extraction agent failed unexpectedly; PDF parsed by tables only",
+    ]
+    assert any(
+        record.getMessage() == "document_extract_fallback_failed" and record.exc_info for record in caplog.records
+    )
+
+
+def test_failure_while_converting_rows_leaves_no_partial_rows():
+    """A conversion failure after some rows were classified must not leak those rows into the upload."""
+    extractor = FakeExtractor(
+        result=ExtractionResult(
+            evidence=_evidence(),
+            data={"facilities": [{"name": "Salinas Packhouse"}], "events": [{"cte_type": "shipping"}]},
+        )
+    )
+    original = parsers._classify_row
+    calls = {"n": 0}
+
+    def flaky_classify(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list[str]) -> None:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("boom on second row")
+        original(parsed, row, warnings=warnings)
+
+    with patch.object(parsers, "_classify_row", flaky_classify):
+        parsed = _parse(PROSE, extractor)
+    assert calls["n"] == 2
+    assert parsed["facilities"] == [] and parsed["events"] == []
+    assert "extraction" not in parsed
+    assert parsed["warnings"][-1] == "Document extraction agent failed unexpectedly; PDF parsed by tables only"
+
+
 def test_extraction_with_no_records_keeps_no_rows_warning():
     extractor = FakeExtractor(result=ExtractionResult(evidence=_evidence(), data={"facilities": [], "events": []}))
     parsed = _parse(PROSE, extractor)

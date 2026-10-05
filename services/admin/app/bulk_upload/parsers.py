@@ -639,13 +639,19 @@ async def _extract_pdf_with_agent(content: bytes, filename: str, parsed: dict[st
     same ``_classify_row`` as every other format, so validation and commit
     are unchanged. The job's evidence (job id, tier, resolved version, pages,
     per-field confidence summary) is kept in ``parsed["extraction"]`` for the
-    session and the response. Any vendor failure leaves the upload exactly as
-    the deterministic pass left it, with one warning naming the reason.
+    session and the response. Any failure, a vendor error or anything else,
+    leaves the upload exactly as the deterministic pass left it, with one
+    warning naming the reason: like the Jev suggestion path on CSV ingestion,
+    an extraction failure must never reject an upload.
     """
-    extractor = get_document_extractor()
-    if not extractor.enabled:
-        return
+    # Rows are staged and merged only after the whole result converted, so a
+    # failure half-way through cannot leave a partially populated upload.
+    staged: dict[str, Any] = {"facilities": [], "ftl_scopes": [], "tlcs": [], "events": []}
+    staged_warnings: list[str] = []
     try:
+        extractor = get_document_extractor()
+        if not extractor.enabled:
+            return
         result = await extractor.extract_async(
             content,
             filename=filename,
@@ -654,21 +660,29 @@ async def _extract_pdf_with_agent(content: bytes, filename: str, parsed: dict[st
             schema_version=SUPPLIER_SCHEMA_VERSION,
             max_pages=_max_pdf_pages(),
         )
+        rows = rows_from_extraction(result.data)
+        for row in rows:
+            _classify_row(staged, _normalize_row(row), warnings=staged_warnings)
+        extraction = {
+            **result.to_dict(include_data=False),
+            "field_metadata": result.field_metadata,
+        }
     except DocumentExtractUnavailable as exc:
         warnings.append(f"Document extraction agent unavailable ({exc.reason}); PDF parsed by tables only")
         return
+    except Exception:  # noqa: BLE001 - an extraction failure must never reject an upload.
+        logger.exception("document_extract_fallback_failed")
+        warnings.append("Document extraction agent failed unexpectedly; PDF parsed by tables only")
+        return
 
-    rows = rows_from_extraction(result.data)
-    for row in rows:
-        _classify_row(parsed, _normalize_row(row), warnings=warnings)
+    for section, items in staged.items():
+        parsed[section].extend(items)
+    warnings.extend(staged_warnings)
     added = _row_count(parsed)
 
     evidence = result.evidence
-    parsed["extraction"] = {
-        **result.to_dict(include_data=False),
-        "rows": added,
-        "field_metadata": result.field_metadata,
-    }
+    extraction["rows"] = added
+    parsed["extraction"] = extraction
     if added:
         while PDF_NO_ROWS_WARNING in warnings:
             warnings.remove(PDF_NO_ROWS_WARNING)

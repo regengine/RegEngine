@@ -114,8 +114,14 @@ left it, with one warning naming the reason.
 | `empty_result` | Job completed with no data |
 | `invalid_response`, `sdk_error` | Response the SDK could not parse; any other SDK error |
 
-A programming error (anything that is not an SDK or polling exception)
-propagates; it must be seen, not swallowed.
+The wrapper itself lets a programming error (anything that is not an SDK or
+polling exception) propagate so it is seen. The bulk-upload integration point
+catches it, like the Jev path on CSV ingestion: it logs
+`document_extract_fallback_failed` with the traceback, adds the warning
+`Document extraction agent failed unexpectedly; PDF parsed by tables only`,
+and the upload still succeeds with the deterministic result. Rows are staged
+and merged only after the whole result converted, so a failure part-way
+never leaves a half-populated upload.
 
 ## Data handling
 
