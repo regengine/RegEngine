@@ -44,7 +44,7 @@ Implemented capabilities in the current tree. Route availability is controlled b
 | EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
 | GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
 | Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
-| Optional LlamaCloud Extract v2.5 document extraction (invoices, bills of lading, receiving logs to schema-conforming JSON with per-field citations and confidence); fail-open SDK wrapper, evidence record, and command-line tool; no ingestion route calls it yet | [services/shared/llama_extract/](services/shared/llama_extract/), [docs/engineering/LLAMA_EXTRACT.md](docs/engineering/LLAMA_EXTRACT.md) |
+| Optional LlamaIndex Extract v2.5 document extraction: a fail-open second pass on bulk-upload supplier PDFs the table parser cannot read, with per-field citations, confidence and evidence; rows still go through classify, validate and human commit; operator command-line tool | [services/shared/document_extract/](services/shared/document_extract/), [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) |
 | Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
 | Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
 | Supplier CSV manifest remediation (implemented; excluded from the production router allowlist): byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
@@ -366,7 +366,7 @@ These are current repo facts, not speculation:
 
 - [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) — canonical positioning and capability availability.
 - [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) — optional CSV suggestions, review policy, privacy defaults, and evaluation tools.
-- [docs/engineering/LLAMA_EXTRACT.md](docs/engineering/LLAMA_EXTRACT.md) — optional document data extraction (LlamaCloud Extract v2.5): configuration, fail-open contract, evidence, command line.
+- [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) — optional document data extraction (LlamaIndex Extract v2.5 on supplier PDFs): request flow, failure modes, data handling, configuration, command line.
 - [frontend/README.md](frontend/README.md) — current UI surfaces and consolidated-backend development setup.
 
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.

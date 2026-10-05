@@ -1,40 +1,41 @@
-"""``scripts/extract_document.py``: extract a document from the command line.
+"""``scripts/extract_document.py``: extract a local document from the command line.
 
-Offline (``httpx.MockTransport``): the document and schema go up as the API
-takes them, the result prints with its evidence line, ``--json``/``--out``
-carry the full result, and the key is never printed. Without a key nothing
-is sent; bad arguments exit 1 before anything is read.
+Offline: the extractor the script builds is swapped for one that carries a
+fake SDK client, so nothing reaches the network. The contract under test is
+the script's exit-code and output surface:
+
+* without a key, or with the kill switch, exit 2 and nothing is uploaded;
+* a missing, empty, unsupported or oversized document and an unreadable or
+  non-object schema file exit 1 before anything is read into a request;
+* a vendor failure exits 3 with the stable reason;
+* success prints the data with its evidence line, or one JSON report with
+  ``--json``; ``--tier`` / ``--version`` override the environment for the run;
+* ``--prompt-key`` reads the key from stdin when there is no terminal and
+  never prints it;
+* run as a process without a key, it exits 2 with no traceback.
 """
 
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
-import httpx
 import pytest
 import structlog
+from llama_cloud import AuthenticationError, _polling
+from shared.document_extract import DocumentExtractor, DocumentExtractSettings
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "extract_document.py"
 FAKE_KEY = "llx-extract-test-key-51e0"  # pragma: allowlist secret
-ENV = {"LLAMA_CLOUD_API_KEY": FAKE_KEY}
 SCHEMA = {"type": "object", "properties": {"lot_code": {"type": "string"}}}
-JOB = {
-    "id": "job_7",
-    "created_at": "2026-10-05T10:00:00Z",
-    "updated_at": "2026-10-05T10:00:00Z",
-    "file_input": "file_7",
-    "project_id": "proj",
-    "status": "COMPLETED",
-    "configuration": {"data_schema": SCHEMA, "tier": "agentic", "version": "2.5.0-2026-10-01"},
-    "extract_result": {"lot_code": "LOT-9"},
-    "extract_metadata": {"field_metadata": {"document_metadata": {"lot_code": {"confidence": 0.95}}}},
-    "metadata": {"usage": {"num_pages_billed": 1, "num_pages_extracted": 1}},
-}
+EXTRACTED = {"lot_code": "LOT-9"}
 
 
 @pytest.fixture(scope="module")
@@ -47,33 +48,91 @@ def script():
     return module
 
 
+def _job(data: Any = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        id="job-7",
+        status="COMPLETED",
+        extract_result=EXTRACTED if data is None else data,
+        configuration=SimpleNamespace(tier="agentic", version="2026-10-01"),
+        extract_metadata=SimpleNamespace(
+            field_metadata=SimpleNamespace(
+                document_metadata={"lot_code": {"confidence": 0.95, "citation": []}},
+                page_metadata=None,
+                row_metadata=None,
+            ),
+            parse_job_id="parse-7",
+            parse_tier="agentic",
+        ),
+        metadata=SimpleNamespace(usage=SimpleNamespace(num_pages_extracted=1, num_pages_billed=1)),
+        usage=SimpleNamespace(credits=15.0, extract_credits=15.0, parse_credits=0.0),
+    )
+
+
+class FakeFiles:
+    def __init__(self, create_error: BaseException | None = None) -> None:
+        self.created: list[dict[str, Any]] = []
+        self.deleted: list[str] = []
+        self.create_error = create_error
+
+    def create(self, **kwargs: Any) -> SimpleNamespace:
+        self.created.append(kwargs)
+        if self.create_error is not None:
+            raise self.create_error
+        return SimpleNamespace(id="file-7", name=kwargs["file"][0], project_id="proj")
+
+    def delete(self, file_id: str, **kwargs: Any) -> None:
+        self.deleted.append(file_id)
+
+
+class FakeExtract:
+    def __init__(self, run_error: BaseException | None = None) -> None:
+        self.runs: list[dict[str, Any]] = []
+        self.run_error = run_error
+
+    def run(self, **kwargs: Any) -> SimpleNamespace:
+        self.runs.append(kwargs)
+        if self.run_error is not None:
+            raise self.run_error
+        return _job()
+
+
+class FakeClient:
+    def __init__(self, *, create_error: BaseException | None = None, run_error: BaseException | None = None) -> None:
+        self.files = FakeFiles(create_error)
+        self.extract = FakeExtract(run_error)
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
 @pytest.fixture(autouse=True)
-def cli_logging(script):
-    """What ``__main__`` does before anything logs: warnings and above to stderr, stdout stays the result."""
-    script._configure_cli_logging()
+def _reset_structlog():
+    """main() configures structlog for the run; leave no configuration behind for other tests."""
     yield
     structlog.reset_defaults()
 
 
-class _Server:
-    def __init__(self, *, job=None, upload_status: int = 200):
-        self.requests: list[httpx.Request] = []
-        self.job = JOB if job is None else job
-        self.upload_status = upload_status
+@pytest.fixture
+def sdk(script, monkeypatch) -> FakeClient:
+    """Hand the script an extractor that talks to a fake SDK client; return the client."""
+    fake = FakeClient()
 
-    def __call__(self, request: httpx.Request) -> httpx.Response:
-        self.requests.append(request)
-        if request.url.path == "/api/v1/beta/files":
-            return httpx.Response(self.upload_status, json={"id": "file_7", "name": "x.pdf", "project_id": "proj"})
-        if request.url.path == "/api/v2/extract" and request.method == "POST":
-            return httpx.Response(200, json={**self.job, "status": "PENDING", "extract_result": None})
-        if request.url.path == "/api/v2/extract/job_7":
-            return httpx.Response(200, json=self.job)
-        return httpx.Response(404, json={"detail": request.url.path})
+    def build(settings: DocumentExtractSettings, **kwargs: Any) -> DocumentExtractor:
+        return DocumentExtractor(settings, client=fake)
+
+    monkeypatch.setattr(script, "DocumentExtractor", build)
+    return fake
 
 
-def _client(server: _Server) -> httpx.Client:
-    return httpx.Client(transport=httpx.MockTransport(server))
+@pytest.fixture
+def env(monkeypatch):
+    """A clean, keyed environment; the extract-related variables start unset."""
+    for name in list(__import__("os").environ):
+        if name.startswith("REGENGINE_DOC_EXTRACT_") or name in ("LLAMA_CLOUD_API_KEY", "LLAMA_CLOUD_BASE_URL"):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LLAMA_CLOUD_API_KEY", FAKE_KEY)
+    return monkeypatch
 
 
 @pytest.fixture
@@ -90,138 +149,182 @@ def schema_file(tmp_path: Path) -> Path:
     return path
 
 
-def test_extracts_and_prints_data_with_evidence_line(script, document, schema_file, capsys):
-    server = _Server()
-    code = script.main(
-        ["--file", str(document), "--schema", str(schema_file), "--tier", "agentic_plus", "--pages", "1"],
-        env=ENV,
-        http_client=_client(server),
-    )
+def test_extracts_and_prints_data_with_evidence(script, sdk, env, document, schema_file, capsys):
+    code = script.main([str(document), "--schema", str(schema_file), "--tier", "agentic_plus", "--version", "latest"])
     out, err = capsys.readouterr()
     assert code == script.EXIT_OK, err
-    assert json.loads(out.split("\n-- ")[0]) == {"lot_code": "LOT-9"}
-    assert "-- extracted by llama_cloud extract_v2 tier=agentic_plus version=2.5.0-2026-10-01 job=job_7" in out
+    assert out.startswith("Extracted: receiving.pdf")
+    assert "job=job-7 tier=agentic version=2026-10-01 target=per_doc" in out
+    assert json.dumps(EXTRACTED, indent=2) in out
+    assert "document_extract.completed" not in out and "document_extract.completed" not in err
     assert FAKE_KEY not in out and FAKE_KEY not in err
 
-    upload, create, _poll = server.requests
-    assert b'filename="receiving.pdf"' in upload.content and b"receiving log" in upload.content
-    config = json.loads(create.content)["configuration"]
+    upload = sdk.files.created[0]
+    assert upload["file"][0] == "receiving.pdf" and upload["file"][1] == b"%PDF-1.4 receiving log"
+    (run,) = sdk.extract.runs
+    config = run["configuration"]
     assert config["data_schema"] == SCHEMA
     assert config["tier"] == "agentic_plus"
-    assert config["version"] == "2.5"
-    assert config["target_pages"] == "1"
+    assert config["version"] == "latest"
+    assert config["extraction_target"] == "per_doc"
+    assert sdk.files.deleted == ["file-7"]
+    assert sdk.closed is True
 
 
-def test_json_and_out_carry_the_full_result(script, document, tmp_path, capsys):
-    out_path = tmp_path / "result.json"
-    code = script.main(
-        ["--file", str(document), "--schema-inline", json.dumps(SCHEMA), "--json", "--out", str(out_path)],
-        env=ENV,
-        http_client=_client(_Server()),
-    )
+def test_json_report_carries_data_evidence_and_confidence(script, sdk, env, document, schema_file, capsys):
+    code = script.main([str(document), "--schema", str(schema_file), "--json", "--target", "per_page"])
     out, _ = capsys.readouterr()
     assert code == script.EXIT_OK
-    printed = json.loads(out)
-    assert printed["data"] == {"lot_code": "LOT-9"}
-    assert printed["field_metadata"] == {"target": "per_doc", "fields": {"lot_code": {"confidence": 0.95}}}
-    assert printed["evidence"]["job_id"] == "job_7"
-    assert printed["evidence"]["requested_version"] == "2.5"
-    assert json.loads(out_path.read_text(encoding="utf-8")) == printed
+    report = json.loads(out)
+    assert report["data"] == EXTRACTED
+    assert report["evidence"]["job_id"] == "job-7"
+    assert report["evidence"]["extraction_target"] == "per_page"
+    assert report["evidence"]["schema_version"] == "file:schema.json"
+    assert report["confidence"]["fields"] == 1
+    assert sdk.extract.runs[0]["configuration"]["extraction_target"] == "per_page"
 
 
-def test_without_key_nothing_is_sent(script, document, schema_file, capsys):
-    server = _Server()
-    code = script.main(["--file", str(document), "--schema", str(schema_file)], env={}, http_client=_client(server))
+def test_verbose_sends_wrapper_log_lines_to_stderr_only(script, sdk, env, document, schema_file, capsys):
+    code = script.main([str(document), "--schema", str(schema_file), "--json", "--verbose"])
+    out, err = capsys.readouterr()
+    assert code == script.EXIT_OK
+    assert json.loads(out)["data"] == EXTRACTED
+    assert "document_extract.completed" in err
+    assert "LOT-9" not in err and FAKE_KEY not in err
+
+
+def test_default_schema_is_the_supplier_schema_and_rows_print(script, sdk, env, document, monkeypatch, capsys):
+    supplier_result = {"facilities": [], "ftl_scopes": [], "tlcs": [], "events": []}
+    monkeypatch.setattr(sdk.extract, "run", lambda **kwargs: _job(supplier_result))
+    code = script.main([str(document), "--rows"])
+    out, _ = capsys.readouterr()
+    assert code == script.EXIT_OK
+    assert "Bulk-upload parser rows (0):" in out
+
+
+def test_without_key_nothing_is_sent(script, sdk, env, document, schema_file, capsys):
+    env.delenv("LLAMA_CLOUD_API_KEY")
+    code = script.main([str(document), "--schema", str(schema_file)])
     _, err = capsys.readouterr()
     assert code == script.EXIT_NOT_CONFIGURED
-    assert "LLAMA_CLOUD_API_KEY is not set" in err and "Nothing was sent" in err
-    assert server.requests == []
+    assert "set LLAMA_CLOUD_API_KEY or pass --prompt-key" in err
+    assert sdk.files.created == [] and sdk.extract.runs == []
 
 
-def test_kill_switch_reports_not_configured(script, document, schema_file, capsys):
-    server = _Server()
-    code = script.main(
-        ["--file", str(document), "--schema", str(schema_file)],
-        env={**ENV, "REGENGINE_LLAMA_EXTRACT_ENABLED": "0"},
-        http_client=_client(server),
-    )
+def test_kill_switch_reports_switched_off(script, sdk, env, document, schema_file, capsys):
+    env.setenv("REGENGINE_DOC_EXTRACT_ENABLED", "0")
+    code = script.main([str(document), "--schema", str(schema_file)])
     _, err = capsys.readouterr()
     assert code == script.EXIT_NOT_CONFIGURED
-    assert "switches Extract off" in err
-    assert server.requests == []
+    assert "switched off (REGENGINE_DOC_EXTRACT_ENABLED)" in err
+    assert sdk.files.created == []
 
 
-def test_prompt_key_is_used_and_never_printed(script, document, schema_file, capsys):
-    server = _Server()
-    code = script.main(
-        ["--file", str(document), "--schema", str(schema_file), "--prompt-key"],
-        env={},
-        http_client=_client(server),
-        read_key=lambda prompt: "typed-key-77\n",  # pragma: allowlist secret
-    )
+def test_prompt_key_reads_stdin_without_a_terminal_and_never_prints_it(
+    script, env, document, schema_file, monkeypatch, capsys
+):
+    env.delenv("LLAMA_CLOUD_API_KEY")
+    fake = FakeClient()
+    seen: dict[str, str | None] = {}
+
+    def build(settings: DocumentExtractSettings, **kwargs: Any) -> DocumentExtractor:
+        seen["api_key"] = settings.api_key
+        return DocumentExtractor(settings, client=fake)
+
+    monkeypatch.setattr(script, "DocumentExtractor", build)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("typed-key-77\n"))  # pragma: allowlist secret
+    code = script.main([str(document), "--schema", str(schema_file), "--prompt-key"])
     out, err = capsys.readouterr()
     assert code == script.EXIT_OK, err
-    assert server.requests[0].headers["authorization"] == "Bearer typed-key-77"
+    assert seen["api_key"] == "typed-key-77"  # pragma: allowlist secret
     assert "typed-key-77" not in out and "typed-key-77" not in err
 
 
-def test_vendor_failure_exits_unavailable(script, document, schema_file, capsys):
-    code = script.main(
-        ["--file", str(document), "--schema", str(schema_file)],
-        env=ENV,
-        http_client=_client(_Server(upload_status=401)),
-    )
+def test_empty_prompt_key_is_a_usage_error(script, sdk, env, document, schema_file, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n"))
+    code = script.main([str(document), "--schema", str(schema_file), "--prompt-key"])
     _, err = capsys.readouterr()
-    assert code == script.EXIT_UNAVAILABLE
-    assert "unavailable: auth (status 401)" in err
+    assert code == script.EXIT_USAGE
+    assert "no key entered" in err
+    assert sdk.files.created == []
 
 
-def test_failed_job_exits_unavailable(script, document, schema_file, capsys):
-    failed = {**JOB, "status": "FAILED", "error_message": "unreadable scan", "extract_result": None}
-    code = script.main(
-        ["--file", str(document), "--schema", str(schema_file)],
-        env=ENV,
-        http_client=_client(_Server(job=failed)),
-    )
+def test_vendor_auth_failure_exits_unavailable(script, env, document, schema_file, monkeypatch, capsys):
+    import httpx
+
+    response = httpx.Response(401, request=httpx.Request("POST", "https://api.cloud.llamaindex.ai/x"), json={})
+    fake = FakeClient(create_error=AuthenticationError("nope", response=response, body=None))
+    monkeypatch.setattr(script, "DocumentExtractor", lambda settings, **kw: DocumentExtractor(settings, client=fake))
+    code = script.main([str(document), "--schema", str(schema_file)])
     _, err = capsys.readouterr()
     assert code == script.EXIT_UNAVAILABLE
-    assert "unavailable: job_failed" in err
+    assert "Extract unavailable: auth (status=401)" in err
+
+
+def test_failed_job_exits_unavailable_and_deletes_the_upload(script, env, document, schema_file, monkeypatch, capsys):
+    fake = FakeClient(run_error=_polling.PollingError("Job job-7 failed with status: FAILED"))
+    monkeypatch.setattr(script, "DocumentExtractor", lambda settings, **kw: DocumentExtractor(settings, client=fake))
+    code = script.main([str(document), "--schema", str(schema_file)])
+    _, err = capsys.readouterr()
+    assert code == script.EXIT_UNAVAILABLE
+    assert "Extract unavailable: job_failed" in err
+    assert fake.files.deleted == ["file-7"]
 
 
 @pytest.mark.parametrize(
-    ("argv_tail", "message"),
+    ("make_path", "message"),
     [
-        (["--schema-inline", "{not json"], "is not valid JSON"),
-        (["--schema-inline", "[]"], "non-empty JSON object"),
-        (["--schema", "/nonexistent/schema.json"], "cannot read --schema"),
-        (["--schema-inline", "{}", "--tier", "premium"], "invalid choice"),
+        (lambda d: d / "missing.pdf", "is not a file"),
+        (lambda d: _write(d / "notes.md", b"# notes"), "unsupported file type"),
+        (lambda d: _write(d / "empty.pdf", b""), "is empty"),
     ],
 )
-def test_bad_arguments_exit_usage_before_sending(script, document, capsys, argv_tail, message):
-    server = _Server()
-    code = script.main(["--file", str(document), *argv_tail], env=ENV, http_client=_client(server))
+def test_bad_document_exits_usage_before_sending(script, sdk, env, tmp_path, capsys, make_path, message):
+    code = script.main([str(make_path(tmp_path))])
     _, err = capsys.readouterr()
     assert code == script.EXIT_USAGE
     assert message in err
-    assert server.requests == []
+    assert sdk.files.created == []
 
 
-def test_missing_document_exits_usage(script, schema_file, capsys):
-    server = _Server()
-    code = script.main(
-        ["--file", "/nonexistent/doc.pdf", "--schema", str(schema_file)], env=ENV, http_client=_client(server)
-    )
+def test_oversized_document_exits_usage(script, sdk, env, document, capsys):
+    code = script.main([str(document), "--max-bytes", "4"])
     _, err = capsys.readouterr()
     assert code == script.EXIT_USAGE
-    assert "is not a file" in err
-    assert server.requests == []
+    assert "--max-bytes is 4" in err
+    assert sdk.files.created == []
+
+
+@pytest.mark.parametrize(
+    ("schema_text", "message"),
+    [
+        ("{not json", "cannot read schema"),
+        ("[]", "must be a JSON object schema"),
+        ('{"type": "array"}', "must be a JSON object schema"),
+    ],
+)
+def test_bad_schema_file_exits_usage_before_sending(script, sdk, env, document, tmp_path, capsys, schema_text, message):
+    bad = tmp_path / "bad.json"
+    bad.write_text(schema_text, encoding="utf-8")
+    code = script.main([str(document), "--schema", str(bad)])
+    _, err = capsys.readouterr()
+    assert code == script.EXIT_USAGE
+    assert message in err
+    assert sdk.files.created == []
+
+
+def test_bad_tier_is_rejected_by_the_parser(script, sdk, env, document):
+    with pytest.raises(SystemExit) as info:
+        script.main([str(document), "--tier", "premium"])
+    assert info.value.code == 2
+    assert sdk.files.created == []
 
 
 def test_runs_as_a_process_without_a_key(document, schema_file):
     """The script's own bootstrap: importable from the repo, exit 2 and nothing sent without a key."""
     env = {"PATH": "/usr/bin:/bin", "LLAMA_CLOUD_API_KEY": ""}
     proc = subprocess.run(
-        [sys.executable, str(SCRIPT), "--file", str(document), "--schema", str(schema_file)],
+        [sys.executable, str(SCRIPT), str(document), "--schema", str(schema_file)],
         env=env,
         capture_output=True,
         text=True,
@@ -231,3 +334,8 @@ def test_runs_as_a_process_without_a_key(document, schema_file):
     assert proc.returncode == 2, proc.stderr
     assert "not configured" in proc.stderr
     assert "Traceback" not in proc.stderr
+
+
+def _write(path: Path, content: bytes) -> Path:
+    path.write_bytes(content)
+    return path
