@@ -9,6 +9,13 @@ import re
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
+from shared.document_extract import (
+    SUPPLIER_DOCUMENT_SCHEMA,
+    SUPPLIER_SCHEMA_VERSION,
+    DocumentExtractUnavailable,
+    get_document_extractor,
+    rows_from_extraction,
+)
 
 logger = logging.getLogger("bulk_upload.parsers")
 
@@ -17,6 +24,8 @@ ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".json", ".pdf"}
 DEFAULT_MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 READ_CHUNK_BYTES = 1024 * 1024
 DEFAULT_MAX_PDF_PAGES = 200
+PDF_NO_ROWS_WARNING = "PDF parsed but no structured rows detected; include tabular data or JSON block"
+EXTRACT_PURPOSE = "bulk_upload_pdf"
 
 
 def _max_upload_bytes() -> int:
@@ -613,7 +622,76 @@ def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
                     warnings.append("PDF contained JSON-like text but parsing failed")
 
     if extracted_rows == 0:
-        warnings.append("PDF parsed but no structured rows detected; include tabular data or JSON block")
+        warnings.append(PDF_NO_ROWS_WARNING)
+
+
+def _row_count(parsed: dict[str, Any]) -> int:
+    return sum(len(parsed.get(section) or []) for section in ("facilities", "ftl_scopes", "tlcs", "events"))
+
+
+async def _extract_pdf_with_agent(content: bytes, filename: str, parsed: dict[str, Any], warnings: list[str]) -> None:
+    """Second pass for a PDF the table parser could not read: LlamaIndex Extract.
+
+    Runs only when ``_parse_pdf_bytes`` produced no rows and the extractor is
+    configured (``LLAMA_CLOUD_API_KEY``; see
+    docs/engineering/DOCUMENT_EXTRACT.md). The document is sent to the vendor
+    with the FSMA 204 supplier schema; the returned sections go through the
+    same ``_classify_row`` as every other format, so validation and commit
+    are unchanged. The job's evidence (job id, tier, resolved version, pages,
+    per-field confidence summary) is kept in ``parsed["extraction"]`` for the
+    session and the response. Any failure, a vendor error or anything else,
+    leaves the upload exactly as the deterministic pass left it, with one
+    warning naming the reason: like the Jev suggestion path on CSV ingestion,
+    an extraction failure must never reject an upload.
+    """
+    # Rows are staged and merged only after the whole result converted, so a
+    # failure half-way through cannot leave a partially populated upload.
+    staged: dict[str, Any] = {"facilities": [], "ftl_scopes": [], "tlcs": [], "events": []}
+    staged_warnings: list[str] = []
+    try:
+        extractor = get_document_extractor()
+        if not extractor.enabled:
+            return
+        result = await extractor.extract_async(
+            content,
+            filename=filename,
+            data_schema=SUPPLIER_DOCUMENT_SCHEMA,
+            purpose=EXTRACT_PURPOSE,
+            schema_version=SUPPLIER_SCHEMA_VERSION,
+            max_pages=_max_pdf_pages(),
+        )
+        rows = rows_from_extraction(result.data)
+        for row in rows:
+            _classify_row(staged, _normalize_row(row), warnings=staged_warnings)
+        extraction = {
+            **result.to_dict(include_data=False),
+            "field_metadata": result.field_metadata,
+        }
+    except DocumentExtractUnavailable as exc:
+        warnings.append(f"Document extraction agent unavailable ({exc.reason}); PDF parsed by tables only")
+        return
+    except Exception:  # noqa: BLE001 - an extraction failure must never reject an upload.
+        logger.exception("document_extract_fallback_failed")
+        warnings.append("Document extraction agent failed unexpectedly; PDF parsed by tables only")
+        return
+
+    for section, items in staged.items():
+        parsed[section].extend(items)
+    warnings.extend(staged_warnings)
+    added = _row_count(parsed)
+
+    evidence = result.evidence
+    extraction["rows"] = added
+    parsed["extraction"] = extraction
+    if added:
+        while PDF_NO_ROWS_WARNING in warnings:
+            warnings.remove(PDF_NO_ROWS_WARNING)
+        warnings.append(
+            f"{added} rows extracted by LlamaIndex Extract (tier={evidence.tier or evidence.requested_tier}, "
+            f"version={evidence.version or evidence.requested_version}); review before commit"
+        )
+    else:
+        warnings.append("Document extraction agent found no FSMA 204 records in this PDF")
 
 
 async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
@@ -659,6 +737,8 @@ async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
         _parse_xlsx_bytes(content, parsed, warnings)
     elif extension == ".pdf":
         _parse_pdf_bytes(content, parsed, warnings)
+        if _row_count(parsed) == 0:
+            await _extract_pdf_with_agent(content, file.filename or "upload.pdf", parsed, warnings)
     else:  # pragma: no cover
         raise HTTPException(status_code=400, detail="Unsupported file format")
 

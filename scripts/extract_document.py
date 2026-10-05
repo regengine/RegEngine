@@ -1,42 +1,34 @@
 #!/usr/bin/env python3
-"""Extract structured data from a document with LlamaCloud Extract v2.5.
+"""Extract structured data from a local document with LlamaIndex Extract v2.5.
 
-A sidecar for people and coding agents working in this repo: give it a
-document (PDF, image, scan, DOCX, XLSX, CSV) and a JSON Schema, get back JSON
-that conforms to the schema, with a citation and confidence per field.
+Runs the code the bulk-upload PDF path runs
+(``shared.document_extract.DocumentExtractor``): the same upload, the same
+tier/version pins, the same evidence. Nothing is ingested, persisted or
+queued, and no database is used.
 
-    python3 scripts/extract_document.py --file invoice.pdf --schema schema.json
-    python3 scripts/extract_document.py --file bol.pdf --schema-inline \\
-        '{"type":"object","properties":{"lot_code":{"type":"string"},"ship_date":{"type":"string"}}}' \\
-        --tier agentic_plus --pages 1-2 --json --out bol.json
+    python3 scripts/extract_document.py supplier_packet.pdf                 # FSMA 204 supplier schema
+    python3 scripts/extract_document.py supplier_packet.pdf --json          # machine-readable report
+    python3 scripts/extract_document.py invoice.pdf --schema invoice.json   # any JSON Schema
+    python3 scripts/extract_document.py scan.png --tier agentic_plus --target per_page
+    python3 scripts/extract_document.py packet.pdf --rows                   # bulk-upload parser rows
+    python3 scripts/extract_document.py packet.pdf --prompt-key
 
-Options:
-    --file PATH            the document to extract from (required)
-    --schema PATH          JSON Schema file describing the fields to extract
-    --schema-inline JSON   the same schema given inline
-    --tier TIER            cost_effective | agentic (default) | agentic_plus | turbo
-    --version VERSION      Extract release (default 2.5; "latest" floats)
-    --target TARGET        per_doc (default) | per_page | per_table_row
-    --pages RANGES         1-based pages to process, e.g. "1,3,5-7"
-    --max-pages N          page cap for this run
-    --system-prompt TEXT   extra extraction instructions
-    --spreadsheet          read cells directly from a workbook (agentic_plus only)
-    --json                 print data, field metadata and evidence as one JSON object
-    --out PATH             also write that JSON object to a file
+Configuration comes from the environment through
+``shared.document_extract.DocumentExtractSettings`` (``LLAMA_CLOUD_API_KEY``,
+``LLAMA_CLOUD_BASE_URL`` and the ``REGENGINE_DOC_EXTRACT_*`` variables; see
+docs/engineering/DOCUMENT_EXTRACT.md). ``--tier``, ``--version`` and
+``--max-pages`` override the environment for this run. ``--prompt-key`` reads
+the key with ``getpass`` instead (hidden on a terminal; read from stdin
+otherwise), for this run only. The script never prints, logs or writes the key.
 
-The document leaves this machine for LlamaCloud. Send only files you are
-authorised to share with the vendor; never credentials or data outside the
-tenant the extraction is for.
+What leaves the process is the whole document, as in production. Do not run
+this on a tenant's document outside that tenant's engagement.
 
-The key comes from ``LLAMA_CLOUD_API_KEY`` or, with ``--prompt-key``, a hidden
-prompt for this run. It is never printed, logged or written.
-
-Run it with ``venv/bin/python`` in a Claude Code session (the session start hook
-installs ``requirements.lock`` there); plain ``python3`` works wherever the
-repo's requirements are installed.
-
-Exit codes: 0 extracted; 1 bad usage; 2 not configured (no key, switched off, or
-packages missing), nothing sent; 3 Extract unavailable (vendor error, failed job).
+Exit codes:
+    0  extraction received
+    1  bad usage; unreadable, oversized or unsupported file; invalid schema file; unexpected error
+    2  Extract not configured (no LLAMA_CLOUD_API_KEY) or switched off (REGENGINE_DOC_EXTRACT_ENABLED)
+    3  Extract unavailable (auth, rate limit, timeout, job failure, server error, ...)
 """
 
 from __future__ import annotations
@@ -47,195 +39,194 @@ import getpass
 import json
 import logging
 import sys
-from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+for entry in (REPO_ROOT, REPO_ROOT / "services"):
+    if str(entry) not in sys.path:
+        sys.path.insert(0, str(entry))
+
+from shared.document_extract import (  # noqa: E402
+    EXTRACTION_TARGETS,
+    SUPPLIER_DOCUMENT_SCHEMA,
+    SUPPLIER_SCHEMA_VERSION,
+    TIERS,
+    DocumentExtractor,
+    DocumentExtractSettings,
+    DocumentExtractUnavailable,
+    rows_from_extraction,
+)
 
 EXIT_OK = 0
 EXIT_USAGE = 1
 EXIT_NOT_CONFIGURED = 2
 EXIT_UNAVAILABLE = 3
-PROG = "extract_document"
-PURPOSE = "cli"
-KEY_PROMPT = "LlamaCloud API key (hidden when typed at a terminal): "
 
-ROOT = Path(__file__).resolve().parents[1]
-_services = str(ROOT / "services")
-if _services not in sys.path:
-    sys.path.insert(0, _services)
-
-
-def _missing_dependency(exc: ImportError) -> NoReturn:
-    """Run as a script without the repo's packages: say how to run it instead of a traceback."""
-    if __name__ != "__main__":
-        raise exc
-    print(
-        f"{PROG}: not configured: Python package {exc.name or exc} is not installed. Nothing was sent. "
-        "Run it with venv/bin/python (the session start hook installs requirements.lock there) "
-        "or install requirements.lock first.",
-        file=sys.stderr,
-    )
-    sys.exit(EXIT_NOT_CONFIGURED)
+DEFAULT_MAX_BYTES = 25 * 1024 * 1024
+SUPPORTED_SUFFIXES = {
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".webp",
+    ".docx",
+    ".doc",
+    ".pptx",
+    ".xlsx",
+    ".xls",
+    ".csv",
+    ".txt",
+    ".html",
+}
 
 
-try:
-    import structlog
-except ImportError as exc:
-    _missing_dependency(exc)
-
-
-def _configure_cli_logging() -> None:
-    """Warnings and above to stderr with plain tracebacks, so stdout carries only the result."""
-    structlog.configure(
-        processors=[
-            structlog.processors.add_log_level,
-            structlog.processors.format_exc_info,
-            structlog.dev.ConsoleRenderer(colors=False, exception_formatter=structlog.dev.plain_traceback),
-        ],
-        wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING),
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
-    )
-
-
-if __name__ == "__main__":  # before the imports below can log anything
-    _configure_cli_logging()
-
-try:
-    from shared.llama_extract import DocumentExtractor, LlamaExtractSettings, LlamaExtractUnavailable
-    from shared.llama_extract.client import EXTRACTION_TARGETS
-    from shared.llama_extract.settings import API_KEY_ENV, ENABLED_ENV, TIERS
-except ImportError as exc:
-    _missing_dependency(exc)
-
-
-class _UsageError(Exception):
-    """Bad arguments: exit 1."""
-
-
-class _Parser(argparse.ArgumentParser):
-    def error(self, message: str) -> None:  # type: ignore[override]
-        raise _UsageError(message)
-
-
-def _parser() -> _Parser:
-    parser = _Parser(prog=PROG, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--file", required=True, help="the document to extract from")
-    schema = parser.add_mutually_exclusive_group(required=True)
-    schema.add_argument("--schema", help="JSON Schema file describing the fields to extract")
-    schema.add_argument("--schema-inline", help="the JSON Schema given inline")
-    parser.add_argument("--tier", choices=TIERS, help="extract tier (default from settings: agentic)")
-    parser.add_argument("--version", help='extract release (default from settings: 2.5; "latest" floats)')
-    parser.add_argument("--target", choices=EXTRACTION_TARGETS, default="per_doc", help="extraction granularity")
-    parser.add_argument("--pages", help='1-based pages to process, e.g. "1,3,5-7"')
-    parser.add_argument("--max-pages", type=int, help="page cap for this run")
-    parser.add_argument("--system-prompt", help="extra extraction instructions")
-    parser.add_argument("--spreadsheet", action="store_true", help="read cells directly from a workbook")
-    parser.add_argument("--json", action="store_true", help="print data, field metadata and evidence as JSON")
-    parser.add_argument("--out", help="also write the JSON result to this file")
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("document", type=Path, help="Local document to extract from")
     parser.add_argument(
-        "--prompt-key",
-        action="store_true",
-        help=f"read the API key from a hidden prompt for this run instead of {API_KEY_ENV}",
+        "--schema",
+        type=Path,
+        default=None,
+        help="JSON Schema file to extract against (default: the FSMA 204 supplier schema)",
+    )
+    parser.add_argument("--tier", choices=TIERS, default=None, help="Extract tier for this run")
+    parser.add_argument("--version", dest="extract_version", default=None, help="Extract release: YYYY-MM-DD or latest")
+    parser.add_argument("--target", choices=EXTRACTION_TARGETS, default="per_doc", help="Extraction granularity")
+    parser.add_argument("--max-pages", type=int, default=None, help="Pages to send (capped by the environment's limit)")
+    parser.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES, help="Refuse files larger than this")
+    parser.add_argument("--system-prompt", default=None, help="Extra guidance for the extraction agent")
+    parser.add_argument(
+        "--rows", action="store_true", help="Also print the bulk-upload parser rows (supplier schema only)"
+    )
+    parser.add_argument("--json", action="store_true", help="Print one JSON report instead of text")
+    parser.add_argument("--prompt-key", action="store_true", help="Read LLAMA_CLOUD_API_KEY interactively for this run")
+    parser.add_argument(
+        "--verbose", action="store_true", help="Show the wrapper's own log lines (never the key or data)"
     )
     return parser
 
 
-def _load_schema(args: argparse.Namespace) -> dict[str, Any]:
-    if args.schema_inline is not None:
-        raw = args.schema_inline
-        where = "--schema-inline"
-    else:
-        try:
-            raw = Path(args.schema).read_text(encoding="utf-8")
-        except OSError as exc:
-            raise _UsageError(f"cannot read --schema {args.schema}: {exc.strerror or exc}") from exc
-        where = f"--schema {args.schema}"
-    try:
-        schema = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise _UsageError(f"{where} is not valid JSON: {exc.msg} at position {exc.pos}") from exc
-    if not isinstance(schema, dict) or not schema:
-        raise _UsageError(f"{where} must be a non-empty JSON object (a JSON Schema)")
-    return schema
-
-
-def _check_document(path_text: str) -> Path:
-    path = Path(path_text)
+def _read_document(path: Path, max_bytes: int) -> bytes:
     if not path.is_file():
-        raise _UsageError(f"--file {path_text} is not a file")
-    return path
-
-
-def render_text(result: Mapping[str, Any]) -> str:
-    """Human-readable result: the data, then one evidence line."""
-    evidence = result["evidence"]
-    lines = [json.dumps(result["data"], indent=2, ensure_ascii=False)]
-    lines.append(
-        "-- extracted by {provider} {product} tier={tier} version={version} job={job} "
-        "pages_billed={pages} latency_ms={latency}".format(
-            provider=evidence["provider"],
-            product=evidence["product"],
-            tier=evidence["tier"],
-            version=evidence["resolved_version"] or evidence["requested_version"],
-            job=evidence["job_id"],
-            pages=evidence["pages_billed"],
-            latency=evidence["latency_ms"],
+        raise SystemExit(f"error: {path} is not a file")
+    if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        raise SystemExit(
+            f"error: unsupported file type {path.suffix!r}; supported: {', '.join(sorted(SUPPORTED_SUFFIXES))}"
         )
-    )
-    return "\n".join(lines)
+    size = path.stat().st_size
+    if size == 0:
+        raise SystemExit(f"error: {path} is empty")
+    if size > max_bytes:
+        raise SystemExit(f"error: {path} is {size} bytes; --max-bytes is {max_bytes}")
+    return path.read_bytes()
 
 
-def main(
-    argv: Sequence[str] | None = None,
-    *,
-    env: Mapping[str, str] | None = None,
-    http_client: Any | None = None,
-    read_key: Callable[[str], str] = getpass.getpass,
-) -> int:
-    """Extract once and print. ``env``, ``http_client`` and ``read_key`` exist for offline tests."""
+def _read_schema(path: Path | None) -> tuple[dict[str, Any], str]:
+    if path is None:
+        return SUPPLIER_DOCUMENT_SCHEMA, f"supplier:{SUPPLIER_SCHEMA_VERSION}"
     try:
-        args = _parser().parse_args(argv)
-        document = _check_document(args.file)
-        schema = _load_schema(args)
-    except _UsageError as exc:
-        print(f"{PROG}: error: {exc}", file=sys.stderr)
-        return EXIT_USAGE
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"error: cannot read schema {path}: {exc}") from exc
+    if not isinstance(schema, dict) or schema.get("type", "object") != "object":
+        raise SystemExit(f"error: schema {path} must be a JSON object schema")
+    return schema, f"file:{path.name}"
 
-    settings = LlamaExtractSettings.from_env(env)
+
+def _settings(args: argparse.Namespace) -> DocumentExtractSettings:
+    settings = DocumentExtractSettings.from_env()
+    overrides: dict[str, Any] = {}
     if args.prompt_key:
-        try:
-            entered = read_key(KEY_PROMPT)
-        except EOFError:
-            entered = ""
-        settings = dataclasses.replace(settings, api_key=entered.strip() or None)
+        key = getpass.getpass("LLAMA_CLOUD_API_KEY: ") if sys.stdin.isatty() else sys.stdin.readline().strip()
+        if not key:
+            raise SystemExit("error: no key entered")
+        overrides["api_key"] = key
+    if args.tier:
+        overrides["tier"] = args.tier
+    if args.extract_version:
+        overrides["version"] = args.extract_version
+    if overrides:
+        settings = dataclasses.replace(settings, **overrides)
+    return settings
+
+
+def _print_text(result_dict: dict[str, Any], rows: list[dict[str, Any]] | None, path: Path) -> None:
+    evidence = result_dict["evidence"]
+    confidence = result_dict["confidence"]
+    print(f"Extracted: {path.name}")
+    print(
+        f"  job={evidence['job_id']} tier={evidence['tier'] or evidence['requested_tier']} "
+        f"version={evidence['version'] or evidence['requested_version']} target={evidence['extraction_target']}"
+    )
+    print(
+        f"  pages_extracted={evidence['pages_extracted']} pages_billed={evidence['pages_billed']} "
+        f"credits={evidence['credits']} latency_ms={evidence['latency_ms']}"
+    )
+    print(f"  confidence: fields={confidence['fields']} min={confidence['min']} mean={confidence['mean']}")
+    print()
+    print(json.dumps(result_dict["data"], indent=2, ensure_ascii=False))
+    if rows is not None:
+        print()
+        print(f"Bulk-upload parser rows ({len(rows)}):")
+        for row in rows:
+            print("  " + json.dumps(row, ensure_ascii=False))
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _build_parser().parse_args(argv)
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
+
+    try:
+        content = _read_document(args.document, args.max_bytes)
+        schema, schema_version = _read_schema(args.schema)
+        settings = _settings(args)
+    except SystemExit as exc:
+        if isinstance(exc.code, str):
+            print(exc.code, file=sys.stderr)
+            return EXIT_USAGE
+        raise
+
     if not settings.enabled:
-        reason = f"{API_KEY_ENV} is not set" if not settings.api_key else f"{ENABLED_ENV} switches Extract off"
-        print(f"{PROG}: not configured: {reason}. Nothing was sent.", file=sys.stderr)
+        summary = settings.public_summary()
+        if summary["kill_switch"]:
+            print("Extract is switched off (REGENGINE_DOC_EXTRACT_ENABLED).", file=sys.stderr)
+        else:
+            print("Extract is not configured: set LLAMA_CLOUD_API_KEY or pass --prompt-key.", file=sys.stderr)
         return EXIT_NOT_CONFIGURED
 
-    extractor = DocumentExtractor(settings, http_client=http_client)
+    extractor = DocumentExtractor(settings)
     try:
         result = extractor.extract(
-            document,
+            content,
+            filename=args.document.name,
             data_schema=schema,
-            purpose=PURPOSE,
+            purpose="extract_document_cli",
+            schema_version=schema_version,
             extraction_target=args.target,
-            system_prompt=args.system_prompt,
-            target_pages=args.pages,
             max_pages=args.max_pages,
-            spreadsheet_mode=args.spreadsheet,
-            tier=args.tier,
-            version=args.version,
+            system_prompt=args.system_prompt,
         )
-    except LlamaExtractUnavailable as exc:
-        detail = f" (status {exc.status})" if exc.status is not None else ""
-        print(f"{PROG}: unavailable: {exc.reason}{detail}", file=sys.stderr)
+    except DocumentExtractUnavailable as exc:
+        print(f"Extract unavailable: {exc.reason}" + (f" (status={exc.status})" if exc.status else ""), file=sys.stderr)
         return EXIT_UNAVAILABLE
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    finally:
+        extractor.close()
 
-    payload = result.to_dict()
-    if args.out:
-        Path(args.out).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(json.dumps(payload, indent=2, ensure_ascii=False) if args.json else render_text(payload))
+    rows = rows_from_extraction(result.data) if (args.rows and args.schema is None) else None
+    report = result.to_dict()
+    if rows is not None:
+        report["rows"] = rows
+
+    if args.json:
+        print(json.dumps(report, indent=2, ensure_ascii=False, default=str))
+    else:
+        _print_text(report, rows, args.document)
     return EXIT_OK
 
 
