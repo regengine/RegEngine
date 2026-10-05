@@ -48,6 +48,14 @@ class BulkUploadParseResponse(BaseModel):
     tlcs: int
     events: int
     warnings: list[str] = Field(default_factory=list)
+    extraction: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Present when a PDF with no readable tables was extracted by LlamaIndex Extract: "
+            "job evidence (job id, tier, resolved version, pages, latency), a per-field confidence "
+            "summary, the per-field citations, and the number of rows it produced."
+        ),
+    )
 
 
 class BulkUploadValidationError(BaseModel):
@@ -143,6 +151,7 @@ async def parse_bulk_upload(
             "events": parsed_data.get("events") or [],
             "warnings": parsed_data.get("warnings") or [],
         },
+        "extraction": parsed_data.get("extraction"),
         "normalized_data": None,
         "validation_preview": None,
         "commit_summary": None,
@@ -162,6 +171,7 @@ async def parse_bulk_upload(
         tlcs=len(parsed_payload.get("tlcs") or []),
         events=len(parsed_payload.get("events") or []),
         warnings=parsed_payload.get("warnings") or [],
+        extraction=parsed_data.get("extraction"),
     )
 
 
