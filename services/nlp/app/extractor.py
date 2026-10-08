@@ -167,7 +167,8 @@ def infer_obligation_type(text: str) -> dict:
     5. Negated permissive ("may not") caught by phase 1.
     6. Fallback → MANDATORY (conservative default).
     """
-    text_lower = text.lower()
+    # Keyword presence is tested against whole-word tokens, never substrings:
+    # "may" in "mayonnaise" or "can" in "candy" must not read as a modal.
     tokens = _tokenise(text)
 
     def _has_negation_near(keyword: str) -> bool:
@@ -199,7 +200,7 @@ def infer_obligation_type(text: str) -> dict:
 
     # --- Phase 2: conditional hedge ------------------------------------------
     _MANDATORY_KW = ["shall", "must", "required"]
-    has_mandatory = any(kw in text_lower for kw in _MANDATORY_KW)
+    has_mandatory = any(kw in tokens for kw in _MANDATORY_KW)
     if has_mandatory and _CONDITIONAL_PATTERNS.search(text):
         logger.warning(
             "obligation_type CONDITIONAL inferred from hedge phrase",
@@ -221,7 +222,7 @@ def infer_obligation_type(text: str) -> dict:
     # "required"; an attributive "required" defers to phase 4 and is picked
     # up by phase 4b when no permissive modal governs the sentence.
     for kw in ("shall", "must"):
-        if kw in text_lower and not _has_negation_near(kw):
+        if kw in tokens and not _has_negation_near(kw):
             return {
                 "obligation": "MANDATORY",
                 "negation_detected": False,
@@ -237,7 +238,7 @@ def infer_obligation_type(text: str) -> dict:
     # --- Phase 4: positive permissive keywords --------------------------------
     _PERMISSIVE_KW = ["may", "can", "permitted", "allowed"]
     for kw in _PERMISSIVE_KW:
-        if kw in text_lower and not _has_negation_near(kw):
+        if kw in tokens and not _has_negation_near(kw):
             return {
                 "obligation": "PERMITTED",
                 "negation_detected": False,
@@ -248,7 +249,7 @@ def infer_obligation_type(text: str) -> dict:
     # The keyword is the only modality signal left, so the pre-#3009 reading
     # stands: sentences where "required" IS the operative word ("the required
     # records: lot code, quantity, and date") remain MANDATORY.
-    if "required" in text_lower and not _has_negation_near("required"):
+    if "required" in tokens and not _has_negation_near("required"):
         return {
             "obligation": "MANDATORY",
             "negation_detected": False,
@@ -257,7 +258,7 @@ def infer_obligation_type(text: str) -> dict:
 
     # --- Phase 5: negated permissive → PROHIBITED ----------------------------
     for kw in _PERMISSIVE_KW:
-        if kw in text_lower and _has_negation_near(kw):
+        if kw in tokens and _has_negation_near(kw):
             return {
                 "obligation": "PROHIBITED",
                 "negation_detected": True,

@@ -14,7 +14,7 @@ logger = logging.getLogger("s3_loader")
 # Import shared utilities
 from shared.url_validation import PathTraversalError, validate_s3_uri
 
-from .text_loader import load_artifact
+from .text_loader import MAX_DOC_BYTES, load_artifact
 
 S3_URL_RE = re.compile(r"^s3://([^/]+)/(.+)$")
 
@@ -54,4 +54,12 @@ def load_s3_artifact(s3_uri: str) -> str:
             params["ExpectedBucketOwner"] = owner
         obj = s3.get_object(**params)
         data = obj["Body"].read()
-        return data.decode(errors="ignore")
+        # Same envelope as the presigned-URL path: cap bytes so a large
+        # object cannot pin memory, and decode strictly so malformed
+        # UTF-8 raises instead of silently corrupting lot codes.
+        if len(data) > MAX_DOC_BYTES:
+            raise ValueError("E_DOC_TOO_LARGE: S3 object exceeds cap")
+        try:
+            return data.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise ValueError("E_DOC_DECODE_FAILED") from exc
