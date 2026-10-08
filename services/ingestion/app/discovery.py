@@ -9,24 +9,34 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
-import httpx
 import structlog
 from redis import Redis
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_sync
+from shared.url_validation import SSRFError
 
 from services.ingestion.app.regulation_loader import RegulationLoader
 from services.ingestion.app.regulation_parser import RegulationParser
 
 logger = structlog.get_logger("regulation-discovery")
 
+DISCOVERY_USER_AGENT = "RegEngine-Research-Bot/1.0 (+https://regengine.co/bot)"
+DISCOVERY_MAX_BYTES = DEFAULT_MAX_RESPONSE_BYTES
+ROBOTS_TXT_MAX_BYTES = 256 * 1024
+
 
 class EthicalScraper:
     """
     Crawler that respects robots.txt, implements polite delays,
     and is idempotent via ETag + content-hash deduplication.
+
+    All outbound HTTP goes through :func:`shared.safe_http.safe_httpx_get_sync`
+    so private or link-local targets are refused before connecting and every
+    redirect hop is re-validated, with response bodies capped at
+    ``DISCOVERY_MAX_BYTES``.
     """
 
     def __init__(self, redis_url: str | None = None):
-        self.session = httpx.Client(headers={"User-Agent": "RegEngine-Research-Bot/1.0 (+https://regengine.co/bot)"})
+        self.headers = {"User-Agent": DISCOVERY_USER_AGENT}
         # #2505: read REDIS_URL like every other Redis consumer
         # (server/main.py readiness probe, shared.idempotency,
         # shared.circuit_breaker_store, shared.api_key_store). The old
@@ -37,13 +47,29 @@ class EthicalScraper:
         self.redis = Redis.from_url(redis_url or os.getenv("REDIS_URL", "redis://redis:6379/0"))
 
     def can_fetch(self, url: str) -> bool:
-        """Check if robots.txt allows fetching this URL."""
+        """Check if robots.txt allows fetching this URL.
+
+        Raises :class:`SSRFError` when the URL or its robots.txt target is
+        not a public destination. Callers must refuse the scrape outright
+        in that case (never queue it for manual upload).
+        """
         parsed = urlparse(url)
+        robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
         rp = RobotFileParser()
-        rp.set_url(f"{parsed.scheme}://{parsed.netloc}/robots.txt")
+        rp.set_url(robots_url)
         try:
-            rp.read()
+            resp = safe_httpx_get_sync(
+                robots_url,
+                headers=self.headers,
+                timeout=10,
+                max_bytes=ROBOTS_TXT_MAX_BYTES,
+            )
+            resp.raise_for_status()
+            lines = resp.text.splitlines()
+            rp.parse(lines)
             return rp.can_fetch("RegEngine-Research-Bot", url)
+        except SSRFError:
+            raise
         except Exception as e:
             logger.warning("robots_txt_unreachable", url=url, error=str(e))
             return True  # Default allow if robots.txt is unreachable
@@ -72,7 +98,13 @@ class EthicalScraper:
                        preventing cross-tenant queue pollution. Defaults to
                        'system' for scheduler-triggered runs.
         """
-        if not self.can_fetch(source_url):
+        try:
+            robots_allowed = self.can_fetch(source_url)
+        except SSRFError as e:
+            logger.warning("scrape_refused_unsafe_url", body=body, url=source_url, error=str(e))
+            return {"status": "failed", "body": body, "error": f"URL refused: {e}"}
+
+        if not robots_allowed:
             logger.info("scraping_denied_by_robots", body=body, url=source_url)
             queue_key = f"manual_upload_queue:{tenant_id}"
             self.redis.rpush(queue_key, f"{body}:{source_url}")
@@ -98,7 +130,14 @@ class EthicalScraper:
         logger.info("polite_scrape_started", body=body, url=source_url, jurisdiction=jurisdiction)
 
         try:
-            response = self.session.get(source_url, headers=req_headers, timeout=30)
+            headers = dict(self.headers)
+            headers.update(req_headers)
+            response = safe_httpx_get_sync(
+                source_url,
+                headers=headers,
+                timeout=30,
+                max_bytes=DISCOVERY_MAX_BYTES,
+            )
 
             if response.status_code == 304:
                 logger.info("source_unchanged_etag", body=body, url=source_url)

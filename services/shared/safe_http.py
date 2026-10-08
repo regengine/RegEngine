@@ -33,6 +33,18 @@ logger = structlog.get_logger("safe-http")
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_MAX_REDIRECTS = 5
 
+# Upper bound on response bodies accepted through the safe helpers. Callers
+# fetching regulatory pages, feeds, or vendor JSON get a bounded buffer so a
+# malicious or misconfigured server cannot force unbounded memory use.
+# Callers with a legitimately smaller budget pass ``max_bytes`` explicitly.
+DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+
+class ResponseTooLargeError(ValueError):
+    """Raised when a response body exceeds the caller's ``max_bytes`` cap."""
+
+    pass
+
 # Standard browser-like headers used by upstream fetchers. Kept here so callers
 # that want a single SSRF-safe entry point don't have to redefine them.
 STANDARD_BROWSER_HEADERS: Dict[str, str] = {
@@ -170,18 +182,42 @@ def safe_httpx_client(
     )
 
 
+def _enforce_size_cap(response: httpx.Response, *, max_bytes: int) -> None:
+    """Refuse a response whose body exceeds ``max_bytes``.
+
+    Checks the declared ``Content-Length`` first so an obviously oversized
+    body is refused even before trusting the buffered bytes, then checks the
+    actual buffered length. Raises :class:`ResponseTooLargeError`.
+    """
+    declared = response.headers.get("content-length")
+    if declared is not None:
+        try:
+            if int(declared) > max_bytes:
+                raise ResponseTooLargeError(f"Response body exceeds {max_bytes} bytes (declared {declared})")
+        except ResponseTooLargeError:
+            raise
+        except (TypeError, ValueError):
+            pass
+    if len(response.content) > max_bytes:
+        raise ResponseTooLargeError(
+            f"Response body exceeds {max_bytes} bytes (received {len(response.content)})"
+        )
+
+
 def safe_httpx_get_sync(
     url: str,
     *,
     headers: Optional[dict] = None,
     timeout: float = DEFAULT_TIMEOUT,
     max_redirects: int = DEFAULT_MAX_REDIRECTS,
+    max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
     validator: Callable[[str], str] = validate_url,
 ) -> httpx.Response:
     """Sync GET that validates every hop (initial + redirects).
 
     Returns the final :class:`httpx.Response`. Each hop uses a transport
-    pinned to the freshly validated IP for that hop's hostname.
+    pinned to the freshly validated IP for that hop's hostname. Responses
+    larger than ``max_bytes`` are refused with :class:`ResponseTooLargeError`.
     """
     current_url = validator(url)
     last_response: Optional[httpx.Response] = None
@@ -200,6 +236,7 @@ def safe_httpx_get_sync(
             headers=headers or {},
         ) as client:
             response = client.get(current_url)
+        _enforce_size_cap(response, max_bytes=max_bytes)
         if response.is_redirect:
             next_url = response.headers.get("location")
             if not next_url:
@@ -292,11 +329,12 @@ class PinnedHTTPSession:
         *,
         params: Optional[Mapping[str, Any]] = None,
         timeout: float = DEFAULT_TIMEOUT,
+        max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
     ) -> httpx.Response:
         if self.closed:
             raise RuntimeError("HTTP session is closed")
         request_url = str(httpx.URL(url).copy_merge_params(params)) if params else url
-        return safe_httpx_get_sync(request_url, headers=self.headers, timeout=timeout)
+        return safe_httpx_get_sync(request_url, headers=self.headers, timeout=timeout, max_bytes=max_bytes)
 
     def post(
         self,
@@ -362,11 +400,59 @@ async def follow_redirects_safely(
     raise SSRFError(f"Too many redirects (>{max_hops}); last hop: {current_url}")
 
 
+async def safe_httpx_get_async(
+    url: str,
+    *,
+    headers: Optional[dict] = None,
+    params: Optional[Mapping[str, Any]] = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    http2: bool = False,
+    max_redirects: int = DEFAULT_MAX_REDIRECTS,
+    max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
+    validator: Callable[[str], str] = validate_url,
+) -> httpx.Response:
+    """Async GET that validates every hop and pins each hop's IP.
+
+    Mirrors :func:`safe_httpx_get_sync` for ``httpx.AsyncClient`` callers such
+    as vendor connectors whose ``base_url`` is tenant-configurable. Query
+    ``params`` are merged into the first-hop URL only. Responses larger than
+    ``max_bytes`` are refused with :class:`ResponseTooLargeError`.
+    """
+    current_url = validator(url)
+    if params:
+        current_url = str(httpx.URL(current_url).copy_merge_params(params))
+    for hop in range(max_redirects + 1):
+        client = safe_httpx_client(url=current_url, timeout=timeout, http2=http2, headers=headers)
+        try:
+            response = await client.get(current_url)
+        finally:
+            await client.aclose()
+        _enforce_size_cap(response, max_bytes=max_bytes)
+        if response.is_redirect:
+            next_url = response.headers.get("location")
+            if not next_url:
+                return response
+            from urllib.parse import urljoin
+
+            next_url = urljoin(current_url, next_url)
+            logger.info(
+                "safe_http_async_redirect",
+                from_url=current_url,
+                to_url=next_url,
+                hop=hop,
+            )
+            current_url = validator(next_url)
+            continue
+        return response
+    raise SSRFError(f"Too many redirects (>{max_redirects}); last hop: {current_url}")
+
+
 def safe_fetch_content(
     url: str,
     *,
     timeout: int = 30,
     headers: Optional[dict] = None,
+    max_bytes: int = DEFAULT_MAX_RESPONSE_BYTES,
 ) -> Dict[str, Any]:
     """SSRF-safe sync fetch returning a normalized response dict.
 
@@ -388,7 +474,9 @@ def safe_fetch_content(
         raise ValueError(f"URL validation failed: {str(e)}") from e
 
     try:
-        response = safe_httpx_get_sync(url, headers=headers or STANDARD_BROWSER_HEADERS, timeout=timeout)
+        response = safe_httpx_get_sync(
+            url, headers=headers or STANDARD_BROWSER_HEADERS, timeout=timeout, max_bytes=max_bytes
+        )
     except SSRFError as e:
         logger.warning("ssrf_error_during_fetch", url=url, error=str(e))
         raise ValueError(f"URL validation failed: {str(e)}") from e
@@ -403,9 +491,12 @@ def safe_fetch_content(
 
 
 __all__ = [
+    "DEFAULT_MAX_RESPONSE_BYTES",
     "PinnedHTTPSession",
+    "ResponseTooLargeError",
     "STANDARD_BROWSER_HEADERS",
     "safe_httpx_client",
+    "safe_httpx_get_async",
     "safe_httpx_get_sync",
     "safe_httpx_post_sync",
     "safe_httpx_post_async",
