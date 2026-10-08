@@ -117,7 +117,9 @@ def set_api_key_lookup_context(session: Any, raw_key: str) -> tuple[str, tuple[s
     Callers receive the digest tuple for their parameterized lookup; raw key
     material is never placed in a GUC.
     """
-    if not raw_key or not raw_key.startswith("rge_"):
+    # Fail closed on helper misuse: a non-string credential is not a key,
+    # never a 500 from str methods on the wrong type.
+    if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
         return None
     try:
         key_id, secret = raw_key.split(".", 1)
@@ -745,7 +747,9 @@ class DatabaseAPIKeyStore:
         Returns:
             APIKeyResponse if valid, None otherwise
         """
-        if not raw_key or not raw_key.startswith("rge_"):
+        # Fail closed on helper misuse: a non-string credential is an
+        # invalid key, never a 500 from str methods on the wrong type.
+        if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
         # Extract key_id
