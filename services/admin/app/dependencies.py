@@ -759,6 +759,24 @@ from shared.api_key_store import get_db_key_store
 api_key_header = APIKeyHeader(name="X-RegEngine-API-Key", auto_error=False)
 
 
+def _clear_tenant_context_best_effort(db: Session) -> None:
+    """Best-effort clear of tenant GUC after a deny verdict.
+
+    Clear any session-scoped binding before rejecting authentication. If
+    the transaction is already aborted, this can fail; the existing session
+    rollback/close and pool-checkout GUC reset remain the backstop. Never
+    replace the caller's denial verdict with a cleanup exception.
+    """
+    try:
+        TenantContext.clear_tenant_context(db)
+    except Exception as exc:  # noqa: BLE001 — denial verdict must win
+        logger.warning(
+            "tenant_context_clear_failed_after_deny",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+
+
 async def get_current_tenant(key: str = Depends(api_key_header), db: Session = Depends(get_session)) -> UUID:
     """
     Validates API Key and returns the associated Tenant ID.
@@ -779,6 +797,25 @@ async def get_current_tenant(key: str = Depends(api_key_header), db: Session = D
 
     tenant_id = UUID(api_key_data.tenant_id)
 
+    # SEC-RLS: bind the VALIDATED key tenant BEFORE any tenant-row read.
+    # ``tenants`` is FORCE RLS: the status lookup below is denied until
+    # ``app.tenant_id`` is bound. Only the cryptographically validated
+    # API-key tenant is ever bound here — never a request-supplied value.
+    # A bind failure denies (503), it never allows.
+    try:
+        TenantContext.set_tenant_context(db, tenant_id)
+    except Exception as exc:
+        logger.error(
+            "api_key_tenant_context_failed",
+            tenant_id=str(tenant_id),
+            error=str(exc),
+        )
+        _clear_tenant_context_best_effort(db)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+        ) from exc
+
     # SECURITY: enforce live tenant status on the API-key path, mirroring
     # the opaque-session check in get_current_user. Without this, a
     # suspended tenant's API keys retain full access. Fail closed: a status
@@ -792,6 +829,7 @@ async def get_current_tenant(key: str = Depends(api_key_header), db: Session = D
             tenant_id=str(tenant_id),
             error=str(exc),
         )
+        _clear_tenant_context_best_effort(db)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication service temporarily unavailable",
@@ -803,9 +841,7 @@ async def get_current_tenant(key: str = Depends(api_key_header), db: Session = D
             tenant_id=str(tenant_id),
             tenant_status=tenant_status,
         )
+        _clear_tenant_context_best_effort(db)
         raise HTTPException(status_code=403, detail="Invalid API Key")
-
-    # SEC-RLS: Ensure the database session is restricted to this tenant
-    TenantContext.set_tenant_context(db, tenant_id)
 
     return tenant_id
