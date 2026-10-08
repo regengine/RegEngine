@@ -201,10 +201,17 @@ class APIKeyStore:
             logger.warning("api_key_disabled", key_id=key_id)
             return None
 
-        # Check if key has expired
-        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-            logger.warning("api_key_expired", key_id=key_id)
-            return None
+        # Check if key has expired. Naive datetimes (no tzinfo) can arrive
+        # from DB rows or direct construction; assume UTC so the comparison
+        # never raises TypeError (which would surface as a 500 instead of
+        # an auth decision).
+        if api_key.expires_at:
+            expires_at = api_key.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at < datetime.now(timezone.utc):
+                logger.warning("api_key_expired", key_id=key_id)
+                return None
 
         # Track last usage timestamp
         api_key.last_used_at = datetime.now(timezone.utc)
