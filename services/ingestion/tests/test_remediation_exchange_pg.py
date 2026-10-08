@@ -1,4 +1,4 @@
-"""Remediation exchange is single-use even under a race — live Postgres.
+"""Remediation exchange is single-use even under a race: live Postgres.
 
 ``exchange_for_session`` used to check ``exchange_count`` in Python and then
 run an UPDATE with no count guard, so two requests that both pre-read
@@ -63,7 +63,7 @@ _DB_READY = _reachable()
 
 if not _DB_READY and os.environ.get("REGENGINE_REQUIRE_DB") == "1":
     raise RuntimeError(
-        f"REGENGINE_REQUIRE_DB=1 but no Postgres is reachable at {ADMIN_DSN!r} — refusing to skip."
+        f"REGENGINE_REQUIRE_DB=1 but no Postgres is reachable at {ADMIN_DSN!r}: refusing to skip."
     )
 
 pytestmark = [
