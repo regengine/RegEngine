@@ -8,6 +8,7 @@ import {
     markPhotoSyncFailed,
     getPendingUploads,
     cleanupOfflineRecords,
+    scanIdempotencyKey,
 } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
@@ -23,12 +24,15 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
-    const syncEndpoint = useCallback(async (payload: string) => {
+    const syncEndpoint = useCallback(async (payload: string, idempotencyKey: string) => {
         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
             method: 'POST',
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
+                // Stable per-scan key: retries replay the first response
+                // instead of recording the scan twice.
+                'Idempotency-Key': idempotencyKey,
             },
             body: payload,
         });
@@ -64,9 +68,10 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    const idempotencyKey = scanIdempotencyKey(scan);
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        await syncEndpoint(scan.payload);
+                        await syncEndpoint(scan.payload, idempotencyKey);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -83,7 +88,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        await syncEndpoint(JSON.stringify(payload));
+                        await syncEndpoint(JSON.stringify(payload), idempotencyKey);
                     }
                     if (typeof scan.id === 'number') {
                         await markScanSynced(scan.id);
