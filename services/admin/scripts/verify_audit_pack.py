@@ -96,6 +96,10 @@ def verify_pack(zip_path):
         with zipf:
             file_list = zipf.namelist()
 
+            if len(set(file_list)) != len(file_list):
+                dupes = sorted({n for n in file_list if file_list.count(n) > 1})
+                return _fail(f"duplicate zip entries rejected: {dupes}")
+
             for name in file_list:
                 if not _is_safe_member(name):
                     return _fail(f"unsafe zip entry rejected: {name!r}")
@@ -153,9 +157,7 @@ def verify_pack(zip_path):
                 path = entry["path"]
                 data = zipf.read(path)
                 if len(data) != entry["size"]:
-                    return _fail(
-                        f"size mismatch for {path}: manifest says {entry['size']}, actual {len(data)}"
-                    )
+                    return _fail(f"size mismatch for {path}: manifest says {entry['size']}, actual {len(data)}")
                 actual = hashlib.sha256(data).hexdigest()
                 recomputed_hashes.append(actual)
                 if actual != entry["sha256"]:
@@ -180,21 +182,12 @@ def verify_pack(zip_path):
             print(f"Merkle Root: {declared_root[:16]}... matches recomputed value")
 
             # 4. Exactly one CSV evidence file and one chain artifact.
-            csv_files = [
-                n for n in file_list if n.startswith("fda_spreadsheet_") and n.endswith(".csv")
-            ]
+            csv_files = [n for n in file_list if n.startswith("fda_spreadsheet_") and n.endswith(".csv")]
             if len(csv_files) != 1:
-                return _fail(
-                    f"pack must contain exactly one fda_spreadsheet_*.csv file; found {len(csv_files)}"
-                )
-            chain_files = [
-                n for n in file_list if n.startswith("chain_verification_") and n.endswith(".json")
-            ]
+                return _fail(f"pack must contain exactly one fda_spreadsheet_*.csv file; found {len(csv_files)}")
+            chain_files = [n for n in file_list if n.startswith("chain_verification_") and n.endswith(".json")]
             if len(chain_files) != 1:
-                return _fail(
-                    "pack must contain exactly one chain_verification_*.json file; "
-                    f"found {len(chain_files)}"
-                )
+                return _fail(f"pack must contain exactly one chain_verification_*.json file; found {len(chain_files)}")
             csv_bytes = zipf.read(csv_files[0])
             csv_hash = hashlib.sha256(csv_bytes).hexdigest()
             print(f"CSV Evidence Hash (Computed): {csv_hash}")
@@ -269,16 +262,13 @@ def verify_pack(zip_path):
             if chain_valid is not artifact_valid:
                 return _fail("manifest chain_valid disagrees with the chain artifact")
             if not (
-                isinstance(artifact_length, int)
-                and not isinstance(artifact_length, bool)
-                and artifact_length >= 0
+                isinstance(artifact_length, int) and not isinstance(artifact_length, bool) and artifact_length >= 0
             ):
                 return _fail("chain artifact chain_length must be a non-negative integer")
             if manifest_chain_length is not None and manifest_chain_length != artifact_length:
                 return _fail("manifest chain_length disagrees with the chain artifact")
             counts_ok = all(
-                isinstance(v, int) and not isinstance(v, bool) and v >= 0
-                for v in (missing_record, missing_chain)
+                isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (missing_record, missing_chain)
             )
             if not counts_ok:
                 return _fail("chain artifact row-hash counts must be non-negative integers")

@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
@@ -45,7 +46,7 @@ from ingestion.app.fda_export_service import (  # noqa: E402
 from shared.merkle_tree import MerkleTree  # noqa: E402
 
 
-def _make_pack(tmp_path, *, valid_chain=True):
+def _make_pack(tmp_path, *, valid_chain=True, with_validation_log=False):
     events = [
         {
             "traceability_lot_code": "TLC1",
@@ -66,6 +67,15 @@ def _make_pack(tmp_path, *, valid_chain=True):
         "required_kde_coverage_ratio": 1.0,
         "events_with_missing_required_fields": 0,
     }
+    if with_validation_log:
+        completeness["missing_required_events"] = [
+            {
+                "traceability_lot_code": "TLC1",
+                "event_type": "shipping",
+                "missing_fields": ["location_gln"],
+            }
+        ]
+        completeness["events_with_missing_required_fields"] = 1
     chain_payload = _build_chain_verification_payload(
         tenant_id="tenant-1",
         tlc="TLC1",
@@ -205,3 +215,116 @@ def test_verifier_merkle_matches_shared_tree():
 def test_unverified_chain_pack_fails(tmp_path):
     pack_path, _ = _make_pack(tmp_path, valid_chain=False)
     assert verifier.verify_pack(str(pack_path)) is False
+
+
+def _validation_name(members):
+    names = [n for n in members if n.startswith("VALIDATION_ERRORS_") and n.endswith(".log")]
+    assert len(names) == 1
+    return names[0]
+
+
+def _write_entries(tmp_path, name, entries):
+    """Write zip entries in order, allowing duplicate member names."""
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
+        for member_name, data in entries:
+            zf.writestr(member_name, data)
+    pack_path = tmp_path / name
+    pack_path.write_bytes(out.getvalue())
+    return pack_path
+
+
+def _entries_with_duplicate(members, target, extra, *, extra_first):
+    entries = []
+    for name, data in members.items():
+        if name == target:
+            if extra_first:
+                entries.extend([(name, extra), (name, data)])
+            else:
+                entries.extend([(name, data), (name, extra)])
+        else:
+            entries.append((name, data))
+    return entries
+
+
+def _bad_manifest_bytes(members):
+    manifest = json.loads(members["manifest.json"].decode("utf-8"))
+    manifest["merkle"]["root"] = "f" * 64
+    return json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+
+
+def test_pack_with_validation_log_passes(tmp_path):
+    pack_path, _ = _make_pack(tmp_path, with_validation_log=True)
+    members = _read_members(pack_path)
+    assert any(n.startswith("VALIDATION_ERRORS_") for n in members)
+    assert verifier.verify_pack(str(pack_path)) is True
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+def test_duplicate_manifest_rejected_both_orders(tmp_path, capsys, extra_first):
+    # Differing manifest duplicates: zip read returns one entry, so without
+    # duplicate rejection a valid second copy hides a tampered first copy
+    # (and vice versa, failing with the wrong diagnostic). Both orders must
+    # fail closed as duplicates.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    bad = _bad_manifest_bytes(members)
+    assert bad != members["manifest.json"]
+    entries = _entries_with_duplicate(members, "manifest.json", bad, extra_first=extra_first)
+    dup = _write_entries(tmp_path, "dup_manifest.zip", entries)
+    assert verifier.verify_pack(str(dup)) is False
+    assert "duplicate" in capsys.readouterr().out.lower()
+
+
+def test_identical_duplicate_manifest_rejected(tmp_path, capsys):
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    entries = _entries_with_duplicate(members, "manifest.json", members["manifest.json"], extra_first=False)
+    dup = _write_entries(tmp_path, "dup_identical_manifest.zip", entries)
+    assert verifier.verify_pack(str(dup)) is False
+    assert "duplicate" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@pytest.mark.parametrize("identical", [True, False])
+def test_duplicate_readme_rejected(tmp_path, capsys, extra_first, identical):
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    if identical:
+        extra = members["README.txt"]
+    else:
+        extra = members["README.txt"] + b"\nTAMPERED\n"
+    entries = _entries_with_duplicate(members, "README.txt", extra, extra_first=extra_first)
+    dup = _write_entries(tmp_path, "dup_readme.zip", entries)
+    assert verifier.verify_pack(str(dup)) is False
+    assert "duplicate" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.parametrize("extra_first", [True, False])
+@pytest.mark.parametrize("identical", [True, False])
+def test_duplicate_validation_log_rejected(tmp_path, capsys, extra_first, identical):
+    pack_path, _ = _make_pack(tmp_path, with_validation_log=True)
+    members = _read_members(pack_path)
+    log_name = _validation_name(members)
+    if identical:
+        extra = members[log_name]
+    else:
+        extra = members[log_name] + b"\nTAMPERED\n"
+    entries = _entries_with_duplicate(members, log_name, extra, extra_first=extra_first)
+    dup = _write_entries(tmp_path, "dup_log.zip", entries)
+    assert verifier.verify_pack(str(dup)) is False
+    assert "duplicate" in capsys.readouterr().out.lower()
+
+
+def test_cli_rejects_duplicate_entries(tmp_path):
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    entries = _entries_with_duplicate(members, "README.txt", members["README.txt"] + b"\nTAMPERED\n", extra_first=True)
+    dup = _write_entries(tmp_path, "dup_cli.zip", entries)
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), str(dup)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+    assert "duplicate" in (proc.stdout + proc.stderr).lower()
