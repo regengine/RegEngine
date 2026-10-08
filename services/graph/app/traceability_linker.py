@@ -21,14 +21,16 @@ def _require_tenant_id(tenant_id: str) -> str:
     return tenant_id
 
 
-# Obligation nodes are a shared global catalog by design (see
-# services/ingestion/app/regulation_loader.py, which MERGEs them on text
-# with no tenant, and the shared-catalog note in
-# services/admin/app/supplier_graph_sync.py). No writer stamps tenant_id
-# onto Obligation nodes today. This predicate keeps those global nodes
-# readable while excluding another tenant's private obligation if such
-# nodes ever exist.
-_OBLIGATION_TENANT_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+# Obligation rows are quarantined by Decision 3 (Oct 8, 2026): an
+# Obligation is shared across tenants only when a catalog writer
+# explicitly marks it (``catalog = true``; see
+# services/ingestion/app/regulation_loader.py and the catalog note in
+# services/admin/app/supplier_graph_sync.py). A null tenant_id alone
+# shares nothing: unmarked null-tenant rows match no tenant, and
+# tenant-stamped rows are confined to their tenant. A backfill script
+# (scripts/backfill_obligation_catalog.py) must mark pre-existing catalog
+# rows before this predicate deploys, or regulation lookups go empty.
+_OBLIGATION_TENANT_PREDICATE = "(o.tenant_id = $tenant_id OR o.catalog = true)"
 
 
 class TraceabilityLinker:
@@ -51,8 +53,8 @@ class TraceabilityLinker:
         _require_tenant_id(tenant_id)
         async with self.driver.session() as session:
             # 1. Fetch obligation text and metadata. Scoped so a tenant can
-            # use the shared global catalog but not another tenant's
-            # private obligation.
+            # use marked catalog rows but not another tenant's private
+            # obligation or an unmarked null-tenant row.
             obs_res = await session.run(
                 f"""
                 MATCH (o:Obligation {{id: $id}})
@@ -68,9 +70,11 @@ class TraceabilityLinker:
 
             text = obs["text"].lower()
 
-            # 2. Heuristic mapping:
-            # If obligation mentions 'temperature', 'cooling', 'receiving', etc.
-            # link to corresponding CTEs.
+            # 2. Heuristic mapping.
+            # If obligation mentions 'temperature', 'cooling', 'receiving', etc.,
+            # link to corresponding CTEs. The GOVERNS MERGE below re-checks
+            # the quarantine predicate so the edge only lands on an
+            # own-tenant or marked-catalog obligation.
 
             keywords = []
             if "shipping" in text:

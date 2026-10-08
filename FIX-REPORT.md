@@ -31,3 +31,38 @@ deliberately left out as beyond this blocker and its done criteria.
 
 - BUG-001, BUG-004, BUG-005, BUG-006, BUG-007 remain open strict xfails owned by other teams; this task did not touch them.
 - The scanner still resolves f-string interpolations opaquely (an unresolvable `{name}` is blanked, never inlined), so a tenant predicate that lives only inside a module constant interpolated into a query does not count toward scoping. Changing that would surface new shim findings at each use site; current behavior is pinned by a new test (`test_fstring_interpolation_alone_does_not_scope`). Say the word if you want inlining as follow-up work.
+
+## Decision applied: Decision 3, Obligation quarantine (Oct 8, 2026)
+
+Status: FIXED AND TESTED
+
+C.Lee chose quarantine: an Obligation is shared across tenants only when
+explicitly marked as the official regulation catalog. `_OBLIGATION_TENANT_PREDICATE`
+in services/graph/app/traceability_linker.py changed from
+`(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)` to
+`(o.tenant_id = $tenant_id OR o.catalog = true)`, used at all four read
+sites (link fetch, GOVERNS write, get_governing_regulations,
+get_impacted_lots). Both catalog writers now stamp the marker ON CREATE:
+regulation_loader MERGEs `ON CREATE SET o.catalog = true`, and
+supplier_graph_sync CTE_EVENT_QUERY MERGEs
+`ON CREATE SET obligation.catalog = true`. Create-only anchoring means a
+MERGE that matches a tenant-private row with the same key can never
+promote it to the shared catalog. The gate baseline shim entry was
+deleted as fixed (the shim text no longer exists) and the Obligation
+catalog-label reason now names the marker. New one-time backfill script
+scripts/backfill_obligation_catalog.py marks existing catalog-shaped
+null-tenant rows; it was written but never run (no Neo4j in this
+environment, and the task forbids running it here).
+
+Test commands and results (all through ~/metacode/fleet/heavy):
+
+- `python3 scripts/security/scan_tenant_scope.py` -> `Tenant-scope query gate passed (0 stale baseline entries).`, exit 0.
+- `.venv/bin/python -m pytest services/graph/tests/test_traceability_linker_tenant_scope.py services/graph/tests/test_cypher_tenant_scope_scan.py tests/security/test_tenant_scope_scan.py -p no:cacheprovider --no-cov` -> `89 passed, 4 skipped, 5 xfailed in 6.95s`. The 4 skips are catalog-allowlist reads (pre-existing). The 5 xfails are the unrelated known gaps BUG-001/004/005/006/007.
+- `.venv/bin/python -m pytest services/ingestion/tests/test_regulation_loader_hardening.py services/admin/tests/test_supplier_graph_sync_tenant_scoping.py -p no:cacheprovider --no-cov` -> `22 passed in 0.96s`.
+- `.venv/bin/ruff check` on all eight touched Python files -> `All checks passed!`
+- Fail-without-fix proof: with product code untouched, the updated tests failed as intended (8 failed in the linker test file, 3 obligation predicate failures in the cypher scan file, and both new writer marker tests failed); after the fix all pass. New guard `test_obligation_predicate_old_null_shim_rejected` goes red if the old IS NULL shape ever returns.
+
+What must happen before a deploy:
+
+- Run the backfill before this deploys, or regulation lookups go empty: `python3 scripts/backfill_obligation_catalog.py --dry-run` first to review counts, then `python3 scripts/backfill_obligation_catalog.py --apply`. Rows it leaves unmarked stay hidden from every tenant by design; review the printed quarantined sample ids.
+- Note: mapping_engine and compliance Obligation reads use strict `o.tenant_id = $tenant_id` and never matched null-tenant catalog rows, so they are unchanged by this work and still cannot see catalog rows. If those paths need catalog access, that is a separate decision.

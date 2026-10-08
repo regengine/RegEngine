@@ -762,11 +762,13 @@ async def test_map_requirement_empty_tenant_rejected_before_query(tenant_id):
 # ── Runtime tests: traceability linker composed queries ──────────────────────
 # #3220 rebuilt the linker queries as f-strings interpolating
 # _OBLIGATION_TENANT_PREDICATE, so they are invisible to the static scan and
-# are covered here instead (see DYNAMIC_INVENTORY). Obligation nodes are a
-# shared global catalog that may one day include tenant-private rows, so
-# each composed query must carry the shared-catalog predicate with
-# $tenant_id bound as a parameter, never interpolated. Fake sessions only;
-# no driver or network is touched.
+# are covered here instead (see DYNAMIC_INVENTORY). Obligation rows are
+# quarantined by Decision 3: only rows stamped ``catalog = true`` by a
+# catalog writer are shared, tenant-stamped rows are confined to their
+# tenant, and unmarked null-tenant rows match no tenant. Each composed
+# query must carry the quarantine predicate with $tenant_id bound as a
+# parameter, never interpolated. Fake sessions only; no driver or network
+# is touched.
 
 
 class _LinkerCaptureSession:
@@ -805,14 +807,16 @@ def _linker_with_capture(store):
     return linker, session
 
 
-# Independent expectation: shared-or-own catalog predicate. Literal on
-# purpose — importing the product constant would mirror the implementation.
-_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+# Independent expectation: quarantine predicate. Literal on purpose —
+# importing the product constant would mirror the implementation. There is
+# deliberately no ``IS NULL`` arm: unmarked null-tenant rows must match no
+# tenant, and only ``catalog = true`` rows are shared.
+_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id = $tenant_id OR o.catalog = true)"
 _OBLIGATION_WHERE_RE = re.compile(r"WHERE\s*" + re.escape(_EXPECTED_OBLIGATION_PREDICATE) + r"\s*(MATCH|RETURN|MERGE)")
 
 
 def _assert_obligation_predicate(source: str, query: str, kwargs: dict) -> None:
-    """The exact shared-catalog WHERE predicate is present, bound, not interpolated."""
+    """The exact quarantine WHERE predicate is present, bound, not interpolated."""
     flat = _flatten(query)
     assert _OBLIGATION_WHERE_RE.search(flat), (
         f"{source}: missing exact shared-catalog WHERE {_EXPECTED_OBLIGATION_PREDICATE!r} "
@@ -830,7 +834,7 @@ async def test_obligation_predicate_weakened_or_true_rejected(monkeypatch):
     monkeypatch.setattr(
         linker_module,
         "_OBLIGATION_TENANT_PREDICATE",
-        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id OR true)",
+        "(o.tenant_id = $tenant_id OR o.catalog = true OR true)",
     )
     store: list = []
     linker, session = _linker_with_capture(store)
@@ -839,6 +843,30 @@ async def test_obligation_predicate_weakened_or_true_rejected(monkeypatch):
     query, kwargs = store[0]
     with pytest.raises(AssertionError):
         _assert_obligation_predicate("weakened-predicate", query, kwargs)
+
+
+@pytest.mark.asyncio
+async def test_obligation_predicate_old_null_shim_rejected(monkeypatch):
+    """The pre-quarantine null-tenant shim must fail the quarantine check.
+
+    Decision 3 removed the ``o.tenant_id IS NULL`` arm because it showed
+    every unmarked null-tenant obligation to every tenant. If that shape
+    ever returns, this test goes red.
+    """
+    import services.graph.app.traceability_linker as linker_module
+
+    monkeypatch.setattr(
+        linker_module,
+        "_OBLIGATION_TENANT_PREDICATE",
+        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)",
+    )
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"regulation": "FSMA", "requirement": "x", "requirement_id": "obl-9"}])
+    await linker.get_governing_regulations("tlc-1", TENANT_A)
+    query, kwargs = store[0]
+    with pytest.raises(AssertionError):
+        _assert_obligation_predicate("null-shim-predicate", query, kwargs)
 
 
 @pytest.mark.asyncio

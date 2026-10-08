@@ -20,7 +20,7 @@ version: 1
 
 global_catalog_labels:
   # Core FSMA regulation text shared by every tenant (DB_GLOBAL).
-  Obligation: "Global regulatory obligation catalog in the shared Neo4j database; readable across tenants by design."
+  Obligation: "Global regulatory obligation catalog in the shared Neo4j database; readable across tenants by design when marked catalog = true by a catalog writer (Decision 3 quarantine)."
   Section: "Global regulation section catalog in the shared Neo4j database; readable across tenants by design."
   Regulation: "Global regulation catalog in the shared Neo4j database; readable across tenants by design."
   Citation: "Global citation catalog in the shared Neo4j database; readable across tenants by design."
@@ -42,16 +42,11 @@ global_sql_tables:
   food_traceability_list: "Static FDA food traceability list; no tenant rows."
 
 baseline:
-  # Obligation nodes are a shared global catalog by design: the regulation
-  # loader and supplier graph sync MERGE them with no tenant_id, so the null
-  # arm matches only those global rows. The equality arm confines private
-  # tenant-stamped obligations to their tenant, and _require_tenant_id
-  # rejects empty tenants, so a null parameter cannot match every row.
-  - file: services/graph/app/traceability_linker.py
-    scope: _OBLIGATION_TENANT_PREDICATE
-    rule: tenant-failopen-shim
-    target: query
-    reason: "Intended global-or-own Obligation catalog predicate (see the design comment at the constant); every caller passes a non-empty tenant_id."
+  # Decision 3 (Oct 8, 2026) removed the _OBLIGATION_TENANT_PREDICATE
+  # null-tenant shim from services/graph/app/traceability_linker.py; the
+  # predicate is now (o.tenant_id = $tenant_id OR o.catalog = true), so
+  # this baseline entry was deleted as fixed. Catalog writers stamp
+  # catalog = true ON CREATE; unmarked null-tenant rows match no tenant.
   # The four queries below run against the shared global regulatory
   # database through global_client, never a tenant database. The provision
   # hashes they look up come from tenant-scoped ControlMapping rows read
