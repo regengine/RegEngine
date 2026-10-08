@@ -37,7 +37,8 @@ async def list_regulations(
             query = f"""
                 MATCH (r:Regulation)
                 {where_clause}
-                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s)
+                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s:Section)
+                WHERE s.tenant_id = $tenant_id
                 RETURN r.name as name, count(s) as section_count, r.version as version
                 ORDER BY r.name
                 SKIP $skip LIMIT $limit
@@ -168,6 +169,11 @@ async def get_requirement_mappings(
             where_clauses = [
                 "o1.tenant_id = $tenant_id",
                 "o2.tenant_id = $tenant_id",
+                # Joined Sections must be scoped too: a cross-tenant
+                # Section behind a stray REQUIRES edge would leak its
+                # regulation name into our mappings.
+                "s1.tenant_id = $tenant_id",
+                "s2.tenant_id = $tenant_id",
             ]
             params: Dict[str, Any] = {"skip": skip, "limit": limit, "tenant_id": str(tenant_id)}
 

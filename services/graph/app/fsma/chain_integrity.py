@@ -30,13 +30,22 @@ async def find_gaps(
 
     Returns:
         List of events with gap details
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty. A null tenant
+            would read every tenant's gap events on Community Neo4j,
+            where all tenants share one database. Fail closed, matching
+            `find_broken_chains` (#1301).
     """
+    if not tenant_id:
+        raise ValueError("find_gaps requires a non-empty tenant_id; null-tenant queries are not supported")
+
     start_time = time.time()
 
     # Find events missing key fields
     query = """
     MATCH (e:TraceEvent)
-    WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
+    WHERE e.tenant_id = $tenant_id
     AND (
         e.event_date IS NULL OR
         e.event_date = '' OR
