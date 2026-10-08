@@ -129,6 +129,10 @@ class FSMAExtractor(
         """
         if not tenant_id or not str(tenant_id).strip():
             raise ValueError("E_MISSING_TENANT_ID")
+        if not isinstance(text, str):
+            raise TypeError(
+                f"extract received {type(text).__name__}; caller must pass a str"
+            )
         logger.info(
             "fsma_extraction_started",
             document_id=document_id,
