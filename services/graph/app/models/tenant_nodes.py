@@ -63,8 +63,11 @@ class RegulationOverride:
 
     @staticmethod
     def merge_cypher() -> str:
+        # Tenant-scoped MERGE: override_id alone is not unique across
+        # tenants, so the tenant_id predicate prevents one tenant's write
+        # from matching and overwriting another tenant's override node.
         return """
-        MERGE (r:RegulationOverride {override_id: $override_id})
+        MERGE (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
         ON CREATE SET r += $properties, r.created_at = datetime()
         ON MATCH SET r += $properties
         RETURN r
@@ -75,8 +78,10 @@ class OverlayRelationships:
     """Cypher templates for Overlay relationships."""
 
     # Tenant HAS_OVERLAY -> RegulationOverride
+    # Both ends carry tenant_id so a tenant cannot link its overlay to
+    # another tenant's override node when override_id values collide.
     TENANT_HAS_OVERRIDE = """
     MATCH (t:TenantOverlay {tenant_id: $tenant_id})
-    MATCH (r:RegulationOverride {override_id: $override_id})
+    MATCH (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
     MERGE (t)-[:HAS_OVERRIDE]->(r)
     """
