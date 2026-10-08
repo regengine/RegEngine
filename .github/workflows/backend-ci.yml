@@ -955,6 +955,7 @@ jobs:
             tests/security/test_global_admin_context_allowlist.py \
             tests/security/test_security_audit_fixes.py \
             tests/security/test_auth_coverage.py \
+            tests/security/test_tenant_route_isolation_matrix.py \
             tests/security/test_route_security_manifest.py \
             tests/security/test_staging_release_gate_runner.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
