@@ -72,6 +72,8 @@ def parse_query(
     today: Optional[date] = None,
 ) -> QueryPlan:
     """Convert natural language into a deterministic query plan."""
+    if not isinstance(query, str):
+        raise TypeError(f"parse_query requires str, got {type(query).__name__}")
 
     normalized = _normalize(query)
     lowered = normalized.lower()
