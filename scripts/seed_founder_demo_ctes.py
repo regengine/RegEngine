@@ -33,6 +33,11 @@ Defaults to the local ingestion service (http://localhost:8002) and refuses
 to target any non-local host unless BOTH an explicit URL and
 --allow-production are given. Secrets come from the environment only.
 TLS certificate errors are never downgraded; they abort the run.
+Plain http is refused for any non-local host (localhost, 127.0.0.1 and
+::1 may stay http for local dev), even with --allow-production.
+Redirects are never followed, so the API key, tenant ID and webhook
+signature are not forwarded to a host the allowlist never approved;
+a redirect fails the run with a clear error.
 """
 
 from __future__ import annotations
@@ -91,6 +96,7 @@ def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
                 "Pass --allow-production with an explicit URL only if you "
                 "intentionally want demo data in that environment."
             )
+    require_https_for_non_local(target)
     return target
 
 
@@ -109,6 +115,73 @@ def is_tls_cert_failure(exc: BaseException) -> bool:
     if isinstance(exc, ssl.SSLCertVerificationError):
         return True
     return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+
+
+def require_https_for_non_local(target: str) -> None:
+    """Reject plain http targets outside this machine.
+
+    http stays allowed for local dev (localhost, 127.0.0.1, ::1).
+    Anything else must use https, even with --allow-production, so the
+    API key never travels in cleartext.
+    """
+    scheme = urllib.parse.urlparse(target).scheme.lower()
+    if scheme == "http" and not is_local_target(target):
+        raise UnsafeTargetError(
+            f"Refusing plain http for non-local target {target!r}. "
+            "Use https (http is allowed only for local targets such as "
+            "localhost and 127.0.0.1)."
+        )
+
+
+class RedirectRefusedError(urllib.error.HTTPError):
+    """Raised when a redirect is refused so credentials are never forwarded."""
+
+
+class _NoFollowRedirect(urllib.request.HTTPRedirectHandler):
+    """Block every redirect so auth headers never reach another host.
+
+    urllib follows redirects by default and re-sends the original request
+    headers (including X-RegEngine-API-Key, X-Tenant-ID and
+    X-Webhook-Signature) to the redirect target, which the seed allowlist
+    never approved. Seed scripts fail instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RedirectRefusedError(
+            req.get_full_url(),
+            code,
+            f"Refusing to follow redirect (HTTP {code}) to {newurl!r}. "
+            "Seed scripts never follow redirects so the API key, tenant ID "
+            "and webhook signature are not forwarded to another host.",
+            headers,
+            fp,
+        )
+
+
+def _no_redirect_opener(ctx):
+    """Build an opener whose chain has no redirect-following handler.
+
+    Built explicitly instead of build_opener with extras so the default
+    HTTPRedirectHandler, which would forward auth headers, is never in
+    the chain.
+    """
+    opener = urllib.request.OpenerDirector()
+    opener.add_handler(urllib.request.ProxyHandler())
+    opener.add_handler(urllib.request.UnknownHandler())
+    opener.add_handler(urllib.request.HTTPHandler())
+    opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(_NoFollowRedirect())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
+    opener.add_handler(urllib.request.HTTPSHandler(context=ctx))
+    return opener
+
+
+def urlopen_no_redirect(req: urllib.request.Request, *, context=None, timeout=None):
+    """Open an http(s) request without following redirects."""
+    opener = _no_redirect_opener(context)
+    if timeout is None:
+        return opener.open(req)
+    return opener.open(req, timeout=timeout)
 
 
 # GS1 check digit — mirrors services/shared/fsma_validation.py:_gs1_check_digit
@@ -420,10 +493,13 @@ RESUBMIT_TLCS = {"VFF-ROM-0708-P", "FC-MIX-0709-X", "SGF-TOM-0712-P", "PGC-SAL-0
 def check_health(base: str) -> int:
     ctx = create_ssl_context()
     try:
-        with urllib.request.urlopen(urllib.request.Request(f"{base}/health"), context=ctx, timeout=10) as r:
+        with urlopen_no_redirect(urllib.request.Request(f"{base}/health"), context=ctx, timeout=10) as r:
             body = json.loads(r.read())
     except ssl.SSLCertVerificationError as e:
         print(f"ERROR: TLS certificate verification failed: {e}. Refusing to continue.")
+        return 1
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
         return 1
     except Exception as e:  # noqa: BLE001
         if is_tls_cert_failure(e):
@@ -448,8 +524,11 @@ def status(base: str, tenant: str) -> int:
     url = f"{base}/api/v1/readiness/assessment?tenant_id={tenant}"
     req = urllib.request.Request(url, headers={"X-RegEngine-API-Key": api_key, "X-Tenant-ID": tenant})
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+        with urlopen_no_redirect(req, context=ctx, timeout=30) as r:
             body = json.loads(r.read())
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
+        return 1
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code}: {e.read().decode()[:400]}")
         return 1
@@ -514,7 +593,7 @@ def post_batch(base, api_key, tenant, source, events, idem, hmac_secret, ctx) ->
         sig = hmac.new(hmac_secret.encode(), data, hashlib.sha256).hexdigest()
         headers["X-Webhook-Signature"] = f"sha256={sig}"
     req = urllib.request.Request(f"{base}/api/v1/webhooks/ingest", data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, context=ctx, timeout=60) as resp:
+    with urlopen_no_redirect(req, context=ctx, timeout=60) as resp:
         return json.loads(resp.read())
 
 
@@ -575,6 +654,9 @@ def main(argv=None) -> int:
         idem = f"{SEED_VERSION}-{'fix1-' if args.fix else ''}{source}"
         try:
             result = post_batch(base, api_key, tenant, source, events, idem, hmac_secret, ctx)
+        except RedirectRefusedError as e:
+            print(f"[{source}] ERROR: {e.msg} Refusing to continue.")
+            return 1
         except urllib.error.HTTPError as e:
             print(f"[{source}] HTTP {e.code}: {e.read().decode()[:500]}")
             return 1
