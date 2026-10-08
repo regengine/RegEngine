@@ -781,10 +781,18 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_disabled", key_id=key_id)
                 return None
 
-            # Check if expired
-            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-                logger.warning("api_key_expired", key_id=key_id)
-                return None
+            # Check if expired. Naive datetimes (no tzinfo) can arrive
+            # from hand-built rows or drivers that drop the offset; assume
+            # UTC so the comparison never raises TypeError (which would
+            # surface as a 500 instead of an auth decision). This matches
+            # the in-memory APIKeyStore.validate_key guard.
+            if api_key.expires_at:
+                expires_at = api_key.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at < datetime.now(timezone.utc):
+                    logger.warning("api_key_expired", key_id=key_id)
+                    return None
 
             # Check if revoked
             if api_key.revoked_at:
