@@ -9,6 +9,7 @@
 
 import { getServiceURL } from './api-config';
 import { fetchWithCsrf } from './fetch-with-csrf';
+import { apiError } from './api-error';
 
 const BASE = () => getServiceURL('ingestion');
 const API_FETCH_TIMEOUT_MS = 8000;
@@ -24,8 +25,9 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        let res: Response;
         try {
-            const res = await fetchWithCsrf(`${BASE()}${path}`, {
+            res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
                 credentials: 'include', // Send HTTP-only cookies
                 signal: options.signal ?? AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
@@ -34,28 +36,37 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
                     ...options.headers,
                 },
             });
-
-            if (res.ok) {
-                return res.json();
-            }
-
-            // Don't retry client errors (4xx)
-            if (res.status >= 400 && res.status < 500) {
-                throw new Error(`API error: ${res.status} ${res.statusText}`);
-            }
-
-            // Server error (5xx) — retry
-            lastError = new Error(`API error: ${res.status} ${res.statusText}`);
         } catch (err) {
+            // Network failure only: retry unless the request was aborted.
             lastError = err instanceof Error ? err : new Error('Network request failed');
             if (isAbortError(err)) {
                 throw lastError;
             }
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
         }
 
-        if (attempt < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+        if (res.ok) {
+            // Parse outside the retryable section. A malformed success body is
+            // a contract error, not a transient failure, and retrying here
+            // would re-execute POST mutations that have side effects.
+            return res.json();
         }
+
+        // 429 and 5xx are transient: retry. Every other 4xx is final, in
+        // particular 401/403 which need immediate session handling, not
+        // two more doomed requests and seconds of added latency.
+        if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
+            lastError = apiError(res.status, res.statusText);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
+        }
+
+        throw apiError(res.status, res.statusText);
     }
 
     throw lastError!;
