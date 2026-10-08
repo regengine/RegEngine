@@ -50,6 +50,7 @@ from shared.tenant_context import set_tenant_guc
 
 from .authz import IngestionPrincipal, require_permission
 from .config import get_settings
+from .shared.csv_safety import sanitize_cell
 from .shared.tenant_resolution import resolve_principal_tenant_id
 from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
 from .webhook_compat import SourceFileReceipt, ingest_events
@@ -217,8 +218,10 @@ def _generate_csv_template(cte_type: str) -> str:
     # Row 1: Column headers
     writer.writerow([col[0] for col in columns])
 
-    # Row 2: Example data
-    writer.writerow([col[1] for col in columns])
+    # Row 2: Example data. Sanitized with the same sanitize_cell the FDA
+    # export uses: an example such as "+1-202-555-0100" would otherwise open
+    # in Excel as a live formula instead of sample text.
+    writer.writerow([sanitize_cell(col[1]) for col in columns])
 
     # Row 3: Descriptions (commented)
     writer.writerow([f"# {col[2]}" for col in columns])
@@ -323,7 +326,9 @@ _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 # Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
 # yields after the header. DictReader skips completely blank lines, so they
 # do not count; comment rows and all-empty rows do. The next row is an error
-# and parsing stops. _file_cte_type_for_jev scans exactly these rows.
+# and parsing stops; rows past it are counted (not stored) and reported as
+# skipped so the caller knows exactly what was dropped.
+# _file_cte_type_for_jev scans exactly these rows.
 MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
@@ -743,6 +748,7 @@ def parse_csv_rows(
     # endings, a field over csv.field_size_limit(), usually from an unclosed
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
+    skipped_overflow = 0
     try:
         header = reader.fieldnames
         if header and any(name.strip() for name in header):
@@ -763,6 +769,16 @@ def parse_csv_rows(
             records.append(record)
             if len(records) > MAX_CSV_ROWS:
                 break
+        if len(records) > MAX_CSV_ROWS:
+            # The cap below rejects the first over-limit record, but the
+            # file may hold many more rows the reader never reached. Count
+            # them (without storing them) so the caller learns exactly what
+            # was dropped instead of silently losing data.
+            try:
+                skipped_overflow = sum(1 for _ in reader)
+            except csv.Error:
+                # A malformed tail must not break the rows already read.
+                skipped_overflow = 0
     except csv.Error as exc:
         line = reader.reader.line_num
         logger.warning("csv_unreadable line=%s error=%s", line, exc)
@@ -780,6 +796,10 @@ def parse_csv_rows(
     for row_num, row in enumerate(records, start=2):
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
         if row_num - 1 > MAX_CSV_ROWS:
+            if skipped_overflow:
+                parse_errors.append(
+                    f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
+                )
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
         # DictReader files values past the last header column under the None
