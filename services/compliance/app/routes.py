@@ -192,7 +192,8 @@ async def list_industries() -> IndustriesResponse:
 async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
     results = _CHECKLISTS
     if industry:
-        wanted = _INDUSTRY_FILTER_ALIASES.get(industry.lower(), industry.lower())
+        cleaned = industry.strip().lower()
+        wanted = _INDUSTRY_FILTER_ALIASES.get(cleaned, cleaned)
         results = [c for c in results if c.industry.lower() == wanted]
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 

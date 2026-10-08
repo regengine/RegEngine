@@ -164,6 +164,24 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
         return (str(raw)[:10], "")
 
 
+def _is_recorded(value: Any) -> bool:
+    """A KDE counts as recorded unless it is missing (None) or blank.
+
+    A bare truthiness check drops legitimate zero measurements: a
+    ``quantity`` of 0 and a ``temperature`` of 0 are routine real-world
+    readings that must not render as blank on a regulator-facing export.
+    """
+    return value is not None and value != ""
+
+
+def _first_recorded(*values: Any, default: str = "") -> Any:
+    """Return the first recorded value, falling back to ``default``."""
+    for value in values:
+        if _is_recorded(value):
+            return value
+    return default
+
+
 def _normalise_event(
     event: dict[str, Any],
     *,
@@ -186,15 +204,15 @@ def _normalise_event(
         kdes.get("event_date") or event.get("event_date") or event.get("event_timestamp") or ""
     )
     event_date, event_time = _parse_timestamp(event_date_raw, strict=strict_dates)
-    if kdes.get("event_time"):
+    if _is_recorded(kdes.get("event_time")):
         event_time = str(kdes["event_time"])
 
     # Collect named KDE values
-    kde_vals = {k: str(kdes.get(k, "")) for k in _NAMED_KDE_KEYS if kdes.get(k)}
+    kde_vals = {k: str(kdes[k]) for k in _NAMED_KDE_KEYS if _is_recorded(kdes.get(k))}
 
     # Extra KDEs -> JSON. Even a JSON-encoded string can begin with ``=``
     # once a spreadsheet renders it, so sanitize the serialized blob too.
-    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v}
+    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and _is_recorded(v)}
     extra_json = json.dumps(extra, default=str) if extra else ""
 
     row = {
@@ -203,7 +221,7 @@ def _normalise_event(
         "event_time": event_time,
         "traceability_lot_code": event.get("tlc") or event.get("traceability_lot_code") or "",
         "product_description": event.get("product_description") or kdes.get("product_description") or "",
-        "quantity": str(event.get("quantity") or kdes.get("quantity") or ""),
+        "quantity": str(_first_recorded(event.get("quantity"), kdes.get("quantity"))),
         "unit_of_measure": event.get("uom") or event.get("unit_of_measure") or kdes.get("unit_of_measure") or "",
         "origin_gln": event.get("facility_gln")
         or event.get("location_gln")
