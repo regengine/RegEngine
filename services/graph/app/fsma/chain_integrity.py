@@ -32,11 +32,11 @@ async def find_gaps(
         List of events with gap details
 
     Raises:
-        ValueError: if `tenant_id` is None or empty. The previous
-            `$tenant_id IS NULL OR ...` shim let null-tenant callers
-            read every tenant's events, so callers must pass a tenant.
+        ValueError: if `tenant_id` is None, empty, or whitespace-only. The
+            previous `$tenant_id IS NULL OR ...` shim let null-tenant
+            callers read every tenant's events, so callers must pass a tenant.
     """
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
             "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
         )
@@ -127,7 +127,7 @@ async def find_broken_chains(
     # `$tenant_id IS NULL OR l.tenant_id = $tenant_id` idiom was a
     # test-time shim that turned into a production info-disclosure the
     # moment a caller forgot to pass tenant_id. Prefer a loud error.
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
             "find_broken_chains requires a non-empty tenant_id; null-tenant queries are no longer supported (#1301)"
         )
@@ -384,7 +384,7 @@ async def find_all_gaps(
         ValueError: if `tenant_id` is None or empty (propagated from
             the underlying gap queries, which require a tenant).
     """
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
             "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
         )

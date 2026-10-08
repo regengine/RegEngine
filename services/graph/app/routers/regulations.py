@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
-from shared.auth import APIKey, require_api_key
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from shared.auth import APIKey, reconcile_tenant_scope, require_api_key
 from shared.middleware import get_current_tenant_id
 
 from ..neo4j_utils import Neo4jClient
@@ -201,6 +201,7 @@ async def get_requirement_mappings(
 
 @router.post("/harmonize/{obligation_id}")
 async def harmonize_requirement(
+    request: Request,
     obligation_id: str,
     api_key: APIKey = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -211,14 +212,22 @@ async def harmonize_requirement(
     from ..config import settings
     from ..mapping_engine import MappingEngine
 
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # Fail closed when the middleware-resolved tenant differs from the
+    # authenticated API-key tenant (same reconcile as the gaps routes).
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    scoped_uuid = uuid.UUID(scoped_tenant_id)
+    db_name = Neo4jClient.get_tenant_database_name(scoped_uuid)
     engine = MappingEngine(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
         password=settings.neo4j_password,
+        # Route reads and writes through the tenant database when
+        # Enterprise mode is on; None keeps the driver home database
+        # (Community shares one database and isolates by property).
+        database=db_name if settings.neo4j_enterprise else None,
     )
     try:
-        mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
+        mappings = await engine.map_requirement(obligation_id, tenant_id=scoped_tenant_id)
         await engine.close()
         return {
             "status": "completed",
@@ -227,5 +236,5 @@ async def harmonize_requirement(
             "mappings": mappings,
         }
     except Exception as e:
-        logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=str(tenant_id), error=str(e))
+        logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=scoped_tenant_id, error=str(e))
         raise HTTPException(status_code=503, detail="Harmonization engine unavailable")
