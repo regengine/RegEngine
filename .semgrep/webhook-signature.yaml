@@ -1,0 +1,54 @@
+# Webhook fail-open guard (Wave 3 foundational fix).
+#
+# The optional-signature shape below accepts unsigned webhooks whenever
+# the secret or the signature is missing, so anyone who can reach the
+# endpoint can forge supply-chain or payment events with no secret:
+#
+#     if secret and signature:
+#         verify(...)
+#
+# The required shape is a config-time refusal plus a request-time 401
+# (see ``services/shared/webhook_auth.py``):
+#
+#     secret = require_webhook_secret(config.webhook_secret)  # raises if unset
+#     verify_webhook_signature(payload, header, secret)        # raises if bad
+#
+# Wire into CI via:
+#   semgrep --config .semgrep/webhook-signature.yaml --error .
+# (also loaded in the repo-local rules gate in
+# ``.github/workflows/security.yml``).
+#
+# Deliberately NOT included: a bare ``if not $SECRET: ...`` pattern.
+# Every fail-closed guard (including ``require_webhook_secret`` itself
+# and the Stripe route's missing-secret 500) has that shape, so flagging
+# it would punish the fix. Only the ``and`` form is the fail-open signal.
+#
+# To grant a legitimate exception, add a ``# nosemgrep:
+# webhook-signature-failopen`` comment on the same line with rationale.
+
+rules:
+  - id: webhook-signature-failopen
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Webhook verification skipped when secret or signature is missing.
+      Refuse unsigned webhooks instead: gate on
+      shared.webhook_auth.require_webhook_secret at config time and call
+      shared.webhook_auth.verify_webhook_signature (or
+      verify_webhook_or_401) at request time.
+    paths:
+      exclude:
+        # Known fail-open line owned by in-flight PRs; do not touch.
+        # Re-enable coverage here once those PRs land the shared helper.
+        - "services/shared/external_connectors/safetyculture.py"
+        - "**/tests/**"
+        - "**/test_*.py"
+        - "**/conftest.py"
+    patterns:
+      - pattern: "if $SECRET and $SIG: ..."
+      - metavariable-regex:
+          metavariable: $SECRET
+          regex: (?i).*(secret|hmac).*
+      - metavariable-regex:
+          metavariable: $SIG
+          regex: (?i).*(sig|signature|hmac).*

@@ -403,7 +403,7 @@ class TestPackageManifest:
         assert recomputed == contents2["package_hash"], "Embedded package_hash must match recomputed hash of manifest"
 
     def test_07_submit_package(self, tenant_id, workflow):
-        """Add final_approval signoff and submit the package."""
+        """Prove the blocking-defect gate blocks, then submit with force."""
         workflow.add_signoff(
             tenant_id,
             _State.case_id,
@@ -412,7 +412,26 @@ class TestPackageManifest:
             notes="Approved for submission.",
         )
 
-        # Submit with force=True to bypass any rule-failure blockers
+        # This scenario ships known defects (the cooling event is missing
+        # required KDEs), so the gate must refuse a normal submission.
+        # Proving the refusal is the point: force=True must override a
+        # gate that demonstrably works, not paper over one that does not.
+        defect_check = workflow.check_blocking_defects(tenant_id, _State.case_id)
+        assert defect_check["blocker_count"] > 0, (
+            "expected blocking defects in the manifest scenario. "
+            "without blockers the force=True path below proves nothing"
+        )
+        assert defect_check["can_submit"] is False
+        with pytest.raises(ValueError, match="blocking defect"):
+            workflow.submit_package(
+                tenant_id,
+                _State.case_id,
+                package_id=_State.package_id,
+                submitted_by="vp_quality@test.com",
+                submitted_to="FDA",
+                submission_method="export",
+            )
+
         result = workflow.submit_package(
             tenant_id,
             _State.case_id,

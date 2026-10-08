@@ -29,6 +29,10 @@ def _set_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENV", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/regengine")
     monkeypatch.setenv("REDIS_URL", "redis://example.invalid/0")
+    # A valid Fernet key: strict startup now requires MFA_ENCRYPTION_KEY.
+    # Generated once via Fernet.generate_key(); tests for the missing/invalid
+    # cases delete or overwrite it.
+    monkeypatch.setenv("MFA_ENCRYPTION_KEY", "7TwbyOpMj0u31nuekNYjEQP_uBsnsUChZQEHxUL40JE=")
     monkeypatch.setenv("AUTH_SECRET_KEY", "test-secret-that-is-long-enough")
     monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
     monkeypatch.delenv("SESSION_STORE_BACKEND", raising=False)
