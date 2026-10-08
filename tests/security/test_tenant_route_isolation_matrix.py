@@ -56,8 +56,10 @@ _ENV_KEYS = (
     "REDIS_URL",
     "REGENGINE_API_KEY",
     "REGENGINE_ENV",
+    "REGENGINE_REDIS_URL",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    "WEBHOOK_HMAC_SECRET",
 )
 
 
@@ -119,6 +121,8 @@ def matrix_client():
     os.environ.setdefault("AUTH_SECRET_KEY", "tenant-matrix-signing-material")
     os.environ.setdefault("METRICS_API_KEY", "tenant-matrix-metrics")
     os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+    os.environ.setdefault("REGENGINE_REDIS_URL", os.environ["REDIS_URL"])
+    os.environ.pop("WEBHOOK_HMAC_SECRET", None)
     os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_tenant_matrix")
     os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_tenant_matrix")
     os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
@@ -143,11 +147,52 @@ def matrix_client():
 
 
 def _tenant_api_key_operations(manifest: dict) -> list[dict]:
+    # Covers both plain API-key routes and API-key-plus-HMAC routes
+    # (e.g. webhook:POST:/api/v1/webhooks/ingest). The HMAC dependency is
+    # neutralized (WEBHOOK_HMAC_SECRET unset) in the generic key probes.
+    # Signed probes below additionally require the exact key-auth errors.
     return [
         operation
         for operation in manifest["enabled_operations"]
-        if operation["classification"] == "tenant-scoped" and operation["authentication"] == "x-regengine-api-key"
+        if operation["classification"] == "tenant-scoped"
+        and operation["authentication"] in {"x-regengine-api-key", "x-regengine-api-key+hmac-signature"}
     ]
+
+
+def _tenant_hmac_operations(manifest: dict) -> list[dict]:
+    return [
+        operation
+        for operation in manifest["enabled_operations"]
+        if operation["classification"] == "tenant-scoped"
+        and operation["authentication"] == "x-regengine-api-key+hmac-signature"
+    ]
+
+
+# Current manifest inventory of the API-key-plus-HMAC class. Update only
+# with security review: a silent disappearance must fail loudly.
+EXPECTED_HMAC_OPERATIONS = frozenset({"webhook:POST:/api/v1/webhooks/ingest"})
+
+
+def test_tenant_hmac_operations_are_exercised(matrix_client):
+    """Completeness: every current +HMAC operation is in the probe set."""
+    _, manifest = matrix_client
+    hmac_ids = {o["operation"] for o in _tenant_hmac_operations(manifest)}
+    assert hmac_ids, "Expected at least one tenant-scoped +HMAC operation in the manifest"
+    assert hmac_ids == EXPECTED_HMAC_OPERATIONS, (
+        "API-key-plus-HMAC inventory changed; review before updating EXPECTED_HMAC_OPERATIONS. "
+        f"Missing: {sorted(EXPECTED_HMAC_OPERATIONS - hmac_ids)}, "
+        f"new: {sorted(hmac_ids - EXPECTED_HMAC_OPERATIONS)}"
+    )
+    probed_ids = {o["operation"] for o in _tenant_api_key_operations(manifest)}
+    assert hmac_ids <= probed_ids, f"+HMAC operations not exercised by API-key probes: {sorted(hmac_ids - probed_ids)}"
+
+
+def _webhook_hmac_headers(secret: str, raw_body: bytes) -> dict[str, str]:
+    import hashlib
+    import hmac as hmac_module
+
+    digest = hmac_module.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return {"X-Webhook-Signature": f"sha256={digest}"}
 
 
 def _reset_probe_limiter() -> None:
@@ -166,6 +211,7 @@ def test_tenant_scoped_routes_refuse_missing_api_key(matrix_client):
     os.environ["REGENGINE_ENV"] = "staging"
     os.environ["ENV"] = "staging"
     os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
+    os.environ.pop("WEBHOOK_HMAC_SECRET", None)
 
     failures = []
     for operation in _tenant_api_key_operations(manifest):
@@ -186,6 +232,7 @@ def test_tenant_scoped_routes_refuse_wrong_api_key(matrix_client):
     os.environ["REGENGINE_ENV"] = "staging"
     os.environ["ENV"] = "staging"
     os.environ.pop("AUTH_TEST_BYPASS_TOKEN", None)
+    os.environ.pop("WEBHOOK_HMAC_SECRET", None)
 
     failures = []
     for operation in _tenant_api_key_operations(manifest):
@@ -201,6 +248,47 @@ def test_tenant_scoped_routes_refuse_wrong_api_key(matrix_client):
     assert not failures, "Tenant-scoped routes reachable with a wrong API key:\n" + "\n".join(
         f"  {f}" for f in failures
     )
+
+
+def test_hmac_routes_refuse_bad_api_key_with_valid_hmac(matrix_client, monkeypatch):
+    """With a VALID HMAC, +HMAC routes still refuse missing/wrong API keys.
+
+    Require the canonical key-auth errors, not just any denial: HMAC or
+    subscription failures must not mask a missing API-key dependency.
+    """
+    client, manifest = matrix_client
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("ENV", "staging")
+    monkeypatch.delenv("AUTH_TEST_BYPASS_TOKEN", raising=False)
+    secret = "tenant-matrix-hmac-secret"  # pragma: allowlist secret -- synthetic test signing material
+    monkeypatch.setenv("WEBHOOK_HMAC_SECRET", secret)
+
+    hmac_operations = _tenant_hmac_operations(manifest)
+    assert hmac_operations, "Expected +HMAC operations to probe with valid HMAC"
+
+    failures = []
+    for operation in hmac_operations:
+        raw_body = b"{}"
+        hmac_headers = _webhook_hmac_headers(secret, raw_body)
+        json_headers = {"Content-Type": "application/json"}
+        for label, extra, expected_detail in (
+            ("missing-key", {}, "Invalid or missing API key"),
+            ("wrong-key", {"X-RegEngine-API-Key": "rge_unknown_key_matrix_probe"}, "Invalid API key"),
+        ):
+            _reset_probe_limiter()
+            response = client.request(
+                operation["method"],
+                _concrete_path(operation["path"]),
+                content=raw_body,
+                headers={**json_headers, **hmac_headers, **extra},
+            )
+            if response.status_code != 401:
+                failures.append(f"{operation['operation']} [{label}] -> {response.status_code}")
+            elif response.json().get("detail") != expected_detail:
+                failures.append(
+                    f"{operation['operation']} [{label}] did not return the API-key guard error: {response.text[:160]}"
+                )
+    assert not failures, "API-key guard not proven under valid HMAC:\n" + "\n".join(f"  {f}" for f in failures)
 
 
 def _tenant_path_variants(path_template: str) -> tuple[str, str]:
