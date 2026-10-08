@@ -9,6 +9,7 @@ Provides:
 import abc
 import json
 import os
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -69,17 +70,36 @@ class AgentMessage:
 # ── Agent Memory ──────────────────────────────────────────
 
 
+def sanitize_agent_name(agent_name: str) -> str:
+    """Map an agent name to a safe single file stem.
+
+    Agent names can arrive from task input, so they must not be able to
+    escape the memory directory (for example ``../../etc/cron``) or
+    create hidden or surprising files. Anything outside letters,
+    digits, dash and underscore becomes an underscore, and names that
+    would be empty or just dots fall back to ``"agent"``. The result
+    never contains a path separator, so ``base_dir / name`` always
+    stays inside ``base_dir``.
+    """
+    safe = re.sub(r"[^A-Za-z0-9_-]", "_", agent_name).lstrip(".")
+    if not safe or not safe.strip("_-"):
+        return "agent"
+    return safe
+
+
 class AgentMemory:
     """Persistent memory via JSON append-log.
 
     Each agent maintains a `.swarm_memory/{agent_name}.jsonl` file
     that records all decisions, actions, and outcomes for learning.
+    The file stem is sanitized, so hostile agent names cannot escape
+    the memory directory.
     """
 
     def __init__(self, agent_name: str, base_dir: Optional[Path] = None):
         self.agent_name = agent_name
         self.base_dir = base_dir or Path.cwd() / ".swarm_memory"
-        self.log_file = self.base_dir / f"{agent_name}.jsonl"
+        self.log_file = self.base_dir / f"{sanitize_agent_name(agent_name)}.jsonl"
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
