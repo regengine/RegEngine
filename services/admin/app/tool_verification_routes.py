@@ -12,7 +12,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
 import structlog
@@ -70,6 +70,13 @@ if not _tool_access_secret_env:
         ),
     )
 TOOL_ACCESS_SECRET = _tool_access_secret_env
+
+# Lifetime of a minted tool-access JWT, in days. Matches the 30-day
+# ``re_tool_access`` cookie the frontend sets on confirm success
+# (frontend/src/app/api/tools/verify/route.ts). decode enforces exp
+# automatically (PyJWT verifies exp whenever the claim is present);
+# pre-expiry legacy tokens without exp keep working until replaced.
+TOOL_ACCESS_TOKEN_TTL_DAYS = 30
 
 # ---------------------------------------------------------------------------
 # Redis — reuse the pattern from bulk_upload/session_store.py
@@ -406,16 +413,23 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
 
     # Sign a JWT for the cookie — aud/iss pin this to the tool-access domain
     # so it cannot be swapped in as a session token (#1060).
+    # exp/iat bound the token to TOOL_ACCESS_TOKEN_TTL_DAYS (matching the
+    # 30-day re_tool_access cookie the frontend sets). Without exp a
+    # one-time email check minted a perpetual Bearer [REDACTED]: a leaked token
+    # stayed valid for months and survived email changes and offboarding.
     import jwt
 
+    now = datetime.now(timezone.utc)
     token = jwt.encode(
         {
             "email": email,
             "domain": domain,
-            "verified_at": datetime.now(timezone.utc).isoformat(),
+            "verified_at": now.isoformat(),
             "type": "tool_access",
             "aud": TOOL_ACCESS_AUDIENCE,
             "iss": SESSION_ISSUER,
+            "iat": now,
+            "exp": now + timedelta(days=TOOL_ACCESS_TOKEN_TTL_DAYS),
         },
         TOOL_ACCESS_SECRET,
         algorithm="HS256",
@@ -568,6 +582,10 @@ def decode_tool_access_token(token: str) -> dict:
     added) have no ``aud`` claim; we accept those so existing cookies keep
     working until they expire. A token with the *wrong* aud — e.g. an
     attacker pasting a session token — raises ``InvalidAudienceError``.
+
+    Tokens minted after the expiry fix carry ``exp`` (30 days), which
+    PyJWT enforces automatically. Legacy tokens without ``exp`` are
+    still accepted until they are replaced.
     """
     import jwt as _jwt
 

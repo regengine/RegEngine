@@ -416,23 +416,30 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
         parsed["events"].append(_extract_event_row(row))
         return
     if row.get("tlc_code"):
-        parsed["events"].append(_extract_event_row(row))
-        return
-    if row.get("category_id"):
-        parsed["ftl_scopes"].append(
-            {
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
-                "category_id": str(row.get("category_id") or "").strip(),
-            }
-        )
-        return
-    if row.get("tlc_code"):
+        # A typeless row naming a lot is a lot definition -- unless it
+        # also carries event signals (a timestamp or event payload),
+        # in which case it is an event whose cte_type failed validation
+        # downstream. A bare ``tlc_code``-routes-to-events check used to
+        # come first and shadowed an identical TLC branch beneath it
+        # into dead code, so lots could never be created from typeless
+        # files.
+        if row.get("event_time") or row.get("timestamp") or row.get("kde_data") or row.get("event_type"):
+            parsed["events"].append(_extract_event_row(row))
+            return
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
                 "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
                 "product_description": str(row.get("product_description") or "").strip() or None,
                 "status": str(row.get("status") or "active").strip().lower(),
+            }
+        )
+        return
+    if row.get("category_id"):
+        parsed["ftl_scopes"].append(
+            {
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "category_id": str(row.get("category_id") or "").strip(),
             }
         )
         return

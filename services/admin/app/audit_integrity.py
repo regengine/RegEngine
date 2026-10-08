@@ -11,6 +11,11 @@ import json
 from typing import List
 
 
+def _error_entry_ids(errors: list) -> set:
+    """Return the set of entry ids that have at least one error."""
+    return {err.get("id") for err in errors if isinstance(err, dict)}
+
+
 def verify_chain(entries: List[dict]) -> dict:
     """
     Verify the integrity hash chain of a list of audit entries.
@@ -118,10 +123,17 @@ def verify_chain(entries: List[dict]) -> dict:
             "resource_id": entry.get("resource", {}).get("id"),
             "metadata": entry.get("metadata", {}),
         }
+        # Severity lives at the top level in writer-shaped entries but
+        # under ``event.severity`` in export-shaped entries
+        # (audit_routes builds ``"event": {..., "severity": ...}``).
+        # Without the fallback every export-shaped row recomputes with
+        # ``severity=None`` and can never match its stored hash.
+        event_block = entry.get("event", {}) if isinstance(entry.get("event"), dict) else {}
+        severity = entry.get("severity", event_block.get("severity"))
         actor_fields = {
             "actor_id": actor.get("id"),
             "actor_email": actor.get("email"),
-            "severity": entry.get("severity"),
+            "severity": severity,
             "endpoint": entry.get("endpoint"),
         }
 
@@ -165,7 +177,11 @@ def verify_chain(entries: List[dict]) -> dict:
     return {
         "valid": len(errors) == 0,
         "total_entries": len(entries),
-        "verified": len(entries) - len(errors),
+        # ``errors`` is per-error, not per-entry (one row can append
+        # both prev_hash_mismatch and integrity_hash_mismatch), so count
+        # entries with no errors instead of subtracting error objects
+        # from the entry count (which could go negative).
+        "verified": sum(1 for entry in entries if entry.get("id") not in _error_entry_ids(errors)),
         "first_break": errors[0]["id"] if errors else None,
         "errors": errors,
         "legacy_v1_rows": legacy_v1_rows,

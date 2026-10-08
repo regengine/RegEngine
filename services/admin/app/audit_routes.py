@@ -237,6 +237,58 @@ def _export_resource_id(row: Any, anonymized_actor_ids: set[str]) -> Any:
     return resource_id
 
 
+def _build_verification_entries(rows: list[Any]) -> list[dict[str, Any]]:
+    """Build writer-shaped entries for ``verify_chain`` from raw DB rows.
+
+    The display ``entries`` above are PII-masked (actor email salted-hash,
+    metadata redacted, severity nested under ``event``), so recomputing
+    the chain hash over them can only match rows that happened to carry
+    zero redactable content. Verification must run over the canonical
+    values the writer hashed in ``audit.compute_integrity_hash``: raw
+    metadata, raw actor fields, top-level severity.
+
+    Timestamp note: the writer hashes ``datetime.now(timezone.utc)
+    .isoformat()``. This matches ``row.timestamp.isoformat()`` wherever
+    the database round-trips tz-aware microsecond timestamps (Postgres
+    timestamptz). Backends that drop tz info will show a timestamp
+    mismatch for every row; that is a backend fidelity limit, not chain
+    tampering.
+    """
+    canonical: list[dict[str, Any]] = []
+    for row in rows:
+        actor_id = getattr(row, "actor_id", None)
+        canonical.append(
+            {
+                "id": getattr(row, "id", None),
+                "tenant_id": str(getattr(row, "tenant_id", "")),
+                "timestamp": row.timestamp.isoformat() if getattr(row, "timestamp", None) else None,
+                "actor": {
+                    "id": str(actor_id) if actor_id else None,
+                    "email": getattr(row, "actor_email", None),
+                },
+                "event": {
+                    "type": getattr(row, "event_type", None),
+                    "category": getattr(row, "event_category", None),
+                    "action": getattr(row, "action", None),
+                    "severity": getattr(row, "severity", None),
+                },
+                "severity": getattr(row, "severity", None),
+                "resource": {
+                    "type": getattr(row, "resource_type", None),
+                    "id": getattr(row, "resource_id", None),
+                },
+                "endpoint": getattr(row, "endpoint", None),
+                "metadata": _metadata_as_dict(getattr(row, "metadata_", None)),
+                "integrity": {
+                    "prev_hash": getattr(row, "prev_hash", None),
+                    "hash": getattr(row, "integrity_hash", None),
+                    "sequence_num": getattr(row, "sequence_num", None),
+                },
+            }
+        )
+    return canonical
+
+
 def _caller_has_pii_export_permission(user: UserModel, db: Session, tenant_id: UUID) -> bool:
     """Return True when the caller's role includes ``audit.export.pii``.
 
@@ -531,8 +583,11 @@ def export_audit_logs(
         },
     }
 
-    # Optionally include chain verification
+    # Optionally include chain verification. Verify the canonical
+    # (pre-redaction) row values, not the PII-masked display entries:
+    # the chain was hashed over raw metadata/actor fields, so
+    # verifying the masked view false-alarms on legitimate rows.
     if include_verification and entries:
-        response["integrity"]["chain_verification"] = verify_chain(entries)
+        response["integrity"]["chain_verification"] = verify_chain(_build_verification_entries(rows))
 
     return response

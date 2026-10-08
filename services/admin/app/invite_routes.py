@@ -517,7 +517,12 @@ async def accept_invite(
     user = db.execute(select(UserModel).where(UserModel.email == invite.email)).scalar_one_or_none()
 
     if user is not None:
-        if user.status != "active":
+        # Both status fields gate authentication (see user_routes: a user
+        # can only hold a session when users.status AND
+        # users.global_status are 'active'). Checking only `status` let a
+        # globally-suspended user accept an invite and gain a live
+        # membership plus fresh passwordless identity rows.
+        if user.status != "active" or getattr(user, "global_status", "active") != "active":
             # Do not reinstate erased / suspended users via invite (#1337).
             logger.warning(
                 "accept_invite_inactive_user_blocked",

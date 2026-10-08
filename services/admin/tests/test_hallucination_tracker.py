@@ -226,13 +226,21 @@ def test_list_hallucinations_pagination_format(tracker_fixture):
         def order_by(self, *args):
             return self
 
+        def offset(self, n):
+            self._offset = n
+            return self
+
         def limit(self, n):
             self._limit = n
             return self
 
+        def count(self):
+            return len(self._storage)
+
         def all(self):
             items = list(self._storage.values())
-            return items[: getattr(self, "_limit", 50)]
+            start = getattr(self, "_offset", 0)
+            return items[start : start + getattr(self, "_limit", 50)]
 
     storage.clear()
     queryable_storage = {}
