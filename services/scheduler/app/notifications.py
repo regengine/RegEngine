@@ -426,12 +426,19 @@ class WebhookNotifier:
                             continue
                         try:
                             entries.append(OutboxEntry.from_dict(json.loads(raw)))
-                        except (json.JSONDecodeError, KeyError, ValueError) as parse_err:
+                        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as parse_err:
                             # #2697: quarantine instead of skip — the
                             # retry pass REWRITES the outbox from parsed
                             # entries, which used to permanently destroy
                             # the corrupt entry (a HIGH/CRITICAL alert
                             # delivery).
+                            #
+                            # TypeError covers well-formed lines with
+                            # explicit-null fields (float(None) in
+                            # from_dict). Without it one such line raised
+                            # out of _read_outbox and poisoned every
+                            # drain pass until an operator hand-edited
+                            # the file.
                             self._quarantine_corrupt_line(raw, line_no, parse_err)
             except OSError as disk_err:
                 logger.error(

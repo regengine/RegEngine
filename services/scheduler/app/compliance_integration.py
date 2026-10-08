@@ -106,9 +106,16 @@ class ComplianceIntegration:
                     # ObjectNotExecutableError that this PR is fixing) are no
                     # longer silently swallowed — they bubble up and surface
                     # in Sentry.
+                    #
+                    # Log the loop's tenant_id, not match["tenant_id"]:
+                    # match is only bound after _find_matching_tenants
+                    # returns, so a matcher failure left this handler
+                    # reading an unbound local (NameError), which escaped
+                    # the narrow per-item handler upstream and aborted
+                    # alerts for the rest of the batch.
                     logger.error(
                         "alert_creation_failed",
-                        tenant_id=str(match["tenant_id"]),
+                        tenant_id=str(tenant_id),
                         error=str(e),
                         error_type=type(e).__name__,
                     )
