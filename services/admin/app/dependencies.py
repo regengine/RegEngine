@@ -778,6 +778,33 @@ async def get_current_tenant(key: str = Depends(api_key_header), db: Session = D
         raise HTTPException(status_code=403, detail="API Key not associated with a Tenant")
 
     tenant_id = UUID(api_key_data.tenant_id)
+
+    # SECURITY: enforce live tenant status on the API-key path, mirroring
+    # the opaque-session check in get_current_user. Without this, a
+    # suspended tenant's API keys retain full access. Fail closed: a status
+    # read error denies (503), it never allows. The rejection body matches
+    # the invalid-key response so it exposes no tenant-status oracle.
+    try:
+        tenant = db.get(TenantModel, tenant_id, populate_existing=True)
+    except Exception as exc:
+        logger.error(
+            "api_key_tenant_status_lookup_failed",
+            tenant_id=str(tenant_id),
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service temporarily unavailable",
+        ) from exc
+    tenant_status = getattr(tenant, "status", None) if tenant is not None else None
+    if tenant_status not in ("active", "trial"):
+        logger.warning(
+            "suspended_tenant_api_key_rejected",
+            tenant_id=str(tenant_id),
+            tenant_status=tenant_status,
+        )
+        raise HTTPException(status_code=403, detail="Invalid API Key")
+
     # SEC-RLS: Ensure the database session is restricted to this tenant
     TenantContext.set_tenant_context(db, tenant_id)
 

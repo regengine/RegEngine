@@ -6,6 +6,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel
 from shared.pagination import PaginatedResponse, PaginationParams
+from shared.permissions import can_invite_role
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -199,6 +200,44 @@ async def update_user_role(
         # the Owners who can actually authenticate (#2906).
         if not _other_authenticating_owners(db, tenant_id, user_id):
             raise HTTPException(status_code=400, detail="Cannot remove the last Owner")
+
+    # Privilege-escalation guard, mirroring invite creation (#1387). Holding
+    # users.manage_roles lets an admin change roles, but they may NOT assign
+    # a role of higher rank than their own: without this a compromised
+    # low-privilege key with role-management permission self-promotes to
+    # Owner. Sysadmins bypass (platform-level role, same as invites).
+    if not current_user.is_sysadmin:
+        caller_role = db.execute(
+            select(RoleModel)
+            .join(MembershipModel, MembershipModel.role_id == RoleModel.id)
+            .where(
+                MembershipModel.user_id == current_user.id,
+                MembershipModel.tenant_id == tenant_id,
+                MembershipModel.is_active == True,  # noqa: E712
+            )
+        ).scalar_one_or_none()
+        if caller_role is None:
+            logger.warning(
+                "role_change_no_caller_role",
+                user_id=str(current_user.id),
+                tenant_id=str(tenant_id),
+            )
+            raise HTTPException(status_code=403, detail="No active role in this tenant")
+        if not can_invite_role(
+            caller_role_name=getattr(caller_role, "name", None),
+            caller_permissions=getattr(caller_role, "permissions", None) or [],
+            target_role_name=getattr(target_role, "name", None),
+            target_permissions=getattr(target_role, "permissions", None) or [],
+        ):
+            logger.warning(
+                "role_change_escalation_blocked",
+                user_id=str(current_user.id),
+                tenant_id=str(tenant_id),
+                caller_role=getattr(caller_role, "name", None),
+                target_role=getattr(target_role, "name", None),
+            )
+            # Opaque 403 so an attacker can't enumerate role tiers by response.
+            raise HTTPException(status_code=403, detail="Insufficient privilege to assign this role")
 
     # Update
     old_role_id = membership.role_id
