@@ -896,9 +896,12 @@ def enqueue_task(
     -------------------
     When ``idempotency_key`` is provided, the insert uses
     ``ON CONFLICT (tenant_id, idempotency_key) DO NOTHING``. A retried
-    call with the same (tenant_id, key) pair returns the existing task
-    ID — the task is enqueued exactly once. If the key is ``None`` the
-    legacy behavior is preserved (duplicates are possible).
+    call with the same non-null (tenant_id, key) pair returns the
+    existing task ID instead of inserting a duplicate. Rows with a NULL
+    tenant_id do not conflict with each other under the default unique
+    index behavior, so callers that need deduping must pass a real
+    tenant_id. If the key is ``None`` the legacy behavior is preserved
+    (duplicates are possible).
 
     Recommended keys:
 
@@ -917,7 +920,7 @@ def enqueue_task(
             if idempotency_key is not None:
                 # ON CONFLICT … DO NOTHING returns no rows if there was a
                 # conflict, so we fall through to a SELECT to retrieve the
-                # already-enqueued task's id. This is the at-least-once-safe
+                # already-enqueued task's id. This is the retry-safe
                 # shape used by the idempotency migration for task_queue.
                 row = db.execute(
                     text(
