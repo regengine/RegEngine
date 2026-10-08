@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import Awaitable, Callable, TypeVar
 from uuid import UUID
 
+import jwt
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from shared.pagination import PaginationParams
@@ -52,6 +53,14 @@ def _bearer_token_from_request(request: Request) -> str:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return auth_header[7:]
+
+
+def _invalid_bearer_token() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def _remaining_token_ttl_seconds(payload: dict) -> int | None:
@@ -153,7 +162,17 @@ async def logout(
     user's refresh sessions because no narrower family can be proven.
     """
     token = _bearer_token_from_request(request)
-    payload = decode_access_token(token)
+    # The dependency chain may have authenticated this request without a
+    # local JWT decode (session cookie, or a foreign IdP token accepted
+    # upstream in non-strict runtimes). A bearer value that is not a valid
+    # local session token is a credential failure (401), never a 500: PyJWT
+    # decode errors carry no caller-actionable detail, so log them and reply
+    # with the same generic shape as every other credential rejection.
+    try:
+        payload = decode_access_token(token)
+    except jwt.PyJWTError as exc:
+        logger.warning("logout_token_decode_failed", error_type=type(exc).__name__, error=str(exc))
+        raise _invalid_bearer_token() from exc
 
     # Keep the bearer/session valid when an early cleanup step fails so the
     # caller can retry. Once the refresh session has been revoked, its binding

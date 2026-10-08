@@ -503,6 +503,45 @@ async def get_system_metrics(
     except (RuntimeError, OSError, ValueError, KeyError, ImportError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("supplier_metrics_query_failed", error=str(exc))
 
+    # Real caller-scoped counts (previously hardcoded total_tenants=1 /
+    # active_jobs=0 placeholders). Both degrade to 0 on query failure, same
+    # as the supplier counts above, so metrics stays best-effort.
+    total_tenant_count = 0
+    try:
+        from .sqlalchemy_models import MembershipModel
+
+        user_uuid = uuid_module.UUID(str(current_user.id))
+        total_tenant_count = int(
+            db.execute(
+                select(sql_func.count(sql_func.distinct(MembershipModel.tenant_id))).where(
+                    MembershipModel.user_id == user_uuid,
+                    MembershipModel.is_active.is_(True),
+                )
+            ).scalar()
+            or 0
+        )
+    except (RuntimeError, OSError, ValueError, KeyError, AttributeError, SQLAlchemyError) as exc:
+        logger.warning("metrics_tenant_count_failed", error=str(exc))
+
+    pending_review_count = 0
+    try:
+        from .sqlalchemy_models import ReviewItemModel
+
+        metrics_tenant_uuid = uuid_module.UUID(tenant)
+        pending_review_count = int(
+            db.execute(
+                select(sql_func.count())
+                .select_from(ReviewItemModel)
+                .where(
+                    ReviewItemModel.tenant_id == metrics_tenant_uuid,
+                    ReviewItemModel.status == "PENDING",
+                )
+            ).scalar()
+            or 0
+        )
+    except (RuntimeError, OSError, ValueError, KeyError, AttributeError, SQLAlchemyError) as exc:
+        logger.warning("metrics_pending_review_count_failed", error=str(exc))
+
     # Use the higher of ingestion vs supplier counts (they're separate data paths)
     total_events = max(ingestion_events, supplier_event_count)
     chain_len = chain_data.get("chain_length") or supplier_chain_length
@@ -525,9 +564,12 @@ async def get_system_metrics(
         logger.warning("metrics_alert_count_failed", error=str(exc))
 
     return SystemMetricsResponse(
-        total_tenants=1,
+        # total_tenants: tenants this caller actively belongs to (real count,
+        # not the old hardcoded 1). active_jobs: this tenant's review items
+        # still awaiting a decision (the admin service's outstanding work).
+        total_tenants=total_tenant_count,
         total_documents=total_events,
-        active_jobs=0,
+        active_jobs=pending_review_count,
         compliance_score=score_data.get("overall_score"),
         compliance_grade=score_data.get("grade"),
         events_ingested=total_events,
