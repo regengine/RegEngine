@@ -38,16 +38,59 @@ if [[ -z "$API_KEY" ]]; then
     exit 2
 fi
 
-case "$API_BASE" in
-    http://localhost*|http://127.0.0.1*|http://\[::1\]*)
-        ;;
-    *)
-        if [[ "$ALLOW_PRODUCTION" != "1" ]]; then
-            echo "ERROR: refusing to probe non-localhost target ($API_BASE) without --allow-production." >&2
-            exit 2
+# Parse API_BASE: require http/https, reject userinfo/malformed, exact loopback host.
+_SMOKE_REST=""
+if [[ "$API_BASE" == "http://"* ]]; then
+    _SMOKE_REST="${API_BASE#http://}"
+elif [[ "$API_BASE" == "https://"* ]]; then
+    _SMOKE_REST="${API_BASE#https://}"
+fi
+_SMOKE_VALID=0
+_SMOKE_HOST=""
+if [[ -n "$_SMOKE_REST" ]]; then
+    _SMOKE_AUTH="${_SMOKE_REST%%[/?#]*}"
+    if [[ -n "$_SMOKE_AUTH" && "$_SMOKE_AUTH" != *"@"* ]]; then
+        if [[ "$_SMOKE_AUTH" == "["* ]]; then
+            if [[ "$_SMOKE_AUTH" == *"]"* ]]; then
+                _SMOKE_HOST="${_SMOKE_AUTH#\[}"
+                _SMOKE_HOST="${_SMOKE_HOST%%\]*}"
+                _SMOKE_AFTER="${_SMOKE_AUTH#*\]}"
+                if [[ -n "$_SMOKE_HOST" ]]; then
+                    if [[ -z "$_SMOKE_AFTER" ]]; then
+                        _SMOKE_VALID=1
+                    elif [[ "$_SMOKE_AFTER" =~ ^:[0-9]+$ ]]; then
+                        _SMOKE_VALID=1
+                    fi
+                fi
+            fi
+        else
+            if [[ "$_SMOKE_AUTH" == *":"* ]]; then
+                _SMOKE_HOST="${_SMOKE_AUTH%%:*}"
+                _SMOKE_PORT="${_SMOKE_AUTH#*:}"
+                if [[ -n "$_SMOKE_HOST" && "$_SMOKE_PORT" =~ ^[0-9]+$ ]]; then
+                    if [[ "$_SMOKE_HOST" != *":"* && "$_SMOKE_PORT" != *":"* ]]; then
+                        _SMOKE_VALID=1
+                    fi
+                fi
+            else
+                _SMOKE_HOST="$_SMOKE_AUTH"
+                if [[ -n "$_SMOKE_HOST" ]]; then
+                    _SMOKE_VALID=1
+                fi
+            fi
         fi
-        ;;
-esac
+    fi
+fi
+if [[ "$_SMOKE_VALID" != "1" ]]; then
+    echo "ERROR: refusing to probe malformed or non-http(s) target ($API_BASE)." >&2
+    exit 2
+fi
+if [[ "$_SMOKE_HOST" != "localhost" && "$_SMOKE_HOST" != "127.0.0.1" && "$_SMOKE_HOST" != "::1" ]]; then
+    if [[ "$ALLOW_PRODUCTION" != "1" ]]; then
+        echo "ERROR: refusing to probe non-localhost target ($API_BASE) without --allow-production." >&2
+        exit 2
+    fi
+fi
 
 echo "=== Smoke test: /v1/ingest/* ==="
 echo "Base: $API_BASE"
