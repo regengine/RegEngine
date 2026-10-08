@@ -96,7 +96,7 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
             _key_id, key_hashes = lookup_proof
             stmt = text(
                 """
-                SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions
+                SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions, revoked_at
                 FROM api_keys
                 WHERE key_hash IN :key_hashes
                 LIMIT 1
@@ -108,11 +108,23 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
 
         if not row:
             return None
-        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
-        if enabled is False:
+        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions, revoked_at = row
+        # Match the canonical key validation (DatabaseAPIKeyStore.validate_key):
+        # a falsy enabled flag or any revocation timestamp means the key is
+        # dead, so it must not resolve a tenant or replay a cached response.
+        # The replay path serves the cached body before route dependencies
+        # run, so this lookup is the authorization re-check for API-key
+        # traffic: returning None sends the request to the route, whose own
+        # auth dependency answers 401 or 403.
+        if not enabled:
             return None
-        if expires_at and expires_at < datetime.now(timezone.utc):
+        if revoked_at is not None:
             return None
+        if expires_at is not None:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at < datetime.now(timezone.utc):
+                return None
         if not tenant_id:
             return None
         # Permission narrowing may retain the same raw key. Bind the current
