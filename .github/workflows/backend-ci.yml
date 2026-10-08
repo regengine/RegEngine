@@ -909,8 +909,14 @@ jobs:
           # fail rather than skip if Docker is unavailable.
           # test_v126_operator_guidance pins the v126 refusal message and the
           # read-only, search_path-pinned verify and pre-deploy runbooks.
+          # test_seed_scripts_no_prod_default pins the seed scripts'
+          # localhost default, prod refusal without --allow-production, and
+          # verifying TLS context (#3223). It must block a merge: a
+          # scripts-only revert would never start the non-required
+          # test-suite-check shard.
           pytest tests/scripts/test_bootstrap_staging_database.py \
             tests/scripts/test_v126_operator_guidance.py \
+            tests/scripts/test_seed_scripts_no_prod_default.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Setup Node.js (published-spec contract needs the TS export)
