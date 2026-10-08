@@ -15,9 +15,7 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = (
-    Path(__file__).resolve().parents[2] / "scripts" / "ci" / "check_supply_chain.py"
-)
+_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "ci" / "check_supply_chain.py"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -44,9 +42,7 @@ def repo(tmp_path: Path) -> Path:
     (tmp_path / "frontend" / "package-lock.json").write_text("{}\n")
     (tmp_path / "scripts" / "ci").mkdir(parents=True)
     baseline = {"version": 1, "entries": []}
-    (tmp_path / "scripts" / "ci" / "supply_chain_baseline.json").write_text(
-        json.dumps(baseline)
-    )
+    (tmp_path / "scripts" / "ci" / "supply_chain_baseline.json").write_text(json.dumps(baseline))
     return tmp_path
 
 
@@ -68,16 +64,13 @@ def test_action_pin_accepts_full_sha(repo: Path) -> None:
     path = _write(
         repo,
         ".github/workflows/ok.yml",
-        "steps:\n"
-        "  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n",
+        "steps:\n  - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n",
     )
     assert mod.check_action_pin(path, "ok.yml") == []
 
 
 def test_action_pin_rejects_tag_ref(repo: Path) -> None:
-    path = _write(
-        repo, ".github/workflows/bad.yml", "steps:\n  - uses: actions/checkout@v4\n"
-    )
+    path = _write(repo, ".github/workflows/bad.yml", "steps:\n  - uses: actions/checkout@v4\n")
     violations = mod.check_action_pin(path, "bad.yml")
     assert len(violations) == 1
     assert violations[0].rule == "action-pin"
@@ -105,9 +98,7 @@ def test_action_pin_allows_local_reusable_workflow(repo: Path) -> None:
 
 
 def test_pipe_to_shell_detected(repo: Path) -> None:
-    path = _write(
-        repo, "scripts/setup.sh", "#!/bin/sh\ncurl -fsSL https://x.io/i.sh | sh\n"
-    )
+    path = _write(repo, "scripts/setup.sh", "#!/bin/sh\ncurl -fsSL https://x.io/i.sh | sh\n")
     assert _rules(mod.check_pipe_shell(path, "setup.sh")) == {"pipe-shell"}
 
 
@@ -153,8 +144,7 @@ def test_image_with_digest_passes(repo: Path) -> None:
     path = _write(
         repo,
         "Dockerfile",
-        "FROM python:3.11-slim@sha256:0123456789abcdef0123456789abcdef"
-        "0123456789abcdef0123456789abcdef AS base\n",
+        "FROM python:3.11-slim@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef AS base\n",
     )
     assert mod.check_image_digest_dockerfile(path, "Dockerfile") == []
 
@@ -173,16 +163,14 @@ def test_archive_download_without_checksum_detected(repo: Path) -> None:
         "scripts/get.sh",
         "wget https://github.com/grafana/k6/releases/download/v0.47.0/k6.tar.gz\n",
     )
-    assert _rules(mod.check_download_checksum(path, "get.sh")) == {
-        "download-checksum"
-    }
+    assert _rules(mod.check_download_checksum(path, "get.sh")) == {"download-checksum"}
 
 
 def test_archive_download_with_checksum_passes(repo: Path) -> None:
     path = _write(
         repo,
         "scripts/get.sh",
-        'K_SHA256: abc123  # pragma: allowlist secret\n'
+        "K_SHA256: abc123  # pragma: allowlist secret\n"
         "curl -sSfL https://x.io/k.tar.gz -o /tmp/k.tar.gz\n"
         'echo "${K_SHA256}  /tmp/k.tar.gz" | sha256sum -c -\n',
     )
@@ -194,12 +182,9 @@ def test_unpinned_pip_install_detected(repo: Path) -> None:
     path = _write(
         repo,
         "scripts/deploy.sh",
-        "pip install neo4j --quiet 2>/dev/null "
-        "|| pip install neo4j --quiet --break-system-packages 2>/dev/null\n",
+        "pip install neo4j --quiet 2>/dev/null || pip install neo4j --quiet --break-system-packages 2>/dev/null\n",
     )
-    assert {"pip-pin", "pip-break-system"} <= _rules(
-        mod.check_pip(path, "deploy.sh")
-    )
+    assert {"pip-pin", "pip-break-system"} <= _rules(mod.check_pip(path, "deploy.sh"))
 
 
 def test_pinned_pip_install_passes(repo: Path) -> None:
@@ -225,9 +210,7 @@ def test_npm_unlocked_fallback_detected(repo: Path) -> None:
     path = _write(
         repo,
         "scripts/bootstrap.sh",
-        "if ! (cd frontend && npm ci --silent); then\n"
-        "    (cd frontend && npm install --silent)\n"
-        "fi\n",
+        "if ! (cd frontend && npm ci --silent); then\n    (cd frontend && npm install --silent)\nfi\n",
     )
     assert _rules(mod.check_npm(path, "bootstrap.sh")) == {"npm-unlocked"}
 
@@ -236,33 +219,70 @@ def test_npm_ci_and_pinned_global_pass(repo: Path) -> None:
     path = _write(
         repo,
         "scripts/ok.sh",
-        "(cd frontend && npm ci --silent)\n"
-        'npm install -g "@railway/cli@4.44.0"\n',
+        '(cd frontend && npm ci --silent)\nnpm install -g "@railway/cli@4.44.0"\n',
     )
     assert mod.check_npm(path, "ok.sh") == []
+
+
+def test_npm_global_unpinned_scoped_detected(repo: Path) -> None:
+    # The scope prefix `@vendor/` is part of the name, not a version pin.
+    path = _write(repo, "scripts/setup.sh", "npm install -g @vendor/tool\n")
+    assert _rules(mod.check_npm(path, "setup.sh")) == {"npm-unlocked"}
+
+
+def test_npm_global_unpinned_bare_detected(repo: Path) -> None:
+    path = _write(repo, "scripts/setup.sh", "npm install -g tool\n")
+    assert _rules(mod.check_npm(path, "setup.sh")) == {"npm-unlocked"}
+
+
+def test_npm_global_pinned_scoped_passes(repo: Path) -> None:
+    path = _write(repo, "scripts/ok.sh", "npm install -g @vendor/tool@1.2.3\n")
+    assert mod.check_npm(path, "ok.sh") == []
+
+
+def test_npm_global_pinned_bare_passes(repo: Path) -> None:
+    path = _write(repo, "scripts/ok.sh", "npm install -g tool@1.2.3\n")
+    assert mod.check_npm(path, "ok.sh") == []
+
+
+def test_npm_global_all_pinned_multi_passes(repo: Path) -> None:
+    path = _write(
+        repo,
+        "scripts/ok.sh",
+        "npm install -g tool@1.2.3 @vendor/other@4.5.6\n",
+    )
+    assert mod.check_npm(path, "ok.sh") == []
+
+
+def test_npm_global_range_version_rejected(repo: Path) -> None:
+    path = _write(repo, "scripts/setup.sh", "npm install -g tool@^1.2.3\n")
+    assert _rules(mod.check_npm(path, "setup.sh")) == {"npm-unlocked"}
+
+
+def test_npm_global_tag_version_rejected(repo: Path) -> None:
+    path = _write(repo, "scripts/setup.sh", "npm install -g @vendor/tool@latest\n")
+    assert _rules(mod.check_npm(path, "setup.sh")) == {"npm-unlocked"}
+
+
+def test_npm_global_mixed_pinned_and_unpinned_rejected(repo: Path) -> None:
+    # One pinned package must not carry an unpinned sibling.
+    path = _write(repo, "scripts/setup.sh", "npm install -g tool@1.2.3 othertool\n")
+    assert _rules(mod.check_npm(path, "setup.sh")) == {"npm-unlocked"}
 
 
 # Baseline behavior --------------------------------------------------------
 
 
 def test_baseline_covers_known_violation() -> None:
-    violations = [
-        mod.Violation("image-digest", "Dockerfile", 4, "FROM python:3.11-slim")
-    ]
-    baseline = [
-        mod.BaselineEntry(
-            "image-digest", "Dockerfile", "FROM python:3.11-slim", "reason"
-        )
-    ]
+    violations = [mod.Violation("image-digest", "Dockerfile", 4, "FROM python:3.11-slim")]
+    baseline = [mod.BaselineEntry("image-digest", "Dockerfile", "FROM python:3.11-slim", "reason")]
     failures, stale = mod.apply_baseline(violations, baseline)
     assert failures == []
     assert stale == []
 
 
 def test_stale_baseline_entry_is_reported() -> None:
-    baseline = [
-        mod.BaselineEntry("pip-pin", "scripts/gone.sh", "pip install x", "reason")
-    ]
+    baseline = [mod.BaselineEntry("pip-pin", "scripts/gone.sh", "pip install x", "reason")]
     failures, stale = mod.apply_baseline([], baseline)
     assert failures == []
     assert stale == baseline

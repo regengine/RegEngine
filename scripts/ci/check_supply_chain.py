@@ -40,13 +40,12 @@ PIPE_SHELL_RE = re.compile(r"\|\s*(sudo\s+)?(sh|bash)\b")
 LATEST_URL_RE = re.compile(r"https?://\S*latest\S*|@latest\b", re.IGNORECASE)
 FROM_RE = re.compile(r"^\s*FROM\s+(\S+)")
 IMAGE_RE = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?(\S+?)[\"']?\s*$")
-ARCHIVE_FETCH_RE = re.compile(
-    r"\b(curl|wget)\b.*https?://\S+\.(tar\.gz|tgz|tar\.bz2|zip|whl)\b"
-)
+ARCHIVE_FETCH_RE = re.compile(r"\b(curl|wget)\b.*https?://\S+\.(tar\.gz|tgz|tar\.bz2|zip|whl)\b")
 CHECKSUM_EVIDENCE_RE = re.compile(r"sha256sum|shasum\s+-c|_SHA256|cosign\s+verify")
 PIP_INSTALL_RE = re.compile(r"(?:^|[\s;|&])(?:python3?\s+-m\s+)?pip3?\s+install\b(.*)$")
 BREAK_SYSTEM_RE = re.compile(r"--break-system-packages")
 NPM_INSTALL_RE = re.compile(r"\bnpm\s+(install|i)\b(?!\s+ci\b)(.*)$")
+NPM_EXACT_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 
 WORKFLOW_GLOBS = ("*.yml", "*.yaml")
 SKIP_DIRS = {
@@ -93,11 +92,7 @@ def workflow_files(root: Path) -> list[Path]:
 
 
 def dockerfiles(root: Path) -> list[Path]:
-    return [
-        p
-        for p in repo_files(root, "Dockerfile", "Dockerfile.*", "*.Dockerfile")
-        if p.name != ".metacode_pr.md"
-    ]
+    return [p for p in repo_files(root, "Dockerfile", "Dockerfile.*", "*.Dockerfile") if p.name != ".metacode_pr.md"]
 
 
 def compose_files(root: Path) -> list[Path]:
@@ -186,9 +181,7 @@ def check_download_checksum(path: Path, rel: str) -> list[Violation]:
         out: list[Violation] = []
         for lineno, line in enumerate(text.splitlines(), start=1):
             if ARCHIVE_FETCH_RE.search(strip_comment(line)):
-                out.append(
-                    Violation("download-checksum", rel, lineno, line.strip())
-                )
+                out.append(Violation("download-checksum", rel, lineno, line.strip()))
         return out
     return []
 
@@ -211,14 +204,25 @@ def check_pip(path: Path, rel: str) -> list[Violation]:
                 out.append(Violation("pip-pin", rel, lineno, line.strip()))
             continue
         pkgs = [
-            t.strip("\"'")
-            for t in tokens
-            if not t.startswith("-") and not t.startswith(("./", "../", "/", "http"))
+            t.strip("\"'") for t in tokens if not t.startswith("-") and not t.startswith(("./", "../", "/", "http"))
         ]
         pkgs = [t for t in pkgs if t not in ("pip",)]
         if pkgs and any("==" not in p for p in pkgs):
             out.append(Violation("pip-pin", rel, lineno, line.strip()))
     return out
+
+
+def _is_pinned_npm_package(token: str) -> bool:
+    """Is this `npm install -g` token pinned to an exact version?
+
+    A scoped name (`@scope/name`) carries a leading `@` that is part of
+    the name, not a version pin, so the version is whatever follows the
+    LAST `@` — and the name before it must be non-empty.
+    """
+    name, sep, version = token.rpartition("@")
+    if not sep or not name:
+        return False
+    return bool(NPM_EXACT_VERSION_RE.match(version))
 
 
 def check_npm(path: Path, rel: str) -> list[Violation]:
@@ -232,8 +236,9 @@ def check_npm(path: Path, rel: str) -> list[Violation]:
             continue
         rest = match.group(2).strip()
         if rest.startswith("-g"):
-            # Global tool install: must pin an exact version after @.
-            if "@" not in rest:
+            # Global tool install: every package must pin an exact version.
+            pkgs = [t.strip("\"'") for t in rest.split() if not t.startswith("-")]
+            if not pkgs or any(not _is_pinned_npm_package(p) for p in pkgs):
                 out.append(Violation("npm-unlocked", rel, lineno, line.strip()))
             continue
         out.append(Violation("npm-unlocked", rel, lineno, line.strip()))
@@ -298,11 +303,7 @@ def apply_baseline(
     for entry in baseline:
         matched = False
         for violation in violations:
-            if (
-                violation.rule == entry.rule
-                and violation.file == entry.file
-                and entry.match in violation.text
-            ):
+            if violation.rule == entry.rule and violation.file == entry.file and entry.match in violation.text:
                 matched = True
                 if violation in remaining:
                     remaining.remove(violation)
@@ -349,10 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             f"({len(violations)} total findings, {len(baseline)} baselined)"
         )
         return 1
-    print(
-        f"supply-chain gate passed: {len(violations)} findings, "
-        f"all covered by baseline"
-    )
+    print(f"supply-chain gate passed: {len(violations)} findings, all covered by baseline")
     return 0
 
 
