@@ -178,11 +178,6 @@ def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quan
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
-)
 @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
 def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
     upload, captured = csv_upload
