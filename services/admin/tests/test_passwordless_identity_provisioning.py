@@ -293,3 +293,95 @@ async def test_accept_invite_existing_user_gets_identity_rows(db_session, monkey
     identity = _load_valid_identity(db=db_session, email_fingerprint=crypto.fingerprint_email("existing@acme.test"))
     assert identity is not None
     assert identity[0].id == user.id
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Case-variant email handling (audit: acceptance moved a user_emails row
+# from another user when addresses differed only by case)
+# ─────────────────────────────────────────────────────────────────────
+
+
+def test_ensure_passwordless_identity_refuses_different_user_row(db_session, crypto):
+    """A verified email row owned by another user is never reassigned."""
+    owner = _add_user(db_session, "owner@acme.test")
+    db_session.add(
+        UserEmailModel(
+            user_id=owner.id,
+            email="owner@acme.test",
+            email_fingerprint=crypto.fingerprint_email("owner@acme.test"),
+            is_verified=True,
+        )
+    )
+    db_session.commit()
+    intruder = _add_user(db_session, "OWNER@acme.test")
+    db_session.commit()
+
+    with pytest.raises(ValueError, match="different user"):
+        ensure_passwordless_identity(
+            db_session,
+            user=intruder,
+            email="OWNER@Acme.test",
+            organization_id=TENANT_ID,
+            role_name="Viewer",
+            crypto_service=crypto,
+        )
+    db_session.rollback()
+
+    row = db_session.execute(
+        select(UserEmailModel).where(func.lower(UserEmailModel.email) == "owner@acme.test")
+    ).scalar_one()
+    assert row.user_id == owner.id
+    assert row.is_verified is True
+
+
+async def test_accept_invite_case_variant_attaches_to_existing_user(db_session, monkeypatch):
+    """An invite to a case variant of an existing address must not mint a
+    second user for the same mailbox."""
+    user = _add_user(db_session, "Existing@Acme.test")
+    db_session.commit()
+    token = _seed_invite(db_session, "existing@acme.test")
+
+    out = await _accept_invite(db_session, token, monkeypatch)
+    assert out["status"] == "success"
+    assert out["user_id"] == str(user.id)
+
+    user_count = db_session.execute(select(func.count()).select_from(UserModel)).scalar()
+    assert user_count == 2  # inviter fixture + the pre-existing user, no duplicate
+
+    membership = db_session.execute(
+        select(MembershipModel).where(
+            MembershipModel.user_id == user.id,
+            MembershipModel.tenant_id == TENANT_ID,
+        )
+    ).scalar_one_or_none()
+    assert membership is not None
+    assert membership.role_id == ROLE_ID
+
+
+async def test_accept_invite_refuses_email_verified_for_different_user(db_session, monkeypatch):
+    """When the invited address is verified for a different user and no
+    case-insensitive users row matches, acceptance fails closed."""
+    from fastapi import HTTPException
+
+    holder = _add_user(db_session, "holder@acme.test")
+    db_session.add(
+        UserEmailModel(
+            user_id=holder.id,
+            email="holder@acme.test",
+            email_fingerprint=AuthCryptoService(hmac_secret=TEST_HMAC_SECRET).fingerprint_email(
+                "holder@acme.test"
+            ),
+            is_verified=True,
+        )
+    )
+    db_session.commit()
+    # Remove the holder's users row so the accept path mints a fresh user,
+    # then the identity step must refuse to move the verified email row.
+    # (SQLite enforces no FK here; Postgres would need the same ordering.)
+    db_session.delete(holder)
+    db_session.commit()
+
+    token = _seed_invite(db_session, "holder@acme.test")
+    with pytest.raises(HTTPException) as exc_info:
+        await _accept_invite(db_session, token, monkeypatch)
+    assert exc_info.value.status_code == 400
