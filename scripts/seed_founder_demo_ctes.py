@@ -84,9 +84,7 @@ def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
         target, explicit = DEFAULT_BASE, False
     if not is_local_target(target):
         if not explicit:
-            raise UnsafeTargetError(
-                f"Refusing to seed non-local target {target!r} without an explicit URL."
-            )
+            raise UnsafeTargetError(f"Refusing to seed non-local target {target!r} without an explicit URL.")
         if not allow_production:
             raise UnsafeTargetError(
                 f"Refusing to seed non-local target {target!r}. "
@@ -99,6 +97,18 @@ def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
 def create_ssl_context() -> ssl.SSLContext:
     """Return a default verifying SSL context. Never downgraded."""
     return ssl.create_default_context()
+
+
+def is_tls_cert_failure(exc: BaseException) -> bool:
+    """True when exc is (or urllib-wraps) an SSL cert verification failure.
+
+    urllib.request.urlopen surfaces TLS failures as
+    urllib.error.URLError(reason=SSLCertVerificationError), never as the
+    bare ssl exception, so both shapes must be detected.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return True
+    return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
 
 
 # GS1 check digit — mirrors services/shared/fsma_validation.py:_gs1_check_digit
@@ -407,17 +417,25 @@ BATCHES = [CHAIN_A, CHAIN_B, CHAIN_C]
 RESUBMIT_TLCS = {"VFF-ROM-0708-P", "FC-MIX-0709-X", "SGF-TOM-0712-P", "PGC-SAL-0715-F"}
 
 
-def check_health(base: str) -> None:
+def check_health(base: str) -> int:
     ctx = create_ssl_context()
     try:
         with urllib.request.urlopen(urllib.request.Request(f"{base}/health"), context=ctx, timeout=10) as r:
             body = json.loads(r.read())
+    except ssl.SSLCertVerificationError as e:
+        print(f"ERROR: TLS certificate verification failed: {e}. Refusing to continue.")
+        return 1
     except Exception as e:  # noqa: BLE001
+        if is_tls_cert_failure(e):
+            reason = getattr(e, "reason", e)
+            print(f"ERROR: TLS certificate verification failed: {reason}. Refusing to continue.")
+            return 1
         print(f"health check failed: {e}")
-        return
+        return 0
     print(f"BASE={base}")
     print("webhook_hmac_configured:", body.get("webhook_hmac_configured"))
     print(json.dumps(body, indent=2)[:1500])
+    return 0
 
 
 def status(base: str, tenant: str) -> int:
@@ -435,6 +453,11 @@ def status(base: str, tenant: str) -> int:
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code}: {e.read().decode()[:400]}")
         return 1
+    except urllib.error.URLError as e:
+        if is_tls_cert_failure(e):
+            print(f"ERROR: TLS certificate verification failed: {e.reason}. Refusing to continue.")
+            return 1
+        raise
     # nosemgrep: tenant-id-from-request-body — `body` is the authenticated API *response*, printed for CLI display
     print(f"tenant={body.get('tenant_id')}")
     print(
@@ -518,8 +541,7 @@ def main(argv=None) -> int:
         return 2
 
     if args.check:
-        check_health(base)
-        return 0
+        return check_health(base)
     if args.status:
         return status(base, tenant)
 
@@ -540,8 +562,7 @@ def main(argv=None) -> int:
         return 2
     hmac_secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip() or None
     print(
-        f"Seeding tenant={tenant} base={base} "
-        f"hmac={'signing' if hmac_secret else 'NONE — will 401 (prod requires it)'}"
+        f"Seeding tenant={tenant} base={base} hmac={'signing' if hmac_secret else 'NONE — will 401 (prod requires it)'}"
     )
 
     ctx = create_ssl_context()
@@ -560,6 +581,11 @@ def main(argv=None) -> int:
         except ssl.SSLCertVerificationError as e:
             print(f"[{source}] TLS certificate verification failed: {e}. Refusing to continue.")
             return 1
+        except urllib.error.URLError as e:
+            if is_tls_cert_failure(e):
+                print(f"[{source}] TLS certificate verification failed: {e.reason}. Refusing to continue.")
+                return 1
+            raise
         acc, rej = result.get("accepted", 0), result.get("rejected", 0)
         grand_ok += acc
         grand_bad += rej

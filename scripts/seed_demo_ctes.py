@@ -17,12 +17,13 @@ import json
 import os
 import ssl
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
 DEFAULT_BASE = "http://localhost:8002"
 BASE_ENV_VAR = "SEED_BASE_URL"
-API_KEY_ENV_VAR = "REGENGINE_TENANT_API_KEY"
+API_KEY_ENV_VAR = "REGENGINE_TENANT_API_KEY"  # pragma: allowlist secret -- environment variable name
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 
@@ -55,9 +56,7 @@ def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
         target, explicit = DEFAULT_BASE, False
     if not is_local_target(target):
         if not explicit:
-            raise UnsafeTargetError(
-                f"Refusing to seed non-local target {target!r} without an explicit URL."
-            )
+            raise UnsafeTargetError(f"Refusing to seed non-local target {target!r} without an explicit URL.")
         if not allow_production:
             raise UnsafeTargetError(
                 f"Refusing to seed non-local target {target!r}. "
@@ -72,8 +71,7 @@ def get_api_key() -> str:
     api_key = os.getenv(API_KEY_ENV_VAR, "").strip()
     if not api_key:
         raise UnsafeTargetError(
-            f"No API key. Set {API_KEY_ENV_VAR} in the environment. "
-            "API keys are never accepted as CLI arguments."
+            f"No API key. Set {API_KEY_ENV_VAR} in the environment. API keys are never accepted as CLI arguments."
         )
     return api_key
 
@@ -81,6 +79,18 @@ def get_api_key() -> str:
 def create_ssl_context() -> ssl.SSLContext:
     """Return a default verifying SSL context. Never downgraded."""
     return ssl.create_default_context()
+
+
+def is_tls_cert_failure(exc: BaseException) -> bool:
+    """True when exc is (or urllib-wraps) an SSL cert verification failure.
+
+    urllib.request.urlopen surfaces TLS failures as
+    urllib.error.URLError(reason=SSLCertVerificationError), never as the
+    bare ssl exception, so both shapes must be detected.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return True
+    return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -93,6 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Allow seeding a non-local target. Requires an explicit URL.",
     )
     return ap
+
 
 # One event per CTE type with all required KDEs (including reference_document)
 EVENTS = [
@@ -217,6 +228,7 @@ EVENTS = [
     },
 ]
 
+
 def build_payload() -> dict:
     return {
         "tenant_id": "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
@@ -269,6 +281,11 @@ def main(argv=None) -> int:
     except ssl.SSLCertVerificationError as e:
         print(f"ERROR: TLS certificate verification failed: {e}. Refusing to continue.")
         return 1
+    except urllib.error.URLError as e:
+        if is_tls_cert_failure(e):
+            print(f"ERROR: TLS certificate verification failed: {e.reason}. Refusing to continue.")
+            return 1
+        raise
 
 
 if __name__ == "__main__":
