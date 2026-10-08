@@ -88,6 +88,19 @@ class TestEnvValidation:
         assert result.ok
         assert result.warnings
 
+    def test_weak_value_messages_never_echo_the_credential(self):
+        weak_value = "change-me-in-production"
+        dev_result = validate_env(env=base_env(REGENGINE_ENV="development", POSTGRES_PASSWORD=weak_value))
+        assert dev_result.ok
+        assert dev_result.warnings
+        assert any("POSTGRES_PASSWORD" in w for w in dev_result.warnings)
+        assert all(weak_value not in w for w in dev_result.warnings)
+
+        prod_result = validate_env(env=base_env(POSTGRES_PASSWORD=weak_value))
+        assert not prod_result.ok
+        assert any("POSTGRES_PASSWORD" in e for e in prod_result.errors)
+        assert all(weak_value not in e for e in prod_result.errors)
+
 
 class TestDevCompose:
     def test_dev_compose_exists(self):

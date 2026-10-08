@@ -21,21 +21,29 @@ _pkg = sys.modules[__package__]
 # Rate Limiting (Redis-backed with in-memory fallback via shared module)
 # ---------------------------------------------------------------------------
 
-_WEBHOOK_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "120")))
-_WEBHOOK_RATE_LIMIT_WINDOW_SECS = max(
-    1,
-    int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", "60")),
-)
+
+def _limit_from_env(name: str, default: int) -> int:
+    """Parse a rate-limit env knob, falling back to ``default`` on garbage.
+
+    A misconfigured value previously raised ValueError at import time and
+    took the whole ingestion service down with it. Clamped to a minimum
+    of 1 so a zero/negative budget cannot lock every tenant out.
+    """
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (TypeError, ValueError):
+        return default
+
+
+_WEBHOOK_RATE_LIMIT_RPM = _limit_from_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120)
+_WEBHOOK_RATE_LIMIT_WINDOW_SECS = _limit_from_env("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", 60)
 
 # F-4 (re-audit): tighter, separate bucket for read endpoints (/recent,
 # /chain/verify). These are dashboard-facing reads, not partner ingestion,
 # so they should be rate-limited away from the ingest budget and capped
 # lower to make scraping/oracle-style probing visible.
-_WEBHOOK_READ_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_READ_RATE_LIMIT_RPM", "30")))
-_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = max(
-    1,
-    int(os.getenv("WEBHOOK_READ_RATE_LIMIT_WINDOW_SECONDS", "60")),
-)
+_WEBHOOK_READ_RATE_LIMIT_RPM = _limit_from_env("WEBHOOK_READ_RATE_LIMIT_RPM", 30)
+_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = _limit_from_env("WEBHOOK_READ_RATE_LIMIT_WINDOW_SECONDS", 60)
 
 
 def _store_rate_limit_state(
