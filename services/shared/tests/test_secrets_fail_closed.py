@@ -43,19 +43,35 @@ VALIDATE_SCRIPT = (
 )
 
 # Every variable the checks consult, cleared so the host environment cannot
-# make a "not set" case accidentally pass.
+# make a "not set" case accidentally pass. ENV and DATABASE_URL are included
+# because production detection now uses the central detector in shared.env
+# (REGENGINE_ENV, then ENV, then the DATABASE_URL heuristic).
 _CLEARED = (
     "REGENGINE_ENV",
+    "ENV",
+    "DATABASE_URL",
+    "ENABLED_ROUTERS",
+    "EVENT_BACKBONE",
     "REGENGINE_SKIP_SECRET_CHECK",
+    "POSTGRES_HOST",
+    "POSTGRES_PASSWORD",
+    "NEO4J_URI",
+    "NEO4J_URL",
     "NEO4J_PASSWORD",
     "ADMIN_MASTER_KEY",
+    "KAFKA_BOOTSTRAP_SERVERS",
     "OBJECT_STORAGE_ACCESS_KEY_ID",
     "OBJECT_STORAGE_SECRET_ACCESS_KEY",
 )
 
 _SECURE_ENV = {
+    "DATABASE_URL": "postgresql://synthetic-prod-host:5432/regengine",
+    "POSTGRES_HOST": "synthetic-postgres-host",
+    "POSTGRES_PASSWORD": "synthetic-postgres-passphrase-7d1c",  # pragma: allowlist secret
+    "NEO4J_URI": "bolt://synthetic-neo4j:7687",
     "NEO4J_PASSWORD": "synthetic-neo4j-passphrase-9f2a",  # pragma: allowlist secret
     "ADMIN_MASTER_KEY": "synthetic-admin-master-key-4c7e",  # pragma: allowlist secret
+    "KAFKA_BOOTSTRAP_SERVERS": "synthetic-kafka:9092",
     "OBJECT_STORAGE_ACCESS_KEY_ID": "SYNTHETICACCESSKEYID",  # pragma: allowlist secret
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": "synthetic-object-storage-secret",  # pragma: allowlist secret
 }
@@ -129,21 +145,22 @@ class TestProductionSecretValidation:
         assert "secure_secrets_required_in_production" in (result.stdout + result.stderr)
 
     def test_unset_secrets_fail_in_production(self):
-        """The finding behind server/main.py's non-fatal default.
+        """Production startup fails when its required database is absent.
 
-        With none of the four variables set — which is the state of a plain
-        checkout and of any deploy that has not had all four confirmed —
-        validate_production_secrets() raises on "is not set", not just on a
-        known placeholder. server/main.py therefore logs rather than aborts
-        unless REGENGINE_REQUIRE_SECURE_SECRETS is set, because raising here
-        would crash-loop the single deployed container fleet-wide.
+        Optional disabled integrations do not add missing-credential errors.
+        The monolith calls this validator unconditionally before serving.
         """
         result = _run({"REGENGINE_ENV": "production"})
         assert result.returncode != 0
         combined = result.stdout + result.stderr
+        assert "DATABASE_URL is not set" in combined
         for var in (
+            "POSTGRES_HOST",
+            "POSTGRES_PASSWORD",
             "NEO4J_PASSWORD",
+            "KAFKA_BOOTSTRAP_SERVERS",
             "OBJECT_STORAGE_ACCESS_KEY_ID",
             "OBJECT_STORAGE_SECRET_ACCESS_KEY",
         ):
-            assert f"{var} is not set" in combined
+            assert f"{var} is not set" not in combined
+        assert "NEO4J_URI / NEO4J_URL is not set" not in combined
