@@ -45,6 +45,7 @@ class ResponseTooLargeError(ValueError):
 
     pass
 
+
 # Standard browser-like headers used by upstream fetchers. Kept here so callers
 # that want a single SSRF-safe entry point don't have to redefine them.
 STANDARD_BROWSER_HEADERS: Dict[str, str] = {
@@ -182,26 +183,129 @@ def safe_httpx_client(
     )
 
 
-def _enforce_size_cap(response: httpx.Response, *, max_bytes: int) -> None:
-    """Refuse a response whose body exceeds ``max_bytes``.
+def _check_declared_length(headers, *, max_bytes: int) -> None:
+    """Refuse before reading when ``Content-Length`` already exceeds the cap."""
+    declared = headers.get("content-length")
+    if declared is None:
+        return
+    try:
+        if int(declared) > max_bytes:
+            raise ResponseTooLargeError(f"Response body exceeds {max_bytes} bytes (declared {declared})")
+    except ResponseTooLargeError:
+        raise
+    except (TypeError, ValueError):
+        pass
 
-    Checks the declared ``Content-Length`` first so an obviously oversized
-    body is refused even before trusting the buffered bytes, then checks the
-    actual buffered length. Raises :class:`ResponseTooLargeError`.
+
+def _effective_origin(url: str) -> tuple[str, str, int]:
+    """Effective origin as ``(scheme, normalized host, effective port)``."""
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower().rstrip(".")
+    port = parsed.port
+    if port is None:
+        if scheme == "https":
+            port = 443
+        elif scheme == "http":
+            port = 80
+        else:
+            port = -1
+    return (scheme, host, port)
+
+
+def _is_same_origin(first_url: str, second_url: str) -> bool:
+    return _effective_origin(first_url) == _effective_origin(second_url)
+
+
+# Benign request headers that are safe to resend on a cross-origin redirect.
+# Covers ``STANDARD_BROWSER_HEADERS`` (the ``safe_fetch_content`` default) plus
+# common cache/negotiation validators. Anything else (Authorization, Cookie,
+# X-Api-Key, custom headers, ...) fails closed: the redirect is rejected
+# before the second origin is requested. Compared case-insensitively.
+_SAFE_CROSS_ORIGIN_HEADERS: frozenset[str] = frozenset(
+    {
+        "user-agent",
+        "accept",
+        "accept-language",
+        "accept-encoding",
+        "dnt",
+        "connection",
+        "upgrade-insecure-requests",
+        "cache-control",
+        "pragma",
+        "if-none-match",
+        "if-modified-since",
+        "te",
+    }
+)
+
+
+def _has_only_safe_redirect_headers(headers: Optional[dict]) -> bool:
+    if not headers:
+        return True
+    return all(str(name).lower() in _SAFE_CROSS_ORIGIN_HEADERS for name in headers.keys())
+
+
+def _check_redirect_allowed(*, from_url: str, to_url: str, headers: Optional[dict]) -> None:
+    """Reject header-leaking or downgrading redirects before the next hop.
+
+    Policy: HTTPS->HTTP downgrades are always rejected. Same-origin
+    redirects keep working with any headers. Cross-origin redirects are
+    allowed only when caller headers are absent or limited to benign
+    content-negotiation/cache headers (``_SAFE_CROSS_ORIGIN_HEADERS``);
+    any other header (``Authorization``/``X-Api-Key``/``Cookie``/custom)
+    rejects before the second origin is requested, so credentials never
+    leak. Header names compare case-insensitively.
     """
-    declared = response.headers.get("content-length")
-    if declared is not None:
-        try:
-            if int(declared) > max_bytes:
-                raise ResponseTooLargeError(f"Response body exceeds {max_bytes} bytes (declared {declared})")
-        except ResponseTooLargeError:
-            raise
-        except (TypeError, ValueError):
-            pass
-    if len(response.content) > max_bytes:
-        raise ResponseTooLargeError(
-            f"Response body exceeds {max_bytes} bytes (received {len(response.content)})"
-        )
+    if urlparse(from_url).scheme.lower() == "https" and urlparse(to_url).scheme.lower() == "http":
+        raise SSRFError(f"Refusing HTTPS->HTTP downgrade redirect: {from_url} -> {to_url}")
+    if _is_same_origin(from_url, to_url):
+        return
+    if _has_only_safe_redirect_headers(headers):
+        return
+    raise SSRFError(f"Refusing cross-origin redirect with headers: {from_url} -> {to_url}")
+
+
+def _read_capped_sync(response: httpx.Response, *, max_bytes: int) -> bytes:
+    """Read decoded body bytes, stopping immediately once ``max_bytes`` is exceeded."""
+    chunks: list[bytes] = []
+    total = 0
+    for chunk in response.iter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            raise ResponseTooLargeError(f"Response body exceeds {max_bytes} bytes (received >{max_bytes})")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def _read_capped_async(response, *, max_bytes: int) -> bytes:
+    """Async counterpart to :func:`_read_capped_sync` (decoded bytes)."""
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes():
+        total += len(chunk)
+        if total > max_bytes:
+            raise ResponseTooLargeError(f"Response body exceeds {max_bytes} bytes (received >{max_bytes})")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _finalize_response(response, body: bytes) -> httpx.Response:
+    """Rebuild a buffered response preserving status/headers/request semantics.
+
+    ``body`` holds decoded bytes, so content-encoding/length from the wire
+    are dropped and httpx sets the decoded length.
+    """
+    headers = httpx.Headers(response.headers)
+    for name in ("content-encoding", "content-length"):
+        if name in headers:
+            del headers[name]
+    return httpx.Response(
+        status_code=response.status_code,
+        headers=headers,
+        content=body,
+        request=response.request,
+    )
 
 
 def safe_httpx_get_sync(
@@ -220,7 +324,6 @@ def safe_httpx_get_sync(
     larger than ``max_bytes`` are refused with :class:`ResponseTooLargeError`.
     """
     current_url = validator(url)
-    last_response: Optional[httpx.Response] = None
     for hop in range(max_redirects + 1):
         pinned_ip, host = _validate_and_pin(current_url)
         ssl_ctx = _build_ssl_context()
@@ -235,26 +338,28 @@ def safe_httpx_get_sync(
             follow_redirects=False,
             headers=headers or {},
         ) as client:
-            response = client.get(current_url)
-        _enforce_size_cap(response, max_bytes=max_bytes)
-        if response.is_redirect:
-            next_url = response.headers.get("location")
-            if not next_url:
-                return response
-            # Resolve relative redirects against current URL
-            from urllib.parse import urljoin
+            with client.stream("GET", current_url) as response:
+                _check_declared_length(response.headers, max_bytes=max_bytes)
+                if response.is_redirect:
+                    next_url = response.headers.get("location")
+                    if not next_url:
+                        body = _read_capped_sync(response, max_bytes=max_bytes)
+                        return _finalize_response(response, body)
+                    # Resolve relative redirects against current URL
+                    from urllib.parse import urljoin
 
-            next_url = urljoin(current_url, next_url)
-            logger.info(
-                "safe_http_redirect",
-                from_url=current_url,
-                to_url=next_url,
-                hop=hop,
-            )
-            current_url = validator(next_url)
-            last_response = response
-            continue
-        return response
+                    next_url = urljoin(current_url, next_url)
+                    _check_redirect_allowed(from_url=current_url, to_url=next_url, headers=headers)
+                    logger.info(
+                        "safe_http_redirect",
+                        from_url=current_url,
+                        to_url=next_url,
+                        hop=hop,
+                    )
+                    current_url = validator(next_url)
+                    continue
+                body = _read_capped_sync(response, max_bytes=max_bytes)
+                return _finalize_response(response, body)
     raise SSRFError(f"Too many redirects (>{max_redirects}); last hop: {current_url}")
 
 
@@ -424,26 +529,29 @@ async def safe_httpx_get_async(
     for hop in range(max_redirects + 1):
         client = safe_httpx_client(url=current_url, timeout=timeout, http2=http2, headers=headers)
         try:
-            response = await client.get(current_url)
+            async with client.stream("GET", current_url) as response:
+                _check_declared_length(response.headers, max_bytes=max_bytes)
+                if response.is_redirect:
+                    next_url = response.headers.get("location")
+                    if not next_url:
+                        body = await _read_capped_async(response, max_bytes=max_bytes)
+                        return _finalize_response(response, body)
+                    from urllib.parse import urljoin
+
+                    next_url = urljoin(current_url, next_url)
+                    _check_redirect_allowed(from_url=current_url, to_url=next_url, headers=headers)
+                    logger.info(
+                        "safe_http_async_redirect",
+                        from_url=current_url,
+                        to_url=next_url,
+                        hop=hop,
+                    )
+                    current_url = validator(next_url)
+                    continue
+                body = await _read_capped_async(response, max_bytes=max_bytes)
+                return _finalize_response(response, body)
         finally:
             await client.aclose()
-        _enforce_size_cap(response, max_bytes=max_bytes)
-        if response.is_redirect:
-            next_url = response.headers.get("location")
-            if not next_url:
-                return response
-            from urllib.parse import urljoin
-
-            next_url = urljoin(current_url, next_url)
-            logger.info(
-                "safe_http_async_redirect",
-                from_url=current_url,
-                to_url=next_url,
-                hop=hop,
-            )
-            current_url = validator(next_url)
-            continue
-        return response
     raise SSRFError(f"Too many redirects (>{max_redirects}); last hop: {current_url}")
 
 

@@ -93,6 +93,22 @@ async def test_async_get_refuses_oversized_body(monkeypatch):
         async def get(self, url: str) -> httpx.Response:
             return _oversized_response(100)
 
+        def stream(self, method: str, url: str):
+            class _Ctx:
+                async def __aenter__(self_inner) -> httpx.Response:
+                    req = httpx.Request(method, url)
+                    return httpx.Response(
+                        200,
+                        content=b"x" * 100,
+                        headers={"Content-Type": "text/plain", "Content-Length": "100"},
+                        request=req,
+                    )
+
+                async def __aexit__(self_inner, *exc) -> bool:
+                    return False
+
+            return _Ctx()
+
         async def aclose(self) -> None:
             pass
 

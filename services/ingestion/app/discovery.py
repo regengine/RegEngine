@@ -11,7 +11,7 @@ from urllib.robotparser import RobotFileParser
 
 import structlog
 from redis import Redis
-from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_sync
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, ResponseTooLargeError, safe_httpx_get_sync
 from shared.url_validation import SSRFError
 
 from services.ingestion.app.regulation_loader import RegulationLoader
@@ -64,12 +64,18 @@ class EthicalScraper:
                 timeout=10,
                 max_bytes=ROBOTS_TXT_MAX_BYTES,
             )
+            if resp.status_code in (401, 403):
+                logger.info("robots_txt_forbidden", url=url, status_code=resp.status_code)
+                return False
             resp.raise_for_status()
             lines = resp.text.splitlines()
             rp.parse(lines)
             return rp.can_fetch("RegEngine-Research-Bot", url)
         except SSRFError:
             raise
+        except ResponseTooLargeError as e:
+            logger.warning("robots_txt_too_large", url=url, error=str(e))
+            return False
         except Exception as e:
             logger.warning("robots_txt_unreachable", url=url, error=str(e))
             return True  # Default allow if robots.txt is unreachable
