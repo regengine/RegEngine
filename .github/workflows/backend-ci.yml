@@ -882,9 +882,16 @@ jobs:
           # test_logging_binding_guard: AST scan banning structlog-style
           # kwargs on stdlib logging.Logger bindings — the defect class that
           # shipped twice (sandbox/router.py, then request_workflow/#2625).
+          # test_visibility_timeout_2918 (#2918) and test_secret_validation
+          # (SEC-004) ran in NO blocking job until the QA suite review found
+          # them ignored in test-suite-check's fast shard: pure-offline
+          # regression tests with no gate. They run here, where a failure
+          # blocks the merge.
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
             tests/test_guard_text_bind_casts.py \
+            tests/shared/test_visibility_timeout_2918.py \
+            tests/shared/test_secret_validation.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
@@ -906,6 +913,18 @@ jobs:
             tests/scripts/test_v126_operator_guidance.py \
             -v --no-cov -o "testpaths=tests"
 
+      - name: Setup Node.js (published-spec contract needs the TS export)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies (published-spec contract)
+        run: |
+          cd frontend
+          npm ci
+
       - name: In-process security & FSMA-204 contract suites (#2503)
         run: |
           repo_root="$(pwd)"
@@ -916,6 +935,20 @@ jobs:
           # Needs the Redis service (job env REDIS_URL) for the job-status
           # tenant-scoping tests; no Postgres — every assertion resolves
           # before DB access. An unreachable Redis FAILS these tests.
+          # The repo-root offline mirrors (tests/admin, tests/billing, ...)
+          # and the published OpenAPI surface contract executed in NO
+          # blocking job (QA suite review): they are asserted here, in the
+          # same process composition that was rehearsed green locally.
+          # NOT included, deliberately: tests/e2e and tests/vertical_services
+          # (need a live stack; skip without one), tests/load (locust/k6
+          # perf harnesses, not merge-gate material), tests/nlp (whole file
+          # skips without the full NLP pipeline),
+          # tests/contract/test_service_contracts.py (needs live services),
+          # tests/contract/test_admin_api_contract.py (needs AUDIT_INTEGRITY_KEY
+          # plus a generated docs/openapi/admin-api.json that no CI step
+          # produces — it would only skip), and
+          # tests/contract/test_error_envelope_contract_2863.py (fails on the
+          # documented flat 409 idempotency shape; needs a product decision).
           pytest tests/test_router_policy.py \
             tests/test_server_import_smoke.py \
             tests/security/test_account_erasure_live_db_guard.py \
@@ -925,6 +958,17 @@ jobs:
             tests/security/test_route_security_manifest.py \
             tests/security/test_staging_release_gate_runner.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
+            tests/admin \
+            tests/audit \
+            tests/billing \
+            tests/compliance \
+            tests/docs \
+            tests/graph \
+            tests/infra \
+            tests/ingestion \
+            tests/recall_reconstruction \
+            tests/qa_sweep_20261002 \
+            tests/contract/test_openapi_production_surface_2861.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
