@@ -1075,7 +1075,7 @@ class TestAuditWriteFailures:
             await create_item({"name": "test"}, actor=actor)
 
     @pytest.mark.asyncio
-    async def test_decorator_does_not_mask_function_error_with_audit_error(self, actor):
+    async def test_decorator_does_not_mask_function_error_with_audit_error(self, actor, caplog):
         """When both fail, the function's own error propagates, not the audit one."""
         AuditLogger.configure(storage=_FalseReturningStorage())
 
@@ -1087,8 +1087,15 @@ class TestAuditWriteFailures:
         async def failing_action(actor: AuditActor):
             raise ValueError("Test error")
 
-        with pytest.raises(ValueError, match="Test error"):
-            await failing_action(actor=actor)
+        with caplog.at_level(logging.ERROR, logger="shared.audit_logging.writer"):
+            with pytest.raises(ValueError, match="Test error"):
+                await failing_action(actor=actor)
+        # The dropped audit failure must still be visible at error level,
+        # or a full revert of the fail-closed decorator stays green here.
+        assert any(
+            record.levelno >= logging.ERROR and "audit_action write failed" in record.getMessage()
+            for record in caplog.records
+        )
 
 
 # =============================================================================

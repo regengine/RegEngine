@@ -887,11 +887,14 @@ jobs:
           # them ignored in test-suite-check's fast shard: pure-offline
           # regression tests with no gate. They run here, where a failure
           # blocks the merge.
+          # test_audit_logging (#3234) guards the fail-closed audit write
+          # contract with fakes and mocks only; same story, same gate.
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
             tests/test_guard_text_bind_casts.py \
             tests/shared/test_visibility_timeout_2918.py \
             tests/shared/test_secret_validation.py \
+            tests/shared/test_audit_logging.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
