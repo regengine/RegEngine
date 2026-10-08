@@ -383,9 +383,11 @@ async def require_api_key(
             detail="Workload credentials are not accepted by tenant APIs",
         )
 
-    # Check rate limit
+    # Check rate limits: enforce every recorded per-key quota window (minute,
+    # hour, day), not just the minute window. A key over any of its caps is
+    # rejected here, before any handler runs.
     if isinstance(key_store, DatabaseAPIKeyStore):
-        rate_info = await key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute)
+        rate_info = await key_store.check_all_rate_limits(api_key)
         if not rate_info.allowed:
             logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
             raise HTTPException(
