@@ -12,7 +12,7 @@ import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
 import structlog
@@ -70,6 +70,58 @@ if not _tool_access_secret_env:
         ),
     )
 TOOL_ACCESS_SECRET = _tool_access_secret_env
+
+# ---------------------------------------------------------------------------
+# Tool-access JWT lifetime — tokens must expire (#medium-9).
+#
+# A leaked or stolen ``re_tool_access`` cookie stops working once ``exp``
+# passes. ``decode_tool_access_token`` rejects expired tokens (PyJWT
+# verifies ``exp`` on every decode path, including the legacy fallback).
+# Configurable so tests and short-lived deployments can tighten it.
+# ---------------------------------------------------------------------------
+TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT = 24.0
+
+
+def _tool_access_expire_hours() -> float:
+    """Return the minted tool-access token lifetime in hours.
+
+    Read from ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS`` on every call so the
+    value can change without a restart. Missing, unparsable, or
+    non-positive values fall back to the 24-hour default.
+    """
+    raw = os.environ.get("TOOL_ACCESS_TOKEN_EXPIRE_HOURS", "").strip()
+    if not raw:
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        hours = float(raw)
+    except ValueError:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if hours <= 0:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    return hours
+
+
+def _mint_tool_access_token(email: str, domain: str) -> str:
+    """Mint a short-lived tool-access JWT for a verified lead."""
+    import jwt
+
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "email": email,
+            "domain": domain,
+            "verified_at": now.isoformat(),
+            "type": "tool_access",
+            "aud": TOOL_ACCESS_AUDIENCE,
+            "iss": SESSION_ISSUER,
+            "iat": now,
+            "exp": now + timedelta(hours=_tool_access_expire_hours()),
+        },
+        TOOL_ACCESS_SECRET,
+        algorithm="HS256",
+    )
 
 # ---------------------------------------------------------------------------
 # Redis — reuse the pattern from bulk_upload/session_store.py
@@ -404,22 +456,10 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     except Exception as exc:
         logger.error("lead_save_failed", email=mask_email(email), error=str(exc))
 
-    # Sign a JWT for the cookie — aud/iss pin this to the tool-access domain
-    # so it cannot be swapped in as a session token (#1060).
-    import jwt
-
-    token = jwt.encode(
-        {
-            "email": email,
-            "domain": domain,
-            "verified_at": datetime.now(timezone.utc).isoformat(),
-            "type": "tool_access",
-            "aud": TOOL_ACCESS_AUDIENCE,
-            "iss": SESSION_ISSUER,
-        },
-        TOOL_ACCESS_SECRET,
-        algorithm="HS256",
-    )
+    # Sign a short-lived JWT for the cookie — aud/iss pin this to the
+    # tool-access domain so it cannot be swapped in as a session token
+    # (#1060), and exp bounds the damage if the cookie leaks (#medium-9).
+    token = _mint_tool_access_token(email, domain)
 
     logger.info("tool_lead_verified", email=mask_email(email), domain=domain, tool=payload.tool_name)
     return ConfirmCodeResponse(status="verified", token=token)
@@ -563,6 +603,11 @@ def decode_tool_access_token(token: str) -> dict:
     ``aud=TOOL_ACCESS_AUDIENCE`` — a session JWT cannot pass this check
     even if the attacker controls the signing key, because its aud is
     ``regengine-api`` (see #1060).
+
+    Tokens minted after the expiry fix carry ``iat``/``exp`` (default
+    24-hour lifetime, see ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS``). PyJWT
+    verifies ``exp`` on both decode paths below, so an expired token
+    raises ``ExpiredSignatureError``.
 
     During the transitional rollout legacy tokens (minted before aud was
     added) have no ``aud`` claim; we accept those so existing cookies keep
