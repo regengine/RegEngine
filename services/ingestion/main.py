@@ -106,6 +106,15 @@ app = FastAPI(
 # CORS is handled by add_security() via shared middleware (single source of truth).
 add_security(app)
 add_rate_limiting(app)
+
+# slowapi raises RateLimitExceeded when a @limiter.limit decorator
+# trips. Without this handler FastAPI would return 500, so register
+# the standard 429 handler (also covers the proof-verify 10/min and
+# integration-webhook 60/min limits).
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 add_observability(app, service_name="ingestion-service")
 
 from app.middleware import RateLimitHeadersMiddleware
