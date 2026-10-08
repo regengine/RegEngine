@@ -22,11 +22,29 @@ These tests lock in the fix:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from services.graph.app.traceability_linker import TraceabilityLinker
 
 TENANT_A = "11111111-1111-1111-1111-111111111111"
+
+# Independent expectation, written as a literal on purpose: importing the
+# product constant would mirror the implementation and let a weakened
+# predicate pass. Every Obligation MATCH must carry this exact WHERE clause.
+_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+_OBLIGATION_WHERE_RE = re.compile(r"WHERE\s*" + re.escape(_EXPECTED_OBLIGATION_PREDICATE) + r"\s*(MATCH|RETURN|MERGE)")
+
+
+def _assert_obligation_scoped(source: str, cypher: str, kwargs: dict) -> None:
+    """The exact shared-catalog WHERE predicate is present, bound, not interpolated."""
+    assert _OBLIGATION_WHERE_RE.search(" ".join(cypher.split())), (
+        f"{source}: missing exact shared-catalog WHERE {_EXPECTED_OBLIGATION_PREDICATE!r} "
+        f"before MATCH/RETURN/MERGE:\n{cypher}"
+    )
+    assert kwargs.get("tenant_id") == TENANT_A, f"{source}: $tenant_id not bound: {kwargs!r}"
+    assert TENANT_A not in cypher, f"{source}: tenant value interpolated into Cypher:\n{cypher}"
 
 
 class _FakeResult:
@@ -126,13 +144,9 @@ async def test_link_fetch_query_scopes_obligation_to_tenant(linker, fake_session
     assert links == []
     assert len(fake_session.runs) == 1
     cypher, kwargs = fake_session.runs[0]
-    assert "o.tenant_id" in cypher
-    assert "$tenant_id" in cypher
-    assert kwargs["tenant_id"] == TENANT_A
-    assert kwargs["id"] == "obl-1"
     # Shared global obligations stay readable; other tenants' do not.
-    assert "IS NULL" in cypher
-    assert TENANT_A not in cypher
+    _assert_obligation_scoped("link fetch", cypher, kwargs)
+    assert kwargs["id"] == "obl-1"
 
 
 @pytest.mark.asyncio
@@ -145,27 +159,59 @@ async def test_link_write_query_scopes_obligation_to_tenant(linker, fake_session
 
     assert len(links) == 1
     assert len(fake_session.runs) == 2
+    fetch_cypher, fetch_kwargs = fake_session.runs[0]
+    _assert_obligation_scoped("link fetch", fetch_cypher, fetch_kwargs)
     cypher, kwargs = fake_session.runs[1]
     assert "Obligation" in cypher
-    assert "o.tenant_id" in cypher
-    assert "$tenant_id" in cypher
-    assert "IS NULL" in cypher
-    assert kwargs["tenant_id"] == TENANT_A
+    _assert_obligation_scoped("link write", cypher, kwargs)
     assert kwargs["obs_id"] == "obl-9"
     # Events were already scoped; the obligation anchor is what this locks in.
     assert "e.tenant_id = $tenant_id" in cypher
-    assert TENANT_A not in cypher
 
 
 @pytest.mark.asyncio
 async def test_link_returns_empty_when_obligation_belongs_to_other_tenant(linker, fake_session):
-    """Wrong-tenant obligation id must yield no match (fail closed)."""
+    """Wrong-tenant obligation id must yield no match (fail closed).
+
+    The empty row models Neo4j returning no node because the exact tenant
+    predicate below excluded the other tenant's obligation. The proof is the
+    captured Cypher: without that WHERE clause the victim node would match
+    and the link would proceed, so the query assertion is what makes this
+    test sensitive to a predicate revert.
+    """
     fake_session.queue(_FakeResult(single_row=None))
 
     links = await linker.link_obligation_to_traceability("obl-victim", TENANT_A)
 
     assert links == []
     assert len(fake_session.runs) == 1
+    cypher, kwargs = fake_session.runs[0]
+    _assert_obligation_scoped("cross-tenant fetch", cypher, kwargs)
+    assert kwargs["id"] == "obl-victim"
+
+
+@pytest.mark.asyncio
+async def test_obligation_predicate_rejects_or_true_mutation(linker, fake_session, monkeypatch):
+    """A weakened predicate such as OR true must fail the exact-clause check.
+
+    Guards against boolean mutations that keep every substring token while
+    letting other tenants' obligations match.
+    """
+    import services.graph.app.traceability_linker as linker_module
+
+    monkeypatch.setattr(
+        linker_module,
+        "_OBLIGATION_TENANT_PREDICATE",
+        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id OR true)",
+    )
+    fake_session.queue(_FakeResult(single_row={"text": "Cooling logs", "category": "COOLING"}))
+    fake_session.queue(_FakeResult(rows=[{"event_id": "e1", "type": "COOLING"}]))
+
+    await linker.link_obligation_to_traceability("obl-9", TENANT_A)
+
+    cypher, kwargs = fake_session.runs[0]
+    with pytest.raises(AssertionError):
+        _assert_obligation_scoped("weakened predicate", cypher, kwargs)
 
 
 @pytest.mark.asyncio
@@ -178,12 +224,8 @@ async def test_get_governing_regulations_scopes_obligation_to_tenant(linker, fak
     assert len(regs) == 1
     assert len(fake_session.runs) == 1
     cypher, kwargs = fake_session.runs[0]
-    assert "o.tenant_id" in cypher
-    assert "$tenant_id" in cypher
-    assert "IS NULL" in cypher
-    assert kwargs["tenant_id"] == TENANT_A
+    _assert_obligation_scoped("governing regulations", cypher, kwargs)
     assert kwargs["tlc"] == "tlc-1"
-    assert TENANT_A not in cypher
 
 
 @pytest.mark.asyncio
@@ -196,9 +238,5 @@ async def test_get_impacted_lots_scopes_obligation_to_tenant(linker, fake_sessio
     assert len(lots) == 1
     assert len(fake_session.runs) == 1
     cypher, kwargs = fake_session.runs[0]
-    assert "o.tenant_id" in cypher
-    assert "$tenant_id" in cypher
-    assert "IS NULL" in cypher
-    assert kwargs["tenant_id"] == TENANT_A
+    _assert_obligation_scoped("impacted lots", cypher, kwargs)
     assert kwargs["id"] == "obl-9"
-    assert TENANT_A not in cypher
