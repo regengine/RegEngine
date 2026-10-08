@@ -142,7 +142,7 @@ def sign_webhook_payload(
     return "t=%d,v1=%s" % (timestamp, _digest(signed, secret, algorithm))
 
 
-def _parse_signature_header(header: str) -> tuple[str, str, Optional[int]]:
+def _parse_signature_header(header: str, *, algorithm: str = "sha256") -> tuple[str, str, Optional[int]]:
     """Return ``(scheme, provided_hex, timestamp_or_None)`` or raise."""
     text = header.strip()
     timestamp: Optional[int] = None
@@ -172,7 +172,7 @@ def _parse_signature_header(header: str) -> tuple[str, str, Optional[int]]:
 
     if not text:
         raise WebhookSignatureMissingError("Missing webhook signature.")
-    return "sha256", text, None
+    return algorithm, text, None
 
 
 def verify_webhook_signature(
@@ -214,7 +214,7 @@ def verify_webhook_signature(
         logger.warning("webhook_signature_missing connector=%s", connector_id)
         raise WebhookSignatureMissingError("Missing webhook signature.")
 
-    scheme, provided, timestamp = _parse_signature_header(signature_header)
+    scheme, provided, timestamp = _parse_signature_header(signature_header, algorithm=algorithm)
 
     if timestamp is not None:
         current = int(time.time()) if now is None else now

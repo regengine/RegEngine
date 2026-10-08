@@ -140,6 +140,38 @@ class TestVerifyAccepts:
         assert result.timestamp is None
 
 
+class TestBareHexAlgorithmSelection:
+    """Bare hex digests honor the selected default algorithm (sha256 unless told)."""
+
+    def test_bare_sha1_accepted_when_selected(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        bare_sha1 = hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha1).hexdigest()
+        result = verify_webhook_signature(webhook_payload, bare_sha1, webhook_secret, algorithm="sha1")
+        assert result.scheme == "sha1"
+        assert result.timestamp is None
+
+    def test_bare_sha1_rejected_by_default(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        bare_sha1 = hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha1).hexdigest()
+        with pytest.raises(WebhookSignatureInvalidError):
+            verify_webhook_signature(webhook_payload, bare_sha1, webhook_secret)
+
+    def test_bare_hex_with_unsupported_algorithm_rejected(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        bare = hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha256).hexdigest()
+        with pytest.raises(WebhookSignatureInvalidError):
+            verify_webhook_signature(webhook_payload, bare, webhook_secret, algorithm="md5")
+
+    def test_explicit_sha1_prefix_accepted_without_algorithm_arg(
+        self, webhook_payload: bytes, webhook_secret: str
+    ) -> None:
+        header = "sha1=" + hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha1).hexdigest()
+        result = verify_webhook_signature(webhook_payload, header, webhook_secret)
+        assert result.scheme == "sha1"
+
+    def test_explicit_prefix_wins_over_algorithm_default(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        header = "sha256=" + hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha256).hexdigest()
+        result = verify_webhook_signature(webhook_payload, header, webhook_secret, algorithm="sha1")
+        assert result.scheme == "sha256"
+
+
 class TestTimestampTolerance:
     def test_stale_timestamp_rejected(self, webhook_secret: str) -> None:
         payload = b'{"event_type": "replay"}'
@@ -276,3 +308,18 @@ class TestConnectorAdoption:
     def test_connector_rejects_unknown_scheme(self, webhook_payload: bytes) -> None:
         connector = self._connector()
         assert connector.verify_webhook_signature(webhook_payload, "md5=abcdef") is False
+
+    def test_connector_accepts_bare_sha1_when_selected(self, webhook_payload: bytes) -> None:
+        connector = self._connector()
+        bare_sha1 = hmac.new(b"connector-secret", webhook_payload, hashlib.sha1).hexdigest()
+        assert connector.verify_webhook_signature(webhook_payload, bare_sha1, algorithm="sha1") is True
+
+    def test_connector_rejects_bare_sha1_by_default(self, webhook_payload: bytes) -> None:
+        connector = self._connector()
+        bare_sha1 = hmac.new(b"connector-secret", webhook_payload, hashlib.sha1).hexdigest()
+        assert connector.verify_webhook_signature(webhook_payload, bare_sha1) is False
+
+    def test_connector_rejects_invalid_algorithm(self, webhook_payload: bytes, sign_webhook) -> None:  # type: ignore[no-untyped-def]
+        connector = self._connector()
+        header = sign_webhook(webhook_payload, "connector-secret", timestamp=None)
+        assert connector.verify_webhook_signature(webhook_payload, header, algorithm="md5") is False

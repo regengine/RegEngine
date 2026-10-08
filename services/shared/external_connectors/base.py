@@ -332,8 +332,7 @@ class IntegrationConnector(ABC):
             )
         except Exception as exc:
             raise ValueError(
-                "Webhooks cannot be enabled for connector '%s' without a signing secret."
-                % self.connector_id
+                "Webhooks cannot be enabled for connector '%s' without a signing secret." % self.connector_id
             ) from exc
 
     def verify_webhook_signature(
@@ -358,6 +357,7 @@ class IntegrationConnector(ABC):
                 signature,
                 self.config.webhook_secret,
                 connector_id=self.connector_id,
+                algorithm=algorithm,
             )
             return True
         except WebhookVerificationError:
