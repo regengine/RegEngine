@@ -65,6 +65,55 @@ def _infer_cte_type(template_name: str) -> str:
     return "receiving"  # default fallback
 
 
+# Webhook completion markers. SafetyCulture posts the completed
+# inspection shape with the trigger name under ``event.event_types``
+# (for example TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS) while older
+# payloads carry a top level ``event_type`` of INSPECTION_COMPLETED
+# or AUDIT_COMPLETED. Both shapes are accepted.
+_COMPLETION_EVENT_TYPES = frozenset(
+    {
+        "INSPECTION_COMPLETED",
+        "AUDIT_COMPLETED",
+        "TRIGGER_EVENT_INSPECTION_COMPLETED",
+        "TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS",
+    }
+)
+
+
+def _is_completion_event(data: Dict[str, Any]) -> bool:
+    """Return True when the payload marks a completed inspection."""
+    top_level = data.get("event_type")
+    if isinstance(top_level, str) and top_level in _COMPLETION_EVENT_TYPES:
+        return True
+    event = data.get("event")
+    if isinstance(event, dict):
+        event_types = event.get("event_types")
+        if isinstance(event_types, str):
+            event_types = [event_types]
+        if isinstance(event_types, (list, tuple)):
+            for event_type in event_types:
+                if isinstance(event_type, str) and event_type in _COMPLETION_EVENT_TYPES:
+                    return True
+    return False
+
+
+def _nested_inspection_id(data: Dict[str, Any]) -> str:
+    """Return the inspection id from the nested webhook shape, if any."""
+    resource = data.get("resource")
+    if isinstance(resource, dict):
+        resource_id = resource.get("id")
+        if isinstance(resource_id, str) and resource_id:
+            return resource_id
+    details = data.get("data")
+    if isinstance(details, dict):
+        inner = details.get("details")
+        if isinstance(inner, dict):
+            inspection_id = inner.get("inspection_id")
+            if isinstance(inspection_id, str) and inspection_id:
+                return inspection_id
+    return ""
+
+
 class SafetyCultureConnector(IntegrationConnector):
     """Connector for SafetyCulture (iAuditor) food safety platform.
 
@@ -358,13 +407,22 @@ class SafetyCultureConnector(IntegrationConnector):
         import json
 
         data = json.loads(payload)
-        event_type = data.get("event_type", "")
+        if not isinstance(data, dict):
+            return []  # ignore unexpected shapes, never an error
 
-        if event_type not in ("INSPECTION_COMPLETED", "AUDIT_COMPLETED"):
+        if not _is_completion_event(data):
             return []  # ignore non-completion events
 
-        audit_id = data.get("audit_id") or data.get("inspection_id")
+        audit_id = (
+            data.get("audit_id")
+            or data.get("inspection_id")
+            or _nested_inspection_id(data)
+        )
         if not audit_id:
+            logger.warning(
+                "safetyculture_webhook_missing_id keys=%s",
+                sorted(data.keys()),
+            )
             return []
 
         # Fetch full audit detail and normalize

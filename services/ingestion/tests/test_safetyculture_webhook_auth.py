@@ -87,12 +87,15 @@ async def test_missing_secret_rejected():
     body = json.dumps(PAYLOAD).encode()
     with pytest.raises(ValueError, match="not configured"):
         await connector.handle_webhook(body, {"x-sc-signature": _sign(body, SECRET)})
+    # An unsigned caller must never trigger a fetch with the tenant key.
+    connector._fetch_audit_detail.assert_not_awaited()
 
 
 async def test_missing_signature_rejected():
     connector = _connector()
     with pytest.raises(ValueError, match="Missing.*signature"):
         await connector.handle_webhook(json.dumps(PAYLOAD).encode(), {})
+    connector._fetch_audit_detail.assert_not_awaited()
 
 
 async def test_bad_signature_rejected():
@@ -100,6 +103,7 @@ async def test_bad_signature_rejected():
     body = json.dumps(PAYLOAD).encode()
     with pytest.raises(ValueError, match="Invalid.*signature"):
         await connector.handle_webhook(body, {"x-sc-signature": "0" * 64})
+    connector._fetch_audit_detail.assert_not_awaited()
 
 
 async def test_valid_signature_accepted():
@@ -115,6 +119,76 @@ async def test_valid_signature_with_prefix_accepted():
     body = json.dumps(PAYLOAD).encode()
     events = await connector.handle_webhook(body, {"X-Sc-Signature": "sha256=" + _sign(body)})
     assert len(events) == 1
+
+
+async def test_safetyculture_signature_header_accepted():
+    connector = _connector()
+    body = json.dumps(PAYLOAD).encode()
+    events = await connector.handle_webhook(
+        body, {"X-Safetyculture-Signature": _sign(body)}
+    )
+    assert len(events) == 1
+
+
+async def test_safetyculture_signature_header_rejected_when_bad():
+    connector = _connector()
+    body = json.dumps(PAYLOAD).encode()
+    with pytest.raises(ValueError, match="Invalid.*signature"):
+        await connector.handle_webhook(
+            body, {"X-Safetyculture-Signature": "0" * 64}
+        )
+    connector._fetch_audit_detail.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Documented provider shape: nested event types and resource ids
+# ---------------------------------------------------------------------------
+
+NESTED_PAYLOAD = {
+    "event": {"event_types": ["TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS"]},
+    "resource": {"id": "audit-456"},
+}
+
+NESTED_DETAILS_PAYLOAD = {
+    "event": {"event_types": "TRIGGER_EVENT_INSPECTION_COMPLETED"},
+    "data": {"details": {"inspection_id": "audit-789"}},
+}
+
+
+async def test_nested_completion_shape_accepted_with_resource_id():
+    connector = _connector()
+    body = json.dumps(NESTED_PAYLOAD).encode()
+    events = await connector.handle_webhook(body, {"x-sc-signature": _sign(body)})
+    assert len(events) == 1
+    connector._fetch_audit_detail.assert_awaited_once_with("audit-456")
+
+
+async def test_nested_completion_shape_accepted_with_details_id():
+    connector = _connector()
+    body = json.dumps(NESTED_DETAILS_PAYLOAD).encode()
+    events = await connector.handle_webhook(body, {"x-sc-signature": _sign(body)})
+    assert len(events) == 1
+    connector._fetch_audit_detail.assert_awaited_once_with("audit-789")
+
+
+async def test_nested_non_completion_shape_ignored_without_fetch():
+    connector = _connector()
+    body = json.dumps(
+        {"event": {"event_types": ["TRIGGER_EVENT_INSPECTION_UPDATED"]}}
+    ).encode()
+    events = await connector.handle_webhook(body, {"x-sc-signature": _sign(body)})
+    assert events == []
+    connector._fetch_audit_detail.assert_not_awaited()
+
+
+async def test_nested_completion_without_id_ignored_without_fetch():
+    connector = _connector()
+    body = json.dumps(
+        {"event": {"event_types": ["TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS"]}}
+    ).encode()
+    events = await connector.handle_webhook(body, {"x-sc-signature": _sign(body)})
+    assert events == []
+    connector._fetch_audit_detail.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -183,3 +257,44 @@ def test_router_valid_signature_returns_count_only(client, monkeypatch):
     # No inspection data may leak back to the webhook caller.
     assert "events" not in result
     assert "audit-123" not in resp.text
+
+
+def test_router_nested_shape_returns_count_only(client, monkeypatch):
+    monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {CONNECTOR_ID: _connector()})
+    body = json.dumps(NESTED_PAYLOAD).encode()
+    resp = _post(client, body, {"X-Sc-Signature": _sign(body)})
+    assert resp.status_code == 200
+    assert resp.json()["accepted"] == 1
+
+
+def test_reconfigure_rotates_webhook_secret(client, monkeypatch):
+    """A second configure call must replace the cached connector.
+
+    Otherwise a rotated webhook secret never takes effect and the old
+    secret keeps authorizing fetches with the tenant key.
+    """
+    from shared.external_connectors.safetyculture import SafetyCultureConnector
+
+    # get_or_create_connector reads _CONNECTOR_CLASSES directly, so
+    # register the class there (monkeypatch undoes it after the test).
+    monkeypatch.setitem(
+        registry_mod._CONNECTOR_CLASSES, CONNECTOR_ID, SafetyCultureConnector
+    )
+    tenant = "tenant-rotate-secret"
+    try:
+        first = client.post(
+            f"/api/v1/integrations/configure/{tenant}",
+            json={"connector_id": CONNECTOR_ID, "api_key": "k", "webhook_secret": "secret-one"},
+        )
+        assert first.status_code == 200
+        assert registry_mod.get_tenant_connectors(tenant)[CONNECTOR_ID].config.webhook_secret == "secret-one"
+
+        second = client.post(
+            f"/api/v1/integrations/configure/{tenant}",
+            json={"connector_id": CONNECTOR_ID, "api_key": "k", "webhook_secret": "secret-two"},
+        )
+        assert second.status_code == 200
+        connector = registry_mod.get_tenant_connectors(tenant)[CONNECTOR_ID]
+        assert connector.config.webhook_secret == "secret-two"
+    finally:
+        registry_mod.remove_connector(tenant, CONNECTOR_ID)
