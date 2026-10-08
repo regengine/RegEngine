@@ -15,12 +15,58 @@ No network, no disk. Env vars are monkeypatched per test.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from shared import secrets_manager as sm
+
+_ISOLATED_VARS = (
+    "REGENGINE_ENV",
+    "ENV",
+    "ENVIRONMENT",
+    "DATABASE_URL",
+    "EVENT_BACKBONE",
+    "REGENGINE_SKIP_SECRET_CHECK",
+    "POSTGRES_HOST",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_PORT",
+    "POSTGRES_DB",
+    "NEO4J_URI",
+    "NEO4J_URL",
+    "NEO4J_USER",
+    "NEO4J_PASSWORD",
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "KAFKA_USERNAME",
+    "KAFKA_PASSWORD",
+    "KAFKA_SECURITY_PROTOCOL",
+    "OBJECT_STORAGE_ACCESS_KEY_ID",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    "OBJECT_STORAGE_REGION",
+    "S3_BUCKET_PREFIX",
+    "OBJECT_STORAGE_ENDPOINT_URL",
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "RAILWAY_ENVIRONMENT_ID",
+    "RAILWAY_PROJECT_NAME",
+    "RAILWAY_PROJECT_ID",
+    "RAILWAY_SERVICE_NAME",
+    "RAILWAY_SERVICE_ID",
+    "VERCEL_ENV",
+    "VERCEL_URL",
+    "RENDER",
+    "FLY_APP_NAME",
+    "KUBERNETES_SERVICE_HOST",
+)
 
 
 @pytest.fixture(autouse=True)
 def _fresh_singleton(monkeypatch):
+    for var in _ISOLATED_VARS:
+        monkeypatch.delenv(var, raising=False)
+    for var in list(os.environ):
+        if var.startswith("REGENGINE_SECRET_"):
+            monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(sm, "_secrets_manager", None)
     mgr = sm.SecretsManager()
     mgr.get_secret.cache_clear()
@@ -84,7 +130,7 @@ class TestCredentialGetters:
         creds = _mgr().get_database_credentials()
         assert creds == {
             "username": "app",
-            "password": "pw",
+            "password": "pw",  # pragma: allowlist secret -- synthetic fixture value
             "host": "db.internal",
             "port": "5433",
             "database": "appdb",
@@ -114,7 +160,7 @@ class TestCredentialGetters:
         monkeypatch.setenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "secret")
         creds = _mgr().get_s3_credentials()
         assert creds["access_key_id"] == "AKID"
-        assert creds["secret_access_key"] == "secret"
+        assert creds["secret_access_key"] == "secret"  # pragma: allowlist secret -- synthetic fixture value
         assert creds["region"] == "us-east-1"
 
     def test_module_convenience_functions_delegate(self, monkeypatch):
@@ -132,6 +178,8 @@ class TestCredentialGetters:
 
 def _prod_env(monkeypatch, **overrides):
     monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic-localhost:5432/regengine")
+    monkeypatch.setenv("EVENT_BACKBONE", "pg")
     monkeypatch.setenv("NEO4J_PASSWORD", "a-strong-neo4j-password-value")
     monkeypatch.setenv("OBJECT_STORAGE_ACCESS_KEY_ID", "AKIAEXAMPLE")
     monkeypatch.setenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "a-strong-object-secret")
@@ -152,9 +200,41 @@ class TestValidateProductionSecrets:
         sm.validate_production_secrets()
 
     def test_missing_secret_fails(self, monkeypatch):
-        _prod_env(monkeypatch, NEO4J_PASSWORD=None)
-        with pytest.raises(RuntimeError, match="NEO4J_PASSWORD is not set"):
+        _prod_env(monkeypatch, DATABASE_URL=None)
+        with pytest.raises(RuntimeError, match="DATABASE_URL is not set") as exc_info:
             sm.validate_production_secrets()
+        message = str(exc_info.value)
+        for var in (
+            "POSTGRES_HOST",
+            "POSTGRES_PASSWORD",
+            "NEO4J_PASSWORD",
+            "KAFKA_BOOTSTRAP_SERVERS",
+            "OBJECT_STORAGE_ACCESS_KEY_ID",
+            "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+        ):
+            assert f"{var} is not set" not in message
+
+    def test_optional_unset_passes(self, monkeypatch):
+        _prod_env(
+            monkeypatch,
+            NEO4J_PASSWORD=None,
+            OBJECT_STORAGE_ACCESS_KEY_ID=None,
+            OBJECT_STORAGE_SECRET_ACCESS_KEY=None,
+        )
+        sm.validate_production_secrets()
+
+    def test_kafka_enabled_without_config_fails(self, monkeypatch):
+        _prod_env(monkeypatch, EVENT_BACKBONE="kafka", KAFKA_BOOTSTRAP_SERVERS=None)
+        with pytest.raises(RuntimeError, match="KAFKA_BOOTSTRAP_SERVERS is not set"):
+            sm.validate_production_secrets()
+
+    def test_kafka_enabled_with_config_passes(self, monkeypatch):
+        _prod_env(
+            monkeypatch,
+            EVENT_BACKBONE="kafka",
+            KAFKA_BOOTSTRAP_SERVERS="synthetic-kafka:9092",
+        )
+        sm.validate_production_secrets()
 
     @pytest.mark.parametrize("weak", ["change-me", "password", "test", "test-key", "demo123"])
     def test_insecure_defaults_fail(self, monkeypatch, weak):
@@ -166,7 +246,7 @@ class TestValidateProductionSecrets:
         _prod_env(
             monkeypatch,
             OBJECT_STORAGE_ACCESS_KEY_ID="test",
-            OBJECT_STORAGE_SECRET_ACCESS_KEY="test",
+            OBJECT_STORAGE_SECRET_ACCESS_KEY="test",  # pragma: allowlist secret -- synthetic fixture value
         )
         with pytest.raises(RuntimeError, match="OBJECT_STORAGE"):
             sm.validate_production_secrets()
