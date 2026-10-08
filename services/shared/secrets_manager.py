@@ -298,19 +298,18 @@ INSECURE_DEFAULTS = {
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": ["test"],
 }
 
-# Every credential the getters serve that production must provide
-# explicitly. Each entry lists aliases of which at least one must be set
-# (example: NEO4J_URI or the legacy NEO4J_URL). The localhost fallbacks in
-# the getters are for local development only and never satisfy this list.
-REQUIRED_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (
-    ("POSTGRES_HOST",),
-    ("POSTGRES_PASSWORD",),
-    ("NEO4J_URI", "NEO4J_URL"),
-    ("NEO4J_PASSWORD",),
-    ("KAFKA_BOOTSTRAP_SERVERS",),
-    ("OBJECT_STORAGE_ACCESS_KEY_ID",),
-    ("OBJECT_STORAGE_SECRET_ACCESS_KEY",),
-)
+# The only credential production always needs at startup: the database the
+# monolith cannot boot without (shared/database.py raises without it).
+# The localhost fallbacks in the getters are for local development only
+# and never satisfy this requirement.
+REQUIRED_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("DATABASE_URL",),)
+
+# Kafka consumers run only when EVENT_BACKBONE=kafka (default pg).
+KAFKA_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("KAFKA_BOOTSTRAP_SERVERS",),)
+
+# Neo4j is absent from the release-approved production router set; its
+# credentials stay fail-closed on use. Object storage is optional: absent
+# keys degrade document routes to 503 while the monolith still boots.
 
 
 def _production_env_label() -> str:
@@ -342,26 +341,31 @@ def validate_production_secrets() -> None:
     env = _production_env_label()
     logger.info("validating_production_secrets", environment=env)
 
+    # DATABASE_URL is always required; subsystem credentials join the list
+    # only when their subsystem is actually enabled.
+    from shared.event_backbone import kafka_enabled  # noqa: PLC0415
+
+    required: list[tuple[str, ...]] = list(REQUIRED_PRODUCTION_CREDENTIALS)
+    if kafka_enabled():
+        required.extend(KAFKA_PRODUCTION_CREDENTIALS)
+
     errors = []
 
     # Every required credential must be set; the localhost fallbacks in
     # the getters must never silently stand in for them.
-    for alternatives in REQUIRED_PRODUCTION_CREDENTIALS:
+    for alternatives in required:
         if not any(os.getenv(var_name, "") for var_name in alternatives):
             if len(alternatives) == 1:
                 errors.append(f"{alternatives[0]} is not set")
             else:
                 errors.append(f"{' / '.join(alternatives)} is not set")
 
-    # Check each critical secret. Variables already reported missing above are
-    # not repeated here.
-    already_reported = {alternatives[0] for alternatives in REQUIRED_PRODUCTION_CREDENTIALS if len(alternatives) == 1}
+    # Insecure placeholders are rejected whenever SET, even for a disabled
+    # subsystem — but an unset optional value is fine.
     for var_name, insecure_values in INSECURE_DEFAULTS.items():
         current_value = os.getenv(var_name, "")
 
         if not current_value:
-            if var_name not in already_reported:
-                errors.append(f"{var_name} is not set")
             continue
 
         # Check if current value matches any insecure default
@@ -383,7 +387,7 @@ def validate_production_secrets() -> None:
     logger.info(
         "production_secrets_validated",
         environment=env,
-        checks_passed=len(REQUIRED_PRODUCTION_CREDENTIALS) + len(INSECURE_DEFAULTS),
+        checks_passed=len(required) + len(INSECURE_DEFAULTS),
     )
 
 

@@ -92,6 +92,7 @@ class TestNotImplementedStatus:
 _PROD_ENV = {
     "REGENGINE_ENV": "production",
     "ENVIRONMENT": "production",
+    "EVENT_BACKBONE": "pg",
     "ENABLED_ROUTERS": ",".join(sorted(PRODUCTION_ENABLED_ROUTERS)),
     "REDIS_URL": "redis://localhost:6379/15",
     "DATABASE_URL": "postgresql://localhost:5432/regengine_test",
@@ -115,8 +116,19 @@ print(json.dumps({
 def _enumerate_production_routes(disabled: str | None = None) -> dict:
     env = {**os.environ, **_PROD_ENV}
     # The pytest session exports test-only knobs that server.main refuses to
-    # boot with under REGENGINE_ENV=production.
-    for test_only in ("AUTH_TEST_BYPASS_TOKEN", "ENABLE_EXPERIMENTAL_ROUTERS", "DISABLED_ROUTERS"):
+    # boot with under REGENGINE_ENV=production, plus placeholder storage keys
+    # (services/ingestion/conftest.py) that the secrets gate rejects as
+    # insecure whenever set.
+    for test_only in (
+        "AUTH_TEST_BYPASS_TOKEN",
+        "ENABLE_EXPERIMENTAL_ROUTERS",
+        "DISABLED_ROUTERS",
+        "NEO4J_URI",
+        "NEO4J_URL",
+        "NEO4J_PASSWORD",
+        "OBJECT_STORAGE_ACCESS_KEY_ID",
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    ):
         env.pop(test_only, None)
     if disabled is not None:
         env["REGENGINE_ENV"] = "test"

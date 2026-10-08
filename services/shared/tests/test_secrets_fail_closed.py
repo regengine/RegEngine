@@ -50,6 +50,8 @@ _CLEARED = (
     "REGENGINE_ENV",
     "ENV",
     "DATABASE_URL",
+    "ENABLED_ROUTERS",
+    "EVENT_BACKBONE",
     "REGENGINE_SKIP_SECRET_CHECK",
     "POSTGRES_HOST",
     "POSTGRES_PASSWORD",
@@ -63,6 +65,7 @@ _CLEARED = (
 )
 
 _SECURE_ENV = {
+    "DATABASE_URL": "postgresql://synthetic-prod-host:5432/regengine",
     "POSTGRES_HOST": "synthetic-postgres-host",
     "POSTGRES_PASSWORD": "synthetic-postgres-passphrase-7d1c",  # pragma: allowlist secret
     "NEO4J_URI": "bolt://synthetic-neo4j:7687",
@@ -142,18 +145,15 @@ class TestProductionSecretValidation:
         assert "secure_secrets_required_in_production" in (result.stdout + result.stderr)
 
     def test_unset_secrets_fail_in_production(self):
-        """The finding behind server/main.py's non-fatal default.
+        """Production startup fails when its required database is absent.
 
-        With none of the four variables set — which is the state of a plain
-        checkout and of any deploy that has not had all four confirmed —
-        validate_production_secrets() raises on "is not set", not just on a
-        known placeholder. server/main.py therefore logs rather than aborts
-        unless REGENGINE_REQUIRE_SECURE_SECRETS is set, because raising here
-        would crash-loop the single deployed container fleet-wide.
+        Optional disabled integrations do not add missing-credential errors.
+        The monolith calls this validator unconditionally before serving.
         """
         result = _run({"REGENGINE_ENV": "production"})
         assert result.returncode != 0
         combined = result.stdout + result.stderr
+        assert "DATABASE_URL is not set" in combined
         for var in (
             "POSTGRES_HOST",
             "POSTGRES_PASSWORD",
@@ -162,5 +162,5 @@ class TestProductionSecretValidation:
             "OBJECT_STORAGE_ACCESS_KEY_ID",
             "OBJECT_STORAGE_SECRET_ACCESS_KEY",
         ):
-            assert f"{var} is not set" in combined
-        assert "NEO4J_URI / NEO4J_URL is not set" in combined
+            assert f"{var} is not set" not in combined
+        assert "NEO4J_URI / NEO4J_URL is not set" not in combined

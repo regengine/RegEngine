@@ -6,7 +6,9 @@ only checked 3 variables, so a production deploy missing its secret wiring
 would boot against localhost fallbacks. Now the getters raise in production
 (central ``shared.env`` detection, explicit ``environment`` argument wins)
 while local development keeps its localhost defaults, and the startup
-validator requires every credential the getters serve.
+validator requires ``DATABASE_URL`` plus only the credentials of enabled
+subsystems (Kafka iff ``EVENT_BACKBONE=kafka``), while still rejecting insecure placeholders
+whenever they are set (#3243).
 
 All key material below is synthetic. Every test scrubs the credential and
 environment-detection variables first so the host environment cannot make a
@@ -33,6 +35,8 @@ _CRED_VARS = (
     "ENV",
     "ENVIRONMENT",
     "DATABASE_URL",
+    "ENABLED_ROUTERS",
+    "EVENT_BACKBONE",
     "REGENGINE_SKIP_SECRET_CHECK",
     "POSTGRES_HOST",
     "POSTGRES_USER",
@@ -51,6 +55,7 @@ _CRED_VARS = (
 )
 
 _SECURE_CREDS = {
+    "DATABASE_URL": "postgresql://synthetic-prod-host:5432/regengine",
     "POSTGRES_HOST": "synthetic-postgres-host",
     "POSTGRES_PASSWORD": "synthetic-postgres-passphrase-7d1c",  # pragma: allowlist secret
     "NEO4J_URI": "bolt://synthetic-neo4j:7687",
@@ -99,7 +104,7 @@ class TestDatabaseCredentials:
         production.setenv("POSTGRES_PASSWORD", "synthetic-pass")  # pragma: allowlist secret
         creds = manager.get_database_credentials()
         assert creds["host"] == "synthetic-postgres-host"
-        assert creds["password"] == "synthetic-pass"
+        assert creds["password"] == "synthetic-pass"  # pragma: allowlist secret
 
     def test_explicit_environment_argument_wins_over_env(self, clean_env, manager):
         clean_env.setenv("REGENGINE_ENV", "development")
@@ -176,10 +181,21 @@ class TestValidateProductionSecrets:
         clean_env.setenv("REGENGINE_ENV", "development")
         validate_production_secrets()
 
-    def test_production_missing_everything_fails(self, production):
+    def test_production_database_url_only_passes(self, production):
+        """#3243: disabled/absent optional subsystems must not block boot."""
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        validate_production_secrets()
+
+    def test_production_all_set_passes(self, production):
+        for var, value in _SECURE_CREDS.items():
+            production.setenv(var, value)
+        validate_production_secrets()
+
+    def test_production_missing_database_url_fails(self, production):
         with pytest.raises(RuntimeError) as exc_info:
             validate_production_secrets()
         message = str(exc_info.value)
+        assert "DATABASE_URL is not set" in message
         for var in (
             "POSTGRES_HOST",
             "POSTGRES_PASSWORD",
@@ -188,12 +204,35 @@ class TestValidateProductionSecrets:
             "OBJECT_STORAGE_ACCESS_KEY_ID",
             "OBJECT_STORAGE_SECRET_ACCESS_KEY",
         ):
-            assert f"{var} is not set" in message
-        assert "NEO4J_URI / NEO4J_URL is not set" in message
+            assert f"{var} is not set" not in message
+        assert "NEO4J_URI / NEO4J_URL is not set" not in message
 
-    def test_production_all_set_passes(self, production):
-        for var, value in _SECURE_CREDS.items():
-            production.setenv(var, value)
+    def test_unapproved_graph_request_is_owned_by_router_policy(self, production):
+        from server.router_policy import PRODUCTION_ENABLED_ROUTERS, RouterPolicy
+
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("ENABLED_ROUTERS", ",".join(sorted(PRODUCTION_ENABLED_ROUTERS | {"graph"})))
+        # A requested but unapproved router must not invent a credential
+        # requirement. The existing router policy rejects this configuration.
+        validate_production_secrets()
+        with pytest.raises(RuntimeError, match="release-approved set"):
+            RouterPolicy.from_environment(production=True)
+
+    def test_production_kafka_enabled_without_config_rejected(self, production):
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("EVENT_BACKBONE", "kafka")
+        with pytest.raises(RuntimeError) as exc_info:
+            validate_production_secrets()
+        message = str(exc_info.value)
+        assert "KAFKA_BOOTSTRAP_SERVERS is not set" in message
+        assert "DATABASE_URL is not set" not in message
+        assert "NEO4J_PASSWORD is not set" not in message
+        assert "OBJECT_STORAGE_ACCESS_KEY_ID is not set" not in message
+
+    def test_production_kafka_enabled_with_config_passes(self, production):
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("EVENT_BACKBONE", "kafka")
+        production.setenv("KAFKA_BOOTSTRAP_SERVERS", "synthetic-kafka:9092")
         validate_production_secrets()
 
     def test_production_detected_via_env_fallback(self, clean_env):
@@ -203,10 +242,16 @@ class TestValidateProductionSecrets:
             validate_production_secrets()
 
     def test_production_detected_via_database_url_heuristic(self, clean_env):
-        """Central detection: the Supabase pooler heuristic counts as production."""
+        """Central detection: the Supabase pooler heuristic counts as production.
+
+        DATABASE_URL itself satisfies the always-required slot, so Kafka
+        is enabled to prove the heuristic flips the gate on.
+        """
         clean_env.setenv("DATABASE_URL", "postgresql://u:p@db.pooler.supabase.com:6543/d")
-        with pytest.raises(RuntimeError):
+        clean_env.setenv("EVENT_BACKBONE", "kafka")
+        with pytest.raises(RuntimeError) as exc_info:
             validate_production_secrets()
+        assert "KAFKA_BOOTSTRAP_SERVERS is not set" in str(exc_info.value)
 
     def test_each_required_credential_is_checked(self, production):
         """Every required credential is individually load-bearing."""
@@ -223,12 +268,19 @@ class TestValidateProductionSecrets:
         validate_production_secrets()
 
     def test_insecure_default_still_rejected(self, production):
-        for var, value in _SECURE_CREDS.items():
-            production.setenv(var, value)
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
         production.setenv("NEO4J_PASSWORD", "neo4j")
         with pytest.raises(RuntimeError) as exc_info:
             validate_production_secrets()
         assert "NEO4J_PASSWORD is using an insecure default value" in str(exc_info.value)
+
+    def test_insecure_storage_placeholder_rejected_when_set(self, production):
+        """Storage is never startup-required, but a set placeholder still fails."""
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("OBJECT_STORAGE_ACCESS_KEY_ID", "test")
+        with pytest.raises(RuntimeError) as exc_info:
+            validate_production_secrets()
+        assert "OBJECT_STORAGE_ACCESS_KEY_ID is using an insecure default value" in str(exc_info.value)
 
 
 class TestStartupWiring:
