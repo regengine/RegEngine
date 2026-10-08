@@ -57,8 +57,24 @@ def _canonicalize_ftl_commodity(value: str) -> str:
     return re.sub(r"\s+", " ", value.replace("_", " ").replace("-", " ").strip().lower())
 
 
+# The catalog stores hyphenated entries ("fresh-cut fruits") while
+# _canonicalize_ftl_commodity folds hyphens to spaces, so a direct
+# membership test against FTL_CATEGORIES rejects every spelling of
+# those commodities. This lookup resolves any accepted spelling back
+# to the engine-canonical catalog form (the lower-case catalog entry),
+# which is what the rules engine matches in get_ftl_category (it only
+# lower-cases and strips, so a space-folded stamp would classify an
+# in-scope food as not-FTL scoped).
+_FTL_LOOKUP: dict[str, str] = {_canonicalize_ftl_commodity(entry): entry.strip().lower() for entry in FTL_CATEGORIES}
+
+
 def _is_ftl_commodity(value: str) -> bool:
-    return _canonicalize_ftl_commodity(value) in FTL_CATEGORIES
+    return _canonicalize_ftl_commodity(value) in _FTL_LOOKUP
+
+
+def _resolve_ftl_commodity(value: str) -> str | None:
+    """Return the engine-canonical catalog form of a commodity, or None."""
+    return _FTL_LOOKUP.get(_canonicalize_ftl_commodity(value))
 
 
 # ---------------------------------------------------------------------------
@@ -483,10 +499,14 @@ async def validate_compliance(
     ``traceability_lot_code`` / ``product_reference``.
     """
     # --- Step 1 / 2 — catalog-level FTL gate ------------------------------
-    if not _is_ftl_commodity(request.ftl_commodity):
-        raise HTTPException(status_code=400, detail="E_NON_FTL_FOOD")
-
+    # Resolve to the engine-canonical catalog form (None when not FTL).
+    # The space-folded canonical form is kept for the scope comparison
+    # and the response echo; the catalog form is what the engine event
+    # is stamped with so get_ftl_category recognizes it.
     canonical_commodity = _canonicalize_ftl_commodity(request.ftl_commodity)
+    engine_commodity = _FTL_LOOKUP.get(canonical_commodity)
+    if engine_commodity is None:
+        raise HTTPException(status_code=400, detail="E_NON_FTL_FOOD")
 
     # --- Step 3 — per-checklist scope (future-proofed, not yet enforced) --
     if request.checklist_id is not None:
@@ -542,7 +562,7 @@ async def validate_compliance(
         # fabricate a verdict from nothing (fail-closed, #1347).
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    event_data = _config_to_engine_event(request.config, canonical_commodity)
+    event_data = _config_to_engine_event(request.config, engine_commodity)
     engine = RulesEngine(db)
     summary = engine.evaluate_event(
         event_data,

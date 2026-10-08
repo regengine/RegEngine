@@ -189,12 +189,15 @@ def _normalise_event(
     if kdes.get("event_time"):
         event_time = str(kdes["event_time"])
 
-    # Collect named KDE values
-    kde_vals = {k: str(kdes.get(k, "")) for k in _NAMED_KDE_KEYS if kdes.get(k)}
+    # Collect named KDE values. Only None and "" count as missing: a
+    # numeric zero (for example a 0F temperature reading) or False is a
+    # real measurement and must survive normalization.
+    kde_vals = {k: str(v) for k in _NAMED_KDE_KEYS if (v := kdes.get(k)) is not None and v != ""}
 
     # Extra KDEs -> JSON. Even a JSON-encoded string can begin with ``=``
     # once a spreadsheet renders it, so sanitize the serialized blob too.
-    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v}
+    # Same missing-value rule as above so zero/False evidence is kept.
+    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v is not None and v != ""}
     extra_json = json.dumps(extra, default=str) if extra else ""
 
     row = {
