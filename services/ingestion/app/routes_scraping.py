@@ -13,7 +13,7 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
 
-from plugins.fsma.sources import FSMA_SOURCES
+from plugins.fsma.sources import FSMA_SOURCES, load_fsma_sources
 
 from .discovery import discovery
 from .models import IngestAllRegulationsResponse, ScrapeRegistryResponse, ScrapeResponse
@@ -131,13 +131,16 @@ async def run_all_regulations_ingest() -> dict:
     internal credential that ``require_api_key`` accepts, so the old
     HTTP-to-self call could never authenticate.
     """
+    # Refuse a bad catalog before any fetch. A path-like name, an off-scope
+    # URL, or an extra scope field must not reach the scraper or the queue.
+    sources = load_fsma_sources(FSMA_SOURCES)
     job_id = str(uuid.uuid4())
     started_at = time.time()
 
     logger.info(
         "fsma_ingestion_triggered",
         job_id=job_id,
-        sources=len(FSMA_SOURCES),
+        sources=len(sources),
     )
 
     tasks = [
@@ -147,12 +150,12 @@ async def run_all_regulations_ingest() -> dict:
             source_type=source["type"],
             jurisdiction=source["jurisdiction"],
         )
-        for source in FSMA_SOURCES
+        for source in sources
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     summary: dict[str, int] = {
-        "sources_attempted": len(FSMA_SOURCES),
+        "sources_attempted": len(sources),
         "queued_manual": 0,
         "unchanged": 0,
         "ingested": 0,
