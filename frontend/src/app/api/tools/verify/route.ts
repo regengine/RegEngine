@@ -5,12 +5,27 @@
  * POST /api/tools/verify
  *   body: { action: "verify" | "confirm", email, code?, tool_name? }
  *
- * On confirm success, sets re_tool_access cookie (30-day, httpOnly, lax).
+ * On confirm success, sets re_tool_access cookie (httpOnly, lax) with a
+ * maxAge matching the minted token lifetime (default 24 hours, reported
+ * by the backend as expires_in_seconds).
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerServiceURL } from '@/lib/api-config';
 
-const THIRTY_DAYS = 60 * 60 * 24 * 30;
+/** Default tool-access cookie lifetime: 24 hours, matching the backend mint. */
+const DEFAULT_TOOL_ACCESS_MAX_AGE = 60 * 60 * 24;
+
+function resolveCookieMaxAge(expiresInSeconds: unknown): number {
+    if (
+        typeof expiresInSeconds === 'number' &&
+        Number.isFinite(expiresInSeconds) &&
+        expiresInSeconds >= 60 &&
+        expiresInSeconds <= DEFAULT_TOOL_ACCESS_MAX_AGE
+    ) {
+        return Math.floor(expiresInSeconds);
+    }
+    return DEFAULT_TOOL_ACCESS_MAX_AGE;
+}
 
 function getBackendUrl(): string {
     return getServerServiceURL('admin').replace(/\/+$/, '');
@@ -61,14 +76,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // On successful confirmation, set the HTTP-only cookie
+        // On successful confirmation, set the HTTP-only cookie with a
+        // lifetime matching the minted token, so the cookie stops
+        // granting access when the JWT itself expires.
         if (action === 'confirm' && data.token) {
             const response = NextResponse.json({ status: 'verified' });
             response.cookies.set('re_tool_access', data.token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
-                maxAge: THIRTY_DAYS,
+                maxAge: resolveCookieMaxAge(data.expires_in_seconds),
                 path: '/',
             });
             return response;
