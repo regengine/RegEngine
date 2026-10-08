@@ -31,6 +31,15 @@ _CHILD_ENV = {
     "JWT_SECRET": "openapi-contract-test-import-only-not-a-real-jwt-secret-9c7e",
     "REGENGINE_API_KEY": "openapi-contract-test-import-only-not-a-real-key-1a3d",
     "TOOL_ACCESS_SECRET": "openapi-contract-test-import-only-not-a-real-tool-8e5c",
+    # Import-only credential values so the production secret gate passes while
+    # the child builds the route table. Never used to connect anywhere.
+    "POSTGRES_HOST": "import-only-postgres-host",
+    "POSTGRES_PASSWORD": "openapi-contract-test-import-only-not-a-real-pg-secret-9d2a",
+    "NEO4J_URI": "bolt://import-only-neo4j:7687",
+    "NEO4J_PASSWORD": "openapi-contract-test-import-only-not-a-real-neo4j-secret-1b7e",
+    "KAFKA_BOOTSTRAP_SERVERS": "import-only-kafka:9092",
+    "OBJECT_STORAGE_ACCESS_KEY_ID": "IMPORTONLYACCESSKEYID",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY": "openapi-contract-test-import-only-not-a-real-s3-secret-5f3c",
 }
 
 _CHILD_SCRIPT = """
