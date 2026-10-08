@@ -8,6 +8,7 @@ unlock free compliance tools. Verified leads are stored in tool_leads.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import secrets
@@ -86,8 +87,10 @@ def _tool_access_expire_hours() -> float:
     """Return the minted tool-access token lifetime in hours.
 
     Read from ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS`` on every call so the
-    value can change without a restart. Missing, unparsable, or
-    non-positive values fall back to the 24-hour default.
+    value can change without a restart. Missing, unparsable,
+    non-positive, non-finite, or unrepresentable values fall back to the
+    24-hour default, as do sub-second durations (they round to zero JWT
+    seconds and would mint an immediately-expired cookie).
     """
     raw = os.environ.get("TOOL_ACCESS_TOKEN_EXPIRE_HOURS", "").strip()
     if not raw:
@@ -97,7 +100,20 @@ def _tool_access_expire_hours() -> float:
     except ValueError:
         logger.warning("tool_access_expiry_misconfigured", value=raw)
         return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
-    if hours <= 0:
+    if not math.isfinite(hours) or hours <= 0:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        lifetime = timedelta(hours=hours)
+    except OverflowError:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if lifetime.total_seconds() < 1:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        datetime.now(timezone.utc) + lifetime
+    except OverflowError:
         logger.warning("tool_access_expiry_misconfigured", value=raw)
         return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
     return hours
@@ -108,6 +124,13 @@ def _mint_tool_access_token(email: str, domain: str) -> str:
     import jwt
 
     now = datetime.now(timezone.utc)
+    try:
+        expires_at = now + timedelta(hours=_tool_access_expire_hours())
+    except OverflowError:
+        # _tool_access_expire_hours already rejects unrepresentable values;
+        # this is defense-in-depth so minting itself can never crash.
+        logger.warning("tool_access_expiry_overflow")
+        expires_at = now + timedelta(hours=TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT)
     return jwt.encode(
         {
             "email": email,
@@ -117,11 +140,12 @@ def _mint_tool_access_token(email: str, domain: str) -> str:
             "aud": TOOL_ACCESS_AUDIENCE,
             "iss": SESSION_ISSUER,
             "iat": now,
-            "exp": now + timedelta(hours=_tool_access_expire_hours()),
+            "exp": expires_at,
         },
         TOOL_ACCESS_SECRET,
         algorithm="HS256",
     )
+
 
 # ---------------------------------------------------------------------------
 # Redis — reuse the pattern from bulk_upload/session_store.py
@@ -605,13 +629,14 @@ def decode_tool_access_token(token: str) -> dict:
     ``regengine-api`` (see #1060).
 
     Tokens minted after the expiry fix carry ``iat``/``exp`` (default
-    24-hour lifetime, see ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS``). PyJWT
-    verifies ``exp`` on both decode paths below, so an expired token
-    raises ``ExpiredSignatureError``.
+    24-hour lifetime, see ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS``). ``exp`` is
+    required on both decode paths below: an expired token raises
+    ``ExpiredSignatureError`` and a token without ``exp`` raises
+    ``MissingRequiredClaimError`` — old no-exp cookies must reverify.
 
     During the transitional rollout legacy tokens (minted before aud was
-    added) have no ``aud`` claim; we accept those so existing cookies keep
-    working until they expire. A token with the *wrong* aud — e.g. an
+    added) have no ``aud``/``iss`` claim; we accept those only when they
+    carry a valid ``exp``. A token with the *wrong* aud — e.g. an
     attacker pasting a session token — raises ``InvalidAudienceError``.
     """
     import jwt as _jwt
@@ -623,14 +648,28 @@ def decode_tool_access_token(token: str) -> dict:
             algorithms=["HS256"],
             audience=TOOL_ACCESS_AUDIENCE,
             issuer=SESSION_ISSUER,
+            options={"require": ["exp"]},
         )
-    except _jwt.exceptions.MissingRequiredClaimError:
-        # Legacy token predates aud/iss — verify signature only.
+    except _jwt.exceptions.MissingRequiredClaimError as exc:
+        if exc.claim not in ("aud", "iss"):
+            # Missing exp (or any other required claim) — re-raise. The
+            # legacy fallback must never re-accept a token without expiry.
+            raise
+        # Legacy tokens may omit aud/iss, but must not bypass a present claim.
+        legacy = _jwt.decode(
+            token,
+            TOOL_ACCESS_SECRET,
+            algorithms=["HS256"],
+            options={"verify_aud": False, "verify_iss": False, "require": ["exp"]},
+        )
+        # Retain PyJWT's audience/issuer validation, including audience lists.
         return _jwt.decode(
             token,
             TOOL_ACCESS_SECRET,
             algorithms=["HS256"],
-            options={"verify_aud": False, "verify_iss": False},
+            audience=TOOL_ACCESS_AUDIENCE,
+            issuer=SESSION_ISSUER,
+            options={"verify_aud": "aud" in legacy, "verify_iss": "iss" in legacy, "require": ["exp"]},
         )
 
 
