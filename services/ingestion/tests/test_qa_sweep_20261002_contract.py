@@ -129,9 +129,6 @@ def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timest
     assert response.status_code == 422, response.text
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
-)
 @pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
 def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -142,9 +139,6 @@ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
-)
 @pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
 def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -155,9 +149,6 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
-)
 @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
 def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
     upload, captured = csv_upload
