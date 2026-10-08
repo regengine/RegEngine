@@ -959,9 +959,10 @@ async def get_compliance_score(
     Returns unmeasured dimensions for an empty graph; database failures return 503.
     """
     generated_at = datetime.now(timezone.utc).isoformat()
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
     try:
-        async with Neo4jClient() as client:
+        async with Neo4jClient(database=db_name) as client:
             async with client.session() as session:
                 # #1273 — every OPTIONAL MATCH must repeat the tenant filter.
                 # The Obligation anchor was scoped, but Control and Evidence

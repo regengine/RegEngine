@@ -790,8 +790,12 @@ async def log_traceability_event(
                 db.close()
 
             logger.info("mobile_event_canonical_bridged", event_id=event_id, tlc=payload.tlc)
-        except (ImportError, ValueError, KeyError, TypeError) as bridge_err:
-            # Non-blocking: Neo4j write already succeeded
+        except Exception as bridge_err:
+            # Non-blocking: the Neo4j write already succeeded, so a bridge
+            # failure (missing dependency, bad value, or a canonical-store
+            # outage such as SQLAlchemy raising) must not 500 the capture.
+            # A 500 here makes clients retry and record duplicate Neo4j
+            # events under fresh event ids.
             logger.warning("mobile_canonical_bridge_failed", event_id=event_id, error=str(bridge_err))
 
         return {
