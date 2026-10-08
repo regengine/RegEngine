@@ -37,7 +37,8 @@ async def list_regulations(
             query = f"""
                 MATCH (r:Regulation)
                 {where_clause}
-                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s)
+                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s:Section)
+                WHERE (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN r.name as name, count(s) as section_count, r.version as version
                 ORDER BY r.name
                 SKIP $skip LIMIT $limit
@@ -99,8 +100,9 @@ async def get_regulation_citations(
             try:
                 result = await session.run(
                     """
-                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
+                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s:Section)-[:CITES]->(c:Citation)
                     WHERE s.tenant_id = $tenant_id
+                    AND (c.tenant_id IS NULL OR c.tenant_id = $tenant_id)
                     RETURN DISTINCT c.text as citation, count(s) as mention_count
                     ORDER BY mention_count DESC
                     SKIP $skip LIMIT $limit
