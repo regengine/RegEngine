@@ -21,21 +21,30 @@ _pkg = sys.modules[__package__]
 # Rate Limiting (Redis-backed with in-memory fallback via shared module)
 # ---------------------------------------------------------------------------
 
-_WEBHOOK_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "120")))
-_WEBHOOK_RATE_LIMIT_WINDOW_SECS = max(
-    1,
-    int(os.getenv("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", "60")),
-)
+def _positive_int_env(name: str, default: int) -> int:
+    """Read a positive-int rate-limit setting, falling back to ``default``.
+
+    A garbage value (``"abc"``, empty, negative) must never crash the
+    module import: these constants are evaluated at import time, so an
+    unguarded ``int(os.getenv(...))`` takes the whole service down on a
+    single operator typo. Floor at 1 so a zero/negative value cannot
+    disable the bucket or invert the window.
+    """
+    try:
+        return max(1, int(os.getenv(name, str(default))))
+    except (ValueError, TypeError):
+        return default
+
+
+_WEBHOOK_RATE_LIMIT_RPM = _positive_int_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120)
+_WEBHOOK_RATE_LIMIT_WINDOW_SECS = _positive_int_env("WEBHOOK_INGEST_RATE_LIMIT_WINDOW_SECONDS", 60)
 
 # F-4 (re-audit): tighter, separate bucket for read endpoints (/recent,
 # /chain/verify). These are dashboard-facing reads, not partner ingestion,
 # so they should be rate-limited away from the ingest budget and capped
 # lower to make scraping/oracle-style probing visible.
-_WEBHOOK_READ_RATE_LIMIT_RPM = max(1, int(os.getenv("WEBHOOK_READ_RATE_LIMIT_RPM", "30")))
-_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = max(
-    1,
-    int(os.getenv("WEBHOOK_READ_RATE_LIMIT_WINDOW_SECONDS", "60")),
-)
+_WEBHOOK_READ_RATE_LIMIT_RPM = _positive_int_env("WEBHOOK_READ_RATE_LIMIT_RPM", 30)
+_WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS = _positive_int_env("WEBHOOK_READ_RATE_LIMIT_WINDOW_SECONDS", 60)
 
 
 def _store_rate_limit_state(
