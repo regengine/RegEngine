@@ -304,6 +304,7 @@ def _update_subscription_status(
     last_payment_at: Optional[str] = None,
     last_payment_failure_at: Optional[str] = None,
     event_created: Optional[int] = None,
+    preserve_status: bool = False,
 ) -> None:
     """Apply a subscription-state change from a webhook event.
 
@@ -389,13 +390,28 @@ def _update_subscription_status(
             )
             return
 
-    existing.update(
-        {
-            "status": status,
-            "subscription_id": subscription_id or existing.get("subscription_id", ""),
-            "customer_id": customer_id or existing.get("customer_id", ""),
-        }
-    )
+    # A one-off (non-subscription) invoice proves a payment happened but
+    # says nothing about subscription entitlement, so it records invoice
+    # metadata without touching the status the subscription gate reads.
+    # Without this, invoicing a per-label InvoiceItem (see
+    # ``label_billing.charge_for_label``) would flip a canceled tenant
+    # back to ``active`` via ``invoice.paid``, or 402 a paying tenant via
+    # ``invoice.payment_failed``.
+    updated_fields: dict[str, str] = {
+        "subscription_id": subscription_id or existing.get("subscription_id", ""),
+        "customer_id": customer_id or existing.get("customer_id", ""),
+    }
+    if preserve_status:
+        logger.info(
+            "stripe_subscription_status_preserved_no_subscription",
+            tenant_id=tenant_id,
+            subscription_id=subscription_id,
+            customer_id=customer_id,
+            refused_status=status,
+        )
+    else:
+        updated_fields["status"] = status
+    existing.update(updated_fields)
     if current_period_end is not None:
         existing["current_period_end"] = current_period_end
     if last_invoice_id is not None:
@@ -615,6 +631,9 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
                 _helpers_mod._coerce_int(data_object.get("created"))
             ),
             event_created=event_created,
+            # One-off invoices carry no subscription; only a subscription
+            # invoice may move entitlement state (see _update_subscription_status).
+            preserve_status=not data_object.get("subscription"),
         )
         return
 
@@ -631,6 +650,7 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             last_invoice_id=str(data_object.get("id", "") or ""),
             last_payment_at=paid_at,
             event_created=event_created,
+            preserve_status=not subscription_id,
         )
         payment_tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
         _funnel_mod.emit_funnel_event(
