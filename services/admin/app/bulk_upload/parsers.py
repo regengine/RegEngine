@@ -416,23 +416,27 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
         parsed["events"].append(_extract_event_row(row))
         return
     if row.get("tlc_code"):
-        parsed["events"].append(_extract_event_row(row))
-        return
-    if row.get("category_id"):
-        parsed["ftl_scopes"].append(
-            {
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
-                "category_id": str(row.get("category_id") or "").strip(),
-            }
-        )
-        return
-    if row.get("tlc_code"):
+        # A tlc_code without event signals identifies a TLC row. Event rows
+        # that omitted cte_type still carry event_time, kde_data, or
+        # obligation_ids; those stay events so validation rejects the missing
+        # cte_type loudly instead of silently minting a lot.
+        if row.get("event_time") or row.get("kde_data") or row.get("obligation_ids"):
+            parsed["events"].append(_extract_event_row(row))
+            return
         parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
                 "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
                 "product_description": str(row.get("product_description") or "").strip() or None,
                 "status": str(row.get("status") or "active").strip().lower(),
+            }
+        )
+        return
+    if row.get("category_id"):
+        parsed["ftl_scopes"].append(
+            {
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "category_id": str(row.get("category_id") or "").strip(),
             }
         )
         return
