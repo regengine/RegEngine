@@ -332,15 +332,26 @@ async def trace_forward(
                     facility_tenant=fac_tenant,
                 )
                 raise ValueError(f"trace_forward facility invariant violation: tenant={fac_tenant!r}")
-            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
-                facilities.append(
-                    {
-                        "gln": fac.get("gln"),
-                        "name": fac.get("name"),
-                        "address": fac.get("address"),
-                        "facility_type": fac.get("facility_type"),
-                    }
-                )
+            if fac:
+                # Project before comparing: `fac` is the raw node props
+                # (tenant_id and other keys included) while `facilities`
+                # holds projected dicts, so a direct `fac not in [...]`
+                # membership test never matches and re-adds a facility
+                # that is already present. Dedup on GLN when one exists,
+                # otherwise on the full projected shape so two distinct
+                # GLN-less facilities are not collapsed into one.
+                facility = {
+                    "gln": fac.get("gln"),
+                    "name": fac.get("name"),
+                    "address": fac.get("address"),
+                    "facility_type": fac.get("facility_type"),
+                }
+                if facility["gln"]:
+                    duplicate = any(f.get("gln") == facility["gln"] for f in facilities)
+                else:
+                    duplicate = facility in facilities
+                if not duplicate:
+                    facilities.append(facility)
 
     # ------------------------------------------------------------------
     # Strict Time Arrow enforcement via shared SSOT rule
@@ -644,15 +655,22 @@ async def trace_backward(
                     facility_tenant=fac_tenant,
                 )
                 raise ValueError(f"trace_backward facility invariant violation: tenant={fac_tenant!r}")
-            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
-                facilities.append(
-                    {
-                        "gln": fac.get("gln"),
-                        "name": fac.get("name"),
-                        "address": fac.get("address"),
-                        "facility_type": fac.get("facility_type"),
-                    }
-                )
+            if fac:
+                # Same projection-then-compare dedup as trace_forward:
+                # raw node props never equal the projected dicts, so the
+                # old membership test re-added facilities already present.
+                facility = {
+                    "gln": fac.get("gln"),
+                    "name": fac.get("name"),
+                    "address": fac.get("address"),
+                    "facility_type": fac.get("facility_type"),
+                }
+                if facility["gln"]:
+                    duplicate = any(f.get("gln") == facility["gln"] for f in facilities)
+                else:
+                    duplicate = facility in facilities
+                if not duplicate:
+                    facilities.append(facility)
 
     # #2945: preserve the lot<->event<->facility association for exporters.
     trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)

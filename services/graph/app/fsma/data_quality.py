@@ -158,11 +158,14 @@ async def find_orphaned_lots(
         result = await session.run(query, tenant_id=tenant_id, cutoff_date=cutoff_date)
 
         async for record in result:
-            # Calculate stagnant days
+            # Calculate stagnant days. The parsed date is naive, so anchor
+            # it to UTC before subtracting: an aware minus naive
+            # subtraction raises TypeError, which the fallback below would
+            # swallow and report every lot as exactly `days_stagnant` old.
             last_date = record["last_event_date"]
             if last_date:
                 try:
-                    last_dt = datetime.strptime(str(last_date)[:10], "%Y-%m-%d")
+                    last_dt = datetime.strptime(str(last_date)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
                     stagnant = (datetime.now(timezone.utc) - last_dt).days
                 except (ValueError, TypeError):
                     stagnant = days_stagnant  # Default if date parsing fails
@@ -236,6 +239,9 @@ async def analyze_kde_completeness(
 
     start_time = time.time()
 
+    # The Lot inside the missing-lot EXISTS check is tenant-scoped: a
+    # cross-tenant UNDERWENT edge must not mark the event as linked and
+    # suppress a genuine missing-lot gap.
     query = """
     MATCH (e:TraceEvent)
     WHERE e.tenant_id = $tenant_id
@@ -243,7 +249,7 @@ async def analyze_kde_completeness(
     WITH e.type as event_type,
          count(e) as total,
          sum(CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 1 ELSE 0 END) as missing_date,
-         sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN 1 ELSE 0 END) as missing_lot,
+         sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN 1 ELSE 0 END) as missing_lot,
          sum(CASE WHEN e.confidence IS NOT NULL AND e.confidence < $threshold THEN 1 ELSE 0 END) as low_confidence,
          avg(CASE WHEN e.confidence IS NOT NULL THEN e.confidence ELSE 0 END) as avg_confidence
 
