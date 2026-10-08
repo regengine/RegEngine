@@ -92,15 +92,22 @@ async def test_neo4j_user_graph_deleted_with_tenant_and_user_id(monkeypatch):
     assert anonymize_kwargs.get("tenant_id") == TEST_TENANT_ID
     assert anonymize_kwargs.get("user_id") == TEST_USER_ID
 
-    # Identity delete must not match on actor_id: shared records that only
-    # reference the user must survive the delete step.
-    assert "actor_id" not in delete_cypher, "delete query must not match shared records via actor_id"
+    # The delete step may match actor_id only inside the identity-label
+    # filter: identity nodes keyed solely by actor_id are removed, while
+    # shared records that only reference the user survive this step.
+    assert "any(label IN labels(n) WHERE label IN" in delete_cypher
+    assert "n.actor_id = $user_id" in delete_cypher
+    assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in delete_cypher
     assert "DETACH DELETE" in delete_cypher
 
     # Anonymization must rewrite the actor reference to a stable token,
     # never delete the record.
     assert "DETACH DELETE" not in anonymize_cypher
     assert "$erased_actor_id" in anonymize_cypher
+    assert "SET" in anonymize_cypher
+    assert "m.actor_id" in anonymize_cypher
+    assert "m.user_id" in anonymize_cypher
+    assert "THEN $erased_actor_id" in anonymize_cypher
     assert anonymize_kwargs.get("erased_actor_id"), "anonymize query must carry the erased-actor token"
 
 
