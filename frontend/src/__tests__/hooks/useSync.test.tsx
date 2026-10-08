@@ -145,6 +145,67 @@ describe('useSync', () => {
         expect('apiKey' in uploadArgs).toBe(false);
     });
 
+    it('quarantines a previous tenant scan instead of replaying it under the new session', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 3,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-a',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-A' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-A',
+                },
+            ],
+            photos: [],
+        });
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-b' });
+
+        const { result } = renderHook(() => useSync());
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        expect(fetchWithCsrfMock).not.toHaveBeenCalled();
+        expect(dbMocks.markScanSyncFailed).toHaveBeenCalledWith(
+            3,
+            expect.objectContaining({ message: expect.stringContaining('different tenant') }),
+        );
+        expect(dbMocks.markScanSynced).not.toHaveBeenCalled();
+    });
+
+    it('replays a scan whose stored tenant still matches the session', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 4,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-123',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-1' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-1',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+        expect(dbMocks.markScanSynced).toHaveBeenCalledWith(4);
+    });
+
     it('does not sync when the user is signed out', async () => {
         mockUseAuth.mockReturnValue({
             isAuthenticated: false,

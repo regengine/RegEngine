@@ -14,6 +14,20 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
 
+/**
+ * Tenant named inside a stored offline scan payload, if any. Legacy records
+ * without a payload carry no owner and are handled by the caller.
+ */
+function storedScanTenantId(payload: string | undefined): string | undefined {
+    if (!payload) return undefined;
+    try {
+        const parsed = JSON.parse(payload) as { tenant_id?: unknown };
+        return typeof parsed?.tenant_id === 'string' ? parsed.tenant_id : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -64,6 +78,13 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    const queuedTenantId = storedScanTenantId(scan.payload);
+                    if (queuedTenantId && queuedTenantId !== tenantId) {
+                        // Captured under a different tenant session (account
+                        // switch while offline). Never replay it under this
+                        // session; keep it queued until its owner signs in.
+                        throw new Error('Scan belongs to a different tenant session; kept queued.');
+                    }
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
                         await syncEndpoint(scan.payload);

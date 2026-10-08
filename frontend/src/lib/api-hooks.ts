@@ -24,8 +24,9 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        let res: Response | undefined;
         try {
-            const res = await fetchWithCsrf(`${BASE()}${path}`, {
+            res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
                 credentials: 'include', // Send HTTP-only cookies
                 signal: options.signal ?? AbortSignal.timeout(API_FETCH_TIMEOUT_MS),
@@ -34,18 +35,6 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
                     ...options.headers,
                 },
             });
-
-            if (res.ok) {
-                return res.json();
-            }
-
-            // Don't retry client errors (4xx)
-            if (res.status >= 400 && res.status < 500) {
-                throw new Error(`API error: ${res.status} ${res.statusText}`);
-            }
-
-            // Server error (5xx) — retry
-            lastError = new Error(`API error: ${res.status} ${res.statusText}`);
         } catch (err) {
             lastError = err instanceof Error ? err : new Error('Network request failed');
             if (isAbortError(err)) {
@@ -53,6 +42,28 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
             }
         }
 
+        if (res === undefined) {
+            // Transport failure — retry with backoff.
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
+        }
+
+        if (res.ok) {
+            return res.json();
+        }
+
+        // Don't retry client errors (4xx): the request itself is wrong, so
+        // resending it only repeats the failure. Thrown outside the
+        // try/catch above so this throw is never mistaken for a retryable
+        // transport failure.
+        if (res.status >= 400 && res.status < 500) {
+            throw new Error(`API error: ${res.status} ${res.statusText}`);
+        }
+
+        // Server error (5xx) — retry with backoff.
+        lastError = new Error(`API error: ${res.status} ${res.statusText}`);
         if (attempt < MAX_RETRIES) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
         }
