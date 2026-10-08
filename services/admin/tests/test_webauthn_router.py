@@ -350,7 +350,9 @@ async def test_login_generate_options_returns_fake_challenge_without_user_enumer
     )
 
     assert result["challenge"]
-    assert result["allowCredentials"] == []
+    assert isinstance(result["allowCredentials"], list) and len(result["allowCredentials"]) == 1
+    assert result["allowCredentials"][0]["type"] == "public-key"
+    assert result["allowCredentials"][0]["id"]
     assert result["userVerification"] == "required"
     assert db.added == []
     assert db.commit_count == 0
