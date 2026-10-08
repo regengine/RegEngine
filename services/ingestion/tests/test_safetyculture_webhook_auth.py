@@ -1,4 +1,4 @@
-"""SafetyCulture webhook authentication — fail closed, no data echo.
+"""SafetyCulture webhook authentication: fail closed, no data echo.
 
 Covers the HIGH audit finding: the inbound webhook accepted calls
 without a signature (``if secret and signature`` skipped verification
