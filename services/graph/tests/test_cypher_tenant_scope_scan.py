@@ -129,7 +129,7 @@ def _path_bound_aliases(flat: str) -> set[str]:
         return set()
     bound: set[str] = set()
     for assign in PATH_ASSIGN_RE.finditer(flat):
-        rest = flat[assign.end():]
+        rest = flat[assign.end() :]
         clause = CLAUSE_RE.search(rest)
         region = rest[: clause.start()] if clause else rest
         for node in NODE_RE.finditer(region):
@@ -322,9 +322,7 @@ READ_QUERIES, DYNAMIC_SITES = _collect()
 
 def _labels_of(text: str) -> str:
     flat = _flatten(text)
-    labels = sorted(
-        {label for _, label in NODE_RE.findall(flat)} | set(ANON_NODE_RE.findall(flat))
-    )
+    labels = sorted({label for _, label in NODE_RE.findall(flat)} | set(ANON_NODE_RE.findall(flat)))
     return ",".join(labels) if labels else ("fulltext" if "CALL db.index" in flat else "none")
 
 
@@ -338,45 +336,15 @@ def _labels_of(text: str) -> str:
 KNOWN_GAPS = [
     {
         "file": "fsma/chain_integrity.py",
-        "snippet": "WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)",
-        "bug": "BUG-001 find_gaps fail-open null-tenant shim: a null tenant_id "
-        "returns every tenant's TraceEvents, and the inner Lot in the "
-        "NOT EXISTS sub-query carries no tenant predicate",
+        "snippet": "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
+        "bug": "BUG-001 find_gaps inner Lot in the NOT EXISTS sub-query "
+        "carries no tenant predicate, so a cross-tenant Lot satisfies the "
+        "lot linkage and suppresses a genuine missing_lot gap (fail-open "
+        "null-tenant shim removed in #3227; Lot remainder retained)",
         "fix": [
-            (
-                "WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)",
-                "WHERE e.tenant_id = $tenant_id",
-            ),
             (
                 "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
                 "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }",
-            ),
-        ],
-    },
-    {
-        "file": "traceability_linker.py",
-        "snippet": "MATCH (l:Lot {tlc: $tlc, tenant_id: $tenant_id})-[:UNDERWENT]->(e:TraceEvent)",
-        "bug": "BUG-002 get_governing_regulations joins (e:TraceEvent) with no "
-        "tenant predicate, so an event from another tenant reached through a "
-        "cross-tenant UNDERWENT edge leaks its governing obligations",
-        "fix": [
-            (
-                "MATCH (o:Obligation)-[:GOVERNS]->(e)",
-                "MATCH (o:Obligation)-[:GOVERNS]->(e) WHERE e.tenant_id = $tenant_id",
-            ),
-        ],
-    },
-    {
-        "file": "traceability_linker.py",
-        "snippet": "MATCH (o:Obligation {id: $id})-[:GOVERNS]->(e:TraceEvent)",
-        "bug": "BUG-003 get_impacted_lots joins (e:TraceEvent) with no tenant "
-        "predicate: the Lot is scoped but the event reached from the global "
-        "Obligation is not, so another tenant's event can pull its lots "
-        "into this tenant's impact list",
-        "fix": [
-            (
-                "MATCH (l:Lot)-[:UNDERWENT]->(e)",
-                "MATCH (l:Lot)-[:UNDERWENT]->(e) WHERE e.tenant_id = $tenant_id",
             ),
         ],
     },
@@ -389,8 +357,7 @@ KNOWN_GAPS = [
         "fix": [
             (
                 "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) "
-                "WHERE prev.tenant_id = $tenant_id",
+                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) WHERE prev.tenant_id = $tenant_id",
             ),
         ],
     },
@@ -417,8 +384,7 @@ KNOWN_GAPS = [
         "fix": [
             (
                 "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)",
-                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl "
-                "{tenant_id: $tenant_id})",
+                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl {tenant_id: $tenant_id})",
             ),
         ],
     },
@@ -428,12 +394,6 @@ KNOWN_GAPS = [
 # tenant predicate is required. Each entry must still match a live query
 # (test_catalog_allowlist_entries_current fails on stale entries).
 CATALOG_ALLOWLIST = [
-    {
-        "file": "traceability_linker.py",
-        "snippet": "MATCH (o:Obligation {id: $id})\n                RETURN o.text as text",
-        "reason": "global regulation catalog fetch by obligation id; tenant "
-        "scoping is enforced on the event/lot side of the link queries",
-    },
     {
         "file": "overlay_resolver.py",
         "snippet": "WHERE prov.hash IN $hashes",
@@ -462,15 +422,20 @@ CATALOG_ALLOWLIST = [
 
 # Dynamically composed MATCH queries (f-strings or concatenation with runtime
 # values) whose full predicate is invisible to the static scan, keyed by
-# file and enclosing function with the expected site count. Disposition:
-# "runtime" means a runtime capture test in this file proves scoping;
-# "catalog" means Obligation-only catalog reads (LLM-gated harmonization).
+# file and enclosing function with the expected site count. Disposition
+# "runtime" means a runtime capture test in this file proves scoping over
+# the composed Cypher (for the linker GOVERNS write template it proves the
+# shared-catalog predicate instead; write templates are out of checker
+# scope by design). map_requirement's 3 sites became static literals in
+# #3227: the two reads now pass the static scan and the MERGE is excluded.
 DYNAMIC_INVENTORY = {
     ("fsma/tracer.py", "trace_forward"): {"count": 2, "disposition": "runtime"},
     ("fsma/tracer.py", "trace_backward"): {"count": 1, "disposition": "runtime"},
     ("routers/regulations.py", "list_regulations"): {"count": 1, "disposition": "runtime"},
     ("routers/regulations.py", "get_requirement_mappings"): {"count": 1, "disposition": "runtime"},
-    ("mapping_engine.py", "map_requirement"): {"count": 3, "disposition": "catalog"},
+    ("traceability_linker.py", "link_obligation_to_traceability"): {"count": 2, "disposition": "runtime"},
+    ("traceability_linker.py", "get_governing_regulations"): {"count": 1, "disposition": "runtime"},
+    ("traceability_linker.py", "get_impacted_lots"): {"count": 1, "disposition": "runtime"},
 }
 
 
@@ -494,10 +459,8 @@ def _scan_params():
     for rel, lineno, func, text in READ_QUERIES:
         gap = _gap_for(rel, text)
         marks: list = []
-        # A known gap always wins over the catalog allowlist: one allowlist
-        # snippet ("MATCH (o:Obligation {id: $id})") is a substring of a
-        # larger query that goes on to join tenant data, and skipping it
-        # would hide BUG-003.
+        # A known gap always wins over the catalog allowlist, so a shared
+        # substring can never hide a scoping gap behind a skip.
         if gap is not None:
             marks.append(pytest.mark.xfail(strict=True, reason=gap["bug"]))
         elif _allowlisted(rel, text):
@@ -774,43 +737,203 @@ async def test_overlay_writer_list_queries_scoped(monkeypatch):
         assert_query_scoped("overlay_writer listing", query)
 
 
-# ── Runtime tests: mapping engine conditional filter ───────────────────────
+# ── Runtime tests: mapping engine required tenant ───────────────────────
 
 
 @pytest.mark.asyncio
-async def test_mapping_engine_source_query_tenant_filter():
-    """map_requirement adds the Obligation tenant filter only with a tenant."""
+@pytest.mark.parametrize("tenant_id", [None, ""], ids=["none", "empty"])
+async def test_map_requirement_empty_tenant_rejected_before_query(tenant_id):
+    """map_requirement with a null/empty tenant raises before touching the session (#3227).
+
+    Fails against the pre-#3227 shape, which built tenant-optional Cypher
+    and ran it instead of raising.
+    """
     mapping_engine = pytest.importorskip("services.graph.app.mapping_engine")
 
-    async def run_with(source_record):
-        store: list = []
-
-        async def fake_run(query, *args, **kwargs):
-            store.append((query, kwargs))
-            if "LIMIT 1" in query:
-                return _Result([], single=source_record)
-            return _Result([])
-
-        session = MagicMock()
-        session.run = fake_run
-        context = MagicMock()
-        context.__aenter__ = AsyncMock(return_value=session)
-        context.__aexit__ = AsyncMock(return_value=False)
-        driver = MagicMock()
-        driver.session = MagicMock(return_value=context)
-        return store, driver
-
     engine = mapping_engine.MappingEngine.__new__(mapping_engine.MappingEngine)
+    engine.driver = MagicMock()
     engine.llm = MagicMock()
-    engine.llm.ainvoke = AsyncMock(return_value=MagicMock(content="NONE"))
 
-    source = {"text": "obligation text", "regulation": "FSMA", "section_id": "s1"}
-    store, engine.driver = await run_with(source)
-    await engine.map_requirement("obligation text", tenant_id=TENANT_A)
-    assert store, "map_requirement issued no query"
-    assert "o.tenant_id = $tenant_id" in store[0][0]
-    assert store[0][1].get("tenant_id") == TENANT_A
+    with pytest.raises(ValueError, match="tenant_id"):
+        await engine.map_requirement("obligation text", tenant_id=tenant_id)
+    engine.driver.session.assert_not_called()
 
-    store, engine.driver = await run_with(None)
-    await engine.map_requirement("obligation text", tenant_id=None)
-    assert store == [] or "o.tenant_id" not in store[0][0]
+
+# ── Runtime tests: traceability linker composed queries ──────────────────────
+# #3220 rebuilt the linker queries as f-strings interpolating
+# _OBLIGATION_TENANT_PREDICATE, so they are invisible to the static scan and
+# are covered here instead (see DYNAMIC_INVENTORY). Obligation nodes are a
+# shared global catalog that may one day include tenant-private rows, so
+# each composed query must carry the shared-catalog predicate with
+# $tenant_id bound as a parameter, never interpolated. Fake sessions only;
+# no driver or network is touched.
+
+
+class _LinkerCaptureSession:
+    """Fake Neo4j session capturing composed linker queries and bindings."""
+
+    def __init__(self, store):
+        self._store = store
+        self._queued: list = []
+
+    def queue(self, rows=None, single_row=None):
+        self._queued.append(_Result(list(rows or []), single=single_row))
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def run(self, query, **kwargs):
+        self._store.append((query, kwargs))
+        return self._queued.pop(0)
+
+
+def _linker_with_capture(store):
+    """TraceabilityLinker wired to a capturing fake session (no driver)."""
+    from services.graph.app.traceability_linker import TraceabilityLinker
+
+    linker = TraceabilityLinker.__new__(TraceabilityLinker)
+    session = _LinkerCaptureSession(store)
+    context = MagicMock()
+    context.__aenter__ = AsyncMock(return_value=session)
+    context.__aexit__ = AsyncMock(return_value=False)
+    driver = MagicMock()
+    driver.session = MagicMock(return_value=context)
+    linker.driver = driver
+    return linker, session
+
+
+# Independent expectation: shared-or-own catalog predicate. Literal on
+# purpose — importing the product constant would mirror the implementation.
+_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+_OBLIGATION_WHERE_RE = re.compile(r"WHERE\s*" + re.escape(_EXPECTED_OBLIGATION_PREDICATE) + r"\s*(MATCH|RETURN|MERGE)")
+
+
+def _assert_obligation_predicate(source: str, query: str, kwargs: dict) -> None:
+    """The exact shared-catalog WHERE predicate is present, bound, not interpolated."""
+    flat = _flatten(query)
+    assert _OBLIGATION_WHERE_RE.search(flat), (
+        f"{source}: missing exact shared-catalog WHERE {_EXPECTED_OBLIGATION_PREDICATE!r} "
+        f"before MATCH/RETURN/MERGE:\n{query}"
+    )
+    assert kwargs.get("tenant_id") == TENANT_A, f"{source}: $tenant_id not bound: {kwargs!r}"
+    assert TENANT_A not in query, f"{source}: tenant value interpolated into Cypher:\n{query}"
+
+
+@pytest.mark.asyncio
+async def test_obligation_predicate_weakened_or_true_rejected(monkeypatch):
+    """Independent check rejects a weakened OR-true catalog predicate (mutation)."""
+    import services.graph.app.traceability_linker as linker_module
+
+    monkeypatch.setattr(
+        linker_module,
+        "_OBLIGATION_TENANT_PREDICATE",
+        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id OR true)",
+    )
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"regulation": "FSMA", "requirement": "x", "requirement_id": "obl-9"}])
+    await linker.get_governing_regulations("tlc-1", TENANT_A)
+    query, kwargs = store[0]
+    with pytest.raises(AssertionError):
+        _assert_obligation_predicate("weakened-predicate", query, kwargs)
+
+
+@pytest.mark.asyncio
+async def test_link_obligation_queries_carry_obligation_predicate():
+    """link_obligation_to_traceability fetch and GOVERNS write scope the Obligation anchor (#3220)."""
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(single_row={"text": "Cooling logs required daily", "category": "COOLING"})
+    session.queue(rows=[{"event_id": "e1", "type": "COOLING"}])
+
+    links = await linker.link_obligation_to_traceability("obl-9", TENANT_A)
+
+    assert len(links) == 1
+    assert len(store) == 2, f"expected fetch + write queries, got {len(store)}"
+    for query, kwargs in store:
+        _assert_obligation_predicate("link_obligation_to_traceability", query, kwargs)
+    assert "e.tenant_id = $tenant_id" in store[1][0]
+
+
+@pytest.mark.asyncio
+async def test_get_governing_regulations_composed_obligation_predicate():
+    """get_governing_regulations binds the shared-catalog predicate (#3220)."""
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"regulation": "FSMA", "requirement": "Cool it", "requirement_id": "obl-9"}])
+
+    regs = await linker.get_governing_regulations("tlc-1", TENANT_A)
+
+    assert len(regs) == 1
+    assert len(store) == 1
+    query, kwargs = store[0]
+    assert "MATCH" in query
+    _assert_obligation_predicate("get_governing_regulations", query, kwargs)
+    assert kwargs.get("tlc") == "tlc-1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    raises=QueryScopeError,
+    reason="BUG-002 get_governing_regulations joins (e:TraceEvent) with no "
+    "tenant predicate, so an event from another tenant reached through a "
+    "cross-tenant UNDERWENT edge leaks its governing obligations "
+    "(runtime-composed since #3220; captured query still unscoped)",
+)
+async def test_get_governing_regulations_composed_traceevent_scoped():
+    """Composed governing query must scope the joined TraceEvent (BUG-002)."""
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"regulation": "FSMA", "requirement": "Cool it", "requirement_id": "obl-9"}])
+
+    await linker.get_governing_regulations("tlc-1", TENANT_A)
+
+    matched = [query for query, _ in store if "MATCH" in query]
+    assert matched, "get_governing_regulations issued no MATCH query"
+    for query in matched:
+        assert_query_scoped("get_governing_regulations composed", query)
+
+
+@pytest.mark.asyncio
+async def test_get_impacted_lots_composed_obligation_predicate():
+    """get_impacted_lots binds the shared-catalog predicate (#3220)."""
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"tlc": "tlc-1", "description": "Lettuce"}])
+
+    lots = await linker.get_impacted_lots("obl-9", TENANT_A)
+
+    assert len(lots) == 1
+    assert len(store) == 1
+    query, kwargs = store[0]
+    assert "MATCH" in query
+    _assert_obligation_predicate("get_impacted_lots", query, kwargs)
+    assert kwargs.get("id") == "obl-9"
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(
+    strict=True,
+    raises=QueryScopeError,
+    reason="BUG-003 get_impacted_lots joins (e:TraceEvent) with no tenant "
+    "predicate: the Lot is scoped but the event reached from the global "
+    "Obligation is not, so another tenant's event can pull its lots "
+    "into this tenant's impact list "
+    "(runtime-composed since #3220; captured query still unscoped)",
+)
+async def test_get_impacted_lots_composed_traceevent_scoped():
+    """Composed impacted-lots query must scope the joined TraceEvent (BUG-003)."""
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"tlc": "tlc-1", "description": "Lettuce"}])
+
+    await linker.get_impacted_lots("obl-9", TENANT_A)
+
+    matched = [query for query, _ in store if "MATCH" in query]
+    assert matched, "get_impacted_lots issued no MATCH query"
+    for query in matched:
+        assert_query_scoped("get_impacted_lots composed", query)
