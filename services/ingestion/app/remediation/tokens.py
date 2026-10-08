@@ -219,6 +219,7 @@ def exchange_for_session(db, token_row: Dict[str, Any]) -> Dict[str, Any]:
             WHERE id = CAST(:token_id AS uuid)
               AND tenant_id = CAST(:tenant_id AS uuid)
               AND revoked_at IS NULL
+              AND exchange_count < :max_exchanges
             """
         ),
         {
@@ -226,6 +227,7 @@ def exchange_for_session(db, token_row: Dict[str, Any]) -> Dict[str, Any]:
             "session_expires": session_expires,
             "token_id": token_row["id"],
             "tenant_id": token_row["tenant_id"],
+            "max_exchanges": MAX_EXCHANGES,
         },
     )
     if result.rowcount != 1:
