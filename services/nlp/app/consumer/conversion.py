@@ -369,6 +369,13 @@ def _convert_llm_results_to_extractions(
         )
 
         span_start = _llm_field(item, "source_span_start", 0)
+        # Mapping items bypass pydantic, so a non-numeric span must not
+        # kill the batch: keep the item with offset 0 (a provenance gap
+        # the reviewer can see) instead of raising out of the loop.
+        try:
+            source_offset = int(span_start or 0)
+        except (TypeError, ValueError):
+            source_offset = 0
         parts = provision_text.split()
         attributes = {
             "document_id": doc_id,
@@ -394,7 +401,7 @@ def _convert_llm_results_to_extractions(
                 obligation_type=obl_type,
                 confidence_score=confidence,
                 source_text=provision_text,
-                source_offset=int(span_start or 0),
+                source_offset=source_offset,
                 attributes=attributes,
             )
         )

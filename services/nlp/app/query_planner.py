@@ -192,7 +192,7 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
     explicit_since = re.search(r"\bsince\s+([A-Za-z0-9,\-\s]+)", lowered_query)
     if explicit_since:
         raw_token = _clean_capture(explicit_since.group(1))
-        parsed = _parse_human_date(raw_token, today)
+        parsed = _parse_human_date_prefix(raw_token, today)
         if parsed:
             return parsed.isoformat(), today.isoformat()
 
@@ -203,14 +203,36 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
     if between:
         start_raw = _clean_capture(between.group(1))
         end_raw = _clean_capture(between.group(2))
-        start_dt = _parse_human_date(start_raw, today)
-        end_dt = _parse_human_date(end_raw, today)
+        start_dt = _parse_human_date_prefix(start_raw, today)
+        end_dt = _parse_human_date_prefix(end_raw, today)
         if start_dt and end_dt:
             if start_dt > end_dt:
                 start_dt, end_dt = end_dt, start_dt
             return start_dt.isoformat(), end_dt.isoformat()
 
     return None, None
+
+
+def _parse_human_date_prefix(raw_value: str, today: date) -> Optional[date]:
+    """Parse the longest leading prefix of *raw_value* that is a valid date.
+
+    The ``since`` / ``between`` captures are greedy, so trailing filter
+    text ("... january 5, 2026 for spinach") rides along and the full
+    string never parses. Trimming one trailing token at a time keeps the
+    explicit date the user gave instead of silently falling back to the
+    30-day default. Returns ``None`` when no leading prefix parses.
+    """
+
+    value = raw_value.strip()
+    while value:
+        parsed = _parse_human_date(value, today)
+        if parsed:
+            return parsed
+        trimmed = re.sub(r"[\s,;:.()\[\]]+[A-Za-z0-9\-./]+$", "", value).strip()
+        if not trimmed or trimmed == value:
+            return None
+        value = trimmed
+    return None
 
 
 def _parse_human_date(raw_value: str, today: date) -> Optional[date]:
