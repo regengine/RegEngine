@@ -261,6 +261,12 @@ class FDAWarningLettersScraper(BaseScraper):
             # Example: "Wed, 15 Jan 2026 12:00:00 -0500"
             from email.utils import parsedate_to_datetime
 
-            return parsedate_to_datetime(date_str)
+            parsed = parsedate_to_datetime(date_str)
+            if parsed.tzinfo is None:
+                # No offset supplied (e.g. "Wed, 15 Jan 2026 12:00:00").
+                # Assume UTC so published_date stays comparable with the
+                # timezone-aware dates every other scraper produces.
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
         except (ValueError, TypeError, OverflowError):
             return datetime.now(timezone.utc)

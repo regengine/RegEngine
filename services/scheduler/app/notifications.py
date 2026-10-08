@@ -426,7 +426,7 @@ class WebhookNotifier:
                             continue
                         try:
                             entries.append(OutboxEntry.from_dict(json.loads(raw)))
-                        except (json.JSONDecodeError, KeyError, ValueError) as parse_err:
+                        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as parse_err:
                             # #2697: quarantine instead of skip — the
                             # retry pass REWRITES the outbox from parsed
                             # entries, which used to permanently destroy

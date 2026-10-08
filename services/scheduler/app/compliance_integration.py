@@ -106,9 +106,15 @@ class ComplianceIntegration:
                     # ObjectNotExecutableError that this PR is fixing) are no
                     # longer silently swallowed — they bubble up and surface
                     # in Sentry.
+                    #
+                    # QA5: log the loop's ``tenant_id``, not
+                    # ``match["tenant_id"]`` — ``match`` is unbound when
+                    # ``_find_matching_tenants`` itself raises, and the
+                    # resulting NameError used to escape this handler and
+                    # abort alerting for every remaining tenant.
                     logger.error(
                         "alert_creation_failed",
-                        tenant_id=str(match["tenant_id"]),
+                        tenant_id=str(tenant_id),
                         error=str(e),
                         error_type=type(e).__name__,
                     )

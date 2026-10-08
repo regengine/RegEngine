@@ -67,6 +67,11 @@ class CircuitBreaker:
     stats: CircuitStats = field(default_factory=CircuitStats)
     _opened_at: Optional[float] = field(default=None, repr=False)
     _half_open_calls: int = field(default=0, repr=False)
+    # Failures since the last success. The trip threshold applies to
+    # CONSECUTIVE failures: isolated errors spread over a long healthy
+    # period must not accumulate into a spurious open. stats.failures
+    # stays cumulative for observability.
+    _consecutive_failures: int = field(default=0, repr=False)
 
     def can_execute(self) -> bool:
         """Check if a request can be executed."""
@@ -94,6 +99,7 @@ class CircuitBreaker:
         self.stats.successes += 1
         self.stats.total_calls += 1
         self.stats.last_success_time = time.time()
+        self._consecutive_failures = 0
 
         if self.state == CircuitState.HALF_OPEN:
             self._half_open_calls += 1
@@ -110,6 +116,7 @@ class CircuitBreaker:
         self.stats.failures += 1
         self.stats.total_calls += 1
         self.stats.last_failure_time = time.time()
+        self._consecutive_failures += 1
 
         if self.state == CircuitState.HALF_OPEN:
             # Immediate transition back to open on any failure
@@ -120,12 +127,12 @@ class CircuitBreaker:
                 error=str(error) if error else "Unknown",
             )
         elif self.state == CircuitState.CLOSED:
-            if self.stats.failures >= self.failure_threshold:
+            if self._consecutive_failures >= self.failure_threshold:
                 self._transition_to_open()
                 logger.warning(
                     "circuit_opened",
                     name=self.name,
-                    failures=self.stats.failures,
+                    failures=self._consecutive_failures,
                     threshold=self.failure_threshold,
                 )
 
@@ -145,6 +152,7 @@ class CircuitBreaker:
         """Transition to closed state."""
         self.state = CircuitState.CLOSED
         self.stats.failures = 0
+        self._consecutive_failures = 0
         self._opened_at = None
         self._half_open_calls = 0
 
@@ -154,6 +162,7 @@ class CircuitBreaker:
         self.stats = CircuitStats()
         self._opened_at = None
         self._half_open_calls = 0
+        self._consecutive_failures = 0
 
     def get_status(self) -> Dict[str, Any]:
         """Get current circuit breaker status."""
