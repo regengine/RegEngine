@@ -58,7 +58,6 @@ paths = [
   '''db_test\.py$''',
   '''diag_db\.py$''',
   '''verify_phi\.py$''',
-  '''fix_password\.sql$''',
   '''login_resp\.json$''',
   '''frontend_logs\.txt$''',
   '''ingest_logs.*\.txt$''',
