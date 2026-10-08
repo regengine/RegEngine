@@ -604,6 +604,7 @@ jobs:
           SUPABASE_KEY: test-key-for-ci
           PYTHONDONTWRITEBYTECODE: 1
           REMEDIATION_TEST_SUPERUSER_DSN: postgresql://postgres:postgres@localhost:5432/remediation_test # pragma: allowlist secret
+          REMEDIATION_EXCHANGE_PG_ADMIN_DSN: postgresql://postgres:postgres@localhost:5432/postgres # pragma: allowlist secret
           # An unreachable DB must FAIL this step, never skip it green (#2530).
           REGENGINE_REQUIRE_DB: "1"
         run: |
