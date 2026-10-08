@@ -130,7 +130,7 @@ async def approve_discovery(
         enqueue_task(
             db,
             task_type="discovery_scrape",
-            payload={"body": body, "url": url},
+            payload={"body": body, "url": url, "tenant_id": api_key.tenant_id},
             tenant_id=api_key.tenant_id,
             idempotency_key=_discovery_task_key(api_key.tenant_id, body, url),
         )
@@ -192,7 +192,7 @@ async def bulk_approve_discovery(
             enqueue_task(
                 db,
                 task_type="discovery_scrape",
-                payload={"body": body, "url": url},
+                payload={"body": body, "url": url, "tenant_id": api_key.tenant_id},
                 tenant_id=api_key.tenant_id,
                 idempotency_key=_discovery_task_key(api_key.tenant_id, body, url),
             )
