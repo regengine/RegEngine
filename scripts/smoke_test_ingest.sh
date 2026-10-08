@@ -10,20 +10,44 @@
 #
 # Usage:
 #   REGENGINE_API_KEY=rge_live_xxxx ./scripts/smoke_test_ingest.sh
-#   REGENGINE_API_KEY=rge_live_xxxx REGENGINE_API_BASE=https://api... ./scripts/smoke_test_ingest.sh
+#   REGENGINE_API_KEY=rge_live_xxxx REGENGINE_API_BASE=http://localhost:8000 ./scripts/smoke_test_ingest.sh
+#   REGENGINE_API_KEY=rge_live_xxxx ./scripts/smoke_test_ingest.sh --allow-production
+#
+# Localhost is the default target. Pointing REGENGINE_API_BASE at anything
+# else requires the explicit --allow-production flag (or
+# REGENGINE_ALLOW_PRODUCTION=1).
 #
 # Exits 0 if all endpoints return a coherent state (all 200 OR all 503).
 # Exits 1 on any unexpected status (404, 500, mixed states).
+# Exits 2 on missing credentials or a refused non-localhost target.
 
 set -u
 
-API_BASE="${REGENGINE_API_BASE:-https://regengine.co/api/ingestion}"
+ALLOW_PRODUCTION="${REGENGINE_ALLOW_PRODUCTION:-0}"
+for arg in "$@"; do
+    if [[ "$arg" == "--allow-production" ]]; then
+        ALLOW_PRODUCTION=1
+    fi
+done
+
+API_BASE="${REGENGINE_API_BASE:-http://localhost:8000}"
 API_KEY="${REGENGINE_API_KEY:-}"
 
 if [[ -z "$API_KEY" ]]; then
     echo "ERROR: set REGENGINE_API_KEY environment variable (e.g. rge_live_...)"
     exit 2
 fi
+
+case "$API_BASE" in
+    http://localhost*|http://127.0.0.1*|http://\[::1\]*)
+        ;;
+    *)
+        if [[ "$ALLOW_PRODUCTION" != "1" ]]; then
+            echo "ERROR: refusing to probe non-localhost target ($API_BASE) without --allow-production." >&2
+            exit 2
+        fi
+        ;;
+esac
 
 echo "=== Smoke test: /v1/ingest/* ==="
 echo "Base: $API_BASE"
