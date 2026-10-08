@@ -39,18 +39,46 @@ class GenericRSSScraper(StateRegistryScraper):
         self.title_prefix = title_prefix or getattr(self, "title_prefix", "Generic RSS")
 
     def list_sources(self) -> Iterable[Source]:
-        """Parse RSS feed and yield sources for each entry."""
-        feed = feedparser.parse(self.feed_url)
-        for entry in feed.entries:
-            yield Source(
-                url=entry.link,
-                title=f"{self.title_prefix}: {entry.title}",
-                jurisdiction_code=self.jurisdiction,
-                metadata={
-                    "published": entry.get("published"),
-                    "summary": entry.get("summary"),
-                },
+        """Parse RSS feed and yield sources for each entry.
+
+        The feed is fetched through ``safe_httpx_get_sync`` (SSRF-checked,
+        IP-pinned, timed out) and only the response bytes are handed to
+        feedparser, so discovery never performs a raw HTTP fetch.
+        """
+        try:
+            resp = safe_httpx_get_sync(
+                self.feed_url,
+                timeout=30,
+                headers={"User-Agent": "RegEngine/1.0"},
             )
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
+        except Exception as e:
+            logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
+            return
+        for entry in feed.entries:
+            try:
+                link = entry.get("link")
+                if not link:
+                    continue
+                try:
+                    url = validate_url(link)
+                except SSRFError as e:
+                    logger.debug("ssrf_validation_failed_generic_rss", url=link, error=str(e))
+                    continue
+                title = entry.get("title") or link
+                yield Source(
+                    url=url,
+                    title=f"{self.title_prefix}: {title}",
+                    jurisdiction_code=self.jurisdiction,
+                    metadata={
+                        "published": entry.get("published"),
+                        "summary": entry.get("summary"),
+                    },
+                )
+            except Exception as e:
+                logger.warning("generic_rss_entry_skipped", error=str(e))
+                continue
 
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL.
@@ -74,7 +102,7 @@ class GenericRSSScraper(StateRegistryScraper):
             return FetchedItem(
                 source=source,
                 content_bytes=b"",
-                content_type="error",
+                content_type=None,
             )
 
 
@@ -129,7 +157,11 @@ class GenericListScraper(StateRegistryScraper):
                 href = link.get("href")
                 if not href:
                     continue
-                url = urljoin(base, href)
+                try:
+                    url = validate_url(urljoin(base, href))
+                except SSRFError as e:
+                    logger.debug("ssrf_validation_failed_generic_list", url=href, error=str(e))
+                    continue
                 title = link.get_text(strip=True) or href
                 yield Source(
                     url=url,
@@ -163,5 +195,5 @@ class GenericListScraper(StateRegistryScraper):
             return FetchedItem(
                 source=source,
                 content_bytes=b"",
-                content_type="error",
+                content_type=None,
             )
