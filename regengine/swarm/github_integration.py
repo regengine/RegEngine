@@ -158,15 +158,46 @@ class GitHubClient:
             "state": pr.state,
         }
 
-    def merge_pr(self, pr_number: int, commit_message: str = "") -> bool:
-        """Merge a pull request."""
+    def merge_pr(
+        self,
+        pr_number: int,
+        commit_message: str = "",
+        human_approved: bool = False,
+        require_green_checks: bool = True,
+    ) -> bool:
+        """Merge a pull request.
+
+        Merging requires explicit human approval (human_approved=True, off by
+        default) and, unless require_green_checks is disabled, green CI checks
+        for the PR head commit. Refuses to merge otherwise.
+        """
+        if not human_approved:
+            logger.warning("pr_merge_blocked", number=pr_number, reason="missing_human_approval")
+            return False
         pr = self.repo.get_pull(pr_number)
-        if pr.mergeable:
-            status = pr.merge(commit_message=commit_message or f"🤖 Swarm Auto-Merge PR #{pr_number}")
+        if require_green_checks:
+            try:
+                checks_state = self.get_pr_checks_status(pr_number)
+            except Exception:
+                logger.warning("pr_merge_blocked", number=pr_number, reason="checks_unavailable")
+                return False
+            if checks_state != "success":
+                logger.warning(
+                    "pr_merge_blocked",
+                    number=pr_number,
+                    reason="checks_not_green",
+                    state=checks_state,
+                )
+                return False
+        if not pr.mergeable:
+            logger.warning("pr_not_mergeable", number=pr_number)
+            return False
+        try:
+            status = pr.merge(commit_message=commit_message or f"Swarm merge PR #{pr_number}")
             logger.info("pr_merged", number=pr_number, success=status.merged)
             return status.merged
-        else:
-            logger.warning("pr_not_mergeable", number=pr_number)
+        except Exception:
+            logger.warning("pr_merge_failed", number=pr_number)
             return False
 
     def get_pr_checks_status(self, pr_number: int) -> str:
