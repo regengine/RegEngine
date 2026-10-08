@@ -14,6 +14,15 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
 
+/** Small stable string hash for id-less legacy records (not cryptographic). */
+export function simpleHash(input: string): string {
+    let h = 0;
+    for (let i = 0; i < input.length; i++) {
+        h = (Math.imul(h, 31) + input.charCodeAt(i)) | 0;
+    }
+    return (h >>> 0).toString(36);
+}
+
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -23,12 +32,17 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
-    const syncEndpoint = useCallback(async (payload: string) => {
+    // Retry safety: each offline record replays under a key derived from
+    // its stable local id, so a failed sync retried later (or an
+    // at-least-once redelivery) replays instead of duplicating events.
+    // The webhook ingest endpoint requires this header.
+    const syncEndpoint = useCallback(async (payload: string, idempotencyKey: string) => {
         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
             method: 'POST',
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
+                'Idempotency-Key': idempotencyKey,
             },
             body: payload,
         });
@@ -64,9 +78,14 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    // Stable per-record key: the same queued scan retried
+                    // across sync runs replays under the same key.
+                    const recordKey = typeof scan.id === 'number'
+                        ? `offline-scan-${scan.id}`
+                        : `offline-scan-${simpleHash(scan.payload ?? scan.content ?? '')}`;
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        await syncEndpoint(scan.payload);
+                        await syncEndpoint(scan.payload, recordKey);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -83,7 +102,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        await syncEndpoint(JSON.stringify(payload));
+                        await syncEndpoint(JSON.stringify(payload), recordKey);
                     }
                     if (typeof scan.id === 'number') {
                         await markScanSynced(scan.id);

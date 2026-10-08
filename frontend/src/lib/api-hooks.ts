@@ -17,11 +17,27 @@ function isAbortError(err: unknown): boolean {
     return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
+/** One stable key per logical user action, reused across retries. Never mint inside the retry loop. */
+export function newIdempotencyKey(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isMutatingMethod(method: RequestInit['method']): boolean {
+    const m = (method ?? 'GET').toString().toUpperCase();
+    return m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE';
+}
+
 /** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
 async function apiFetch<T>(path: string, _apiKey?: string | null, options: RequestInit = {}): Promise<T> {
     const MAX_RETRIES = 2;
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
+
+    // Retry safety: mint one key per logical call and reuse it on every
+    // attempt, so a retried POST replays instead of duplicating the write.
+    const incoming = new Headers(options.headers ?? {}).get('Idempotency-Key');
+    const idempotencyKey = incoming ?? (isMutatingMethod(options.method) ? newIdempotencyKey() : null);
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
@@ -32,6 +48,7 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers,
+                    ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
                 },
             });
 

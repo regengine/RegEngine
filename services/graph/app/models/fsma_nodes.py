@@ -320,6 +320,23 @@ class TraceEvent:
         RETURN e
         """
 
+    @staticmethod
+    def merge_cypher() -> str:
+        """Return Cypher MERGE statement for TraceEvent node.
+
+        Matches on ``(event_id, tenant_id)`` so that a retried write
+        carrying the same idempotent event id resolves to the existing
+        node instead of creating a duplicate. Other properties are
+        applied on both create and match so a retry repairs a partial
+        first write. ``created_at`` is only set on first create.
+        """
+        return """
+        MERGE (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+        ON CREATE SET e.created_at = datetime()
+        SET e += $properties
+        RETURN e
+        """
+
 
 @dataclass
 class Facility:
