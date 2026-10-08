@@ -876,14 +876,6 @@ async def test_get_governing_regulations_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-002 get_governing_regulations joins (e:TraceEvent) with no "
-    "tenant predicate, so an event from another tenant reached through a "
-    "cross-tenant UNDERWENT edge leaks its governing obligations "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_governing_regulations_composed_traceevent_scoped():
     """Composed governing query must scope the joined TraceEvent (BUG-002)."""
     store: list = []
@@ -916,15 +908,6 @@ async def test_get_impacted_lots_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-003 get_impacted_lots joins (e:TraceEvent) with no tenant "
-    "predicate: the Lot is scoped but the event reached from the global "
-    "Obligation is not, so another tenant's event can pull its lots "
-    "into this tenant's impact list "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_impacted_lots_composed_traceevent_scoped():
     """Composed impacted-lots query must scope the joined TraceEvent (BUG-003)."""
     store: list = []
