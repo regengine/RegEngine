@@ -37,7 +37,9 @@ async def find_gaps(
             read every tenant's events, so callers must pass a tenant.
     """
     if not tenant_id:
-        raise ValueError("find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported")
+        raise ValueError(
+            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
 
     start_time = time.time()
 
@@ -383,7 +385,9 @@ async def find_all_gaps(
             the underlying gap queries, which require a tenant).
     """
     if not tenant_id:
-        raise ValueError("find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported")
+        raise ValueError(
+            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
 
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)

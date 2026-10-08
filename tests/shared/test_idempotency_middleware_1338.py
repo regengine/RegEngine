@@ -1137,6 +1137,7 @@ def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch
             "stable-key-id",
             authorization["scopes"],
             authorization["jurisdictions"],
+            None,  # revoked_at: key is live
         )
         return result
 

@@ -84,9 +84,11 @@ def _webhook_hmac_secret() -> Optional[str]:
 
     Single global secret to start — per-tenant / per-integration
     rotation is planned as follow-up (see #1243 fix description). When
-    the env is unset the dependency is a no-op, which preserves the
-    existing partner-integration ramp. Production operators MUST set
-    this before relying on webhook-ingest events.
+    the env is unset the dependency is a no-op outside production,
+    which preserves the existing partner-integration ramp. In
+    production an unset secret rejects every ingest request, so
+    production operators MUST set this before relying on
+    webhook-ingest events.
     """
     secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip()
     return secret or None
@@ -115,16 +117,32 @@ async def _verify_webhook_signature(
     Stripe-style senders don't need a separate code path.
 
     Behavior:
-    - ``WEBHOOK_HMAC_SECRET`` unset → verification skipped (migration ramp).
+    - ``WEBHOOK_HMAC_SECRET`` unset + production → HTTP 401 (fail closed;
+      an unsigned ingest path must not exist in production).
+    - ``WEBHOOK_HMAC_SECRET`` unset + non-production → verification
+      skipped (migration ramp), with a WARN log and a counter increment
+      so ops can alarm on the fail-open path.
     - Secret set + signature missing → HTTP 401.
     - Secret set + signature mismatch → HTTP 401 (timing-safe compare).
     - Unknown scheme → HTTP 401.
     """
     secret = _pkg._webhook_hmac_secret()
     if not secret:
-        # F-5: record the fail-open path so ops can alarm on it. Behavior
-        # itself unchanged — verification still skipped per the migration ramp.
+        # F-5: record the fail-open path so ops can alarm on it.
         _pkg._record_hmac_skip()
+        if _pkg._is_production():
+            # Fail closed in production: accepting unsigned compliance
+            # events with no shared secret configured is never safe.
+            # Detail stays opaque (no secret material); server-side log
+            # carries the operator action.
+            _pkg.logger.error(
+                "webhook_hmac_secret_missing_in_production",
+                mitigation="Set WEBHOOK_HMAC_SECRET in environment to accept webhook ingest",
+            )
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "webhook_hmac_not_configured"},
+            )
         return
 
     if not x_webhook_signature:
