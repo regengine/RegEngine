@@ -80,3 +80,66 @@ No test still fails. No fix was backed out.
    (Finding 7, low.)
 3. Whether the webhook rate limit should be keyed by tenant_id instead
    of client IP. (Finding 8, low.)
+
+## Decision applied: Decision 1 (Oct 8, 2026, 3:03 PM PT call)
+
+Status: FIXED AND TESTED
+
+Chris decided that SafetyCulture webhooks must reject every unsigned
+post with 401, with no unsigned or compatibility path, while valid
+signed deliveries in both payload shapes keep working.
+
+Code audit result: PR 3222 had already removed the only unsigned path
+(the old `if secret and signature` skip). The current
+`SafetyCultureConnector.handle_webhook` fails closed on all three
+inputs: missing configured secret raises ValueError, missing signature
+header raises ValueError, and bad signature raises ValueError, all
+mapped to 401 by `receive_webhook` in
+services/ingestion/app/integration_router.py, and no fetch runs before
+verification. The only other receiver at the same URL prefix
+(`services/ingestion/app/integration_webhook.py`) is intentionally not
+wired and raises NotImplementedError, so it cannot accept unsigned
+SafetyCulture posts. No unsigned or compatibility path was found to
+remove. One gap was fixed: a whitespace only webhook secret
+(for example `"   "`) passed the old truthiness check and fell through
+to an "Invalid signature" error instead of "not configured".
+`services/shared/external_connectors/safetyculture.py` now treats a
+blank secret the same as a missing one, so it is rejected before any
+signature check or fetch.
+
+New tests in
+services/ingestion/tests/test_safetyculture_webhook_auth.py (all assert
+the fetch is never awaited on reject):
+- test_blank_secret_rejected_as_not_configured (fails on old code)
+- test_nested_shape_missing_signature_rejected (regression lock)
+- test_nested_shape_bad_signature_rejected (regression lock)
+- test_router_nested_shape_missing_signature_returns_401 (regression lock)
+
+Test commands and results (all run through ~/metacode/fleet/heavy):
+1. `.venv/bin/pytest services/ingestion/tests/test_safetyculture_webhook_auth.py -p no:cacheprovider`
+   Result: 21 passed in 1.00s.
+2. Old-code check: the one line fix was temporarily reverted, then the
+   four new tests were run with
+   `-k "blank_secret or nested_shape_missing or nested_shape_bad or router_nested_shape_missing"`.
+   Result: 1 failed as expected
+   (test_blank_secret_rejected_as_not_configured, old code raised
+   "Invalid SafetyCulture webhook signature" instead of "not
+   configured"), 3 passed, 17 deselected. The three nested reject tests
+   pass on old code too and serve as regression locks proving both
+   payload shapes require HMAC. The fix was then restored.
+3. `.venv/bin/pytest services/ingestion/tests/test_safetyculture_webhook_auth.py services/ingestion/tests/test_integration_router_1342.py -p no:cacheprovider`
+   Result: 60 passed in 1.90s.
+4. `.venv/bin/pytest services/shared/tests/test_external_connectors_defaults.py services/shared/tests/test_connector_safe_http.py -p no:cacheprovider`
+   Result: 30 passed in 0.52s.
+5. `.venv/bin/ruff check services/shared/external_connectors/safetyculture.py services/ingestion/tests/test_safetyculture_webhook_auth.py`
+   Result: All checks passed.
+
+What ops must confirm before deploy (no env was changed by this task):
+1. The webhook secret must be configured in the SafetyCulture dashboard
+   for every tenant that delivers inspections by webhook.
+2. The same secret value must be configured in the service env for each
+   of those tenants (the per-tenant `webhook_secret` on the connector
+   config).
+3. Until both sides match, those tenants will get 401s and their
+   inspection deliveries will not be ingested, with retries from the
+   provider. Confirm 401 rates return to normal after the secrets land.
