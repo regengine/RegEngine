@@ -892,6 +892,7 @@ jobs:
             tests/test_guard_text_bind_casts.py \
             tests/shared/test_visibility_timeout_2918.py \
             tests/shared/test_secret_validation.py \
+            tests/security/test_tenant_scope_scan.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
