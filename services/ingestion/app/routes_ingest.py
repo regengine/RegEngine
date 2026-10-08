@@ -42,6 +42,7 @@ from fastapi import (
     UploadFile,
 )
 from prometheus_client import REGISTRY, Counter, Histogram
+from pydantic import ValidationError
 
 # Advanced ingestion framework components
 from regengine_ingestion.audit import AuditLogger
@@ -508,7 +509,14 @@ def _process_and_emit(
     normalized_alias_key = f"normalized/by-document-id/{document_id}/current.json"
 
     raw_uri = put_bytes(settings.raw_bucket, raw_key, raw_bytes)
-    normalized_payload = NormalizedDocument(**normalized)
+    try:
+        normalized_payload = NormalizedDocument(**normalized)
+    except ValidationError as exc:
+        logger.error("normalized_document_invalid", url=url_str, error=str(exc))
+        raise HTTPException(
+            status_code=422,
+            detail="Document parsing/normalization failed. Check server logs for details.",
+        ) from exc
     normalized_uri = put_json(
         settings.processed_bucket,
         normalized_key,
@@ -657,6 +665,8 @@ async def ingest_direct(
             job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
         logger.exception("ingestion_error", error=str(exc))
+        if isinstance(exc, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if db_manager:

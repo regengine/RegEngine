@@ -7,7 +7,7 @@ import socket
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, field_validator
 
 # ---------------------------------------------------------------------------
 # SSRF protection (#549)
@@ -118,6 +118,43 @@ class IngestRequest(BaseModel):
         return v
 
 
+# ---------------------------------------------------------------------------
+# Stored source-URL markers for non-fetched ingests (#qa5)
+# The file-upload and direct-text routes store a source identifier that is
+# never fetched over the network: ``manual://direct`` (default direct-ingest
+# marker) and ``http://upload.internal/<name>`` (server-built file marker).
+# The SSRF guard above intentionally rejects both (unresolvable host), so
+# the stored models below exempt exactly these non-routable markers while
+# keeping the fetch boundary (IngestRequest, _validate_url, _fetch) strict.
+# Matching is exact: ``upload.internal.evil.com`` still goes through DNS
+# validation, and no fetcher accepts these markers without revalidation.
+# ---------------------------------------------------------------------------
+
+_INTERNAL_SOURCE_SCHEMES = frozenset({"manual"})
+_INTERNAL_SOURCE_HOSTS = frozenset({"upload.internal"})
+
+_http_url_adapter = TypeAdapter(HttpUrl)
+
+
+def _validate_stored_source_url(value: str) -> str:
+    """Validate a stored (never directly fetched) source URL.
+
+    Non-routable internal markers pass through unchanged. Anything else
+    must be an http(s) URL that survives the shared SSRF guard.
+    """
+    from urllib.parse import urlsplit
+
+    text = str(value).strip()
+    parsed = urlsplit(text)
+    if parsed.scheme.lower() in _INTERNAL_SOURCE_SCHEMES:
+        return text
+    if (parsed.hostname or "").lower() in _INTERNAL_SOURCE_HOSTS:
+        return text
+    url = _http_url_adapter.validate_python(text)
+    _reject_private_host(url)
+    return str(url)
+
+
 class DirectIngestRequest(BaseModel):
     """Request payload for direct text or byte ingestion."""
 
@@ -149,7 +186,10 @@ class NormalizedDocument(BaseModel):
     """Schema for normalized regulatory document payloads."""
 
     document_id: str
-    source_url: HttpUrl
+    # Stored identifier, never directly fetched: http(s) URLs pass the SSRF
+    # guard; the non-routable ``manual://`` and ``upload.internal`` markers
+    # used by direct/file ingests pass through unchanged.
+    source_url: str
     source_system: str
     retrieved_at: datetime
     text: str
@@ -162,9 +202,8 @@ class NormalizedDocument(BaseModel):
 
     @field_validator("source_url")
     @classmethod
-    def source_url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
-        _reject_private_host(v)
-        return v
+    def source_url_must_not_be_private(cls, v: str) -> str:
+        return _validate_stored_source_url(v)
 
 
 class NormalizedEvent(BaseModel):
@@ -175,7 +214,7 @@ class NormalizedEvent(BaseModel):
     document_hash: str  # Content hash for deduplication
     tenant_id: Optional[str] = None  # Tenant UUID for multi-tenancy
     source_system: str
-    source_url: HttpUrl
+    source_url: str  # Same stored-identifier contract as NormalizedDocument
     raw_s3_path: str
     normalized_s3_path: str
     text_s3_uri: Optional[str] = None  # Claim Check pointer for payloads > 1MB
@@ -183,6 +222,11 @@ class NormalizedEvent(BaseModel):
     event_entry_timestamp: Optional[datetime] = None  # FDA 21 CFR 1.1455; added by migration v054
     content_sha256: str
     is_duplicate: bool = False
+
+    @field_validator("source_url")
+    @classmethod
+    def source_url_must_not_be_private(cls, v: str) -> str:
+        return _validate_stored_source_url(v)
 
 
 class FederalRegisterIngestRequest(BaseModel):

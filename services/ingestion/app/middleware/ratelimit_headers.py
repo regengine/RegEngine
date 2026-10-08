@@ -59,7 +59,8 @@ _HEADERS: tuple[tuple[str, str], ...] = (
 
 
 def _path_matches(path: str, prefixes: Iterable[str]) -> bool:
-    return any(path == p or path.startswith(p + "/") or path.startswith(p) for p in prefixes)
+    # Boundary-aware: "/api/v1/ingestion" must not match "/api/v1/ingest".
+    return any(path == p or path.startswith(p + "/") for p in prefixes)
 
 
 class RateLimitHeadersMiddleware(BaseHTTPMiddleware):
