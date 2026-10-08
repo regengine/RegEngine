@@ -5,25 +5,34 @@
 
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v runtime_pw="$POSTGRES_PASSWORD" -v admin_runtime_pw="$POSTGRES_PASSWORD" <<-EOSQL
+# Never pass passwords with psql -v: the values sit in the process table
+# where anyone on the box can read them (Pattern 11: secrets from env,
+# never argv). The password travels on stdin instead, SQL-quoted by
+# doubling single quotes. Shell expansion results are inserted literally,
+# so no further escaping is needed.
+sql_quote() {
+    printf '%s' "$1" | sed "s/'/''/g"
+}
+RUNTIME_PW_QUOTED="$(sql_quote "${POSTGRES_PASSWORD:-}")"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Independent application logins. Local development reuses the container
     -- password for convenience; production provisions unrelated secrets in
     -- the provider control plane.
     SELECT format(
         'CREATE ROLE regengine LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        :'runtime_pw'
+        '$RUNTIME_PW_QUOTED'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')\gexec
-    ALTER ROLE regengine LOGIN PASSWORD :'runtime_pw'
+    ALTER ROLE regengine LOGIN PASSWORD '$RUNTIME_PW_QUOTED'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     SELECT format(
         'CREATE ROLE regengine_sysadmin LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        :'admin_runtime_pw'
+        '$RUNTIME_PW_QUOTED'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin')\gexec
-    ALTER ROLE regengine_sysadmin LOGIN PASSWORD :'admin_runtime_pw'
+    ALTER ROLE regengine_sysadmin LOGIN PASSWORD '$RUNTIME_PW_QUOTED'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     -- Admin API database

@@ -10,9 +10,14 @@ phase-2b audit fixture.
 
 import hashlib
 import os
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from services.shared.secret_redaction import mask_secret, redact_text  # noqa: E402
 
 # Config
 DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
@@ -36,8 +41,10 @@ def seed_key():
     key_prefix = RAW_KEY[:12]
     now = datetime.now(timezone.utc)
 
-    print(f"Seeding API Key: {RAW_KEY}")
-    print(f"Hash: {key_hash}")
+    # Never print the raw key: it would land in shell history, CI logs and
+    # any log shipper. The masked form still shows which key was seeded.
+    print(f"Seeding API Key: {mask_secret(RAW_KEY)}")
+    print(f"Key prefix stored: {key_prefix}")
 
     tenant_id = "11111111-1111-1111-1111-111111111111"
 
@@ -92,7 +99,8 @@ def seed_key():
 
     except Exception as e:
         conn.rollback()
-        print(f"❌ Failed to seed key: {e}")
+        # redact_text guards against DB errors that echo the connection string.
+        print(f"❌ Failed to seed key: {redact_text(str(e))}")
         raise
     finally:
         cur.close()

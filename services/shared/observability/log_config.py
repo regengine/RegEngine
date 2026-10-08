@@ -26,6 +26,7 @@ import sys
 from contextvars import ContextVar
 
 import structlog
+from shared.secret_redaction import redact_secrets
 
 # ---------------------------------------------------------------------------
 # Per-request context variables
@@ -107,6 +108,9 @@ def configure_logging(service_name: str, log_level: str = "INFO") -> None:
         _inject_context,
         # Format exceptions into the event dict
         structlog.processors.format_exc_info,
+        # Scrub secret shapes from every record before rendering
+        # (shared.secret_redaction, Pattern 11). Never raises.
+        redact_secrets,
     ]
 
     if is_dev:
