@@ -909,8 +909,12 @@ jobs:
           # fail rather than skip if Docker is unavailable.
           # test_v126_operator_guidance pins the v126 refusal message and the
           # read-only, search_path-pinned verify and pre-deploy runbooks.
+          # test_check_supply_chain guards the supply-chain pinning gate:
+          # a checker-only weakening under scripts/** must fail here,
+          # because test-suite-check.yml does not trigger on that path.
           pytest tests/scripts/test_bootstrap_staging_database.py \
             tests/scripts/test_v126_operator_guidance.py \
+            tests/scripts/test_check_supply_chain.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Setup Node.js (published-spec contract needs the TS export)
