@@ -32,6 +32,7 @@ def base_env(**overrides):
         "AUTH_OTP_HMAC_SECRET": "auth-otp-hmac-secret-with-enough-entropy",  # pragma: allowlist secret
         "RESEND_API_KEY": "resend-api-key-with-enough-entropy",  # pragma: allowlist secret
         "STRIPE_WEBHOOK_SECRET": "stripe-webhook-secret-with-enough-entropy",  # pragma: allowlist secret
+        "WEBHOOK_HMAC_SECRET": "webhook-hmac-secret-with-enough-entropy",  # pragma: allowlist secret
     }
     env.update(overrides)
     return env

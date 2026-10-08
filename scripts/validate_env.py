@@ -95,6 +95,11 @@ _PRODUCTION_REQUIRED: list[str] = [
     # delivers and every Stripe webhook 500s. Caught here instead.
     "RESEND_API_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    # #3229 — when unset on a closed gate (production or any strict/cloud
+    # runtime), POST /api/v1/webhooks/ingest rejects every request with
+    # 401 webhook_hmac_not_configured. Required so a deploy wired only
+    # from the templates cannot silently stop all webhook ingest.
+    "WEBHOOK_HMAC_SECRET",
 ]
 
 # ---------------------------------------------------------------------------
