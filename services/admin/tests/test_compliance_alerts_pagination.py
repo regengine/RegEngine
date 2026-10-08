@@ -13,7 +13,7 @@ tz-aware values.
 
 from __future__ import annotations
 
-# Admin-test sys.path bootstrap — mirrors test_compliance_routes_idor.py so
+# Admin-test sys.path bootstrap: mirrors test_compliance_routes_idor.py so
 # the file loads even when the parent conftest is bypassed (#1435).
 import sys
 from pathlib import Path as _Path
@@ -55,7 +55,7 @@ def _ensure_pg_db() -> None:
 
 
 def _ensure_pg_tables(engine) -> None:
-    from services.admin.app.compliance_models import (  # noqa: F401 — registers tables
+    from services.admin.app.compliance_models import (  # noqa: F401: registers tables
         ComplianceAlertModel,
         TenantComplianceStatusModel,
     )
@@ -115,7 +115,7 @@ def pg_session() -> Session:
 def session() -> Session:
     """Isolated in-memory SQLite session for the service-level test
     (no ``to_dict`` involved, so naive datetimes are harmless)."""
-    from services.admin.app.compliance_models import (  # noqa: F401 — registers tables
+    from services.admin.app.compliance_models import (  # noqa: F401: registers tables
         ComplianceAlertModel,
         TenantComplianceStatusModel,
     )
