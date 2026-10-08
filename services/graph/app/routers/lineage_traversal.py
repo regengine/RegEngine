@@ -93,7 +93,7 @@ LINEAGE_BY_TLC_QUERY = """
 MATCH (f:RegulatoryFact {tenant_id: $tenant_id})
 WHERE f.tlc = $tlc OR f.lot_number = $tlc OR f.identifier = $tlc
 WITH f ORDER BY f.version DESC, f.created_at DESC
-OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)
+OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) WHERE prev.tenant_id = $tenant_id
 RETURN
     f.tlc AS tlc,
     coalesce(f.version, 1) AS version,

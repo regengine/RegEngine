@@ -333,62 +333,11 @@ def _labels_of(text: str) -> str:
 # forces removal of the entry. Product files are not edited by this task.
 
 
-KNOWN_GAPS = [
-    {
-        "file": "fsma/chain_integrity.py",
-        "snippet": "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-        "bug": "BUG-001 find_gaps inner Lot in the NOT EXISTS sub-query "
-        "carries no tenant predicate, so a cross-tenant Lot satisfies the "
-        "lot linkage and suppresses a genuine missing_lot gap (fail-open "
-        "null-tenant shim removed in #3227; Lot remainder retained)",
-        "fix": [
-            (
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }",
-            ),
-        ],
-    },
-    {
-        "file": "routers/lineage_traversal.py",
-        "snippet": "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-        "bug": "BUG-004 LINEAGE_BY_TLC_QUERY returns prev.tlc from an unscoped "
-        "OPTIONAL MATCH, and the Python invariant check only inspects the "
-        "anchor fact, so a cross-tenant predecessor leaks its TLC",
-        "fix": [
-            (
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) WHERE prev.tenant_id = $tenant_id",
-            ),
-        ],
-    },
-    {
-        "file": "fsma/data_quality.py",
-        "snippet": "sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-        "bug": "BUG-005 analyze_kde_completeness counts a cross-tenant Lot as "
-        "satisfying the lot linkage, undercounting missing_lot for the caller "
-        "(same NOT EXISTS shape fixed per-node in #1301 for chain_integrity)",
-        "fix": [
-            (
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }",
-            ),
-        ],
-    },
-    {
-        "file": "overlay_resolver.py",
-        "snippet": "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)",
-        "bug": "BUG-006 get_regulatory_requirements anchors on a scoped product "
-        "but the OPTIONAL MATCH join into TenantControl has no tenant "
-        "predicate, surfacing another tenant's controls (same class as the "
-        "#1278/#1289/#1294 fixes for the sibling queries in this file)",
-        "fix": [
-            (
-                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)",
-                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl {tenant_id: $tenant_id})",
-            ),
-        ],
-    },
-]
+# All seven documented gaps (BUG-001 through BUG-007) are fixed and their
+# xfail marks removed; each case below is now an enforcing test. New gaps
+# follow the same pattern: add an entry here with an xfail mark until the
+# query carries a tenant predicate.
+KNOWN_GAPS: list = []
 
 # Reads that are catalog by design: no tenant rows exist behind them, so no
 # tenant predicate is required. Each entry must still match a live query
@@ -676,12 +625,6 @@ async def test_requirement_mappings_composed_scopes_obligations(captured_queries
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-007 get_requirement_mappings scopes o1/o2 but not the joined "
-    "s1/s2 Sections, so a cross-tenant REQUIRES edge leaks the other "
-    "tenant's regulation name into the mapping rows",
-)
 async def test_requirement_mappings_composed_scopes_sections(captured_queries, monkeypatch):
     """Joined Section nodes in the mappings query must be tenant filtered."""
     from services.graph.app.routers import regulations as regulations_router
@@ -876,14 +819,6 @@ async def test_get_governing_regulations_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-002 get_governing_regulations joins (e:TraceEvent) with no "
-    "tenant predicate, so an event from another tenant reached through a "
-    "cross-tenant UNDERWENT edge leaks its governing obligations "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_governing_regulations_composed_traceevent_scoped():
     """Composed governing query must scope the joined TraceEvent (BUG-002)."""
     store: list = []
@@ -916,15 +851,6 @@ async def test_get_impacted_lots_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-003 get_impacted_lots joins (e:TraceEvent) with no tenant "
-    "predicate: the Lot is scoped but the event reached from the global "
-    "Obligation is not, so another tenant's event can pull its lots "
-    "into this tenant's impact list "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_impacted_lots_composed_traceevent_scoped():
     """Composed impacted-lots query must scope the joined TraceEvent (BUG-003)."""
     store: list = []
