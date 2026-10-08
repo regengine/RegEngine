@@ -327,12 +327,24 @@ class SafetyCultureConnector(IntegrationConnector):
 
         SafetyCulture sends webhooks on audit completion.
         Webhook signature is verified via X-Sc-Signature header.
+
+        Fails closed: a missing webhook secret or a missing or
+        invalid signature raises ValueError (mapped to 401 by the
+        router), so an unauthenticated caller can never trigger a
+        fetch with the tenant's SafetyCulture key.
         """
-        # Verify signature
-        signature = headers.get("x-sc-signature", "")
-        if self.config.webhook_secret and signature:
-            if not self.verify_webhook_signature(payload, signature):
-                raise ValueError("Invalid SafetyCulture webhook signature")
+        if not self.config.webhook_secret:
+            raise ValueError("SafetyCulture webhook secret is not configured for this tenant")
+        lowered = {str(key).lower(): value for key, value in (headers or {}).items()}
+        signature = str(lowered.get("x-sc-signature") or lowered.get("x-safetyculture-signature") or "").strip()
+        if not signature:
+            raise ValueError("Missing SafetyCulture webhook signature")
+        candidate = signature
+        if candidate.lower().startswith("sha256="):
+            candidate = candidate[len("sha256=") :].strip()
+        # verify_webhook_signature uses a constant-time comparison.
+        if not self.verify_webhook_signature(payload, candidate):
+            raise ValueError("Invalid SafetyCulture webhook signature")
 
         import json
 
