@@ -13,6 +13,13 @@ on:
   push:
     branches: [main, develop]
     paths:
+      # frontend/src/lib/public-openapi.ts and frontend/package-lock.json are
+      # included because repo-root-suite runs the published OpenAPI surface
+      # contract, which shells out to node and reads that spec (#3248). A
+      # spec-only change must trigger the gate that compares it. The rest of
+      # frontend/** stays out so frontend-only merges do not wait on this job.
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/package-lock.json'
       - 'alembic/**'
       - 'server/**'
       - 'services/**'
@@ -34,6 +41,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # Same frontend spec inclusion as push above (#3248 OpenAPI contract).
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/package-lock.json'
       - 'alembic/**'
       - 'server/**'
       - 'services/**'
@@ -783,7 +793,11 @@ jobs:
   repo-root-suite:
     name: Repo-root security/RLS/isolation suite
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Raised from 15 for #3248: this job now runs `npm ci` plus a production
+    # app import child with its own 300s timeout, on top of ten new test
+    # directories. A timeout fails the status gate and blocks deploy, so the
+    # cap must leave headroom for a slow registry or a slow import.
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -890,6 +904,7 @@ jobs:
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
             tests/test_guard_text_bind_casts.py \
+            tests/test_ci_qa_gates_3248.py \
             tests/shared/test_visibility_timeout_2918.py \
             tests/shared/test_secret_validation.py \
             -v --no-cov -o "testpaths=tests"
@@ -949,6 +964,19 @@ jobs:
           # produces — it would only skip), and
           # tests/contract/test_error_envelope_contract_2863.py (fails on the
           # documented flat 409 idempotency shape; needs a product decision).
+          # tests/audit is NOT listed: it holds only manual helper scripts
+          # (audit_trace_back.py, verify_chain.py), which do not match
+          # python_files = "test_*.py", so pytest collects nothing there and
+          # the gate comment must not claim they are asserted. Hash-chain
+          # audit integrity is gated by
+          # tests/security/test_audit_integrity.py in the offline step above.
+          # tests/qa_sweep_20261002/test_portal_export_disclosure.py is
+          # excluded below: BE-011 is still a strict xfail (the redacted FDA
+          # CSV still embeds the portal link token via leftover KDEs), so an
+          # expected failure there exits 0 and proves nothing. Keep it out
+          # of the blocking argv until the export stops embedding portal_id;
+          # when that is fixed, delete the xfail and drop this --ignore so a
+          # regression fails the job.
           pytest tests/test_router_policy.py \
             tests/test_server_import_smoke.py \
             tests/security/test_account_erasure_live_db_guard.py \
@@ -959,7 +987,6 @@ jobs:
             tests/security/test_staging_release_gate_runner.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
             tests/admin \
-            tests/audit \
             tests/billing \
             tests/compliance \
             tests/docs \
@@ -969,6 +996,7 @@ jobs:
             tests/recall_reconstruction \
             tests/qa_sweep_20261002 \
             tests/contract/test_openapi_production_surface_2861.py \
+            --ignore=tests/qa_sweep_20261002/test_portal_export_disclosure.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
