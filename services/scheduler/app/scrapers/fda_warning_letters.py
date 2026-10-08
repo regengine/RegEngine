@@ -82,7 +82,12 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as scrap_error:
+        # QA5: broad catch is intentional. The scraper contract is to always
+        # return a ScrapeResult, never raise: the scheduler records a failure
+        # result with an error message, while a raised error skips that
+        # bookkeeping. This previously let XML parse errors (a SyntaxError,
+        # not a ValueError) escape on malformed RSS bodies.
+        except Exception as scrap_error:
             logger.warning(
                 "scrape_attempt_failed",
                 error=str(scrap_error),
@@ -205,6 +210,18 @@ class FDAWarningLettersScraper(BaseScraper):
         for result in data.get("results", []):
             try:
                 recall_number = result.get("recall_number", "")
+                if not recall_number:
+                    # QA5: rows without a recall number must leave a trace
+                    # instead of sharing source_id "fda_enf:". The state
+                    # manager dedupes on source_id only, so emitting them
+                    # would silently drop distinct actions after the first.
+                    logger.warning(
+                        "warning_letter_row_missing_recall_number_dropped",
+                        report_date=result.get("report_date", ""),
+                        classification=result.get("classification", ""),
+                        product_hint=str(result.get("product_description", ""))[:80],
+                    )
+                    continue
                 source_id = self._create_source_id("fda_enf", recall_number)
 
                 # Parse date
@@ -223,17 +240,20 @@ class FDAWarningLettersScraper(BaseScraper):
                 else:
                     severity = EnforcementSeverity.MEDIUM
 
+                recalling_firm = result.get("recalling_firm", "") or "Unknown"
+                product_description = result.get("product_description", "") or ""
+
                 items.append(
                     EnforcementItem(
                         source_type=self.source_type,
                         source_id=source_id,
-                        title=f"{result.get('recalling_firm', 'Unknown')} - {result.get('product_description', '')[:100]}",
+                        title=f"{recalling_firm} - {product_description[:100]}",
                         summary=result.get("reason_for_recall", "")[:500],
                         url=f"https://www.accessdata.fda.gov/scripts/ires/index.cfm?event=ires.dspBriefRecallNumber&RecallNumber={recall_number}",
                         published_date=published_date,
                         severity=severity,
-                        affected_products=[result.get("product_description", "")],
-                        affected_companies=[result.get("recalling_firm", "")],
+                        affected_products=[product_description] if product_description else [],
+                        affected_companies=[recalling_firm],
                         jurisdiction="US-FDA",
                         raw_data=result,
                     )
@@ -261,6 +281,11 @@ class FDAWarningLettersScraper(BaseScraper):
             # Example: "Wed, 15 Jan 2026 12:00:00 -0500"
             from email.utils import parsedate_to_datetime
 
-            return parsedate_to_datetime(date_str)
+            parsed = parsedate_to_datetime(date_str)
+            # QA5: feeds sometimes omit the zone. Return UTC-aware so
+            # downstream code never mixes naive and aware datetimes.
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
         except (ValueError, TypeError, OverflowError):
             return datetime.now(timezone.utc)
