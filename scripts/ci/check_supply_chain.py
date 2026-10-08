@@ -35,11 +35,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-USES_RE = re.compile(r"uses:\s*[\"']?([A-Za-z0-9_.\-/]+)(?:@([^\"'#\s]+))?[\"']?")
+USES_RE = re.compile(r"[\"']?uses[\"']?:\s*[\"']?([A-Za-z0-9_.\-/]+)(?:@([^\"'#\s]+))?[\"']?")
 PIPE_SHELL_RE = re.compile(r"\|\s*(sudo\s+)?(sh|bash)\b")
 LATEST_URL_RE = re.compile(r"https?://\S*latest\S*|@latest\b", re.IGNORECASE)
 FROM_RE = re.compile(r"^\s*FROM\s+(\S+)")
-IMAGE_RE = re.compile(r"^\s*(?:-\s*)?image:\s*[\"']?(\S+?)[\"']?\s*$")
+# Full-line value (not \S+) so `${{ ... }}` expressions with spaces cannot
+# bypass the match. Callers strip quotes/comments before digest validation.
+IMAGE_RE = re.compile(r"^\s*(?:-\s*)?[\"']?image[\"']?:\s*(.+?)\s*$")
+CONTAINER_RE = re.compile(r"^\s*(?:-\s*)?[\"']?container[\"']?:\s*(.+?)\s*$")
+DOCKER_USES_RE = re.compile(r"^\s*(?:-\s*)?[\"']?uses[\"']?:\s*[\"']?docker://(.+?)\s*$")
+RUN_BLOCK_RE = re.compile(r"^\s*(?:-\s*)?[\"']?run[\"']?:\s*[|>][-+]?\s*$")
+DIGEST_RE = re.compile(r"[^@\s]+@sha256:[0-9a-fA-F]{64}")
+# Quoted strings are consumed separately so their contents cannot become keys.
+FLOW_IMAGE_RE = re.compile(r""""[^"\n]*"|'[^'\n]*'|[{,]\s*["']?(?P<key>image|container)["']?\s*:\s*""")
+FLOW_VALUE_RE = re.compile(r""""[^"\n]*"|'[^'\n]*'|[^,}]+""")
 ARCHIVE_FETCH_RE = re.compile(r"\b(curl|wget)\b.*https?://\S+\.(tar\.gz|tgz|tar\.bz2|zip|whl)\b")
 CHECKSUM_EVIDENCE_RE = re.compile(r"sha256sum|shasum\s+-c|_SHA256|cosign\s+verify")
 PIP_INSTALL_RE = re.compile(r"(?:^|[\s;|&])(?:python3?\s+-m\s+)?pip3?\s+install\b(.*)$")
@@ -121,9 +130,34 @@ def strip_comment(line: str) -> str:
     return line
 
 
+def has_valid_digest(ref: str) -> bool:
+    """True when ref pins a full 64-hex sha256 digest, not merely a substring."""
+    return bool(DIGEST_RE.fullmatch(ref))
+
+
+def _unquote(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1].strip()
+    return value
+
+
+def _image_value_needs_pin(raw: str) -> bool:
+    """Fail closed: empty, `${{ }}` expressions, or missing/invalid digest."""
+    value = _unquote(raw.strip())
+    if not value:
+        return True
+    if "${{" in value:
+        return True
+    return not has_valid_digest(value)
+
+
 def check_action_pin(path: Path, rel: str) -> list[Violation]:
     out: list[Violation] = []
     for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        # docker:// steps are container images, governed by image-digest.
+        if DOCKER_USES_RE.match(strip_comment(line)):
+            continue
         match = USES_RE.search(line)
         if not match:
             continue
@@ -161,7 +195,7 @@ def check_image_digest_dockerfile(path: Path, rel: str) -> list[Violation]:
     out: list[Violation] = []
     for lineno, line in enumerate(path.read_text().splitlines(), start=1):
         match = FROM_RE.match(strip_comment(line))
-        if match and "@sha256:" not in match.group(1):
+        if match and not has_valid_digest(match.group(1)):
             out.append(Violation("image-digest", rel, lineno, line.strip()))
     return out
 
@@ -170,7 +204,85 @@ def check_image_digest_yaml(path: Path, rel: str) -> list[Violation]:
     out: list[Violation] = []
     for lineno, line in enumerate(path.read_text().splitlines(), start=1):
         match = IMAGE_RE.match(strip_comment(line))
-        if match and "@sha256:" not in match.group(1):
+        if match and _image_value_needs_pin(match.group(1)):
+            out.append(Violation("image-digest", rel, lineno, line.strip()))
+    return out
+
+
+def _docker_uses_needs_pin(code: str) -> bool | None:
+    """None when not a `uses: docker://` step, else True if unpinned."""
+    match = DOCKER_USES_RE.match(code)
+    if not match:
+        return None
+    raw_ref = match.group(1).strip()
+    if not raw_ref:
+        return True
+    if "${{" in raw_ref:
+        return True
+    return _image_value_needs_pin(raw_ref.strip("\"'"))
+
+
+def _flow_image_values(code: str) -> list[str]:
+    """Extract image scalars from same-line YAML flow mappings."""
+    values: list[str] = []
+    for match in FLOW_IMAGE_RE.finditer(code):
+        if match.group("key") is None:
+            continue
+        rest = code[match.end() :].lstrip()
+        if match.group("key") == "container" and rest.startswith("{"):
+            continue  # The nested image key is checked separately.
+        value = FLOW_VALUE_RE.match(rest)
+        values.append(value.group(0) if value else "")
+    return values
+
+
+def check_image_digest_workflow(path: Path, rel: str) -> list[Violation]:
+    """Workflow service/container images plus `uses: docker://` steps.
+
+    Bounded line scanner: `image:` (service or container mapping), scalar
+    `container: <image>`, same-line flow mappings, and `uses: docker://<image>`. Multi-line `run: |`
+    blocks are skipped so shell echo/heredoc `image:` text is not confused
+    with real declarations. Quoted values and trailing comments are
+    stripped; `${{ }}` expressions fail closed.
+    """
+    out: list[Violation] = []
+    in_run = False
+    run_col = 0
+    for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        if in_run:
+            if indent > run_col:
+                continue
+            in_run = False
+        code = strip_comment(line)
+        if RUN_BLOCK_RE.match(code):
+            try:
+                run_col = line.index("run:")
+            except ValueError:
+                run_col = indent
+            in_run = True
+            continue
+        if re.match(r"^\s*(?:-\s*)?[\"']?run[\"']?:", code):
+            continue
+        docker_needs = _docker_uses_needs_pin(code)
+        if docker_needs is True:
+            out.append(Violation("image-digest", rel, lineno, line.strip()))
+            continue
+        if docker_needs is False:
+            continue
+        flow_values = _flow_image_values(code)
+        if flow_values:
+            if any(_image_value_needs_pin(value) for value in flow_values):
+                out.append(Violation("image-digest", rel, lineno, line.strip()))
+            continue
+        match = IMAGE_RE.match(code)
+        if match and _image_value_needs_pin(match.group(1)):
+            out.append(Violation("image-digest", rel, lineno, line.strip()))
+            continue
+        cmatch = CONTAINER_RE.match(code)
+        if cmatch and _image_value_needs_pin(cmatch.group(1)):
             out.append(Violation("image-digest", rel, lineno, line.strip()))
     return out
 
@@ -259,6 +371,7 @@ def find_violations(root: Path) -> list[Violation]:
     for path in workflow_files(root):
         rel = path.relative_to(root).as_posix()
         found.extend(check_action_pin(path, rel))
+        found.extend(check_image_digest_workflow(path, rel))
         found.extend(check_pipe_shell(path, rel))
         found.extend(check_latest_url(path, rel))
         found.extend(check_download_checksum(path, rel))
@@ -287,11 +400,20 @@ class BaselineEntry:
     file: str
     match: str
     reason: str
+    exact: bool = False
 
 
 def load_baseline(path: Path) -> list[BaselineEntry]:
     data = json.loads(path.read_text())
-    return [BaselineEntry(**e) for e in data.get("entries", [])]
+    return [BaselineEntry(**entry) for entry in data.get("entries", [])]
+
+
+def _baseline_matches(entry: BaselineEntry, violation: Violation) -> bool:
+    if violation.rule != entry.rule or violation.file != entry.file:
+        return False
+    if entry.exact:
+        return violation.text.strip() == entry.match.strip()
+    return entry.match in violation.text
 
 
 def apply_baseline(
@@ -303,7 +425,7 @@ def apply_baseline(
     for entry in baseline:
         matched = False
         for violation in violations:
-            if violation.rule == entry.rule and violation.file == entry.file and entry.match in violation.text:
+            if _baseline_matches(entry, violation):
                 matched = True
                 if violation in remaining:
                     remaining.remove(violation)
