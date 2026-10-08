@@ -101,9 +101,10 @@ def can_invite_role(
 
     #1387 — an inviter may only issue invites at or below their own tier.
     Owner-tier targets additionally require the explicit
-    ``users.invite.grant_owner`` permission (or Owner rank). The explicit
-    permission acts as an escape hatch for both the Owner-tier check AND
-    the basic tier check.
+    ``users.invite.grant_owner`` permission (or Owner rank). That explicit
+    permission applies to Owner-tier targets only: it never lifts the basic
+    tier check for sub-Owner targets, so a low-rank holder of the permission
+    still cannot assign roles above their own tier.
     """
     # Materialize perm iterables once — has_permission consumes them.
     caller_perm_list = list(caller_permissions or [])
