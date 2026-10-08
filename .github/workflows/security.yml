@@ -252,7 +252,7 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape)
+      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape + webhook signature)
         run: |
           # No grandfathered tenant-trust findings. Tenant authority must come
           # from authenticated principal state; see services/shared/tenant_context.py.
@@ -265,6 +265,7 @@ jobs:
           semgrep --config=.semgrep/tenant-trust.yaml \
             --config=.semgrep.yml \
             --config=.semgrep/current-user-shape.yaml \
+            --config=.semgrep/webhook-signature.yaml \
             --error \
             --json --output semgrep-tenant-trust.json \
             .
