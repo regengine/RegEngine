@@ -368,7 +368,20 @@ def _convert_llm_results_to_extractions(
             0.0, min(reported_confidence, _LLM_EXTRACTION_CONFIDENCE_CAP)
         )
 
-        span_start = _llm_field(item, "source_span_start", 0)
+        # A garbage span must not nuke the whole document: coerce it to 0
+        # and keep the extraction (the reviewer still sees source_text).
+        # Previously int("abc") raised ValueError here, aborting the loop
+        # over every item and sending all of the document's valid
+        # extractions to the DLQ along with the bad one.
+        try:
+            span_start = int(_llm_field(item, "source_span_start", 0) or 0)
+        except (TypeError, ValueError):
+            logger.warning(
+                "llm_span_start_unparseable",
+                document_id=doc_id,
+                raw_span=_llm_field(item, "source_span_start"),
+            )
+            span_start = 0
         parts = provision_text.split()
         attributes = {
             "document_id": doc_id,
@@ -394,7 +407,7 @@ def _convert_llm_results_to_extractions(
                 obligation_type=obl_type,
                 confidence_score=confidence,
                 source_text=provision_text,
-                source_offset=int(span_start or 0),
+                source_offset=span_start,
                 attributes=attributes,
             )
         )
