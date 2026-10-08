@@ -30,17 +30,33 @@ async def find_gaps(
 
     Returns:
         List of events with gap details
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty. The previous
+            `$tenant_id IS NULL OR ...` shim let null-tenant callers see
+            every tenant's gap events — the exact cross-tenant exposure
+            the sibling queries already closed (#2540, #1301).
     """
+    # Fail-fast on null-tenant calls, matching find_broken_chains (#1301)
+    # and the other #2540-hardened queries in this package.
+    if not tenant_id:
+        raise ValueError(
+            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported (#2540)"
+        )
+
     start_time = time.time()
 
-    # Find events missing key fields
+    # Find events missing key fields.
+    # The Lot inside the NOT EXISTS sub-query is tenant-scoped: a
+    # cross-tenant UNDERWENT edge (see #1284) must not satisfy the
+    # existence check and suppress a genuine missing_lot gap.
     query = """
     MATCH (e:TraceEvent)
-    WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
+    WHERE e.tenant_id = $tenant_id
     AND (
         e.event_date IS NULL OR
         e.event_date = '' OR
-        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } OR
+        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } OR
         e.responsible_party_contact IS NULL OR
         e.responsible_party_contact = ''
     )
@@ -369,7 +385,16 @@ async def find_all_gaps(
 
     Returns:
         Combined list of all gaps and violations
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty. Fail closed before
+            either sub-query runs so a null tenant can neither leak gap
+            data (via find_gaps) nor half-raise (via find_broken_chains).
     """
+    if not tenant_id:
+        raise ValueError(
+            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported (#2540)"
+        )
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)
 
