@@ -589,7 +589,7 @@ class DatabaseAPIKeyStore:
 
         try:
             uuid.UUID(uuid_str)
-        except ValueError:
+        except (ValueError, AttributeError, TypeError):
             raise ValueError(f"Invalid UUID: {uuid_str}")
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
@@ -781,8 +781,12 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_disabled", key_id=key_id)
                 return None
 
-            # Check if expired
-            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+            # Check if expired. Naive datetimes (SQLite) are read as UTC
+            # so expiry keeps working instead of raising TypeError (500).
+            expires_at = api_key.expires_at
+            if expires_at is not None and expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at and expires_at < datetime.now(timezone.utc):
                 logger.warning("api_key_expired", key_id=key_id)
                 return None
 
@@ -806,7 +810,12 @@ class DatabaseAPIKeyStore:
             # _record_key_usage). Build the response from the row as loaded;
             # the buffered counter flush does not need to round-trip back here.
             response = APIKeyResponse.model_validate(api_key)
-            await self._record_key_usage(key_id, session)
+            # Usage accounting must never break authentication: a failed
+            # usage UPDATE turns a valid key into a 500 otherwise.
+            try:
+                await self._record_key_usage(key_id, session)
+            except Exception as exc:
+                logger.warning("api_key_usage_record_failed", key_id=key_id, error=str(exc))
             return response
 
     async def check_rate_limit(

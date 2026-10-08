@@ -127,6 +127,7 @@ def _validate_and_pin(url: str) -> tuple[str, str]:
     # Re-validate the exact address we are about to pin. validate_url checked
     # the addresses from an earlier resolution, but DNS can rebind between the
     # two lookups; pinning an unvalidated addr would reopen the SSRF window.
+    skipped_private = 0
     for info in infos:
         addr = info[4][0]
         if not addr:
@@ -137,8 +138,13 @@ def _validate_and_pin(url: str) -> tuple[str, str]:
             continue
         mapped = getattr(resolved, "ipv4_mapped", None)
         if not (mapped or resolved).is_global:
-            raise SSRFError(f"Resolved IP {resolved} is not a public global address")
+            # Do not fail on the first non-global address: DNS order is
+            # not deterministic, and a later address may be usable.
+            skipped_private += 1
+            continue
         return addr, host
+    if skipped_private:
+        raise SSRFError(f"Resolved IP for {host} is not a public global address")
     raise SSRFError(f"No addresses for host: {host}")
 
 

@@ -110,9 +110,15 @@ def validate_url(
     if hostname_lower in BLOCKED_HOSTS:
         raise SSRFError(f"Blocked host: {hostname}")
 
-    # Check domain allowlist if provided
+    # Check domain allowlist if provided. Matching is exact or on a
+    # subdomain boundary: a bare endswith check would let
+    # "evilexample.com" pass for allowlisted "example.com".
     if allowed_domains:
-        if not any(hostname_lower.endswith(domain.lower()) for domain in allowed_domains):
+        allowed = [domain.lower().lstrip(".") for domain in allowed_domains]
+        if not any(
+            hostname_lower == domain or hostname_lower.endswith(f".{domain}")
+            for domain in allowed
+        ):
             raise SSRFError(f"Host '{hostname}' not in allowed domains: {allowed_domains}")
 
     # Resolve DNS and check IP if enabled

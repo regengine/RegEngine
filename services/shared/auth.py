@@ -61,7 +61,9 @@ def validate_auth_config() -> None:
         logger.error("auth_config_validation_failed", issue=issue)
 
     # Only explicit local development/test may continue after a warning.
-    is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
+    # Any value counts except explicit falsy strings: a leftover
+    # CI=false or CI=0 must not silently disable the startup gate.
+    is_ci = _is_ci_environment()
     if issues and strict_auth and not is_ci:
         raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
@@ -78,7 +80,7 @@ def validate_auth_config() -> None:
     # process JWT / TOOL_ACCESS signing keys mean non-portable, restart-forgeable
     # sessions and invisible cross-worker revocation. Refuse to boot.
     cloud_marker_present = any(os.getenv(var) for var in CLOUD_ENV_VARS)
-    if cloud_marker_present and not is_production() and not is_ci:
+    if cloud_marker_present and not is_production() and not _is_ci_environment():
         ephemeral_secrets: list[str] = []
         if not (os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")):
             ephemeral_secrets.append("AUTH_SECRET_KEY")
@@ -92,6 +94,39 @@ def validate_auth_config() -> None:
                 "and provide these secrets before deploying — ephemeral keys produce "
                 "non-portable, restart-forgeable sessions."
             )
+
+
+# Values that explicitly mean "not CI" when found in CI marker variables.
+_CI_FALSY_VALUES = frozenset({"", "0", "false", "no", "off", "none"})
+
+
+def _is_ci_environment() -> bool:
+    """Return True when running under CI.
+
+    Any marker value counts except explicit falsy strings (``false``,
+    ``0``, ``no``, ``off``, ``none``), so a leftover ``CI=false`` in a
+    deployed environment cannot silently disable startup gates.
+    """
+    for var in ("GITHUB_ACTIONS", "CI"):
+        raw = os.getenv(var)
+        if raw is None:
+            continue
+        if raw.strip().lower() not in _CI_FALSY_VALUES:
+            return True
+    return False
+
+
+def _is_expired(expires_at: Optional[datetime]) -> bool:
+    """Return True when ``expires_at`` is in the past.
+
+    Naive datetimes (as returned by SQLite) are treated as UTC rather
+    than raising ``TypeError`` against the aware ``now()``.
+    """
+    if not expires_at:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < datetime.now(timezone.utc)
 
 
 # API Key header scheme
@@ -202,7 +237,7 @@ class APIKeyStore:
             return None
 
         # Check if key has expired
-        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+        if _is_expired(api_key.expires_at):
             logger.warning("api_key_expired", key_id=key_id)
             return None
 
@@ -541,7 +576,12 @@ def reconcile_tenant_scope(
     # ``middleware_tenant_id`` is non-optional at the handler (the
     # get_current_tenant_id dependency 401s when absent), but guard anyway.
     middleware_tenant = str(middleware_tenant_id) if middleware_tenant_id is not None else None
-    if middleware_tenant and middleware_tenant != authenticated_tenant:
+    # Compare case-insensitively: the same UUID in upper- vs lower-case
+    # hex is identical, and a 409 on legitimate requests is an outage.
+    if (
+        middleware_tenant
+        and middleware_tenant.strip().lower() != authenticated_tenant.strip().lower()
+    ):
         logger.warning(
             "graph_tenant_scope_mismatch",
             authenticated_tenant=authenticated_tenant,
@@ -575,7 +615,7 @@ def get_tenant_id(
 
     try:
         _uuid.UUID(x_tenant_id)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         raise HTTPException(
             status_code=400,
             detail="Invalid X-Tenant-ID: must be a valid UUID.",

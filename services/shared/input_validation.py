@@ -180,8 +180,14 @@ class InjectionRule:
         self.check_command = check_command
         self.check_header = check_header
 
+    # SQL comment sequences used to glue keywords past whitespace checks.
+    _SQL_COMMENT_RE = re.compile(r"/\*.*?\*/")
+
     def validate(self, value: str, field: str) -> str:
         normalized = InputSanitizer.normalize_unicode(str(value))
+        # Unmask comment-obfuscated keywords (e.g. UNION/**/SELECT) for the
+        # SQL checks only; the returned value is untouched.
+        sql_probe = self._SQL_COMMENT_RE.sub(" ", normalized)
         checks: list[tuple[str, bool, Iterable[re.Pattern[str]]]] = [
             ("SQL", self.check_sql, InjectionPatterns.SQL_INJECTION),
             ("NoSQL", self.check_nosql, InjectionPatterns.NOSQL_INJECTION),
@@ -191,8 +197,9 @@ class InjectionRule:
         for injection_type, enabled, patterns in checks:
             if not enabled:
                 continue
+            probe = sql_probe if injection_type == "SQL" else normalized
             for pattern in patterns:
-                if pattern.search(normalized):
+                if pattern.search(probe):
                     raise InjectionAttemptError(
                         f"{injection_type} injection detected",
                         injection_type=injection_type,
@@ -370,6 +377,8 @@ class IntegerField:
         try:
             if isinstance(value, bool):
                 raise ValueError
+            if isinstance(value, float) and not value.is_integer():
+                raise ValueError
             parsed = int(value)
         except (TypeError, ValueError) as exc:
             raise ValidationError(
@@ -448,7 +457,7 @@ def validate_input(**validators: Any) -> Callable[[Callable[..., Any]], Callable
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         signature = inspect.signature(func)
 
-        def _validate_args(*args: Any, **kwargs: Any) -> None:
+        def _validated_call_args(*args: Any, **kwargs: Any) -> tuple[tuple, dict]:
             bound = signature.bind_partial(*args, **kwargs)
             for field_name, validator in validators.items():
                 if field_name in bound.arguments:
@@ -456,20 +465,24 @@ def validate_input(**validators: Any) -> Callable[[Callable[..., Any]], Callable
                         bound.arguments[field_name],
                         field_name,
                     )
+            # Rebuild the call from the validated bindings so sanitized
+            # values reach the function; calling with the original
+            # args/kwargs would silently drop every normalization.
+            return bound.args, bound.kwargs
 
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                _validate_args(*args, **kwargs)
-                return await func(*args, **kwargs)
+                call_args, call_kwargs = _validated_call_args(*args, **kwargs)
+                return await func(*call_args, **call_kwargs)
 
             return async_wrapper
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            _validate_args(*args, **kwargs)
-            return func(*args, **kwargs)
+            call_args, call_kwargs = _validated_call_args(*args, **kwargs)
+            return func(*call_args, **call_kwargs)
 
         return sync_wrapper
 

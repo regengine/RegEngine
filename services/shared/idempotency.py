@@ -111,6 +111,11 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
         tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
         if enabled is False:
             return None
+        # Naive datetimes (SQLite) are read as UTC: comparing naive with
+        # aware raises TypeError, which the handler below would swallow
+        # into "no tenant" and silently disable idempotency caching.
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
         if expires_at and expires_at < datetime.now(timezone.utc):
             return None
         if not tenant_id:

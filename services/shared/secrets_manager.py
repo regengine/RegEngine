@@ -65,6 +65,15 @@ class SecretsManager:
             )
             raise RuntimeError(f"Failed to retrieve secret {secret_name}: {exc}")
 
+    def invalidate_cache(self) -> None:
+        """Drop all cached secrets so the next read sees rotated values.
+
+        ``get_secret`` caches per process; without this, a rotated secret
+        (or one injected after first read) stays stale until restart.
+        Call it from rotation hooks or secret-refresh endpoints.
+        """
+        type(self).get_secret.cache_clear()
+
     def get_database_credentials(self, environment: Optional[str] = None) -> dict:
         """Get PostgreSQL database credentials.
 
