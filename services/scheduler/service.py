@@ -1305,11 +1305,27 @@ class SchedulerService:
         except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
             logger.error("data_archival_failed", error=str(e))
 
+    def _holds_leadership(self) -> bool:
+        """True while this process still owns the scheduler advisory lock."""
+        ctx = getattr(self, "distributed_context", None)
+        if ctx is None:
+            return False
+        return bool(getattr(ctx, "_is_leader", False))
+
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""
         logger.info("running_initial_scrape")
 
         for source_type in self.scrapers.keys():
+            # The heartbeat can drop leadership during a long FDA fetch,
+            # before scheduler.start() exists to shut down. Stop the rest
+            # of the startup scrapes instead of continuing as a zombie.
+            if not self._holds_leadership():
+                logger.error(
+                    "leadership_lost_aborting_initial_scrape",
+                    source_type=source_type.value,
+                )
+                return
             try:
                 self.run_scraper(source_type)
             except Exception as e:
@@ -1380,8 +1396,19 @@ class SchedulerService:
         # We only schedule/update jobs if we are the leader
         self.schedule_jobs()
 
+        # Heartbeat may already have cleared leadership during scheduling.
+        # shutdown() cannot stop a scheduler that has not started, so do
+        # not enter the scrape or the blocking start() after that.
+        if not self._holds_leadership():
+            logger.error("leadership_lost_before_initial_scrape")
+            return
+
         # Run initial scrape (on promotion to leader)
         self.run_initial_scrape()
+
+        if not self._holds_leadership():
+            logger.error("leadership_lost_before_scheduler_start")
+            return
 
         logger.info("scheduler_starting_mainloop")
         try:
