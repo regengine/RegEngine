@@ -81,74 +81,430 @@ def test_coder_act_still_writes_inside_workdir(tmp_path: Path, monkeypatch: pyte
 
 
 # ── merge_pr guards ─────────────────────────────────────────
+# Faithful minimal PyGithub fakes.
+#
+# PyGithub is NOT installed in the shared venv (verified: `import github`
+# raises ModuleNotFoundError; do not install). These fakes mirror the
+# official PyGithub 2.10.0 surface verified via documentation:
+# - Repository.get_pull(number) / Repository.get_commit(sha)
+# - Commit.get_combined_status() (no args) -> .state + .statuses
+# - Commit.get_check_runs(check_name, status, filter) -> iterable of runs
+#   with .status + .conclusion
+# - PullRequest.merge(..., sha=...) accepts the head SHA for an atomic guard
+# Refs:
+# https://pygithub.readthedocs.io/en/stable/github_objects/Commit.html
+# https://pygithub.readthedocs.io/en/stable/github_objects/PullRequest.html
+# Live library integration unavailable; see
+# test_pygithub_signatures_when_available (skips when `github` missing).
+#
+# Repository.get_combined_status does NOT exist on real Repository and is
+# intentionally absent here; any use would fail loudly instead of passing
+# against a fake unsupported API.
+
+
+class _FakeCheckRun:
+    """Minimal stand-in for github.CheckRun.CheckRun (status + conclusion)."""
+
+    def __init__(self, status: str = "completed", conclusion: str | None = "success") -> None:
+        self.status = status
+        self.conclusion = conclusion
+
+
+class _FakeCombinedStatus:
+    """Minimal stand-in for github.CombinedStatus.CombinedStatus."""
+
+    def __init__(self, state: str, statuses: list) -> None:
+        self.state = state
+        self.statuses = statuses
+
+
+class _FakeCommit:
+    """Minimal stand-in for github.Commit.Commit.
+
+    Real signature: get_check_runs(check_name=NotSet, status=NotSet,
+    filter=NotSet). Production calls it with no args; the fake keeps the
+    same parameter names with None defaults (NotSet unavailable without
+    PyGithub installed).
+    """
+
+    def __init__(
+        self,
+        combined_state: str = "success",
+        statuses: list | None = None,
+        check_runs: list | None = None,
+        raise_combined: bool = False,
+        raise_checks: bool = False,
+    ) -> None:
+        if statuses is None:
+            statuses = [SimpleNamespace(state=combined_state)]
+        if check_runs is None:
+            check_runs = []
+        self._combined_state = combined_state
+        self._statuses = statuses
+        self._check_runs = check_runs
+        self._raise_combined = raise_combined
+        self._raise_checks = raise_checks
+
+    def get_combined_status(self):
+        if self._raise_combined:
+            raise RuntimeError("combined status unavailable")
+        return _FakeCombinedStatus(state=self._combined_state, statuses=self._statuses)
+
+    def get_check_runs(self, check_name=None, status=None, filter=None):
+        if self._raise_checks:
+            raise RuntimeError("check runs unavailable")
+        return list(self._check_runs)
 
 
 class _FakePR:
-    def __init__(self, mergeable: bool = True) -> None:
-        self.mergeable = mergeable
-        self.merge_called = False
-        self.head = SimpleNamespace(sha="abc123")
+    """Minimal stand-in for github.PullRequest.PullRequest (head/sha + merge)."""
 
-    def merge(self, commit_message: str = ""):
+    def __init__(
+        self,
+        head_sha: str = "abc123",
+        mergeable: bool = True,
+        merge_result: bool = True,
+        enforce_atomic: bool = False,
+    ) -> None:
+        self.head = SimpleNamespace(sha=head_sha)
+        self.mergeable = mergeable
+        self._merge_result = merge_result
+        self._enforce_atomic = enforce_atomic
+        self.merge_called = False
+        self.merge_kwargs = None
+
+    def merge(self, commit_message: str = "", sha=None):
         self.merge_called = True
-        return SimpleNamespace(merged=True)
+        self.merge_kwargs = {"commit_message": commit_message, "sha": sha}
+        if self._enforce_atomic and sha != self.head.sha:
+            return SimpleNamespace(merged=False)
+        return SimpleNamespace(merged=self._merge_result)
 
 
 class _FakeRepo:
-    def __init__(self, pr: _FakePR, state: str = "success", raise_checks: bool = False) -> None:
+    """Minimal stand-in for github.Repository.Repository.
+
+    Intentionally has no get_combined_status (nonexistent on real Repository).
+    """
+
+    def __init__(
+        self,
+        pr: _FakePR,
+        commit=None,
+        raise_pull: bool = False,
+        raise_commit: bool = False,
+        commit_side_effect=None,
+    ) -> None:
         self._pr = pr
-        self._state = state
-        self._raise_checks = raise_checks
+        self._commit = commit
+        self._raise_pull = raise_pull
+        self._raise_commit = raise_commit
+        self._commit_side_effect = commit_side_effect
+        self.get_pull_calls: list = []
+        self.get_commit_calls: list = []
 
     def get_pull(self, number: int) -> _FakePR:
+        self.get_pull_calls.append(number)
+        if self._raise_pull:
+            raise RuntimeError("pull unavailable")
         return self._pr
 
-    def get_combined_status(self, ref: str):
-        if self._raise_checks:
-            raise RuntimeError("checks unavailable")
-        return SimpleNamespace(state=self._state)
+    def get_commit(self, sha: str):
+        self.get_commit_calls.append(sha)
+        if self._commit_side_effect is not None:
+            self._commit_side_effect()
+        if self._raise_commit:
+            raise RuntimeError("commit unavailable")
+        return self._commit
 
 
-def _client(pr: _FakePR, **kwargs) -> GitHubClient:
+def _client(pr: _FakePR, commit=None, **repo_kwargs) -> GitHubClient:
     client = GitHubClient(repo_name="owner/repo", token="test-token")
-    client._repo = _FakeRepo(pr, **kwargs)
+    if commit is None:
+        commit = _FakeCommit(combined_state="success")
+    client._repo = _FakeRepo(pr, commit, **repo_kwargs)
     return client
 
 
 def test_merge_pr_blocked_without_human_approval() -> None:
     pr = _FakePR(mergeable=True)
+    client = _client(pr)
 
-    assert _client(pr).merge_pr(1) is False
+    assert client.merge_pr(1) is False
     assert pr.merge_called is False
+    # No network on the no-approval path: no PR/commit reads.
+    assert client._repo.get_pull_calls == []
+    assert client._repo.get_commit_calls == []
 
 
 def test_merge_pr_blocked_when_checks_not_green() -> None:
     for state in ("failure", "pending", "error"):
         pr = _FakePR(mergeable=True)
+        commit = _FakeCommit(combined_state=state)
+        client = _client(pr, commit)
 
-        assert _client(pr, state=state).merge_pr(1, human_approved=True) is False
+        assert client.merge_pr(1, human_approved=True) is False
         assert pr.merge_called is False
+        assert client._repo.get_commit_calls == ["abc123"]
 
 
 def test_merge_pr_blocked_when_checks_unavailable() -> None:
     pr = _FakePR(mergeable=True)
+    client = _client(pr, raise_commit=True)
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
 
-    assert _client(pr, raise_checks=True).merge_pr(1, human_approved=True) is False
+    pr = _FakePR(mergeable=True)
+    client = _client(pr, _FakeCommit(raise_combined=True))
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
+
+    pr = _FakePR(mergeable=True)
+    client = _client(pr, _FakeCommit(combined_state="success", raise_checks=True))
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
+
+    pr = _FakePR(mergeable=True)
+    client = _client(pr, raise_pull=True)
+    assert client.merge_pr(1, human_approved=True) is False
     assert pr.merge_called is False
 
 
 def test_merge_pr_blocked_when_not_mergeable() -> None:
     pr = _FakePR(mergeable=False)
+    commit = _FakeCommit(combined_state="success", check_runs=[_FakeCheckRun()])
+    client = _client(pr, commit)
 
-    assert _client(pr).merge_pr(1, human_approved=True) is False
+    assert client.merge_pr(1, human_approved=True) is False
     assert pr.merge_called is False
 
 
 def test_merge_pr_merges_when_approved_and_green() -> None:
-    pr = _FakePR(mergeable=True)
+    pr = _FakePR(mergeable=True, head_sha="abc123")
+    commit = _FakeCommit(
+        combined_state="success",
+        statuses=[SimpleNamespace(state="success")],
+        check_runs=[_FakeCheckRun(status="completed", conclusion="success")],
+    )
+    client = _client(pr, commit)
 
-    assert _client(pr).merge_pr(1, human_approved=True) is True
+    assert client.merge_pr(1, human_approved=True) is True
     assert pr.merge_called is True
+    assert pr.merge_kwargs["sha"] == "abc123"
+    assert client._repo.get_commit_calls == ["abc123"]
+    assert client._repo.get_pull_calls == [1]
+
+
+def test_merge_pr_status_only_success() -> None:
+    pr = _FakePR(head_sha="status-sha")
+    commit = _FakeCommit(
+        combined_state="success",
+        statuses=[SimpleNamespace(state="success")],
+        check_runs=[],
+    )
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True) is True
+    assert pr.merge_kwargs["sha"] == "status-sha"
+
+
+def test_merge_pr_check_only_success() -> None:
+    # GitHub represents empty combined as pending; with no statuses, green
+    # check runs alone are success.
+    pr = _FakePR(head_sha="checks-sha")
+    commit = _FakeCommit(
+        combined_state="pending",
+        statuses=[],
+        check_runs=[
+            _FakeCheckRun(status="completed", conclusion="success"),
+            _FakeCheckRun(status="completed", conclusion="success"),
+        ],
+    )
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True) is True
+    assert pr.merge_kwargs["sha"] == "checks-sha"
+
+
+@pytest.mark.parametrize(
+    "combined",
+    [None, SimpleNamespace(state="pending"), SimpleNamespace(state="pending", statuses=None)],
+)
+def test_missing_legacy_response_does_not_allow_check_only_merge(monkeypatch, combined):
+    pr = _FakePR()
+    commit = _FakeCommit(check_runs=[_FakeCheckRun()])
+    monkeypatch.setattr(commit, "get_combined_status", lambda: combined)
+
+    assert _client(pr, commit).merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
+
+
+def test_merge_pr_blocked_when_check_runs_pending_despite_success_statuses() -> None:
+    for run_status in ("queued", "in_progress", "requested", "waiting"):
+        pr = _FakePR(mergeable=True)
+        commit = _FakeCommit(
+            combined_state="success",
+            statuses=[SimpleNamespace(state="success")],
+            check_runs=[_FakeCheckRun(status=run_status, conclusion=None)],
+        )
+        client = _client(pr, commit)
+
+        assert client.merge_pr(1, human_approved=True) is False
+        assert pr.merge_called is False
+
+    pr = _FakePR(mergeable=True)
+    commit = _FakeCommit(
+        combined_state="success",
+        statuses=[SimpleNamespace(state="success")],
+        check_runs=[_FakeCheckRun(status="completed", conclusion=None)],
+    )
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
+
+
+def test_merge_pr_blocked_when_check_runs_failing_despite_success_statuses() -> None:
+    for conclusion in ("failure", "cancelled", "timed_out", "action_required", "stale"):
+        pr = _FakePR(mergeable=True)
+        commit = _FakeCommit(
+            combined_state="success",
+            statuses=[SimpleNamespace(state="success")],
+            check_runs=[_FakeCheckRun(status="completed", conclusion=conclusion)],
+        )
+        client = _client(pr, commit)
+
+        assert client.merge_pr(1, human_approved=True) is False
+        assert pr.merge_called is False
+
+
+def test_merge_pr_blocked_when_check_runs_neutral_or_skipped() -> None:
+    """Conservative: only an explicit success conclusion counts as green."""
+    for conclusion in ("neutral", "skipped"):
+        pr_status = _FakePR()
+        commit_status = _FakeCommit(
+            combined_state="success",
+            statuses=[SimpleNamespace(state="success")],
+            check_runs=[_FakeCheckRun(status="completed", conclusion=conclusion)],
+        )
+        assert _client(pr_status, commit_status).get_pr_checks_status(1) == "failure"
+
+        pr = _FakePR(mergeable=True)
+        commit = _FakeCommit(
+            combined_state="success",
+            statuses=[SimpleNamespace(state="success")],
+            check_runs=[_FakeCheckRun(status="completed", conclusion=conclusion)],
+        )
+        client = _client(pr, commit)
+
+        assert client.merge_pr(1, human_approved=True) is False
+        assert pr.merge_called is False
+
+
+def test_merge_pr_blocked_when_no_checks() -> None:
+    pr = _FakePR()
+    commit = _FakeCommit(combined_state="pending", statuses=[], check_runs=[])
+    assert _client(pr, commit).get_pr_checks_status(1) == "pending"
+
+    pr = _FakePR(mergeable=True)
+    commit = _FakeCommit(combined_state="pending", statuses=[], check_runs=[])
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is False
+
+
+def test_merge_pr_passes_exact_checked_sha() -> None:
+    pr = _FakePR(head_sha="deadbeef", mergeable=True)
+    commit = _FakeCommit(combined_state="success", check_runs=[_FakeCheckRun()])
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True) is True
+    assert client._repo.get_pull_calls == [1]
+    assert client._repo.get_commit_calls == ["deadbeef"]
+    assert pr.merge_kwargs is not None
+    assert pr.merge_kwargs["sha"] == "deadbeef"
+
+
+def test_merge_pr_concurrent_head_change_rejected() -> None:
+    pr = _FakePR(head_sha="sha-old", mergeable=True, enforce_atomic=True)
+    commit = _FakeCommit(combined_state="success", check_runs=[_FakeCheckRun()])
+
+    def advance_head() -> None:
+        pr.head.sha = "sha-new"
+
+    client = _client(pr, commit, commit_side_effect=advance_head)
+
+    assert client.merge_pr(1, human_approved=True) is False
+    assert pr.merge_called is True
+    assert pr.merge_kwargs["sha"] == "sha-old"
+    assert client._repo.get_commit_calls == ["sha-old"]
+
+
+def test_merge_pr_disable_checks_bypasses_gate_but_uses_atomic_sha() -> None:
+    pr = _FakePR(head_sha="bypass-sha", mergeable=True)
+    commit = _FakeCommit(combined_state="failure")
+    client = _client(pr, commit)
+
+    assert client.merge_pr(1, human_approved=True, require_green_checks=False) is True
+    assert pr.merge_called is True
+    assert pr.merge_kwargs["sha"] == "bypass-sha"
+    assert client._repo.get_commit_calls == []
+    assert client._repo.get_pull_calls == [1]
+
+
+def test_get_pr_checks_status_uses_commit_api() -> None:
+    pr = _FakePR(head_sha="commit-sha")
+    commit = _FakeCommit(combined_state="success", check_runs=[_FakeCheckRun()])
+    client = _client(pr, commit)
+
+    assert client.get_pr_checks_status(1) == "success"
+    assert client._repo.get_pull_calls == [1]
+    assert client._repo.get_commit_calls == ["commit-sha"]
+
+
+def test_get_pr_checks_status_propagates_api_errors() -> None:
+    pr = _FakePR()
+    with pytest.raises(RuntimeError):
+        _client(pr, raise_commit=True).get_pr_checks_status(1)
+
+    pr = _FakePR()
+    with pytest.raises(RuntimeError):
+        _client(pr, _FakeCommit(raise_combined=True)).get_pr_checks_status(1)
+
+    pr = _FakePR()
+    with pytest.raises(RuntimeError):
+        _client(pr, _FakeCommit(raise_checks=True)).get_pr_checks_status(1)
+
+
+def test_fake_repo_has_no_combined_status_method() -> None:
+    """Guards against reintroducing the nonexistent Repository.get_combined_status."""
+    assert not hasattr(_FakeRepo, "get_combined_status")
+    pr = _FakePR()
+    client = _client(pr)
+    assert not hasattr(client._repo, "get_combined_status")
+
+
+def test_pygithub_signatures_when_available() -> None:
+    """When PyGithub is installed, verify our usage matches its real surface.
+
+    Skips (documents unavailable) in the shared venv, which lacks `github`.
+    """
+    try:
+        import inspect
+
+        from github.Commit import Commit
+        from github.PullRequest import PullRequest
+        from github.Repository import Repository
+    except ImportError:
+        pytest.skip("PyGithub not installed; fakes verified against 2.10.0 docs (see header)")
+    assert hasattr(Repository, "get_commit")
+    assert hasattr(Repository, "get_pull")
+    assert not hasattr(Repository, "get_combined_status")
+    assert hasattr(Commit, "get_combined_status")
+    assert hasattr(Commit, "get_check_runs")
+    assert "sha" in inspect.signature(PullRequest.merge).parameters
+    assert "commit_message" in inspect.signature(PullRequest.merge).parameters
 
 
 # ── Coordinator auto-PR approval ────────────────────────────

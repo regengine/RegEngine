@@ -165,19 +165,23 @@ class GitHubClient:
         human_approved: bool = False,
         require_green_checks: bool = True,
     ) -> bool:
-        """Merge a pull request.
+        """Require explicit approval and, by default, successful CI signals.
 
-        Merging requires explicit human approval (human_approved=True, off by
-        default) and, unless require_green_checks is disabled, green CI checks
-        for the PR head commit. Refuses to merge otherwise.
+        Capture one head SHA for both checks and GitHub's atomic merge guard.
+        Only an explicit success counts as green; missing data blocks merging.
         """
         if not human_approved:
             logger.warning("pr_merge_blocked", number=pr_number, reason="missing_human_approval")
             return False
-        pr = self.repo.get_pull(pr_number)
+        try:
+            pr = self.repo.get_pull(pr_number)
+            head_sha = pr.head.sha
+        except Exception:
+            logger.warning("pr_merge_blocked", number=pr_number, reason="checks_unavailable")
+            return False
         if require_green_checks:
             try:
-                checks_state = self.get_pr_checks_status(pr_number)
+                checks_state = self._get_commit_checks_state(head_sha)
             except Exception:
                 logger.warning("pr_merge_blocked", number=pr_number, reason="checks_unavailable")
                 return False
@@ -193,7 +197,7 @@ class GitHubClient:
             logger.warning("pr_not_mergeable", number=pr_number)
             return False
         try:
-            status = pr.merge(commit_message=commit_message or f"Swarm merge PR #{pr_number}")
+            status = pr.merge(commit_message=commit_message or f"Swarm merge PR #{pr_number}", sha=head_sha)
             logger.info("pr_merged", number=pr_number, success=status.merged)
             return status.merged
         except Exception:
@@ -201,11 +205,58 @@ class GitHubClient:
             return False
 
     def get_pr_checks_status(self, pr_number: int) -> str:
-        """Get the combined status of CI checks for a PR."""
+        """Evaluate the PR head's legacy statuses and Check Runs; API errors propagate."""
         pr = self.repo.get_pull(pr_number)
-        ref = pr.head.sha
-        status = self.repo.get_combined_status(ref)
-        return status.state  # 'success', 'failure', 'pending', etc.
+        head_sha = pr.head.sha
+        return self._get_commit_checks_state(head_sha)
+
+    def _get_commit_checks_state(self, commit_sha: str) -> str:
+        """Require every reported status and Check Run to succeed.
+
+        An explicit empty status list permits Check-Runs-only success; GitHub
+        reports its combined state as pending. An absent list is unavailable.
+        No signals, incomplete runs or missing data remain pending. Completed
+        runs with neutral/skipped or any other non-success conclusion fail.
+        GitHub still enforces repository branch protection on the merge call.
+        """
+        commit = self.repo.get_commit(commit_sha)
+        combined = commit.get_combined_status()
+        if combined is None:
+            return "pending"
+        raw_statuses = getattr(combined, "statuses", None)
+        if raw_statuses is None:
+            return "pending"
+        try:
+            status_list = list(raw_statuses)
+        except TypeError:
+            return "pending"
+        has_statuses = len(status_list) > 0
+
+        check_runs_iter = commit.get_check_runs()
+        if check_runs_iter is None:
+            return "pending"
+        check_runs = list(check_runs_iter)
+        has_checks = len(check_runs) > 0
+
+        if not has_statuses and not has_checks:
+            return "pending"
+
+        if has_statuses:
+            combined_state = getattr(combined, "state", None)
+            if combined_state != "success":
+                return combined_state if isinstance(combined_state, str) else "pending"
+
+        for run in check_runs:
+            status = getattr(run, "status", None)
+            if status != "completed":
+                return "pending"
+            conclusion = getattr(run, "conclusion", None)
+            if conclusion is None:
+                return "pending"
+            if conclusion != "success":
+                return "failure"
+
+        return "success"
 
 
 class IssueLabelClassifier:
