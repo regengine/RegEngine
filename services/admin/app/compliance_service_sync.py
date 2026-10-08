@@ -79,6 +79,7 @@ class ComplianceServiceSync:
         tenant_id: UUID,
         status_filter: Optional[str] = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> List[ComplianceAlertModel]:
         """Get alerts for a tenant."""
         query = select(ComplianceAlertModel).where(ComplianceAlertModel.tenant_id == tenant_id)
@@ -86,7 +87,7 @@ class ComplianceServiceSync:
         if status_filter:
             query = query.where(ComplianceAlertModel.status == status_filter)
 
-        query = query.order_by(desc(ComplianceAlertModel.created_at)).limit(limit)
+        query = query.order_by(desc(ComplianceAlertModel.created_at)).limit(limit).offset(offset)
 
         result = self.session.execute(query)
         return result.scalars().all()
