@@ -49,7 +49,7 @@ def retry_counts_clean():
 
 
 # ---------------------------------------------------------------------------
-# Bug A — _send_to_fsma_dlq must swallow Kafka delivery failures
+# Bug A: _send_to_fsma_dlq must swallow Kafka delivery failures
 # ---------------------------------------------------------------------------
 
 
@@ -110,7 +110,7 @@ class TestFsmaDlqSwallowsKafkaFailures:
 
 
 # ---------------------------------------------------------------------------
-# Bug B — transient producer.send KafkaError must use the retry budget
+# Bug B: transient producer.send KafkaError must use the retry budget
 # ---------------------------------------------------------------------------
 
 
@@ -274,7 +274,7 @@ class TestSendKafkaErrorUsesRetryBudget:
 
 
 # ---------------------------------------------------------------------------
-# Bug C — garbage LLM source_span_start must not discard the document
+# Bug C: garbage LLM source_span_start must not discard the document
 # ---------------------------------------------------------------------------
 
 
@@ -343,7 +343,7 @@ class TestLlmSpanStartCoercion:
 
 
 # ---------------------------------------------------------------------------
-# Bug D — health server must set SO_REUSEADDR before bind
+# Bug D: health server must set SO_REUSEADDR before bind
 # ---------------------------------------------------------------------------
 
 
