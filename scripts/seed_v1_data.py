@@ -6,14 +6,22 @@ import requests
 
 INGEST_URL = "http://localhost:8002/v1/ingest"
 LIVE_FDA_URL = "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods"
-API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
 TENANT_ID = os.environ.get("REGENGINE_TENANT_ID", "00000000-0000-0000-0000-000000000000")
 
-HEADERS = {
-    "X-RegEngine-API-Key": API_KEY,
-    "X-Tenant-ID": TENANT_ID,
-    "Content-Type": "application/json",
-}
+
+def get_api_key():
+    key = os.environ.get("REGENGINE_API_KEY", "")
+    if not key:
+        raise SystemExit("REGENGINE_API_KEY is not set; refusing to seed without a real API credential.")
+    return key
+
+
+def build_headers(api_key):
+    return {
+        "X-RegEngine-API-Key": api_key,
+        "X-Tenant-ID": TENANT_ID,
+        "Content-Type": "application/json",
+    }
 
 
 def log(msg):
@@ -21,6 +29,8 @@ def log(msg):
 
 
 def seed_v1(run_id):
+    api_key = get_api_key()
+    headers = build_headers(api_key)
     log(f"Seeding V1 (Old World) data for run {run_id}...")
 
     unique_url = f"{LIVE_FDA_URL}?run={run_id}"
@@ -40,7 +50,7 @@ def seed_v1(run_id):
     payload = {"text": content, "source_url": unique_url, "source_system": "seed_script", "vertical": "food_safety"}
 
     try:
-        resp = requests.post(INGEST_URL, json=payload, headers=HEADERS)
+        resp = requests.post(INGEST_URL, json=payload, headers=headers)
         if resp.status_code == 200:
             log("✅ V1 Ingest Accepted")
             return True
