@@ -43,25 +43,35 @@ class KafkaEventProducer:
         # #2711: async delivery failures observed via send-future errbacks.
         # Reconciled into (success, failures) after flush() by the batch
         # emitters — local ENQUEUE success is not delivery success.
-        self._delivery_failures = 0
+        # Keyed by topic so a batch spanning two topics (enforcement +
+        # alerts) reconciles each topic's failures on its own; an alert
+        # delivery failure must not move the enforcement ack gate.
+        self._delivery_failures: dict[str, int] = {}
         self._delivery_lock = threading.Lock()
 
     def _note_delivery_failure(self, topic: str, exc: BaseException) -> None:
         """Errback for send futures: count + log an async delivery failure."""
         with self._delivery_lock:
-            self._delivery_failures += 1
+            self._delivery_failures[topic] = self._delivery_failures.get(topic, 0) + 1
         logger.error(
             "kafka_delivery_failed",
             topic=topic,
             error=str(exc),
         )
 
-    def take_delivery_failures(self) -> int:
-        """Return and reset the async delivery-failure count (post-flush)."""
+    def take_delivery_failures(self, topic: Optional[str] = None) -> int:
+        """Return and reset the async delivery-failure count (post-flush).
+
+        With a topic, only that topic's failures are returned and cleared;
+        without one, the total across all topics is returned and everything
+        is cleared (the pre-existing behavior batch emitters relied on).
+        """
         with self._delivery_lock:
-            count = self._delivery_failures
-            self._delivery_failures = 0
-            return count
+            if topic is None:
+                count = sum(self._delivery_failures.values())
+                self._delivery_failures.clear()
+                return count
+            return self._delivery_failures.pop(topic, 0)
 
     def _get_producer(self) -> KafkaProducerLib:
         """Get or create Kafka producer.
@@ -201,11 +211,18 @@ class KafkaEventProducer:
     def emit_batch(self, items: list[EnforcementItem]) -> tuple[int, int]:
         """Emit a batch of enforcement items.
 
+        The returned counts cover the enforcement topic only: alert sends
+        share this flush window, but their failures are reconciled against
+        the alerts topic and reported via logs, so a failing alert can
+        neither withhold the enforcement seen-ack nor pass as an
+        enforcement failure.
+
         Returns:
             Tuple of (success_count, failure_count)
         """
         success = 0
         failures = 0
+        alert_enqueue_failures = 0
 
         for item in items:
             # Emit to enforcement.changes
@@ -216,18 +233,34 @@ class KafkaEventProducer:
 
             # Also emit high-priority alerts
             if item.severity.value in ["critical", "high"]:
-                self.emit_high_priority_alert(item)
+                if not self.emit_high_priority_alert(item):
+                    alert_enqueue_failures += 1
 
         # Flush to ensure all messages are sent
         self.flush()
 
         # #2711: reconcile async delivery failures surfaced during flush —
-        # enqueue success is not delivery success. Covers every message
-        # flushed in this window (including high-priority alert sends).
-        undelivered = self.take_delivery_failures()
+        # enqueue success is not delivery success. Reconciled per topic:
+        # only enforcement-topic failures (plus a flush-level timeout,
+        # which leaves enforcement delivery unknown) move the enforcement
+        # counts that gate the seen-ack in services/scheduler/service.py.
+        undelivered = self.take_delivery_failures(self.topic_enforcement)
+        undelivered += self.take_delivery_failures("<flush>")
         if undelivered:
             failures += undelivered
             success = max(0, success - undelivered)
+
+        # Alert-topic failures belong to the alerts sends, not to the
+        # enforcement batch: surface them loudly without touching the
+        # counts above.
+        alert_undelivered = self.take_delivery_failures(self.topic_alerts)
+        if alert_enqueue_failures or alert_undelivered:
+            logger.error(
+                "alert_batch_delivery_failures",
+                enqueue_failures=alert_enqueue_failures,
+                delivery_failures=alert_undelivered,
+                topic=self.topic_alerts,
+            )
 
         return success, failures
 
