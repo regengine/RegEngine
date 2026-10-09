@@ -62,7 +62,32 @@ def _actor():
 
 
 def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
+
+
+def test_run_helper_does_not_leave_event_loops_unclosed(monkeypatch):
+    """Every loop ``_run`` creates must end up closed, otherwise each call
+    leaks file descriptors."""
+    created = []
+    real_new_event_loop = asyncio.new_event_loop
+
+    def _tracking_new_event_loop(*args, **kwargs):
+        loop = real_new_event_loop(*args, **kwargs)
+        created.append(loop)
+        return loop
+
+    # ``asyncio.run`` builds its loop via ``asyncio.events``, while a bare
+    # ``asyncio.new_event_loop()`` call goes through the package attribute,
+    # so watch both paths.
+    monkeypatch.setattr(asyncio, "new_event_loop", _tracking_new_event_loop)
+    monkeypatch.setattr(asyncio.events, "new_event_loop", _tracking_new_event_loop)
+
+    async def _noop():
+        return 42
+
+    assert _run(_noop()) == 42
+    assert created, "expected the helper to create an event loop"
+    assert all(loop.is_closed() for loop in created), "helper left an event loop unclosed, leaking descriptors"
 
 
 # ---------------------------------------------------------------------------
