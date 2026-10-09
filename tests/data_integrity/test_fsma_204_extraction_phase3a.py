@@ -12,13 +12,30 @@ INGEST_SERVICE_URL = os.getenv("INGEST_SERVICE_URL", "http://localhost:8002")
 
 # Test Data
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
-API_KEY = os.getenv("REGENGINE_TEST_API_KEY", "rge_phase2b.testsecret123")
+# No default: the caller must provide a test-only key via the environment.
+# This keeps even test credentials out of source control.
+API_KEY = os.getenv("REGENGINE_TEST_API_KEY")
 
-HEADERS = {
-    "X-RegEngine-API-Key": API_KEY,
-    "X-Tenant-ID": TENANT_ID,
-    "Content-Type": "application/json",
-}
+# Explicit opt-in gate for the live external FDA fetch below. The test
+# skips unless the operator sets REGENGINE_ALLOW_LIVE_FDA_FETCH=1.
+LIVE_FDA_FETCH_ENABLED = os.getenv("REGENGINE_ALLOW_LIVE_FDA_FETCH", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
+FDA_RULE_URL = (
+    "https://www.fda.gov/food/food-safety-modernization-act-fsma/"
+    "fsma-final-rule-requirements-additional-traceability-records-certain-foods"
+)
+
+
+def _auth_headers(api_key: str) -> Dict[str, str]:
+    return {
+        "X-RegEngine-API-Key": api_key,
+        "X-Tenant-ID": TENANT_ID,
+        "Content-Type": "application/json",
+    }
 
 
 def _service_available(base_url: str) -> bool:
@@ -44,6 +61,17 @@ class TestFSMA204ExtractionPhase3a:
         2. Poll for Facts
         3. Assert specific facts exist
         """
+        api_key = os.getenv("REGENGINE_TEST_API_KEY")
+        if not api_key:
+            pytest.skip("REGENGINE_TEST_API_KEY is not set; refusing to use a default key")
+        live_enabled = os.getenv("REGENGINE_ALLOW_LIVE_FDA_FETCH", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        if not live_enabled:
+            pytest.skip("live FDA fetch not enabled; set REGENGINE_ALLOW_LIVE_FDA_FETCH=1 to opt in")
+        headers = _auth_headers(api_key)
         if not _service_available(INGEST_SERVICE_URL):
             pytest.skip("ingestion service not running")
         if not _service_available(API_BASE_URL):
@@ -51,20 +79,20 @@ class TestFSMA204ExtractionPhase3a:
 
         # 1. Trigger Ingestion (Idempotent: will return existing if handled, or update)
         payload = {
-            "url": "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods",
+            "url": FDA_RULE_URL,
             "source_system": "fda",
             "document_type": "regulation",
         }
 
         print(f"\n[Phase 3a] Ensuring Document Ingestion...")
-        response = requests.post(f"{INGEST_SERVICE_URL}/v1/ingest/url", json=payload, headers=HEADERS)
+        response = requests.post(f"{INGEST_SERVICE_URL}/v1/ingest/url", json=payload, headers=headers)
         assert response.status_code in [200, 202], f"Ingestion failed: {response.text}"
 
         # 2. Find Authority Document
         found_authority = None
         # We need to reuse the polling logic or assume it exists from Phase 2b
         print("[Phase 3a] Locating Authority Document...")
-        auth_resp = requests.get(f"{API_BASE_URL}/pcos/authorities", headers=HEADERS)
+        auth_resp = requests.get(f"{API_BASE_URL}/pcos/authorities", headers=headers)
         if auth_resp.status_code == 200:
             authorities = auth_resp.json()
             found_authority = next((a for a in authorities if "FDA" in str(a.get("issuer_name", "")).upper()), None)
@@ -80,7 +108,7 @@ class TestFSMA204ExtractionPhase3a:
         timeout = 30
 
         while time.time() - start_time < timeout:
-            facts_resp = requests.get(f"{API_BASE_URL}/pcos/authorities/{found_authority['id']}/facts", headers=HEADERS)
+            facts_resp = requests.get(f"{API_BASE_URL}/pcos/authorities/{found_authority['id']}/facts", headers=headers)
             if facts_resp.status_code == 200:
                 found_facts = facts_resp.json()
                 if len(found_facts) > 0:
