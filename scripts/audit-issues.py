@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 RegEngine Full Audit — GitHub Issue Creator
-Run: GITHUB_TOKEN=ghp_xxx python audit-issues.py
+Run: GITHUB_TOKEN=<redacted> python audit-issues.py
 """
 
 import os

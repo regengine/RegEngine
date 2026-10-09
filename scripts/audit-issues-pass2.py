@@ -2,7 +2,7 @@
 """
 RegEngine Second-Pass Audit — GitHub Issue Creator
 Findings from Security, Legal/Compliance, SRE, and API/DX sweeps.
-Run: GITHUB_TOKEN=ghp_xxx python audit-issues-pass2.py
+Run: GITHUB_TOKEN=<redacted> python audit-issues-pass2.py
 """
 
 import os
