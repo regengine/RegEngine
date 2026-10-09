@@ -479,16 +479,28 @@ class TestPackageManifest:
 
     def test_09_amendment_preserves_original(self, db_session, tenant_id, workflow):
         """Amend package -> old package still intact with original hash."""
+        from sqlalchemy import text
+
+        prior_max = db_session.execute(
+            text("""
+                SELECT COALESCE(MAX(version_number), 0)
+                FROM fsma.response_packages
+                WHERE request_case_id = :case_id
+                  AND tenant_id = :tid
+            """),
+            {"case_id": _State.case_id, "tid": tenant_id},
+        ).scalar()
         amendment = workflow.create_amendment(
             tenant_id,
             _State.case_id,
             generated_by="manifest_test@test.com",
         )
-        assert amendment["version_number"] == 3  # versions 1, 2 from reproducibility test, now 3
+        # Assert a relative increment, not a hard-coded version number, so
+        # this test does not depend on how many packages earlier tests
+        # assembled and keeps passing if tests are reordered.
+        assert amendment["version_number"] == prior_max + 1
 
         # Re-read version 1 — must still have original hash and contents
-        from sqlalchemy import text
-
         v1 = (
             db_session.execute(
                 text("""
