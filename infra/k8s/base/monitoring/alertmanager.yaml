@@ -45,8 +45,8 @@ metadata:
   labels:
     app: alertmanager
 spec:
-  serviceName: alertmanager
-  replicas: 1
+  serviceName: alertmanager-mesh
+  replicas: 3
   selector:
     matchLabels:
       app: alertmanager
@@ -66,10 +66,13 @@ spec:
             - --config.file=/etc/alertmanager/alertmanager.yml
             - --storage.path=/alertmanager
             - --web.listen-address=:9093
-            - --cluster.listen-address=
+            - --cluster.listen-address=:9094
+            - --cluster.peer=alertmanager-0.alertmanager-mesh:9094
           ports:
             - name: web
               containerPort: 9093
+            - name: cluster
+              containerPort: 9094
           volumeMounts:
             - name: config
               mountPath: /etc/alertmanager
@@ -135,6 +138,25 @@ spec:
       targetPort: web
   type: ClusterIP
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager-mesh
+  labels:
+    app: alertmanager
+spec:
+  selector:
+    app: alertmanager
+  ports:
+    - name: cluster
+      protocol: TCP
+      port: 9094
+      targetPort: cluster
+  # Headless: gives each replica a stable DNS record
+  # (alertmanager-N.alertmanager-mesh) so the cluster peers can find
+  # each other. Clients keep using the ClusterIP service above.
+  clusterIP: None
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -156,7 +178,21 @@ spec:
       ports:
         - protocol: TCP
           port: 9093
+    - from:
+        - podSelector:
+            matchLabels:
+              app: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9094
   egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: alertmanager
+      ports:
+        - protocol: TCP
+          port: 9094
     - to: []
       ports:
         - protocol: TCP
