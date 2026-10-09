@@ -4,6 +4,7 @@ RegEngine Database Initialization - Apply Neo4j Constraints
 This script applies the required database constraints for production deployment.
 """
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -14,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.neo4j_utils import Neo4jClient
 
 
-def apply_constraints(neo4j_client: Neo4jClient):
+async def apply_constraints(neo4j_client: Neo4jClient):
     """Apply all required database constraints."""
 
     constraints = [
@@ -171,12 +172,12 @@ def apply_constraints(neo4j_client: Neo4jClient):
     print("=" * 60)
 
     try:
-        with neo4j_client.driver.session() as session:
+        async with neo4j_client.session() as session:
             # Apply constraints
             for constraint in constraints:
                 print(f"  ➤ Creating constraint: {constraint['name']}")
                 try:
-                    session.run(constraint["query"])
+                    await session.run(constraint["query"])
                     print(f"    ✅ Success")
                 except Exception as e:
                     print(f"    ⚠️  Warning: {str(e)}")
@@ -186,21 +187,21 @@ def apply_constraints(neo4j_client: Neo4jClient):
             for index in indexes:
                 print(f"  ➤ Creating index: {index['name']}")
                 try:
-                    session.run(index["query"])
+                    await session.run(index["query"])
                     print(f"    ✅ Success")
                 except Exception as e:
                     print(f"    ⚠️  Warning: {str(e)}")
 
             # Verify constraints
             print("\n✅ Verification - Active Constraints:")
-            result = session.run("SHOW CONSTRAINTS")
-            for record in result:
+            result = await session.run("SHOW CONSTRAINTS")
+            async for record in result:
                 print(f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}")
 
             # Verify indexes
             print("\n✅ Verification - Active Indexes:")
-            result = session.run("SHOW INDEXES")
-            for record in result:
+            result = await session.run("SHOW INDEXES")
+            async for record in result:
                 print(f"  • {record.get('name', 'unnamed')}: {record.get('type', 'unknown')}")
 
     except Exception as e:
@@ -216,10 +217,13 @@ if __name__ == "__main__":
     print("RegEngine - Database Constraint Initialization")
     print("=" * 60 + "\n")
 
+    async def _run():
+        async with Neo4jClient() as neo4j:
+            await apply_constraints(neo4j)
+
     # Initialize Neo4j client
     try:
-        neo4j = Neo4jClient()
-        apply_constraints(neo4j)
+        asyncio.run(_run())
     except Exception as e:
         print(f"❌ Failed to connect to Neo4j: {str(e)}")
         print("\nPlease ensure:")
