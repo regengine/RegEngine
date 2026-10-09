@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, ReactNode, useCallback, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, Lock, Sparkles } from 'lucide-react';
 import { submitAssessment, type AssessmentFormData } from '@/app/actions/submit-assessment';
 import { useAuth } from '@/lib/auth-context';
@@ -66,6 +66,10 @@ export function LeadGate({
 
     const [step, setStep] = useState<'gate' | 'enrich' | 'done'>(authenticatedBypass ? 'done' : 'gate');
     const [submitting, setSubmitting] = useState(false);
+    // Synchronous double-submit guard. `submitting` state alone is not
+    // enough: state updates flush on re-render, so two submit events fired
+    // before the next render would both pass a state check and post twice.
+    const submittingRef = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [gateData, setGateData] = useState<Partial<AssessmentFormData>>({});
     // Capture UTM params on mount
@@ -106,6 +110,8 @@ export function LeadGate({
     const handleGateSubmit = useCallback(
         async (e: FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            if (submittingRef.current) return;
+            submittingRef.current = true;
             setSubmitting(true);
             setError(null);
             const fd = new FormData(e.currentTarget);
@@ -122,18 +128,22 @@ export function LeadGate({
                 ...utmParams,
             };
 
-            const result = await submitAssessment(data);
-            setSubmitting(false);
+            try {
+                const result = await submitAssessment(data);
 
-            if (!result.success) {
-                setError(result.error || 'Something went wrong.');
-                return;
+                if (!result.success) {
+                    setError(result.error || 'Something went wrong.');
+                    return;
+                }
+
+                // Persist a non-PII flag so returning visitors bypass the gate
+                try { localStorage.setItem('re_lead_captured', '1'); } catch {}
+                setGateData(data);
+                setStep('enrich');
+            } finally {
+                submittingRef.current = false;
+                setSubmitting(false);
             }
-
-            // Persist a non-PII flag so returning visitors bypass the gate
-            try { localStorage.setItem('re_lead_captured', '1'); } catch {}
-            setGateData(data);
-            setStep('enrich');
         },
         [source, toolContext, utmParams],
     );
@@ -141,25 +151,31 @@ export function LeadGate({
     const handleEnrichSubmit = useCallback(
         async (e: FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            if (submittingRef.current) return;
+            submittingRef.current = true;
             setSubmitting(true);
 
-            const fd = new FormData(e.currentTarget);
-            const enrichData: AssessmentFormData = {
-                ...gateData as AssessmentFormData,
-                facilityCount: fd.get('facilityCount') as string,
-                annualRevenue: fd.get('annualRevenue') as string,
-                currentSystem: fd.get('currentSystem') as string,
-                biggestRetailer: fd.get('biggestRetailer') as string,
-                complianceDeadline: fd.get('complianceDeadline') as string,
-                recentFdaInspection: fd.get('recentFdaInspection') as string,
-                phone: fd.get('phone') as string,
-                productCategories: fd.get('productCategories') as string,
-            };
+            try {
+                const fd = new FormData(e.currentTarget);
+                const enrichData: AssessmentFormData = {
+                    ...gateData as AssessmentFormData,
+                    facilityCount: fd.get('facilityCount') as string,
+                    annualRevenue: fd.get('annualRevenue') as string,
+                    currentSystem: fd.get('currentSystem') as string,
+                    biggestRetailer: fd.get('biggestRetailer') as string,
+                    complianceDeadline: fd.get('complianceDeadline') as string,
+                    recentFdaInspection: fd.get('recentFdaInspection') as string,
+                    phone: fd.get('phone') as string,
+                    productCategories: fd.get('productCategories') as string,
+                };
 
-            await submitAssessment(enrichData);
-            setSubmitting(false);
-            setStep('done');
-            onUnlock?.();
+                await submitAssessment(enrichData);
+                setStep('done');
+                onUnlock?.();
+            } finally {
+                submittingRef.current = false;
+                setSubmitting(false);
+            }
         },
         [gateData, onUnlock],
     );
