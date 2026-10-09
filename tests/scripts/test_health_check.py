@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
+import types
 from pathlib import Path
 
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "health_check.py"
@@ -42,6 +44,36 @@ def test_agent_helper_health_check_rejects_unexpected_agent_specs(tmp_path, monk
     monkeypatch.setattr(_MODULE, "REPO_ROOT", tmp_path)
 
     assert _MODULE.check_agent_helper() is False
+
+
+def test_redis_health_check_logs_failure_before_defaulting(monkeypatch) -> None:
+    failure = RuntimeError("connection refused")
+
+    fake_redis = types.ModuleType("redis")
+
+    def _raise_from_url(url):  # noqa: ANN001, ANN202
+        raise failure
+
+    fake_redis.from_url = _raise_from_url
+    monkeypatch.setitem(sys.modules, "redis", fake_redis)
+
+    messages: list[str] = []
+
+    class _Recorder:
+        def warning(self, message, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+            messages.append(str(message))
+
+        def __getattr__(self, name):  # noqa: ANN003
+            def _sink(*args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+                messages.append(f"{name}: {' '.join(str(a) for a in args)}")
+
+            return _sink
+
+    monkeypatch.setattr(_MODULE, "log", _Recorder())
+
+    assert _MODULE.check_redis_distributed() is False
+    assert messages, "expected the Redis failure to be logged before defaulting"
+    assert any("connection refused" in message for message in messages)
 
 
 def _write_agent_spec(agents_dir: Path, filename: str) -> None:
