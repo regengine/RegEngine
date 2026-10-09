@@ -1,3 +1,18 @@
+"""Shared SQLAlchemy engine and session helpers for RegEngine services.
+
+This module builds the process-wide Postgres engine, hands out sessions
+through sync and async context managers plus a FastAPI dependency, and
+adds small resilience helpers (bulkhead limits, circuit breaker, retry
+with jitter) with Prometheus gauges for pool and breaker state.
+
+Key invariants: every engine transaction carries the tenant RLS baseline
+installed by shared.tenant_context at import time; production refuses to
+boot without DATABASE_URL and treats RLS posture failures as fatal;
+SQLite URLs skip pool sizing and are used by tests; startup probes
+compare database identity values returned by Postgres, never raw URLs,
+so credentials stay out of logs.
+"""
+
 import asyncio
 import hashlib
 import os
@@ -37,7 +52,17 @@ async_bulkhead = asyncio.Semaphore(BULKHEAD_LIMIT)
 
 
 class CircuitBreaker:
+    """Track consecutive OperationalError failures and open the circuit after a threshold.
+
+    While open, callers get ConnectionError until the backoff window passes,
+    then one trial call is allowed in HALF_OPEN state. A successful call
+    closes the circuit and resets the count. Only OperationalError counts
+    as a failure; other exceptions pass through without changing breaker
+    state. Each transition updates the db_circuit_breaker_state gauge.
+    """
+
     def __init__(self, failure_threshold=5, base_recovery=30, backoff_factor=2):
+        """Store the failure threshold and the recovery timing parameters."""
         self.failure_threshold = failure_threshold
         self.base_recovery = base_recovery
         self.backoff_factor = backoff_factor
@@ -46,6 +71,13 @@ class CircuitBreaker:
         self.state = "CLOSED"
 
     def call(self, func, *args, **kwargs):
+        """Run func through the breaker and return its result.
+
+        Returns the value directly when func is not callable. Raises
+        ConnectionError while the circuit is open and the backoff window
+        has not passed. Records OperationalError failures and re-raises
+        them.
+        """
         if self.state == "OPEN":
             elapsed = time.time() - self.last_failure
             recovery = self.base_recovery * (self.backoff_factor**self.failure_count)
@@ -500,17 +532,12 @@ def _runtime_cutover_canary(
         _record_rls_metric(label=label, inert=True)
         return False
 
-    expected_policy_fingerprint = _EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256.get(
-        expected_role
-    )
+    expected_policy_fingerprint = _EXPECTED_RUNTIME_POLICY_MANIFEST_SHA256.get(expected_role)
     policy_manifest = row[1]
-    actual_policy_fingerprint = hashlib.sha256(
-        str(policy_manifest).encode("utf-8")
-    ).hexdigest()
+    actual_policy_fingerprint = hashlib.sha256(str(policy_manifest).encode("utf-8")).hexdigest()
     checks = (
         bool(row[0]),
-        bool(expected_policy_fingerprint)
-        and actual_policy_fingerprint == expected_policy_fingerprint,
+        bool(expected_policy_fingerprint) and actual_policy_fingerprint == expected_policy_fingerprint,
         bool(row[2]),
         bool(row[3]),
         bool(row[4]),
@@ -556,8 +583,7 @@ def check_rls_posture(
     if eng.dialect.name != "postgresql":
         if required:
             raise RuntimeError(
-                f"RLS enforcement required but the '{label}' engine uses "
-                f"{eng.dialect.name!r}, not PostgreSQL."
+                f"RLS enforcement required but the '{label}' engine uses {eng.dialect.name!r}, not PostgreSQL."
             )
         return "unknown"
 
@@ -565,8 +591,7 @@ def check_rls_posture(
         eng,
         label=label,
         statement=text(
-            "SELECT session_user, current_user, rolsuper, rolbypassrls "
-            "FROM pg_roles WHERE rolname = current_user"
+            "SELECT session_user, current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
         ),
         required=required,
     )
