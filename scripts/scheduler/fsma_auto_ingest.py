@@ -262,29 +262,32 @@ class FSMAAutoIngester:
             return False
 
     async def ingest_supply_chain(self, chain: dict) -> bool:
-        """Ingest a supply chain's events into the system."""
-        headers = {"X-RegEngine-API-Key": self.api_key, "Content-Type": "application/json"}
+        """Ingest a supply chain's events into the system.
+
+        Returns True only when the ingestion endpoint accepts the events.
+        Any transport error or non-2xx response is logged and returns False.
+        """
+        if self.client is None:
+            raise RuntimeError("FSMAAutoIngester must be used as an async context manager")
+
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["X-RegEngine-API-Key"] = self.api_key
 
         try:
-            # In production, this would call the actual ingestion endpoint
-            # For demo, we'll simulate success
             logger.info(f"Ingesting supply chain for TLC: {chain['tlc']}")
             logger.info(f"  Product: {chain['product']['name']}")
             logger.info(f"  Events: {len(chain['events'])}")
 
-            # Simulate API call
-            # response = await self.client.post(
-            #     f"{self.graph_url}/v1/fsma/ingest",
-            #     headers=headers,
-            #     json={"events": chain["events"]}
-            # )
-            # return response.status_code == 200
-
-            # For demo purposes, just log the data
-            for event in chain["events"]:
-                logger.debug(f"  Event: {event['type']} at {event['facility']}")
-
-            return True
+            response = await self.client.post(
+                f"{self.graph_url}/v1/fsma/ingest",
+                headers=headers,
+                json={"events": chain["events"]},
+            )
+            if 200 <= response.status_code < 300:
+                return True
+            logger.error(f"Ingestion failed: HTTP {response.status_code} for TLC {chain['tlc']}")
+            return False
 
         except Exception as e:
             logger.error(f"Ingestion failed: {e}")
@@ -313,7 +316,8 @@ class FSMAAutoIngester:
 
         while True:
             chain = self.generator.generate_supply_chain()
-            await self.ingest_supply_chain(chain)
+            if not await self.ingest_supply_chain(chain):
+                logger.error(f"Continuous ingestion failed for TLC: {chain['tlc']}")
             await asyncio.sleep(interval_seconds)
 
 
@@ -338,6 +342,17 @@ async def run_scheduled(cron_expression: str, api_key: str):
         scheduler.shutdown()
 
 
+def validate_api_key(mode: str, api_key: str) -> None:
+    """Fail fast when an API key is missing outside demo mode.
+
+    Demo mode is allowed to run without authentication. Every other mode
+    talks to the real ingestion endpoint and must not proceed anonymously.
+    Raises SystemExit with a non-zero status when the key is required.
+    """
+    if not api_key and mode != "demo":
+        raise SystemExit(f"API key is required in {mode!r} mode: pass --api-key or set REGENGINE_API_KEY")
+
+
 async def main():
     parser = argparse.ArgumentParser(description="FSMA Auto-Ingestion Scheduler")
     parser.add_argument("--mode", choices=["demo", "watch", "schedule"], default="demo", help="Ingestion mode")
@@ -348,12 +363,16 @@ async def main():
 
     args = parser.parse_args()
 
+    validate_api_key(args.mode, args.api_key)
     if not args.api_key:
         logger.warning("No API key provided, running in demo mode without authentication")
 
     if args.mode == "demo":
         async with FSMAAutoIngester(args.api_key) as ingester:
-            await ingester.run_demo_load(num_chains=args.chains)
+            success_count = await ingester.run_demo_load(num_chains=args.chains)
+        if success_count < args.chains:
+            logger.error(f"Demo load incomplete: {success_count}/{args.chains} chains ingested")
+            raise SystemExit(1)
 
     elif args.mode == "watch":
         async with FSMAAutoIngester(args.api_key) as ingester:
