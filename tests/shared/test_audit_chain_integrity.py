@@ -430,6 +430,51 @@ class TestConvenienceMethods:
 # ─── Storage limits ──────────────────────────────────────────────────────
 
 
+class TestInMemoryChainHeadScope:
+    def test_scope_is_documented_as_single_process(self):
+        """The in-memory chain head must be documented as single-process/test-only."""
+        assert "single-process" in AuditIntegrity.__doc__.lower()
+        assert "test-only" in AuditIntegrity.__doc__.lower()
+        assert "single-process" in AuditIntegrity.sign_event.__doc__.lower()
+
+    def test_two_instances_build_divergent_chains(self):
+        """Two instances (as in two workers) do not continue one shared chain."""
+        actor = _make_actor()
+        first_worker = AuditIntegrity(secret_key="test-secret-key")
+        second_worker = AuditIntegrity(secret_key="test-secret-key")
+
+        event_one = AuditEvent(
+            event_id=str(uuid4()),
+            timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            event_type=AuditEventType.DATA_READ,
+            category=AuditEventCategory.DATA_ACCESS,
+            severity=AuditSeverity.INFO,
+            actor=actor,
+            action="read-1",
+            outcome="success",
+        )
+        event_two = AuditEvent(
+            event_id=str(uuid4()),
+            timestamp=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=1),
+            event_type=AuditEventType.DATA_READ,
+            category=AuditEventCategory.DATA_ACCESS,
+            severity=AuditSeverity.INFO,
+            actor=actor,
+            action="read-2",
+            outcome="success",
+        )
+        first_worker.sign_event(event_one)
+        second_worker.sign_event(event_two)
+
+        # The second worker started its own chain instead of continuing the first.
+        assert event_two.previous_hash is None
+        assert first_worker.verify_chain([event_one, event_two]) is False
+
+        result = verify_audit_chain([event_one, event_two], integrity=first_worker)
+        assert result["is_valid"] is False
+        assert any(entry.get("issue") == "chain_link_broken" for entry in result["tampered_entries"])
+
+
 class TestStorageLimits:
     @pytest.mark.asyncio
     async def test_in_memory_storage_trims_oldest(self):

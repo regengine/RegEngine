@@ -19,7 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 class AuditIntegrity:
-    """Ensure audit log integrity with hash chains."""
+    """Ensure audit log integrity with hash chains.
+
+    Single-process and test-only scope: the chain head (``_last_hash``)
+    is kept in memory on this instance, so two instances (two workers,
+    two processes, or two service replicas) each build their own
+    divergent chain. Their ``previous_hash`` links will not line up
+    with each other. Do not rely on this class to continue one shared
+    chain across workers. Deployments with more than one writer must
+    assign ``previous_hash`` from durable shared state (for example a
+    database-side append) and use ``verify_chain`` or
+    ``verify_audit_chain`` to check the stored chain.
+    """
 
     def __init__(self, secret_key: Optional[str] = None):
         """Initialize integrity checker.
@@ -68,6 +79,13 @@ class AuditIntegrity:
 
     def sign_event(self, event: AuditEvent) -> AuditEvent:
         """Sign an event with integrity hash.
+
+        The ``previous_hash`` link comes from this instance's in-memory
+        chain head, so this method is single-process/test-only: events
+        signed by different instances (workers or processes) form
+        divergent chains that do not verify as one chain. Multi-writer
+        deployments must set ``previous_hash`` from durable shared
+        state instead of sharing this instance.
 
         Args:
             event: Event to sign
