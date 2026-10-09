@@ -40,10 +40,23 @@ def _load(name, path):
     return module
 
 
+def _require_database_url_matches(database):
+    """Fail with a readable message when the evidence DATABASE_URL is missing or mismatched."""
+    database_url = os.environ.get("DATABASE_URL")
+    assert database_url is not None, (
+        "DATABASE_URL must be set and equal REGENGINE_EVIDENCE_TEST_DATABASE_URL "
+        "to run the PostgreSQL evidence regression"
+    )
+    assert database == database_url, (
+        "DATABASE_URL must equal REGENGINE_EVIDENCE_TEST_DATABASE_URL; "
+        "refusing to run the PostgreSQL evidence regression against a different database"
+    )
+
+
 @pytest.fixture
 def workflow(monkeypatch):
+    _require_database_url_matches(DATABASE)
     url = make_url(DATABASE)
-    assert DATABASE == os.environ["DATABASE_URL"]
     assert url.username == "regengine"
     if url.host:
         # The CI job provisions this isolated service database. Never reuse a
