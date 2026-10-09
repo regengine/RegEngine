@@ -16,6 +16,7 @@ from shared.funnel_events import emit_funnel_event
 from .authz import IngestionPrincipal, require_permission
 from .shared.upload_limits import (
     MAX_IMAGE_FILE_SIZE_BYTES,
+    downscale_image_bytes,
     read_upload_with_limit,
     validated_image_content_type,
 )
@@ -231,7 +232,17 @@ def _decode_image_bytes(image_bytes: bytes) -> str:
         ) from exc
 
     try:
-        image = Image.open(io.BytesIO(image_bytes))
+        safe_bytes, _ = downscale_image_bytes(image_bytes)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid image payload") from exc
+
+    try:
+        image = Image.open(io.BytesIO(safe_bytes))
+        image.load()
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Invalid image payload") from exc
 

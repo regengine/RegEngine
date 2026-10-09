@@ -20,6 +20,7 @@ from shared.auth import APIKey, require_api_key
 
 from .shared.upload_limits import (
     MAX_IMAGE_FILE_SIZE_BYTES,
+    downscale_image_bytes,
     read_upload_with_limit,
     validated_image_content_type,
 )
@@ -137,6 +138,11 @@ async def analyze_label(
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty")
     content_type = validated_image_content_type(image_bytes, file.content_type)
+
+    # Enforce the pixel budget and downscale large images before base64
+    # encoding and forwarding to the vision model. This bounds worker
+    # memory and model payload size for decompression bombs.
+    image_bytes, content_type = downscale_image_bytes(image_bytes)
 
     # Encode to base64
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")

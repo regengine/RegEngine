@@ -17,6 +17,13 @@ MAX_EDI_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_IMAGE_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_REGULATION_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB
 
+# Pixel-bomb guards. The byte cap above only bounds compressed bytes: a tiny
+# PNG can still decompress to gigapixels and OOM a worker during decode.
+# Reject images whose pixel count exceeds this budget, and downscale images
+# to this longest side before decode/vision so downstream work is bounded.
+MAX_IMAGE_PIXELS = 25_000_000  # 25 megapixels
+MAX_IMAGE_DECODE_SIDE_PIXELS = 2048
+
 UPLOAD_CHUNK_SIZE_BYTES = 64 * 1024
 _MAX_FILENAME_CHARS = 120
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -215,4 +222,112 @@ def validated_image_content_type(
     content_type = _IMAGE_CONTENT_TYPES.get(str(image_format or "").upper())
     if not content_type:
         raise HTTPException(status_code=400, detail="Unsupported image format")
+    _enforce_image_pixel_budget(image_bytes)
     return content_type
+
+
+def _pillow_max_pixels() -> int | None:
+    """Return the effective Pillow decompression-bomb threshold for this process."""
+    try:
+        from PIL import Image  # type: ignore
+    except ImportError:
+        return None
+    return Image.MAX_IMAGE_PIXELS
+
+
+def _enforce_image_pixel_budget(image_bytes: bytes) -> tuple[int, int]:
+    """Reject images whose decompressed pixel count exceeds the budget.
+
+    Returns the (width, height) when within budget. Raises 413 when the
+    pixel count is over budget or Pillow flags a decompression bomb, and
+    400 when the bytes are not a decodable image.
+    """
+    try:
+        from PIL import Image  # type: ignore
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="Pillow is required for image validation") from exc
+
+    if Image.MAX_IMAGE_PIXELS is None or Image.MAX_IMAGE_PIXELS > MAX_IMAGE_PIXELS:
+        Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            width, height = image.size
+            if width <= 0 or height <= 0:
+                raise HTTPException(status_code=400, detail="Invalid image payload")
+            if width * height > MAX_IMAGE_PIXELS:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(f"Image pixel dimensions too large (max {MAX_IMAGE_PIXELS // 1_000_000} MP)"),
+                )
+            try:
+                image.load()
+            except Exception as exc:
+                if exc.__class__.__name__ == "DecompressionBombError":
+                    raise HTTPException(
+                        status_code=413,
+                        detail=(f"Image pixel dimensions too large (max {MAX_IMAGE_PIXELS // 1_000_000} MP)"),
+                    ) from exc
+                raise HTTPException(status_code=400, detail="Invalid image payload") from exc
+            return width, height
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid image payload") from exc
+
+
+def downscale_image_bytes(
+    image_bytes: bytes,
+    *,
+    max_side: int = MAX_IMAGE_DECODE_SIDE_PIXELS,
+) -> tuple[bytes, str]:
+    """Enforce the pixel budget and downscale large images before decode.
+
+    Returns (possibly re-encoded) image bytes and the actual MIME type.
+    Images already within the decode dimension are returned unchanged to
+    avoid a needless re-encode. Raises 413 when over the pixel budget and
+    400 for invalid or unsupported images.
+    """
+    width, height = _enforce_image_pixel_budget(image_bytes)
+    if max(width, height) <= max_side:
+        try:
+            from PIL import Image  # type: ignore
+        except ImportError as exc:
+            raise HTTPException(status_code=500, detail="Pillow is required for image validation") from exc
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as image:
+                image_format = str(image.format or "").upper()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid image payload") from exc
+        content_type = _IMAGE_CONTENT_TYPES.get(image_format)
+        if not content_type:
+            raise HTTPException(status_code=400, detail="Unsupported image format")
+        return image_bytes, content_type
+
+    try:
+        from PIL import Image  # type: ignore
+    except ImportError as exc:
+        raise HTTPException(status_code=500, detail="Pillow is required for image validation") from exc
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            image.load()
+            image_format = str(image.format or "PNG").upper()
+            working = image.copy()
+        working.thumbnail((max_side, max_side), Image.LANCZOS)
+        if image_format == "JPEG" and working.mode in ("RGBA", "LA", "P"):
+            working = working.convert("RGB")
+        save_format = image_format if image_format in _IMAGE_CONTENT_TYPES else "PNG"
+        buf = io.BytesIO()
+        save_kwargs: dict = {}
+        if save_format == "JPEG":
+            save_kwargs["quality"] = 88
+        working.save(buf, format=save_format, **save_kwargs)
+        safe_bytes = buf.getvalue()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Invalid image payload") from exc
+
+    content_type = _IMAGE_CONTENT_TYPES.get(save_format, "image/png")
+    return safe_bytes, content_type
