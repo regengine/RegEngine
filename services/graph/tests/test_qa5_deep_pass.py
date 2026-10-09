@@ -2,21 +2,21 @@
 
 Four real defects, each pinned so a future refactor fails fast:
 
-1. ``find_gaps`` null-tenant leak — the sibling ``find_broken_chains``
+1. ``find_gaps`` null-tenant leak: the sibling ``find_broken_chains``
    fails closed on an empty tenant (#1301) but ``find_gaps`` kept the
    ``$tenant_id IS NULL OR ...`` shim, so a caller that forgets the
    tenant reads every tenant's gap events.
-2. Compliance-score fanout — ``GET /fsma/compliance/score`` counts
+2. Compliance-score fanout: ``GET /fsma/compliance/score`` counts
    ``count(DISTINCT c)`` controls over ``count(DISTINCT o)`` obligations
    for "obligation_coverage" (documented as "% of obligations that have
    >=1 mapped control") and ``sum(CASE ...)`` over fanned-out join rows
    for fresh evidence against ``count(DISTINCT e)`` items. One evidence
    proving two controls already pushes freshness past 100%.
-3. Regulations mappings leak — ``GET /regulations/mappings`` scopes the
+3. Regulations mappings leak: ``GET /regulations/mappings`` scopes the
    Obligation nodes but not the joined Section nodes, so a cross-tenant
    Section linked to our obligation leaks its regulation name; the
    ``/regulations/list`` section count has the same hole.
-4. Lineage fallback leak — ``LINEAGE_BY_TLC_QUERY`` resolves
+4. Lineage fallback leak: ``LINEAGE_BY_TLC_QUERY`` resolves
    ``superseded_by`` through an unscoped ``prev`` node, leaking a
    cross-tenant TLC into our fact history.
 """
@@ -134,7 +134,7 @@ def _score_request():
 async def test_score_cypher_counts_covered_obligations_distinctly():
     """Coverage must count obligations with a control, not mapped controls.
 
-    Old math: ``count(DISTINCT c) / count(DISTINCT o)`` — three
+    Old math: ``count(DISTINCT c) / count(DISTINCT o)``: three
     obligations with two controls each scores 200% "coverage".
     """
     from services.graph.app.routers.fsma import compliance as compliance_router
