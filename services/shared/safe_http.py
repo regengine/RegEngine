@@ -65,20 +65,40 @@ def _build_ssl_context() -> ssl.SSLContext:
     return ctx
 
 
+def _normalize_host(host: object) -> str:
+    """Normalize a hostname for comparison (case and trailing dot)."""
+    return str(host or "").lower().rstrip(".")
+
+
 class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
     """Async transport that pins the destination IP after validation.
 
     The transport replaces the request URL host with a validated IP literal
     while preserving the original Host header (for correct virtual-host
     routing) and using the original hostname as the TLS SNI/server_hostname.
+
+    The transport is bound to a single host: any request whose host does not
+    match the validated ``original_host`` is refused instead of being
+    silently rewritten to the pinned IP (which would fetch the wrong origin
+    while the caller believes it reached the requested URL).
     """
 
     def __init__(self, *, pinned_ip: str, original_host: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self._pinned_ip = pinned_ip
         self._original_host = original_host
+        self._original_host_key = _normalize_host(original_host)
+
+    def _check_host_match(self, request: httpx.Request) -> None:
+        request_host = _normalize_host(request.url.host)
+        if request_host != self._original_host_key:
+            raise ValueError(
+                f"Refusing to send request for host {request.url.host!r} "
+                f"through a client pinned to {self._original_host!r}"
+            )
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:  # type: ignore[override]
+        self._check_host_match(request)
         # Rewrite URL host -> pinned IP literal so the OS does not re-resolve.
         original_url = request.url
         # Bracket IPv6 literals
@@ -102,14 +122,28 @@ class _IPPinnedAsyncTransport(httpx.AsyncHTTPTransport):
 
 
 class _IPPinnedSyncTransport(httpx.HTTPTransport):
-    """Sync counterpart to :class:`_IPPinnedAsyncTransport`."""
+    """Sync counterpart to :class:`_IPPinnedAsyncTransport`.
+
+    Bound to a single host, like the async transport: requests for any other
+    host are refused instead of being silently rewritten to the pinned IP.
+    """
 
     def __init__(self, *, pinned_ip: str, original_host: str, **kwargs) -> None:
         super().__init__(**kwargs)
         self._pinned_ip = pinned_ip
         self._original_host = original_host
+        self._original_host_key = _normalize_host(original_host)
+
+    def _check_host_match(self, request: httpx.Request) -> None:
+        request_host = _normalize_host(request.url.host)
+        if request_host != self._original_host_key:
+            raise ValueError(
+                f"Refusing to send request for host {request.url.host!r} "
+                f"through a client pinned to {self._original_host!r}"
+            )
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:  # type: ignore[override]
+        self._check_host_match(request)
         original_url = request.url
         ip_literal = f"[{self._pinned_ip}]" if ":" in self._pinned_ip else self._pinned_ip
         rewritten = original_url.copy_with(host=ip_literal)
@@ -164,8 +198,11 @@ def safe_httpx_client(
 ) -> httpx.AsyncClient:
     """Build an async client whose transport is pinned to a validated IP.
 
-    The client is bound to the ``url``'s host. ``follow_redirects`` is forced
-    off; use :func:`follow_redirects_safely` for redirect handling.
+    The client is bound to the ``url``'s host: requests for any other host
+    are refused with ``ValueError`` instead of being sent to the pinned IP.
+    Create one client per host; do not reuse a client for other URLs.
+    ``follow_redirects`` is forced off; use :func:`follow_redirects_safely`
+    for redirect handling.
     """
     pinned_ip, host = _validate_and_pin(url)
     ssl_ctx = _build_ssl_context()
