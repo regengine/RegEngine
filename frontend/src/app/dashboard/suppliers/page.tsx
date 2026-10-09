@@ -55,6 +55,17 @@ interface FacilityRow extends SupplierFacility {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Open a backend-supplied portal URL in a new tab without exposing this
+ * tab through window.opener. The third window.open argument adds the
+ * noopener/noreferrer safeguards; clearing opener covers browsers that
+ * ignore those window features (reverse tabnabbing).
+ */
+export function openPortalUrl(url: string): void {
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (opened) opened.opener = null;
+}
+
 /** Sanitise API / network errors into a user-friendly string. */
 function friendlyError(err: unknown, fallback: string): string {
     if (!(err instanceof Error)) return fallback;
@@ -594,7 +605,7 @@ export default function SupplierDashboardPage() {
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8"
-                                                        onClick={() => window.open(link.portal_url, '_blank')}
+                                                        onClick={() => openPortalUrl(link.portal_url)}
                                                         title="Open portal"
                                                         aria-label="Open portal"
                                                     >
