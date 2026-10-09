@@ -175,10 +175,10 @@ def test_write_method_calls_verify_tenant_access(method_name):
 
 def test_read_methods_do_not_require_guard():
     """Sanity: read-only methods — the kind that filter by tenant_id in
-    the SQL WHERE clause — don't need the guard because they can't
-    write. We don't want this test to mandate a guard on reads; it just
-    documents that the WRITE_METHODS list above is the authoritative
-    surface.
+    the SQL WHERE clause — must not call the write guard, because
+    adding it would break cross-tenant read flows that filter in SQL.
+    Asserting the guard is absent (not just that the method exists)
+    makes this test fail if a guard is added to a read.
     """
     read_methods = {
         "find_entity_by_alias",
@@ -187,7 +187,13 @@ def test_read_methods_do_not_require_guard():
         "list_pending_reviews",
     }
     for name in read_methods:
-        assert hasattr(IdentityResolutionService, name), f"Read method {name} missing — update this test if renamed."
+        method = getattr(IdentityResolutionService, name, None)
+        assert method is not None, f"Read method {name} missing — update this test if renamed."
+        src = inspect.getsource(method)
+        assert "_verify_tenant_access" not in src, (
+            f"#1230: read-only method {name} must not call _verify_tenant_access; "
+            "reads filter by tenant_id in SQL and the write guard would break them."
+        )
 
 
 # ── 4. Router plumbs principal through _get_service (source check) ────────
