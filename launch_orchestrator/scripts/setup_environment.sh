@@ -65,6 +65,7 @@ fi
 # Copy example file
 echo "Creating .env from .env.example..."
 cp .env.example .env
+chmod 600 .env
 
 echo -e "${GREEN}✓ Created .env file${NC}"
 echo ""
@@ -130,7 +131,7 @@ echo
         fi
         read -p "Salesforce Instance URL: " sf_url
         if [ ! -z "$sf_url" ]; then
-            echo "SALESFORCE_INSTANCE_URL=$sf_url" >> .env
+            set_env_var SALESFORCE_INSTANCE_URL "$sf_url" .env
         fi
         ;;
     *)
@@ -172,7 +173,7 @@ echo
         fi
         read -p "Mailchimp List ID: " mailchimp_list
         if [ ! -z "$mailchimp_list" ]; then
-            echo "MAILCHIMP_LIST_ID=$mailchimp_list" >> .env
+            set_env_var MAILCHIMP_LIST_ID "$mailchimp_list" .env
         fi
         ;;
     3)
