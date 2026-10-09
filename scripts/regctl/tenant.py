@@ -68,6 +68,34 @@ def _write_private_file(path: str, write) -> None:
     os.chmod(path, 0o600)
 
 
+def _hash_api_key(api_key: str) -> str:
+    """Return the SHA-256 hex digest of an API key for storage.
+
+    The local tenants file is only a provisioning record, never an auth
+    database, so the full key is shown once at creation and only this
+    hash is kept on disk.
+    """
+    import hashlib
+
+    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+
+
+def _scrub_record(record: dict) -> dict:
+    """Return a copy of a tenant record with no plaintext API key.
+
+    New records already store only a hash plus a masked hint. Legacy
+    records may still carry a plaintext "api_key" field; convert it to
+    a hash and hint so rewrites never preserve the secret.
+    """
+    record = dict(record)
+    api_key = record.pop("api_key", None)
+    if api_key and "api_key_hash" not in record:
+        record["api_key_hash"] = _hash_api_key(api_key)
+        record["api_key_hint"] = mask_api_key(api_key)
+    record.setdefault("api_key_hint", mask_api_key(""))
+    return record
+
+
 class TenantManager:
     """Manages tenant provisioning and lifecycle."""
 
@@ -175,7 +203,8 @@ class TenantManager:
             except (ValueError, KeyError):
                 created_str = tenant.get("created_at", "N/A")
 
-            table.add_row(tenant["name"], tenant["tenant_id"], mask_api_key(tenant.get("api_key", "")), created_str)
+            hint = tenant.get("api_key_hint") or mask_api_key(tenant.get("api_key", ""))
+            table.add_row(tenant["name"], tenant["tenant_id"], hint, created_str)
 
         console.print(table)
         console.print(f"[dim]Total: {len(tenants)} tenant(s)[/dim]")
@@ -321,13 +350,19 @@ class TenantManager:
             click.echo("         ⚠️  Demo data loader not found (continuing)")
 
     def _save_tenant_record(self, tenant_id: UUID, name: str, api_key: str):
-        """Save tenant record to a local file restricted to owner-only (0600)."""
+        """Save tenant record without keeping the plaintext API key.
+
+        Only a SHA-256 hash plus a masked hint go to the owner-only (0600)
+        local file. The full key is returned to the operator once by
+        create_tenant and never written to disk.
+        """
         import json
 
         record = {
             "tenant_id": str(tenant_id),
             "name": name,
-            "api_key": api_key,
+            "api_key_hash": _hash_api_key(api_key),
+            "api_key_hint": mask_api_key(api_key),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
@@ -394,11 +429,12 @@ class TenantManager:
         # Filter out the deleted tenant
         tenants = [t for t in tenants if t["tenant_id"] != str(tenant_id)]
 
-        # Rewrite file; it holds secrets, keep it 0600.
+        # Rewrite file; it holds key hashes, keep it 0600. Scrub any
+        # legacy plaintext keys so the rewrite never preserves them.
         def _rewrite(path: str) -> None:
             with open(path, "w") as f:
                 for tenant in tenants:
-                    f.write(json.dumps(tenant) + "\n")
+                    f.write(json.dumps(_scrub_record(tenant)) + "\n")
 
         _write_private_file(self.tenants_db_file, _rewrite)
 

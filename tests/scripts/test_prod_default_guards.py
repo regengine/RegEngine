@@ -223,7 +223,8 @@ def test_regctl_list_never_prints_full_keys(tmp_path, capsys):
     assert full_key[-4:] in out
 
     stored = [json.loads(line) for line in Path(manager.tenants_db_file).read_text().splitlines()]
-    assert stored[0]["api_key"] == full_key
+    assert "api_key" not in stored[0]
+    assert stored[0]["api_key_hash"] == module._hash_api_key(full_key)
 
 
 # --- smoke_test_ingest.sh: exact hostname guard (no glob bypass) ---
