@@ -1,3 +1,15 @@
+"""FSMA 204 traceability query and field capture routes.
+
+Serves forward and backward lot traces, lot timelines, event search,
+regulation linkage lookups, and mobile field capture of Critical
+Tracking Events.
+
+Key invariants: every query is scoped to the caller tenant database,
+read endpoints record a KDE read audit entry, high volume query and
+capture endpoints are rate limited, and captured events validate TLC,
+GLN, and GTIN identifiers before anything is persisted.
+"""
+
 import sys
 import time
 import uuid
@@ -544,6 +556,13 @@ async def search_traceability_events(
 
 
 class TraceabilityEventRequest(BaseModel):
+    """Request body for logging a Critical Tracking Event from field capture.
+
+    Carries the event type, event date, lot code, location identifier,
+    and point of contact, plus optional quantity, product, and evidence
+    details. Identifiers are validated before anything is persisted.
+    """
+
     model_config = {
         "json_schema_extra": {
             "examples": [
