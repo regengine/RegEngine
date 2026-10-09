@@ -28,7 +28,12 @@ const UNAUTHENTICATED_AUTH_PATHS = new Set([
     'v1/auth/accept-invite',
 ]);
 
-const AUTH_CHALLENGE_VERIFY_PATH = /^auth\/challenges\/[0-9a-fA-F-]{36}\/verify$/;
+// Mirrors the strict-UUID challenge-verify CSRF exemption in lib/csrf.ts
+// (CSRF_EXEMPT_RULES). Keep the two patterns in sync: a looser pattern here
+// would proxy non-UUID challenge IDs without a session, while the CSRF gate
+// still rejects them, or vice versa.
+const AUTH_CHALLENGE_VERIFY_PATH =
+    /^auth\/challenges\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\/verify$/;
 function getAdminTargets(): string[] {
     const candidates = resolveAdminTargets(process.env);
     const runningOnVercel = Boolean(

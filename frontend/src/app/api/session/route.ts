@@ -62,10 +62,13 @@ function cookieOptionsFor(rememberSession: boolean) {
 export async function POST(request: NextRequest) {
     try {
         // RE-SEC-003: strict same-origin enforcement on POST /api/session.
-        // /api/session is in CSRF_EXEMPT_PREFIXES (it bootstraps the CSRF
-        // cookies on first login), so a cross-origin attacker holding their
-        // own valid RegEngine JWT could otherwise log a victim's browser
-        // into the attacker's tenant via login-CSRF / session fixation.
+        // /api/session is NOT in the CSRF exemption list: GET /api/session
+        // bootstraps the CSRF cookies on first load, so by login time the
+        // client already carries a valid X-CSRF-Token header like every
+        // other mutating endpoint. The Origin allowlist here remains as
+        // defense-in-depth, so a cross-origin attacker holding their own
+        // valid RegEngine JWT still cannot log a victim's browser into the
+        // attacker's tenant via login-CSRF / session fixation.
         // Origin header is reliable because the browser sets it on every
         // POST and JS cannot forge it cross-origin.
         const origin = request.headers.get('origin');

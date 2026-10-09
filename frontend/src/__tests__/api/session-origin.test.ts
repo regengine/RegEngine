@@ -1,10 +1,12 @@
 /**
  * RE-SEC-003: same-origin enforcement on POST /api/session.
  *
- * /api/session bootstraps the CSRF cookies on first login, so it is
- * necessarily exempt from the CSRF double-submit check. To prevent
- * login-CSRF / session-fixation, POST is gated on the Origin header
- * matching the deploy-configured ALLOWED_ORIGINS list (production only).
+ * GET /api/session bootstraps the CSRF cookies on first load, so POST
+ * /api/session carries a valid X-CSRF-Token header like every other
+ * mutating endpoint and is NOT exempt from the CSRF double-submit check.
+ * To prevent login-CSRF / session-fixation, POST is additionally gated on
+ * the Origin header matching the deploy-configured ALLOWED_ORIGINS list
+ * (production only).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHmac } from 'crypto';
