@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 import structlog
 
@@ -36,6 +37,31 @@ def _require_legacy_swarm_enabled(command: str) -> None:
     if not _legacy_swarm_enabled():
         print(_legacy_swarm_notice(command), file=sys.stderr)
         sys.exit(2)
+
+
+def _resolve_log_file_within_cwd(raw_path: str) -> Path:
+    """Resolve a --log-file value against the working directory and confine it there.
+
+    The path is resolved (so symlinks that escape are caught) and must stay
+    inside the working directory. Prints an error and exits nonzero otherwise.
+    """
+    base_dir = Path.cwd().resolve()
+    try:
+        candidate = Path(raw_path)
+        if candidate.is_absolute():
+            full_path = candidate.resolve()
+        else:
+            full_path = (base_dir / candidate).resolve()
+    except (OSError, ValueError):
+        print(f"❌ Error: --log-file path is invalid: {raw_path}")
+        sys.exit(1)
+    if full_path == base_dir or base_dir not in full_path.parents:
+        print(f"❌ Error: --log-file must be a file inside the working directory: {raw_path}")
+        sys.exit(1)
+    if not full_path.is_file():
+        print(f"❌ Error: --log-file not found: {raw_path}")
+        sys.exit(1)
+    return full_path
 
 
 def configure_logging(verbose: bool = False) -> None:
@@ -156,19 +182,35 @@ def cmd_run(args) -> None:
                     pr_num = int(match.group(1)) if match else None
 
                     if pr_num:
-                        res = result_data.get("result", {})
+                        # LLM output is untrusted: use safe lookups throughout
+                        # so a malformed response cannot crash the comment.
+                        res = result_data.get("result", {}) if isinstance(result_data, dict) else {}
+                        if not isinstance(res, dict):
+                            res = {}
                         vulnerabilities = res.get("vulnerabilities", [])
+                        if not isinstance(vulnerabilities, list):
+                            vulnerabilities = []
+                        try:
+                            score = float(res.get("score", 0.0))
+                        except (TypeError, ValueError):
+                            score = 0.0
                         verdict = "✅ PASS" if res.get("verdict") == "pass" else "❌ FAIL"
 
                         comment = f"### 🛡️ Autonomous Security Audit: {verdict}\n\n"
                         comment += f"**Summary:** {res.get('summary', 'Audit complete')}\n"
-                        comment += f"**Score:** {res.get('score', 0.0) * 100:.1f}%\n\n"
+                        comment += f"**Score:** {score * 100:.1f}%\n\n"
 
                         if vulnerabilities:
                             comment += "#### ⚠️ Findings:\n"
                             for v in vulnerabilities:
-                                comment += f"- **[{v['severity'].upper()}]** {v['issue']} in `{v['file']}`\n"
-                                comment += f"  - *Remediation:* {v['remediation']}\n"
+                                if not isinstance(v, dict):
+                                    continue
+                                severity = str(v.get("severity", "unknown")).upper()
+                                issue = v.get("issue", "unspecified issue")
+                                file_ref = v.get("file", "unknown file")
+                                remediation = v.get("remediation", "not specified")
+                                comment += f"- **[{severity}]** {issue} in `{file_ref}`\n"
+                                comment += f"  - *Remediation:* {remediation}\n"
                         else:
                             comment += "✨ No critical vulnerabilities identified.\n"
 
@@ -260,7 +302,8 @@ def cmd_troubleshoot(args) -> None:
         if args.log_file == "-":
             logs = sys.stdin.read()
         else:
-            with open(args.log_file, "r") as fh:
+            log_path = _resolve_log_file_within_cwd(args.log_file)
+            with open(log_path, "r", encoding="utf-8") as fh:
                 logs = fh.read()
     elif getattr(args, "logs", None):
         logs = args.logs
