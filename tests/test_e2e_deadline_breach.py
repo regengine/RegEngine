@@ -74,6 +74,14 @@ def workflow(db_session):
     return RequestWorkflow(db_session)
 
 
+@pytest.fixture
+def case_id(db_session, tenant_id, workflow):
+    """Create a fresh deadline case per test so each test runs in isolation."""
+    _ingest_deadline_events(db_session, tenant_id)
+    case = _create_deadline_case(workflow, tenant_id)
+    return case["request_case_id"]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -147,6 +155,56 @@ def _set_deadline(db_session, tenant_id: str, case_id: str, due_at: datetime):
     db_session.flush()
 
 
+def _ingest_deadline_events(db_session, tenant_id: str) -> None:
+    """Persist minimal events so record collection has something to find."""
+    from shared.canonical_event import IngestionSource, TraceabilityEvent
+    from shared.canonical_persistence import CanonicalEventStore
+
+    store = CanonicalEventStore(db_session)
+    for event_data in _make_events(tenant_id):
+        te = TraceabilityEvent(
+            event_id=event_data["event_id"],
+            tenant_id=tenant_id,
+            event_type=event_data["event_type"],
+            event_timestamp=event_data["event_timestamp"],
+            product_reference=event_data.get("product_reference"),
+            traceability_lot_code=event_data.get("traceability_lot_code"),
+            quantity=event_data.get("quantity"),
+            unit_of_measure=event_data.get("unit_of_measure"),
+            from_entity_reference=event_data.get("from_entity_reference"),
+            to_entity_reference=event_data.get("to_entity_reference"),
+            from_facility_reference=event_data.get("from_facility_reference"),
+            to_facility_reference=event_data.get("to_facility_reference"),
+            kdes=event_data.get("kdes", {}),
+            confidence_score=event_data.get("confidence_score"),
+            source_system=IngestionSource(event_data.get("source_system", "csv_upload")),
+            status="active",
+        )
+        store.persist_event(te)
+
+
+def _create_deadline_case(workflow, tenant_id: str, due_at=None):
+    """Create a deadline test case with a 1-hour deadline by default."""
+    now = datetime.now(timezone.utc)
+    return workflow.create_request_case(
+        tenant_id=tenant_id,
+        requesting_party="FDA",
+        request_channel="email",
+        scope_type="product_recall",
+        scope_description="Deadline breach test — " + PRODUCT,
+        response_due_at=due_at or (now + timedelta(hours=1)),
+        affected_products=[PRODUCT],
+        affected_lots=["LOT-DL-2026-001"],
+        affected_facilities=[SUPPLIER],
+    )
+
+
+def _ensure_overdue(db_session, tenant_id: str, case_id: str) -> None:
+    """Move the case deadline 30 minutes into the past."""
+    now = datetime.now(timezone.utc)
+    _set_deadline(db_session, tenant_id, case_id, now - timedelta(minutes=30))
+
+
 # ---------------------------------------------------------------------------
 # The Test: Deadline Monitoring & Overdue Escalation
 # ---------------------------------------------------------------------------
@@ -170,62 +228,25 @@ class TestDeadlineBreachE2E:
 
     def test_00_ingest_events(self, db_session, tenant_id):
         """Ingest minimal events for later record collection."""
-        from shared.canonical_event import IngestionSource, TraceabilityEvent
-        from shared.canonical_persistence import CanonicalEventStore
-
-        store = CanonicalEventStore(db_session)
-        events = _make_events(tenant_id)
-
-        for event_data in events:
-            te = TraceabilityEvent(
-                event_id=event_data["event_id"],
-                tenant_id=tenant_id,
-                event_type=event_data["event_type"],
-                event_timestamp=event_data["event_timestamp"],
-                product_reference=event_data.get("product_reference"),
-                traceability_lot_code=event_data.get("traceability_lot_code"),
-                quantity=event_data.get("quantity"),
-                unit_of_measure=event_data.get("unit_of_measure"),
-                from_entity_reference=event_data.get("from_entity_reference"),
-                to_entity_reference=event_data.get("to_entity_reference"),
-                from_facility_reference=event_data.get("from_facility_reference"),
-                to_facility_reference=event_data.get("to_facility_reference"),
-                kdes=event_data.get("kdes", {}),
-                confidence_score=event_data.get("confidence_score"),
-                source_system=IngestionSource(event_data.get("source_system", "csv_upload")),
-                status="active",
-            )
-            store.persist_event(te)
+        _ingest_deadline_events(db_session, tenant_id)
 
     # ---- Step 1: Create case with 1-hour deadline ----
 
-    def test_01_create_case_with_1h_deadline(self, tenant_id, workflow):
-        """Create a request case with a deadline 1 hour from now."""
-        now = datetime.now(timezone.utc)
-        due_at = now + timedelta(hours=1)
+    def test_01_create_case_with_1h_deadline(self, tenant_id, workflow, case_id):
+        """The fixture-created case starts with a 1-hour deadline in intake."""
+        cases = workflow.check_deadline_status(tenant_id)
+        our_case = _find_case(cases, case_id)
 
-        case = workflow.create_request_case(
-            tenant_id=tenant_id,
-            requesting_party="FDA",
-            request_channel="email",
-            scope_type="product_recall",
-            scope_description="Deadline breach test — " + PRODUCT,
-            response_due_at=due_at,
-            affected_products=[PRODUCT],
-            affected_lots=["LOT-DL-2026-001"],
-            affected_facilities=[SUPPLIER],
-        )
-
-        assert case["package_status"] == "intake"
-        assert case["requesting_party"] == "FDA"
-        self.__class__._case_id = case["request_case_id"]
+        assert our_case is not None, "Case not found in deadline status results"
+        assert our_case["package_status"] == "intake"
+        assert our_case["requesting_party"] == "FDA"
 
     # ---- Step 2: Verify "urgent" (< 6 hours remaining) ----
 
-    def test_02_deadline_1h_is_urgent(self, tenant_id, workflow):
+    def test_02_deadline_1h_is_urgent(self, tenant_id, workflow, case_id):
         """1 hour remaining should be classified as 'urgent' (< 6h)."""
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status results"
         # 1 hour < 2 hours, so this is actually "critical"
@@ -236,19 +257,17 @@ class TestDeadlineBreachE2E:
 
     # ---- Step 3: Simulate breach — move deadline 30 minutes into past ----
 
-    def test_03_simulate_deadline_breach(self, db_session, tenant_id):
+    def test_03_simulate_deadline_breach(self, db_session, tenant_id, case_id):
         """Move the deadline to 30 minutes ago to simulate a breach."""
-        now = datetime.now(timezone.utc)
-        overdue_at = now - timedelta(minutes=30)
-
-        _set_deadline(db_session, tenant_id, self.__class__._case_id, overdue_at)
+        _ensure_overdue(db_session, tenant_id, case_id)
 
     # ---- Step 4: Verify "overdue" ----
 
-    def test_04_breached_deadline_is_overdue(self, tenant_id, workflow):
+    def test_04_breached_deadline_is_overdue(self, db_session, tenant_id, workflow, case_id):
         """A case past its deadline must be classified as 'overdue'."""
+        _ensure_overdue(db_session, tenant_id, case_id)
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status results"
         assert our_case["urgency"] == "overdue", (
@@ -258,9 +277,9 @@ class TestDeadlineBreachE2E:
 
     # ---- Step 5: Verify case still functions after breach ----
 
-    def test_05_overdue_case_still_functional_scope(self, tenant_id, workflow):
+    def test_05_overdue_case_still_functional_scope(self, db_session, tenant_id, workflow, case_id):
         """An overdue case can still have its scope updated."""
-        case_id = self.__class__._case_id
+        _ensure_overdue(db_session, tenant_id, case_id)
 
         workflow.update_scope(
             tenant_id,
@@ -268,16 +287,27 @@ class TestDeadlineBreachE2E:
             scope_description="Updated scope after deadline breach — still operational",
         )
 
-    def test_06_overdue_case_still_functional_collect(self, tenant_id, workflow):
+    def test_06_overdue_case_still_functional_collect(self, db_session, tenant_id, workflow, case_id):
         """An overdue case can still collect records."""
-        case_id = self.__class__._case_id
+        _ensure_overdue(db_session, tenant_id, case_id)
+        workflow.update_scope(
+            tenant_id,
+            case_id,
+            scope_description="Isolation scope for record collection",
+        )
 
         result = workflow.collect_records(tenant_id, case_id)
         assert result["total_records"] >= 1, f"Expected >=1 records collected, got {result['total_records']}"
 
-    def test_07_overdue_case_still_functional_package(self, tenant_id, workflow):
+    def test_07_overdue_case_still_functional_package(self, db_session, tenant_id, workflow, case_id):
         """An overdue case can still assemble a response package."""
-        case_id = self.__class__._case_id
+        _ensure_overdue(db_session, tenant_id, case_id)
+        workflow.update_scope(
+            tenant_id,
+            case_id,
+            scope_description="Isolation scope for package assembly",
+        )
+        workflow.collect_records(tenant_id, case_id)
 
         # Add required signoff before assembly
         workflow.add_signoff(
@@ -300,20 +330,17 @@ class TestDeadlineBreachE2E:
 
     # ---- Step 6: Boundary cases ----
 
-    def test_08_boundary_2h_is_critical(self, db_session, tenant_id, workflow):
+    def test_08_boundary_2h_is_critical(self, db_session, tenant_id, workflow, case_id):
         """Exactly 2 hours remaining should be classified as 'critical' (< 2h boundary)."""
         now = datetime.now(timezone.utc)
         # Set deadline to exactly 2 hours from now.
         # The check is `hours < 2`, so exactly 2h should be "urgent" (not critical).
         # We set to 1h59m to guarantee critical.
         due_at = now + timedelta(hours=1, minutes=59)
-        _set_deadline(db_session, tenant_id, self.__class__._case_id, due_at)
+        _set_deadline(db_session, tenant_id, case_id, due_at)
 
-        # Need to reset case status so it appears in active deadlines.
-        # The package was assembled, so status may be 'ready' — but
-        # check_deadline_status excludes 'submitted' and 'amended' only.
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "critical", (
@@ -321,44 +348,44 @@ class TestDeadlineBreachE2E:
             f"(hours_remaining={our_case['hours_remaining']})"
         )
 
-    def test_09_boundary_exactly_2h_is_urgent(self, db_session, tenant_id, workflow):
+    def test_09_boundary_exactly_2h_is_urgent(self, db_session, tenant_id, workflow, case_id):
         """Exactly 2.0 hours remaining: hours < 2 is False, hours < 6 is True => 'urgent'."""
         now = datetime.now(timezone.utc)
         # Add a small buffer (1 minute) to ensure we're clearly above the 2h threshold
         due_at = now + timedelta(hours=2, minutes=1)
-        _set_deadline(db_session, tenant_id, self.__class__._case_id, due_at)
+        _set_deadline(db_session, tenant_id, case_id, due_at)
 
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "urgent", (
             f"Expected 'urgent' at >2h, got '{our_case['urgency']}' (hours_remaining={our_case['hours_remaining']})"
         )
 
-    def test_10_boundary_6h_is_normal(self, db_session, tenant_id, workflow):
+    def test_10_boundary_6h_is_normal(self, db_session, tenant_id, workflow, case_id):
         """Exactly 6.0 hours remaining: hours < 6 is False => 'normal'."""
         now = datetime.now(timezone.utc)
         # Add a small buffer (1 minute) to ensure we're clearly above the 6h threshold
         due_at = now + timedelta(hours=6, minutes=1)
-        _set_deadline(db_session, tenant_id, self.__class__._case_id, due_at)
+        _set_deadline(db_session, tenant_id, case_id, due_at)
 
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "normal", (
             f"Expected 'normal' at >=6h, got '{our_case['urgency']}' (hours_remaining={our_case['hours_remaining']})"
         )
 
-    def test_11_boundary_just_under_6h_is_urgent(self, db_session, tenant_id, workflow):
+    def test_11_boundary_just_under_6h_is_urgent(self, db_session, tenant_id, workflow, case_id):
         """5h59m remaining: hours < 6 is True, hours >= 2 => 'urgent'."""
         now = datetime.now(timezone.utc)
         due_at = now + timedelta(hours=5, minutes=59)
-        _set_deadline(db_session, tenant_id, self.__class__._case_id, due_at)
+        _set_deadline(db_session, tenant_id, case_id, due_at)
 
         cases = workflow.check_deadline_status(tenant_id)
-        our_case = _find_case(cases, self.__class__._case_id)
+        our_case = _find_case(cases, case_id)
 
         assert our_case is not None, "Case not found in deadline status"
         assert our_case["urgency"] == "urgent", (
