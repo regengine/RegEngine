@@ -52,7 +52,7 @@ def _actor():
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 @pytest.mark.security
@@ -153,3 +153,18 @@ def test_global_resource_set_contains_user_account():
     assert "user_account" in _GLOBAL_RESOURCES
     assert not _is_tenant_scoped("user_account")
     assert _is_tenant_scoped("supplier_contact")
+
+
+def test_run_helper_avoids_deprecated_get_event_loop(monkeypatch):
+    """_run must not rely on asyncio.get_event_loop (deprecated no-loop pattern)."""
+    import tests.shared.test_data_retention_tenant_scope as mod
+
+    def _boom():
+        raise AssertionError("deprecated asyncio.get_event_loop must not be used")
+
+    monkeypatch.setattr(asyncio, "get_event_loop", _boom)
+
+    async def _coro():
+        return 42
+
+    assert mod._run(_coro()) == 42
