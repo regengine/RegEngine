@@ -1,10 +1,26 @@
+"""Manual audit helper: independently re-verify an authority export chain.
+
+This file is NOT a pytest test module. It is intentionally named so that
+pytest (``python_files = "test_*.py"``) never collects it, and ``__test__``
+below keeps it uncollected even if collection patterns change. The ``main()``
+entry point only calls live services when explicitly opted in via
+``VERIFY_CHAIN_LIVE=1``.
+"""
+
 import hashlib
 import json
-import sys
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
+
+# Skip guard: pytest must never collect this helper as a test module.
+__test__ = False
+
+LIVE_ENV_VAR = "VERIFY_CHAIN_LIVE"
+BASE_URL_ENV_VAR = "VERIFY_CHAIN_BASE_URL"
+DEFAULT_BASE_URL = "http://localhost:8400"
 
 
 @dataclass
@@ -115,18 +131,29 @@ class ChainVerifier:
         return self.results
 
 
-def main():
+def main() -> int:
+    # Opt-in gate: never call live services by accident. Run with
+    # VERIFY_CHAIN_LIVE=1 (and optionally VERIFY_CHAIN_BASE_URL).
+    if os.environ.get(LIVE_ENV_VAR) != "1":
+        print(
+            "Refusing to call live services: set VERIFY_CHAIN_LIVE=1 to run "
+            f"this manual audit helper (optional {BASE_URL_ENV_VAR})."
+        )
+        return 2
+
+    base_url = os.environ.get(BASE_URL_ENV_VAR, DEFAULT_BASE_URL).rstrip("/")
+
     # 1. Fetch Export
     print("Fetching Audit Export...")
     try:
         # Assuming running against local docker stack
         headers = {"X-Tenant-ID": "00000000-0000-0000-0000-000000000000"}
         # Using correct port 8400 for Admin API
-        resp = requests.get("http://localhost:8400/pcos/authorities/DOC-c9d54044/export", headers=headers)
+        resp = requests.get(f"{base_url}/pcos/authorities/DOC-c9d54044/export", headers=headers)
 
         if resp.status_code == 404:
             # Try logical code from test
-            resp = requests.get("http://localhost:8400/pcos/authorities/DOC-MOCK-V1/export", headers=headers)
+            resp = requests.get(f"{base_url}/pcos/authorities/DOC-MOCK-V1/export", headers=headers)
 
         # Fallback to FSMA if neither works (from test data)
         # Actually, let's look at the test output to see what code was used.
@@ -135,17 +162,17 @@ def main():
         # In test, document_id starts as random UUID.
 
         # Let's try to list first to get the code
-        list_resp = requests.get("http://localhost:8400/pcos/authorities", headers=headers)
+        list_resp = requests.get(f"{base_url}/pcos/authorities", headers=headers)
         if list_resp.status_code == 200:
             docs = list_resp.json()
             if docs:
                 code = docs[0]["document_code"]
                 print(f"Found Authority Code: {code}")
-                resp = requests.get(f"http://localhost:8400/pcos/authorities/{code}/export", headers=headers)
+                resp = requests.get(f"{base_url}/pcos/authorities/{code}/export", headers=headers)
 
         if resp.status_code != 200:
             print(f"Failed to fetch export: {resp.status_code} {resp.text}")
-            sys.exit(1)
+            return 1
 
         export_data = resp.json()
 
@@ -163,15 +190,15 @@ def main():
 
         if results.hashes_failed == 0 and results.lineage_links_failed == 0 and results.consistency_errors == 0:
             print("\n✅ INDEPENDENT VERIFICATION PASSED")
-            sys.exit(0)
+            return 0
         else:
             print("\n❌ INDEPENDENT VERIFICATION FAILED")
-            sys.exit(1)
+            return 1
 
     except Exception as e:
         print(f"Fatal Error: {e}")
-        sys.exit(1)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
