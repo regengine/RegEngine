@@ -14,6 +14,18 @@ API_KEY = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_T
 # Unique Source for this Demo
 SOURCE_URL = "http://demo.fda.gov/fsma-204-update-scenario"
 
+# Per-request timeout (seconds) so stalled services fail fast instead of hanging.
+REQUEST_TIMEOUT = 10
+
+
+def require_credentials():
+    key = os.environ.get("REGENGINE_API_KEY", os.environ.get("AUTH_TEST_BYPASS_TOKEN", ""))
+    if not key or not key.strip():
+        log("REGENGINE_API_KEY (or AUTH_TEST_BYPASS_TOKEN) must be set and non-empty.")
+        raise SystemExit(2)
+    return key
+
+
 # --- SCENARIO DATA ---
 
 # State 1: Old World (Jan 2026)
@@ -56,7 +68,7 @@ def ingest_content(content, version_label):
     log(f"Ingesting {version_label} Content...")
     payload = {"text": content, "source_url": SOURCE_URL, "source_system": "manual_demo", "vertical": "food_safety"}
     try:
-        resp = requests.post(INGEST_URL, json=payload, headers=HEADERS)
+        resp = requests.post(INGEST_URL, json=payload, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         if resp.status_code == 200:
             log(f"✅ Ingest {version_label} Accepted")
             return True
@@ -64,7 +76,7 @@ def ingest_content(content, version_label):
             log(f"❌ Ingest {version_label} Failed: {resp.status_code} - {resp.text}")
             return False
     except Exception as e:
-        log(f"❌ Ingest Connection Error: {e}")
+        log(f"❌ Ingest Connection Error ({type(e).__name__}): {e}")
         return False
 
 
@@ -73,7 +85,7 @@ def wait_for_doc(expect_version, previous_id=None):
     start = time.time()
     while time.time() - start < 30:
         try:
-            resp = requests.get(f"{ADMIN_API_URL}/pcos/authorities", headers=HEADERS)
+            resp = requests.get(f"{ADMIN_API_URL}/pcos/authorities", headers=HEADERS, timeout=REQUEST_TIMEOUT)
             if resp.status_code == 200:
                 docs = resp.json()
                 matches = [d for d in docs if d.get("original_file_path") == SOURCE_URL]
@@ -88,14 +100,17 @@ def wait_for_doc(expect_version, previous_id=None):
                     elif expect_version == 2:
                         if d.get("supersedes_document_id") == previous_id:
                             return d
-        except Exception:
-            pass
+        except Exception as e:
+            log(f"Polling error ({type(e).__name__}): {e}")
         time.sleep(1)
     return None
 
 
 def main():
     log("Starting Freshness Pipeline Demo...")
+
+    api_key = require_credentials()
+    HEADERS["X-RegEngine-API-Key"] = api_key
 
     # 1. Ingest Old Content
     if not ingest_content(CONTENT_OLD, "V1 (Old)"):
