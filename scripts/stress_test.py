@@ -7,7 +7,6 @@ Covers: health, read endpoints, write endpoints, concurrent load, error handling
 
 import asyncio
 import json
-import os
 import statistics
 import sys
 import time
@@ -22,7 +21,8 @@ REQUESTS_PER_ENDPOINT = 100  # requests per test
 TIMEOUT = 10  # seconds per request
 
 TEST_TENANT = "00000000-0000-0000-0000-000000000123"
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # never commit a literal here
+# No admin key is sent on purpose. The admin service retired X-Admin-Key and
+# rejects it, so this script only exercises unauthenticated endpoints.
 
 SERVICES = {
     "ingestion": "http://localhost:8002",
@@ -45,6 +45,7 @@ class EndpointResult:
     latencies: list = field(default_factory=list)
     status_codes: dict = field(default_factory=dict)
     error_messages: list = field(default_factory=list)
+    wall_seconds: float = 0.0
 
     @property
     def p50(self):
@@ -72,8 +73,9 @@ class EndpointResult:
 
     @property
     def rps(self):
-        total_time = sum(self.latencies) if self.latencies else 1
-        return len(self.latencies) / max(total_time, 0.001)
+        if self.wall_seconds <= 0:
+            return 0
+        return self.total_requests / self.wall_seconds
 
 
 # ─── TEST DEFINITIONS ───
@@ -227,6 +229,7 @@ async def run_endpoint_test(test: dict, count: int, concurrency: int) -> Endpoin
     )
 
     connector = aiohttp.TCPConnector(limit=concurrency, force_close=False)
+    start = time.monotonic()
     async with aiohttp.ClientSession(connector=connector) as session:
         sem = asyncio.Semaphore(concurrency)
 
@@ -236,6 +239,7 @@ async def run_endpoint_test(test: dict, count: int, concurrency: int) -> Endpoin
 
         tasks = [bounded_request() for _ in range(count)]
         await asyncio.gather(*tasks)
+    result.wall_seconds = time.monotonic() - start
 
     return result
 
@@ -310,8 +314,8 @@ def print_results(results: list[EndpointResult]):
         p99_idx = int(len(sorted_all) * 0.99)
         print(f"  p99 latency:      {sorted_all[min(p99_idx, len(sorted_all) - 1)] * 1000:.1f}ms")
         print(f"  Max latency:      {max(all_latencies) * 1000:.1f}ms")
-        total_wall = sum(all_latencies)
-        print(f"  Throughput:       ~{total_requests / max(total_wall / CONCURRENCY, 0.001):.0f} req/s effective")
+        total_wall = sum(r.wall_seconds for r in results)
+        print(f"  Throughput:       ~{total_requests / max(total_wall, 0.001):.0f} req/s effective")
 
     if failed_endpoints:
         print(f"\n  ⚠️  {len(failed_endpoints)} endpoint(s) had failures:")
