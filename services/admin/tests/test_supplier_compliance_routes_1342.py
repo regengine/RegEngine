@@ -28,6 +28,7 @@ from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
+OTHER_USER_ID = UUID("00000000-0000-0000-0000-000000000003")
 
 
 @pytest.fixture
@@ -51,9 +52,8 @@ def db_session() -> Session:
     SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(
-        UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
-    )
+    session.add(UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False))
+    session.add(UserModel(id=OTHER_USER_ID, email="other@example.com", status="active", is_sysadmin=False))
     session.commit()
     try:
         yield session
@@ -160,3 +160,91 @@ class TestFDAExportCSV:
         resp = client.get("/v1/supplier/export/fda-records?facility_id=not-a-uuid")
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Lot-code-only FDA export stays scoped to the calling supplier.
+# Regression test: the preview and download endpoints used to drop the
+# per-supplier filter when only a lot code was given, so one supplier
+# could see another supplier's rows in the same tenant.
+# ---------------------------------------------------------------------------
+
+
+def _make_supplier_rows(db_session, *, tlc_code: str) -> None:
+    import hashlib
+    import json
+    from datetime import datetime, timezone
+
+    # One lot code seen by two suppliers in the same tenant: supplier A owns
+    # the lot, and both suppliers record events against it as it moves along
+    # the chain. Lot codes are unique per tenant, so this shares one lot row.
+    facility_a = SupplierFacilityModel(
+        tenant_id=TEST_TENANT_ID,
+        supplier_user_id=TEST_USER_ID,
+        name="Farm A",
+        street="1 Main St",
+        city="Salinas",
+        state="CA",
+        postal_code="93901",
+        roles=["Grower"],
+    )
+    facility_b = SupplierFacilityModel(
+        tenant_id=TEST_TENANT_ID,
+        supplier_user_id=OTHER_USER_ID,
+        name="Cooler B",
+        street="2 Main St",
+        city="Salinas",
+        state="CA",
+        postal_code="93901",
+        roles=["Cooler"],
+    )
+    db_session.add_all([facility_a, facility_b])
+    db_session.flush()
+    lot = SupplierTraceabilityLotModel(
+        tenant_id=TEST_TENANT_ID,
+        supplier_user_id=TEST_USER_ID,
+        facility_id=facility_a.id,
+        tlc_code=tlc_code,
+        product_description="Spinach",
+        status="active",
+    )
+    db_session.add(lot)
+    db_session.flush()
+    for seq, (user_id, facility) in enumerate([(TEST_USER_ID, facility_a), (OTHER_USER_ID, facility_b)], start=1):
+        payload = {"cte_type": "harvesting", "seq": seq}
+        db_session.add(
+            SupplierCTEEventModel(
+                tenant_id=TEST_TENANT_ID,
+                supplier_user_id=user_id,
+                facility_id=facility.id,
+                lot_id=lot.id,
+                cte_type="harvesting",
+                event_time=datetime.now(timezone.utc),
+                payload_sha256=hashlib.sha256(json.dumps(payload).encode()).hexdigest(),
+                merkle_hash=hashlib.sha256(f"merkle-{seq}".encode()).hexdigest(),
+                merkle_prev_hash=None,
+                sequence_number=seq,
+                kde_data={},
+            )
+        )
+    db_session.commit()
+
+
+class TestFDAExportLotCodeSupplierScope:
+    def test_preview_lot_code_only_stays_scoped(self, client, db_session):
+        """Preview with only tlc_code returns just the caller's rows."""
+        _make_supplier_rows(db_session, tlc_code="TLC-SHARED")
+        resp = client.get("/v1/supplier/export/fda-records/preview?tlc_code=TLC-SHARED")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_count"] == 1
+        assert body["rows"][0]["facility_name"] == "Farm A"
+
+    def test_download_lot_code_only_stays_scoped(self, client, db_session):
+        """Download with only tlc_code returns just the caller's rows."""
+        _make_supplier_rows(db_session, tlc_code="TLC-SHARED")
+        resp = client.get("/v1/supplier/export/fda-records?format=csv&tlc_code=TLC-SHARED")
+        assert resp.status_code == 200
+        assert resp.headers["X-FDA-Record-Count"] == "1"
+        assert "Farm A" in resp.text
+        assert "Cooler B" not in resp.text

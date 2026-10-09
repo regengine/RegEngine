@@ -144,12 +144,11 @@ async def preview_fda_records_export(
         )
 
     normalized_tlc_code = tlc_code.strip() if tlc_code else None
-    trace_scope_supplier_id = None if normalized_tlc_code and scoped_facility_id is None else current_user.id
 
     rows = _build_fda_export_rows(
         db,
         tenant_id=tenant_id,
-        supplier_user_id=trace_scope_supplier_id,
+        supplier_user_id=current_user.id,
         facility_id=scoped_facility_id,
         tlc_code=normalized_tlc_code,
         start_time=start_time,
@@ -188,12 +187,11 @@ async def export_fda_records(
         )
 
     normalized_tlc_code = tlc_code.strip() if tlc_code else None
-    trace_scope_supplier_id = None if normalized_tlc_code and scoped_facility_id is None else current_user.id
 
     rows = _build_fda_export_rows(
         db,
         tenant_id=tenant_id,
-        supplier_user_id=trace_scope_supplier_id,
+        supplier_user_id=current_user.id,
         facility_id=scoped_facility_id,
         tlc_code=normalized_tlc_code,
         start_time=start_time,
