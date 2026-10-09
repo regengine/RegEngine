@@ -50,9 +50,15 @@ def _env_flag(name: str, default: bool = False) -> bool:
         return default
     return val.strip().lower() in {"1", "true", "yes", "on"}
 
+
+import sys
+from pathlib import Path
+
 import structlog
-from jsonschema import Draft7Validator, ValidationError
 from confluent_kafka.admin import NewTopic
+from jsonschema import Draft7Validator, ValidationError
+from opentelemetry import propagate, trace
+from prometheus_client import Counter
 from shared.kafka_compat import (
     KafkaAdminClientCompat as KafkaAdminClient,
     KafkaConsumerCompat as KafkaConsumer,
@@ -61,17 +67,24 @@ from shared.kafka_compat import (
     KafkaTimeoutError,
     TopicAlreadyExistsError,
 )
-from opentelemetry import trace, propagate
-from prometheus_client import Counter
-from structlog.contextvars import get_contextvars
-
-from pathlib import Path
-import sys
 
 # Standardized path discovery via shared utility
 from shared.paths import ensure_shared_importable
+from structlog.contextvars import get_contextvars
+
 ensure_shared_importable()
 
+from shared.kafka_auth import (
+    KafkaAuthError,
+    get_allowed_producers,
+    sign_event,
+    verify_event,
+)
+from shared.observability.kafka_propagation import (
+    bind_correlation_context,
+    extract_correlation_headers,
+    inject_correlation_headers_tuples,
+)
 from shared.schemas import (
     ExtractionPayload,
     GraphEvent,
@@ -79,23 +92,7 @@ from shared.schemas import (
     ReviewItem,
     Threshold,
 )
-from shared.observability.kafka_propagation import (
-    bind_correlation_context,
-    extract_correlation_headers,
-    inject_correlation_headers_tuples,
-)
-from shared.kafka_auth import (
-    KafkaAuthError,
-    get_allowed_producers,
-    sign_event,
-    verify_event,
-)
-
-# Producer service identity used when this consumer re-emits events to
-# downstream topics (graph.update, nlp.needs_review, nlp.extracted).
-# Must match the value the downstream consumer expects in its
-# KAFKA_ALLOWED_PRODUCERS_<TOPIC> env var (#1078).
-from .constants import NLP_PRODUCER_SERVICE
+from shared.url_validation import PathTraversalError
 
 from ..classification import SignalClassifier
 from ..config import settings
@@ -107,24 +104,27 @@ from ..extractors.fsma_types import (
 )
 from ..resolution import EntityResolver
 from ..s3_loader import parse_s3_uri
-from ..s3_utils import get_bytes
-from shared.url_validation import PathTraversalError
+from ..s3_utils import S3ObjectTooLargeError, get_bytes
 
+# Producer service identity used when this consumer re-emits events to
+# downstream topics (graph.update, nlp.needs_review, nlp.extracted).
+# Must match the value the downstream consumer expects in its
+# KAFKA_ALLOWED_PRODUCERS_<TOPIC> env var (#1078).
 # ---------------------------------------------------------------------------
 # Backward-compatible re-exports from the package submodules. Every name the
 # original consumer.py defined at module level remains importable from
 # ``app.consumer`` (and patchable as an attribute of this module).
 # ---------------------------------------------------------------------------
 from .constants import (
+    _LEGACY_HEURISTIC_CONFIDENCE_CAP,
+    _LLM_EXTRACTION_CONFIDENCE_CAP,
     MAX_RETRIES,
+    NLP_PRODUCER_SERVICE,
     TOPIC_DLQ,
     TOPIC_FSMA_DLQ,
     TOPIC_GRAPH_UPDATE,
     TOPIC_NEEDS_REVIEW,
-    _LEGACY_HEURISTIC_CONFIDENCE_CAP,
-    _LLM_EXTRACTION_CONFIDENCE_CAP,
 )
-from .tenancy import _kafka_key_for, _resolve_tenant_id, _retry_key_for
 from .conversion import (
     CLASSIFIER,
     RESOLVER,
@@ -133,11 +133,7 @@ from .conversion import (
     _now_iso,
     _score_regulatory_date,
 )
-from .thresholds import CONFIDENCE_THRESHOLD, _ThresholdProxy, _current_thresholds
-from .schema_validation import _INBOUND_VALIDATOR, _load_inbound_schema, _load_schema
-from .review_routing import _build_review_reasons, _route_extraction
-from .dlq import _collect_ftl_flags, _is_fsma_event, _retry_counts
-from .dlq import _send_to_dlq, _send_to_fsma_dlq
+from .dlq import _collect_ftl_flags, _is_fsma_event, _retry_counts, _send_to_dlq, _send_to_fsma_dlq
 from .health import (
     _HEALTH_PORT,
     _POLL_ERROR_UNHEALTHY_THRESHOLD,
@@ -153,6 +149,10 @@ from .health import (
     reset_consumer_health,
     stop_consumer,
 )
+from .review_routing import _build_review_reasons, _route_extraction
+from .schema_validation import _INBOUND_VALIDATOR, _load_inbound_schema, _load_schema
+from .tenancy import _kafka_key_for, _resolve_tenant_id, _retry_key_for
+from .thresholds import CONFIDENCE_THRESHOLD, _current_thresholds, _ThresholdProxy
 
 logger = structlog.get_logger("nlp-consumer")
 _audit_logger = structlog.get_logger("nlp-consumer-audit")
@@ -186,10 +186,16 @@ _audit_logger = structlog.get_logger("nlp-consumer-audit")
 # backstop so existing consumers continue to observe nlp.extracted
 # events.
 NLP_ENABLE_FSMA_EXTRACTOR = os.getenv("NLP_ENABLE_FSMA_EXTRACTOR", "true").lower() in (
-    "true", "1", "yes", "on",
+    "true",
+    "1",
+    "yes",
+    "on",
 )
 NLP_ENABLE_LLM_EXTRACTOR = os.getenv("NLP_ENABLE_LLM_EXTRACTOR", "false").lower() in (
-    "true", "1", "yes", "on",
+    "true",
+    "1",
+    "yes",
+    "on",
 )
 
 # Instantiate extractors lazily on first use so test imports don't pay
@@ -348,6 +354,7 @@ def _run_llm_extractor(
         )
         return []
 
+
 try:
     MESSAGES_COUNTER = Counter("nlp_messages_total", "NLP messages processed", ["status"])
     POISON_PILL_COUNTER = Counter("nlp_poison_pill_total", "Count of malformed Kafka messages")
@@ -362,11 +369,10 @@ try:
 except ValueError:
     # Metric already registered (happens during test re-imports)
     from prometheus_client import REGISTRY
+
     MESSAGES_COUNTER = REGISTRY._names_to_collectors.get("nlp_messages_total")
     POISON_PILL_COUNTER = REGISTRY._names_to_collectors.get("nlp_poison_pill_total")
-    TENANT_RESOLUTION_COUNTER = REGISTRY._names_to_collectors.get(
-        "nlp_tenant_resolution_total"
-    )
+    TENANT_RESOLUTION_COUNTER = REGISTRY._names_to_collectors.get("nlp_tenant_resolution_total")
 
 # Legacy ``nlp.extracted`` topic feature flag (#1218).
 # The legacy publish sent the raw ``entities`` list with no confidence filtering,
@@ -398,7 +404,9 @@ def _ensure_topic(topic: str) -> None:
 
 
 from shared.observability import setup_standalone_observability
+
 tracer = setup_standalone_observability("nlp-consumer")
+
 
 def run_consumer() -> None:
     # Start health endpoint before first Kafka poll so probes succeed at startup
@@ -523,13 +531,10 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                     # the contextvar bind so the raw value survives the
                     # `bind_correlation_context` exit and can be compared
                     # against the payload tenant_id below (injection check).
-                    _, header_tenant_id = extract_correlation_headers(
-                        record.headers or []
-                    )
+                    _, header_tenant_id = extract_correlation_headers(record.headers or [])
                     # Standardized Trace Injection
                     with tracer.start_as_current_span(
-                        "nlp.process_message",
-                        attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
+                        "nlp.process_message", attributes={"kafka.topic": record.topic, "kafka.offset": record.offset}
                     ) as span:
                         # Capture trace context for DLQ headers (OTel W3C)
                         otel_headers: list = []
@@ -545,7 +550,9 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                         except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
                             logger.error("poison_pill_detected", error=str(exc), offset=record.offset)
                             POISON_PILL_COUNTER.inc()
-                            _send_to_dlq(producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers)
+                            _send_to_dlq(
+                                producer, raw_value, f"Deserialization failed: {str(exc)}", headers=kafka_headers
+                            )
                             # #1085 — flush DLQ producer BEFORE committing the
                             # inbound offset. producer.send() only buffers; a
                             # crash between buffer and broker-ack would advance
@@ -611,9 +618,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 **auth_exc.fields,
                             )
                             POISON_PILL_COUNTER.inc()
-                            doc_id_for_dlq = (
-                                evt.get("document_id") if isinstance(evt, dict) else None
-                            ) or "unknown"
+                            doc_id_for_dlq = (evt.get("document_id") if isinstance(evt, dict) else None) or "unknown"
                             _send_to_fsma_dlq(
                                 producer,
                                 evt if isinstance(evt, dict) else raw_value,
@@ -658,9 +663,11 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 # (#1122). ``None`` is safe — _send_to_fsma_dlq
                                 # falls back to the NO_TENANT sentinel key.
                                 _send_to_fsma_dlq(
-                                    producer, evt,
+                                    producer,
+                                    evt,
                                     f"Inbound schema invalid: {error_msg}",
-                                    doc_id, headers=kafka_headers,
+                                    doc_id,
+                                    headers=kafka_headers,
                                     tenant_id=evt.get("tenant_id") if isinstance(evt, dict) else None,
                                 )
                                 MESSAGES_COUNTER.labels(status="rejected").inc()
@@ -702,8 +709,11 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 offset=record.offset,
                             )
                             _send_to_fsma_dlq(
-                                producer, evt, f"Field extraction failed: {field_exc}",
-                                doc_id, kafka_headers,
+                                producer,
+                                evt,
+                                f"Field extraction failed: {field_exc}",
+                                doc_id,
+                                kafka_headers,
                                 tenant_id=evt.get("tenant_id") if isinstance(evt, dict) else None,
                             )
                             MESSAGES_COUNTER.labels(status="error").inc()
@@ -781,8 +791,11 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             offset=record.offset,
                         )
                         _send_to_fsma_dlq(
-                            producer, evt, f"Field extraction failed: {field_exc}",
-                            doc_id, kafka_headers,
+                            producer,
+                            evt,
+                            f"Field extraction failed: {field_exc}",
+                            doc_id,
+                            kafka_headers,
                             tenant_id=tenant_id,
                         )
                         MESSAGES_COUNTER.labels(status="error").inc()
@@ -809,9 +822,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                     try:
                         if inline_text:
                             text = str(inline_text)[:2_000_000]
-                            source_url = provenance.get(
-                                "source_url", evt.get("source_url", "unknown")
-                            )
+                            source_url = provenance.get("source_url", evt.get("source_url", "unknown"))
                         else:
                             # #1127 — use validated parse instead of inline
                             # partition(). parse_s3_uri() → validate_s3_uri()
@@ -829,7 +840,24 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 MESSAGES_COUNTER.labels(status="skipped").inc()
                                 consumer.commit()
                                 continue
-                            payload = json.loads(get_bytes(bucket, key))
+                            try:
+                                raw_s3 = get_bytes(bucket, key)
+                            except S3ObjectTooLargeError as too_large:
+                                # The object exceeds the size envelope:
+                                # skip it like other unprocessable
+                                # supplier content. Committing is safe,
+                                # redelivery could never succeed.
+                                logger.warning(
+                                    "s3_object_skipped_too_large",
+                                    norm_path=norm_path,
+                                    doc_id=doc_id,
+                                    tenant_id=tenant_id,
+                                    err=str(too_large),
+                                )
+                                MESSAGES_COUNTER.labels(status="skipped").inc()
+                                consumer.commit()
+                                continue
+                            payload = json.loads(raw_s3)
                             text = payload.get("text", "")[:2_000_000]
                             source_url = payload.get("source_url", "unknown")
 
@@ -869,9 +897,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                         entities = extract_entities(text)
 
                         # Convert to canonical ExtractionPayload format
-                        extractions = _convert_entities_to_extraction(
-                            entities, doc_id, source_url
-                        )
+                        extractions = _convert_entities_to_extraction(entities, doc_id, source_url)
 
                         # --- LLM fallback pass (#1194) ---
                         # Only invoked when the regex+FSMA passes yielded
@@ -879,12 +905,8 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                         # has explicitly opted in to LLM spend.
                         if NLP_ENABLE_LLM_EXTRACTOR:
                             produced_high_conf = (
-                                fsma_summary is not None
-                                and fsma_summary.get("high_confidence")
-                            ) or any(
-                                e.confidence_score >= settings.extraction_confidence_high
-                                for e in extractions
-                            )
+                                fsma_summary is not None and fsma_summary.get("high_confidence")
+                            ) or any(e.confidence_score >= settings.extraction_confidence_high for e in extractions)
                             if not produced_high_conf:
                                 jurisdiction = "US-FDA" if _is_fsma_event(evt) else "unknown"
                                 llm_results = _run_llm_extractor(
@@ -900,11 +922,7 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                                 # the regex path fed. Every LLM item is
                                 # capped below the medium threshold inside
                                 # the bridge, so it can only reach HITL.
-                                llm_extractions = (
-                                    _convert_llm_results_to_extractions(
-                                        llm_results, doc_id, source_url
-                                    )
-                                )
+                                llm_extractions = _convert_llm_results_to_extractions(llm_results, doc_id, source_url)
                                 extractions.extend(llm_extractions)
                                 logger.info(
                                     "llm_extractor_run",
@@ -999,18 +1017,11 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             document_id=doc_id,
                             tenant_id=tenant_id,
                             extraction_count=len(extractions),
-                            high_confidence=sum(
-                                1 for e in extractions
-                                if e.confidence_score >= high_t_log
-                            ),
+                            high_confidence=sum(1 for e in extractions if e.confidence_score >= high_t_log),
                             medium_confidence=sum(
-                                1 for e in extractions
-                                if medium_t_log <= e.confidence_score < high_t_log
+                                1 for e in extractions if medium_t_log <= e.confidence_score < high_t_log
                             ),
-                            low_confidence=sum(
-                                1 for e in extractions
-                                if e.confidence_score < medium_t_log
-                            ),
+                            low_confidence=sum(1 for e in extractions if e.confidence_score < medium_t_log),
                         )
                         MESSAGES_COUNTER.labels(status="success").inc()
 
