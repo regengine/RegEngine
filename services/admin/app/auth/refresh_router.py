@@ -341,18 +341,27 @@ async def refresh_session(
         )
         active_role = db.get(RoleModel, active_membership.role_id) if active_membership else None
 
-    # #1401 — Re-query the real tenant status instead of hardcoding "active".
-    # The query above already filters for active memberships/tenants, but the
-    # status we embed in the token should reflect the DB truth at refresh time.
+        # #1401 — Re-query the real tenant status instead of hardcoding "active".
+        # The query above already filters for active memberships/tenants, but the
+        # status we embed in the token should reflect the DB truth at refresh time.
+        # If the tenant row is gone (deleted between the membership check and this
+        # re-query), deny the refresh rather than minting a token with a
+        # defaulted status.
         real_tenant_status: Optional[str] = None
         if active_tenant_id:
             tenant_row = db.get(TenantModel, active_tenant_id)
             if tenant_row:
                 real_tenant_status = tenant_row.status
             else:
-                real_tenant_status = "active"  # defensive fallback; query above already enforced it
+                logger.warning(
+                    "refresh_tenant_vanished",
+                    user_id=str(user.id),
+                    tenant_id=str(active_tenant_id),
+                )
+                raise HTTPException(status_code=403, detail="No active tenant available")
         if real_tenant_status is None:
             logger.warning("refresh_no_tenant_status", user_id=str(user.id), tenant_id=str(active_tenant_id))
+            raise HTTPException(status_code=403, detail="No active tenant available")
     finally:
         disarm_global_admin_context(db)
 
