@@ -70,6 +70,9 @@ export default function SysAdminDashboard() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
+    // Client-side gate is UX only: user profile data is browser-readable and
+    // must never be treated as authorization. The /api/admin proxy and the
+    // backend re-check sysadmin rights on every request.
     useEffect(() => {
         if (!user || !user.is_sysadmin) {
             router.push("/login")
@@ -77,25 +80,27 @@ export default function SysAdminDashboard() {
     }, [user, router])
 
     const fetchData = useCallback(async () => {
+        // accessToken here is only a "session exists" signal: its value is the
+        // literal placeholder "cookie-managed", never the real credential. The
+        // real credential lives in an HTTP-only cookie, so send no auth header
+        // and let the same-origin /api/admin proxy inject it server-side.
         if (!accessToken) return
 
         setLoading(true)
         setError(null)
         try {
-            const headers = {
-                "Authorization": `Bearer ${accessToken}`
-            }
+            const requestInit: RequestInit = { credentials: 'include' }
 
             const adminBase = getServiceURL('admin')
 
             // Fetch Status
-            const statusRes = await fetch(`${adminBase}/v1/system/status`, { headers })
+            const statusRes = await fetch(`${adminBase}/v1/system/status`, requestInit)
             if (!statusRes.ok) throw new Error("Failed to fetch system status")
             const statusData = await statusRes.json()
             setStatus(statusData)
 
             // Fetch Metrics
-            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`, { headers })
+            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`, requestInit)
             if (!metricsRes.ok) throw new Error("Failed to fetch system metrics")
             const metricsData = await metricsRes.json()
             setMetrics(metricsData)
@@ -113,6 +118,8 @@ export default function SysAdminDashboard() {
         }
     }, [user, accessToken, fetchData])
 
+    // UX-only guard, mirrors the redirect above. Authorization is enforced
+    // by the /api/admin proxy and the backend, not by this check.
     if (!user || !user.is_sysadmin) {
         return null // Redirecting
     }
