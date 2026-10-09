@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: regengine-ingress
   annotations:
-    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Security headers
@@ -15,6 +14,10 @@ metadata:
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
       more_set_headers "Content-Security-Policy: default-src 'self'";
 spec:
+  # Use the modern class field. The deprecated
+  # kubernetes.io/ingress.class annotation was removed on purpose so the
+  # two settings cannot disagree about which controller owns this Ingress.
+  ingressClassName: nginx
   # cert-manager provisions this certificate from the letsencrypt-prod
   # cluster-issuer above. Without a tls block the annotation alone does
   # nothing and the host serves plaintext.
@@ -23,9 +26,67 @@ spec:
     - api.regengine.co
     secretName: regengine-tls
   rules:
+  # Path table. These prefixes intentionally mirror the public locations in
+  # infra/gateway/nginx.conf (/admin/, /ingest/, /nlp/, /graph/, /fsma/,
+  # /compliance/) so the two edge layers expose one consistent URL scheme,
+  # plus /scheduler/ for the scheduler Service, which has no gateway route
+  # but exists in this tree. Gateway regex locations (/trace/forward/,
+  # /trace/backward/) stay gateway-only: they map into graph-service paths
+  # that a plain Prefix rule cannot express.
+  #
+  # Apply-time note: the gateway strips the matched prefix in proxy_pass
+  # (and maps /fsma/ to /v1/fsma/ on graph-service), while this Ingress
+  # forwards the full path. Whoever applies this tree must add matching
+  # rewrite rules or keep the gateway as the stripping edge.
+  #
+  # Auth ownership (app-level, no ingress auth annotations): every backend
+  # enforces its own authentication, pinned by
+  # docs/security/route-security-manifest.json. /admin (services/admin, API
+  # key plus session auth), /ingest (services/ingestion/app/authz.py),
+  # /graph and /fsma (services/graph, require_api_key), /nlp
+  # (services/nlp, require_api_key), /compliance (services/compliance,
+  # require_api_key), /scheduler (services/scheduler/main.py: /metrics and
+  # /status require X-Metrics-Key, /health stays open for probes). IP
+  # allowlisting is intentionally absent: the permitted source ranges are
+  # a production-network decision and are not committed here.
   - host: api.regengine.co
     http:
       paths:
+      - path: /admin
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+      - path: /ingest
+        pathType: Prefix
+        backend:
+          service:
+            name: ingestion-service
+            port:
+              number: 80
+      - path: /graph
+        pathType: Prefix
+        backend:
+          service:
+            name: graph-service
+            port:
+              number: 80
+      - path: /fsma
+        pathType: Prefix
+        backend:
+          service:
+            name: graph-service
+            port:
+              number: 80
+      - path: /nlp
+        pathType: Prefix
+        backend:
+          service:
+            name: nlp-service
+            port:
+              number: 80
       - path: /compliance
         pathType: Prefix
         backend:
@@ -33,31 +94,10 @@ spec:
             name: compliance-service
             port:
               number: 80
-      - path: /api/admin
+      - path: /scheduler
         pathType: Prefix
         backend:
           service:
-            name: admin-service
-            port:
-              number: 80
-      - path: /api/ingestion
-        pathType: Prefix
-        backend:
-          service:
-            name: ingestion-service
-            port:
-              number: 80
-      - path: /api/graph
-        pathType: Prefix
-        backend:
-          service:
-            name: graph-service
-            port:
-              number: 80
-      - path: /api/nlp
-        pathType: Prefix
-        backend:
-          service:
-            name: nlp-service
+            name: scheduler-service
             port:
               number: 80
