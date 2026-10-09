@@ -35,10 +35,10 @@ run_test() {
     
     if eval "$cmd"; then
         echo -e "${GREEN}✓ ${name} PASSED${NC}"
-        ((PASSED++))
+        ((PASSED+=1))
     else
         echo -e "${RED}✗ ${name} FAILED${NC}"
-        ((FAILED++))
+        ((FAILED+=1))
     fi
     echo ""
 }
@@ -54,10 +54,10 @@ for port in 8002 8100 8200 8300 8400 8500 8600; do
     status=$(curl -sf http://localhost:$port/health 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "DOWN")
     if [[ "$status" == "healthy" || "$status" == "ok" ]]; then
         echo -e "${GREEN}✓ Port $port: $status${NC}"
-        ((SERVICES_UP++))
+        ((SERVICES_UP+=1))
     else
         echo -e "${RED}✗ Port $port: $status${NC}"
-        ((SERVICES_DOWN++))
+        ((SERVICES_DOWN+=1))
     fi
 done
 
@@ -81,12 +81,12 @@ echo ""
 
 if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping contract tests in quick mode (require live services)${NC}"
-    ((SKIPPED++))
+    ((SKIPPED+=1))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
     run_test "Contract Tests" "python3 -m pytest tests/contract/ -v --tb=short 2>&1 | tail -20"
 else
     echo -e "${YELLOW}⚠ Skipping contract tests - some services are down${NC}"
-    ((SKIPPED++))
+    ((SKIPPED+=1))
 fi
 
 # 4. Security Tests (hermetic — no live services needed)
@@ -101,7 +101,7 @@ if [[ -d "tests/security" ]]; then
     fi
 else
     echo -e "${YELLOW}⚠ Security tests directory not found${NC}"
-    ((SKIPPED++))
+    ((SKIPPED+=1))
 fi
 
 # 5. E2E Tests (need live services)
@@ -110,12 +110,12 @@ echo ""
 
 if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping E2E tests in quick mode (require live services)${NC}"
-    ((SKIPPED++))
+    ((SKIPPED+=1))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
     run_test "E2E Tests" "python3 -m pytest tests/e2e/ -v --tb=short 2>&1 | tail -20"
 else
     echo -e "${YELLOW}⚠ Skipping E2E tests - some services are down${NC}"
-    ((SKIPPED++))
+    ((SKIPPED+=1))
 fi
 
 # 6. Frontend Tests (if not quick mode)
@@ -127,15 +127,15 @@ if ! $QUICK_MODE; then
         cd frontend
         if npm run test:run -- --reporter=dot 2>&1 | tail -10; then
             echo -e "${GREEN}✓ Frontend Tests PASSED${NC}"
-            ((PASSED++))
+            ((PASSED+=1))
         else
             echo -e "${YELLOW}⚠ Frontend Tests need review${NC}"
-            ((SKIPPED++))
+            ((SKIPPED+=1))
         fi
         cd ..
     else
         echo -e "${YELLOW}⚠ Frontend not found${NC}"
-        ((SKIPPED++))
+        ((SKIPPED+=1))
     fi
 fi
 
