@@ -93,6 +93,9 @@ class SimResult:
         print("=" * 58)
         if failed:
             sys.exit(1)
+        if passed == 0:
+            print("  No steps passed (everything was skipped): treating as failure")
+            sys.exit(1)
 
 
 def headers(extra: dict | None = None) -> dict:
