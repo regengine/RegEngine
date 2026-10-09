@@ -445,13 +445,19 @@ def _extract_and_record(
       body + Kafka headers emitted by ``sign_event(...)``.
 
     Hardening (#1390):
-    - source_text is escaped via ``sanitize_source_text_for_store``
-      before insert. The DB stores the sanitized text so a later
-      unsanitized read path cannot leak stored XSS into the admin UI.
+    - Store both: the raw ``source_text`` is kept verbatim in the
+      ``text_raw`` column (for analytics / model training / audit
+      exports), while ``extraction["source_text"]`` holds the copy
+      escaped via ``sanitize_source_text_for_store``. Read paths must
+      re-sanitize ``text_raw`` via
+      ``sanitize_source_text_for_response`` and never return it
+      directly, so stored XSS cannot reach the admin UI.
     """
     payload = _verify_review_event(evt, headers, topic=topic)
 
-    tenant_id = payload.get("tenant_id")  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
+    tenant_id = payload.get(
+        "tenant_id"
+    )  # nosemgrep: tenant-id-from-request-body -- payload was authenticated by _verify_review_event via shared.kafka_auth.verify_event
     document_id = payload.get("document_id")
     extraction = payload.get("extraction") or {}
     doc_hash = payload.get("doc_hash") or extraction.get("attributes", {}).get("doc_hash") or document_id or "unknown"
@@ -460,12 +466,15 @@ def _extract_and_record(
     source_text_raw = extraction.get("source_text")
     provenance = extraction.get("attributes", {})
 
-    # Sanitize source_text before DB store (#1390).
+    # Store both (#1390): keep the raw document text verbatim in
+    # text_raw for analytics / training / audit exports, and put the
+    # sanitized copy in extraction["source_text"] for display readers.
     from .text_sanitize import sanitize_source_text_for_store
 
-    sanitized_text = sanitize_source_text_for_store(source_text_raw)
+    raw_text = "" if source_text_raw is None else str(source_text_raw)
+    sanitized_text = sanitize_source_text_for_store(raw_text)
 
-    # Also rewrite the source_text field inside the extraction dict so
+    # Rewrite the source_text field inside the extraction dict so
     # any downstream consumer that reads extraction["source_text"] sees
     # the sanitized value rather than the raw document bytes.
     if isinstance(extraction, dict) and "source_text" in extraction:
@@ -481,7 +490,7 @@ def _extract_and_record(
         confidence_score=confidence_score,
         extraction=extraction,
         provenance=provenance,
-        text_raw=sanitized_text,
+        text_raw=raw_text,
     )
 
 

@@ -560,7 +560,12 @@ def test_extract_and_record_uses_verified_signed_payload(monkeypatch):
     assert captured["tenant_id"] == "abc"
     assert captured["doc_hash"] == "hash-1"
     assert captured["extractor"] == "GENERIC"
-    assert captured["text_raw"] != "<b>unsafe</b>"
+    # Store both (#1390): text_raw keeps the verbatim original for
+    # analytics / training / audit exports, while the extraction dict
+    # carries the sanitized display-safe copy.
+    assert captured["text_raw"] == "<b>unsafe</b>"
+    assert captured["extraction"]["source_text"] != "<b>unsafe</b>"
+    assert "unsafe" in captured["extraction"]["source_text"]
 
 
 # =========================================================================
@@ -586,15 +591,9 @@ def test_review_routes_use_distinct_read_and_decide_dependencies():
         for route in review_routes.router.routes
         for method in route.methods
     }
-    assert review_routes.require_review_read in route_dependencies[
-        ("/v1/admin/review/hallucinations", "GET")
-    ]
-    assert review_routes.require_review_decide in route_dependencies[
-        ("/v1/admin/review/{review_id}/approve", "POST")
-    ]
-    assert review_routes.require_review_decide in route_dependencies[
-        ("/v1/admin/review/{review_id}/reject", "POST")
-    ]
+    assert review_routes.require_review_read in route_dependencies[("/v1/admin/review/hallucinations", "GET")]
+    assert review_routes.require_review_decide in route_dependencies[("/v1/admin/review/{review_id}/approve", "POST")]
+    assert review_routes.require_review_decide in route_dependencies[("/v1/admin/review/{review_id}/reject", "POST")]
 
 
 # =========================================================================

@@ -353,12 +353,17 @@ class HallucinationTracker:
             logger.warning("redis_cache_failed", error=str(exc))
 
     def _serialize(self, item: ReviewItemModel) -> Dict[str, Any]:
+        from .text_sanitize import sanitize_source_text_for_response
+
         snapshot = self._snapshot(item)
         result = asdict(snapshot)
         result.update(
             {
                 "reviewer_id": item.reviewer_id,
-                "text_raw": item.text_raw,
+                # text_raw holds the verbatim original (#1390 stores
+                # both); never hand it to a client directly, always
+                # re-sanitize on read.
+                "text_raw": sanitize_source_text_for_response(item.text_raw),
             }
         )
         return result

@@ -7,10 +7,15 @@ reviewer UI renders this with ``dangerouslySetInnerHTML`` or a
 permissive Markdown renderer, an attacker can smuggle ``<script>``
 payloads into the admin UI via a malicious supplier document.
 
-Strategy:
-- Store the raw text verbatim in the DB (so downstream analytics /
-  model training / audit exports can access the original). The raw
-  field is never returned to the client directly.
+Strategy (store both, sanitize on read):
+- Store the raw text verbatim in the DB ``text_raw`` column (so
+  downstream analytics / model training / audit exports can access
+  the original). The raw column value is never returned to the
+  client directly; every read path must pass it through
+  ``sanitize_source_text_for_response`` first.
+- Store a sanitized copy in ``extraction["source_text"]`` at ingest
+  time, so downstream readers of the extraction dict see display-safe
+  text without needing to sanitize again.
 - On API response, HTML-escape and strip anything that parses as an
   HTML tag. We purposefully do NOT use ``bleach`` (optional
   dependency) so that this ships without a new requirement -- the

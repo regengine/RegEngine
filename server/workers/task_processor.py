@@ -97,10 +97,9 @@ def _heartbeat_interval_for(timeout_seconds: int) -> int:
     """
     timeout = int(timeout_seconds)
     if timeout <= 0:
-        raise ValueError(
-            f"visibility timeout must be a positive number of seconds, got {timeout_seconds!r}"
-        )
+        raise ValueError(f"visibility timeout must be a positive number of seconds, got {timeout_seconds!r}")
     return max(1, timeout // 4)
+
 
 # How long ``stop_task_worker`` waits for the in-flight handler to return
 # before emitting an "abandoned" log and releasing the row's lock so another
@@ -390,9 +389,14 @@ def _handle_review_item(payload: Dict[str, Any], tenant_id: Optional[str] = None
 
         tracker = get_hallucination_tracker()
         document_id = payload.get("document_id", "")
-        # #1390 — sanitize the untrusted source span before DB store,
-        # mirroring the Kafka review consumer (_extract_and_record).
-        sanitized_text = sanitize_source_text_for_store(payload.get("text", ""))
+        # #1390 — store both, mirroring the Kafka review consumer
+        # (_extract_and_record): raw text verbatim in text_raw for
+        # analytics / training / audit exports, sanitized copy in
+        # extraction["source_text"] for display readers. Read paths
+        # must re-sanitize text_raw and never return it directly.
+        raw_text_value = payload.get("text", "")
+        raw_text = "" if raw_text_value is None else str(raw_text_value)
+        sanitized_text = sanitize_source_text_for_store(raw_text)
         extraction = payload.get("extraction") or {
             "source_text": sanitized_text,
             "attributes": {"entity_type": payload.get("entity_type", "unknown")},
@@ -411,7 +415,7 @@ def _handle_review_item(payload: Dict[str, Any], tenant_id: Optional[str] = None
             confidence_score=payload.get("confidence", 0.0),
             extraction=extraction,
             provenance=payload.get("provenance") or {},
-            text_raw=sanitized_text,
+            text_raw=raw_text,
         )
         logger.info("review_item_recorded", document_id=payload.get("document_id"))
     except ImportError:

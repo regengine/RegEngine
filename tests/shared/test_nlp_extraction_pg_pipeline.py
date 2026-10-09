@@ -281,9 +281,13 @@ class TestReviewItemSchemaCompatibility:
         assert kwargs["confidence_score"] == review_payload["confidence"]
         assert kwargs["extractor"] == "legacy_regex_v1"
         assert kwargs["provenance"]["source_document_id"] == "doc-1"
-        # Sanitized span recorded for both text_raw and the extraction dict.
-        assert kwargs["text_raw"]
-        assert kwargs["extraction"]["source_text"] == kwargs["text_raw"]
+        # Store both (#1390): text_raw keeps the verbatim original for
+        # analytics / training / audit exports, while the extraction
+        # dict carries the sanitized display-safe copy.
+        from services.admin.app.text_sanitize import sanitize_source_text_for_store
+
+        assert kwargs["text_raw"] == review_payload["text"]
+        assert kwargs["extraction"]["source_text"] == sanitize_source_text_for_store(review_payload["text"])
 
     def test_legacy_minimal_payload_still_supported(self):
         # The pre-existing 4-key contract must keep working byte-for-byte.
@@ -322,8 +326,12 @@ class TestReviewItemSchemaCompatibility:
             )
 
         kwargs = tracker.record_hallucination.call_args.kwargs
-        assert "<script>" not in kwargs["text_raw"]
-        assert "must report" in kwargs["text_raw"]
+        # Store both (#1390): the verbatim original (with the script
+        # payload intact) lands in text_raw for audit exports, while
+        # display readers use the sanitized extraction copy.
+        assert kwargs["text_raw"] == "<script>alert(1)</script>must report"
+        assert "<script>" not in kwargs["extraction"]["source_text"]
+        assert "must report" in kwargs["extraction"]["source_text"]
 
 
 # ---------------------------------------------------------------------------
@@ -366,9 +374,7 @@ class TestFSMAReviewEnvelope:
             patch.object(task_processor, "_get_fsma_extractor", return_value=FSMAExtractor()),
             patch.object(task_processor, "enqueue_task", enqueue),
         ):
-            task_processor._handle_nlp_extraction(
-                _payload(text=BOL_MISSING_EVENT_DATE), TENANT_ID
-            )
+            task_processor._handle_nlp_extraction(_payload(text=BOL_MISSING_EVENT_DATE), TENANT_ID)
 
         fsma_calls = [c for c in _review_item_calls(enqueue) if c.args[1]["entity_type"] == "FSMA_EXTRACTION"]
         assert len(fsma_calls) == 1
