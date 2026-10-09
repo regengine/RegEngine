@@ -175,6 +175,32 @@ class TestCsvBranches:
         text, meta, _ = extract_from_csv(b"a,b\n1,2\n")
         assert meta.engine == "fallback-csv"
 
+    def test_stdlib_fallback_caps_row_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The stdlib fallback must not buffer every row of a huge file.
+        # It caps data rows at the same 10000 the pandas path uses.
+        _hide_module(monkeypatch, "pandas")
+        cap = fe._CSV_FALLBACK_MAX_ROWS
+        lines = ["a,b"] + [f"v{i},w{i}" for i in range(cap + 500)]
+        raw = ("\n".join(lines) + "\n").encode()
+        text, meta, _ = extract_from_csv(raw)
+        assert meta.engine == "pandas"
+        assert f"Total Rows: {cap}" in text
+        assert f"Row {cap}:" in text
+        assert f"Row {cap + 1}:" not in text
+
+    def test_stdlib_fallback_caps_input_size(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Input larger than the byte cap must be truncated before parsing,
+        # so output stays bounded even when rows are short.
+        _hide_module(monkeypatch, "pandas")
+        max_bytes = fe._CSV_FALLBACK_MAX_BYTES
+        row = "x" * 100
+        count = max_bytes // len(row) + 100
+        raw = ("h\n" + ("\n".join([row] * count)) + "\n").encode()
+        assert len(raw) > max_bytes
+        text, _, _ = extract_from_csv(raw)
+        assert len(text) < len(raw)
+        assert f"Total Rows: {fe._CSV_FALLBACK_MAX_ROWS}" in text
+
     def test_pandas_path_semicolon_delimiter(self) -> None:
         # Covers the ``elif sample.count(";") > sample.count(","):``
         # branch inside the pandas path (line 225-226).

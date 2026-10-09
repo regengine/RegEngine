@@ -158,6 +158,13 @@ def extract_from_xml(
 # CSV Extraction
 # =============================================================================
 
+# Bounds for the stdlib CSV fallback (used when pandas is unavailable).
+# The pandas path caps input with nrows=10000, so the fallback applies
+# the same row cap plus an input-size cap aligned with the 5 MB CSV
+# upload limit, keeping one large file from exhausting memory.
+_CSV_FALLBACK_MAX_BYTES = 5 * 1024 * 1024
+_CSV_FALLBACK_MAX_ROWS = 10000
+
 
 def extract_from_csv(
     raw_bytes: bytes, encoding: str = "utf-8"
@@ -175,7 +182,8 @@ def extract_from_csv(
         import csv as csv_mod
 
         try:
-            text_content = raw_bytes.decode(encoding, errors="ignore")
+            bounded = raw_bytes[:_CSV_FALLBACK_MAX_BYTES]
+            text_content = bounded.decode(encoding, errors="ignore")
             sample = text_content[:2048]
             delimiter = ","
             if sample.count("\t") > sample.count(","):
@@ -184,7 +192,11 @@ def extract_from_csv(
                 delimiter = ";"
 
             reader = csv_mod.reader(io.StringIO(text_content), delimiter=delimiter)
-            rows = list(reader)
+            rows = []
+            for row in reader:
+                rows.append(row)
+                if len(rows) > _CSV_FALLBACK_MAX_ROWS:
+                    break
             if not rows:
                 return _fallback_extraction(raw_bytes, "csv")
 
