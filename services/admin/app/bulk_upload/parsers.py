@@ -87,19 +87,18 @@ def _normalize_key(value: str) -> str:
     return normalized.strip("_")
 
 
-# Canonical column alias map — all known variants collapse to internal names
-# at ingestion so downstream code only references canonical keys.
+# Canonical column alias map — known unambiguous variants collapse to
+# internal names at ingestion so downstream code only references canonical
+# keys. Every remap is reported in ``warnings`` so a remapped upload never
+# silently changes meaning. Directional or generic headers (origin,
+# destination, sender, receiver, bare source/destination/timestamp) are
+# deliberately NOT aliases: collapsing two directions into one field, or
+# guessing which timestamp a generic label means, rewrites the event.
 COLUMN_ALIASES: dict[str, str] = {
     # facility_name
     "location_name": "facility_name",
-    "origin_facility_name": "facility_name",
-    "destination_facility_name": "facility_name",
     "business_name": "facility_name",
     "site_name": "facility_name",
-    "sender_name": "facility_name",
-    "receiver_name": "facility_name",
-    "source": "facility_name",
-    "destination": "facility_name",
     # tlc_code
     "traceability_lot_code": "tlc_code",
     "lot_number": "tlc_code",
@@ -111,6 +110,19 @@ COLUMN_ALIASES: dict[str, str] = {
     "event_datetime": "event_time",
     "event_date": "event_time",
     "cte_date": "event_time",
+}
+
+
+# Headers that look like they name a canonical field but are too ambiguous
+# or directional to map safely. They are kept as-is (extra columns land in
+# kde_data) and reported so the uploader can pick the canonical header.
+RETIRED_AMBIGUOUS_COLUMNS: dict[str, str] = {
+    "origin_facility_name": "facility_name",
+    "destination_facility_name": "facility_name",
+    "sender_name": "facility_name",
+    "receiver_name": "facility_name",
+    "source": "facility_name",
+    "destination": "facility_name",
     "timestamp": "event_time",
 }
 
@@ -289,16 +301,39 @@ def _parse_pdf_matrix_table(table: list[list[Any]], parsed: dict[str, Any], warn
     return added
 
 
-def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
+def _append_once(warnings: list[str] | None, message: str) -> None:
+    if warnings is not None and message not in warnings:
+        warnings.append(message)
+
+
+def _normalize_row(row: dict[str, Any], warnings: list[str] | None = None) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for key, value in row.items():
         if key is None:
             continue
+        raw_header = str(key).strip()
         canonical = _normalize_key(str(key))
-        canonical = COLUMN_ALIASES.get(canonical, canonical)
+        alias_target = COLUMN_ALIASES.get(canonical)
+        if alias_target is not None:
+            _append_once(warnings, f"Column '{raw_header}' mapped to '{alias_target}'")
+            canonical = alias_target
+        elif canonical in RETIRED_AMBIGUOUS_COLUMNS:
+            suggested = RETIRED_AMBIGUOUS_COLUMNS[canonical]
+            _append_once(
+                warnings,
+                f"Column '{raw_header}' was not mapped to '{suggested}': "
+                "the header is ambiguous, so it was kept as-is. "
+                f"Use the canonical '{suggested}' header instead.",
+            )
         # First writer wins — don't overwrite a populated canonical key
         # with a later alias that may be empty.
         if canonical in normalized and normalized[canonical]:
+            if value and str(value).strip() and normalized[canonical] != value:
+                _append_once(
+                    warnings,
+                    f"Column '{raw_header}' also maps to '{canonical}' "
+                    "which already has a value; the later value was dropped.",
+                )
             continue
         normalized[canonical] = value
     return normalized
@@ -352,7 +387,6 @@ def _extract_event_row(row: dict[str, Any]) -> dict[str, Any]:
         "cte_type",
         "event_type",
         "event_time",
-        "timestamp",
         "kde_data",
         "obligation_ids",
     }
@@ -461,7 +495,7 @@ def _parse_csv_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
 
     reader = csv.DictReader(io.StringIO(text))
     for row in reader:
-        normalized_row = _normalize_row(row)
+        normalized_row = _normalize_row(row, warnings)
         if not any(str(value or "").strip() for value in normalized_row.values()):
             continue
         _classify_row(parsed, normalized_row, warnings=warnings)
@@ -490,7 +524,7 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                     continue
                 _classify_row(
                     parsed,
-                    _normalize_row({**row, "record_type": "facility"}),
+                    _normalize_row({**row, "record_type": "facility"}, warnings),
                     warnings=warnings,
                 )
         if isinstance(ftl_scopes, list):
@@ -500,7 +534,7 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                     continue
                 _classify_row(
                     parsed,
-                    _normalize_row({**row, "record_type": "ftl_scope"}),
+                    _normalize_row({**row, "record_type": "ftl_scope"}, warnings),
                     warnings=warnings,
                 )
         if isinstance(tlcs, list):
@@ -510,7 +544,7 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                     continue
                 _classify_row(
                     parsed,
-                    _normalize_row({**row, "record_type": "tlc"}),
+                    _normalize_row({**row, "record_type": "tlc"}, warnings),
                     warnings=warnings,
                 )
         if isinstance(events, list):
@@ -520,17 +554,17 @@ def _parse_json_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                     continue
                 _classify_row(
                     parsed,
-                    _normalize_row({**row, "record_type": "event"}),
+                    _normalize_row({**row, "record_type": "event"}, warnings),
                     warnings=warnings,
                 )
         if not any(isinstance(section, list) and section for section in [facilities, ftl_scopes, tlcs, events]):
-            _classify_row(parsed, _normalize_row(payload), warnings=warnings)
+            _classify_row(parsed, _normalize_row(payload, warnings), warnings=warnings)
         return
 
     if isinstance(payload, list):
         for index, row in enumerate(payload, start=1):
             if isinstance(row, dict):
-                _classify_row(parsed, _normalize_row(row), warnings=warnings)
+                _classify_row(parsed, _normalize_row(row, warnings), warnings=warnings)
             else:
                 _append_non_object_warning(warnings, "json_array", index)
         return
@@ -572,7 +606,7 @@ def _parse_xlsx_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str
                 continue
             if inferred_record_type and "record_type" not in row_data:
                 row_data["record_type"] = inferred_record_type
-            _classify_row(parsed, row_data, warnings=warnings)
+            _classify_row(parsed, _normalize_row(row_data, warnings), warnings=warnings)
 
 
 def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]) -> None:
@@ -605,7 +639,7 @@ def _parse_pdf_bytes(content: bytes, parsed: dict[str, Any], warnings: list[str]
                     row = {header: value for header, value in zip(headers, row_values) if header}
                     if not any(str(value or "").strip() for value in row.values()):
                         continue
-                    _classify_row(parsed, _normalize_row(row), warnings=warnings)
+                    _classify_row(parsed, _normalize_row(row, warnings), warnings=warnings)
                     extracted_rows += 1
 
         if extracted_rows == 0:
@@ -662,7 +696,7 @@ async def _extract_pdf_with_agent(content: bytes, filename: str, parsed: dict[st
         )
         rows = rows_from_extraction(result.data)
         for row in rows:
-            _classify_row(staged, _normalize_row(row), warnings=staged_warnings)
+            _classify_row(staged, _normalize_row(row, staged_warnings), warnings=staged_warnings)
         extraction = {
             **result.to_dict(include_data=False),
             "field_metadata": result.field_metadata,
