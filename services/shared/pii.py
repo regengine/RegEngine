@@ -15,6 +15,14 @@ import re
 # PII patterns for redaction before external API calls (#981)
 _PII_PATTERNS = [
     (re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), "[SSN_REDACTED]"),
+    # Long digit runs with optional separators: credit card numbers and
+    # bare GLNs / GTINs (13 digits). Must precede the phone pattern so a
+    # dashed or spaced run is replaced whole, not partially.
+    (re.compile(r"\b(?:\d[ \-.]?){12,18}\d\b"), "[ID_REDACTED]"),
+    # Shorter bare identifiers: DUNS (9 digits) and short GTINs.
+    (re.compile(r"\b\d{9,12}\b"), "[ID_REDACTED]"),
+    # Employer Identification Numbers (XX-XXXXXXX).
+    (re.compile(r"\b\d{2}-\d{7}\b"), "[EIN_REDACTED]"),
     (re.compile(r"\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b"), "[PHONE_REDACTED]"),
     (re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"), "[EMAIL_REDACTED]"),
     (
@@ -31,7 +39,8 @@ _PII_PATTERNS = [
 def redact_pii(text: str) -> str:
     """Redact PII patterns from text before sending to external services.
 
-    Targets SSNs, phone numbers, email addresses, and street addresses.
+    Targets SSNs, phone numbers, email addresses, street addresses,
+    EINs, and long numeric identifiers (GLNs, GTINs, DUNS, card numbers).
     """
     if not text or not isinstance(text, str):
         return text or ""

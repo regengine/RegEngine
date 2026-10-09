@@ -1,6 +1,6 @@
 """Tests for PII masking utilities."""
 
-from shared.pii import mask_email
+from shared.pii import mask_email, redact_pii
 
 
 class TestMaskEmail:
@@ -35,3 +35,35 @@ class TestMaskEmail:
     def test_long_email(self):
         result = mask_email("verylonglocalpart@verylongdomain.example.com")
         assert result == "v***@verylongdomain.example.com"
+
+
+class TestRedactPiiVendorBoundIdentifiers:
+    """Structured identifiers must not reach the vendor in sample values.
+
+    FSMA CSVs routinely carry GLNs, DUNS numbers and EINs; when the
+    operator enables Jev sample values these cell values leave the
+    process, so the redactor has to cover them.
+    """
+
+    def test_bare_gln_redacted(self):
+        assert redact_pii("site 1234567890123") == "site [ID_REDACTED]"
+
+    def test_bare_duns_redacted(self):
+        assert redact_pii("duns 123456789") == "duns [ID_REDACTED]"
+
+    def test_ein_redacted(self):
+        assert redact_pii("ein 12-3456787") == "ein [EIN_REDACTED]"
+
+    def test_spaced_card_number_redacted(self):
+        result = redact_pii("card 4111 1111 1111 1111")
+        assert "4111" not in result
+        assert "[ID_REDACTED]" in result
+
+    def test_short_values_untouched(self):
+        assert redact_pii("qty 24") == "qty 24"
+        assert redact_pii("2026-10-09") == "2026-10-09"
+
+    def test_existing_patterns_still_hold(self):
+        assert redact_pii("ssn 123-45-6789") == "ssn [SSN_REDACTED]"
+        assert redact_pii("call 555-123-4567") == "call [PHONE_REDACTED]"
+        assert redact_pii("mail jane.doe@example.com") == "mail [EMAIL_REDACTED]"

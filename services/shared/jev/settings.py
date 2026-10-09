@@ -30,6 +30,11 @@ Environment variables
 ``REGENGINE_JEV_HEADER_SAMPLE_VALUES``  Number of PII-redacted sample values per unrecognised
                                         column to include in the request (0-5, default 0:
                                         only column headers leave the process).
+                                        The redactor covers SSNs, phones, emails,
+                                        addresses, EINs and long numeric identifiers
+                                        (GLNs, DUNS, card numbers); keep the default 0
+                                        for files whose cells may hold personal names,
+                                        which pattern matching cannot catch.
 ``REGENGINE_JEV_APPLY_FILE_CTE_TYPE``   ``1``/``true`` lets ``/ingest/csv`` use Jev's answer to
                                         "which CTE does this file record" as the file's fallback
                                         CTE when the upload declares none and has no per-row CTE

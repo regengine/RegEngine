@@ -565,6 +565,17 @@ def test_collect_sample_values_redacts_truncates_and_limits():
     assert collect_sample_values(rows, ["Lot #"], 0) == {}
 
 
+def test_collect_sample_values_redacts_structured_identifiers():
+    rows = [
+        {"Site ID": "1234567890123", "Tax ID": "12-3456787"},
+        {"Site ID": "1234567890123", "Tax ID": "12-3456787"},
+    ]
+    samples = collect_sample_values(rows, ["Site ID", "Tax ID"], 2)
+
+    assert samples["Site ID"] == ["[ID_REDACTED]"]
+    assert samples["Tax ID"] == ["[EIN_REDACTED]"]
+
+
 # ---------------------------------------------------------------------------
 # Artifacts
 # ---------------------------------------------------------------------------
