@@ -15,7 +15,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 _SERVICE_DIR = Path(__file__).resolve().parents[1]
@@ -47,8 +47,19 @@ def backfill_email_fingerprints(
 
     from app.sqlalchemy_models import UserEmailModel
 
-    total = 0
     session = session_factory()
+    if dry_run:
+        try:
+            return int(
+                session.execute(
+                    select(func.count()).select_from(UserEmailModel).where(UserEmailModel.email_fingerprint.is_(None))
+                ).scalar()
+                or 0
+            )
+        finally:
+            session.close()
+
+    total = 0
     try:
         while True:
             rows = (
@@ -68,9 +79,6 @@ def backfill_email_fingerprints(
                 row.email_fingerprint = crypto_service.fingerprint_email(row.email)
 
             total += len(rows)
-            if dry_run:
-                session.rollback()
-                break
             session.commit()
         return total
     except Exception:

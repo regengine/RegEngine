@@ -26,31 +26,46 @@ import structlog
 logger = structlog.get_logger("drain_webhook_outbox")
 
 
-def _build_secret_lookup():
+def _build_secret_lookup(session_factory=None):
     """Return a callable ``tenant_id -> (url, secret)`` backed by the DB.
 
     The drainer does NOT reuse the per-request tenant-scoped session;
     it opens its own session as the sysadmin DB role so it can read
     every tenant's settings. Each row is dispatched with the row's
     own tenant_id in the HMAC header.
+
+    Results are cached per tenant for the life of the returned lookup
+    (one drain batch), so draining N rows for the same tenant opens
+    one session instead of N.
     """
-    from app.database import SessionLocal
     from app.metrics import (
         _TENANT_SETTINGS_WEBHOOK_SECRET_KEY,
         _TENANT_SETTINGS_WEBHOOK_URL_KEY,
     )
     from app.sqlalchemy_models import TenantModel
 
+    if session_factory is None:
+        from app.database import SessionLocal
+
+        session_factory = SessionLocal
+
+    cache: dict[str, Tuple[Optional[str], Optional[str]]] = {}
+
     def lookup(tenant_id: str) -> Tuple[Optional[str], Optional[str]]:
-        session = SessionLocal()
+        if tenant_id in cache:
+            return cache[tenant_id]
+        session = session_factory()
         try:
             tenant = session.get(TenantModel, tenant_id)
             if tenant is None:
-                return None, None
-            settings = tenant.settings or {}
-            url = settings.get(_TENANT_SETTINGS_WEBHOOK_URL_KEY)
-            secret = settings.get(_TENANT_SETTINGS_WEBHOOK_SECRET_KEY)
-            return url, secret
+                result: Tuple[Optional[str], Optional[str]] = (None, None)
+            else:
+                settings = tenant.settings or {}
+                url = settings.get(_TENANT_SETTINGS_WEBHOOK_URL_KEY)
+                secret = settings.get(_TENANT_SETTINGS_WEBHOOK_SECRET_KEY)
+                result = (url, secret)
+            cache[tenant_id] = result
+            return result
         finally:
             session.close()
 
