@@ -57,9 +57,7 @@ def test_metrics_returns_exposition_with_valid_key(server_main, monkeypatch):
     proved only that the seeding ran. Asserting a RED series populated by the
     request fired below proves instrumentation actually works.
     """
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "test-metrics-key")
+    monkeypatch.setenv("METRICS_API_KEY", "test-metrics-key")
 
     client = TestClient(server_main.app)
     # Fire one instrumented request so RED series are populated too.
@@ -149,18 +147,14 @@ def test_scheduler_status_requires_auth(server_main):
 
 
 def test_scheduler_status_rejects_wrong_metrics_key(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
 
     resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "wrong"})
     assert resp.status_code == 403
 
 
 def test_scheduler_status_disabled_when_no_runner(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
     # No runner on app.state (lifespan not entered) → disabled.
     monkeypatch.setattr(server_main.app.state, "embedded_scheduler", None, raising=False)
 
@@ -170,9 +164,7 @@ def test_scheduler_status_disabled_when_no_runner(server_main, monkeypatch):
 
 
 def test_scheduler_status_standby_when_not_leader(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
     monkeypatch.setattr(server_main.app.state, "embedded_scheduler", _FakeRunner(is_leader=False), raising=False)
 
     resp = TestClient(server_main.app).get("/v1/scheduler/status", headers={"X-Metrics-Key": "k"})
@@ -181,9 +173,7 @@ def test_scheduler_status_standby_when_not_leader(server_main, monkeypatch):
 
 
 def test_scheduler_status_starting_when_leader_has_no_service(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
     monkeypatch.setattr(
         server_main.app.state,
         "embedded_scheduler",
@@ -199,9 +189,7 @@ def test_scheduler_status_starting_when_leader_has_no_service(server_main, monke
 def test_scheduler_status_leader_returns_circuit_and_scrape_state(server_main, monkeypatch):
     from datetime import datetime, timezone
 
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
 
     scraped = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
     service = _FakeService(
@@ -261,17 +249,13 @@ def test_features_requires_auth(server_main):
 
 
 def test_features_rejects_wrong_metrics_key(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
     resp = TestClient(server_main.app).get("/api/v1/features", headers={"X-Metrics-Key": "wrong"})
     assert resp.status_code == 403
 
 
 def test_features_returns_topology_with_valid_key(server_main, monkeypatch):
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
     resp = TestClient(server_main.app).get("/api/v1/features", headers={"X-Metrics-Key": "k"})
     assert resp.status_code == 200
     body = resp.json()
@@ -289,9 +273,7 @@ def test_scheduler_status_reports_webhook_dlq_at_risk(server_main, monkeypatch):
     """#2510: when WEBHOOK_URLS is set but no durable outbox path is configured,
     /v1/scheduler/status surfaces webhook_dlq.at_risk=true so the in-memory-only
     footgun is visible without grepping startup logs."""
-    import shared.observability.metrics_auth as metrics_auth
-
-    monkeypatch.setattr(metrics_auth, "_METRICS_API_KEY", "k")
+    monkeypatch.setenv("METRICS_API_KEY", "k")
 
     class _Settings:
         webhook_url_list = ["https://hook.example.com/alerts"]
