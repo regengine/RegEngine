@@ -14,6 +14,15 @@ on:
           - infra-health
           - full-audit
 
+# Serialize manual sweeps so overlapping runs cannot file duplicate issues.
+# The group intentionally covers every sweep_type: 'full-audit' runs the same
+# jobs as the single-type sweeps, so grouping by input would still overlap.
+# A newer dispatch cancels the older run; a half-finished sweep is cheap to
+# re-run, while a duplicate issue is noise every reviewer must triage.
+concurrency:
+  group: agent-sweep-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write
@@ -51,10 +60,23 @@ jobs:
           # cannot scrub. Everything below emits location + matched KEY NAME
           # only; the value never leaves the runner's protected logs.
 
-          # Check for common secret patterns
-          RAW=$(grep -rn --include="*.py" --include="*.ts" --include="*.tsx" --include="*.js" \
-            -E "(password\s*=\s*['\"][^'\"]+['\"]|api_key\s*=\s*['\"][^'\"]+['\"]|secret\s*=\s*['\"][^'\"]+['\"])" \
-            services/ shared/ frontend/src/ 2>/dev/null | grep -v "test" | grep -v "__pycache__" || true)
+          # Coverage: .jsx/.mjs/.cjs sources and .sh operator scripts used to be
+          # invisible to this scan, as were all of scripts/ and tests/. Test
+          # files are selected by PATH (anchored before the first colon),
+          # never by a `grep -v test` substring filter — that filter also
+          # discarded production findings whose value merely contained the
+          # letters "test" (as in "latest-...").
+          INCLUDES=(--include="*.py" --include="*.ts" --include="*.tsx" \
+            --include="*.js" --include="*.jsx" --include="*.mjs" \
+            --include="*.cjs" --include="*.sh")
+          PATTERN="(password\s*=\s*['\"][^'\"]+['\"]|api_key\s*=\s*['\"][^'\"]+['\"]|secret\s*=\s*['\"][^'\"]+['\"])"
+          TESTPATH='(^|/)tests?/|/__tests__/|(^|/)test_|_test\.|\.test\.'
+
+          ALL=$(grep -rn "${INCLUDES[@]}" -E "$PATTERN" \
+            services/ shared/ frontend/src/ scripts/ tests/ 2>/dev/null | grep -v "__pycache__" || true)
+
+          # Production findings: test paths excluded. Only these raise a flag.
+          RAW=$(echo "$ALL" | grep -vE "^[^:]*(${TESTPATH})" || true)
 
           # Redact before anything is written to a publishable file. Keeps
           # `path:line: <key> = <redacted>`; drops the literal entirely.
@@ -67,6 +89,23 @@ jobs:
             echo '```' >> security-report.md
           else
             echo "✅ No hardcoded secrets detected." >> security-report.md
+          fi
+
+          # Test-fixture findings: reported for visibility, never flagged.
+          # Fixtures carry placeholder values by design, so they must not
+          # trip issue creation (see #2925); a human reviews the artifact.
+          echo "" >> security-report.md
+          echo "### Test Fixture Secrets (informational)" >> security-report.md
+          TESTONLY=$(echo "$ALL" | grep -E "^[^:]*(${TESTPATH})" || true)
+
+          if [ -n "$TESTONLY" ]; then
+            COUNT=$(echo "$TESTONLY" | wc -l | tr -d ' ')
+            echo "ℹ️ $COUNT candidate secret(s) in test paths (values redacted, first 20 shown):" >> security-report.md
+            echo '```' >> security-report.md
+            echo "$TESTONLY" | sed -E "s/(=[[:space:]]*)['\"][^'\"]*['\"]/\1<redacted>/g" | head -20 >> security-report.md
+            echo '```' >> security-report.md
+          else
+            echo "✅ No candidate secrets in test paths." >> security-report.md
           fi
 
       - name: Check for print statements (should use logger)
