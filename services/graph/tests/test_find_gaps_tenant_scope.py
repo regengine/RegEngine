@@ -38,7 +38,7 @@ def _flatten(q: str) -> str:
 def _make_client_with_empty_results():
     """Return a client mock whose session.run() yields zero records.
 
-    We only need to capture the Cypher — the function short-circuits on
+    We only need to capture the Cypher: the function short-circuits on
     empty results so no post-processing code runs.
     """
     client = MagicMock()
@@ -93,7 +93,7 @@ async def test_find_gaps_has_no_null_tenant_shim():
     await find_gaps(client, tenant_id=TENANT_A)
 
     cypher = _flatten(session.run.call_args_list[0].args[0])
-    assert "$tenant_id IS NULL" not in cypher, "null-tenant shim must be removed — caller must pass tenant_id"
+    assert "$tenant_id IS NULL" not in cypher, "null-tenant shim must be removed: caller must pass tenant_id"
     assert "e.tenant_id = $tenant_id" in cypher
 
 
@@ -136,7 +136,7 @@ async def test_none_tenant_id_raises():
 
 @pytest.mark.asyncio
 async def test_empty_string_tenant_id_raises():
-    """Empty string counts as absent — same failure mode as None."""
+    """Empty string counts as absent: same failure mode as None."""
     client, _ = _make_client_with_empty_results()
     with pytest.raises(ValueError, match="tenant_id"):
         await find_gaps(client, tenant_id="")
