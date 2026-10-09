@@ -544,3 +544,60 @@ def test_funnel_summary_aggregates_views_and_completions(client: TestClient):
     assert steps_by_name["ftl_scoping"]["viewed"] == 1
     assert steps_by_name["ftl_scoping"]["completed"] == 2
     assert steps_by_name["ftl_scoping"]["completion_rate_pct"] == 200.0
+
+
+def _seed_single_scored_event(client: TestClient, facility_id: str) -> None:
+    scope_response = client.put(
+        f"/v1/supplier/facilities/{facility_id}/ftl-categories",
+        json={"category_ids": ["1"]},
+    )
+    assert scope_response.status_code == 200
+
+    event_response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-6600",
+            "kde_data": {"quantity": 10, "unit_of_measure": "cases", "product_description": "Spinach"},
+        },
+    )
+    assert event_response.status_code == 200
+
+
+def test_integrity_ratio_is_full_for_untampered_chain(client: TestClient):
+    facility_id = _create_facility(client)
+    _seed_single_scored_event(client, facility_id)
+
+    response = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert response.status_code == 200
+    assert response.json()["integrity_ratio"] == 1.0
+
+
+def test_integrity_ratio_drops_when_event_payload_tampered(client: TestClient, db_session: Session):
+    facility_id = _create_facility(client)
+    _seed_single_scored_event(client, facility_id)
+
+    db_session.expire_all()
+    stored_event = db_session.query(SupplierCTEEventModel).one()
+    tampered_kde = dict(stored_event.kde_data or {})
+    tampered_kde["quantity"] = 9999
+    stored_event.kde_data = tampered_kde
+    db_session.commit()
+
+    response = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert response.status_code == 200
+    assert response.json()["integrity_ratio"] < 1.0
+
+
+def test_integrity_ratio_drops_when_stored_hash_tampered(client: TestClient, db_session: Session):
+    facility_id = _create_facility(client)
+    _seed_single_scored_event(client, facility_id)
+
+    db_session.expire_all()
+    stored_event = db_session.query(SupplierCTEEventModel).one()
+    stored_event.payload_sha256 = "0" * 64
+    db_session.commit()
+
+    response = client.get(f"/v1/supplier/compliance-score?facility_id={facility_id}")
+    assert response.status_code == 200
+    assert response.json()["integrity_ratio"] < 1.0

@@ -25,7 +25,11 @@ from .sqlalchemy_models import (
     UserModel,
 )
 from .supplier_cte_service import (
+    _as_utc as _cte_as_utc,
+    _iso_utc as _cte_iso_utc,
+    _next_merkle_hash as _cte_next_merkle_hash,
     _persist_supplier_cte_event,
+    _sha256_json as _cte_sha256_json,
 )
 from .supplier_graph_sync import supplier_graph_sync
 
@@ -302,10 +306,42 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
-def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
+def _recomputed_payload_sha256(event: SupplierCTEEventModel, tlc_code: str | None) -> str | None:
+    """Recompute the write-time payload hash for one stored event.
+
+    Returns None when the row cannot be re-hashed (missing time, type, or
+    lot code), so the caller fails that check closed instead of passing it.
+    """
+    event_time = _cte_as_utc(event.event_time)
+    if event_time is None or not event.cte_type or not tlc_code:
+        return None
+    payload = {
+        "facility_id": str(event.facility_id),
+        "cte_type": event.cte_type,
+        "tlc_code": tlc_code.strip(),
+        "event_time": _cte_iso_utc(event_time),
+        "kde_data": event.kde_data if isinstance(event.kde_data, dict) else {},
+    }
+    return _cte_sha256_json(payload)
+
+
+def _merkle_integrity_ratio(
+    events: list[SupplierCTEEventModel],
+    lots_by_id: dict[Any, str] | None = None,
+) -> float:
+    """Fraction of events whose chain linkage and payload content verify.
+
+    An event counts as valid only when its sequence linkage is intact, its
+    stored payload hash matches the payload recomputed from the stored row,
+    and its stored Merkle hash matches the value derived from the previous
+    hash and the payload hash. Tampering with kde_data, event_time, cte_type,
+    or the stored hashes therefore lowers the ratio. Events whose payload
+    cannot be recomputed (for example a missing lot) count as invalid.
+    """
     if not events:
         return 1.0
 
+    lot_codes = lots_by_id or {}
     checks = 0
     valid = 0
     previous: SupplierCTEEventModel | None = None
@@ -313,12 +349,19 @@ def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
     for event in events:
         checks += 1
         if previous is None:
-            if int(event.sequence_number) == 1 and event.merkle_prev_hash is None:
-                valid += 1
+            linkage_ok = int(event.sequence_number) == 1 and event.merkle_prev_hash is None
         else:
             expected_sequence = int(previous.sequence_number) + 1
-            if int(event.sequence_number) == expected_sequence and event.merkle_prev_hash == previous.merkle_hash:
-                valid += 1
+            linkage_ok = (
+                int(event.sequence_number) == expected_sequence and event.merkle_prev_hash == previous.merkle_hash
+            )
+        expected_payload_sha256 = _recomputed_payload_sha256(event, lot_codes.get(event.lot_id))
+        content_ok = expected_payload_sha256 is not None and expected_payload_sha256 == event.payload_sha256
+        merkle_ok = expected_payload_sha256 is not None and event.merkle_hash == _cte_next_merkle_hash(
+            event.merkle_prev_hash, expected_payload_sha256
+        )
+        if linkage_ok and content_ok and merkle_ok:
+            valid += 1
         previous = event
 
     return valid / checks if checks else 1.0
@@ -486,7 +529,19 @@ def _compute_supplier_compliance(
                     }
                 )
 
-    integrity_ratio = _merkle_integrity_ratio(all_supplier_events)
+    supplier_lots = (
+        db.execute(
+            select(SupplierTraceabilityLotModel).where(
+                SupplierTraceabilityLotModel.tenant_id == tenant_id,
+                SupplierTraceabilityLotModel.supplier_user_id == supplier_user_id,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    lots_by_id = {lot.id: lot.tlc_code for lot in supplier_lots}
+
+    integrity_ratio = _merkle_integrity_ratio(all_supplier_events, lots_by_id)
 
     if required_total == 0:
         coverage_ratio = 0.0
