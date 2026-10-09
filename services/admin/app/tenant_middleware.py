@@ -68,7 +68,17 @@ async def validate_tenant_header(
             detail="API key is not associated with a tenant",
         )
 
-    key_tenant_id = UUID(api_key.tenant_id)
+    try:
+        key_tenant_id = UUID(api_key.tenant_id)
+    except ValueError:
+        logger.warning(
+            "api_key_malformed_tenant",
+            key_id=api_key.key_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API key is not associated with a tenant",
+        )
 
     # Validate header matches API key tenant
     if header_tenant_id != key_tenant_id:
@@ -106,4 +116,14 @@ async def get_tenant_from_key(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="API key is not associated with a tenant",
         )
-    return UUID(api_key.tenant_id)
+    try:
+        return UUID(api_key.tenant_id)
+    except ValueError:
+        logger.warning(
+            "api_key_malformed_tenant",
+            key_id=getattr(api_key, "key_id", None),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="API key is not associated with a tenant",
+        )

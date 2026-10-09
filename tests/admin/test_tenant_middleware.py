@@ -76,6 +76,21 @@ class TestValidateTenantHeader:
         assert "does not match" in exc_info.value.detail
 
     @pytest.mark.asyncio
+    async def test_malformed_key_tenant_raises_403(self):
+        """Malformed tenant id on the API key must not crash with a 500."""
+        from services.admin.app.tenant_middleware import validate_tenant_header
+
+        api_key = MagicMock()
+        api_key.key_id = "test-key"
+        api_key.tenant_id = "not-a-uuid"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await validate_tenant_header(x_tenant_id=str(uuid4()), api_key=api_key)
+
+        assert exc_info.value.status_code == 403
+        assert "not associated" in exc_info.value.detail
+
+    @pytest.mark.asyncio
     async def test_matching_tenant_returns_uuid(self):
         """Matching tenant IDs should return the UUID."""
         from services.admin.app.tenant_middleware import validate_tenant_header
@@ -107,6 +122,21 @@ class TestGetTenantFromKey:
             await get_tenant_from_key(api_key=api_key)
 
         assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_malformed_tenant_raises_403(self):
+        """Malformed tenant id on the API key must not crash with a 500."""
+        from services.admin.app.tenant_middleware import get_tenant_from_key
+
+        api_key = MagicMock()
+        api_key.key_id = "test-key"
+        api_key.tenant_id = "not-a-uuid"
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_tenant_from_key(api_key=api_key)
+
+        assert exc_info.value.status_code == 403
+        assert "not associated" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_returns_tenant_uuid(self):
