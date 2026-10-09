@@ -366,12 +366,20 @@ class TenantManager:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Append to tenants database file; the file holds secrets, keep it 0600.
-        def _append(path: str) -> None:
-            with open(path, "a") as f:
+        # Rewrite the whole file through _scrub_record, then append the new
+        # record; the file holds key hashes, keep it 0600. Scrubbing here
+        # removes any legacy plaintext keys already on disk.
+        def _scrub_and_append(path: str) -> None:
+            existing = []
+            if os.path.exists(path):
+                with open(path) as f:
+                    existing = [_scrub_record(json.loads(line)) for line in f if line.strip()]
+            with open(path, "w") as f:
+                for tenant in existing:
+                    f.write(json.dumps(tenant) + "\n")
                 f.write(json.dumps(record) + "\n")
 
-        _write_private_file(self.tenants_db_file, _append)
+        _write_private_file(self.tenants_db_file, _scrub_and_append)
 
     def _delete_neo4j_database(self, tenant_id: UUID):
         """Delete Neo4j database for tenant."""

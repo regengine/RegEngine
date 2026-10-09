@@ -133,3 +133,37 @@ def test_legacy_plaintext_record_lists_masked(tmp_path, capsys):
     out = capsys.readouterr().out
     assert legacy_key not in out
     assert legacy_key[-4:] in out
+
+
+def test_save_scrubs_legacy_plaintext_key(tmp_path, capsys):
+    module = _load_regctl()
+    manager = module.TenantManager()
+    manager.tenants_db_file = str(tmp_path / ".tenants.db")
+    legacy_key = f"sk_live_{uuid4().hex}"
+    Path(manager.tenants_db_file).write_text(
+        json.dumps(
+            {
+                "tenant_id": str(uuid4()),
+                "name": "Old Co",
+                "api_key": legacy_key,
+                "created_at": "2026-01-01T00:00:00+00:00",
+            }
+        )
+        + "\n"
+    )
+
+    new_key = f"sk_live_{uuid4().hex}"
+    manager._save_tenant_record(uuid4(), "New Co", new_key)
+
+    raw = Path(manager.tenants_db_file).read_text()
+    assert legacy_key not in raw
+    assert new_key not in raw
+    stored = [json.loads(line) for line in raw.splitlines()]
+    assert len(stored) == 2
+    assert all("api_key" not in record for record in stored)
+    assert stored[0]["api_key_hash"] == hashlib.sha256(legacy_key.encode()).hexdigest()
+
+    manager.list_tenants()
+    out = capsys.readouterr().out
+    assert legacy_key not in out
+    assert new_key not in out
