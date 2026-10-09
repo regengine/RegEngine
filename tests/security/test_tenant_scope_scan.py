@@ -130,6 +130,24 @@ def test_optional_builder_placeholder_does_not_count_as_scoping(tmp_path: Path):
     assert [v.rule for v in violations] == ["cypher-match-without-tenant"]
 
 
+def test_fstring_cypher_map_with_params_keeps_tenant_evidence(tmp_path: Path):
+    # Cypher map literals in f-strings use doubled braces, so the resolved
+    # text holds {tlc: $tlc, ...}. Segments with a $param are query text,
+    # not builder placeholders, and must survive placeholder stripping.
+    violations = scan_text(
+        tmp_path,
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent)\nRETURN l\n"""\n',
+    )
+    assert violations == []
+    # A map without a tenant binding is still flagged.
+    violations = scan_text(
+        tmp_path,
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc}})-[:UNDERWENT]->(e:TraceEvent)\nRETURN l\n"""\n',
+    )
+    assert [v.rule for v in violations] == ["cypher-match-without-tenant"]
+    assert violations[0].target == "Lot,TraceEvent"
+
+
 def test_sql_on_tenant_table_without_predicate_is_flagged(tmp_path: Path):
     violations = scan_text(tmp_path, 'QUERY = "SELECT * FROM fsma.cte_events WHERE event_type = :t"\n')
     assert [v.rule for v in violations] == ["sql-without-tenant-predicate"]

@@ -14,7 +14,9 @@ concatenation, or module/function-level name bound to one of those) that
 looks like a query is resolved to text and analyzed as a whole. Dynamic
 ``{placeholder}`` segments and unresolvable builder variables are removed
 before the check, so a predicate that only exists inside an optional
-builder (for example ``WHERE true {tenant_filter}``) does NOT count. Sites
+builder (for example ``WHERE true {tenant_filter}``) does NOT count.
+Brace segments holding a ``$`` bind parameter (Cypher map literals such
+as ``{tlc: $tlc, tenant_id: $tenant_id}``) are kept as query evidence. Sites
 that are scoped at runtime through such builders are recorded in the
 allowlist with a reason instead of passing silently.
 
@@ -189,7 +191,13 @@ class QueryResolver:
                     parts.append(value.value)
                 else:
                     parts.append(" ")
-            return PLACEHOLDER_RE.sub(" ", "".join(parts))
+            # Blank builder placeholders such as {filter}, but keep Cypher
+            # map literals such as {tlc: $tlc, tenant_id: $tenant_id}: text
+            # with a $param is query evidence, including tenant predicates.
+            return PLACEHOLDER_RE.sub(
+                lambda m: " " if "$" not in m.group(0) else m.group(0),
+                "".join(parts),
+            )
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             left = self.resolve(node.left)
             right = self.resolve(node.right)

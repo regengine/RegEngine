@@ -42,21 +42,16 @@ global_sql_tables:
   food_traceability_list: "Static FDA food traceability list; no tenant rows."
 
 baseline:
-  # Live fail-open: tenant_id is optional, so a null tenant matches every
-  # tenant's TraceEvents. Product fix is to require tenant_id and raise on
-  # empty, the same change find_broken_chains received under #1301.
-  - file: services/graph/app/fsma/chain_integrity.py
-    scope: find_gaps
+  # Obligation catalog predicate: a NULL tenant_id means the shared global
+  # catalog row, not another tenant's data (see the comment at the
+  # constant). Every caller requires a non-empty tenant_id through
+  # _require_tenant_id, so a missing tenant raises instead of matching
+  # every row.
+  - file: services/graph/app/traceability_linker.py
+    scope: _OBLIGATION_TENANT_PREDICATE
     rule: tenant-failopen-shim
-    target: Lot,TraceEvent
-    reason: "Known fail-open shim in find_gaps; fix owned by graph team (require tenant_id, see #1301). New shims still fail the gate."
-  # Tenant-optional override merge keyed on override_id alone. In-flight fix
-  # under #3227 requires the tenant; baselined until that merges.
-  - file: services/graph/app/models/tenant_nodes.py
-    scope: RegulationOverride.merge_cypher
-    rule: cypher-merge-without-tenant
-    target: RegulationOverride
-    reason: "Tenant-optional override merge; fix in flight (#3227). New unscoped MERGEs still fail the gate."
+    target: query
+    reason: "Global-catalog Obligation predicate (NULL means the shared catalog row); every caller enforces a non-empty tenant_id via _require_tenant_id, so null tenants raise instead of matching all rows. New shims still fail the gate."
   # The four queries below run against the shared global regulatory
   # database through global_client, never a tenant database. The provision
   # hashes they look up come from tenant-scoped ControlMapping rows read
