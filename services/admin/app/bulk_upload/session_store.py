@@ -15,6 +15,19 @@ logger = structlog.get_logger("bulk_upload.session_store")
 
 
 class BulkUploadSessionStore:
+    """Bulk-upload session state, Redis-primary with an in-memory fallback.
+
+    The in-memory fallback is per-process: it is correct only for
+    single-process dev/test use (or while Redis is briefly unreachable).
+    Multi-worker production deployments must have Redis available or
+    sessions created on one worker are invisible to the others.
+    """
+
+    # Absolute upper bound on a fallback session's lifetime, as a multiple
+    # of the sliding TTL. Sliding refreshes alone let a session that is
+    # touched often live forever; the cap below ends it regardless.
+    _MAX_LIFETIME_TTL_MULTIPLE = 8
+
     def __init__(self, redis_url: str | None = None, ttl_seconds: int = 3600):
         self.redis_url = redis_url or os.getenv("REDIS_URL", "rediss://redis:6379/0")
         self.ttl_seconds = ttl_seconds
@@ -22,12 +35,14 @@ class BulkUploadSessionStore:
         self._redis_available: bool | None = None
         # In-memory fallback — ephemeral upload session data. Redis is primary store when available.
         self._memory_store: dict[str, tuple[float, dict[str, Any]]] = {}
+        # Creation time per fallback session key, used to enforce the
+        # absolute lifetime cap. Entries are removed with their session.
+        self._memory_created_at: dict[str, float] = {}
         # Per-key asyncio locks for the in-memory fallback. Only used by
         # ``try_claim_commit`` — simple ``get``/``update`` don't need
-        # them because they're single-op. The map is never pruned by
-        # hand (it grows O(sessions-seen)) but each entry is a tiny
-        # Lock object and the process gets recycled periodically in
-        # prod; don't bother with eviction.
+        # them because they're single-op. Entries for sessions that no
+        # longer exist are pruned in ``_cleanup_memory`` so the map stays
+        # proportional to live sessions.
         self._memory_locks: dict[str, asyncio.Lock] = {}
 
     async def _get_client(self) -> redis.Redis | None:
@@ -59,11 +74,23 @@ class BulkUploadSessionStore:
             self._memory_locks[key] = lock
         return lock
 
+    def _max_lifetime_seconds(self) -> float:
+        return self.ttl_seconds * self._MAX_LIFETIME_TTL_MULTIPLE
+
     def _cleanup_memory(self) -> None:
         now = time.time()
         expired = [key for key, (expiry, _value) in self._memory_store.items() if expiry <= now]
         for key in expired:
             self._memory_store.pop(key, None)
+            self._memory_created_at.pop(key, None)
+        # Prune locks (and creation markers) for sessions that no longer
+        # exist. A lock that is currently held is kept: its owner is
+        # inside the claim critical section and concurrent claimants must
+        # keep rendezvousing on that same object.
+        for key in [key for key in self._memory_locks if key not in self._memory_store]:
+            if not self._memory_locks[key].locked():
+                del self._memory_locks[key]
+                self._memory_created_at.pop(key, None)
 
     async def create_session(self, tenant_id: str, user_id: str, payload: dict[str, Any]) -> str:
         session_id = str(uuid.uuid4())
@@ -74,7 +101,9 @@ class BulkUploadSessionStore:
             return session_id
 
         self._cleanup_memory()
-        self._memory_store[key] = (time.time() + self.ttl_seconds, payload)
+        now = time.time()
+        self._memory_store[key] = (now + self.ttl_seconds, payload)
+        self._memory_created_at[key] = now
         return session_id
 
     async def get_session(self, tenant_id: str, user_id: str, session_id: str) -> dict[str, Any] | None:
@@ -106,7 +135,19 @@ class BulkUploadSessionStore:
             return
 
         self._cleanup_memory()
-        self._memory_store[key] = (time.time() + self.ttl_seconds, payload)
+        now = time.time()
+        # Sliding refresh, capped at the absolute session lifetime so a
+        # session that is touched continuously still expires. A session
+        # already past the cap was removed by the cleanup above (or has
+        # no creation marker, e.g. written by an older caller), so it
+        # restarts its lifecycle here, mirroring the Redis path where an
+        # expired key written with SETEX starts fresh.
+        created_at = self._memory_created_at.get(key)
+        if created_at is None or key not in self._memory_store:
+            created_at = now
+        expiry = min(now + self.ttl_seconds, created_at + self._max_lifetime_seconds())
+        self._memory_store[key] = (expiry, payload)
+        self._memory_created_at[key] = created_at
 
     async def try_claim_commit(
         self,
