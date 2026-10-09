@@ -88,12 +88,12 @@ if [ -n "${S3_BUCKET:-}" ]; then
     S3_KEY="postgres/${DB_NAME}_${TIMESTAMP}.sql.gz"
     echo "==> Uploading to s3://${S3_BUCKET}/${S3_KEY}..."
 
-    S3_ARGS=""
+    S3_ARGS=()
     if [ -n "${S3_ENDPOINT:-}" ]; then
-        S3_ARGS="--endpoint-url ${S3_ENDPOINT}"
+        S3_ARGS=(--endpoint-url "${S3_ENDPOINT}")
     fi
 
-    aws s3 cp ${S3_ARGS} "${DUMP_FILE}" "s3://${S3_BUCKET}/${S3_KEY}"
+    aws s3 cp "${S3_ARGS[@]}" "${DUMP_FILE}" "s3://${S3_BUCKET}/${S3_KEY}"
     echo "==> Off-site upload complete."
 else
     echo "==> S3_BUCKET unset: local-only retention of ${RETENTION_DAYS} days."

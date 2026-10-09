@@ -307,3 +307,83 @@ def test_verification_survives_a_realistically_sized_dump(tmp_path):
     with gzip.open(dumps[0], "rt") as handle:
         head = "".join(next(handle) for _ in range(3))
     assert "PostgreSQL database dump" in head
+
+
+# ---------------------------------------------------------------------------
+# S3 endpoint argument handling (audit: unquoted expansion allowed argument
+# injection from a crafted S3_ENDPOINT value).
+# ---------------------------------------------------------------------------
+
+
+def _write_aws_stub(bin_dir: Path, log_file: Path) -> None:
+    """Install a fake `aws` that records its argv, one argument per line."""
+    stub = bin_dir / "aws"
+    stub.write_text(f'#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "{log_file}"\n')
+    stub.chmod(0o755)
+
+
+def _run_backup_with_s3(tmp_path: Path, *, env_extra=None):
+    """Run the script with S3 upload enabled and a stubbed `aws` on PATH.
+
+    Returns (proc, backup_dir, aws_argv). `aws_argv` is the argv the script
+    passed to `aws`, one entry per list item.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _write_pg_dump_stub(bin_dir)
+    argv_log = tmp_path / "aws_argv.log"
+    _write_aws_stub(bin_dir, argv_log)
+
+    backup_dir = tmp_path / "backups"
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["BACKUP_DIR"] = str(backup_dir)
+    env["PGDATABASE"] = "regengine"
+    env.pop("RETENTION_DAYS", None)
+    env.pop("S3_BUCKET", None)
+    env.pop("S3_ENDPOINT", None)
+    if env_extra:
+        env.update(env_extra)
+
+    proc = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert argv_log.exists(), f"script never invoked aws:\n{proc.stdout}\n{proc.stderr}"
+    return proc, backup_dir, argv_log.read_text().splitlines()
+
+
+def test_s3_endpoint_reaches_aws_as_a_single_argument(tmp_path):
+    """A crafted S3_ENDPOINT must not inject extra arguments into `aws`.
+
+    Fails against the pre-fix script, which expanded the endpoint unquoted
+    (`aws s3 cp ${S3_ARGS} ...`), so a value containing spaces or flags was
+    word-split into additional argv entries.
+    """
+    endpoint = "http://minio.local:9000 --dryrun"
+    _, _, argv = _run_backup_with_s3(tmp_path, env_extra={"S3_BUCKET": "my-bucket", "S3_ENDPOINT": endpoint})
+
+    assert endpoint in argv, f"S3_ENDPOINT was split into multiple argv entries: {argv}"
+    assert "--dryrun" not in argv, f"crafted S3_ENDPOINT injected an extra flag into aws: {argv}"
+    flag_at = argv.index("--endpoint-url")
+    assert argv[flag_at + 1] == endpoint
+
+
+def test_s3_upload_without_endpoint_passes_no_extra_args(tmp_path):
+    """With S3_BUCKET set and S3_ENDPOINT unset, `aws` gets no endpoint flag.
+
+    Guards the empty-array expansion: under `set -u` this must still run and
+    must not pass an empty or stray argument to `aws`.
+    """
+    _, _, argv = _run_backup_with_s3(tmp_path, env_extra={"S3_BUCKET": "my-bucket"})
+
+    assert argv[:2] == ["s3", "cp"]
+    assert "--endpoint-url" not in argv
+    assert len(argv) == 4, f"unexpected extra argv entries: {argv}"
+    assert argv[3].startswith("s3://my-bucket/postgres/regengine_")
+    assert argv[3].endswith(".sql.gz")
