@@ -10,17 +10,18 @@
 #   Wait for health checks to pass
 #
 # Usage:
-#   ./scripts/demo_mvp_flow.sh [API_KEY]
+#   REGENGINE_API_KEY=<tenant-scoped-api-key> ./scripts/demo_mvp_flow.sh
 #
-# If no API_KEY is provided, REGENGINE_API_KEY must already contain a scoped,
-# tenant-bound credential provisioned by an authorized staff user.
+# The API key is read only from the REGENGINE_API_KEY environment variable
+# or from an interactive prompt. It is never taken as a command-line
+# argument, so it never lands in shell history or process lists.
 
 set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
 ADMIN_URL="${ADMIN_URL:-http://localhost:8400}"
 INGEST_URL="${INGEST_URL:-http://localhost:8002}"  # matches docker-compose.yml port mapping
-API_KEY="${1:-}"
+API_KEY="${REGENGINE_API_KEY:-}"
 TENANT_ID="${TENANT_ID:-00000000-0000-0000-0000-000000000001}"
 SAMPLE_DIR="$(cd "$(dirname "$0")/../sample_data" && pwd)"
 EXPORT_DIR="$(cd "$(dirname "$0")/.." && pwd)/demo_exports"
@@ -36,6 +37,14 @@ info()   { echo -e "  ${C}→${NC} $1"; }
 echo -e "${B}╔══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${B}║  RegEngine MVP Demo — CSV to FDA Export in 5 Minutes    ║${NC}"
 echo -e "${B}╚══════════════════════════════════════════════════════════╝${NC}"
+
+# A key passed as an argument stays visible in shell history and the process
+# list, so refuse it outright instead of reading it.
+if [ "$#" -gt 0 ]; then
+  echo -e "  ${R}✗${NC} Do not pass the API key as a command-line argument."
+  echo -e "  ${Y}Set REGENGINE_API_KEY in the environment instead.${NC}"
+  exit 1
+fi
 
 # ── Step 0: Health checks ───────────────────────────────────────────────────
 header "Step 0 · Checking service health"
@@ -55,14 +64,16 @@ done
 # ── Step 1: Load the pre-provisioned API key ────────────────────────────────
 header "Step 1 · Authentication"
 
-if [ -z "$API_KEY" ]; then
-  # Try REGENGINE_API_KEY env var first (matches docker-compose env)
-  API_KEY="${REGENGINE_API_KEY:-}"
+if [ -z "$API_KEY" ] && [ -t 0 ]; then
+  # Interactive prompt with echo disabled, so the key is not displayed
+  # as it is typed. The || true keeps `set -e` from exiting on EOF.
+  read -rsp "  Enter API key: " API_KEY || true
+  echo ""
 fi
 
 if [ -z "$API_KEY" ]; then
-  echo -e "  ${Y}No API_KEY or REGENGINE_API_KEY provided.${NC}"
-  echo -e "  ${Y}Usage: ./scripts/demo_mvp_flow.sh <tenant-scoped-api-key>${NC}"
+  echo -e "  ${Y}No API key found. Set REGENGINE_API_KEY in the environment${NC}"
+  echo -e "  ${Y}or run interactively and enter it at the prompt.${NC}"
   echo -e "  ${Y}An authorized staff user must provision this credential first.${NC}"
   exit 1
 else
