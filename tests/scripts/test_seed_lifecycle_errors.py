@@ -66,6 +66,25 @@ def _failing_get(url):
     return {"error": 500, "body": "boom"}
 
 
+# --- module stays importable without a key; main still requires one ---
+
+
+def test_import_without_api_key_does_not_exit(monkeypatch):
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_BASE_URL", raising=False)
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    name = "seed_lifecycle_test_no_key"
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS / "seed_lifecycle_test.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(name, None)
+    with pytest.raises(SystemExit):
+        module.main([])
+
+
 # --- contacts are clearly synthetic, never realistic personal data ---
 
 

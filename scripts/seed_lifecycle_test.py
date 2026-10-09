@@ -44,13 +44,25 @@ LOCAL_DEFAULT_BASE = "http://localhost:8000"
 BASE = os.getenv("REGENGINE_BASE_URL", LOCAL_DEFAULT_BASE)
 API_KEY = os.getenv("REGENGINE_API_KEY", "")
 TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "5946c58f-ddf9-4db0-9baa-acb11c6fce91")
-if not API_KEY:
-    print(
-        "Error: REGENGINE_API_KEY is not set. Export a key with ingest permissions "
-        "for the target tenant before running this seeder.",
-        file=sys.stderr,
-    )
-    sys.exit(1)
+
+
+def _require_api_key() -> str:
+    """Fail fast when no API key is configured.
+
+    Checked at run time (not at import) so the module stays importable
+    for tests and tooling without a live key in the environment.
+    """
+    key = os.getenv("REGENGINE_API_KEY", "")
+    if not key:
+        print(
+            "Error: REGENGINE_API_KEY is not set. Export a key with ingest permissions "
+            "for the target tenant before running this seeder.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    return key
+
+
 INGEST_URL = f"{BASE}/api/v1/webhooks/ingest"
 PRODUCTS_URL = f"{BASE}/api/v1/products/{TENANT_ID}"
 SUPPLIERS_URL = f"{BASE}/api/v1/suppliers/{TENANT_ID}"
@@ -596,8 +608,10 @@ def _exit_code(results) -> int:
 
 
 def main(argv=None):
-    global BASE, INGEST_URL, PRODUCTS_URL, SUPPLIERS_URL
+    global BASE, INGEST_URL, PRODUCTS_URL, SUPPLIERS_URL, API_KEY, HEADERS
     args = _parse_args(argv)
+    API_KEY = _require_api_key()
+    HEADERS = {**HEADERS, "X-RegEngine-API-Key": API_KEY}
     BASE = args.base_url
     ensure_local_target(BASE, args.allow_production)
     INGEST_URL = f"{BASE}/api/v1/webhooks/ingest"
