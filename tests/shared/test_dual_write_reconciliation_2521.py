@@ -77,7 +77,7 @@ class _FakeConn:
             if isinstance(value, Exception):
                 raise value
             return _ScalarResult(value)
-        return _ScalarResult(0)
+        raise AssertionError(f"unexpected SQL statement (no scripted rule matched): {sql[:200]}")
 
 
 def _text_fn(s: str) -> str:
@@ -134,6 +134,18 @@ class TestDualWriteReconciliation_Issue2521:
         passed, message = validate_data_integrity.check_dual_write_reconciliation(conn, _text_fn)
         assert passed is True
         assert "skipped" in message.lower()
+
+    def test_unexpected_statement_raises_instead_of_reporting_in_sync(self) -> None:
+        """An unscripted statement (for example after a table rename) must
+        fail loudly instead of returning 0 and reporting "in sync"."""
+        conn = _FakeConn(
+            [
+                ("FROM fsma.cte_events c", 0),
+                ("FROM fsma.traceability_events t", 0),
+            ]
+        )
+        with pytest.raises(AssertionError, match="unexpected SQL"):
+            conn.execute("SELECT COUNT(*) FROM fsma.renamed_table")
 
     def test_check_registered_in_main_checks(self) -> None:
         """The reconciliation check must be wired into the script's run so
