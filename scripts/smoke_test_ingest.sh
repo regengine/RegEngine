@@ -38,6 +38,15 @@ if [[ -z "$API_KEY" ]]; then
     exit 2
 fi
 
+# Per-process temp file for response bodies. A fixed /tmp path would let
+# concurrent runs overwrite and delete each other's bodies, so each process
+# gets its own file and removes it on exit.
+SMOKE_BODY="$(mktemp /tmp/smoke_ingest_body.XXXXXX)" || {
+    echo "ERROR: cannot create temp file" >&2
+    exit 1
+}
+trap 'rm -f "$SMOKE_BODY"' EXIT
+
 # Parse API_BASE: require http/https, reject userinfo/malformed, exact loopback host.
 _SMOKE_REST=""
 if [[ "$API_BASE" == "http://"* ]]; then
@@ -109,12 +118,12 @@ probe() {
     local code
     if [[ "$method" == "POST_MULTIPART" ]]; then
         # Multipart upload for /v1/ingest/file
-        code=$(curl -s -o /tmp/smoke_ingest_body -w "%{http_code}" \
+        code=$(curl -s -o "$SMOKE_BODY" -w "%{http_code}" \
             -X POST "$API_BASE$path" \
             -H "X-RegEngine-API-Key: $API_KEY" \
             -F "$data_arg" 2>/dev/null)
     else
-        code=$(curl -s -o /tmp/smoke_ingest_body -w "%{http_code}" \
+        code=$(curl -s -o "$SMOKE_BODY" -w "%{http_code}" \
             -X "$method" "$API_BASE$path" \
             -H "X-RegEngine-API-Key: $API_KEY" \
             -H "Content-Type: $content_type" \
@@ -122,7 +131,7 @@ probe() {
     fi
 
     local body
-    body=$(cat /tmp/smoke_ingest_body 2>/dev/null | head -c 200)
+    body=$(cat "$SMOKE_BODY" 2>/dev/null | head -c 200)
 
     local interpretation
     case "$code" in
@@ -149,7 +158,7 @@ probe "POST /v1/ingest"            POST            "/v1/ingest"            --dat
 probe "POST /v1/ingest/file"       POST_MULTIPART  "/v1/ingest/file"       file file=@/dev/null;filename=smoke.txt multipart/form-data
 probe "POST /v1/ingest/regulation" POST_MULTIPART  "/v1/ingest/regulation?name=smoke" file file=@/dev/null;filename=smoke.txt multipart/form-data
 
-rm -f /tmp/smoke_ingest_body
+rm -f "$SMOKE_BODY"
 
 echo ""
 # Coherent state: all 200/202 OR all 503. Mixed = something wrong.
