@@ -18,6 +18,7 @@ Scenarios:
 import hashlib
 import json
 import sys
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -35,6 +36,11 @@ from shared.canonical_event import (
     TraceabilityEvent,
 )
 from shared.cte_persistence import compute_chain_hash
+from shared.identity_resolution.constants import (
+    AMBIGUOUS_THRESHOLD_HIGH,
+    AMBIGUOUS_THRESHOLD_LOW,
+)
+from shared.identity_resolution.service import IdentityResolutionService
 from shared.rules.evaluators.stateless import (
     evaluate_field_presence,
     evaluate_multi_field_presence,
@@ -177,42 +183,95 @@ class TestScenario1CleanHappyPath:
 # ===================================================================
 
 
+class _StubIdentitySession:
+    """In-memory stand-in for a SQLAlchemy session.
+
+    Returns one scripted alias row for every query so the tests exercise
+    the real Python scoring in
+    IdentityResolutionService.find_potential_matches without a database.
+    """
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def begin_nested(self):
+        return nullcontext()
+
+    def execute(self, stmt, params=None):
+        result = MagicMock()
+        result.fetchall.return_value = self._rows
+        return result
+
+
+def _find_matches(search_name, candidate_name, threshold):
+    """Score one candidate name with the real identity resolution service."""
+    row = (
+        "entity-1",
+        "firm",
+        candidate_name,
+        None,
+        None,
+        "unverified",
+        1.0,
+        candidate_name,
+    )
+    service = IdentityResolutionService(_StubIdentitySession([row]))
+    return service.find_potential_matches(
+        tenant_id="golden-path-tenant",
+        search_name=search_name,
+        threshold=threshold,
+    )
+
+
 class TestScenario2IdentityCollision:
     """
     Two ingested events reference the same entity with slightly different
     identifiers. Identity resolution should detect the collision.
 
-    Tests the fuzzy matching logic in shared/identity_resolution.py
+    Tests the fuzzy matching logic in shared/identity_resolution
     without requiring a database.
     """
 
     def test_exact_name_match(self):
         """Identical entity names should produce a confidence of 1.0."""
-        from difflib import SequenceMatcher
-
-        ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farms LLC").ratio()
-        assert ratio == 1.0
+        results = _find_matches(
+            "Fresh Farms LLC",
+            "Fresh Farms LLC",
+            threshold=AMBIGUOUS_THRESHOLD_LOW,
+        )
+        assert len(results) == 1
+        assert results[0]["confidence"] == 1.0
 
     def test_near_match_above_high_threshold(self):
-        """Minor typos should produce confidence above 0.90 (auto-merge threshold)."""
-        from difflib import SequenceMatcher
-
-        ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farms, LLC").ratio()
-        assert ratio >= 0.90, f"Expected >= 0.90, got {ratio}"
+        """Minor typos should produce confidence at or above the auto-merge threshold."""
+        results = _find_matches(
+            "Fresh Farms LLC",
+            "Fresh Farms, LLC",
+            threshold=AMBIGUOUS_THRESHOLD_HIGH,
+        )
+        assert len(results) == 1, "Expected the near match to clear the auto-merge threshold, got no matches"
+        assert results[0]["confidence"] >= AMBIGUOUS_THRESHOLD_HIGH
 
     def test_fuzzy_match_in_ambiguous_range(self):
         """Similar but distinct names should fall in the review range (0.60-0.90)."""
-        from difflib import SequenceMatcher
-
-        ratio = SequenceMatcher(None, "Fresh Farms LLC", "Fresh Farm Foods Inc").ratio()
-        assert 0.40 <= ratio < 0.90, f"Expected ambiguous range, got {ratio}"
+        results = _find_matches(
+            "Fresh Farms LLC",
+            "Fresh Farm Foods Inc",
+            threshold=AMBIGUOUS_THRESHOLD_LOW,
+        )
+        assert len(results) == 1, "Expected the similar name to match at the low threshold"
+        assert AMBIGUOUS_THRESHOLD_LOW <= results[0]["confidence"] < AMBIGUOUS_THRESHOLD_HIGH, (
+            f"Expected ambiguous range, got {results[0]['confidence']}"
+        )
 
     def test_distinct_entities_below_threshold(self):
         """Completely different names should score below 0.60."""
-        from difflib import SequenceMatcher
-
-        ratio = SequenceMatcher(None, "Fresh Farms LLC", "Pacific Seafood Corp").ratio()
-        assert ratio < 0.60, f"Expected < 0.60, got {ratio}"
+        results = _find_matches(
+            "Fresh Farms LLC",
+            "Pacific Seafood Corp",
+            threshold=AMBIGUOUS_THRESHOLD_LOW,
+        )
+        assert results == [], f"Expected no matches below the low threshold, got {results}"
 
     def test_gln_exact_match_bypasses_fuzzy(self):
         """Two events referencing the same GLN represent the same entity."""
