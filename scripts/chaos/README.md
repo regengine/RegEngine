@@ -12,7 +12,7 @@ Chaos engineering helps us verify that the RegEngine platform can:
 
 ## Test Scenarios
 
-### 1. Neo4j Database Failure (`kill_neo4j.sh`)
+### 1. Neo4j Database Failure (planned: `kill_neo4j.sh` is not present)
 
 **What it tests**: Graph database failure during active writes
 
@@ -22,12 +22,10 @@ Chaos engineering helps us verify that the RegEngine platform can:
 - No provision data lost
 - All writes eventually consistent
 
-**How to run**:
-```bash
-./scripts/chaos/kill_neo4j.sh
-```
+**Status**: the `kill_neo4j.sh` helper script is not present in this
+directory, so this scenario cannot be run yet.
 
-### 2. Kafka Broker Failure (`kill_kafka.sh`)
+### 2. Kafka Broker Failure (planned: `kill_kafka.sh` is not present)
 
 **What it tests**: Message broker failure during production
 
@@ -37,10 +35,8 @@ Chaos engineering helps us verify that the RegEngine platform can:
 - Consumers resume from last committed offset
 - All buffered messages delivered
 
-**How to run**:
-```bash
-./scripts/chaos/kill_kafka.sh
-```
+**Status**: the `kill_kafka.sh` helper script is not present in this
+directory, so this scenario cannot be run yet.
 
 ## Running Tests
 
@@ -56,6 +52,10 @@ Chaos engineering helps us verify that the RegEngine platform can:
 # Specific test
 ./scripts/chaos/run_all_chaos_tests.sh --test "Neo4j Failure"
 ```
+
+Note: the runner above invokes the per-service helper scripts, which are
+currently not present (see Test Scenarios), so the suite cannot pass until
+those helpers are restored.
 
 ### Prerequisites
 
@@ -93,24 +93,11 @@ Step 5: ✅ Verifying recovery...
 
 ## CI/CD Integration
 
-Chaos tests run automatically:
-- **Scheduled**: Daily at 2 AM UTC (GitHub Actions)
-- **Manual**: Via GitHub Actions workflow dispatch
-
-### GitHub Actions Workflow
-
-Located at `.github/workflows/nightly-resilience-test.yml`
-
-**Manual trigger**:
-1. Go to Actions tab in GitHub
-2. Select "Chaos Tests" workflow
-3. Click "Run workflow"
-4. Choose mode: `quick` or `full`
-5. Optionally specify a specific test
-
-**Artifacts**:
-- Service logs collected on failure
-- Retained for 7 days
+There is currently no GitHub Actions workflow for chaos tests: no scheduled
+run and no workflow dispatch, and no chaos workflow file exists under
+`.github/workflows/`. To run the suite, use the local runner documented
+under "Running Tests" above. If scheduled or manual CI runs are added later,
+document the real workflow file here.
 
 ## Adding New Tests
 
