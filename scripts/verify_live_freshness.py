@@ -30,11 +30,12 @@ def log(msg):
     print(f"[LiveFreshnessVerify] {msg}")
 
 
+USER_AGENT = "RegEngine-LiveFreshnessVerify/1.0 (automated freshness verification bot)"
+
+
 def fetch_live_content():
     log(f"Fetching live content from {LIVE_FDA_URL}...")
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+    headers = {"User-Agent": USER_AGENT}
     try:
         resp = requests.get(LIVE_FDA_URL, headers=headers)
         resp.raise_for_status()
@@ -68,11 +69,8 @@ def ingest_live_content(content, run_id):
 
     unique_url = f"{LIVE_FDA_URL}?run={run_id}"
 
-    # Force hash change for verification purposes
-    # This prevents 'duplicate key' errors if V1 already exists and we want V2
-    # and allows lineage verification to see a new version.
-    content += f"\n\n<!-- Verified at {time.time()} -->"
-
+    # The unique per-run source_url is the new-version signal, so the
+    # fetched content is ingested unmodified.
     payload = {
         "text": content,
         "source_url": unique_url,  # Use unique URL to create new lineage
