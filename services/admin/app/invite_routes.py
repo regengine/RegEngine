@@ -301,7 +301,6 @@ async def create_invite(
             },
         )
 
-
     db.commit()
     db.refresh(new_invite)
 
@@ -424,7 +423,6 @@ async def revoke_invite(
                 ),
             },
         )
-
 
     db.commit()
     return {"status": "revoked"}
@@ -552,6 +550,23 @@ async def accept_invite(
         db.commit()
         raise generic_400
 
+    # Revalidate the role at accept time. It was checked at invite creation,
+    # but it may have been deleted or moved to another tenant since. Mirror
+    # the creation check: system roles (tenant_id None) are valid anywhere,
+    # tenant roles must belong to the invite's tenant. Uniform 400 so an
+    # attacker cannot distinguish a bad role from other unusable states.
+    invite_role = db.get(RoleModel, invite.role_id)
+    if invite_role is None or (
+        getattr(invite_role, "tenant_id", None) is not None and invite_role.tenant_id != invite.tenant_id
+    ):
+        logger.warning(
+            "accept_invite_invalid_role",
+            email=mask_email(invite.email),
+            tenant_id=str(invite.tenant_id),
+        )
+        db.rollback()
+        raise generic_400
+
     # Create Membership
     membership = MembershipModel(
         user_id=user.id,
@@ -564,14 +579,13 @@ async def accept_invite(
     # Provision the passwordless identity rows (verified user_emails +
     # organization_memberships) or sign-in code emails for this user are
     # silently suppressed. The invite token is proof of mailbox control.
-    invite_role = db.get(RoleModel, invite.role_id)
     try:
         ensure_passwordless_identity(
             db,
             user=user,
             email=invite.email,
             organization_id=invite.tenant_id,
-            role_name=invite_role.name if invite_role is not None else None,
+            role_name=invite_role.name,
         )
     except EmailOwnershipConflictError:
         # The invited address (up to case) is verified for a different user.
@@ -617,7 +631,6 @@ async def accept_invite(
                 ),
             },
         )
-
 
     db.commit()
 
