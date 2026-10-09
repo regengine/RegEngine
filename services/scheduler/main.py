@@ -69,6 +69,91 @@ from services.scheduler.app.metrics import metrics
 from services.scheduler.service import SchedulerService
 
 
+def evaluate_scheduler_health(service) -> tuple[int, dict]:
+    """Evaluate scheduler health from leadership and last-scrape state.
+
+    Args:
+        service: The ``SchedulerService`` instance, or None while starting.
+
+    Returns:
+        An ``(http_status, payload)`` pair. Standby and starting instances
+        report 200 with a non-``healthy`` status (the process is alive but
+        not driving jobs, so the liveness probe must not restart it). A
+        leader whose scheduler has stopped, or whose recorded scrapes are
+        all failures, reports 503 ``unhealthy``.
+    """
+    from enum import Enum
+
+    if service is None:
+        return 200, {
+            "status": "starting",
+            "service": "scheduler",
+            "is_leader": False,
+            "scheduler_running": False,
+            "last_success_at": None,
+            "sources": {},
+        }
+
+    is_leader = bool(getattr(getattr(service, "distributed_context", None), "_is_leader", False))
+    scheduler_running = bool(getattr(getattr(service, "scheduler", None), "running", False))
+    last_results = getattr(service, "last_results", None) or {}
+
+    sources: dict = {}
+    success_count = 0
+    last_success_at = None
+    for key, result in last_results.items():
+        name = key.value if isinstance(key, Enum) else str(key)
+        success = bool(getattr(result, "success", False))
+        scraped_at = getattr(result, "scraped_at", None)
+        scraped_at_str = scraped_at.isoformat() if hasattr(scraped_at, "isoformat") else None
+        sources[name] = {
+            "success": success,
+            "scraped_at": scraped_at_str,
+            "error": None if success else getattr(result, "error_message", None),
+        }
+        if success:
+            success_count += 1
+            if scraped_at_str is not None and (last_success_at is None or scraped_at_str > last_success_at):
+                last_success_at = scraped_at_str
+
+    base = {
+        "service": "scheduler",
+        "is_leader": is_leader,
+        "scheduler_running": scheduler_running,
+        "last_success_at": last_success_at,
+        "sources": sources,
+    }
+
+    if not is_leader and not scheduler_running:
+        # Healthy standby: the process is alive and waiting for the
+        # advisory lock, not driving jobs. Must stay 200 so the liveness
+        # probe does not restart it.
+        return 200, {**base, "status": "standby"}
+    if is_leader and not scheduler_running:
+        if not last_results:
+            # Leader elected but the job loop has not started yet.
+            return 200, {**base, "status": "starting"}
+        return 503, {
+            **base,
+            "status": "unhealthy",
+            "reason": "scheduler_not_running_while_leader",
+        }
+    if scheduler_running and not is_leader:
+        # Transient leadership-loss shutdown window: not driving valid
+        # work, so report unhealthy rather than healthy.
+        return 503, {
+            **base,
+            "status": "unhealthy",
+            "reason": "scheduler_running_without_leadership",
+        }
+    # Leader with a running scheduler: grade on last-scrape state.
+    if last_results and success_count == 0:
+        return 503, {**base, "status": "unhealthy", "reason": "all_scrapes_failing"}
+    if last_results and success_count < len(sources):
+        return 200, {**base, "status": "degraded"}
+    return 200, {**base, "status": "healthy"}
+
+
 class HealthHandler(BaseHTTPRequestHandler):
     """HTTP handler for health checks and metrics."""
 
@@ -86,11 +171,32 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def _handle_health(self) -> None:
-        """Return health status."""
-        self.send_response(200)
+        """Return health status.
+
+        Unlike the old always-200 body, this reflects leadership and
+        last-scrape state so a dead scheduler is visible to monitoring:
+        standby and starting instances answer 200 with a non-``healthy``
+        status, while a leader whose scheduler has stopped or whose
+        scrapes are all failing answers 503.
+        """
+        import json
+
+        try:
+            http_status, payload = evaluate_scheduler_health(self.scheduler_service)
+        except Exception as exc:  # pragma: no cover — health must not 500
+            logger.error("health_evaluation_failed", error=str(exc))
+            http_status, payload = (
+                503,
+                {
+                    "status": "unhealthy",
+                    "service": "scheduler",
+                    "reason": "health_evaluation_failed",
+                },
+            )
+        self.send_response(http_status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(b'{"status":"healthy","service":"scheduler"}')
+        self.wfile.write(json.dumps(payload).encode())
 
     def _handle_metrics(self) -> None:
         """Return Prometheus metrics (requires X-Metrics-Key header)."""
