@@ -445,6 +445,23 @@ class DatabaseAPIKeyStore:
             except ImportError:
                 logger.warning("redis_not_available", message="Install redis for distributed rate limiting")
 
+        # Unsalted SHA-256 storage digests are accepted when no server-side
+        # pepper is configured. That fallback keeps local installs working
+        # but weakens offline-cracking resistance, so call it out loudly in
+        # production where a pepper is expected.
+        if _api_key_hash_pepper() is None:
+            from shared.env import is_production  # noqa: PLC0415
+
+            if is_production():
+                logger.warning(
+                    "api_key_pepper_missing_in_production",
+                    message=(
+                        "REGENGINE_API_KEY_HASH_PEPPER is not set; "
+                        "API key hashes fall back to unsalted SHA-256. "
+                        "Set a pepper in production."
+                    ),
+                )
+
     def rate_limit_backend_ready(self) -> bool:
         """Return whether a shared Redis client backs key rate limits."""
 

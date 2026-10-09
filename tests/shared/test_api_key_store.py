@@ -193,6 +193,53 @@ class TestDatabaseAPIKeyStoreInit:
             else:
                 os.environ.pop("DATABASE_URL", None)
 
+    def test_init_warns_in_production_without_pepper(self, monkeypatch):
+        """Production startup without a pepper must log a warning."""
+        from unittest.mock import patch
+
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        monkeypatch.delenv("REGENGINE_API_KEY_HASH_PEPPER", raising=False)
+        monkeypatch.delenv("API_KEY_HASH_PEPPER", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+
+        with patch("shared.api_key_store.logger") as mock_logger:
+            DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+
+        warnings = [c.args[0] for c in mock_logger.warning.call_args_list]
+        assert "api_key_pepper_missing_in_production" in warnings
+
+    def test_init_quiet_without_pepper_outside_production(self, monkeypatch):
+        """Local installs without a pepper must not warn."""
+        from unittest.mock import patch
+
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        monkeypatch.delenv("REGENGINE_API_KEY_HASH_PEPPER", raising=False)
+        monkeypatch.delenv("API_KEY_HASH_PEPPER", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+
+        with patch("shared.api_key_store.logger") as mock_logger:
+            DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+
+        warnings = [c.args[0] for c in mock_logger.warning.call_args_list]
+        assert "api_key_pepper_missing_in_production" not in warnings
+
+    def test_init_quiet_in_production_with_pepper(self, monkeypatch):
+        """A configured pepper in production must not warn."""
+        from unittest.mock import patch
+
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        monkeypatch.setenv("REGENGINE_API_KEY_HASH_PEPPER", "pepper-value")
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+
+        with patch("shared.api_key_store.logger") as mock_logger:
+            DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+
+        warnings = [c.args[0] for c in mock_logger.warning.call_args_list]
+        assert "api_key_pepper_missing_in_production" not in warnings
+
 
 class TestDatabaseAPIKeyStoreCRUD:
     """Test CRUD operations with mocked database."""
