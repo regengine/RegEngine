@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -146,7 +147,9 @@ def test_erasure_removes_identity_keeps_trace_event_anonymized():
         for n in result
     )
 
-    trace = next(n for n in result if n["labels"] == ["CTEEvent"] and n["tenant_id"] == TENANT and n["cte_type"] == "shipping")
+    trace = next(
+        n for n in result if n["labels"] == ["CTEEvent"] and n["tenant_id"] == TENANT and n["cte_type"] == "shipping"
+    )
     assert trace["actor_id"] == token
     assert trace["cte_type"] == "shipping"
 
@@ -190,9 +193,20 @@ def test_other_user_and_other_tenant_records_untouched():
     assert foreign_trace["actor_id"] == USER
 
 
+def _make_consumable_result():
+    """Mimic a Neo4j ``AsyncResult``: ``consume()`` yields a summary with counters."""
+    result = AsyncMock()
+    result.consume = AsyncMock(
+        return_value=SimpleNamespace(
+            counters=SimpleNamespace(nodes_deleted=0, relationships_deleted=0, properties_set=0)
+        )
+    )
+    return result
+
+
 def _make_async_driver_mock():
     mock_session = AsyncMock()
-    mock_session.run = AsyncMock(return_value=None)
+    mock_session.run = AsyncMock(side_effect=[_make_consumable_result(), _make_consumable_result()])
     session_cm = AsyncMock()
     session_cm.__aenter__ = AsyncMock(return_value=mock_session)
     session_cm.__aexit__ = AsyncMock(return_value=False)

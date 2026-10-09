@@ -68,6 +68,7 @@ def get_db():
         db.rollback()
         db.close()
 
+
 # Graph node labels that represent a user identity. Only nodes carrying one
 # of these labels are ever deleted by erasure. Every other node (trace
 # events, CTEs, facilities, lots, audit entries) is somebody's compliance
@@ -169,21 +170,34 @@ async def _delete_neo4j_user_graph_data(
         neo4j_password = os.getenv("NEO4J_PASSWORD", "")
         async with AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as neo4j_driver:
             async with neo4j_driver.session() as session:
-                await session.run(
+                # ``session.run`` only sends the query and buffers the
+                # result header; the statement is not guaranteed to have
+                # executed until the result is consumed. Consume each
+                # result so a failed DETACH DELETE surfaces here instead
+                # of silently no-oping, and read the summary counters so
+                # the outcome is visible in logs.
+                delete_result = await session.run(
                     _CYPHER_DELETE_IDENTITY_NODES,
                     tenant_id=tenant_id,
                     user_id=user_id,
                 )
-                await session.run(
+                delete_summary = await delete_result.consume()
+                anonymize_result = await session.run(
                     _CYPHER_ANONYMIZE_SHARED_ACTOR_REFS,
                     tenant_id=tenant_id,
                     user_id=user_id,
                     erased_actor_id=token,
                 )
+                anonymize_summary = await anonymize_result.consume()
+        delete_counters = getattr(delete_summary, "counters", None)
+        anonymize_counters = getattr(anonymize_summary, "counters", None)
         logger.info(
             "erasure_neo4j_user_graph_data_deleted",
             tenant_id=tenant_id,
             user_id=user_id,
+            nodes_deleted=getattr(delete_counters, "nodes_deleted", 0),
+            relationships_deleted=getattr(delete_counters, "relationships_deleted", 0),
+            anonymized_properties_set=getattr(anonymize_counters, "properties_set", 0),
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning(
@@ -261,22 +275,21 @@ def _apply_account_erasure(
         tenant_ids = db.execute(select(TenantModel.id)).scalars().all()
         for audit_tenant_id in tenant_ids:
             set_tenant_guc(db, str(audit_tenant_id))
-            if db.execute(
-                select(AuditLogModel.tenant_id)
-                .where(
-                    AuditLogModel.tenant_id == audit_tenant_id,
-                    AuditLogModel.actor_id == user_id,
-                )
-                .limit(1)
-            ).scalar_one_or_none() is not None:
+            if (
+                db.execute(
+                    select(AuditLogModel.tenant_id)
+                    .where(
+                        AuditLogModel.tenant_id == audit_tenant_id,
+                        AuditLogModel.actor_id == user_id,
+                    )
+                    .limit(1)
+                ).scalar_one_or_none()
+                is not None
+            ):
                 audit_tenants.add(audit_tenant_id)
     else:
         audit_tenants = set(
-            db.execute(
-                select(AuditLogModel.tenant_id)
-                .where(AuditLogModel.actor_id == user_id)
-                .distinct()
-            )
+            db.execute(select(AuditLogModel.tenant_id).where(AuditLogModel.actor_id == user_id).distinct())
             .scalars()
             .all()
         )
@@ -297,11 +310,7 @@ def _apply_account_erasure(
             active_membership_id=None,
         )
     )
-    db.execute(
-        update(MembershipModel)
-        .where(MembershipModel.user_id == user_id)
-        .values(is_active=False)
-    )
+    db.execute(update(MembershipModel).where(MembershipModel.user_id == user_id).values(is_active=False))
 
     email_rows = db.execute(select(UserEmailModel).where(UserEmailModel.user_id == user_id)).scalars().all()
     email_fingerprints = [row.email_fingerprint for row in email_rows if row.email_fingerprint]

@@ -12,6 +12,7 @@ Two scenarios are covered:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,13 +25,24 @@ TEST_TENANT_ID = "aaaabbbb-cccc-dddd-eeee-ffffffffffff"
 TEST_USER_ID = "11112222-3333-4444-5555-666677778888"
 
 
+def _make_consumable_result():
+    """Mimic a Neo4j ``AsyncResult``: ``consume()`` yields a summary with counters."""
+    result = AsyncMock()
+    result.consume = AsyncMock(
+        return_value=SimpleNamespace(
+            counters=SimpleNamespace(nodes_deleted=0, relationships_deleted=0, properties_set=0)
+        )
+    )
+    return result
+
+
 def _make_async_driver_mock(run_side_effect=None):
     """Return a mock that mimics ``AsyncGraphDatabase.driver`` context manager."""
     mock_session = AsyncMock()
     if run_side_effect is not None:
         mock_session.run = AsyncMock(side_effect=run_side_effect)
     else:
-        mock_session.run = AsyncMock(return_value=None)
+        mock_session.run = AsyncMock(side_effect=[_make_consumable_result(), _make_consumable_result()])
 
     # session() returns an async context manager
     session_cm = AsyncMock()
