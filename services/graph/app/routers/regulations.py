@@ -219,13 +219,16 @@ async def harmonize_requirement(
     )
     try:
         mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
-        await engine.close()
         return {
             "status": "completed",
             "obligation_id": obligation_id,
             "mappings_found": len(mappings),
             "mappings": mappings,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=str(tenant_id), error=str(e))
         raise HTTPException(status_code=503, detail="Harmonization engine unavailable")
+    finally:
+        await engine.close()

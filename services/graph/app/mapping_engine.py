@@ -69,7 +69,9 @@ class MappingEngine:
 
         if not self.llm:
             logger.warning("mapping_engine_disabled_no_llm")
-            return []
+            raise RuntimeError(
+                "Harmonization LLM client is not configured; refusing to report zero mappings as completed"
+            )
 
         # 1. Fetch the source obligation and its context
         async with self.driver.session() as session:
@@ -145,7 +147,7 @@ class MappingEngine:
 
         except Exception as e:
             logger.error("llm_mapping_failed", error=str(e))
-            return []
+            raise
 
         # 4. Persistence: Create MAPPED_TO relationships in the graph
         if mappings:
