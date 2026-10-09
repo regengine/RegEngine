@@ -22,9 +22,13 @@ Usage:
     python scripts/sentinel-backfill.py            # full backfill
     python scripts/sentinel-backfill.py --limit 50 # smoke test
     python scripts/sentinel-backfill.py --dry-run  # don't write file
+    python scripts/sentinel-backfill.py --resume   # skip issues in the checkpoint file
+    python scripts/sentinel-backfill.py --delay 1.0  # slower, gentler on rate limits
 
 Re-run policy: idempotent. Safe to re-run any time. Anchors recovered on
-prior runs are re-verified each time.
+prior runs are re-verified each time. A checkpoint file records recovered
+anchors every few dozen issues; if a run dies midway (for example on a rate
+limit), re-run with --resume to skip issues already recovered.
 """
 
 from __future__ import annotations
@@ -35,10 +39,21 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ANCHORS_PATH = REPO_ROOT / ".claude" / "sentinel_anchors.json"
+CHECKPOINT_PATH = REPO_ROOT / ".claude" / "sentinel_backfill.progress.json"
+
+# Pacing and retry policy for GitHub API calls. The backfill issues several
+# `gh api` calls per unanchored issue; without pacing, a large universe trips
+# secondary rate limits midway and the run is lost (anchors are only written
+# at the end), so calls are paced and rate-limited responses are retried.
+DEFAULT_DELAY_SECONDS = 0.5
+BACKOFF_BASE_SECONDS = 2.0
+MAX_API_ATTEMPTS = 5
+CHECKPOINT_EVERY = 25
 
 # Patterns indicating a closing PR reference. The verify step rejects
 # matches that resolve to issue numbers rather than PR numbers.
@@ -82,6 +97,65 @@ def gh(*args: str, check: bool = True) -> str:
     return r.stdout
 
 
+def is_rate_limited_output(raw: str) -> bool:
+    """Return True when `gh` output signals a rate limit (HTTP 429 or a
+    rate-limit message) as opposed to a genuine 404 or empty answer."""
+    lowered = raw.lower()
+    if "rate limit" in lowered or "rate_limited" in lowered or "abuse detection" in lowered:
+        return True
+    for line in lowered.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0].startswith("http/") and parts[1] == "429":
+            return True
+    return False
+
+
+def gh_with_backoff(
+    *args: str,
+    max_attempts: int | None = None,
+    base_delay: float | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
+) -> str:
+    """Run `gh` without raising, retrying rate-limited responses with
+    exponential backoff. Returns the last raw output, which the caller
+    interprets as usual (a still-limited response simply resolves to no
+    anchor, and --resume retries that issue on the next run)."""
+    attempts = max_attempts if max_attempts is not None else MAX_API_ATTEMPTS
+    delay = base_delay if base_delay is not None else BACKOFF_BASE_SECONDS
+    nap = sleep_fn or time.sleep
+    raw = ""
+    for attempt in range(1, attempts + 1):
+        raw = gh(*args, check=False)
+        if not is_rate_limited_output(raw) or attempt == attempts:
+            return raw
+        nap(delay)
+        delay *= 2
+    return raw
+
+
+def load_checkpoint(path: Path = CHECKPOINT_PATH) -> dict[int, int]:
+    """Return recovered anchors recorded by an interrupted run, or {}."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {}
+    anchors = data.get("anchors") if isinstance(data, dict) else None
+    if not isinstance(anchors, dict):
+        return {}
+    recovered: dict[int, int] = {}
+    for key, value in anchors.items():
+        try:
+            recovered[int(key)] = int(value)
+        except (TypeError, ValueError):
+            continue
+    return recovered
+
+
+def save_checkpoint(path: Path, recovered: dict[int, int]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"anchors": {str(k): v for k, v in recovered.items()}}, indent=2, sort_keys=True) + "\n")
+
+
 def detect_repo() -> tuple[str, str]:
     raw = gh("repo", "view", "--json", "owner,name")
     data = json.loads(raw)
@@ -113,7 +187,7 @@ def load_universe() -> tuple[dict[int, int], list[int]]:
 
 
 def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
-    raw = gh(
+    raw = gh_with_backoff(
         "api",
         "graphql",
         "-f",
@@ -124,7 +198,6 @@ def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
         f"repo={repo}",
         "-F",
         f"num={num}",
-        check=False,
     )
     if not raw.strip():
         return None
@@ -152,18 +225,17 @@ def resolve_via_close_event(owner: str, repo: str, num: int) -> int | None:
 
 
 def is_pull_request(owner: str, repo: str, n: int) -> bool:
-    raw = gh(
+    raw = gh_with_backoff(
         "api",
         f"repos/{owner}/{repo}/pulls/{n}",
-        "--silent" if False else "-i",
-        check=False,
+        "-i",
     )
     # status line: "HTTP/2.0 200" => PR exists; 404 => not a PR (issue or absent)
     return raw.startswith(("HTTP/2.0 200", "HTTP/1.1 200"))
 
 
-def resolve_via_comments(owner: str, repo: str, num: int) -> int | None:
-    raw = gh("issue", "view", str(num), "--json", "body,comments", check=False)
+def resolve_via_comments(owner: str, repo: str, num: int, *, delay: float = 0.0) -> int | None:
+    raw = gh_with_backoff("issue", "view", str(num), "--json", "body,comments")
     if not raw.strip():
         return None
     try:
@@ -179,9 +251,13 @@ def resolve_via_comments(owner: str, repo: str, num: int) -> int | None:
     if not candidates:
         return None
     # Prefer most-recent (highest) candidate; verify each is actually a PR.
+    checked = 0
     for n in sorted(set(candidates), reverse=True):
         if n == num:
             continue  # self-reference
+        if checked and delay > 0:
+            time.sleep(delay)
+        checked += 1
         if is_pull_request(owner, repo, n):
             return n
     return None
@@ -193,6 +269,17 @@ def main() -> int:
         "--limit", type=int, default=0, help="Process at most N unanchored issues (0 = all). For smoke testing."
     )
     ap.add_argument("--dry-run", action="store_true", help="Resolve and print stats; do not write the anchors file.")
+    ap.add_argument(
+        "--delay",
+        type=float,
+        default=DEFAULT_DELAY_SECONDS,
+        help="Seconds to pause between issues (and between PR verifications).",
+    )
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip issues already recovered in the checkpoint file from an interrupted run.",
+    )
     args = ap.parse_args()
 
     owner, repo = detect_repo()
@@ -204,6 +291,10 @@ def main() -> int:
 
     targets = unanchored[: args.limit] if args.limit else unanchored
     recovered: dict[int, int] = {}
+    if args.resume:
+        recovered.update(load_checkpoint(CHECKPOINT_PATH))
+        print(f"[backfill] resumed {len(recovered)} recovered from checkpoint", flush=True)
+    targets = [n for n in targets if n not in recovered]
     failed: list[int] = []
     started = time.time()
 
@@ -218,11 +309,15 @@ def main() -> int:
             )
         pr = resolve_via_close_event(owner, repo, num)
         if pr is None:
-            pr = resolve_via_comments(owner, repo, num)
+            pr = resolve_via_comments(owner, repo, num, delay=args.delay)
         if pr is not None:
             recovered[num] = pr
         else:
             failed.append(num)
+        if not args.dry_run and (i % CHECKPOINT_EVERY == 0 or i == len(targets)):
+            save_checkpoint(CHECKPOINT_PATH, recovered)
+        if args.delay > 0 and i < len(targets):
+            time.sleep(args.delay)
 
     payload = {
         "_generated_by": "scripts/sentinel-backfill.py",
@@ -242,6 +337,7 @@ def main() -> int:
 
     ANCHORS_PATH.parent.mkdir(parents=True, exist_ok=True)
     ANCHORS_PATH.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    CHECKPOINT_PATH.unlink(missing_ok=True)
     print(
         f"[backfill] wrote {ANCHORS_PATH.relative_to(REPO_ROOT)}: "
         f"anchored={len(anchored)} +recovered={len(recovered)} unrecoverable={len(failed)}"
