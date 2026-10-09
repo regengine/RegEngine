@@ -5,20 +5,47 @@ Tests basic flow: login → verify session in Redis → refresh → logout
 """
 
 import json
+import os
 import subprocess
 import time
 
 import requests
 
-BASE_URL = "http://localhost:8400"
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8400")
+REQUEST_TIMEOUT = int(os.environ.get("TEST_REQUEST_TIMEOUT", "10"))
+REDIS_CMD_TIMEOUT = int(os.environ.get("TEST_REDIS_CMD_TIMEOUT", "15"))
+
+
+def get_test_credentials():
+    """Read test user credentials from the environment.
+
+    Returns (email, password). Password has no default so a weak
+    hardcoded secret never lands in source.
+    """
+    email = os.environ.get("TEST_USER_EMAIL", "admin@example.com")
+    password = os.environ.get("TEST_USER_PASSWORD", "")
+    return email, password
 
 
 def run_redis_cmd(cmd):
     """Execute Redis CLI command"""
     result = subprocess.run(
-        ["docker", "exec", "regengine-redis-1", "redis-cli"] + cmd.split(), capture_output=True, text=True
+        ["docker", "exec", "regengine-redis-1", "redis-cli"] + cmd.split(),
+        capture_output=True,
+        text=True,
+        timeout=REDIS_CMD_TIMEOUT,
     )
     return result.stdout.strip()
+
+
+def scan_keys(pattern):
+    """List keys matching pattern using SCAN (non-blocking).
+
+    Uses ``redis-cli --scan --pattern`` which iterates with SCAN
+    instead of the blocking KEYS command.
+    """
+    output = run_redis_cmd(f"--scan --pattern {pattern}")
+    return output.split() if output else []
 
 
 def test_redis_sessions():
@@ -42,13 +69,17 @@ def test_redis_sessions():
 
     # Test 3: Login
     print("\n3. Testing login endpoint...")
+    email, password = get_test_credentials()
+    if not password:
+        print("   ❌ TEST_USER_PASSWORD is not set; refusing to log in with a default password")
+        return False
     login_data = {
-        "email": "admin@example.com",  # Adjust to your test user
-        "password": "password123",
+        "email": email,
+        "password": password,
     }
 
     try:
-        response = requests.post(f"{BASE_URL}/auth/login", json=login_data)
+        response = requests.post(f"{BASE_URL}/auth/login", json=login_data, timeout=REQUEST_TIMEOUT)
         print(f"   Status: {response.status_code}")
 
         if response.status_code == 200:
@@ -69,19 +100,19 @@ def test_redis_sessions():
 
     # Test 4: Verify session in Redis
     print("\n4. Verifying session created in Redis...")
-    session_keys = run_redis_cmd("KEYS session:*")
-    user_session_keys = run_redis_cmd("KEYS user_sessions:*")
-    token_hash_keys = run_redis_cmd("KEYS token_hash:*")
+    session_list = scan_keys("session:*")
+    user_session_list = scan_keys("user_sessions:*")
+    token_hash_list = scan_keys("token_hash:*")
 
-    print(f"   Session keys: {len(session_keys.split()) if session_keys else 0}")
-    print(f"   User session keys: {len(user_session_keys.split()) if user_session_keys else 0}")
-    print(f"   Token hash keys: {len(token_hash_keys.split()) if token_hash_keys else 0}")
+    print(f"   Session keys: {len(session_list)}")
+    print(f"   User session keys: {len(user_session_list)}")
+    print(f"   Token hash keys: {len(token_hash_list)}")
 
-    if session_keys and user_session_keys and token_hash_keys:
+    if session_list and user_session_list and token_hash_list:
         print("   ✅ Session data structures created in Redis")
 
         # Inspect session data
-        session_key = session_keys.split()[0] if session_keys else None
+        session_key = session_list[0] if session_list else None
         if session_key:
             print(f"\n   Inspecting {session_key}...")
             session_data = run_redis_cmd(f"HGETALL {session_key}")
@@ -93,7 +124,7 @@ def test_redis_sessions():
     # Test 5: List sessions
     print("\n5. Testing session listing...")
     headers = {"Authorization": f"Bearer {access_token}"}
-    response = requests.get(f"{BASE_URL}/auth/sessions", headers=headers)
+    response = requests.get(f"{BASE_URL}/auth/sessions", headers=headers, timeout=REQUEST_TIMEOUT)
 
     if response.status_code == 200:
         sessions = response.json()
@@ -107,7 +138,7 @@ def test_redis_sessions():
     # Test 6: Refresh token
     print("\n6. Testing token refresh...")
     refresh_data = {"refresh_token": refresh_token}
-    response = requests.post(f"{BASE_URL}/auth/refresh", json=refresh_data)
+    response = requests.post(f"{BASE_URL}/auth/refresh", json=refresh_data, timeout=REQUEST_TIMEOUT)
 
     if response.status_code == 200:
         data = response.json()
@@ -121,7 +152,9 @@ def test_redis_sessions():
 
     # Test 7: Logout all
     print("\n7. Testing logout all...")
-    response = requests.post(f"{BASE_URL}/auth/logout-all", headers={"Authorization": f"Bearer {access_token}"})
+    response = requests.post(
+        f"{BASE_URL}/auth/logout-all", headers={"Authorization": f"Bearer {access_token}"}, timeout=REQUEST_TIMEOUT
+    )
 
     if response.status_code == 200:
         data = response.json()
