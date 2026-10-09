@@ -1,3 +1,11 @@
+# Coverage note: every rule below queries metrics from the
+# regengine-services scrape job in prometheus.yml (service /metrics).
+# Rules needing exporters that do not exist in this tree (Kafka exporter
+# metrics kafka_consumergroup_*, node exporter metrics node_*,
+# postgres exporter metrics pg_*) were pruned because they could never
+# have data and only suggested coverage that was not there. The pruned
+# rules live in git history; restore them together with real scrape jobs
+# when those exporters are deployed.
 groups:
   - name: regengine_critical_alerts
     interval: 30s
@@ -42,89 +50,6 @@ groups:
           summary: "High P99 latency on {{ $labels.service }}"
           description: "P99 latency is {{ $value | humanizeDuration }} on {{ $labels.service }} (threshold: 500ms)."
 
-      # Kafka Alerts
-      - alert: HighKafkaConsumerLag
-        expr: kafka_consumergroup_lag > 10000
-        for: 5m
-        labels:
-          severity: critical
-          component: kafka
-        annotations:
-          summary: "High Kafka consumer lag on topic {{ $labels.topic }}"
-          description: "Consumer lag is {{ $value }} messages on topic {{ $labels.topic }}, consumer group {{ $labels.consumergroup }}."
-
-      - alert: KafkaConsumerNotConsuming
-        expr: rate(kafka_consumergroup_current_offset[5m]) == 0 and kafka_consumergroup_lag > 0
-        for: 10m
-        labels:
-          severity: critical
-          component: kafka
-        annotations:
-          summary: "Kafka consumer {{ $labels.consumergroup }} not consuming from {{ $labels.topic }}"
-          description: "Consumer group {{ $labels.consumergroup }} has stopped consuming from topic {{ $labels.topic }} with lag {{ $value }}."
-
-      # Database Resource Alerts
-      - alert: HighCPUUtilization
-        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
-        for: 10m
-        labels:
-          severity: critical
-          component: infrastructure
-        annotations:
-          summary: "High CPU usage on {{ $labels.instance }}"
-          description: "CPU usage is {{ $value | humanizePercentage }} on {{ $labels.instance }} (threshold: 90%)."
-
-      - alert: HighMemoryUtilization
-        expr: 100 * (1 - ((node_memory_MemAvailable_bytes) / (node_memory_MemTotal_bytes))) > 90
-        for: 10m
-        labels:
-          severity: critical
-          component: infrastructure
-        annotations:
-          summary: "High memory usage on {{ $labels.instance }}"
-          description: "Memory usage is {{ $value | humanizePercentage }} on {{ $labels.instance }} (threshold: 90%)."
-
-      - alert: LowDiskSpace
-        expr: 100 - ((node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes) > 85
-        for: 5m
-        labels:
-          severity: critical
-          component: infrastructure
-        annotations:
-          summary: "Low disk space on {{ $labels.instance }}"
-          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}:{{ $labels.mountpoint }} (threshold: 85%)."
-
-      - alert: CriticalDiskSpace
-        expr: 100 - ((node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes) > 95
-        for: 1m
-        labels:
-          severity: critical
-          component: infrastructure
-        annotations:
-          summary: "CRITICAL: Disk almost full on {{ $labels.instance }}"
-          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.instance }}:{{ $labels.mountpoint }} (threshold: 95%). Immediate action required."
-
-      # PostgreSQL Alerts
-      - alert: PostgreSQLDown
-        expr: pg_up == 0
-        for: 1m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "PostgreSQL is down"
-          description: "PostgreSQL database has been unreachable for more than 1 minute."
-
-      - alert: PostgreSQLTooManyConnections
-        expr: pg_stat_database_numbackends > (pg_settings_max_connections * 0.9)
-        for: 5m
-        labels:
-          severity: critical
-          component: database
-        annotations:
-          summary: "PostgreSQL approaching max connections"
-          description: "PostgreSQL connection usage is above 90% of the configured max; current matching value is {{ $value }}."
-
       # Audit-the-auditor: a dropped data.bulk.export self-log means a
       # privileged audit export (potentially raw PII) returned without
       # its tamper-evidence record. The export endpoint now fails closed
@@ -143,16 +68,6 @@ groups:
   - name: regengine_warning_alerts
     interval: 30s
     rules:
-      - alert: ModerateKafkaLag
-        expr: kafka_consumergroup_lag > 1000 and kafka_consumergroup_lag <= 10000
-        for: 10m
-        labels:
-          severity: warning
-          component: kafka
-        annotations:
-          summary: "Moderate Kafka consumer lag on {{ $labels.topic }}"
-          description: "Consumer lag is {{ $value }} messages on topic {{ $labels.topic }}."
-
       - alert: IncreasedErrorRate
         expr: |
           (
@@ -181,33 +96,3 @@ groups:
         annotations:
           summary: "Elevated P99 latency on {{ $labels.service }}"
           description: "P99 latency is {{ $value | humanizeDuration }} on {{ $labels.service }} (threshold: 200ms)."
-
-      - alert: HighDiskIOWait
-        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.5
-        for: 10m
-        labels:
-          severity: warning
-          component: infrastructure
-        annotations:
-          summary: "High disk I/O wait time on {{ $labels.instance }}"
-          description: "Disk I/O wait time is elevated on {{ $labels.instance }}."
-
-      - alert: PostgreSQLHighConnections
-        expr: pg_stat_database_numbackends > (pg_settings_max_connections * 0.7)
-        for: 10m
-        labels:
-          severity: warning
-          component: database
-        annotations:
-          summary: "PostgreSQL high connection count"
-          description: "PostgreSQL has {{ $value }} active connections (70% of max)."
-
-      - alert: PostgreSQLDeadlocks
-        expr: rate(pg_stat_database_deadlocks[5m]) > 0
-        for: 5m
-        labels:
-          severity: warning
-          component: database
-        annotations:
-          summary: "PostgreSQL deadlocks detected"
-          description: "PostgreSQL is experiencing deadlocks at rate {{ $value }} per second."

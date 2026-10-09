@@ -48,6 +48,9 @@ scrape_configs:
         labels:
           service: 'scheduler-service'
 
-  - job_name: 'kubernetes-nodes'
-    kubernetes_sd_configs:
-      - role: node
+# NOTE: there is intentionally no kubernetes_sd job here. A previous
+# revision scraped cluster nodes via Kubernetes service discovery, but no
+# Prometheus, node exporter, or related RBAC exists in this tree, so that
+# job could never produce data and failed outside a cluster. Node-level
+# alert rules were pruned from alert_rules.yml for the same reason. Restore
+# both together when node exporter is actually deployed (see alert_rules.yml).
