@@ -490,9 +490,23 @@ def _events_row(
     )
 
 
+def _events_page_call(session: FakeSession) -> Tuple[str, Dict[str, Any]]:
+    """The page SELECT call (sql, params) issued by ``audit_events``.
+
+    The endpoint also fires a ``SELECT COUNT(*)`` for the filtered total;
+    shape assertions about the page query must skip it.
+    """
+    return next((sql, params) for sql, params in session.calls if not sql.startswith("SELECT COUNT"))
+
+
 class TestEvents:
     def test_returns_compliant_status_when_all_rules_pass(self):
-        session = FakeSession({r"FROM fsma\.traceability_events": lambda _: [_events_row()]})
+        session = FakeSession(
+            {
+                r"^SELECT COUNT\(\*\)": lambda _: (1,),
+                r"FROM fsma\.traceability_events": lambda _: [_events_row()],
+            }
+        )
         client = _build_client(_make_principal(), session)
         resp = client.get("/api/v1/audit/events")
         assert resp.status_code == 200
@@ -626,7 +640,7 @@ class TestEvents:
         session = FakeSession({r"FROM fsma\.traceability_events": lambda _: []})
         client = _build_client(_make_principal(), session)
         client.get("/api/v1/audit/events")
-        last_sql = session.calls[-1][0]
+        last_sql = _events_page_call(session)[0]
         assert "FILTER (WHERE result = 'error') AS errored" in last_sql
         assert "FILTER (WHERE result IN ('pass', 'warn')) AS affirmative" in last_sql
         assert "e.evaluation_verdict" in last_sql
@@ -713,7 +727,7 @@ class TestEvents:
         resp = client.get("/api/v1/audit/events?limit=25&offset=50")
         assert resp.status_code == 200
         # The WHERE/ORDER-BY SQL carried :lim and :off bindings
-        params = session.calls[-1][1]
+        params = _events_page_call(session)[1]
         assert params["lim"] == 25
         assert params["off"] == 50
 
@@ -738,16 +752,14 @@ class TestEvents:
         resp = client.get("/api/v1/audit/events?limit=25&offset=50")
         assert resp.status_code == 200
 
-        sql = session.calls[-1][0]
-        order_by = re.search(
-            r"ORDER BY (.+?) LIMIT", sql, re.IGNORECASE
-        )
+        sql = _events_page_call(session)[0]
+        order_by = re.search(r"ORDER BY (.+?) LIMIT", sql, re.IGNORECASE)
         assert order_by, f"audit_events emitted no ORDER BY before LIMIT: {sql}"
         keys = [key.strip() for key in order_by.group(1).split(",")]
         assert keys[0].lower().startswith("e.event_timestamp"), keys
-        assert any(
-            key.lower().startswith("e.event_id") for key in keys[1:]
-        ), f"ORDER BY has no unique tiebreaker after event_timestamp: {keys}"
+        assert any(key.lower().startswith("e.event_id") for key in keys[1:]), (
+            f"ORDER BY has no unique tiebreaker after event_timestamp: {keys}"
+        )
 
     def test_null_timestamp_and_quantity_handled(self):
         """Defensive: missing timestamps and quantities don't crash

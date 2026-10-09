@@ -242,6 +242,20 @@ async def audit_events(
 
     where_sql = " AND ".join(where)
 
+    # Per-event evaluation rollup shared by the page query and the
+    # filtered-total count below, so both agree on which rows match.
+    eval_lateral = """
+        LEFT JOIN LATERAL (
+            SELECT COUNT(*) AS total_rules,
+                   COUNT(*) FILTER (WHERE result = 'pass') AS passed,
+                   COUNT(*) FILTER (WHERE result = 'fail') AS failed,
+                   COUNT(*) FILTER (WHERE result = 'error') AS errored,
+                   COUNT(*) FILTER (WHERE result IN ('pass', 'warn')) AS affirmative
+            FROM fsma.rule_evaluations re
+            WHERE re.event_id = e.event_id AND re.tenant_id = :tid
+        ) eval_summary ON TRUE
+    """
+
     # Subquery for compliance status per event.
     #
     # ``compliant`` is deliberately narrow: no ``fail`` rows, no ``error``
@@ -263,31 +277,24 @@ async def audit_events(
                e.evaluation_verdict,
                e.no_verdict_reason
         FROM fsma.traceability_events e
-        LEFT JOIN LATERAL (
-            SELECT COUNT(*) AS total_rules,
-                   COUNT(*) FILTER (WHERE result = 'pass') AS passed,
-                   COUNT(*) FILTER (WHERE result = 'fail') AS failed,
-                   COUNT(*) FILTER (WHERE result = 'error') AS errored,
-                   COUNT(*) FILTER (WHERE result IN ('pass', 'warn')) AS affirmative
-            FROM fsma.rule_evaluations re
-            WHERE re.event_id = e.event_id AND re.tenant_id = :tid
-        ) eval_summary ON TRUE
+        {eval_lateral}
         WHERE {where_sql}
     """
 
+    filter_sql = ""
     if compliance_status == "compliant":
-        query += (
+        filter_sql = (
             " AND COALESCE(eval_summary.failed, 0) = 0"
             " AND COALESCE(eval_summary.errored, 0) = 0"
             " AND COALESCE(eval_summary.affirmative, 0) > 0"
             " AND COALESCE(e.evaluation_verdict, 'pass') NOT IN ('no_verdict', 'fail')"
         )
     elif compliance_status == "non_compliant":
-        query += " AND (COALESCE(eval_summary.failed, 0) > 0 OR e.evaluation_verdict = 'fail')"
+        filter_sql = " AND (COALESCE(eval_summary.failed, 0) > 0 OR e.evaluation_verdict = 'fail')"
     elif compliance_status == "error":
-        query += " AND COALESCE(eval_summary.failed, 0) = 0 AND COALESCE(eval_summary.errored, 0) > 0"
+        filter_sql = " AND COALESCE(eval_summary.failed, 0) = 0 AND COALESCE(eval_summary.errored, 0) > 0"
     elif compliance_status == "no_verdict":
-        query += (
+        filter_sql = (
             " AND COALESCE(eval_summary.failed, 0) = 0"
             " AND COALESCE(eval_summary.errored, 0) = 0"
             " AND ("
@@ -297,7 +304,8 @@ async def audit_events(
             ")"
         )
     elif compliance_status == "unevaluated":
-        query += " AND COALESCE(eval_summary.total_rules, 0) = 0 AND e.evaluation_verdict IS NULL"
+        filter_sql = " AND COALESCE(eval_summary.total_rules, 0) = 0 AND e.evaluation_verdict IS NULL"
+    query += filter_sql
 
     # ``event_timestamp`` is indexed (idx_trace_events_timestamp) but not
     # unique, so it cannot order a LIMIT/OFFSET scan on its own — an index on
@@ -333,7 +341,19 @@ async def audit_events(
         }
         for r in rows
     ]
-    return {"tenant_id": tid, "events": events, "total": len(events)}
+    # ``total`` is the filtered count across all pages, not the page
+    # size. It reuses the same WHERE and compliance filters as the page
+    # query, without LIMIT/OFFSET, so an auditor paginating to exhaustion
+    # can tell when the set is complete.
+    count_query = f"""
+        SELECT COUNT(*)
+        FROM fsma.traceability_events e
+        {eval_lateral}
+        WHERE {where_sql}{filter_sql}
+    """
+    count_params = {k: v for k, v in params.items() if k not in ("lim", "off")}
+    total = db.execute(text(count_query), count_params).scalar() or 0
+    return {"tenant_id": tid, "events": events, "total": total}
 
 
 def _event_compliance(r) -> Dict[str, Any]:
