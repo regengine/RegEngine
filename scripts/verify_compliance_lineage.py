@@ -5,6 +5,9 @@ import time
 from datetime import datetime
 
 import requests
+from requests.exceptions import ConnectionError, RequestException, Timeout
+
+REQUEST_TIMEOUT_SECONDS = 30
 
 # Configuration
 ADMIN_API_URL = "http://localhost:8400"
@@ -28,12 +31,24 @@ def get_compliance_date_facts(run_id):
 
     # First find the relevant documents
     try:
-        resp = requests.get(f"{ADMIN_API_URL}/pcos/authorities", headers=HEADERS, params={"limit": 1000})
+        resp = requests.get(
+            f"{ADMIN_API_URL}/pcos/authorities",
+            headers=HEADERS,
+            params={"limit": 1000},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
         if resp.status_code != 200:
-            log(f"❌ Failed to fetch authorities: {resp.status_code}")
+            if resp.status_code == 429 or 500 <= resp.status_code < 600:
+                log(f"⚠️ Transient error fetching authorities: {resp.status_code}. Retry later.")
+            else:
+                log(f"❌ Fatal error fetching authorities: {resp.status_code}. Retry will not help.")
             return []
 
-        docs = resp.json()
+        try:
+            docs = resp.json()
+        except ValueError as e:
+            log(f"❌ Fatal error: authorities response is not valid JSON: {e}")
+            return []
         fda_docs = [d for d in docs if d.get("original_file_path") == unique_url]
 
         if not fda_docs:
@@ -45,25 +60,56 @@ def get_compliance_date_facts(run_id):
             # Fetch facts for each doc
             # Assuming facts are included or we fetch export
             # Let's try export endpoint for full details including facts
+            doc_code = doc.get("document_code")
+            if not doc_code:
+                log(f"⚠️ Anomaly: document {doc.get('id', '?')} has no document_code; skipping.")
+                continue
             try:
                 export_resp = requests.get(
-                    f"{ADMIN_API_URL}/pcos/authorities/{doc['document_code']}/export", headers=HEADERS
+                    f"{ADMIN_API_URL}/pcos/authorities/{doc_code}/export",
+                    headers=HEADERS,
+                    timeout=REQUEST_TIMEOUT_SECONDS,
                 )
                 if export_resp.status_code == 200:
-                    data = export_resp.json()
+                    try:
+                        data = export_resp.json()
+                    except ValueError as e:
+                        log(f"❌ Fatal error: export for {doc_code} is not valid JSON: {e}")
+                        continue
                     # Flatten facts from documents
                     for d in data.get("documents", []):
                         for f in d.get("facts", []):
                             if f.get("key") == "Compliance Date":
                                 f["_doc_version"] = d.get("version")  # annotated for convenience
                                 facts.append(f)
-            except Exception as e:
-                log(f"Error fetching export for {doc['document_code']}: {e}")
+                elif export_resp.status_code == 429 or 500 <= export_resp.status_code < 600:
+                    log(
+                        f"⚠️ Transient error fetching export for {doc_code}: "
+                        f"{export_resp.status_code}. Continuing with other documents."
+                    )
+                else:
+                    log(
+                        f"❌ Fatal error fetching export for {doc_code}: "
+                        f"{export_resp.status_code}. Continuing with other documents."
+                    )
+            except (Timeout, ConnectionError) as e:
+                log(
+                    f"⚠️ Transient error fetching export for {doc_code}: "
+                    f"{type(e).__name__}: {e}. Continuing with other documents."
+                )
+            except RequestException as e:
+                log(
+                    f"❌ Fatal error fetching export for {doc_code}: "
+                    f"{type(e).__name__}: {e}. Continuing with other documents."
+                )
 
         return facts
 
-    except Exception as e:
-        log(f"❌ Connection Error: {e}")
+    except (Timeout, ConnectionError) as e:
+        log(f"⚠️ Transient connection error: {type(e).__name__}: {e}. Retry later.")
+        return []
+    except RequestException as e:
+        log(f"❌ Fatal request error: {type(e).__name__}: {e}")
         return []
 
 
@@ -78,7 +124,14 @@ def verify_lineage(facts):
 
     for f in facts:
         val = f.get("value")
-        log(f"Found Fact: {val} (Hash: {f.get('fact_hash')[:8]}...)")
+        fact_hash = f.get("fact_hash")
+        if not fact_hash:
+            log(f"⚠️ Anomaly: fact {f.get('id', '?')} is missing its hash; skipping.")
+            continue
+        if not isinstance(val, str):
+            log(f"⚠️ Anomaly: fact {f.get('id', '?')} is missing its value; skipping.")
+            continue
+        log(f"Found Fact: {val} (Hash: {fact_hash[:8]}...)")
 
         if "2026" in val:
             v1_fact = f
@@ -93,11 +146,11 @@ def verify_lineage(facts):
 
     if v1_fact and v2_fact:
         log("\n--- Lineage Verification ---")
-        log(f"V1 ID: {v1_fact['id']}")
-        log(f"V2 ID: {v2_fact['id']}")
+        log(f"V1 ID: {v1_fact.get('id', '?')}")
+        log(f"V2 ID: {v2_fact.get('id', '?')}")
         log(f"V2 Previous Fact ID: {v2_fact.get('previous_fact_id')}")
 
-        if v2_fact.get("previous_fact_id") == v1_fact["id"]:
+        if v2_fact.get("previous_fact_id") == v1_fact.get("id"):
             log("✅ SUCCESS: V2 correctly identifies V1 as its predecessor.")
             log("   This cryptographically proves the system detected the specific update.")
             return True
