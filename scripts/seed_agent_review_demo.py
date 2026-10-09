@@ -58,6 +58,9 @@ DEMO_REQUEST_ID = "synthetic-agent-review-demo"
 DEMO_AGENT_NAME = "fsma-agent-review-demo-seeder"
 DEMO_AGENT_VERSION = "2026.05.19"
 DEMO_MODEL_NAME = "synthetic-deterministic-fixture"
+# Typed confirmation required before writing fixtures outside local/dev.
+# Callers must pass --confirm-production with exactly this value.
+PRODUCTION_CONFIRM_PHRASE = "SEED-PRODUCTION"
 DEFAULT_DEV_DATABASE_URL = "".join(
     (
         "postgresql://",
@@ -369,6 +372,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Allow seeding when environment or DATABASE_URL looks production.",
     )
+    parser.add_argument(
+        "--confirm-production",
+        default=None,
+        help=(
+            "Typed confirmation for production writes. Must be exactly "
+            f"{PRODUCTION_CONFIRM_PHRASE!r}. Required with "
+            "--allow-production-demo-seed when the run will write outside local/dev."
+        ),
+    )
     args = parser.parse_args(argv)
 
     artifacts = build_demo_artifacts(
@@ -381,17 +393,25 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     database_url = os.environ.get("DATABASE_URL") or DEFAULT_DEV_DATABASE_URL
-    if not args.allow_production_demo_seed and (
-        _environment_looks_production() or not is_safe_database_url_for_demo_seed(database_url)
+    production_write = _environment_looks_production() or not is_safe_database_url_for_demo_seed(database_url)
+    if production_write and (
+        not args.allow_production_demo_seed or args.confirm_production != PRODUCTION_CONFIRM_PHRASE
     ):
         print(
             "Refusing to seed synthetic agent-review demo data because the "
             "environment or DATABASE_URL does not look local/dev. Re-run with "
-            "--allow-production-demo-seed only if you intentionally want demo "
-            "fixtures in that database.",
+            "--allow-production-demo-seed and "
+            f"--confirm-production {PRODUCTION_CONFIRM_PHRASE} only if you "
+            "intentionally want demo fixtures in that database.",
             file=sys.stderr,
         )
         return 2
+    if production_write:
+        print(
+            "AUDIT: production agent-review demo seed confirmed for "
+            f"db_host={_redacted_db_host(database_url)} tenant={args.tenant_id}",
+            file=sys.stderr,
+        )
 
     try:
         from shared.database import SessionLocal
@@ -568,6 +588,18 @@ def _environment_looks_production() -> bool:
         return True
     cloud_markers = ("RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME", "VERCEL_ENV", "VERCEL_URL")
     return any(os.environ.get(marker) for marker in cloud_markers)
+
+
+def _redacted_db_host(database_url: str | None) -> str:
+    """Return the database host for audit logging without credentials."""
+    if not database_url:
+        return "unknown"
+    if database_url.lower().startswith("sqlite:"):
+        return "sqlite"
+    try:
+        return urlparse(database_url).hostname or "unknown"
+    except ValueError:
+        return "unknown"
 
 
 def _print_dry_run(artifacts: list[AgentArtifact]) -> None:

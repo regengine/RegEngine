@@ -53,6 +53,9 @@ DEFAULT_BASE = "http://localhost:8002"
 BASE_ENV_VAR = "SEED_BASE_URL"
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 SEED_VERSION = "founderseed-v1"  # bump to force re-processing past the 24h idempotency cache
+# Typed confirmation required before writing fixtures to a non-local target.
+# Callers must pass --confirm-production with exactly this value.
+PRODUCTION_CONFIRM_PHRASE = "SEED-PRODUCTION"
 
 
 class UnsafeTargetError(ValueError):
@@ -530,6 +533,15 @@ def main(argv=None) -> int:
         action="store_true",
         help="Allow seeding a non-local target. Requires an explicit URL.",
     )
+    ap.add_argument(
+        "--confirm-production",
+        default=None,
+        help=(
+            "Typed confirmation for production writes. Must be exactly "
+            f"{PRODUCTION_CONFIRM_PHRASE!r}. Required with --allow-production "
+            "when the run will write to a non-local target."
+        ),
+    )
     ap.add_argument("--tenant", default=FOUNDER_TENANT)
     args = ap.parse_args(argv)
     tenant = args.tenant
@@ -555,6 +567,20 @@ def main(argv=None) -> int:
     if rc != 0:
         print("Refusing to seed: static validation failed.")
         return rc
+
+    if not is_local_target(base) and args.confirm_production != PRODUCTION_CONFIRM_PHRASE:
+        print(
+            "ERROR: Refusing to write demo fixtures to non-local target "
+            f"{base!r} without typed confirmation. Re-run with "
+            f"--confirm-production {PRODUCTION_CONFIRM_PHRASE} only if you "
+            "intentionally want demo data in that environment."
+        )
+        return 2
+    if not is_local_target(base):
+        print(
+            f"AUDIT: production demo seed confirmed for base={base} tenant={tenant}",
+            file=sys.stderr,
+        )
 
     api_key = os.getenv("REGENGINE_TENANT_API_KEY", "").strip()
     if not api_key:
