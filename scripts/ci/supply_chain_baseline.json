@@ -146,12 +146,6 @@
       "exact": true
     },
     {
-      "rule": "download-checksum",
-      "file": "scripts/run-performance-baseline.sh",
-      "match": "k6-v0.47.0-linux-amd64.tar.gz",
-      "reason": "k6 download is fixed at v0.47.0 but has no checksum verification. Add a verified SHA256 before the next k6 version bump."
-    },
-    {
       "rule": "pip-pin",
       "file": ".github/workflows/inflow-contract-ci.yml",
       "match": "pip install uvicorn",

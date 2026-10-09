@@ -16,10 +16,16 @@ if ! command -v k6 &> /dev/null; then
     if [[ "$OSTYPE" == "darwin"* ]]; then
         brew install k6
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        wget https://github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz
-        tar -xzf k6-v0.47.0-linux-amd64.tar.gz
-        sudo cp k6-v0.47.0-linux-amd64/k6 /usr/local/bin/
-        rm -rf k6-v0.47.0-linux-amd64*
+        # Install a pinned k6 through the package manager so apt verifies
+        # the artifact signature instead of trusting a bare tarball.
+        K6_VERSION="0.47.0"
+        curl -fsSL -o /tmp/k6-archive-keyring.gpg https://dl.k6.io/key.gpg
+        sudo mkdir -p /usr/share/keyrings
+        sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg /tmp/k6-archive-keyring.gpg
+        rm -f /tmp/k6-archive-keyring.gpg
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y "k6=${K6_VERSION}"
     fi
 fi
 
