@@ -33,11 +33,10 @@ def seed_key():
     cur = conn.cursor()
 
     key_hash = hash_key(RAW_KEY)
-    key_prefix = RAW_KEY[:12]
+    key_prefix = KEY_ID
     now = datetime.now(timezone.utc)
 
-    print(f"Seeding API Key: {RAW_KEY}")
-    print(f"Hash: {key_hash}")
+    print(f"Seeding API Key: {KEY_ID}")
 
     tenant_id = "11111111-1111-1111-1111-111111111111"
 
