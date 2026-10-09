@@ -14,10 +14,10 @@ echo "=========================================="
 EXIT_CODE=0
 
 # ---- Node (if present) ----
-if [ -f package-lock.json ] || [ -f package.json ]; then
+if [ -f frontend/package-lock.json ] || [ -f frontend/package.json ]; then
   echo ""
   echo "--- npm audit ---"
-  npm audit --audit-level=moderate || EXIT_CODE=1
+  npm --prefix frontend audit --audit-level=moderate || EXIT_CODE=1
 else
   echo "No Node project detected. Skipping npm audit."
 fi
@@ -39,6 +39,7 @@ if command -v pip-audit &> /dev/null; then
   fi
 else
   echo "pip-audit not installed. Run: pip install pip-audit"
+  EXIT_CODE=1
 fi
 
 if [ "$EXIT_CODE" -ne 0 ]; then
