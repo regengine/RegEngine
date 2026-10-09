@@ -5,6 +5,7 @@ RegEngine API Client
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -108,6 +109,11 @@ class RegEngineClient:
         self.max_retries = max_retries
         self.retry_backoff_factor = retry_backoff_factor
         self._session = httpx.Client()
+
+    @staticmethod
+    def _encode_segment(value: str) -> str:
+        """Percent-encode one URL path segment (lot codes are caller input)."""
+        return quote(value, safe="")
 
     def _headers(self, accept: str = "application/json") -> Dict[str, str]:
         """Build request headers.
@@ -348,7 +354,9 @@ class RegEngineClient:
             "max_depth": max_depth,
             "enforce_time_arrow": enforce_time_arrow,
         }
-        data = self._request("GET", f"/api/v1/fsma/traceability/trace/forward/{tlc}", params=params)
+        data = self._request(
+            "GET", f"/api/v1/fsma/traceability/trace/forward/{self._encode_segment(tlc)}", params=params
+        )
         return TraceResult(**data)
 
     def trace_backward(
@@ -367,7 +375,9 @@ class RegEngineClient:
             TraceResult with source lots and facilities
         """
         params = {"max_depth": max_depth}
-        data = self._request("GET", f"/api/v1/fsma/traceability/trace/backward/{tlc}", params=params)
+        data = self._request(
+            "GET", f"/api/v1/fsma/traceability/trace/backward/{self._encode_segment(tlc)}", params=params
+        )
         return TraceResult(**data)
 
     def get_timeline(self, tlc: str) -> List[TimelineEvent]:
@@ -380,7 +390,7 @@ class RegEngineClient:
         Returns:
             List of TimelineEvent objects in chronological order
         """
-        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{tlc}")
+        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{self._encode_segment(tlc)}")
         return [TimelineEvent.from_api(e) for e in data.get("events", [])]
 
     # =========================================================================

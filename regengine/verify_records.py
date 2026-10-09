@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import quote
 
 try:
     import requests
@@ -160,7 +161,8 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regeng
     try:
         # Fetch record
         headers = {"Authorization": f"Bearer {api_key}"}
-        resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}", headers=headers, timeout=30)
+        encoded_tlc = quote(tlc, safe="")
+        resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{encoded_tlc}", headers=headers, timeout=30)
         resp.raise_for_status()
         record = resp.json()
 
@@ -168,7 +170,9 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regeng
         result = verify_record_offline(record)
 
         # Cross-check with server's verification endpoint
-        verify_resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}/verify", headers=headers, timeout=30)
+        verify_resp = requests.get(
+            f"{base_url}/api/graph/fsma/v1/records/{encoded_tlc}/verify", headers=headers, timeout=30
+        )
         if verify_resp.ok:
             verify_data = verify_resp.json()
             result.chain_position = verify_data.get("chain_position")
