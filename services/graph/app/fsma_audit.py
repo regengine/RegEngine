@@ -79,6 +79,71 @@ def _get_audit_admin_engine():
         return None
 
 
+def _engine_is_postgres(engine) -> bool:
+    """True for real Postgres engines. Advisory locks are Postgres-only, so
+    sqlite fallback engines and unit-test doubles skip the lock statement."""
+    try:
+        return getattr(getattr(engine, "dialect", None), "name", None) == "postgresql"
+    except Exception:
+        return False
+
+
+def _read_global_audit_head() -> Optional[str]:
+    """Return the checksum of the most recently appended audit row.
+
+    Reads through the admin engine because the checksum chain is global while
+    tenant-engine connections are RLS-scoped to one tenant: a tenant-scoped
+    head read would re-chain to the wrong predecessor whenever tenants
+    interleave, forking the chain the same way stale in-memory heads do.
+
+    Returns None when no admin engine is configured or the table is empty.
+    Raises when the database is configured but unreachable, so callers never
+    mistake "DB unreachable" for an empty table.
+    """
+    engine = _get_audit_admin_engine()
+    if engine is None:
+        return None
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        row = conn.execute(text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY id DESC LIMIT 1")).fetchone()
+        return row[0] if row else None
+
+
+def _read_head_for_append(conn) -> Optional[str]:
+    """Head read for the atomic append path in ``_persist_audit_entry``.
+
+    Prefers the global head. When no admin engine is configured (dev, test,
+    sqlite fallback) the same-connection read is the true head. When the
+    admin read fails, falls back to the same-connection read so the write
+    path stays alive, and logs at error level: the chain may fork until the
+    admin DB recovers, and that degradation must be visible.
+    """
+    try:
+        head = _read_global_audit_head()
+    except Exception as exc:
+        logging.getLogger("fsma_audit").error(
+            "Global audit head unreadable; falling back to connection-local head: %s",
+            exc,
+        )
+        head = None
+    else:
+        if head is not None:
+            return head
+        if _get_audit_admin_engine() is not None:
+            return None  # table genuinely empty
+    from sqlalchemy import text
+
+    row = conn.execute(text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY id DESC LIMIT 1")).fetchone()
+    return row[0] if row else None
+
+
+# Advisory-lock key serializing FSMA audit appends across processes (audit
+# finding: chain forks). Fixed 64-bit signed integer, unique to this table's
+# append path. Held as a transaction lock, so it releases on commit, rollback
+# or session loss with no cleanup needed.
+_AUDIT_APPEND_LOCK_KEY = 8100388291931649
+
 _PERSIST_MAX_RETRIES = 3
 
 # #2850: cap on the in-process audit history. The DB is the source of truth
@@ -253,6 +318,26 @@ def _persist_audit_entry(entry) -> bool:
         for attempt in range(_PERSIST_MAX_RETRIES):
             try:
                 with engine.connect() as conn:
+                    # Serialize appends database-side. The advisory
+                    # transaction lock is held until commit, so the head
+                    # read, re-chain and insert below are atomic across
+                    # every process and worker appending to this table. A
+                    # process-local lock cannot do this: two processes
+                    # chaining from the same startup-time in-memory head
+                    # insert siblings with the same predecessor and fork
+                    # the chain. Re-chaining here also heals a stale
+                    # ``_last_db_checksum`` seed on first persist.
+                    if _engine_is_postgres(engine):
+                        conn.execute(
+                            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+                            {"lock_key": _AUDIT_APPEND_LOCK_KEY},
+                        )
+                    db_head = _read_head_for_append(conn)
+                    if db_head != entry.previous_checksum:
+                        entry.previous_checksum = db_head
+                        entry.checksum = entry._calculate_checksum()
+                        _params["previous_checksum"] = entry.previous_checksum
+                        _params["checksum"] = entry.checksum
                     conn.execute(_insert_sql, _params)
                     conn.commit()
                 return True  # confirmed write
@@ -597,24 +682,22 @@ class FSMAAuditLog:
 
     @staticmethod
     def _load_last_checksum() -> Optional[str]:
-        """Bootstrap chain integrity from DB on restart (#986)."""
-        engine = _get_audit_admin_engine()
-        if engine is None:
-            return None
-        try:
-            from sqlalchemy import text
+        """Bootstrap chain integrity from DB on restart (#986).
 
-            # The checksum chain remains global, but the scan uses the exact
-            # audited control-plane role rather than a spoofable runtime GUC.
-            with engine.connect() as conn:
-                row = conn.execute(
-                    text("SELECT checksum FROM fsma.fsma_audit_trail ORDER BY created_at DESC LIMIT 1")
-                ).fetchone()
-                if row:
-                    return row[0]
+        The checksum chain remains global, so the scan uses the exact
+        audited control-plane role rather than a spoofable runtime GUC
+        (see ``_read_global_audit_head``). Ordering is by append order
+        (``id``), not wall-clock time, which can tie under concurrency.
+        """
+        try:
+            return _read_global_audit_head()
         except Exception as e:
-            logging.getLogger("fsma_audit").warning("Failed to load last audit checksum: %s", e)
-        return None
+            # Loud: without the true head this process starts chaining from
+            # a guess. The persist path re-chains every entry to the
+            # database head under a lock, so this heals on first successful
+            # write, but an unreachable audit DB at startup must be visible.
+            logging.getLogger("fsma_audit").error("Failed to load last audit checksum: %s", e)
+            return None
 
     def log(
         self,
@@ -658,7 +741,10 @@ class FSMAAuditLog:
 
         Note:
             This method performs a **blocking** DB write. From ``async``
-            code call :meth:`alog` instead — see #2848.
+            code call :meth:`alog` instead — see #2848. The entry chains to
+            the in-memory head here, then is re-chained to the database head
+            under an advisory lock at persist time, so concurrent processes
+            append one linear chain instead of forking.
         """
         with self._lock:
             # Get previous checksum for chain (falls back to DB on first entry after restart)
@@ -873,13 +959,20 @@ class FSMAAuditLog:
         Verify the integrity of the entire audit chain.
 
         When PostgreSQL is available, verifies entries from the DB (ordered by
-        created_at ASC) so the check is durable across restarts.
+        append order) so the check is durable across restarts.
+
+        Raises :class:`AuditPersistenceError` when the database is configured
+        but unreachable: verifying the bounded in-memory window instead would
+        certify a partial cache as the whole chain. When no database engine
+        is configured at all (dev/test), verifies the in-memory entries and
+        labels the result accordingly.
 
         Returns:
             Dict with integrity status and any violations found
         """
         # Prefer DB entries; fall back to in-memory
         engine = _get_audit_admin_engine()
+        source = "memory"
         if engine is not None:
             try:
                 from sqlalchemy import text
@@ -893,14 +986,17 @@ class FSMAAuditLog:
                                    evidence_link, checksum, previous_checksum,
                                    diff_json, created_at
                             FROM fsma.fsma_audit_trail
-                            ORDER BY created_at ASC
+                            ORDER BY id ASC
                         """)
                     ).fetchall()
                 entries = [_row_to_audit_entry(r) for r in rows]
+                source = "database"
             except Exception as e:
-                logging.getLogger("fsma_audit").warning("Chain integrity DB query failed: %s", e)
-                with self._lock:
-                    entries = list(self._entries)
+                logging.getLogger("fsma_audit").error("Chain integrity DB query failed: %s", e)
+                raise AuditPersistenceError(
+                    "Audit chain verification failed: database unreachable. "
+                    "Refusing to certify the partial in-memory cache as the whole chain."
+                )
         else:
             with self._lock:
                 entries = list(self._entries)
@@ -935,6 +1031,7 @@ class FSMAAuditLog:
             "total_entries": len(entries),
             "is_valid": len(violations) == 0,
             "violations": violations,
+            "source": source,
         }
 
     def export_for_fda(
