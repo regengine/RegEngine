@@ -10,7 +10,6 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from shared.schemas import Jurisdiction
 from shared.tenant_models import (
     ControlMapping,
     CustomerProduct,
@@ -41,41 +40,6 @@ class OverlayWriter:
             tenant_id=str(tenant_id),
             database=self.db_name,
         )
-
-    async def create_jurisdiction_node(self, jurisdiction: Jurisdiction) -> None:
-        """Create or update a Jurisdiction node and BELONGS_TO link to its parent."""
-        query = """
-        MERGE (j:Jurisdiction {code: $code})
-        SET j.name = $name, j.scope = $scope
-
-        WITH j, $parent_code AS parent_code
-        CALL {
-          WITH parent_code
-          OPTIONAL MATCH (parent:Jurisdiction {code: parent_code})
-          RETURN parent
-        }
-        WITH j, parent
-        WHERE parent IS NOT NULL
-        MERGE (j)-[:BELONGS_TO]->(parent)
-        """
-        params = {
-            "code": jurisdiction.code,
-            "name": jurisdiction.name,
-            "scope": (jurisdiction.scope.value if hasattr(jurisdiction.scope, "value") else jurisdiction.scope),
-            "parent_code": jurisdiction.parent_code,
-        }
-        client = Neo4jClient(database=self.db_name)
-        try:
-            async with client.session() as session:
-                result = await session.run(query, params)
-                await result.consume()
-                logger.info(
-                    "jurisdiction_upserted",
-                    tenant_id=str(self.tenant_id),
-                    code=jurisdiction.code,
-                )
-        finally:
-            await client.close()
 
     async def create_tenant_control(self, control: TenantControl) -> TenantControl:
         """Create a tenant control in the tenant's database.
