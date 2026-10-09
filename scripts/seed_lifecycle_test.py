@@ -76,8 +76,7 @@ def ensure_local_target(base: str, allow_production: bool) -> None:
     env = os.getenv("REGENGINE_ENV", "").strip().lower()
     if (is_production_base(base) or env == "production") and not allow_production:
         print(
-            "Refusing to seed non-localhost target "
-            f"({base}). Re-run with --allow-production only if you are certain.",
+            f"Refusing to seed non-localhost target ({base}). Re-run with --allow-production only if you are certain.",
             file=sys.stderr,
         )
         sys.exit(2)
@@ -122,12 +121,16 @@ def api_get(url):
 
 
 # ── Step 1: Seed Suppliers ─────────────────────────────────────────────
+# Fixture contacts below are deliberately synthetic: names are labeled,
+# emails use the reserved example.invalid domain (never resolves), and
+# phones use the reserved fictional 555-01XX range. Never put real
+# personal data in this seeder; it writes into the target tenant.
 SUPPLIERS = [
     {
         "name": "Valley Fresh Farms",
-        "contact_name": "Maria Gonzalez",
-        "contact_email": "maria@valleyfreshfarms.com",
-        "phone": "+1-831-555-0101",
+        "contact_name": "Synthetic Test Contact 1 (Valley Fresh)",
+        "contact_email": "synthetic-valleyfresh-1@example.invalid",
+        "phone": "+1-555-010-0001",
         "location": "Salinas, CA",
         "gln": "0614141000012",
         "compliance_status": "compliant",
@@ -136,9 +139,9 @@ SUPPLIERS = [
     },
     {
         "name": "Sunrise Organics",
-        "contact_name": "David Chen",
-        "contact_email": "david@sunriseorganics.com",
-        "phone": "+1-928-555-0202",
+        "contact_name": "Synthetic Test Contact 2 (Sunrise)",
+        "contact_email": "synthetic-sunrise-2@example.invalid",
+        "phone": "+1-555-010-0002",
         "location": "Yuma, AZ",
         "gln": "0614141000029",
         "compliance_status": "compliant",
@@ -147,9 +150,9 @@ SUPPLIERS = [
     },
     {
         "name": "Green Leaf Growers",
-        "contact_name": "Sarah Park",
-        "contact_email": "sarah@greenleafgrowers.com",
-        "phone": "+1-831-555-0303",
+        "contact_name": "Synthetic Test Contact 3 (Green Leaf)",
+        "contact_email": "synthetic-greenleaf-3@example.invalid",
+        "phone": "+1-555-010-0003",
         "location": "Watsonville, CA",
         "gln": "0614141000036",
         "compliance_status": "at_risk",
@@ -587,6 +590,11 @@ def build_supply_chain_events():
 # ══════════════════════════════════════════════════════════════════════
 
 
+def _exit_code(results) -> int:
+    """Aggregate seeding errors into a process exit code (0 means clean)."""
+    return 1 if results.get("errors") else 0
+
+
 def main(argv=None):
     global BASE, INGEST_URL, PRODUCTS_URL, SUPPLIERS_URL
     args = _parse_args(argv)
@@ -596,28 +604,41 @@ def main(argv=None):
     PRODUCTS_URL = f"{BASE}/api/v1/products/{TENANT_ID}"
     SUPPLIERS_URL = f"{BASE}/api/v1/suppliers/{TENANT_ID}"
     results = {}
+    # HTTP failures are collected here so the run exits nonzero instead
+    # of logging them as successes.
+    errors: list = []
 
     # ── Step 1: Add suppliers ──
     print("=" * 60)
     print("STEP 1: Seeding Suppliers")
     print("=" * 60)
+    seeded_suppliers = 0
     for s in SUPPLIERS:
         print(f"  Adding: {s['name']}...")
         resp = api_post(SUPPLIERS_URL, s)
-        status = "ok" if "error" not in resp else f"error ({resp.get('error')})"
-        print(f"    → {status}")
-    results["suppliers"] = len(SUPPLIERS)
+        if "error" in resp:
+            print(f"    → error ({resp.get('error')})")
+            errors.append(f"supplier {s['name']}: HTTP {resp.get('error')}")
+        else:
+            print("    → ok")
+            seeded_suppliers += 1
+    results["suppliers"] = seeded_suppliers
 
     # ── Step 2: Add products ──
     print("\n" + "=" * 60)
     print("STEP 2: Seeding Products")
     print("=" * 60)
+    seeded_products = 0
     for p in PRODUCTS:
         print(f"  Adding: {p['name']}...")
         resp = api_post(PRODUCTS_URL, p)
-        status = "ok" if "error" not in resp else f"error ({resp.get('error')})"
-        print(f"    → {status}")
-    results["products"] = len(PRODUCTS)
+        if "error" in resp:
+            print(f"    → error ({resp.get('error')})")
+            errors.append(f"product {p['name']}: HTTP {resp.get('error')}")
+        else:
+            print("    → ok")
+            seeded_products += 1
+    results["products"] = seeded_products
 
     # ── Step 3: Ingest CTE events ──
     print("\n" + "=" * 60)
@@ -632,13 +653,19 @@ def main(argv=None):
         "events": events,
     }
     resp = api_post(INGEST_URL, payload)
-    accepted = resp.get("accepted", 0)
-    rejected = resp.get("rejected", 0)
-    print(f"  Accepted: {accepted}  Rejected: {rejected}")
-    if rejected > 0:
-        for ev in resp.get("events", []):
-            if ev.get("status") == "rejected":
-                print(f"    REJECTED {ev.get('cte_type', '?')}: {ev.get('errors', [])}")
+    if "error" in resp:
+        print(f"  Ingest request failed: HTTP {resp.get('error')}")
+        errors.append(f"ingest: HTTP {resp.get('error')}")
+        accepted, rejected = 0, 0
+    else:
+        accepted = resp.get("accepted", 0)
+        rejected = resp.get("rejected", 0)
+        print(f"  Accepted: {accepted}  Rejected: {rejected}")
+        if rejected > 0:
+            errors.append(f"ingest: {rejected} event(s) rejected")
+            for ev in resp.get("events", []):
+                if ev.get("status") == "rejected":
+                    print(f"    REJECTED {ev.get('cte_type', '?')}: {ev.get('errors', [])}")
     results["cte_events"] = {"accepted": accepted, "rejected": rejected}
 
     # ── Step 4: Check compliance score ──
@@ -655,6 +682,7 @@ def main(argv=None):
             print(f"    {cat.get('name', '?')}: {cat.get('score', '?')}%")
     else:
         print(f"  Could not fetch score: {score}")
+        errors.append(f"compliance: HTTP {score.get('error')}")
     results["compliance"] = score
 
     # ── Step 5: Check audit log ──
@@ -667,6 +695,9 @@ def main(argv=None):
         print(f"  Total entries: {audit.get('total', 0)}")
         for entry in audit.get("entries", [])[:5]:
             print(f"    [{entry.get('timestamp', '?')[:19]}] {entry.get('event_type')}: {entry.get('action')}")
+    else:
+        print(f"  Could not fetch audit log: {audit}")
+        errors.append(f"audit-log: HTTP {audit.get('error')}")
     results["audit_log"] = audit
 
     # ── Step 6: Run recall simulation ──
@@ -685,6 +716,8 @@ def main(argv=None):
     }
     sim_resp = api_post(sim_url, sim_payload)
     print(f"  Simulation result: {json.dumps(sim_resp, indent=2)[:500]}")
+    if "error" in sim_resp:
+        errors.append(f"recall-simulation: HTTP {sim_resp.get('error')}")
     results["recall_simulation"] = sim_resp
 
     # ── Step 7: Get recall readiness report ──
@@ -698,6 +731,9 @@ def main(argv=None):
         print(f"  Grade: {report.get('grade', 'N/A')}")
         for dim in report.get("dimensions", []):
             print(f"    {dim.get('name', '?')}: {dim.get('score', '?')}%")
+    else:
+        print(f"  Could not fetch recall report: {report}")
+        errors.append(f"recall-report: HTTP {report.get('error')}")
     results["recall_report"] = report
 
     # ── Step 8: FDA Export ──
@@ -707,10 +743,11 @@ def main(argv=None):
     export_url = f"{BASE}/api/v1/fda/export?tlc=TLC-VFF-HARVEST-0312"
     export_resp = api_get(export_url)
     if isinstance(export_resp, dict) and "error" not in export_resp:
-        print(f"  Export generated successfully")
+        print("  Export generated successfully")
         print(f"  Preview: {json.dumps(export_resp, indent=2)[:300]}")
     else:
         print(f"  Export result: {str(export_resp)[:300]}")
+        errors.append(f"fda-export: {str(export_resp)[:100]}")
     results["fda_export"] = str(export_resp)[:500]
 
     # ── Step 9: Mock audit drill ──
@@ -726,6 +763,8 @@ def main(argv=None):
     }
     drill_resp = api_post(drill_url, drill_payload)
     print(f"  Drill result: {json.dumps(drill_resp, indent=2)[:500]}")
+    if "error" in drill_resp:
+        errors.append(f"mock-drill: HTTP {drill_resp.get('error')}")
     results["mock_drill"] = drill_resp
 
     # ── Summary ──
@@ -735,7 +774,13 @@ def main(argv=None):
     print(f"  Suppliers seeded: {results['suppliers']}")
     print(f"  Products seeded: {results['products']}")
     print(f"  CTE events: {results['cte_events']}")
+    if errors:
+        print(f"  ERRORS ({len(errors)}):")
+        for err in errors:
+            print(f"    - {err}")
     print()
+    results["errors"] = errors
+    results["success"] = not errors
 
     # Write full results to file
     outfile = "/sessions/amazing-trusting-pascal/mnt/RegEngine/scripts/lifecycle_test_results.json"
@@ -747,4 +792,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(_exit_code(main()))
