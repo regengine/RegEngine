@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAdminSessionPath } from '@/lib/admin-session-fetch';
-import { rejectRetiredPrivilegedCredential } from '@/lib/api-proxy';
+import { requireProxyAuth, validateProxySession } from '@/lib/api-proxy';
 import { appendOpaqueSessionCookies, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-    const retiredCredentialError = rejectRetiredPrivilegedCredential(request);
-    if (retiredCredentialError) return retiredCredentialError;
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
 
     try {
         const headers = new Headers({ accept: 'application/json' });

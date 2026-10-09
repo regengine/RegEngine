@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchAdminSessionPath } from '@/lib/admin-session-fetch';
-import { rejectRetiredPrivilegedCredential, validateUuid } from '@/lib/api-proxy';
+import { requireProxyAuth, validateProxySession, validateUuid } from '@/lib/api-proxy';
 import { appendOpaqueSessionCookies, passthroughRequestHeaders } from '@/lib/proxy-factory';
 import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
@@ -10,8 +10,13 @@ export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const retiredCredentialError = rejectRetiredPrivilegedCredential(request);
-    if (retiredCredentialError) return retiredCredentialError;
+    // Defense-in-depth: reject requests with no auth credentials before proxying
+    const authError = requireProxyAuth(request);
+    if (authError) return authError;
+
+    // Validate Supabase session tokens (expired/revoked sessions get 401)
+    const sessionError = await validateProxySession(request);
+    if (sessionError) return sessionError;
 
     const { id: rawId } = await params;
     const id = validateUuid(rawId);

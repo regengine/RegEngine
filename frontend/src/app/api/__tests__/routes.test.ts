@@ -8,6 +8,10 @@ vi.mock('@/lib/admin-targets', () => ({
 
 import { POST as adminPost } from '@/app/api/admin/[...path]/route';
 import { GET as reviewItemsGet } from '@/app/api/review/items/route';
+import { POST as reviewApprovePost } from '@/app/api/review/[id]/approve/route';
+import { POST as reviewRejectPost } from '@/app/api/review/[id]/reject/route';
+
+const REVIEW_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 describe('security-sensitive API route contracts', () => {
   const fetchMock = vi.fn();
@@ -30,6 +34,45 @@ describe('security-sensitive API route contracts', () => {
 
     const response = await adminPost!(request, {
       params: Promise.resolve({ path: ['v1', 'admin', 'tenants'] }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated review queue reads before any upstream fetch', async () => {
+    const request = new NextRequest('https://regengine.co/api/review/items');
+
+    const response = await reviewItemsGet(request);
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated review approvals before any upstream fetch', async () => {
+    const request = new NextRequest(`https://regengine.co/api/review/${REVIEW_ID}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const response = await reviewApprovePost(request, {
+      params: Promise.resolve({ id: REVIEW_ID }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated review rejections before any upstream fetch', async () => {
+    const request = new NextRequest(`https://regengine.co/api/review/${REVIEW_ID}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const response = await reviewRejectPost(request, {
+      params: Promise.resolve({ id: REVIEW_ID }),
     });
 
     expect(response.status).toBe(401);
