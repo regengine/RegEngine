@@ -193,6 +193,75 @@ def _bridge_to_canonical(
         )
 
 
+def _void_bridged_canonical_rows(
+    db: Session,
+    *,
+    tenant_id: uuid_module.UUID,
+    source_record_ids: list[str],
+) -> int:
+    """Void canonical rows bridged from wiped supplier CTE events.
+
+    The supplier bridge writes into ``fsma.traceability_events`` with
+    ``source_system='supplier_portal'`` and ``source_record_id`` set to
+    the supplier event id. When a demo reset hard-deletes those supplier
+    rows, the bridged copies would otherwise stay ``status='active'``
+    and keep showing up in FDA export and compliance scoring. Mark them
+    ``'rejected'`` (an existing lifecycle value every canonical reader
+    already excludes via its ``status = 'active'`` predicate) instead of
+    deleting them, so the evidence trail records what was voided.
+
+    Returns the number of rows voided. When the canonical table is
+    absent (dev or test databases without the ``fsma`` schema) logs a
+    warning and returns 0; any other database error propagates.
+    """
+    import logging
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
+
+    _logger = logging.getLogger("supplier-canonical-bridge")
+
+    ids = [str(source_id) for source_id in source_record_ids if source_id]
+    if not ids:
+        return 0
+
+    voided = 0
+    try:
+        for chunk_start in range(0, len(ids), 500):
+            chunk = ids[chunk_start : chunk_start + 500]
+            placeholders = ", ".join(f":void_id_{index}" for index in range(len(chunk)))
+            result = db.execute(
+                text(
+                    f"""
+                    UPDATE fsma.traceability_events
+                    SET status = 'rejected'
+                    WHERE tenant_id = :tenant_id
+                      AND source_system = 'supplier_portal'
+                      AND source_record_id IN ({placeholders})
+                      AND status = 'active'
+                    """
+                ),
+                {"tenant_id": str(tenant_id), **{f"void_id_{index}": value for index, value in enumerate(chunk)}},
+            )
+            voided += result.rowcount or 0
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        message = str(exc).lower()
+        if "no such table" in message or "undefined_table" in message or "does not exist" in message:
+            _logger.warning(
+                "supplier_canonical_void_skipped",
+                extra={
+                    "tenant_id": str(tenant_id),
+                    "row_count": len(ids),
+                    "reason": "canonical table absent",
+                },
+            )
+            return 0
+        raise
+    return voided
+
+
 def _persist_supplier_cte_event(
     db: Session,
     *,

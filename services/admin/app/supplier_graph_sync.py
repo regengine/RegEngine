@@ -159,6 +159,41 @@ MERGE (cte)-[:SATISFIES]->(obligation)
 """
 
 
+DEMO_RESET_TOMBSTONE_QUERY = """
+// Demo reset cleanup: tombstone (never hard-delete) the graph mirror of
+// the wiped supplier rows. CTEEvent and SupplierFacility nodes are keyed
+// by ids that belong to exactly one supplier, so they are always safe to
+// mark. TLC nodes are tenant-wide and can be shared with another
+// supplier's live events (supplier lots are looked up per tenant, not per
+// supplier), so a lot is marked only when no live CTEEvent outside the
+// wiped set still points at it. Readers that must hide reset data filter
+// on ``status <> 'void'``; the marker preserves the evidence trail.
+MATCH (cte:CTEEvent {tenant_id: $tenant_id})
+WHERE cte.cte_event_id IN $cte_event_ids
+SET cte.status = 'void',
+    cte.deleted_at = datetime(),
+    cte.deleted_reason = 'supplier_demo_reset'
+WITH 1 AS _cte
+MATCH (facility:SupplierFacility {tenant_id: $tenant_id})
+WHERE facility.facility_id IN $facility_ids
+SET facility.status = 'void',
+    facility.deleted_at = datetime(),
+    facility.deleted_reason = 'supplier_demo_reset'
+WITH 1 AS _facility
+MATCH (lot:TLC {tenant_id: $tenant_id})
+WHERE lot.tlc_code IN $tlc_codes
+  AND NOT EXISTS {
+    MATCH (live:CTEEvent)-[:FOR_LOT]->(lot)
+    WHERE live.tenant_id = $tenant_id
+      AND NOT live.cte_event_id IN $cte_event_ids
+      AND (live.status IS NULL OR live.status <> 'void')
+  }
+SET lot.status = 'void',
+    lot.deleted_at = datetime(),
+    lot.deleted_reason = 'supplier_demo_reset'
+"""
+
+
 def _to_utc_iso(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -571,6 +606,37 @@ class SupplierGraphSync:
             )
 
         self._run(CTE_EVENT_QUERY, cypher_params)
+
+    def record_supplier_demo_reset(
+        self,
+        *,
+        tenant_id: str,
+        supplier_user_id: str,
+        cte_event_ids: list[str],
+        tlc_codes: list[str],
+        facility_ids: list[str],
+    ) -> None:
+        """Tombstone the graph mirror of a supplier demo reset.
+
+        Marks the wiped supplier's CTEEvent and SupplierFacility nodes
+        ``status='void'`` and marks their TLC nodes only when no live
+        outside event still references the lot. Best-effort like every
+        other method here: a down Neo4j only logs. All id lists are
+        already scoped to one supplier by the caller (queried with the
+        tenant plus supplier user predicates before the Postgres
+        deletes), and ``tenant_id`` further scopes every MATCH.
+        """
+        self._run(
+            DEMO_RESET_TOMBSTONE_QUERY,
+            {
+                "operation": "supplier_demo_reset",
+                "tenant_id": tenant_id,
+                "supplier_user_id": supplier_user_id,
+                "cte_event_ids": list(cte_event_ids),
+                "tlc_codes": list(tlc_codes),
+                "facility_ids": list(facility_ids),
+            },
+        )
 
 
 supplier_graph_sync = SupplierGraphSync.from_env()

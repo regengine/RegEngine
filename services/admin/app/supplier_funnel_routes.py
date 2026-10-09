@@ -29,7 +29,7 @@ from .sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-from .supplier_cte_service import _persist_supplier_cte_event
+from .supplier_cte_service import _persist_supplier_cte_event, _void_bridged_canonical_rows
 from .supplier_graph_sync import supplier_graph_sync
 from .supplier_onboarding_routes import (
     FTL_CATEGORY_LOOKUP,
@@ -111,6 +111,11 @@ async def reset_supplier_demo(
     - Hard delete is retained for now; soft-delete requires adding
       ``deleted_at`` columns across five supplier models and is
       tracked as a separate PR so we can ship the RBAC hardening now.
+    - Mirror cleanup after the deletes: bridged canonical rows are
+      voided (``status='rejected'``) and graph nodes are tombstoned
+      (``status='void'``), never deleted, so shared TLC evidence
+      survives. Both are best-effort with warning logs; they cannot
+      fail the reset once the deletes have committed.
     """
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
@@ -207,6 +212,38 @@ async def reset_supplier_demo(
     ):
         pre_counts[label] = len(db.execute(stmt).all())
 
+    # Ids of the rows about to be wiped, so their mirrors can be cleaned
+    # up after the hard deletes: the Neo4j nodes keyed by these ids and
+    # the canonical rows bridged from these supplier event ids. Queried
+    # BEFORE the deletes below (afterwards they are gone).
+    doomed_event_ids = [
+        str(row_id)
+        for (row_id,) in db.execute(
+            select(SupplierCTEEventModel.id).where(
+                SupplierCTEEventModel.tenant_id == tenant_id,
+                SupplierCTEEventModel.supplier_user_id == current_user.id,
+            )
+        ).all()
+    ]
+    doomed_tlc_codes = [
+        code
+        for (code,) in db.execute(
+            select(SupplierTraceabilityLotModel.tlc_code).where(
+                SupplierTraceabilityLotModel.tenant_id == tenant_id,
+                SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+            )
+        ).all()
+    ]
+    doomed_facility_ids = [
+        str(facility_id)
+        for (facility_id,) in db.execute(
+            select(SupplierFacilityModel.id).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == current_user.id,
+            )
+        ).all()
+    ]
+
     # Audit BEFORE destructive SQL so the operation is recorded even
     # if the delete half-commits. If audit insertion fails (returns
     # None), we ABORT and refuse to delete — FSMA 204 tamper-evidence
@@ -287,6 +324,53 @@ async def reset_supplier_demo(
         )
     )
     db.commit()
+
+    # The hard deletes above leave two mirrors behind unless cleaned up:
+    # canonical rows bridged from the wiped supplier events, and the
+    # Neo4j nodes mirroring them. Void the bridged rows (status change
+    # only, never a delete) and tombstone the graph nodes (marker only,
+    # so shared TLC evidence survives). Both steps are best-effort with
+    # a loud log on failure: the deletes already committed, so failing
+    # the request here would report an error for a reset that happened
+    # and would skip the reseed below, leaving the demo half-built.
+    try:
+        voided_canonical = _void_bridged_canonical_rows(
+            db,
+            tenant_id=tenant_id,
+            source_record_ids=doomed_event_ids,
+        )
+    except Exception as exc:
+        logger.warning(
+            "supplier_demo_reset_canonical_void_failed",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+            error=str(exc),
+        )
+        voided_canonical = 0
+    try:
+        supplier_graph_sync.record_supplier_demo_reset(
+            tenant_id=str(tenant_id),
+            supplier_user_id=str(current_user.id),
+            cte_event_ids=doomed_event_ids,
+            tlc_codes=doomed_tlc_codes,
+            facility_ids=doomed_facility_ids,
+        )
+    except Exception as exc:
+        logger.warning(
+            "supplier_demo_reset_graph_tombstone_failed",
+            tenant_id=str(tenant_id),
+            actor_id=str(current_user.id),
+            error=str(exc),
+        )
+    logger.info(
+        "supplier_demo_reset_mirrors_cleaned",
+        tenant_id=str(tenant_id),
+        actor_id=str(current_user.id),
+        voided_canonical_rows=voided_canonical,
+        tombstoned_cte_events=len(doomed_event_ids),
+        tombstoned_tlcs=len(doomed_tlc_codes),
+        tombstoned_facilities=len(doomed_facility_ids),
+    )
 
     facility_blueprints = [
         {
