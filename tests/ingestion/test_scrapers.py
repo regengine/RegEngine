@@ -10,6 +10,7 @@ Covers:
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -211,14 +212,145 @@ class TestNYDFSScraper:
                     scraper.fetch(source)
 
 
-class TestGenericScraper:
-    """Tests for generic state scraper."""
+class _StubS3Client:
+    """In-memory stand-in for the generic scraper S3 client."""
 
-    def test_generic_scraper_exists(self):
-        """Verify generic scraper is importable."""
+    def __init__(self):
+        self.uploads = []
+
+    def upload_bytes(self, bucket, key, data, content_type):
+        self.uploads.append({"bucket": bucket, "key": key, "data": data, "content_type": content_type})
+        return f"s3://{bucket}/{key}"
+
+
+class _StubKafkaProducer:
+    """In-memory stand-in for the generic scraper Kafka producer."""
+
+    def __init__(self):
+        self.emits = []
+
+    def emit(self, topic, payload):
+        self.emits.append({"topic": topic, "payload": payload})
+        return True
+
+
+class _FakeHttpResponse:
+    """Minimal HTTP response double for the generic scraper."""
+
+    def __init__(self, content=b"<html>hi</html>", content_type="text/html"):
+        self.content = content
+        self.headers = {"Content-Type": content_type}
+
+    def raise_for_status(self):
+        return None
+
+
+class TestGenericScraper:
+    """Tests for generic state scraper fetch behavior."""
+
+    def test_fetch_document_persists_bytes_and_emits_event(self):
+        """Verify fetch stores response bytes and emits the collect event."""
         from services.ingestion.app.scrapers.state_generic import StateRegistryScraper
 
-        assert StateRegistryScraper is not None
+        s3 = _StubS3Client()
+        kafka = _StubKafkaProducer()
+        scraper = StateRegistryScraper(s3_bucket="test-bucket", s3_client=s3, kafka=kafka)
+        url = "https://register.example.gov/rules.html"
+
+        with (
+            patch(
+                "services.ingestion.app.scrapers.state_generic.validate_url",
+                side_effect=lambda u: u,
+            ),
+            patch(
+                "services.ingestion.app.scrapers.state_generic.safe_httpx_get_sync",
+                return_value=_FakeHttpResponse(),
+            ) as mock_get,
+        ):
+            event = asyncio.run(scraper.fetch_document(url=url, jurisdiction_code="US-NY", tenant_id="tenant-7"))
+
+        assert mock_get.call_count == 1
+        assert event["type"] == "ingest.raw_collected"
+        assert event["jurisdiction_code"] == "US-NY"
+        assert event["source_url"] == url
+        assert event["content_type"] == "text/html"
+        assert event["tenant_id"] == "tenant-7"
+        assert event["s3_uri"].startswith("s3://test-bucket/raw/US-NY/")
+        assert event["doc_id"] in event["s3_uri"]
+
+        assert len(s3.uploads) == 1
+        assert s3.uploads[0]["bucket"] == "test-bucket"
+        assert s3.uploads[0]["data"] == b"<html>hi</html>"
+        assert s3.uploads[0]["content_type"] == "text/html"
+
+        assert len(kafka.emits) == 1
+        assert kafka.emits[0]["topic"] == "ingest.raw_collected"
+        assert kafka.emits[0]["payload"] == event
+
+    def test_fetch_document_rejects_blocked_url_without_side_effects(self):
+        """Verify a blocked URL raises without fetching, storing or emitting."""
+        from shared.url_validation import SSRFError
+
+        from services.ingestion.app.scrapers.state_generic import StateRegistryScraper
+
+        s3 = _StubS3Client()
+        kafka = _StubKafkaProducer()
+        scraper = StateRegistryScraper(s3_bucket="test-bucket", s3_client=s3, kafka=kafka)
+
+        with (
+            patch(
+                "services.ingestion.app.scrapers.state_generic.validate_url",
+                side_effect=SSRFError("blocked"),
+            ),
+            patch("services.ingestion.app.scrapers.state_generic.safe_httpx_get_sync") as mock_get,
+        ):
+            with pytest.raises(ValueError, match="URL validation failed"):
+                asyncio.run(
+                    scraper.fetch_document(
+                        url="http://169.254.169.254/latest",
+                        jurisdiction_code="US-NY",
+                    )
+                )
+
+        assert mock_get.call_count == 0
+        assert s3.uploads == []
+        assert kafka.emits == []
+
+    def test_fetch_document_propagates_http_error_without_side_effects(self):
+        """Verify an HTTP failure raises without storing or emitting."""
+        from services.ingestion.app.scrapers.state_generic import StateRegistryScraper
+
+        s3 = _StubS3Client()
+        kafka = _StubKafkaProducer()
+        scraper = StateRegistryScraper(s3_bucket="test-bucket", s3_client=s3, kafka=kafka)
+
+        response = _FakeHttpResponse()
+
+        def _raise():
+            raise RuntimeError("HTTP 500")
+
+        response.raise_for_status = _raise
+
+        with (
+            patch(
+                "services.ingestion.app.scrapers.state_generic.validate_url",
+                side_effect=lambda u: u,
+            ),
+            patch(
+                "services.ingestion.app.scrapers.state_generic.safe_httpx_get_sync",
+                return_value=response,
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="HTTP 500"):
+                asyncio.run(
+                    scraper.fetch_document(
+                        url="https://register.example.gov/rules.html",
+                        jurisdiction_code="US-NY",
+                    )
+                )
+
+        assert s3.uploads == []
+        assert kafka.emits == []
 
 
 class TestScraperConstants:
