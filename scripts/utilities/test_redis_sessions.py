@@ -185,6 +185,11 @@ def test_redis_sessions():
     return True
 
 
+# Manual operator script, not a pytest test. The test_ prefix would make
+# pytest collect and run it (it needs docker and live services), so opt out.
+test_redis_sessions.__test__ = False
+
+
 if __name__ == "__main__":
     success = test_redis_sessions()
     exit(0 if success else 1)
