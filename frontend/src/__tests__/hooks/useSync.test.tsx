@@ -54,6 +54,23 @@ function setOnlineState(isOnline: boolean) {
     });
 }
 
+function mockServiceWorker(overrides: Record<string, unknown> = {}) {
+    const register = vi.fn().mockResolvedValue({ scope: '/' });
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    Object.defineProperty(window.navigator, 'serviceWorker', {
+        configurable: true,
+        value: {
+            register,
+            addEventListener,
+            removeEventListener,
+            ready: Promise.resolve({}),
+            ...overrides,
+        },
+    });
+    return { register, addEventListener, removeEventListener };
+}
+
 describe('useSync', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -143,6 +160,41 @@ describe('useSync', () => {
         expect(uploadArgs.file).toBeInstanceOf(File);
         expect(uploadArgs.sourceSystem).toBe('mobile_capture_pwa_offline');
         expect('apiKey' in uploadArgs).toBe(false);
+    });
+
+    it('registers the offline service worker so background sync can wake the hook', async () => {
+        const { register } = mockServiceWorker();
+
+        renderHook(() => useSync());
+
+        await waitFor(() => expect(register).toHaveBeenCalledWith('/sw.js'));
+    });
+
+    it('requests a background-sync retry when uploads fail', async () => {
+        const registerSync = vi.fn().mockResolvedValue(undefined);
+        mockServiceWorker({ ready: Promise.resolve({ sync: { register: registerSync } }) });
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 1,
+                    content: 'LOT-FAIL',
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    synced: 0,
+                },
+            ],
+            photos: [],
+        });
+        fetchWithCsrfMock.mockRejectedValue(new Error('offline'));
+        setOnlineState(true);
+
+        const { result } = renderHook(() => useSync());
+
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(registerSync).toHaveBeenCalledWith('regengine-offline-queue'));
     });
 
     it('does not sync when the user is signed out', async () => {

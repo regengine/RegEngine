@@ -11,6 +11,12 @@
 const CACHE_NAME = 'regengine-v1';
 const OFFLINE_EVENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Double-submit CSRF cookie/header names. These must match
+// frontend/src/lib/csrf.ts (CSRF_COOKIE, CSRF_HEADER). The service worker
+// cannot read document.cookie, so it uses the Cookie Store API instead.
+const CSRF_COOKIE = 're_csrf';
+const CSRF_HEADER = 'x-csrf-token';
+
 const PRECACHE_URLS = [
   '/fsma/field-capture',
   '/tools/scan',
@@ -94,11 +100,25 @@ self.addEventListener('sync', (event) => {
   }
 });
 
+async function getCsrfToken() {
+  try {
+    if (self.cookieStore && typeof self.cookieStore.get === 'function') {
+      const cookie = await self.cookieStore.get(CSRF_COOKIE);
+      if (cookie && cookie.value) return cookie.value;
+    }
+  } catch {
+    // Cookie Store API unavailable: replay without the header and let the
+    // backend reject it, which keeps the record queued for a later retry.
+  }
+  return '';
+}
+
 async function processOfflineQueue() {
   // Field capture now uses RegEngineMobileDB as the durable queue owner.
   // This handler drains legacy service-worker-owned records without deleting
   // them until the backend acknowledges the replay with a 2xx response.
   try {
+    const csrfToken = await getCsrfToken();
     const db = await openDB();
     const tx = db.transaction('offline-events', 'readonly');
     const store = tx.objectStore('offline-events');
@@ -115,6 +135,7 @@ async function processOfflineQueue() {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
+            ...(csrfToken ? { [CSRF_HEADER]: csrfToken } : {}),
             ...(retryEvent.headers || {}),
           },
           body: typeof retryEvent.body === 'string' ? retryEvent.body : JSON.stringify(retryEvent.body),

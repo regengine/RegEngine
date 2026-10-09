@@ -14,6 +14,9 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
 
+// Must match the Background Sync tag handled in frontend/public/sw.js.
+const OFFLINE_QUEUE_SYNC_TAG = 'regengine-offline-queue';
+
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
@@ -35,8 +38,26 @@ export function useSync() {
         if (!response.ok) throw new Error(`Ingest failed: ${response.status}`);
     }, []);
 
+    const requestBackgroundSync = useCallback(async () => {
+        try {
+            if (!('serviceWorker' in navigator)) return;
+            const registration = await navigator.serviceWorker.ready;
+            const syncManager = (registration as unknown as { sync?: { register(tag: string): Promise<void> } } | undefined)?.sync;
+            if (!syncManager) return;
+            await syncManager.register(OFFLINE_QUEUE_SYNC_TAG);
+        } catch {
+            // Background Sync is best-effort; the online/offline listeners below already drive sync.
+        }
+    }, []);
+
     const sync = useCallback(async () => {
-        if (!isAuthenticated || isSyncingRef.current || !navigator.onLine) return;
+        if (!isAuthenticated || isSyncingRef.current) return;
+        if (!navigator.onLine) {
+            // Queue a Background Sync wake-up so the service worker can nudge
+            // this hook to retry once connectivity returns.
+            void requestBackgroundSync();
+            return;
+        }
 
         isSyncingRef.current = true;
         setIsSyncing(true);
@@ -136,6 +157,7 @@ export function useSync() {
                     description: `${successfulUploads} uploaded. ${failedUploads} item${failedUploads === 1 ? '' : 's'} remain queued for retry.`,
                     variant: "destructive",
                 });
+                void requestBackgroundSync();
             } else {
                 toast({
                     title: "Sync Complete",
@@ -157,7 +179,7 @@ export function useSync() {
             isSyncingRef.current = false;
             setIsSyncing(false);
         }
-    }, [isAuthenticated, ingestFile, syncEndpoint, tenantId, toast]);
+    }, [isAuthenticated, ingestFile, syncEndpoint, tenantId, toast, requestBackgroundSync]);
 
     useEffect(() => {
         // Initial check
@@ -185,6 +207,17 @@ export function useSync() {
             window.removeEventListener('offline', handleOffline);
         };
     }, [sync]);
+
+    useEffect(() => {
+        if (!('serviceWorker' in navigator)) return;
+        // Register the offline service worker (frontend/public/sw.js) so
+        // field-capture pages stay available offline and the Background Sync
+        // tag above can wake this hook. Best-effort: sync still runs off the
+        // online/offline listeners when registration is blocked or fails.
+        void navigator.serviceWorker.register('/sw.js').catch(() => {
+            // Offline caching unavailable; online/offline listeners still drive sync.
+        });
+    }, []);
 
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;

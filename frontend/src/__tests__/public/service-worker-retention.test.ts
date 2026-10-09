@@ -13,7 +13,11 @@ type OfflineEvent = {
     queuedAt?: number | string;
 };
 
-function loadServiceWorker(records: OfflineEvent[], fetchImpl = vi.fn().mockResolvedValue({ ok: true })) {
+function loadServiceWorker(
+    records: OfflineEvent[],
+    fetchImpl = vi.fn().mockResolvedValue({ ok: true }),
+    options: { csrfToken?: string } = {},
+) {
     const putCalls: OfflineEvent[] = [];
     const deleteCalls: number[] = [];
     const source = readFileSync(join(process.cwd(), 'public/sw.js'), 'utf-8');
@@ -51,6 +55,15 @@ function loadServiceWorker(records: OfflineEvent[], fetchImpl = vi.fn().mockReso
         self: {
             addEventListener: vi.fn(),
             skipWaiting: vi.fn(),
+            ...(options.csrfToken
+                ? {
+                    cookieStore: {
+                        get: async (name: string) => (
+                            name === 're_csrf' ? { value: options.csrfToken, name } : null
+                        ),
+                    },
+                }
+                : {}),
             clients: {
                 claim: vi.fn(),
                 matchAll: vi.fn().mockResolvedValue([]),
@@ -115,6 +128,28 @@ describe('service worker offline queue retention', () => {
             credentials: 'include',
             body: JSON.stringify(freshEvent.body),
         }));
+    });
+
+    it('attaches the CSRF double-submit header when replaying the legacy queue', async () => {
+        const event = {
+            id: 1,
+            url: '/api/ingestion/api/v1/webhooks/ingest',
+            body: { traceability_lot_code: 'csrf-legacy' },
+            createdAt: Date.now(),
+        };
+        const { context, fetchImpl, deleteCalls } = loadServiceWorker(
+            [event],
+            vi.fn().mockResolvedValue({ ok: true }),
+            { csrfToken: 'csrf-token-123' },
+        );
+
+        await context.processOfflineQueue();
+
+        expect(deleteCalls).toEqual([1]);
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+        const [, init] = fetchImpl.mock.calls[0] as [string, { headers: Record<string, string> }];
+        expect(init.headers['Content-Type']).toBe('application/json');
+        expect(init.headers['x-csrf-token']).toBe('csrf-token-123');
     });
 
     it('keeps expired events queued when replay fails', async () => {
