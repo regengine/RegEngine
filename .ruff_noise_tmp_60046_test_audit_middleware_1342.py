@@ -2,19 +2,19 @@
 
 Two slices of the module are exercised here:
 
-* ``_trusted_proxy_cidrs`` line 62 — the ``continue`` branch hit when
+* ``_trusted_proxy_cidrs`` line 62: the ``continue`` branch hit when
   ``AUDIT_TRUSTED_PROXY_CIDRS`` contains an empty token after splitting on
   ``,`` and stripping whitespace (trailing comma, double comma,
   whitespace-only entry). Without this guard the loop would fall through
   to ``ipaddress.ip_network("")`` and log a spurious
   ``audit_trusted_proxy_cidr_invalid`` warning for benign operator input.
 
-* ``AuditContextMiddleware.dispatch`` — the full request wrapper: skip-path
+* ``AuditContextMiddleware.dispatch``: the full request wrapper: skip-path
   fast-path, audit-context attachment on the happy path, and the signed
   proxy-attribution IP resolver.
 
 Why this matters: ``audit_middleware`` sits on the critical tamper-evidence
-path for the EPIC-K #1414 story — raw forwarding headers cannot forge
+path for the EPIC-K #1414 story: raw forwarding headers cannot forge
 ``actor_ip``; only fresh metadata signed by the privileged BFF can override
 the socket peer. Legacy CIDR parsing remains covered for compatibility, and
 every request that reaches an admin route runs through ``dispatch``, so
@@ -77,7 +77,7 @@ def _proxy_ip_headers(
 
 
 # ---------------------------------------------------------------------------
-# #1342 — tolerant parsing of AUDIT_TRUSTED_PROXY_CIDRS
+# #1342: tolerant parsing of AUDIT_TRUSTED_PROXY_CIDRS
 # ---------------------------------------------------------------------------
 
 
@@ -85,7 +85,7 @@ def test_trusted_proxy_cidrs_skips_trailing_empty_token(monkeypatch):
     """A trailing comma produces an empty token after ``.strip()``.
 
     The loop must ``continue`` (line 62) rather than attempt to parse ``""``
-    as a network — otherwise ops typos produce noisy
+    as a network: otherwise ops typos produce noisy
     ``audit_trusted_proxy_cidr_invalid`` warnings for something benign.
     """
     monkeypatch.setenv("AUDIT_TRUSTED_PROXY_CIDRS", "10.0.0.0/8,")
@@ -95,7 +95,7 @@ def test_trusted_proxy_cidrs_skips_trailing_empty_token(monkeypatch):
 
 
 def test_trusted_proxy_cidrs_skips_whitespace_only_token(monkeypatch):
-    """A ``,  ,`` run is whitespace after strip — must still ``continue``."""
+    """A ``,  ,`` run is whitespace after strip: must still ``continue``."""
     monkeypatch.setenv(
         "AUDIT_TRUSTED_PROXY_CIDRS",
         "10.0.0.0/8,   ,172.16.0.0/12",
@@ -107,7 +107,7 @@ def test_trusted_proxy_cidrs_skips_whitespace_only_token(monkeypatch):
 
 def test_trusted_proxy_cidrs_warns_on_invalid_cidr_and_continues(monkeypatch):
     """An un-parseable token must hit the ``ValueError`` branch (lines
-    65-66) — log a warning and keep processing other entries rather than
+    65-66): log a warning and keep processing other entries rather than
     crash the whole middleware on one fat-fingered CIDR."""
     monkeypatch.setenv(
         "AUDIT_TRUSTED_PROXY_CIDRS",
@@ -119,13 +119,13 @@ def test_trusted_proxy_cidrs_warns_on_invalid_cidr_and_continues(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# #1342 — path-skip and trusted-proxy helper edge cases
+# #1342: path-skip and trusted-proxy helper edge cases
 # ---------------------------------------------------------------------------
 
 
 def test_should_skip_covers_docs_subpaths():
     """FastAPI mounts Swagger/Redoc assets at ``/docs/...`` and
-    ``/redoc/...`` — the prefix branch (line 42-43) must match those."""
+    ``/redoc/...``: the prefix branch (line 42-43) must match those."""
     assert _should_skip("/docs/oauth2-redirect") is True
     assert _should_skip("/redoc/somefile.js") is True
     # Sanity: an audit-bearing admin route must NOT skip.
@@ -147,7 +147,7 @@ def test_is_trusted_proxy_returns_false_for_non_ip_client_host(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# #1342 — AuditContextMiddleware.dispatch behaviour
+# #1342: AuditContextMiddleware.dispatch behaviour
 # ---------------------------------------------------------------------------
 
 
@@ -167,7 +167,7 @@ def _make_request(
       - ``request.client.host`` (raw socket peer)
       - ``request.state`` (write target for audit_context)
 
-    A MagicMock with these attrs wired is enough — we do NOT need a real
+    A MagicMock with these attrs wired is enough: we do NOT need a real
     Starlette app, ASGI scope, or event loop routing.
     """
     req = MagicMock()
@@ -188,7 +188,7 @@ def _make_request(
 
 @pytest.mark.asyncio
 async def test_dispatch_skips_health_path_without_attaching_context():
-    """``/health`` is in _AUDIT_SKIP_PATHS — dispatch must bypass the
+    """``/health`` is in _AUDIT_SKIP_PATHS: dispatch must bypass the
     context attach and call straight through (line 102-103)."""
     mw = AuditContextMiddleware(app=MagicMock())
     req = _make_request(path="/health")
@@ -451,7 +451,7 @@ async def test_dispatch_ignores_x_real_ip_when_legacy_proxy_cidr_matches(monkeyp
 async def test_dispatch_ignores_xff_from_untrusted_peer(monkeypatch):
     """Untrusted peer: XFF MUST be ignored to prevent actor_ip spoofing.
 
-    This is the #1414 security invariant — attackers on open routes
+    This is the #1414 security invariant: attackers on open routes
     cannot forge actor_ip by sending X-Forwarded-For.
     """
     monkeypatch.delenv("AUDIT_TRUSTED_PROXY_CIDRS", raising=False)
