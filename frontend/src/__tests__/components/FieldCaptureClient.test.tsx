@@ -88,9 +88,10 @@ function setCaptureUrl(search: string) {
     window.history.replaceState({}, '', `/mobile/capture${search}`);
 }
 
-describe('FieldCaptureClient tenant hinting', () => {
+describe('FieldCaptureClient tenant handling', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        setCaptureUrl('');
         mocks.useAuth.mockReturnValue({
             apiKey: null,
             isAuthenticated: true,
@@ -106,51 +107,52 @@ describe('FieldCaptureClient tenant hinting', () => {
         });
     });
 
-    it('uses the URL tenant hint for catalog and ingest requests when auth has no tenant yet', async () => {
+    it('ignores the URL tenant hint when the session has no tenant', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
-        mocks.fetchWithCsrf
-            .mockResolvedValueOnce(jsonResponse({ products: [] }))
-            .mockResolvedValueOnce(new Response(null, { status: 202 }));
 
         const user = userEvent.setup();
         render(<FieldCaptureClient />);
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenCalled();
+            expect(screen.getByText(/sign in to a tenant to enable field capture/i)).toBeInTheDocument();
         });
-        const [catalogUrl, catalogInit] = mocks.fetchWithCsrf.mock.calls[0] as [string, RequestInit];
-        const catalogHeaders = new Headers(catalogInit?.headers);
-        expect(catalogUrl).toBe('https://ingestion.test/api/v1/products/hinted-tenant');
-        expect(catalogInit?.credentials).toBe('include');
-        expect(catalogHeaders.get('Content-Type')).toBe('application/json');
-        expect(catalogHeaders.get('X-RegEngine-API-Key')).toBeNull();
-        expect(catalogHeaders.get('X-Tenant-ID')).toBeNull();
+        expect(mocks.fetchWithCsrf).not.toHaveBeenCalled();
 
         await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
+            expect(mocks.toast).toHaveBeenCalledWith(
+                expect.objectContaining({ title: 'Sign-in required' }),
+            );
         });
-
-        const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
-        const ingestHeaders = new Headers(ingestInit.headers);
-        expect(mocks.fetchWithCsrf.mock.calls[1]?.[0]).toBe('https://ingestion.test/api/v1/webhooks/ingest');
-        expect(ingestInit.credentials).toBe('include');
-        expect(ingestHeaders.get('Content-Type')).toBe('application/json');
-        expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
-        expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
-        expect(JSON.parse(String(ingestInit.body))).toMatchObject({
-            tenant_id: 'hinted-tenant',
-            events: [
-                expect.objectContaining({
-                    cte_type: 'shipping',
-                    traceability_lot_code: 'LOT-123',
-                }),
-            ],
-        });
+        expect(mocks.fetchWithCsrf).not.toHaveBeenCalled();
+        expect(mocks.saveScan).not.toHaveBeenCalled();
     });
 
-    it('prefers the authenticated tenant over the URL hint once auth is established', async () => {
+    it('blocks photo capture when the session has no tenant', async () => {
+        setCaptureUrl('?tenant_id=hinted-tenant');
+
+        const user = userEvent.setup();
+        render(<FieldCaptureClient />);
+
+        await waitFor(() => {
+            expect(screen.getByText(/sign in to a tenant to enable field capture/i)).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('tab', { name: /photo/i }));
+        await user.click(screen.getByRole('button', { name: 'Trigger mock capture' }));
+
+        await waitFor(() => {
+            expect(mocks.toast).toHaveBeenCalledWith(
+                expect.objectContaining({ title: 'Sign-in required' }),
+            );
+        });
+        expect(mocks.fetchWithCsrf).not.toHaveBeenCalled();
+        expect(mocks.savePhoto).not.toHaveBeenCalled();
+        expect(mocks.ingestFileMutation.mutateAsync).not.toHaveBeenCalled();
+    });
+
+    it('files uploads under the session tenant and ignores the URL hint', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
         mocks.useAuth.mockReturnValue({
             apiKey: null,
@@ -180,16 +182,31 @@ describe('FieldCaptureClient tenant hinting', () => {
 
         const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
         const ingestHeaders = new Headers(ingestInit.headers);
+        expect(mocks.fetchWithCsrf.mock.calls[1]?.[0]).toBe('https://ingestion.test/api/v1/webhooks/ingest');
         expect(ingestInit.credentials).toBe('include');
+        expect(ingestHeaders.get('Content-Type')).toBe('application/json');
         expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
         expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
         expect(JSON.parse(String(ingestInit.body))).toMatchObject({
             tenant_id: 'auth-tenant',
+            events: [
+                expect.objectContaining({
+                    cte_type: 'shipping',
+                    traceability_lot_code: 'LOT-123',
+                }),
+            ],
         });
+        for (const [url] of mocks.fetchWithCsrf.mock.calls) {
+            expect(String(url)).not.toContain('hinted-tenant');
+        }
     });
 
     it('falls back to cookie-backed file upload when label vision is unavailable', async () => {
-        setCaptureUrl('?tenant_id=hinted-tenant');
+        mocks.useAuth.mockReturnValue({
+            apiKey: null,
+            isAuthenticated: true,
+            tenantId: 'auth-tenant',
+        });
         mocks.fetchWithCsrf
             .mockResolvedValueOnce(jsonResponse({ products: [] }))
             .mockResolvedValueOnce(new Response('fake-image', {

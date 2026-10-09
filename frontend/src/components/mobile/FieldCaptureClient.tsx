@@ -97,16 +97,13 @@ export function FieldCaptureClient() {
     const [manualLot, setManualLot] = useState('');
 
     const { tenantId } = useAuth();
-    const [hintedTenantId, setHintedTenantId] = useState<string | null>(null);
     const { toast } = useToast();
     const { isOnline, isSyncing } = useSync();
     const ingestFileMutation = useIngestFile();
-    const effectiveTenantId = tenantId || hintedTenantId || undefined;
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        setHintedTenantId(new URLSearchParams(window.location.search).get('tenant_id'));
-    }, []);
+    // Tenant identity comes only from the authenticated session. A
+    // ?tenant_id= URL value is untrusted input and must never select the
+    // tenant that uploads are filed under.
+    const effectiveTenantId = tenantId || undefined;
 
     useEffect(() => {
         const loadCatalog = async () => {
@@ -142,6 +139,9 @@ export function FieldCaptureClient() {
 
     const ingestScannedEvent = useCallback(
         async (scanState: ParsedScanState) => {
+            if (!effectiveTenantId) {
+                throw new Error('Sign in to a tenant before capturing scans.');
+            }
             const traceabilityLotCode =
                 scanState.traceabilityLotCode ||
                 scanState.serial ||
@@ -189,6 +189,14 @@ export function FieldCaptureClient() {
     );
 
     const handleScan = async (rawScan: string) => {
+        if (!effectiveTenantId) {
+            toast({
+                title: 'Sign-in required',
+                description: 'Sign in to a tenant before capturing scans.',
+                variant: 'destructive',
+            });
+            return;
+        }
         const parsed = parseGS1(rawScan);
         const productDescription = resolveProductDescription(parsed, catalogByGtin);
 
@@ -264,6 +272,14 @@ export function FieldCaptureClient() {
     };
 
     const handleCapture = async (imageData: string) => {
+        if (!effectiveTenantId) {
+            toast({
+                title: 'Sign-in required',
+                description: 'Sign in to a tenant before capturing photos.',
+                variant: 'destructive',
+            });
+            return;
+        }
         setCapturedImages((prev) => [imageData, ...prev]);
 
         const res = await fetchWithCsrf(imageData);
@@ -387,6 +403,16 @@ export function FieldCaptureClient() {
             </div>
 
             <div className="p-4 max-w-md mx-auto space-y-4">
+                {!effectiveTenantId && (
+                    <Card>
+                        <CardContent>
+                            <p className="text-small text-re-text-secondary">
+                                Sign in to a tenant to enable field capture. Scans and photos are
+                                disabled until a tenant session is established.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader>
                         <CardTitle>CTE Type</CardTitle>
