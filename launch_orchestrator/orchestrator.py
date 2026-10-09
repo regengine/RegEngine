@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import secrets
 import string
 import subprocess
@@ -37,6 +38,46 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+REDACTED = "[REDACTED]"
+
+# Patterns for credential-like values that may appear in deployment
+# command output. Each entry is (compiled pattern, replacement).
+_SECRET_PATTERNS = [
+    # PEM private key blocks, which can span many lines.
+    (
+        re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----"),
+        "[REDACTED PRIVATE KEY]",
+    ),
+    # JWT-shaped tokens (three base64url segments).
+    (re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"), REDACTED),
+    # Bearer / token header values.
+    (re.compile(r"(?i)\b(bearer|token)\s+([A-Za-z0-9\-._~+/=]{8,})"), r"\1 " + REDACTED),
+    # Common API key and token prefixes.
+    (
+        re.compile(r"\b(sk-[A-Za-z0-9-_]{8,}|gh[op]_[A-Za-z0-9_]{8,}|xox[bap]-" r"[A-Za-z0-9-]{8,}|AKIA[0-9A-Z]{16})"),
+        REDACTED,
+    ),
+    # Key=value style assignments such as api_key=..., password: ....
+    (
+        re.compile(r"(?i)\b(api[_-]?key|auth[_-]?token|secret|password|passwd|pwd)" r"\s*[:=]\s*['\"]?([^\s'\",}\]]+)"),
+        r"\1=" + REDACTED,
+    ),
+]
+
+
+def redact_secrets(text: Any) -> Any:
+    """Replace credential-like values in text with a placeholder.
+
+    Non-string inputs pass through unchanged so None outputs from
+    failed commands stay None.
+    """
+    if not isinstance(text, str):
+        return text
+    redacted = text
+    for pattern, replacement in _SECRET_PATTERNS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
 
 
 class OrchestrationMode(Enum):
@@ -429,10 +470,7 @@ Contact: sales@regengine.ai
                 "api_key_prefix": api_key_prefix,
                 "config_path": str(output_dir / f"{sandbox_id}.json"),
                 "reason": "not_implemented",
-                "detail": (
-                    "No platform API call was made; the sandbox does not exist "
-                    "and the key is not registered."
-                ),
+                "detail": ("No platform API call was made; the sandbox does not exist and the key is not registered."),
             },
         )
 
@@ -538,8 +576,11 @@ Contact: sales@regengine.ai
                 details={
                     **details,
                     "command": command,
-                    "stdout": result.stdout.strip(),
-                    "stderr": result.stderr.strip(),
+                    # Redact before storing: details are persisted to
+                    # orchestration_result.json, so leaked tokens in deploy
+                    # output must not be kept verbatim.
+                    "stdout": redact_secrets(result.stdout.strip()),
+                    "stderr": redact_secrets(result.stderr.strip()),
                 },
             )
         except subprocess.CalledProcessError as exc:
@@ -547,8 +588,13 @@ Contact: sales@regengine.ai
                 phase,
                 action,
                 "failure",
-                details={**details, "command": command, "stdout": exc.stdout, "stderr": exc.stderr},
-                error=str(exc),
+                details={
+                    **details,
+                    "command": command,
+                    "stdout": redact_secrets(exc.stdout),
+                    "stderr": redact_secrets(exc.stderr),
+                },
+                error=redact_secrets(str(exc)),
             )
 
     def _generate_summary(self):
