@@ -1,3 +1,16 @@
+"""Tenant invite lifecycle: create, list, revoke, and accept.
+
+Admin endpoints create single-use invites scoped to one tenant, list
+pending invites, and revoke them. A public endpoint accepts an invite
+with the one-time token mailed to the invitee.
+
+Key invariants: every admin operation requires tenant context, tokens are
+stored only as hashes with the raw secret carried in the link fragment,
+state changes are committed only when the audit chain write succeeds,
+accept failures return a uniform error that hides the reason, and a caller
+cannot assign a role above their own except for sysadmins.
+"""
+
 import hashlib
 import html
 import json
@@ -133,18 +146,23 @@ def _send_invite_email(recipient_email: str, invite_link: str) -> None:
 
 # DTOs
 class InviteCreate(BaseModel):
+    """Request body for creating one tenant invite."""
+
     email: str
     role_id: UUID
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
+        """Reject values that are not shaped like an email address."""
         if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", v):
             raise ValueError("Invalid email format")
         return v
 
 
 class InviteResponse(BaseModel):
+    """Newly created invite plus its acceptance link."""
+
     id: UUID
     email: str
     role_id: UUID
@@ -155,6 +173,8 @@ class InviteResponse(BaseModel):
 
 
 class AcceptInviteRequest(BaseModel):
+    """Request body for accepting an invite with its one-time token."""
+
     token: str
     name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check.
     # Note: UserModel has no 'name' col in the viewed file, only email/status/sysadmin metadata.
@@ -181,6 +201,7 @@ class AcceptInviteResponse(BaseModel):
 async def create_invite(
     invite_data: InviteCreate, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
+    """Create a pending invite unless the email or role is unusable."""
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
@@ -301,7 +322,6 @@ async def create_invite(
             },
         )
 
-
     db.commit()
     db.refresh(new_invite)
 
@@ -333,6 +353,7 @@ async def list_invites(
     pagination: PaginationParams = Depends(),
     db: Session = Depends(get_session),
 ):
+    """List pending invites for the current tenant, newest first."""
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
@@ -381,6 +402,7 @@ async def list_invites(
 async def revoke_invite(
     invite_id: UUID, current_user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)
 ):
+    """Revoke a pending invite so its token can no longer be accepted."""
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
@@ -424,7 +446,6 @@ async def revoke_invite(
                 ),
             },
         )
-
 
     db.commit()
     return {"status": "revoked"}
@@ -617,7 +638,6 @@ async def accept_invite(
                 ),
             },
         )
-
 
     db.commit()
 
