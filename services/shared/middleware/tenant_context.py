@@ -329,6 +329,12 @@ async def get_optional_tenant_id(request: Request) -> Optional[uuid.UUID]:
     """
     FastAPI dependency to get tenant_id, but don't require it.
 
+    Resolution order (mirrors :func:`get_current_tenant_id`):
+    1. ``request.state.tenant_id`` set by ``TenantContextMiddleware``
+       (JWT or authenticated internal header).
+    2. Fallback to the tenant on the authenticated principal that
+       ``require_api_key`` attaches to ``request.state.api_key``.
+
     Returns None if no tenant_id is available (doesn't raise exception).
 
     Usage:
@@ -341,7 +347,10 @@ async def get_optional_tenant_id(request: Request) -> Optional[uuid.UUID]:
             else:
                 return await fetch_public_data()
     """
-    return getattr(request.state, "tenant_id", None)
+    tenant_id = getattr(request.state, "tenant_id", None)
+    if tenant_id is None:
+        tenant_id = _tenant_id_from_authenticated_principal(request)
+    return tenant_id
 
 
 async def validate_tenant_access(request: Request, tenant_id: uuid.UUID) -> uuid.UUID:

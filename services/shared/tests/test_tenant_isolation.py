@@ -215,6 +215,57 @@ class TestTenantDependencies:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_get_optional_tenant_id_falls_back_to_api_key_principal(self):
+        """Optional helper must share the API-key fallback its sibling has.
+
+        A DB-issued API key leaves request.state.tenant_id=None; the
+        principal on request.state.api_key still carries the tenant, so
+        the optional helper must resolve it instead of returning None.
+        """
+        from shared.middleware import get_optional_tenant_id
+
+        tenant_id = uuid.uuid4()
+        api_key = SimpleNamespace(key_id="db-key-1", tenant_id=str(tenant_id))
+        request = SimpleNamespace(state=SimpleNamespace(tenant_id=None, api_key=api_key))
+
+        result = await get_optional_tenant_id(request)
+
+        assert result == tenant_id
+
+    @pytest.mark.asyncio
+    async def test_get_optional_tenant_id_prefers_middleware_tenant(self):
+        """When the middleware resolved a tenant it stays authoritative."""
+        from shared.middleware import get_optional_tenant_id
+
+        mw_tenant = uuid.uuid4()
+        key_tenant = uuid.uuid4()
+        request = SimpleNamespace(
+            state=SimpleNamespace(
+                tenant_id=mw_tenant,
+                api_key=SimpleNamespace(key_id="k", tenant_id=str(key_tenant)),
+            )
+        )
+
+        assert await get_optional_tenant_id(request) == mw_tenant
+
+    @pytest.mark.asyncio
+    async def test_get_optional_tenant_id_without_tenant_returns_none(self):
+        """No tenant anywhere returns None, never raises."""
+        from shared.middleware import get_optional_tenant_id
+
+        request = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="k", tenant_id=None))
+        )
+
+        assert await get_optional_tenant_id(request) is None
+
+        request_bad = SimpleNamespace(
+            state=SimpleNamespace(tenant_id=None, api_key=SimpleNamespace(key_id="k", tenant_id="not-a-uuid"))
+        )
+
+        assert await get_optional_tenant_id(request_bad) is None
+
+    @pytest.mark.asyncio
     async def test_validate_tenant_access_success(self):
         """Test tenant access validation when IDs match."""
         from shared.middleware import validate_tenant_access
