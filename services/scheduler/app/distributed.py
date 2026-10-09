@@ -35,7 +35,7 @@ SCHEDULER_LEADER_LOCK_ID = 4294967295  # Max uint32
 # three consecutive failures (either the lock is gone OR we can't reach the
 # DB) we invoke ``on_leadership_lost`` so the caller can gracefully shut the
 # scheduler down and let the orchestrator restart us.
-_DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 15.0
+_DEFAULT_HEARTBEAT_INTERVAL_SECONDS = 5.0
 _DEFAULT_HEARTBEAT_MAX_FAILURES = 3
 _HEARTBEAT_SHUTDOWN_JOIN_TIMEOUT_SECONDS = 5.0
 
@@ -203,9 +203,12 @@ class DistributedContext:
             and logs loudly but does not signal the main thread — the
             callback will continue until it exits on its own.
         heartbeat_interval_seconds:
-            Polling cadence of the heartbeat. Default 15s — every 30s
-            check wastes cycles; every 5s could add meaningful DB load
-            in a large cluster.
+            Polling cadence of the heartbeat. Default 5s — with 3
+            tolerated failures a lost lock is noticed within about 15s,
+            bounding the split-brain window in which a deposed leader
+            could emit alongside its successor. The probe is one cheap
+            indexed pg_locks lookup per interval on its own short-lived
+            connection.
         heartbeat_max_failures:
             Consecutive heartbeat failures tolerated before declaring
             leadership lost. Default 3 — tolerates transient blips.
@@ -355,6 +358,65 @@ class DistributedContext:
                 conn = None
 
     # ── #1142: heartbeat implementation ────────────────────────────────────
+    def _query_lock_held(self, leader_pid: int) -> bool:
+        """One-shot probe: does ``leader_pid`` still hold the leader lock?
+
+        Opens a SEPARATE short-lived connection (the election connection
+        is not thread-safe) and looks for our advisory-lock row in
+        ``pg_locks``. Returns True only when the row is present.
+
+        Raises on database errors so callers can distinguish "lock gone"
+        from "could not reach the database".
+        """
+        with self.engine.connect() as hb_conn:
+            hb_conn.execution_options(isolation_level="AUTOCOMMIT")
+            result = hb_conn.execute(
+                text(
+                    """
+                    SELECT 1 FROM pg_locks
+                    WHERE locktype = 'advisory'
+                      AND pid = :leader_pid
+                      AND objid = :lock_id
+                      AND classid = 0
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "leader_pid": leader_pid,
+                    "lock_id": SCHEDULER_LEADER_LOCK_ID,
+                },
+            ).scalar()
+        return result == 1
+
+    def verify_leadership(self) -> bool:
+        """Synchronous one-shot re-check of leadership for pre-emit guards.
+
+        Returns True only when this instance currently believes it is the
+        leader AND the database still shows our backend pid holding the
+        advisory lock. Fail-closed and never raises: an unknown pid, a
+        missing lock row, or a database error all return False so a
+        deposed leader skips emission instead of double-emitting
+        alongside its successor.
+
+        When leadership was claimed via :meth:`leadership_claim` (which
+        records no backend pid) there is nothing to re-verify against,
+        so the in-process flag alone decides.
+        """
+        if not self._is_leader:
+            return False
+        leader_pid = getattr(self, "_leader_pid", None)
+        if leader_pid is None:
+            return True
+        try:
+            return self._query_lock_held(leader_pid)
+        except Exception as exc:  # noqa: BLE001 - fail closed, never raise
+            logger.warning(
+                "leadership_verify_failed_fail_closed",
+                leader_pid=leader_pid,
+                error=str(exc),
+            )
+            return False
+
     def _run_heartbeat(
         self,
         leader_pid: int,
@@ -385,24 +447,7 @@ class DistributedContext:
 
         while not self._heartbeat_stop.wait(interval_seconds):
             try:
-                with self.engine.connect() as hb_conn:
-                    hb_conn.execution_options(isolation_level="AUTOCOMMIT")
-                    result = hb_conn.execute(
-                        text(
-                            """
-                            SELECT 1 FROM pg_locks
-                            WHERE locktype = 'advisory'
-                              AND pid = :leader_pid
-                              AND objid = :lock_id
-                              AND classid = 0
-                            LIMIT 1
-                            """
-                        ),
-                        {
-                            "leader_pid": leader_pid,
-                            "lock_id": SCHEDULER_LEADER_LOCK_ID,
-                        },
-                    ).scalar()
+                lock_held = self._query_lock_held(leader_pid)
             except Exception as exc:  # noqa: BLE001 - intentional catch-all
                 consecutive_failures += 1
                 logger.warning(
@@ -422,7 +467,7 @@ class DistributedContext:
                     return
                 continue
 
-            if result == 1:
+            if lock_held:
                 if consecutive_failures > 0:
                     logger.info(
                         "leadership_heartbeat_recovered",

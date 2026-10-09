@@ -372,6 +372,23 @@ class SchedulerService:
             count=len(items),
         )
 
+        # Split-brain guard: after a database failover the advisory lock
+        # can move to a standby while this (old) leader's heartbeat has
+        # not yet noticed. Re-check leadership synchronously before any
+        # emission; on loss, skip and leave items un-marked so the true
+        # leader emits them on its next tick. The guard only applies once
+        # this process actually won an election (_leader_pid set);
+        # otherwise behavior is unchanged (standalone runs, unit tests).
+        leadership_ctx = getattr(self, "distributed_context", None)
+        verifier = getattr(leadership_ctx, "verify_leadership", None)
+        if verifier is not None and getattr(leadership_ctx, "_leader_pid", None) is not None and not verifier():
+            logger.error(
+                "emit_skipped_leadership_lost",
+                source_type=source_type.value,
+                count=len(items),
+            )
+            return
+
         # #1159 — the default production event backbone is PostgreSQL;
         # Kafka emission only happens when EVENT_BACKBONE=kafka. In pg
         # mode no Kafka consumers are deployed, emitting would stall each
