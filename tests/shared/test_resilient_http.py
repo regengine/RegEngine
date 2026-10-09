@@ -173,8 +173,8 @@ class TestRetryTransport:
         request = httpx.Request("GET", "http://test/api")
         response = await transport.handle_async_request(request)
 
-        # Should return the last response after exhausting retries
-        assert response.status_code in _RETRYABLE_STATUS_CODES
+        # Should return the last response after exhausting retries (502).
+        assert response.status_code == 502
         assert fake.call_count == 4  # 1 initial + 3 retries
 
     @pytest.mark.asyncio
