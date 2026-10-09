@@ -152,9 +152,7 @@ class PrivilegedAuthThrottle:
         now = time.monotonic()
         with self._memory_lock:
             recent = [
-                timestamp
-                for timestamp in self._memory[subject]
-                if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
+                timestamp for timestamp in self._memory[subject] if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
             ]
             self._memory[subject] = recent
             return len(recent) >= PRIVILEGED_AUTH_MAX_FAILURES
@@ -163,9 +161,7 @@ class PrivilegedAuthThrottle:
         now = time.monotonic()
         with self._memory_lock:
             recent = [
-                timestamp
-                for timestamp in self._memory[subject]
-                if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
+                timestamp for timestamp in self._memory[subject] if now - timestamp < PRIVILEGED_AUTH_WINDOW_SECONDS
             ]
             recent.append(now)
             self._memory[subject] = recent[-(PRIVILEGED_AUTH_MAX_FAILURES * 2) :]
@@ -305,14 +301,114 @@ def _throttle_subject(request: Request, *, realm: str) -> str:
     return f"{realm}:{source_ip}"
 
 
+def _normalize_throttle_account(account: object) -> str | None:
+    """Normalize a targeted-account identifier for throttle keying."""
+    text = str(account or "").strip().lower()
+    if not text:
+        return None
+    return text[:128]
+
+
+def _throttle_account_subject(*, realm: str, account: object) -> str | None:
+    """Return the per-account failure-budget subject for a realm.
+
+    The account budget carries no source IP, so failures against one account
+    from many addresses still accumulate in a single budget. The value is
+    hashed by ``PrivilegedAuthThrottle._key`` before it enters Redis.
+    """
+    normalized = _normalize_throttle_account(account)
+    if normalized is None:
+        return None
+    return f"{realm}:account:{normalized}"
+
+
+def _workload_key_throttle_account(presented_key: str | None) -> str | None:
+    """Derive a non-secret account hint from a presented workload API key.
+
+    A well-formed key carries its public key id before the first dot, and
+    that id is already used as the workload actor id in audit logs. Anything
+    else is keyed by a short hash so the raw secret never becomes a throttle
+    subject (memory-fallback subjects are kept verbatim per process).
+    """
+    if not presented_key:
+        return None
+    candidate = presented_key.strip()
+    if not candidate:
+        return None
+    if "." in candidate:
+        key_id = candidate.split(".", 1)[0].strip()
+        if key_id:
+            return key_id[:64]
+    digest = hashlib.sha256(candidate.encode("utf-8")).hexdigest()[:16]
+    return f"unparsable-key:{digest}"
+
+
+def _throttle_subjects(
+    request: Request,
+    *,
+    realm: str,
+    account: object | None = None,
+) -> list[str]:
+    """Return every failure-budget subject for an authentication attempt.
+
+    The IP subject caps single-address guessing across all accounts, while
+    the account subject caps distributed guessing against one targeted
+    account. Callers check, record, and reset the whole list together.
+    """
+    subjects = [_throttle_subject(request, realm=realm)]
+    if account is not None:
+        account_subject = _throttle_account_subject(realm=realm, account=account)
+        if account_subject is not None and account_subject not in subjects:
+            subjects.append(account_subject)
+    return subjects
+
+
+def _with_account_subject(
+    subjects: list[str],
+    *,
+    realm: str,
+    account: object | None,
+) -> list[str]:
+    if account is None:
+        return list(subjects)
+    account_subject = _throttle_account_subject(realm=realm, account=account)
+    if account_subject is None or account_subject in subjects:
+        return list(subjects)
+    return [*subjects, account_subject]
+
+
+async def _throttle_is_limited(throttle: PrivilegedAuthThrottle, subjects: list[str]) -> bool:
+    for subject in subjects:
+        if await throttle.is_limited(subject):
+            return True
+    return False
+
+
+async def _throttle_record_failures(throttle: PrivilegedAuthThrottle, subjects: list[str]) -> int:
+    count = 0
+    for subject in subjects:
+        count = await throttle.record_failure(subject)
+    return count
+
+
+async def _throttle_reset_subjects(throttle: PrivilegedAuthThrottle, subjects: list[str]) -> None:
+    for subject in subjects:
+        await throttle.reset(subject)
+
+
 async def _start_authentication(
     request: Request,
     throttle: PrivilegedAuthThrottle,
     *,
     realm: str,
-) -> str:
-    subject = _throttle_subject(request, realm=realm)
-    if await throttle.is_limited(subject):
+) -> list[str]:
+    account = (
+        _workload_key_throttle_account(request.headers.get("X-RegEngine-API-Key"))
+        if realm == _WORKLOAD_AUTH_REALM
+        else None
+    )
+    subjects = _throttle_subjects(request, realm=realm, account=account)
+    if await _throttle_is_limited(throttle, subjects):
         audit_privileged_action(
             request,
             action="authenticate",
@@ -323,7 +419,7 @@ async def _start_authentication(
         )
         raise _rate_limited()
     if "x-admin-key" in request.headers:
-        await throttle.record_failure(subject)
+        await _throttle_record_failures(throttle, subjects)
         audit_privileged_action(
             request,
             action="authenticate",
@@ -336,20 +432,31 @@ async def _start_authentication(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="X-Admin-Key is not an accepted authentication method.",
         )
-    return subject
+    return subjects
 
 
 async def _deny_authentication(
     request: Request,
     throttle: PrivilegedAuthThrottle,
-    subject: str,
+    subjects: list[str],
     *,
     error: HTTPException,
     reason: str,
     actor: PrivilegedActor | None = None,
 ) -> None:
     if error.status_code in {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN}:
-        await throttle.record_failure(subject)
+        if await _throttle_is_limited(throttle, subjects):
+            audit_privileged_action(
+                request,
+                action="authenticate",
+                outcome="denied",
+                actor=actor,
+                target=request.url.path,
+                selected_tenant=actor.tenant_id if actor else request.headers.get("X-Tenant-ID"),
+                reason="failure_budget_exhausted",
+            )
+            raise _rate_limited()
+        await _throttle_record_failures(throttle, subjects)
     audit_privileged_action(
         request,
         action="authenticate",
@@ -369,8 +476,8 @@ async def _load_active_session(
     throttle: PrivilegedAuthThrottle,
     *,
     realm: str,
-) -> tuple[ActiveSessionContext, str]:
-    subject = await _start_authentication(request, throttle, realm=realm)
+) -> tuple[ActiveSessionContext, list[str]]:
+    subjects = await _start_authentication(request, throttle, realm=realm)
 
     # The opaque cookie identifies a session before a tenant is known.  The
     # control-plane connection therefore starts from its checkout-time
@@ -387,7 +494,7 @@ async def _load_active_session(
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            subjects,
             error=exc,
             reason="inactive_or_missing_session" if exc.status_code == 401 else "session_backend_unavailable",
         )
@@ -414,7 +521,7 @@ async def _load_active_session(
             )
             raise _authentication_service_unavailable() from exc
     bind_authenticated_user_context(db, context.user.id)
-    return context, subject
+    return context, subjects
 
 
 async def require_sysadmin_high_assurance(
@@ -424,7 +531,7 @@ async def require_sysadmin_high_assurance(
     throttle: PrivilegedAuthThrottle = Depends(get_privileged_auth_throttle),
 ) -> PrivilegedActor:
     """Require an active WebAuthn/SSO browser session for a sysadmin."""
-    context, subject = await _load_active_session(
+    context, subjects = await _load_active_session(
         request,
         db,
         crypto_service,
@@ -440,11 +547,13 @@ async def require_sysadmin_high_assurance(
         session=context.session,
     )
 
+    denial_subjects = _with_account_subject(subjects, realm=_ADMIN_AUTH_REALM, account=actor.actor_id)
+
     if not bool(getattr(context.user, "is_sysadmin", False)):
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            denial_subjects,
             error=HTTPException(status_code=403, detail="System administrator access required."),
             reason="not_sysadmin",
             actor=actor,
@@ -454,7 +563,7 @@ async def require_sysadmin_high_assurance(
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            denial_subjects,
             error=HTTPException(
                 status_code=403,
                 detail={
@@ -467,7 +576,7 @@ async def require_sysadmin_high_assurance(
             actor=actor,
         )
 
-    await throttle.reset(subject)
+    await _throttle_reset_subjects(throttle, denial_subjects)
     audit_privileged_action(
         request,
         action="authenticate",
@@ -487,12 +596,13 @@ async def _require_review_permission(
     permission: str,
     high_assurance: bool,
 ) -> PrivilegedActor:
-    context, subject = await _load_active_session(
+    realm = _REVIEW_DECIDE_AUTH_REALM if high_assurance else _REVIEW_READ_AUTH_REALM
+    context, subjects = await _load_active_session(
         request,
         db,
         crypto_service,
         throttle,
-        realm=_REVIEW_DECIDE_AUTH_REALM if high_assurance else _REVIEW_READ_AUTH_REALM,
+        realm=realm,
     )
     provisional_actor = PrivilegedActor(
         actor_type="tenant_user",
@@ -503,11 +613,13 @@ async def _require_review_permission(
         session=context.session,
     )
 
+    provisional_subjects = _with_account_subject(subjects, realm=realm, account=provisional_actor.actor_id)
+
     if high_assurance and provisional_actor.auth_method not in HIGH_ASSURANCE_AUTH_METHODS:
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            provisional_subjects,
             error=HTTPException(
                 status_code=403,
                 detail={
@@ -525,7 +637,7 @@ async def _require_review_permission(
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            provisional_subjects,
             error=HTTPException(status_code=403, detail="An active tenant membership is required."),
             reason="missing_active_membership",
             actor=provisional_actor,
@@ -548,7 +660,7 @@ async def _require_review_permission(
             await _deny_authentication(
                 request,
                 throttle,
-                subject,
+                provisional_subjects,
                 error=HTTPException(status_code=401, detail="Authentication required."),
                 reason="stale_active_membership",
                 actor=provisional_actor,
@@ -612,13 +724,13 @@ async def _require_review_permission(
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            _with_account_subject(subjects, realm=realm, account=actor.actor_id),
             error=HTTPException(status_code=403, detail="Insufficient permissions."),
             reason=f"missing_permission:{permission}",
             actor=actor,
         )
 
-    await throttle.reset(subject)
+    await _throttle_reset_subjects(throttle, _with_account_subject(subjects, realm=realm, account=actor.actor_id))
     audit_privileged_action(
         request,
         action="authenticate",
@@ -694,12 +806,12 @@ async def require_tenant_provisioner_key(
     throttle: PrivilegedAuthThrottle = Depends(get_privileged_auth_throttle),
 ) -> PrivilegedActor:
     """Authenticate the single-purpose Stripe tenant-provisioning workload."""
-    subject = await _start_authentication(request, throttle, realm=_WORKLOAD_AUTH_REALM)
+    subjects = await _start_authentication(request, throttle, realm=_WORKLOAD_AUTH_REALM)
     if not x_regengine_api_key:
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            subjects,
             error=HTTPException(
                 status_code=401,
                 detail="Missing workload API key.",
@@ -746,7 +858,11 @@ async def require_tenant_provisioner_key(
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            _with_account_subject(
+                subjects,
+                realm=_WORKLOAD_AUTH_REALM,
+                account=_workload_key_throttle_account(x_regengine_api_key),
+            ),
             error=HTTPException(
                 status_code=401,
                 detail="Invalid workload API key.",
@@ -763,17 +879,18 @@ async def require_tenant_provisioner_key(
         api_key=api_key,
     )
     policy_error = _workload_key_policy_error(api_key)
+    workload_subjects = _with_account_subject(subjects, realm=_WORKLOAD_AUTH_REALM, account=actor.actor_id)
     if policy_error:
         await _deny_authentication(
             request,
             throttle,
-            subject,
+            workload_subjects,
             error=HTTPException(status_code=403, detail="Workload key is not authorized for tenant provisioning."),
             reason=policy_error,
             actor=actor,
         )
 
-    await throttle.reset(subject)
+    await _throttle_reset_subjects(throttle, workload_subjects)
     ready = getattr(key_store, "rate_limit_backend_ready", None)
     if not callable(ready) or not ready():
         audit_privileged_action(

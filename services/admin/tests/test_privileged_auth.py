@@ -134,7 +134,12 @@ def test_non_sysadmin_high_assurance_session_is_denied():
             )
 
     assert exc_info.value.status_code == 403
-    assert throttle.failures == 1
+    # One failure lands on the IP budget, one on the targeted account budget.
+    assert throttle.failures == 2
+    assert throttle.failure_subjects[0] == mod._throttle_subject(_request(), realm=mod._ADMIN_AUTH_REALM)
+    assert throttle.failure_subjects[1] == mod._throttle_account_subject(
+        realm=mod._ADMIN_AUTH_REALM, account="11111111-1111-1111-1111-111111111111"
+    )
 
 
 def test_email_code_sysadmin_session_requires_step_up():
@@ -178,7 +183,12 @@ def test_high_assurance_sysadmin_session_is_accepted(auth_method):
     assert actor.actor_type == "staff_user"
     assert actor.auth_method == auth_method
     assert actor.session_id == "22222222-2222-2222-2222-222222222222"
-    assert throttle.resets == 1
+    # Success clears both the IP budget and the targeted account budget.
+    assert throttle.resets == 2
+    assert throttle.reset_subjects[0] == mod._throttle_subject(_request(), realm=mod._ADMIN_AUTH_REALM)
+    assert throttle.reset_subjects[1] == mod._throttle_account_subject(
+        realm=mod._ADMIN_AUTH_REALM, account="11111111-1111-1111-1111-111111111111"
+    )
 
 
 class _FakeDatabaseStore(DatabaseAPIKeyStore):
@@ -245,7 +255,10 @@ def test_exact_tenantless_workload_key_is_accepted(monkeypatch):
     assert actor.actor_id == "rge_live_workload"
     assert actor.actor_name == "stripe-tenant-provisioner"
     assert store.validated_raw_key == "rge_live_workload.raw-secret"
-    assert throttle.resets == 1
+    assert throttle.resets == 2
+    assert throttle.reset_subjects[1] == mod._throttle_account_subject(
+        realm=mod._WORKLOAD_AUTH_REALM, account="rge_live_workload"
+    )
 
 
 @pytest.mark.parametrize(
@@ -274,7 +287,10 @@ def test_wrong_workload_key_policy_is_denied(monkeypatch, overrides):
         )
 
     assert exc_info.value.status_code == 403
-    assert throttle.failures == 1
+    assert throttle.failures == 2
+    assert throttle.failure_subjects[1] == mod._throttle_account_subject(
+        realm=mod._WORKLOAD_AUTH_REALM, account="rge_live_workload"
+    )
 
 
 def test_workload_key_lifetime_over_90_days_is_denied(monkeypatch):
@@ -310,7 +326,10 @@ def test_invalid_expired_or_revoked_workload_key_is_unauthorized(monkeypatch):
         )
 
     assert exc_info.value.status_code == 401
-    assert throttle.failures == 1
+    assert throttle.failures == 2
+    assert throttle.failure_subjects[1] == mod._throttle_account_subject(
+        realm=mod._WORKLOAD_AUTH_REALM, account="rge_live_workload"
+    )
 
 
 def test_workload_key_rate_limit_is_enforced(monkeypatch):
@@ -357,11 +376,7 @@ def _db_with_query_results(*results):
 
 
 def _non_guc_execute_calls(db):
-    return [
-        call
-        for call in db.execute.call_args_list
-        if not _is_security_guc(call.args[0])
-    ]
+    return [call for call in db.execute.call_args_list if not _is_security_guc(call.args[0])]
 
 
 def test_review_tenant_and_reviewer_are_derived_from_active_session(monkeypatch):
@@ -604,3 +619,198 @@ def test_consumer_health_uses_metrics_credential():
     dependencies = {dependency.call for dependency in consumer_route.dependant.dependencies}
     assert routes.require_metrics_key in dependencies
     assert routes.require_sysadmin_high_assurance not in dependencies
+
+
+def _request_from_ip(
+    source_ip: str,
+    path: str = "/v1/admin/keys",
+    *,
+    headers: dict[str, str] | None = None,
+) -> Request:
+    raw_headers = [(name.lower().encode(), value.encode()) for name, value in (headers or {}).items()]
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": path,
+            "headers": raw_headers,
+            "client": (source_ip, 12345),
+            "server": ("testserver", 443),
+            "scheme": "https",
+            "query_string": b"",
+            "http_version": "1.1",
+            "root_path": "",
+            "state": {},
+            "app": SimpleNamespace(state=SimpleNamespace()),
+        }
+    )
+
+
+def test_account_subject_is_scoped_to_targeted_account_not_ip():
+    first = _request_from_ip("198.51.100.11")
+    second = _request_from_ip("198.51.100.22")
+
+    ip_subjects = {
+        mod._throttle_subject(first, realm=mod._ADMIN_AUTH_REALM),
+        mod._throttle_subject(second, realm=mod._ADMIN_AUTH_REALM),
+    }
+    assert len(ip_subjects) == 2
+
+    account_a_first = mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account="user-a")
+    account_a_second = mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account="user-a")
+    account_b = mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account="user-b")
+
+    assert account_a_first == account_a_second
+    assert account_a_first != account_b
+    assert "198.51.100" not in (account_a_first or "")
+
+    combined_first = mod._throttle_subjects(first, realm=mod._ADMIN_AUTH_REALM, account="user-a")
+    combined_second = mod._throttle_subjects(second, realm=mod._ADMIN_AUTH_REALM, account="user-a")
+    assert combined_first[0] != combined_second[0]
+    assert combined_first[1] == combined_second[1]
+
+    assert mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account="  USER-A ") == account_a_first
+    assert mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account="") is None
+    assert mod._throttle_account_subject(realm=mod._ADMIN_AUTH_REALM, account=None) is None
+
+
+def test_workload_key_hint_uses_key_id_not_secret():
+    assert (
+        mod._workload_key_throttle_account("rge_live_workload.raw-secret")  # pragma: allowlist secret
+        == "rge_live_workload"
+    )
+    assert mod._workload_key_throttle_account(None) is None
+    assert mod._workload_key_throttle_account("   ") is None
+
+    hint = mod._workload_key_throttle_account("not-a-key-format")
+    assert hint is not None
+    assert "not-a-key-format" not in hint
+
+    request = _request_from_ip(
+        "198.51.100.31",
+        path="/v1/internal/tenants",
+        headers={"X-RegEngine-API-Key": "rge_live_workload.raw-secret"},
+    )
+    subjects = mod._throttle_subjects(
+        request,
+        realm=mod._WORKLOAD_AUTH_REALM,
+        account=mod._workload_key_throttle_account("rge_live_workload.raw-secret"),  # pragma: allowlist secret
+    )
+    assert len(subjects) == 2
+    assert not any("raw-secret" in subject for subject in subjects)
+
+
+def test_distributed_failures_against_one_account_trip_account_budget():
+    redis = _AsyncRedis()
+    throttle = mod.PrivilegedAuthThrottle(redis_client=redis)
+    account = "targeted-user"
+
+    for octet in range(1, mod.PRIVILEGED_AUTH_MAX_FAILURES + 1):
+        request = _request_from_ip(f"198.51.100.{octet}")
+        subjects = mod._throttle_subjects(request, realm=mod._ADMIN_AUTH_REALM, account=account)
+        _run(mod._throttle_record_failures(throttle, subjects))
+
+    fresh_request = _request_from_ip("198.51.100.99")
+    assert _run(throttle.is_limited(mod._throttle_subject(fresh_request, realm=mod._ADMIN_AUTH_REALM))) is False
+    assert (
+        _run(
+            mod._throttle_is_limited(
+                throttle,
+                mod._throttle_subjects(fresh_request, realm=mod._ADMIN_AUTH_REALM, account=account),
+            )
+        )
+        is True
+    )
+    assert (
+        _run(
+            mod._throttle_is_limited(
+                throttle,
+                mod._throttle_subjects(fresh_request, realm=mod._ADMIN_AUTH_REALM, account="other-user"),
+            )
+        )
+        is False
+    )
+
+
+def test_deny_after_account_budget_exhausted_returns_429():
+    redis = _AsyncRedis()
+    throttle = mod.PrivilegedAuthThrottle(redis_client=redis)
+    account = "targeted-user"
+
+    for octet in range(1, mod.PRIVILEGED_AUTH_MAX_FAILURES + 1):
+        request = _request_from_ip(f"203.0.113.{octet}")
+        with pytest.raises(HTTPException) as exc_info:
+            _run(
+                mod._deny_authentication(
+                    request,
+                    throttle,
+                    mod._throttle_subjects(request, realm=mod._ADMIN_AUTH_REALM, account=account),
+                    error=HTTPException(status_code=403, detail="System administrator access required."),
+                    reason="not_sysadmin",
+                )
+            )
+        assert exc_info.value.status_code == 403
+
+    with pytest.raises(HTTPException) as exc_info:
+        _run(
+            mod._deny_authentication(
+                _request_from_ip("203.0.113.99"),
+                throttle,
+                mod._throttle_subjects(_request_from_ip("203.0.113.99"), realm=mod._ADMIN_AUTH_REALM, account=account),
+                error=HTTPException(status_code=403, detail="System administrator access required."),
+                reason="not_sysadmin",
+            )
+        )
+    assert exc_info.value.status_code == 429
+
+
+def test_single_ip_spray_across_accounts_still_trips_ip_budget():
+    redis = _AsyncRedis()
+    throttle = mod.PrivilegedAuthThrottle(redis_client=redis)
+    request = _request_from_ip("198.51.100.77")
+
+    for index in range(mod.PRIVILEGED_AUTH_MAX_FAILURES):
+        subjects = mod._throttle_subjects(request, realm=mod._ADMIN_AUTH_REALM, account=f"sprayed-user-{index}")
+        _run(mod._throttle_record_failures(throttle, subjects))
+
+    assert _run(throttle.is_limited(mod._throttle_subject(request, realm=mod._ADMIN_AUTH_REALM))) is True
+
+
+def test_success_resets_account_budget_for_targeted_account():
+    redis = _AsyncRedis()
+    throttle = mod.PrivilegedAuthThrottle(redis_client=redis)
+    account = "11111111-1111-1111-1111-111111111111"
+
+    for octet in range(1, mod.PRIVILEGED_AUTH_MAX_FAILURES):
+        request = _request_from_ip(f"198.51.100.{octet}")
+        _run(
+            mod._throttle_record_failures(
+                throttle,
+                mod._throttle_subjects(request, realm=mod._ADMIN_AUTH_REALM, account=account),
+            )
+        )
+
+    with patch.object(
+        mod,
+        "get_current_active_session_context",
+        return_value=_session_context(sysadmin=True, auth_method="webauthn"),
+    ):
+        _run(
+            mod.require_sysadmin_high_assurance(
+                request=_request_from_ip("198.51.100.200"),
+                db=MagicMock(),
+                crypto_service=MagicMock(),
+                throttle=throttle,
+            )
+        )
+
+    fresh_request = _request_from_ip("198.51.100.201")
+    assert (
+        _run(
+            mod._throttle_is_limited(
+                throttle,
+                mod._throttle_subjects(fresh_request, realm=mod._ADMIN_AUTH_REALM, account=account),
+            )
+        )
+        is False
+    )
