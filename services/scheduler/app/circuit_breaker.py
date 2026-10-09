@@ -67,6 +67,7 @@ class CircuitBreaker:
     stats: CircuitStats = field(default_factory=CircuitStats)
     _opened_at: Optional[float] = field(default=None, repr=False)
     _half_open_calls: int = field(default=0, repr=False)
+    _half_open_successes: int = field(default=0, repr=False)
 
     def can_execute(self) -> bool:
         """Check if a request can be executed."""
@@ -77,14 +78,17 @@ class CircuitBreaker:
             # Check if recovery timeout has elapsed
             if self._opened_at and (time.time() - self._opened_at) >= self.recovery_timeout:
                 self._transition_to_half_open()
-                return True
-            self.stats.rejected_calls += 1
-            return False
+            else:
+                self.stats.rejected_calls += 1
+                return False
 
         if self.state == CircuitState.HALF_OPEN:
-            # Allow limited calls in half-open state
+            # Reserve one probe slot per admission so concurrent callers
+            # cannot exceed half_open_max_calls in-flight probes.
             if self._half_open_calls < self.half_open_max_calls:
+                self._half_open_calls += 1
                 return True
+            self.stats.rejected_calls += 1
             return False
 
         return False
@@ -96,20 +100,26 @@ class CircuitBreaker:
         self.stats.last_success_time = time.time()
 
         if self.state == CircuitState.HALF_OPEN:
-            self._half_open_calls += 1
-            if self._half_open_calls >= self.half_open_max_calls:
+            self._half_open_successes += 1
+            if self._half_open_successes >= self.half_open_max_calls:
                 self._transition_to_closed()
                 logger.info(
                     "circuit_closed",
                     name=self.name,
                     message="Circuit recovered after successful half-open calls",
                 )
+        elif self.state == CircuitState.CLOSED:
+            # A success breaks the failure run: the threshold counts
+            # consecutive failures, mirroring shared/circuit_breaker.py.
+            self.stats.failures = 0
 
     def record_failure(self, error: Optional[Exception] = None) -> None:
         """Record a failed call."""
+        now = time.time()
+        previous_failure_time = self.stats.last_failure_time
         self.stats.failures += 1
         self.stats.total_calls += 1
-        self.stats.last_failure_time = time.time()
+        self.stats.last_failure_time = now
 
         if self.state == CircuitState.HALF_OPEN:
             # Immediate transition back to open on any failure
@@ -120,6 +130,10 @@ class CircuitBreaker:
                 error=str(error) if error else "Unknown",
             )
         elif self.state == CircuitState.CLOSED:
+            if previous_failure_time is not None and (now - previous_failure_time) >= self.recovery_timeout:
+                # Failures older than the recovery window have decayed;
+                # count only this fresh failure run.
+                self.stats.failures = 1
             if self.stats.failures >= self.failure_threshold:
                 self._transition_to_open()
                 logger.warning(
@@ -134,11 +148,13 @@ class CircuitBreaker:
         self.state = CircuitState.OPEN
         self._opened_at = time.time()
         self._half_open_calls = 0
+        self._half_open_successes = 0
 
     def _transition_to_half_open(self) -> None:
         """Transition to half-open state."""
         self.state = CircuitState.HALF_OPEN
         self._half_open_calls = 0
+        self._half_open_successes = 0
         logger.info("circuit_half_open", name=self.name)
 
     def _transition_to_closed(self) -> None:
@@ -147,6 +163,7 @@ class CircuitBreaker:
         self.stats.failures = 0
         self._opened_at = None
         self._half_open_calls = 0
+        self._half_open_successes = 0
 
     def reset(self) -> None:
         """Reset the circuit breaker to initial state."""
@@ -154,6 +171,7 @@ class CircuitBreaker:
         self.stats = CircuitStats()
         self._opened_at = None
         self._half_open_calls = 0
+        self._half_open_successes = 0
 
     def get_status(self) -> Dict[str, Any]:
         """Get current circuit breaker status."""

@@ -207,12 +207,29 @@ class FDAWarningLettersScraper(BaseScraper):
                 recall_number = result.get("recall_number", "")
                 source_id = self._create_source_id("fda_enf", recall_number)
 
-                # Parse date
+                # Parse date. A missing or unparsable report date falls back
+                # to now, flagged in raw_data so downstream consumers can
+                # tell an inferred timestamp from a real one.
                 report_date = result.get("report_date", "")
+                date_inferred = False
                 if report_date:
-                    published_date = datetime.strptime(report_date, "%Y%m%d").replace(tzinfo=timezone.utc)
+                    try:
+                        published_date = datetime.strptime(report_date, "%Y%m%d").replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        logger.warning(
+                            "api_item_bad_report_date_using_now",
+                            report_date=report_date,
+                            recall_number=recall_number,
+                        )
+                        published_date = datetime.now(timezone.utc)
+                        date_inferred = True
                 else:
+                    logger.warning(
+                        "api_item_missing_report_date_using_now",
+                        recall_number=recall_number,
+                    )
                     published_date = datetime.now(timezone.utc)
+                    date_inferred = True
 
                 # Determine severity from classification
                 classification = result.get("classification", "")
@@ -223,9 +240,15 @@ class FDAWarningLettersScraper(BaseScraper):
                 else:
                     severity = EnforcementSeverity.MEDIUM
 
+                # This fallback serves the openFDA food enforcement API, whose
+                # records are recalls, not warning letters. Label them as
+                # recalls so downstream routing and dedupe see the true type.
+                item_raw_data = dict(result)
+                if date_inferred:
+                    item_raw_data["published_date_inferred"] = True
                 items.append(
                     EnforcementItem(
-                        source_type=self.source_type,
+                        source_type=SourceType.FDA_RECALL,
                         source_id=source_id,
                         title=f"{result.get('recalling_firm', 'Unknown')} - {result.get('product_description', '')[:100]}",
                         summary=result.get("reason_for_recall", "")[:500],
@@ -235,7 +258,7 @@ class FDAWarningLettersScraper(BaseScraper):
                         affected_products=[result.get("product_description", "")],
                         affected_companies=[result.get("recalling_firm", "")],
                         jurisdiction="US-FDA",
-                        raw_data=result,
+                        raw_data=item_raw_data,
                     )
                 )
 
@@ -253,8 +276,14 @@ class FDAWarningLettersScraper(BaseScraper):
         self.session.close()
 
     def _parse_rss_date(self, date_str: str) -> datetime:
-        """Parse RFC 822 date format used in RSS."""
+        """Parse RFC 822 date format used in RSS.
+
+        Falls back to now when the feed omits or mangles the date, logging
+        loudly so an inferred timestamp is never mistaken for a real one.
+        The raw value is preserved in the item's ``rss_pub_date`` field.
+        """
         if not date_str:
+            logger.warning("rss_item_missing_pub_date_using_now")
             return datetime.now(timezone.utc)
 
         try:
@@ -263,4 +292,8 @@ class FDAWarningLettersScraper(BaseScraper):
 
             return parsedate_to_datetime(date_str)
         except (ValueError, TypeError, OverflowError):
+            logger.warning(
+                "rss_item_bad_pub_date_using_now",
+                pub_date=date_str,
+            )
             return datetime.now(timezone.utc)

@@ -214,6 +214,66 @@ class TestFDAWarningLettersParser_Issue1154:
         assert result.items_found == 1
         assert result.items[0].source_id == "api-1"
 
+    def test_api_fallback_labels_enforcement_items_as_recalls(self, monkeypatch):
+        scraper = FDAWarningLettersScraper()
+        monkeypatch.setattr(
+            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            lambda *_args, **_kwargs: _FakeResponse(
+                json_payload={
+                    "results": [
+                        {
+                            "recall_number": "F-5555-2026",
+                            "classification": "Class I",
+                            "report_date": "20260420",
+                            "recalling_firm": "Fallback Foods",
+                            "product_description": "Spinach",
+                            "reason_for_recall": "Listeria",
+                        }
+                    ]
+                }
+            ),
+        )
+
+        items = scraper._scrape_api()
+
+        assert len(items) == 1
+        # The API fallback serves openFDA food enforcement (recall)
+        # records, not warning letters, so items must carry the recall type.
+        assert items[0].source_type == SourceType.FDA_RECALL
+
+    def test_api_fallback_flags_inferred_date(self, monkeypatch):
+        scraper = FDAWarningLettersScraper()
+        monkeypatch.setattr(
+            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            lambda *_args, **_kwargs: _FakeResponse(
+                json_payload={
+                    "results": [
+                        {
+                            "recall_number": "F-6666-2026",
+                            "classification": "Class II",
+                            "report_date": "not-a-date",
+                            "recalling_firm": "Dateless Foods",
+                        }
+                    ]
+                }
+            ),
+        )
+
+        items = scraper._scrape_api()
+
+        assert len(items) == 1
+        assert isinstance(items[0].published_date, datetime)
+        assert items[0].raw_data.get("published_date_inferred") is True
+
+    def test_parse_rss_date_warns_on_unparsable_input(self, caplog):
+        scraper = FDAWarningLettersScraper()
+
+        with caplog.at_level("WARNING"):
+            parsed = scraper._parse_rss_date("not a real date")
+
+        assert isinstance(parsed, datetime)
+        assert "not a real date" in caplog.text
+
     def test_scrape_surfaces_errors(self, monkeypatch):
         scraper = FDAWarningLettersScraper()
         monkeypatch.setattr(

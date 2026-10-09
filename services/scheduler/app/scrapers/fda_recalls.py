@@ -149,15 +149,29 @@ class FDARecallsScraper(BaseScraper):
 
         source_id = self._create_source_id("fda_recall", recall_number)
 
-        # Parse date
+        # Parse date. A missing or unparsable report date falls back to
+        # now, flagged in raw_data so downstream consumers can tell an
+        # inferred timestamp from a real one.
         report_date = result.get("report_date", "")
+        date_inferred = False
         if report_date:
             try:
                 published_date = datetime.strptime(report_date, "%Y%m%d").replace(tzinfo=timezone.utc)
             except ValueError:
+                logger.warning(
+                    "recall_bad_report_date_using_now",
+                    report_date=report_date,
+                    recall_number=recall_number,
+                )
                 published_date = datetime.now(timezone.utc)
+                date_inferred = True
         else:
+            logger.warning(
+                "recall_missing_report_date_using_now",
+                recall_number=recall_number,
+            )
             published_date = datetime.now(timezone.utc)
+            date_inferred = True
 
         # Determine severity from classification
         classification = result.get("classification", "")

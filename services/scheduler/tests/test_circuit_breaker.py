@@ -104,6 +104,37 @@ class TestCircuitBreakerTransitions:
         cb.record_failure()
         assert cb.state == CircuitState.OPEN
 
+    def test_half_open_admits_only_max_probes(self):
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=2)
+        cb.record_failure()
+        time.sleep(0.01)
+        assert cb.can_execute() is True
+        assert cb.can_execute() is True
+        assert cb.can_execute() is False
+        assert cb.state == CircuitState.HALF_OPEN
+        assert cb.stats.rejected_calls == 1
+
+    def test_success_resets_failure_count_in_closed(self):
+        cb = CircuitBreaker(name="test", failure_threshold=3)
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.stats.failures == 2
+        cb.record_success()
+        assert cb.stats.failures == 0
+        assert cb.state == CircuitState.CLOSED
+
+    def test_stale_failures_decay_in_closed(self):
+        cb = CircuitBreaker(name="test", failure_threshold=3, recovery_timeout=60)
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.stats.failures == 2
+        # Age the last failure beyond the recovery window.
+        assert cb.stats.last_failure_time is not None
+        cb.stats.last_failure_time -= 61
+        cb.record_failure()
+        assert cb.stats.failures == 1
+        assert cb.state == CircuitState.CLOSED
+
     def test_success_resets_failure_count_after_close(self):
         cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0, half_open_max_calls=1)
         cb.record_failure()

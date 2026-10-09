@@ -95,58 +95,50 @@ class DistributedContext:
     def leadership_claim(self, poll_interval: int = 5) -> Generator[bool, None, None]:
         """Attempt to acquire and hold leadership.
 
-        Yields True if leader, False otherwise. This is a blocking context manager
-        that runs a keep-alive loop.
+        Yields True if leader, False otherwise. This is a single-attempt
+        context manager: it tries the advisory lock once and yields the
+        result. A context manager may only yield once, so the old
+        standby retry loop (which yielded on every poll) is gone — callers
+        that need to wait for leadership should re-enter in their own loop
+        with ``poll_interval`` seconds between attempts, or use
+        :meth:`wait_for_leadership`.
 
         Args:
-            poll_interval: Seconds to wait between lock acquisition attempts.
+            poll_interval: Kept for backwards compatibility; no longer used
+                for in-manager retries.
         """
         connection = None
+        acquired = False
         try:
-            while True:
-                try:
-                    if not connection:
-                        connection = self.engine.connect()
-                        # Set autocommit isolation to ensure lock acquisition is immediate
-                        connection.execution_options(isolation_level="AUTOCOMMIT")
+            try:
+                connection = self.engine.connect()
+                # Set autocommit isolation to ensure lock acquisition is immediate
+                connection.execution_options(isolation_level="AUTOCOMMIT")
 
-                    # Try to acquire advisory lock (non-blocking)
-                    # pg_try_advisory_lock returns true if lock obtained, false otherwise
-                    result = connection.execute(
-                        text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
-                    ).scalar()
+                # Try to acquire advisory lock (non-blocking)
+                # pg_try_advisory_lock returns true if lock obtained, false otherwise
+                result = connection.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
+                ).scalar()
+                acquired = bool(result)
+            except SQLAlchemyError as e:
+                logger.error("database_connection_error", error=str(e))
+                acquired = False
 
-                    if result:
-                        if not self._is_leader:
-                            logger.info("leadership_acquired", lock_id=SCHEDULER_LEADER_LOCK_ID)
-                            self._is_leader = True
+            if acquired:
+                if not self._is_leader:
+                    logger.info("leadership_acquired", lock_id=SCHEDULER_LEADER_LOCK_ID)
+                self._is_leader = True
+            else:
+                if self._is_leader:
+                    logger.warning("leadership_lost", lock_id=SCHEDULER_LEADER_LOCK_ID)
+                    self._is_leader = False
+                logger.debug("leadership_poll_standby", lock_id=SCHEDULER_LEADER_LOCK_ID)
 
-                        yield True
-                        return
-
-                    else:
-                        if self._is_leader:
-                            logger.warn("leadership_lost", lock_id=SCHEDULER_LEADER_LOCK_ID)
-                            self._is_leader = False
-
-                        logger.debug("leadership_poll_standby", lock_id=SCHEDULER_LEADER_LOCK_ID)
-                        yield False
-
-                        # Wait before retrying (effectively creating a standby loop)
-                        time.sleep(poll_interval)
-
-                except SQLAlchemyError as e:
-                    logger.error("database_connection_error", error=str(e))
-                    if connection:
-                        try:
-                            connection.close()
-                        except Exception as close_error:
-                            logger.error("connection_close_failed", error=str(close_error))
-                        connection = None
-                    time.sleep(poll_interval)
+            yield acquired
 
         finally:
-            if connection:
+            if connection is not None:
                 try:
                     # Release lock if we held it
                     if self._is_leader:
@@ -154,10 +146,13 @@ class DistributedContext:
                             text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": SCHEDULER_LEADER_LOCK_ID}
                         )
                         logger.info("leadership_released", lock_id=SCHEDULER_LEADER_LOCK_ID)
-                    connection.close()
                 except Exception as e:
                     logger.error("error_releasing_lock", error=str(e))
-                self._is_leader = False
+                try:
+                    connection.close()
+                except Exception as close_error:
+                    logger.error("connection_close_failed", error=str(close_error))
+            self._is_leader = False
 
     def wait_for_leadership(
         self,
