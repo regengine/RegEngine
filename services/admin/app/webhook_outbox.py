@@ -394,7 +394,14 @@ class WebhookOutboxDrainer:
         ]
 
     def _drain_one(self, row: OutboxRow) -> str:
-        url, secret = self._secret_lookup(row.tenant_id)
+        _, secret = self._secret_lookup(row.tenant_id)
+        # Dispatch to the URL stored on the row, which the caller
+        # SSRF-validated at enqueue time. The currently configured URL
+        # may have changed since (rotation, typo, takeover) and was
+        # never validated for this event, so it must not receive it.
+        # The secret is still looked up live so rotation takes effect
+        # on the next retry without stranding the backlog.
+        url = row.target_url
 
         if not url or not secret:
             # Configuration drift: the tenant had a URL+secret at enqueue

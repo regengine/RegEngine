@@ -314,6 +314,38 @@ def test_drainer_routes_per_tenant_url(session):
         assert sig == expected
 
 
+def test_drainer_dispatches_to_stored_url_not_current_config(session):
+    """Stored URL wins: the tenant rotated their webhook URL after enqueue.
+
+    The row's ``target_url`` was SSRF-validated at enqueue time. The
+    drainer must POST there, not to whatever URL is currently
+    configured for the tenant (which was never validated for this
+    event and may point somewhere else entirely).
+    """
+    tenant = str(uuid4())
+    stored_url = "https://old.example.test/hook"
+    current_url = "https://new.example.test/hook"
+    enqueue_webhook(
+        session,
+        tenant_id=tenant,
+        event_type="hallucination_resolved",
+        target_url=stored_url,
+        payload={"review_id": "r-1", "status": "APPROVED"},
+    )
+    session.commit()
+
+    poster = _Poster(responses=[200])
+    drainer = WebhookOutboxDrainer(
+        session,
+        secret_lookup=_secret_lookup_for({tenant: (current_url, "s")}),
+        http_poster=poster,
+    )
+    summary = drainer.drain_once(batch_size=10)
+    assert summary["delivered"] == 1
+    assert len(poster.calls) == 1
+    assert poster.calls[0]["url"] == stored_url
+
+
 # ---------------------------------------------------------------------------
 # Drain — failure modes
 # ---------------------------------------------------------------------------
