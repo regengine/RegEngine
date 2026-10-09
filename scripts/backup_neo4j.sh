@@ -67,7 +67,10 @@ cleanup_failed_dump() {
     local status=$?
     if [ "${SERVICE_STOPPED}" -eq 1 ]; then
         echo "==> Restarting Neo4j (exit status ${status})" >&2
-        service_control start || echo "ERROR: failed to restart Neo4j -- it is STILL DOWN." >&2
+        if ! service_control start; then
+            echo "ERROR: failed to restart Neo4j -- it is STILL DOWN." >&2
+            status=1
+        fi
         SERVICE_STOPPED=0
     fi
     if [ "${status}" -ne 0 ] && [ -d "${DUMP_DIR}" ]; then
@@ -89,7 +92,10 @@ service_control() {
     fi
     if command -v docker >/dev/null 2>&1; then
         echo "==> docker compose ${1} ${NEO4J_COMPOSE_SERVICE}"
-        docker compose "${1}" "${NEO4J_COMPOSE_SERVICE}" || true
+        if ! docker compose "${1}" "${NEO4J_COMPOSE_SERVICE}"; then
+            echo "ERROR: failed to ${1} Neo4j via 'docker compose ${1} ${NEO4J_COMPOSE_SERVICE}'." >&2
+            return 1
+        fi
     fi
 }
 

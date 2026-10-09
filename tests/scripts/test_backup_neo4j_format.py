@@ -265,3 +265,83 @@ def test_failed_dump_still_restarts_neo4j(tmp_path):
         "Neo4j was stopped for the dump and never restarted after it failed -- "
         f"the database is left down. docker calls: {calls}"
     )
+
+
+def _control_failure_harness(tmp_path: Path, *, fail_on: str, dump_fail: bool = False):
+    """Harness where `docker compose <fail_on>` exits 1; all else succeeds."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "neo4j-admin").write_text(_NEO4J_ADMIN_STUB)
+    (bin_dir / "neo4j-admin").chmod(0o755)
+
+    log = tmp_path / "docker-calls.log"
+    docker = bin_dir / "docker"
+    docker.write_text(
+        "#!/usr/bin/env bash\n"
+        f'echo "$@" >> "{log}"\n'
+        f'if [ "$2" = "{fail_on}" ]; then\n'
+        f'  echo "compose {fail_on} failed" >&2\n'
+        "  exit 1\n"
+        "fi\n"
+        "exit 0\n"
+    )
+    docker.chmod(0o755)
+
+    backup_dir = tmp_path / "backups"
+    env = dict(os.environ)
+    env["PATH"] = f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin"
+    env["BACKUP_DIR"] = str(backup_dir)
+    env["NEO4J_DATABASE"] = "neo4j"
+    env.pop("SKIP_SERVICE_CONTROL", None)  # service control must actually run
+    if dump_fail:
+        env["STUB_FAIL"] = "1"
+
+    proc = subprocess.run(
+        ["bash", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+    )
+    calls = log.read_text().splitlines() if log.exists() else []
+    return proc, calls, backup_dir
+
+
+def test_failed_stop_aborts_before_dump(tmp_path):
+    """A failed stop must fail loudly instead of yielding a bad dump.
+
+    Audit finding: `service_control` swallowed control errors (`|| true`), so
+    a failed `docker compose stop` still ran the dump against a live database
+    and reported success.
+    """
+    proc, calls, backup_dir = _control_failure_harness(tmp_path, fail_on="stop")
+    assert proc.returncode != 0, "script reported success despite failing to stop Neo4j"
+    assert "failed to stop" in proc.stderr, f"stop failure not reported loudly: {proc.stderr}"
+    assert any("stop" in c for c in calls), f"stop was never attempted: {calls}"
+    assert not list(backup_dir.rglob("*.dump")), (
+        "dump ran against a database that was never stopped -- the bad-dump path"
+    )
+    leftovers = list(backup_dir.rglob("*")) if backup_dir.exists() else []
+    assert not [p for p in leftovers if p.is_file()], f"failed run left files behind: {leftovers}"
+    assert not any("start" in c for c in calls), f"nothing was stopped, so nothing should be restarted: {calls}"
+
+
+def test_failed_restart_fails_loudly(tmp_path):
+    """A failed restart must exit non-zero even when the dump succeeded.
+
+    Audit finding: the restart failure was reduced to an echoed warning, so a
+    good dump plus a dead database still exited 0 and the outage went unnoticed.
+    """
+    proc, calls, backup_dir = _control_failure_harness(tmp_path, fail_on="start")
+    assert proc.returncode != 0, "script reported success even though Neo4j was left stopped"
+    assert "STILL DOWN" in proc.stderr, f"restart failure not reported loudly: {proc.stderr}"
+    assert any("start" in c for c in calls), f"restart was never attempted: {calls}"
+
+
+def test_failed_dump_with_failed_restart_reports_the_outage(tmp_path):
+    """Both failures must be visible: the dump error and the still-down database."""
+    proc, calls, _backup_dir = _control_failure_harness(tmp_path, fail_on="start", dump_fail=True)
+    assert proc.returncode != 0, "precondition: the dump was supposed to fail"
+    assert any("start" in c for c in calls), f"restart was never attempted: {calls}"
+    assert "STILL DOWN" in proc.stderr, f"restart failure not reported loudly: {proc.stderr}"
