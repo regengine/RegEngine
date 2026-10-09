@@ -181,13 +181,19 @@ export function useSync() {
         }
     }, [isAuthenticated, ingestFile, syncEndpoint, tenantId, toast, requestBackgroundSync]);
 
+    // Latest sync, called by mount and listener effects that must run once.
+    // Keeping those effects on empty deps stops an unstable dependency from
+    // re-firing the mount sync on every render in a retry storm.
+    const syncRef = useRef(sync);
+    syncRef.current = sync;
+
     useEffect(() => {
         // Initial check
         setIsOnline(navigator.onLine);
 
         const handleOnline = () => {
             setIsOnline(true);
-            sync();
+            void syncRef.current();
         };
 
         const handleOffline = () => {
@@ -199,14 +205,15 @@ export function useSync() {
 
         // Try verifying connection periodically or on mount
         if (navigator.onLine) {
-            sync();
+            void syncRef.current();
         }
 
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [sync]);
+        // Runs once on mount by design; syncRef always points at the latest sync.
+    }, []);
 
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return;
@@ -224,7 +231,7 @@ export function useSync() {
 
         const handleServiceWorkerMessage = (event: MessageEvent) => {
             if (event.data?.type === 'REGENGINE_SYNC_OFFLINE_QUEUE') {
-                sync();
+                void syncRef.current();
             }
         };
 
@@ -232,7 +239,8 @@ export function useSync() {
         return () => {
             navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
         };
-    }, [sync]);
+        // Subscribed once; syncRef always points at the latest sync.
+    }, []);
 
     return { isOnline, isSyncing, manualSync: sync };
 }

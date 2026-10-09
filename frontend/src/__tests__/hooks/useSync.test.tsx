@@ -27,8 +27,11 @@ vi.mock('@/components/ui/use-toast', () => ({
 }));
 
 vi.mock('@/hooks/use-api', () => ({
+    // Return the shared mock directly so mutateAsync keeps a stable identity
+    // across renders. A per-render wrapper would change sync identity and
+    // re-fire the mount effect on every render.
     useIngestFile: () => ({
-        mutateAsync: (...args: any[]) => mockMutateAsync(...args),
+        mutateAsync: mockMutateAsync,
     }),
 }));
 
@@ -186,9 +189,11 @@ describe('useSync', () => {
             photos: [],
         });
         fetchWithCsrfMock.mockRejectedValue(new Error('offline'));
-        setOnlineState(true);
 
+        // Render while offline so the mount effect does not start a sync,
+        // then go online for the single manual sync below.
         const { result } = renderHook(() => useSync());
+        setOnlineState(true);
 
         await act(async () => {
             await result.current.manualSync();
