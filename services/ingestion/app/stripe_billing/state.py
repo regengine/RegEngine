@@ -237,6 +237,19 @@ def _get_subscription_mapping(tenant_id: str) -> dict[str, str]:
     return client.hgetall(_tenant_subscription_key(tenant_id))
 
 
+def _clear_subscription_watermark(tenant_id: str) -> None:
+    """Remove a poisoned ``last_event_created`` field from a mapping.
+
+    ``hset`` merges, so overwriting the mapping cannot delete the bad
+    value. Used by the reorder guard when the stored watermark is not
+    parseable: the content update is still refused, but the poison is
+    removed so later events are ordered against a clean mapping instead
+    of being refused forever.
+    """
+    client = _redis_client()
+    client.hdel(_tenant_subscription_key(tenant_id), "last_event_created")
+
+
 def _find_tenant_id(subscription_id: Optional[str], customer_id: Optional[str]) -> Optional[str]:
     client = _redis_client()
 

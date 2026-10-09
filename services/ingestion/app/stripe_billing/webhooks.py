@@ -304,8 +304,13 @@ def _update_subscription_status(
     last_payment_at: Optional[str] = None,
     last_payment_failure_at: Optional[str] = None,
     event_created: Optional[int] = None,
-) -> None:
+) -> bool:
     """Apply a subscription-state change from a webhook event.
+
+    Returns ``True`` when the mapping was updated, ``False`` when the
+    update was buffered, refused, or had no mapping to apply to. The
+    dispatcher reads this to decide whether follow-up writes (such as
+    ``current_period_end``) may proceed.
 
     #1196: Stripe does not guarantee event ordering. Two safeguards:
 
@@ -318,9 +323,12 @@ def _update_subscription_status(
 
     2. *Reorder guard*: if a mapping exists but has a ``last_event_created``
        watermark newer than this event's ``event_created``, we skip the
-       write. This prevents an older webhook from overwriting a newer
-       status that already landed (e.g. ``canceled`` followed in Stripe-
-       time by a retry of an earlier ``active``).
+       write. Equal timestamps count as stale: Stripe stamps ``created``
+       at one-second resolution, so two deliveries carrying the same
+       stamp cannot be ordered and the first write wins. This prevents
+       an older webhook from overwriting a newer status that already
+       landed (e.g. ``canceled`` followed in Stripe-time by a retry of
+       an earlier ``active``).
     """
     tenant_id = _state_mod._find_tenant_id(subscription_id, customer_id)
     if not tenant_id:
@@ -356,7 +364,7 @@ def _update_subscription_status(
                 customer_id=customer_id,
                 status=status,
             )
-        return
+        return False
 
     existing = _state_mod._get_subscription_mapping(tenant_id)
 
@@ -368,8 +376,11 @@ def _update_subscription_status(
             # #2699 fail closed: corrupt stored state must not become
             # last_seen=0 — that lets a STALE event (e.g. an old `active`)
             # overwrite current subscription status, which the entitlement
-            # gate then reads. Refuse the update and alert; Stripe retries,
-            # and the operator repairs the corrupt mapping.
+            # gate then reads. Refuse the content update and alert, but
+            # also remove the poisoned watermark: leaving it in place
+            # refuses every later event too, so the corrupt mapping would
+            # linger frozen until an operator hand-edits Redis. The next
+            # delivery is ordered against a clean mapping instead.
             logger.error(
                 "stripe_subscription_state_corrupt",
                 tenant_id=tenant_id,
@@ -377,8 +388,9 @@ def _update_subscription_status(
                 last_event_created_raw=str(existing.get("last_event_created"))[:64],
                 refused_status=status,
             )
-            return
-        if int(event_created) < last_seen:
+            _state_mod._clear_subscription_watermark(tenant_id)
+            return False
+        if int(event_created) <= last_seen:
             logger.info(
                 "stripe_webhook_event_out_of_order_ignored",
                 tenant_id=tenant_id,
@@ -387,7 +399,7 @@ def _update_subscription_status(
                 last_event_created=last_seen,
                 status=status,
             )
-            return
+            return False
 
     existing.update(
         {
@@ -407,6 +419,7 @@ def _update_subscription_status(
     if event_created is not None:
         existing["last_event_created"] = str(int(event_created))
     _state_mod._store_subscription_mapping(tenant_id, existing)
+    return True
 
 
 def _handle_trial_will_end(subscription: dict[str, Any]) -> None:
@@ -647,7 +660,7 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
         sub_status = data_object.get("status")
         status = "canceled" if event_type == "customer.subscription.deleted" else (sub_status or "active")
 
-        _update_subscription_status(
+        applied = _update_subscription_status(
             subscription_id=data_object.get("id"),
             customer_id=data_object.get("customer"),
             status=status,
@@ -655,15 +668,33 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
         )
 
         # Persist period end when available — but only if the reorder guard
-        # above actually accepted the update. We re-check the watermark to
-        # stay consistent: if ``last_event_created`` moved past this event,
-        # we already logged out-of-order and must not clobber period_end.
+        # above actually accepted the update. A refused update (stale,
+        # equal-timestamp replay, or corrupt watermark) must not clobber
+        # period_end, so a ``False`` return skips this block outright. The
+        # watermark re-check below stays as defense in depth.
+        if not applied:
+            return
         tenant_id = _state_mod._find_tenant_id(data_object.get("id"), data_object.get("customer"))
         if tenant_id:
             existing = _state_mod._get_subscription_mapping(tenant_id)
             try:
                 last_seen = int(existing.get("last_event_created") or 0)
             except (ValueError, TypeError):
+                if event_created is not None:
+                    # Fail closed like the status path: a corrupt watermark
+                    # must not read as 0, which would let this timestamped
+                    # event's period end overwrite the mapping the guard
+                    # just refused to touch. Legacy events with no timestamp
+                    # keep the pre-fix behavior below: with nothing to order
+                    # against, the update is applied.
+                    logger.error(
+                        "stripe_subscription_state_corrupt",
+                        tenant_id=tenant_id,
+                        subscription_id=data_object.get("id"),
+                        last_event_created_raw=str(existing.get("last_event_created"))[:64],
+                        refused_status=status,
+                    )
+                    return
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
                 # #2951: same relocated field on the event's subscription

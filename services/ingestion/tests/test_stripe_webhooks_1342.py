@@ -119,6 +119,15 @@ class _FakeRedis:
     def hgetall(self, key: str) -> dict[str, str]:
         return dict(self.hashes.get(key, {}))
 
+    def hdel(self, key: str, *fields: str) -> int:
+        stored = self.hashes.get(key, {})
+        removed = 0
+        for field in fields:
+            if field in stored:
+                del stored[field]
+                removed += 1
+        return removed
+
     def delete(self, key: str) -> int:
         existed = key in self.values or key in self.hashes
         self.values.pop(key, None)
@@ -403,6 +412,31 @@ class TestUpdateSubscriptionStatus:
         # The out-of-order log fired.
         assert any("stripe_webhook_event_out_of_order_ignored" in call[1] for call in _stub_logger.calls)
 
+    def test_reorder_guard_ignores_equal_timestamp_replay(
+        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
+    ) -> None:
+        """Equal ``event_created`` counts as stale: Stripe stamps
+        ``created`` at one-second resolution, so two deliveries with the
+        same stamp cannot be ordered and the first write wins. A redelivered
+        older status must not flip the newer one back."""
+        fake_redis.hashes["billing:tenant:tenant-equal"] = {
+            "tenant_id": "tenant-equal",
+            "status": "canceled",
+            "last_event_created": "5000",
+        }
+        fake_redis.values["billing:subscription:sub_eq"] = "tenant-equal"
+
+        applied = webhooks_mod._update_subscription_status(
+            subscription_id="sub_eq",
+            customer_id="cus_eq",
+            status="active",
+            event_created=5000,  # same stamp as the watermark
+        )
+
+        assert applied is False
+        assert fake_redis.hashes["billing:tenant:tenant-equal"]["status"] == "canceled"
+        assert any("stripe_webhook_event_out_of_order_ignored" in call[1] for call in _stub_logger.calls)
+
     def test_reorder_guard_refuses_corrupt_last_event_created(
         self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
     ) -> None:
@@ -427,6 +461,44 @@ class TestUpdateSubscriptionStatus:
         assert fake_redis.hashes["billing:tenant:tenant-corrupt"]["status"] == "active"
         # The corrupt-state alert fired.
         assert any("stripe_subscription_state_corrupt" in call[1] for call in _stub_logger.calls)
+
+    def test_reorder_guard_quarantines_corrupt_watermark(
+        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
+    ) -> None:
+        """A corrupt ``last_event_created`` is refused AND removed: the
+        poisoned field must not linger and freeze every later event.
+        The refused delivery returns ``False``; a redelivery of the same
+        event then lands on the clean mapping."""
+        fake_redis.hashes["billing:tenant:tenant-quarantine"] = {
+            "tenant_id": "tenant-quarantine",
+            "status": "active",
+            "last_event_created": "not-an-int",
+        }
+        fake_redis.values["billing:subscription:sub_q"] = "tenant-quarantine"
+
+        applied = webhooks_mod._update_subscription_status(
+            subscription_id="sub_q",
+            customer_id="cus_q",
+            status="past_due",
+            event_created=100,
+        )
+
+        assert applied is False
+        mapping = fake_redis.hashes["billing:tenant:tenant-quarantine"]
+        assert mapping["status"] == "active"
+        assert "last_event_created" not in mapping
+
+        # Stripe redelivers the refused event; it now applies cleanly.
+        applied = webhooks_mod._update_subscription_status(
+            subscription_id="sub_q",
+            customer_id="cus_q",
+            status="past_due",
+            event_created=100,
+        )
+        assert applied is True
+        mapping = fake_redis.hashes["billing:tenant:tenant-quarantine"]
+        assert mapping["status"] == "past_due"
+        assert mapping["last_event_created"] == "100"
 
     def test_happy_path_updates_all_fields(self, fake_redis: _FakeRedis) -> None:
         """Lines 258-275: the full update path, exercising every
@@ -580,6 +652,43 @@ class TestHandleStripeEventDispatcher:
         # Nothing changed — stale update was ignored by both guards.
         assert fake_redis.hashes["billing:tenant:tenant-stale"]["status"] == "active"
         assert fake_redis.hashes["billing:tenant:tenant-stale"]["current_period_end"] == "2030-01-01T00:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_subscription_updated_corrupt_watermark_writes_nothing(
+        self, fake_redis: _FakeRedis, _stub_logger: _RecorderLogger
+    ) -> None:
+        """A corrupt watermark fails closed in the dispatcher too: the
+        status update is refused (and the poisoned field quarantined) and
+        the stale event's period end must not overwrite the mapping. The
+        old code treated the corrupt watermark as 0 here and clobbered
+        ``current_period_end`` even though the status write was refused."""
+        fake_redis.hashes["billing:tenant:tenant-corrupt-d"] = {
+            "tenant_id": "tenant-corrupt-d",
+            "status": "active",
+            "current_period_end": "2030-01-01T00:00:00+00:00",
+            "last_event_created": "garbage",
+        }
+        fake_redis.values["billing:subscription:sub_cd"] = "tenant-corrupt-d"
+
+        event = {
+            "id": "evt_corrupt",
+            "type": "customer.subscription.updated",
+            "created": 100,
+            "data": {
+                "object": {
+                    "id": "sub_cd",
+                    "customer": "cus_cd",
+                    "status": "canceled",
+                    "current_period_end": 1_700_000_000,
+                }
+            },
+        }
+        await webhooks_mod._handle_stripe_event(event)
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-corrupt-d"]
+        assert mapping["status"] == "active"
+        assert mapping["current_period_end"] == "2030-01-01T00:00:00+00:00"
+        assert any("stripe_subscription_state_corrupt" in call[1] for call in _stub_logger.calls)
 
     @pytest.mark.asyncio
     async def test_invoice_paid_emits_funnel_event(
@@ -1481,9 +1590,7 @@ class TestNewSignupBindingBeforeLookup2930:
             await webhooks_mod._handle_checkout_completed(session, event_created=1)
         assert created == ["Solo"], "redelivery provisioned a duplicate tenant"
 
-    def test_bind_tenant_lookups_swallows_redis_errors(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_bind_tenant_lookups_swallows_redis_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The caller has already provisioned a tenant; a Redis failure
         here must not replace the outage it was defending against with a
         different, more confusing exception."""
@@ -1496,8 +1603,6 @@ class TestNewSignupBindingBeforeLookup2930:
         monkeypatch.setattr(state_mod, "_redis_client", lambda: _BrokenRedis())
         state_mod._bind_tenant_lookups("tenant-x", session_id="cs_x", customer_id="cus_x")
 
-    def test_bind_tenant_lookups_ignores_empty_tenant(
-        self, fake_redis: _FakeRedis
-    ) -> None:
+    def test_bind_tenant_lookups_ignores_empty_tenant(self, fake_redis: _FakeRedis) -> None:
         state_mod._bind_tenant_lookups("", session_id="cs_empty", customer_id="cus_empty")
         assert fake_redis.values == {}
