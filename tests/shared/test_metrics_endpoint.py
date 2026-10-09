@@ -49,7 +49,7 @@ def _reset_prometheus_registry():
     yield
 
 
-def _build_app(require_auth: bool = True, metrics_path: str | object = "/metrics") -> FastAPI:
+def _build_app(require_auth: bool = True, metrics_path: str | None = "/metrics") -> FastAPI:
     """Build a minimal FastAPI app with the shared metrics installer."""
     from shared.observability.fastapi_metrics import install_metrics
 
@@ -63,9 +63,7 @@ def _build_app(require_auth: bool = True, metrics_path: str | object = "/metrics
     def boom() -> dict:
         raise RuntimeError("boom")
 
-    kwargs = {"require_auth": require_auth}
-    if metrics_path is not None or metrics_path is None:
-        kwargs["metrics_path"] = metrics_path
+    kwargs = {"require_auth": require_auth, "metrics_path": metrics_path}
 
     install_metrics(app, service_name="test-service", **kwargs)
     return app
@@ -174,6 +172,26 @@ def test_metrics_path_none_skips_endpoint(monkeypatch):
     assert resp.status_code == 404
     # But the instrumentator is still measuring the other route
     assert client.get("/").status_code == 200
+
+
+def test_build_app_with_metrics_path_none_skips_endpoint(monkeypatch):
+    """The ``_build_app`` helper must forward ``metrics_path=None``.
+
+    Regression guard for the dead-branch fix: the helper used to carry
+    ``if metrics_path is not None or metrics_path is None`` (always true).
+    The tempting mis-fix (``if metrics_path is not None``) would silently
+    drop ``None`` and expose ``/metrics`` with the default path instead of
+    skipping the endpoint, so this test pins the ``None`` passthrough.
+    """
+    monkeypatch.delenv("METRICS_API_KEY", raising=False)
+
+    app = _build_app(require_auth=False, metrics_path=None)
+    client = TestClient(app)
+
+    # /metrics should not exist
+    assert client.get("/metrics").status_code == 404
+    # But the app is still instrumented and serving its routes
+    assert client.get("/hello").status_code == 200
 
 
 def test_dead_business_counters_are_not_seeded(monkeypatch):
