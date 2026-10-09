@@ -23,7 +23,12 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - PyYAML is pinned in requirements.lock
+    yaml = None  # type: ignore[assignment]
 
 # Color codes for terminal output
 GREEN = "\033[92m"
@@ -49,6 +54,80 @@ class VerificationResult:
         if self.details:
             result += f"\n  {YELLOW}Details:{RESET} {self.details}"
         return result
+
+
+def _python_code_facts(source: str) -> tuple[set[str], set[str], dict[str, set[str]], set[str]]:
+    """Structural facts about Python source, ignoring comments.
+
+    Returns (assigned_names, function_names, methods_by_class, string_literals)
+    where assigned_names are targets of real assignments, function_names are
+    every defined function (including methods), methods_by_class maps each
+    class name to the methods defined directly in its body, and
+    string_literals are the exact string constants in the code. A token that
+    appears only in a comment or docstring-adjacent prose never lands in the
+    first three sets, and only an exact string literal lands in the last one.
+    """
+    tree = ast.parse(source)
+    assigned: set[str] = set()
+    functions: set[str] = set()
+    methods: dict[str, set[str]] = {}
+    strings: set[str] = set()
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            functions.add(node.name)
+        elif isinstance(node, ast.ClassDef):
+            methods[node.name] = {
+                item.name for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                assigned.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            assigned.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            assigned.update(n.id for n in ast.walk(node.target) if isinstance(n, ast.Name))
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            strings.add(node.value)
+
+    return assigned, functions, methods, strings
+
+
+def _iter_yaml_strings(node: object, parent_key: str | None = None) -> Iterator[tuple[str | None, str]]:
+    """Yield (parent_key, string) for every mapping key and scalar in parsed YAML.
+
+    Comments never reach here because the YAML parser drops them, so a token
+    that appears only in a comment is invisible to callers.
+    """
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str):
+                yield parent_key, key
+            yield from _iter_yaml_strings(value, parent_key=key if isinstance(key, str) else parent_key)
+    elif isinstance(node, (list, tuple)):
+        for item in node:
+            yield from _iter_yaml_strings(item, parent_key=parent_key)
+    elif isinstance(node, str):
+        yield parent_key, node
+
+
+def _strip_yaml_comments(text: str) -> str:
+    """Drop YAML comments as a fallback when PyYAML is unavailable.
+
+    Removes full-line comments and trailing `` #`` comments. This is an
+    approximation (a `` #`` inside a quoted scalar is also cut), so it is
+    only used when the real parser cannot be imported.
+    """
+    kept = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        match = re.search(r"\s+#", line)
+        if match:
+            line = line[: match.start()]
+        kept.append(line)
+    return "\n".join(kept)
 
 
 class ProductionReadinessVerifier:
@@ -179,18 +258,22 @@ class ProductionReadinessVerifier:
             with open(file_path, "r") as f:
                 content = f.read()
 
-            # Check for required components
-            required_components = [
-                ("correlation_id_ctx", "Context variable for correlation ID"),
-                ("get_correlation_id", "Function to retrieve correlation ID"),
-                ("CorrelationIdMiddleware", "Middleware class"),
-                ("X-Correlation-ID", "Header name"),
-            ]
+            # Structural check: each component must be defined in the code,
+            # not merely mentioned in a comment or docstring.
+            assigned, functions, methods, strings = _python_code_facts(content)
 
             missing = []
-            for component, description in required_components:
-                if component not in content:
-                    missing.append(f"{component} ({description})")
+            if "correlation_id_ctx" not in assigned:
+                missing.append("correlation_id_ctx (context variable assignment)")
+            if "get_correlation_id" not in functions:
+                missing.append("get_correlation_id (accessor function)")
+            middleware_methods = methods.get("CorrelationIdMiddleware")
+            if middleware_methods is None:
+                missing.append("CorrelationIdMiddleware (middleware class)")
+            elif "dispatch" not in middleware_methods:
+                missing.append("CorrelationIdMiddleware.dispatch (request handler)")
+            if "X-Correlation-ID" not in strings:
+                missing.append("X-Correlation-ID (header string literal)")
 
             if missing:
                 return VerificationResult(
@@ -231,17 +314,26 @@ class ProductionReadinessVerifier:
             with open(file_path, "r") as f:
                 content = f.read()
 
-            required_components = [
-                ("BruteForceLimiter", "Shared brute-force limiter class"),
+            # Structural check: the limiter class must exist with its key
+            # methods, and each Redis env var must be an exact string literal
+            # in the code. Mentions in comments or docstrings do not count.
+            _assigned, _functions, methods, strings = _python_code_facts(content)
+
+            missing = []
+            limiter_methods = methods.get("BruteForceLimiter")
+            if limiter_methods is None:
+                missing.append("BruteForceLimiter (shared brute-force limiter class)")
+            else:
+                if "record_failure" not in limiter_methods:
+                    missing.append("record_failure (failure counter mutation)")
+                if "is_redis_backed" not in limiter_methods:
+                    missing.append("is_redis_backed (shared-store status)")
+            for env_var, description in [
                 ("REGENGINE_REDIS_URL", "Primary Redis env var"),
                 ("REDIS_URL", "Fallback Redis env var"),
-                ("record_failure", "Failure counter mutation"),
-                ("is_redis_backed", "Operational visibility for shared-store status"),
-            ]
-
-            missing = [
-                f"{needle} ({description})" for needle, description in required_components if needle not in content
-            ]
+            ]:
+                if env_var not in strings:
+                    missing.append(f"{env_var} ({description})")
 
             if not missing:
                 return VerificationResult(
@@ -282,14 +374,44 @@ class ProductionReadinessVerifier:
             with open(file_path, "r") as f:
                 content = f.read()
 
-            required_tokens = [
-                "railway",
+            # Structural check: the Railway CLI must be invoked from a run
+            # step and each secret must be referenced by the workflow config.
+            # Comment-only mentions do not count.
+            secret_names = [
                 "RAILWAY_API_TOKEN",
                 "RAILWAY_PROJECT_ID",
                 "RAILWAY_ENVIRONMENT_ID",
             ]
-
-            missing = [token for token in required_tokens if token not in content]
+            if yaml is not None:
+                try:
+                    workflow = yaml.safe_load(content)
+                except Exception:
+                    return VerificationResult(
+                        name,
+                        False,
+                        "Deployment workflow is not parseable as YAML",
+                        f"Location: {file_path.relative_to(self.repo_root)}",
+                    )
+                if not isinstance(workflow, dict):
+                    return VerificationResult(
+                        name,
+                        False,
+                        "Deployment workflow has no YAML mapping at its root",
+                        f"Location: {file_path.relative_to(self.repo_root)}",
+                    )
+                entries = list(_iter_yaml_strings(workflow))
+                scalars = [text for _, text in entries]
+                has_cli = any(
+                    parent_key == "run" and re.search(r"railway\s+\S|@railway/", text, re.IGNORECASE)
+                    for parent_key, text in entries
+                )
+                missing = [token for token in secret_names if not any(token in text for text in scalars)]
+            else:
+                code = _strip_yaml_comments(content).lower()
+                has_cli = bool(re.search(r"railway\s+\S|@railway/", code))
+                missing = [token for token in secret_names if token.lower() not in code]
+            if not has_cli:
+                missing.append("railway (CLI invocation in a run step)")
             if missing:
                 return VerificationResult(
                     name,
