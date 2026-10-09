@@ -126,7 +126,7 @@ class Lot:
     quantity: Optional[float] = None
     unit_of_measure: Optional[str] = None
     created_at: Optional[str] = None
-    tenant_id: Optional[str] = None
+    tenant_id: str = field(kw_only=True)
     # TLC Source fields - required for TRANSFORMATION/INITIAL_PACKING/CREATION
     tlc_source_gln: Optional[str] = None  # GLN of facility that assigned the TLC
     tlc_source_fda_reg: Optional[str] = None  # FDA Registration of TLC source facility
@@ -136,6 +136,8 @@ class Lot:
 
     def __post_init__(self) -> None:
         """Derive sha256_hash if not explicitly provided."""
+        if not self.tenant_id:
+            raise ValueError("tenant_id is required for Lot nodes")
         if self.sha256_hash is None:
             self.sha256_hash = compute_lot_hash(self.tlc, self.tenant_id)
 
@@ -154,8 +156,7 @@ class Lot:
             props["unit_of_measure"] = self.unit_of_measure
         if self.created_at:
             props["created_at"] = self.created_at
-        if self.tenant_id:
-            props["tenant_id"] = self.tenant_id
+        props["tenant_id"] = self.tenant_id
         if self.tlc_source_gln:
             props["tlc_source_gln"] = self.tlc_source_gln
         if self.tlc_source_fda_reg:
@@ -257,7 +258,7 @@ class TraceEvent:
     description: Optional[str] = None
     document_id: Optional[str] = None  # Source document reference
     confidence: Optional[float] = None
-    tenant_id: Optional[str] = None
+    tenant_id: str = field(kw_only=True)
     responsible_party_contact: Optional[str] = None  # FSMA 204 KDE
     # Merkle hash-chain integrity
     sha256_hash: Optional[str] = None
@@ -265,6 +266,8 @@ class TraceEvent:
 
     def __post_init__(self) -> None:
         """Derive sha256_hash from identity fields if not provided."""
+        if not self.tenant_id:
+            raise ValueError("tenant_id is required for TraceEvent nodes")
         if self.sha256_hash is None:
             event_type = self.type.value if isinstance(self.type, CTEType) else str(self.type)
             self.sha256_hash = compute_event_hash(self.event_id, event_type, self.event_date)
@@ -297,8 +300,7 @@ class TraceEvent:
             props["document_id"] = self.document_id
         if self.confidence is not None:
             props["confidence"] = self.confidence
-        if self.tenant_id:
-            props["tenant_id"] = self.tenant_id
+        props["tenant_id"] = self.tenant_id
         # Hash-chain fields
         if self.sha256_hash:
             props["sha256_hash"] = self.sha256_hash
@@ -310,9 +312,8 @@ class TraceEvent:
     def create_cypher() -> str:
         """Return Cypher CREATE statement for TraceEvent node.
 
-        NOTE: tenant_id isolation depends on the caller including
-        ``tenant_id`` in the ``$properties`` map.  All call-sites must
-        ensure ``tenant_id`` is present before executing this statement.
+        NOTE: ``tenant_id`` is required at construction, so
+        ``node_properties`` always carries it in the ``$properties`` map.
         """
         return """
         CREATE (e:TraceEvent $properties)
@@ -337,13 +338,15 @@ class Facility:
     state: Optional[str] = None
     country: Optional[str] = "US"
     facility_type: FacilityType = FacilityType.UNKNOWN
-    tenant_id: Optional[str] = None
+    tenant_id: str = field(kw_only=True)
     # Merkle hash-chain integrity
     sha256_hash: Optional[str] = None
     chain_hash: Optional[str] = None
 
     def __post_init__(self) -> None:
         """Derive sha256_hash if not explicitly provided."""
+        if not self.tenant_id:
+            raise ValueError("tenant_id is required for Facility nodes")
         if self.sha256_hash is None:
             self.sha256_hash = compute_facility_hash(
                 gln=self.gln,
@@ -375,8 +378,7 @@ class Facility:
         props["facility_type"] = (
             self.facility_type.value if isinstance(self.facility_type, FacilityType) else self.facility_type
         )
-        if self.tenant_id:
-            props["tenant_id"] = self.tenant_id
+        props["tenant_id"] = self.tenant_id
         if self.sha256_hash:
             props["sha256_hash"] = self.sha256_hash
         if self.chain_hash:
