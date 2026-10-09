@@ -44,6 +44,29 @@ def test_default_cors_headers_are_explicit(monkeypatch: pytest.MonkeyPatch) -> N
     assert "X-API-Version" in headers
 
 
+def test_internal_metrics_header_not_in_default_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    """X-Metrics-Key guards /metrics for server-to-server scrapes only.
+
+    Browsers never send it, so it must not appear in the default CORS
+    allowlist where it would invite cross-origin use of an ops secret.
+    """
+    monkeypatch.delenv("CORS_ALLOWED_HEADERS", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+
+    headers = get_allowed_headers()
+
+    assert "X-Metrics-Key" not in headers
+    # Browser-sent API headers must keep working.
+    assert "X-RegEngine-API-Key" in headers
+
+
+def test_metrics_header_restorable_via_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setenv("CORS_ALLOWED_HEADERS", "Authorization,X-Metrics-Key")
+
+    assert get_allowed_headers() == ["Authorization", "X-Metrics-Key"]
+
+
 def test_wildcard_cors_headers_rejected_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("REGENGINE_ENV", "production")
     monkeypatch.setenv("CORS_ALLOWED_HEADERS", "Authorization,*")

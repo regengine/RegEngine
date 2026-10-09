@@ -8,13 +8,18 @@ import os
 from typing import List
 from urllib.parse import urlsplit
 
+# NOTE: X-Metrics-Key is intentionally absent. It guards the /metrics
+# endpoint for server-to-server Prometheus scrapes, which never run in a
+# browser, so browsers never need it in a CORS preflight allowlist.
+# Listing it here would invite browsers on an allowed origin to send an
+# ops-only secret cross-origin. Re-add it via CORS_ALLOWED_HEADERS only
+# if a browser client ever truly needs it.
 DEFAULT_ALLOWED_HEADERS = [
     "Authorization",
     "Content-Type",
     "Idempotency-Key",
     "X-API-Version",
     "X-Correlation-ID",
-    "X-Metrics-Key",
     "X-RegEngine-API-Key",
     "X-RegEngine-Partner-Key",
     "X-RegEngine-Tenant-ID",
