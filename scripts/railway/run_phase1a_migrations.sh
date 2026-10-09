@@ -17,24 +17,26 @@ if [[ -z "$MIGRATION_DB_URL" ]]; then
     exit 1
 fi
 
+export MIGRATIONS_DATABASE_URL="$MIGRATION_DB_URL"
+
 echo "=== Phase 1A SQL Migration Run ==="
 echo "Repo root: $REPO_ROOT"
 
 echo
 echo "[1/4] Admin migrations"
-bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/admin/migrations"
+bash "$APPLY_SQL" "$REPO_ROOT/services/admin/migrations"
 
 echo
 echo "[2/4] Ingestion service migrations"
-bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/ingestion/migrations"
+bash "$APPLY_SQL" "$REPO_ROOT/services/ingestion/migrations"
 
 echo
 echo "[3/4] Root FSMA migrations"
-bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/migrations"
+bash "$APPLY_SQL" "$REPO_ROOT/migrations"
 
 echo
 echo "[4/4] Compliance service migrations"
-bash "$APPLY_SQL" "$MIGRATION_DB_URL" "$REPO_ROOT/services/compliance/migrations"
+bash "$APPLY_SQL" "$REPO_ROOT/services/compliance/migrations"
 
 echo
 echo "All Phase 1A SQL migration batches completed."
