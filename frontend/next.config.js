@@ -209,6 +209,15 @@ const nextConfig = {
         // is a security hazard — it skips requireProxyAuth, validateProxySession,
         // and sanitizePath. Only keep rewrites for paths that have no handler.
         //
+        // Audit re-frontend finding 7: the records/FDA/webhook rewrites below
+        // bypass the frontend auth preflight by design (external API-key and
+        // webhook callers cannot pass the browser session gate), so the
+        // backend is the only gate on those paths. Backend-side proof that
+        // each path rejects unauthenticated callers lives in
+        // services/ingestion/tests/test_public_rewrite_auth_boundary.py.
+        // Keep that test green, or remove the rewrite. /api/v1/health is the
+        // intentional exception: a public liveness probe with no handler.
+        //
         // Removed 2026-04-17 (#1221):
         //   - /api/compliance/:path*    (shadowed by the compliance route handler)
         // Removed 2026-08-03:
