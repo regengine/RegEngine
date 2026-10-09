@@ -6,6 +6,19 @@
 # consolidation.
 # Refactoring target — see PHASE 3.5 in REGENGINE_CODEBASE_REMEDIATION_PRD.md
 # ============================================================
+"""FSMA 204 compliance API routes.
+
+Serves the regulatory coverage card, FDA and EPCIS exports, lot trace and
+recall contact CSVs, gap and orphan lot analysis, traceability plan building,
+and the tenant compliance score.
+
+Key invariants: graph queries filter by the authenticated tenant id, and
+routes with two tenant sources reconcile them and fail closed on mismatch.
+Most endpoints are rate limited, export cells pass through csv_safe, XML
+values pass through xml_escape, filenames pass through header_filename, and
+unexpected failures return generic errors without tenant details.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -748,6 +761,8 @@ async def export_gaps_csv(
 
 
 class CommodityRequest(BaseModel):
+    """One Food Traceability List commodity in a plan request: its name and category, the CTE types it passes through, and how its lot code is assigned."""
+
     name: str
     category: str
     cte_types: List[str] = []
@@ -755,6 +770,8 @@ class CommodityRequest(BaseModel):
 
 
 class RecordLocationRequest(BaseModel):
+    """Where FSMA records are kept for a plan request: storage type, system or address, backup procedure, and retention period."""
+
     location_type: str  # "electronic", "paper", "hybrid"
     system_name: Optional[str] = None
     physical_address: Optional[str] = None
@@ -763,6 +780,8 @@ class RecordLocationRequest(BaseModel):
 
 
 class TraceabilityPlanRequest(BaseModel):
+    """Request body for generating a traceability plan: firm identity and contacts, commodities handled, record locations, and lot code format."""
+
     firm_name: str
     firm_address: str
     firm_type: str  # grower, manufacturer, processor, etc.
@@ -910,6 +929,8 @@ def get_plan_template(
 
 
 class ComplianceScoreResponse(BaseModel):
+    """Tenant compliance score and its inputs: coverage, effectiveness and freshness dimensions, obligation, control and evidence counts, and generation time."""
+
     model_config = {
         "json_schema_extra": {
             "example": {
