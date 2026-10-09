@@ -1,3 +1,12 @@
+"""FastAPI authentication and tenant scoping dependencies for the admin service.
+
+Resolves the caller from an opaque session cookie or a Bearer token, binds the
+verified tenant into the database session for row level security, and provides
+helpers that enforce permissions and tenant match on routes. Key invariants:
+tenant identity comes only from trusted sources, requests without a resolvable
+tenant fail closed, and revoked or stale credentials are rejected.
+"""
+
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -211,6 +220,13 @@ async def get_current_user(
     db: Session = Depends(get_session),
     session_store: Optional[RedisSessionStore] = Depends(get_session_store),
 ) -> UserModel:
+    """Resolve the authenticated user and bind the verified tenant context.
+
+    Accepts an opaque session cookie or a Bearer token, checks revocation and
+    freshness, and sets row level security state on the database session.
+    Raises 401 when credentials are missing or invalid and 503 when the
+    backing auth store is unavailable.
+    """
     credentials_exception = _credentials_exception()
 
     user_id = None
@@ -559,10 +575,20 @@ async def get_current_user(
 
 
 class PermissionChecker:
+    """FastAPI dependency that requires one permission on the caller's role.
+
+    The tenant is read from the context bound by get_current_user. The check
+    fails closed with 403 when no tenant is bound, when no role is found, or
+    when the role lacks the required permission.
+    """
+
     def __init__(self, required_permission: str):
+        """Store the permission string this checker will require."""
         self.required_permission = required_permission
 
     def __call__(self, user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)):
+        """Return True when the caller's role grants the required permission."""
+
         # Inspect current tenant context from session?
         # Since set_tenant_context was called in get_current_user, RLS is active.
         # But we need to check the Roles/Permissions for the current tenant.
