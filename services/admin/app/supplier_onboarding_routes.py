@@ -1,3 +1,16 @@
+"""Shared schemas and helpers for supplier onboarding routes.
+
+This module holds the Pydantic request and response models, the FTL food
+category catalog, and the helper functions that the supplier sub routers
+(facilities, compliance, funnel) import. The router object defined here is
+kept empty so existing imports keep working, while the route handlers live
+in those sub modules.
+
+Key invariants: every database query filters by tenant id, supplier scoped
+queries also filter by supplier user id, and timestamps returned to callers
+are normalized to UTC ISO 8601 strings.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -57,6 +70,8 @@ FTL_CATEGORY_LOOKUP = {item["id"]: item for item in FTL_CATEGORY_CATALOG}
 
 
 class SupplierFacilityCreateRequest(BaseModel):
+    """Request body for registering a supplier facility."""
+
     name: str = Field(min_length=2)
     street: str = Field(min_length=2)
     city: str = Field(min_length=2)
@@ -67,6 +82,8 @@ class SupplierFacilityCreateRequest(BaseModel):
 
 
 class SupplierFacilityResponse(BaseModel):
+    """Response describing a registered supplier facility."""
+
     id: str
     name: str
     street: str
@@ -78,10 +95,14 @@ class SupplierFacilityResponse(BaseModel):
 
 
 class FacilityFTLScopingRequest(BaseModel):
+    """Request body for assigning FTL food categories to a facility."""
+
     category_ids: list[str] = Field(default_factory=list)
 
 
 class FacilityFTLScopingResponse(BaseModel):
+    """Response listing the categories and required CTEs for a facility."""
+
     facility_id: str
     categories: list[dict[str, Any]]
     required_ctes: list[str]
@@ -89,6 +110,8 @@ class FacilityFTLScopingResponse(BaseModel):
 
 
 class SupplierCTEEventCreateRequest(BaseModel):
+    """Request body for recording a supplier CTE event against a lot."""
+
     cte_type: str = Field(min_length=2)
     tlc_code: str = Field(min_length=3)
     event_time: datetime | None = None
@@ -97,6 +120,8 @@ class SupplierCTEEventCreateRequest(BaseModel):
 
 
 class SupplierCTEEventResponse(BaseModel):
+    """Response identifying a stored supplier CTE event and its chain position."""
+
     event_id: str
     facility_id: str
     tlc_code: str
@@ -108,6 +133,8 @@ class SupplierCTEEventResponse(BaseModel):
 
 
 class SupplierTLCUpsertRequest(BaseModel):
+    """Request body for creating or updating a traceability lot."""
+
     facility_id: str
     tlc_code: str = Field(min_length=3)
     product_description: str | None = None
@@ -115,6 +142,8 @@ class SupplierTLCUpsertRequest(BaseModel):
 
 
 class SupplierTLCResponse(BaseModel):
+    """Response describing a traceability lot and its event count."""
+
     id: str
     facility_id: str
     tlc_code: str
@@ -125,6 +154,8 @@ class SupplierTLCResponse(BaseModel):
 
 
 class SupplierComplianceScoreResponse(BaseModel):
+    """Response with the compliance score and its component ratios."""
+
     score: int
     coverage_ratio: float
     freshness_ratio: float
@@ -138,6 +169,8 @@ class SupplierComplianceScoreResponse(BaseModel):
 
 
 class SupplierComplianceGap(BaseModel):
+    """One compliance gap for a facility, with severity and reason."""
+
     facility_id: str
     facility_name: str
     cte_type: str | None
@@ -148,6 +181,8 @@ class SupplierComplianceGap(BaseModel):
 
 
 class SupplierComplianceGapsResponse(BaseModel):
+    """Response listing compliance gaps with severity totals."""
+
     gaps: list[SupplierComplianceGap]
     total: int
     high: int
@@ -157,6 +192,8 @@ class SupplierComplianceGapsResponse(BaseModel):
 
 
 class SupplierDemoResetResponse(BaseModel):
+    """Response summarizing the seeded demo data after a reset."""
+
     focus_facility_id: str
     focus_facility_name: str
     focus_required_ctes: list[str]
@@ -173,6 +210,8 @@ class SupplierDemoResetResponse(BaseModel):
 
 
 class SupplierFunnelEventRequest(BaseModel):
+    """Request body for recording a supplier onboarding funnel event."""
+
     event_name: str = Field(min_length=3, max_length=80)
     step: str | None = None
     status: str | None = None
@@ -181,12 +220,16 @@ class SupplierFunnelEventRequest(BaseModel):
 
 
 class SupplierFunnelEventResponse(BaseModel):
+    """Response confirming a recorded funnel event."""
+
     event_id: str
     event_name: str
     created_at: str
 
 
 class SupplierSocialProofResponse(BaseModel):
+    """Response with tenant wide onboarding totals."""
+
     suppliers_onboarded: int
     facilities_registered: int
     tlcs_tracked: int
@@ -196,6 +239,8 @@ class SupplierSocialProofResponse(BaseModel):
 
 
 class SupplierFunnelStepSummary(BaseModel):
+    """Per step view and completion counts for the onboarding funnel."""
+
     step: str
     viewed: int
     completed: int
@@ -203,6 +248,8 @@ class SupplierFunnelStepSummary(BaseModel):
 
 
 class SupplierFunnelSummaryResponse(BaseModel):
+    """Response with funnel step summaries and export and reset totals."""
+
     steps: list[SupplierFunnelStepSummary]
     total_step_views: int
     total_step_completions: int
@@ -212,6 +259,8 @@ class SupplierFunnelSummaryResponse(BaseModel):
 
 
 class SupplierFDAExportRow(BaseModel):
+    """One FDA export row joining a CTE event, its lot, and its facility."""
+
     event_id: str
     tlc_code: str
     product_description: str | None = None
@@ -227,6 +276,8 @@ class SupplierFDAExportRow(BaseModel):
 
 
 class SupplierFDAExportPreviewResponse(BaseModel):
+    """Response with FDA export preview rows and the total count."""
+
     rows: list[SupplierFDAExportRow]
     total_count: int
 
@@ -270,6 +321,7 @@ def _get_supplier_facility_or_404(
     supplier_user_id: uuid_module.UUID,
     facility_id: uuid_module.UUID,
 ) -> SupplierFacilityModel:
+    """Return the facility for this tenant and supplier, or raise 404."""
     facility = db.get(SupplierFacilityModel, facility_id)
     if facility is None or facility.tenant_id != tenant_id or facility.supplier_user_id != supplier_user_id:
         raise HTTPException(status_code=404, detail="Facility not found")
@@ -277,6 +329,7 @@ def _get_supplier_facility_or_404(
 
 
 def _derive_required_ctes(categories: list[dict[str, Any]]) -> list[str]:
+    """Merge CTE lists from categories, keeping first seen order."""
     required_ctes: list[str] = []
     seen: set[str] = set()
     for category in categories:
@@ -289,12 +342,14 @@ def _derive_required_ctes(categories: list[dict[str, Any]]) -> list[str]:
 
 
 def _iso_utc(value: datetime) -> str:
+    """Format a datetime as a UTC ISO 8601 string."""
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc).isoformat()
     return value.astimezone(timezone.utc).isoformat()
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
+    """Return the datetime with UTC timezone, leaving None unchanged."""
     if value is None:
         return None
     if value.tzinfo is None:
@@ -303,6 +358,7 @@ def _as_utc(value: datetime | None) -> datetime | None:
 
 
 def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
+    """Return the fraction of events whose sequence and chain links are consistent."""
     if not events:
         return 1.0
 
@@ -332,6 +388,7 @@ def _compute_supplier_compliance(
     facility_id: uuid_module.UUID | None,
     lookback_days: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Compute the compliance score payload and gap payloads for the scope."""
     facilities_query = select(SupplierFacilityModel).where(
         SupplierFacilityModel.tenant_id == tenant_id,
         SupplierFacilityModel.supplier_user_id == supplier_user_id,
@@ -514,6 +571,7 @@ def _compute_supplier_compliance(
 
 
 def _compute_social_proof(db: Session, *, tenant_id: uuid_module.UUID) -> dict[str, Any]:
+    """Count tenant wide onboarding totals for the social proof card."""
     suppliers_onboarded = int(
         db.execute(
             select(func.count(func.distinct(SupplierFacilityModel.supplier_user_id))).where(
@@ -583,6 +641,7 @@ SUPPLIER_FUNNEL_STEP_ORDER = [
 
 
 def _compute_funnel_summary(db: Session, *, tenant_id: uuid_module.UUID) -> dict[str, Any]:
+    """Summarize funnel views and completions per step, plus export and reset totals."""
     grouped_rows = db.execute(
         select(
             SupplierFunnelEventModel.step,
@@ -658,6 +717,7 @@ def _compute_funnel_summary(db: Session, *, tenant_id: uuid_module.UUID) -> dict
 
 
 def _string_value(value: Any) -> str:
+    """Convert a value to string, returning an empty string for None."""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -675,6 +735,7 @@ def _build_fda_export_rows(
     start_time: datetime | None,
     end_time: datetime | None,
 ) -> list[dict[str, Any]]:
+    """Build FDA export row dicts for the given tenant and optional filters."""
     event_query = (
         select(
             SupplierCTEEventModel,
@@ -747,6 +808,7 @@ def _build_fda_export_rows(
 
 
 def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
+    """Render export rows as UTF-8 CSV bytes using the FDA column order."""
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=[FDA_EXPORT_HEADERS[column] for column in FDA_EXPORT_COLUMN_ORDER])
     writer.writeheader()
@@ -760,6 +822,7 @@ def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
 
 
 def _xlsx_column_name(index: int) -> str:
+    """Convert a one based column index to an Excel column name."""
     name = ""
     current = index
     while current > 0:
@@ -769,6 +832,7 @@ def _xlsx_column_name(index: int) -> str:
 
 
 def _xml_escape(value: str) -> str:
+    """Escape a string for use in XML element text."""
     return (
         value.replace("&", "&amp;")
         .replace("<", "&lt;")
@@ -779,6 +843,7 @@ def _xml_escape(value: str) -> str:
 
 
 def _render_fda_export_xlsx_fallback(rows: list[dict[str, Any]]) -> bytes:
+    """Build a minimal xlsx workbook from rows without third party packages."""
     header_values = [FDA_EXPORT_HEADERS[column] for column in FDA_EXPORT_COLUMN_ORDER]
     last_column = _xlsx_column_name(len(FDA_EXPORT_COLUMN_ORDER))
 
@@ -859,6 +924,7 @@ def _render_fda_export_xlsx_fallback(rows: list[dict[str, Any]]) -> bytes:
 
 
 def _render_fda_export_xlsx(rows: list[dict[str, Any]]) -> bytes:
+    """Build an xlsx workbook from rows, falling back when openpyxl is missing."""
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Font
