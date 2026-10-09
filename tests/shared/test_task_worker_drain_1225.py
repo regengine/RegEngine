@@ -209,8 +209,16 @@ class TestStopTaskWorkerDrain_Issue1225:
         """``stop_task_worker`` called before ``start_task_worker`` must
         not explode."""
         task_processor._worker_thread = None
-        # Should return without raising.
-        task_processor.stop_task_worker(timeout_seconds=1)
+        with patch.object(task_processor, "_release_abandoned_task_lock") as rel:
+            # Should return without raising.
+            result = task_processor.stop_task_worker(timeout_seconds=1)
+            rel.assert_not_called()
+        assert result is None
+        assert task_processor._shutdown_event.is_set()
+        assert task_processor._worker_thread is None
+        with task_processor._inflight_lock:
+            assert task_processor._current_task_id is None
+            assert task_processor._current_task_attempts == 0
 
 
 # ===========================================================================
@@ -260,14 +268,48 @@ class TestReleaseAbandonedTaskLockSQL_Issue1225:
         """The release path runs during shutdown — a DB failure must
         not raise out of ``stop_task_worker`` (the process is already
         on its way out)."""
+        constructor_calls = []
 
         class _ExplodingSession:
             def __init__(self):
+                constructor_calls.append(1)
                 raise RuntimeError("db unreachable")
 
         with patch("services.admin.app.database.SessionLocal", _ExplodingSession):
             # Should not raise.
-            task_processor._release_abandoned_task_lock(task_id=1, attempts=1)
+            result = task_processor._release_abandoned_task_lock(task_id=1, attempts=1)
+        assert result is None
+        # The release must have attempted DB work before swallowing the
+        # error. A body that returns early without trying would also
+        # "not raise" but would silently drop the handover.
+        assert constructor_calls == [1]
+
+        close_calls = []
+
+        class _ExecuteFailingSession:
+            def __init__(self):
+                self.execute_calls = 0
+
+            def execute(self, _stmt, _params=None):
+                self.execute_calls += 1
+                if self.execute_calls > 1:
+                    raise RuntimeError("update blew up")
+                return MagicMock()
+
+            def commit(self):
+                raise AssertionError("commit must not run after execute failure")
+
+            def close(self):
+                close_calls.append(1)
+
+        session = _ExecuteFailingSession()
+        with patch("services.admin.app.database.SessionLocal", lambda: session):
+            result = task_processor._release_abandoned_task_lock(task_id=1, attempts=1)
+        assert result is None
+        # The UPDATE itself was attempted (first execute arms the admin
+        # context, second is the release) and the session was closed.
+        assert session.execute_calls == 2
+        assert close_calls == [1]
 
 
 # ===========================================================================
