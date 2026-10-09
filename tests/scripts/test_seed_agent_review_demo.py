@@ -245,6 +245,8 @@ def test_main_accepts_database_url_flag(monkeypatch, capsys) -> None:
         lambda database_url: database_url == "sqlite:///:memory:",
     )
 
+    opened_urls: list[str] = []
+
     class _Session:
         def commit(self) -> None:
             return None
@@ -255,9 +257,34 @@ def test_main_accepts_database_url_flag(monkeypatch, capsys) -> None:
         def close(self) -> None:
             return None
 
+        def get_bind(self):
+            return None
+
+    def _fake_open_seed_session(database_url: str):
+        opened_urls.append(database_url)
+        return _Session()
+
+    monkeypatch.setattr(module, "_open_seed_session", _fake_open_seed_session)
+
     import shared.database
 
-    monkeypatch.setattr(shared.database, "SessionLocal", lambda: _Session())
+    def _forbidden_session_factory(*args, **kwargs):
+        raise AssertionError("main must build the session from --database-url, not import-time SessionLocal")
+
+    monkeypatch.setattr(shared.database, "SessionLocal", _forbidden_session_factory)
 
     assert module.main(["--database-url", "sqlite:///:memory:"]) == 0
     assert "Seeded FSMA agent-review demo artifacts" in capsys.readouterr().out
+    assert "sqlite:///:memory:" in opened_urls
+
+
+def test_open_seed_session_binds_to_given_url() -> None:
+    module = _load_module()
+
+    session = module._open_seed_session("sqlite:///:memory:")
+    try:
+        assert str(session.get_bind().url) == "sqlite:///:memory:"
+    finally:
+        bind = session.get_bind()
+        session.close()
+        bind.dispose()

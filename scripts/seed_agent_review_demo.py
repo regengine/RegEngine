@@ -341,6 +341,34 @@ def is_safe_database_url_for_demo_seed(database_url: str | None) -> bool:
     return host in local_hosts or host.endswith(".local") or host.endswith(".test")
 
 
+def _open_seed_session(database_url: str):
+    """Open a SQLAlchemy session bound to ``database_url``.
+
+    The session is built from the resolved URL instead of the import-time
+    ``SessionLocal`` binding, so the ``--database-url`` flag value selects
+    the connection even when the ``DATABASE_URL`` environment variable is
+    unset or different.
+    """
+
+    from shared.db_url import sync_postgres_connect_args, sync_postgres_url
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    engine_url = sync_postgres_url(database_url)
+    kwargs: dict = {"pool_pre_ping": True}
+    if not engine_url.startswith("sqlite"):
+        kwargs.update(
+            pool_size=int(os.getenv("DB_POOL_SIZE", "10")),
+            max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "20")),
+            pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+            pool_recycle=int(os.getenv("DB_POOL_RECYCLE", "1800")),
+            connect_args=sync_postgres_connect_args(engine_url),
+        )
+    seed_engine = create_engine(engine_url, **kwargs)
+    seed_session_factory = sessionmaker(autocommit=False, autoflush=False, bind=seed_engine)
+    return seed_session_factory()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Seed deterministic synthetic FSMA agent-review demo artifacts.")
     parser.add_argument(
@@ -404,9 +432,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        from shared.database import SessionLocal
-
-        db_session = SessionLocal()
+        db_session = _open_seed_session(database_url)
         try:
             result = seed_agent_review_demo(db_session, artifacts)
             db_session.commit()
@@ -414,7 +440,18 @@ def main(argv: list[str] | None = None) -> int:
             db_session.rollback()
             raise
         finally:
-            db_session.close()
+            try:
+                bind = db_session.get_bind() if hasattr(db_session, "get_bind") else None
+            except Exception:
+                bind = None
+            try:
+                db_session.close()
+            finally:
+                if bind is not None and hasattr(bind, "dispose"):
+                    try:
+                        bind.dispose()
+                    except Exception:
+                        pass
     except Exception as exc:
         print(f"Failed to seed FSMA agent-review demo artifacts: {exc}", file=sys.stderr)
         return 1
