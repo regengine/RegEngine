@@ -8,6 +8,7 @@
  */
 
 import { getServiceURL } from './api-config';
+import { encodePathSegment } from './api-path';
 import { fetchWithCsrf } from './fetch-with-csrf';
 
 const BASE = () => getServiceURL('ingestion');
@@ -71,21 +72,21 @@ export async function fetchAlerts(tenantId: string, apiKey?: string | null, para
     if (params?.category) search.set('category', params.category);
     if (params?.acknowledged !== undefined) search.set('acknowledged', String(params.acknowledged));
     const qs = search.toString() ? `?${search}` : '';
-    return apiFetch(`/api/v1/alerts/${tenantId}${qs}`, apiKey);
+    return apiFetch(`/api/v1/alerts/${encodePathSegment(tenantId)}${qs}`, apiKey);
 }
 
 export async function acknowledgeAlert(tenantId: string, apiKey: string | null | undefined, alertId: string) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/${alertId}/acknowledge`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/alerts/${encodePathSegment(tenantId)}/${encodePathSegment(alertId)}/acknowledge`, apiKey, { method: 'POST' });
 }
 
 export async function fetchAlertSummary(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/summary`, apiKey);
+    return apiFetch(`/api/v1/alerts/${encodePathSegment(tenantId)}/summary`, apiKey);
 }
 
 // ── Compliance ──
 
 export async function fetchComplianceScore(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/compliance/score/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/compliance/score/${encodePathSegment(tenantId)}`, apiKey);
 }
 
 export interface WorkbenchReadinessSnapshot {
@@ -176,34 +177,34 @@ export async function createCheckout(_apiKey: string, planId: string, _tenantId:
 }
 
 export async function fetchSubscription(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/billing/subscription/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/billing/subscription/${encodePathSegment(tenantId)}`, apiKey);
 }
 
 // ── Supplier Management ──
 
 export async function fetchSupplierDashboard(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/suppliers/${encodePathSegment(tenantId)}`, apiKey);
 }
 
 export async function addSupplier(tenantId: string, apiKey: string, name: string, email: string, products: string[]) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey, {
+    return apiFetch(`/api/v1/suppliers/${encodePathSegment(tenantId)}`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ name, contact_email: email, products }),
     });
 }
 
 export async function sendPortalLink(tenantId: string, apiKey: string, supplierId: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/${supplierId}/send-link`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/suppliers/${encodePathSegment(tenantId)}/${encodePathSegment(supplierId)}/send-link`, apiKey, { method: 'POST' });
 }
 
 export async function fetchSupplierHealth(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/health`, apiKey);
+    return apiFetch(`/api/v1/suppliers/${encodePathSegment(tenantId)}/health`, apiKey);
 }
 
 // ── Recall Readiness ──
 
 export async function fetchRecallReport(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/recall/${tenantId}/report`, apiKey);
+    return apiFetch(`/api/v1/recall/${encodePathSegment(tenantId)}/report`, apiKey);
 }
 
 // ── Onboarding ──
@@ -213,11 +214,11 @@ export async function fetchOnboardingSteps(apiKey: string) {
 }
 
 export async function fetchOnboardingProgress(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/progress`, apiKey);
+    return apiFetch(`/api/v1/onboarding/${encodePathSegment(tenantId)}/progress`, apiKey);
 }
 
 export async function completeOnboardingStep(tenantId: string, apiKey: string, stepId: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/step/${stepId}`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/onboarding/${encodePathSegment(tenantId)}/step/${encodePathSegment(stepId)}`, apiKey, { method: 'POST' });
 }
 
 // ── Mock Audit ──
@@ -230,11 +231,11 @@ export async function startDrill(apiKey: string, scenario: string, tenantId: str
 }
 
 export async function fetchDrillStatus(apiKey: string, drillId: string) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}`, apiKey);
+    return apiFetch(`/api/v1/audit/drill/${encodePathSegment(drillId)}`, apiKey);
 }
 
 export async function submitDrillResponse(apiKey: string, drillId: string, checklist: Record<string, boolean>) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}/submit`, apiKey, {
+    return apiFetch(`/api/v1/audit/drill/${encodePathSegment(drillId)}/submit`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ checklist }),
     });

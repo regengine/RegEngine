@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { encodePathSegment } from '@/lib/api-path';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import type { ReviewItem } from '@/types/review';
 
@@ -44,7 +45,7 @@ export function useApproveReviewItem() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (itemId: string) =>
-            reviewFetch<void>(`/api/review/${itemId}/approve`, {
+            reviewFetch<void>(`/api/review/${encodePathSegment(itemId)}/approve`, {
                 method: 'POST',
                 body: JSON.stringify({}),
             }),
@@ -58,7 +59,7 @@ export function useRejectReviewItem() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (itemId: string) =>
-            reviewFetch<void>(`/api/review/${itemId}/reject`, {
+            reviewFetch<void>(`/api/review/${encodePathSegment(itemId)}/reject`, {
                 method: 'POST',
                 body: JSON.stringify({}),
             }),

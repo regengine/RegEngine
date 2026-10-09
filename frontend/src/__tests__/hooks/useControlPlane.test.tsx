@@ -29,6 +29,7 @@ vi.mock('@/lib/polling-config', () => ({
 import {
     useRules,
     useExceptions,
+    useException,
     useCanonicalEvents,
     useRequestCases,
     useEntities,
@@ -215,6 +216,24 @@ describe('use-control-plane hooks', () => {
 
             expect(result.current.fetchStatus).toBe('idle');
             expect(global.fetch).not.toHaveBeenCalled();
+        });
+
+        it('encodes the case ID spliced into the exception path', async () => {
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ case_id: 'case/01?x', status: 'open' }),
+            });
+
+            const wrapper = createWrapper();
+            const { result } = renderHook(
+                () => useException(TENANT_ID, 'case/01?x'),
+                { wrapper },
+            );
+
+            await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+            const url = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+            expect(url).toBe('/api/ingestion/api/v1/exceptions/case%2F01%3Fx');
         });
 
         it('is disabled when the user is not authenticated', () => {

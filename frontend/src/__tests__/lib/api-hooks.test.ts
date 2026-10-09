@@ -75,6 +75,31 @@ describe('internal api hooks', () => {
         expect(new Headers(scoreInit.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
+    it('encodes IDs spliced into alert paths', async () => {
+        fetchWithCsrfMock
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ alerts: [], total: 0 }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({ acknowledged: true }),
+            });
+
+        const { fetchAlerts, acknowledgeAlert } = await import('@/lib/api-hooks');
+        await fetchAlerts('tenant a/b?c');
+        await acknowledgeAlert('tenant a/b?c', null, 'alert/1?x');
+
+        const [alertsUrl] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+        expect(alertsUrl).toBe('/api/ingestion/api/v1/alerts/tenant%20a%2Fb%3Fc');
+
+        const [ackUrl, ackInit] = fetchWithCsrfMock.mock.calls[1] as [string, RequestInit];
+        expect(ackUrl).toBe(
+            '/api/ingestion/api/v1/alerts/tenant%20a%2Fb%3Fc/alert%2F1%3Fx/acknowledge',
+        );
+        expect(ackInit.method).toBe('POST');
+    });
+
     it('creates checkout sessions via the billing proxy without client tenant payload', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,

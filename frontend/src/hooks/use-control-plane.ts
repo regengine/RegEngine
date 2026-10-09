@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
+import { encodePathSegment } from '@/lib/api-path';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
 
@@ -107,7 +108,7 @@ export function useException(tenantId: string, caseId: string) {
   return useQuery({
     queryKey: ['exceptions', tenantId, caseId],
     queryFn: () => cpFetch<ExceptionCase>(
-      `/api/v1/exceptions/${caseId}`
+      `/api/v1/exceptions/${encodePathSegment(caseId)}`
     ).then(unwrapCp),
     enabled: isAuthenticated && !!tenantId && !!caseId,
   });
@@ -130,7 +131,7 @@ export function useAssignException(tenantId: string) {
   return useMutation({
     mutationKey: ['exceptions', tenantId, 'assign'],
     mutationFn: ({ caseId, ownerUserId }: { caseId: string; ownerUserId: string }) =>
-      cpFetch(`/api/v1/exceptions/${caseId}/assign`, {
+      cpFetch(`/api/v1/exceptions/${encodePathSegment(caseId)}/assign`, {
         method: 'PATCH',
         body: JSON.stringify({ owner_user_id: ownerUserId }),
       }).then(r => r.data),
@@ -144,7 +145,7 @@ export function useResolveException(tenantId: string) {
     mutationKey: ['exceptions', tenantId, 'resolve'],
     mutationFn: ({ caseId, resolutionSummary, resolvedBy }: {
       caseId: string; resolutionSummary: string; resolvedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/resolve`, {
+    }) => cpFetch(`/api/v1/exceptions/${encodePathSegment(caseId)}/resolve`, {
       method: 'PATCH',
       body: JSON.stringify({ resolution_summary: resolutionSummary, resolved_by: resolvedBy }),
     }).then(r => r.data),
@@ -158,7 +159,7 @@ export function useWaiveException(tenantId: string) {
     mutationKey: ['exceptions', tenantId, 'waive'],
     mutationFn: ({ caseId, waiverReason, waiverApprovedBy }: {
       caseId: string; waiverReason: string; waiverApprovedBy: string;
-    }) => cpFetch(`/api/v1/exceptions/${caseId}/waive`, {
+    }) => cpFetch(`/api/v1/exceptions/${encodePathSegment(caseId)}/waive`, {
       method: 'PATCH',
       body: JSON.stringify({ waiver_reason: waiverReason, waiver_approved_by: waiverApprovedBy }),
     }).then(r => r.data),
@@ -226,7 +227,7 @@ export function useApproveScope(tenantId: string) {
   return useMutation({
     mutationKey: ['requests', tenantId, 'scope'],
     mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
-      cpFetch(`/api/v1/requests/${requestCaseId}/scope`, {
+      cpFetch(`/api/v1/requests/${encodePathSegment(requestCaseId)}/scope`, {
         method: 'PATCH',
         body: JSON.stringify({}),
       }).then(r => r.data),
@@ -239,7 +240,7 @@ export function useCollectRecords(tenantId: string) {
   return useMutation({
     mutationKey: ['requests', tenantId, 'collect'],
     mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
-      cpFetch(`/api/v1/requests/${requestCaseId}/collect`, {
+      cpFetch(`/api/v1/requests/${encodePathSegment(requestCaseId)}/collect`, {
         method: 'POST',
       }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
@@ -251,7 +252,7 @@ export function useRunGapAnalysis(tenantId: string) {
   return useMutation({
     mutationKey: ['requests', tenantId, 'gap-analysis'],
     mutationFn: ({ requestCaseId }: { requestCaseId: string }) =>
-      cpFetch(`/api/v1/requests/${requestCaseId}/gap-analysis`, {
+      cpFetch(`/api/v1/requests/${encodePathSegment(requestCaseId)}/gap-analysis`, {
         method: 'POST',
       }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['requests'] }),
@@ -265,7 +266,7 @@ export function useAssemblePackage(tenantId: string) {
     mutationFn: ({ requestCaseId, generatedBy }: { requestCaseId: string; generatedBy: string }) =>
       cpFetch(
         withQuery(
-          `/api/v1/requests/${requestCaseId}/assemble`,
+          `/api/v1/requests/${encodePathSegment(requestCaseId)}/assemble`,
           new URLSearchParams({ generated_by: generatedBy }),
         ),
         {
@@ -283,7 +284,7 @@ export function useSubmitPackage(tenantId: string) {
     mutationFn: ({ requestCaseId, ...data }: {
       requestCaseId: string; submitted_to?: string; submitted_by: string;
       submission_method?: string; submission_notes?: string;
-    }) => cpFetch(`/api/v1/requests/${requestCaseId}/submit`, {
+    }) => cpFetch(`/api/v1/requests/${encodePathSegment(requestCaseId)}/submit`, {
       method: 'POST',
       body: JSON.stringify(data),
     }).then(r => r.data),
@@ -296,7 +297,7 @@ export function usePackageHistory(tenantId: string, requestCaseId: string) {
   return useQuery({
     queryKey: ['requests', tenantId, requestCaseId, 'packages'],
     queryFn: () => cpFetch<{ packages: Record<string, unknown>[]; total: number }>(
-      `/api/v1/requests/${requestCaseId}/packages`
+      `/api/v1/requests/${encodePathSegment(requestCaseId)}/packages`
     ).then(unwrapCp),
     enabled: isAuthenticated && !!tenantId && !!requestCaseId,
   });
@@ -342,7 +343,7 @@ export function useEventEvaluations(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['evaluations', tenantId, eventId],
     queryFn: () => cpFetch<{ evaluations: RuleEvaluation[]; total: number }>(
-      `/api/v1/rules/evaluations/${eventId}`
+      `/api/v1/rules/evaluations/${encodePathSegment(eventId)}`
     ).then(unwrapCp),
     enabled: isAuthenticated && !!tenantId && !!eventId,
   });
@@ -412,7 +413,7 @@ export function useCanonicalEvent(tenantId: string, eventId: string) {
   return useQuery({
     queryKey: ['records', tenantId, eventId],
     queryFn: () => cpFetch<CanonicalEventDetail>(
-      `/api/v1/records/${eventId}`
+      `/api/v1/records/${encodePathSegment(eventId)}`
     ).then(unwrapCp),
     enabled: isAuthenticated && !!tenantId && !!eventId,
   });
