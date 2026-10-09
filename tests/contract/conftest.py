@@ -1,6 +1,11 @@
 """Shared fixtures for contract tests."""
 
+import logging
+import sys
+
 import pytest
+
+logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(autouse=True)
@@ -19,21 +24,33 @@ def _clear_admin_brute_force_state():
     """
     try:
         import redis
-
-        client = redis.Redis.from_url(
-            "redis://localhost:6379/0",
-            socket_connect_timeout=0.5,
-            socket_timeout=0.5,
+    except ImportError as exc:
+        # The redis client is not installed, so the limiter always uses its
+        # in-memory fallback; there is no Redis state to clear.
+        logger.debug(
+            "skipping privileged-auth Redis cleanup: client not installed (%s)",
+            exc,
         )
-        keys = list(client.scan_iter("privileged_auth:*"))
-        if keys:
-            client.delete(*keys)
-    except Exception:
-        # No local Redis -> the limiter falls back to in-memory and each
-        # pytest process starts clean; nothing to clear.
-        pass
-
-    import sys
+    else:
+        try:
+            client = redis.Redis.from_url(
+                "redis://localhost:6379/0",
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+            )
+            keys = list(client.scan_iter("privileged_auth:*"))
+            if keys:
+                client.delete(*keys)
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+        ) as exc:
+            # No local Redis -> the limiter falls back to in-memory and each
+            # pytest process starts clean; nothing to clear.
+            logger.warning(
+                "skipping privileged-auth Redis cleanup: local Redis unavailable (%s)",
+                exc,
+            )
 
     for module_name in ("app.privileged_auth", "services.admin.app.privileged_auth"):
         module = sys.modules.get(module_name)
