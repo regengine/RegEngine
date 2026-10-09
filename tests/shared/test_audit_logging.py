@@ -50,6 +50,21 @@ def _set_audit_key(monkeypatch):
     monkeypatch.setenv("AUDIT_INTEGRITY_KEY", "test-audit-key")
 
 
+@pytest.fixture(autouse=True)
+def _preserve_audit_logger_singleton():
+    """Save and restore the process-wide AuditLogger singleton around each test.
+
+    Several tests replace the singleton via AuditLogger.configure() or by
+    assigning AuditLogger._instance directly. Without restoring it, that
+    state leaks into later tests running in the same process.
+    """
+    previous = AuditLogger._instance
+    try:
+        yield previous
+    finally:
+        AuditLogger._instance = previous
+
+
 @pytest.fixture
 def actor():
     """Create a test actor."""
@@ -577,6 +592,7 @@ class TestInMemoryStorage:
         assert len(page2) == 10
         assert page1[0].event_id != page2[0].event_id
 
+
 class TestPostgresHashChainStorage:
     """#2854: durable backend delegates to the hash-chain writer."""
 
@@ -898,6 +914,26 @@ class TestSingleton:
         monkeypatch.setattr("shared.env.is_production", lambda: True)
         with pytest.raises(RuntimeError, match="durable backend"):
             AuditLogger.get_instance()
+
+
+class TestSingletonIsolation:
+    """The singleton mutation from one test must not leak into the next."""
+
+    def test_singleton_mutation_first(self):
+        """Replace the singleton; the autouse fixture must undo it after."""
+        AuditLogger.configure(
+            storage=InMemoryAuditStorage(),
+            service_name="leak-check-singleton",
+            environment="test",
+        )
+        assert AuditLogger.get_instance()._service_name == "leak-check-singleton"
+
+    def test_singleton_mutation_does_not_leak(self):
+        """The previous test's singleton must have been restored."""
+        instance = AuditLogger._instance
+        assert not (isinstance(instance, AuditLogger) and instance._service_name == "leak-check-singleton"), (
+            "AuditLogger singleton leaked from the previous test"
+        )
 
 
 # =============================================================================
