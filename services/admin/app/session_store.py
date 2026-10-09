@@ -939,6 +939,10 @@ class RedisSessionStore:
         Also drops the refresh-token → session lookup keys so a stolen
         refresh token cannot be redeemed even before the row TTL expires.
 
+        The list-then-revoke sequence is re-checked in bounded passes: a
+        session minted concurrently with the cleanup would otherwise survive
+        logout-everywhere, so passes repeat until one finds nothing active.
+
         Args:
             user_id: User to revoke sessions for
             except_session_id: If provided, skip revoking this session.
@@ -946,24 +950,27 @@ class RedisSessionStore:
         Returns:
             Number of sessions revoked
         """
-        sessions = await self.list_user_sessions(user_id, active_only=True)
-
-        if not sessions:
-            return 0
-
-        # Revoke all sessions in parallel (skip the caller's own session if requested)
         client = await self._get_client()
         revoked = 0
-        async with client.pipeline(transaction=True) as pipe:
-            for session in sessions:
-                if except_session_id is not None and session.id == except_session_id:
-                    continue
-                await pipe.hset(self._session_key(session.id), "is_revoked", "true")
-                # Tear down the refresh-token mapping so /refresh can't claim it.
-                if session.refresh_token_hash:
-                    await pipe.delete(self._token_hash_key(session.refresh_token_hash))
-                revoked += 1
-            await pipe.execute()
+        # Bounded so a steady stream of new sessions cannot spin this forever.
+        for _ in range(3):
+            sessions = await self.list_user_sessions(user_id, active_only=True)
+
+            # Revoke all sessions in parallel (skip the caller's own session if requested)
+            revoked_this_pass = 0
+            async with client.pipeline(transaction=True) as pipe:
+                for session in sessions:
+                    if except_session_id is not None and session.id == except_session_id:
+                        continue
+                    await pipe.hset(self._session_key(session.id), "is_revoked", "true")
+                    # Tear down the refresh-token mapping so /refresh can't claim it.
+                    if session.refresh_token_hash:
+                        await pipe.delete(self._token_hash_key(session.refresh_token_hash))
+                    revoked_this_pass += 1
+                await pipe.execute()
+            revoked += revoked_this_pass
+            if revoked_this_pass == 0:
+                break
 
         logger.info(
             "user_sessions_revoked",
