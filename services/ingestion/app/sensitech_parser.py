@@ -37,6 +37,12 @@ logger = logging.getLogger("sensitech-parser")
 
 router = APIRouter(prefix="/api/v1/ingest/iot", tags=["IoT Import"])
 
+# Upper bound on parsed temperature readings per import. A 5 MB CSV can hold
+# well over 100k short rows, so without this the parser buffers an unbounded
+# list in memory. A year of 15-minute logger samples is about 35k readings,
+# so 100k covers multi-year exports with headroom.
+MAX_SENSITECH_READINGS = 100_000
+
 
 class TemperatureReading(BaseModel):
     """A single parsed temperature reading."""
@@ -69,11 +75,33 @@ class SensitechImportResponse(BaseModel):
     avg_temperature: Optional[float] = None
     duration_hours: Optional[float] = None
     ingestion_result: Optional[IngestResponse] = None
+    rows_skipped: int = 0
+    truncated: bool = False
 
 
-def _parse_sensitech_csv(content: str) -> list[TemperatureReading]:
-    """Parse Sensitech TempTale CSV format."""
+class SensitechParseResult(BaseModel):
+    """Parsed readings plus accounting for rows that were not kept."""
+
+    readings: list[TemperatureReading] = Field(default_factory=list)
+    rows_skipped: int = 0
+    truncated: bool = False
+
+
+def _parse_sensitech_csv_with_stats(
+    content: str,
+    max_readings: int = MAX_SENSITECH_READINGS,
+) -> SensitechParseResult:
+    """Parse Sensitech TempTale CSV format, counting rows that are dropped.
+
+    At most ``max_readings`` readings are kept; anything beyond that sets
+    ``truncated``. Rows with a missing temperature cell, a comment or blank
+    timestamp, or an unparseable temperature increment ``rows_skipped`` so
+    callers can see that data was dropped. Fully blank lines are formatting
+    noise and are not counted.
+    """
     readings: list[TemperatureReading] = []
+    rows_skipped = 0
+    truncated = False
 
     reader = csv.reader(io.StringIO(content))
 
@@ -110,11 +138,20 @@ def _parse_sensitech_csv(content: str) -> list[TemperatureReading]:
 
     # Parse data rows
     for row in reader:
-        if not row or len(row) <= temp_idx:
+        if len(readings) >= max_readings:
+            truncated = True
+            break
+
+        if not row:
+            continue
+
+        if len(row) <= temp_idx:
+            rows_skipped += 1
             continue
 
         # Skip comment/empty rows
         if row[0].strip().startswith("#") or not row[0].strip():
+            rows_skipped += 1
             continue
 
         try:
@@ -130,9 +167,34 @@ def _parse_sensitech_csv(content: str) -> list[TemperatureReading]:
                 )
             )
         except (ValueError, IndexError):
-            continue  # Skip unparseable rows
+            rows_skipped += 1
+            continue
 
-    return readings
+    if truncated or rows_skipped:
+        logger.warning(
+            "sensitech_csv_rows_dropped readings=%d skipped=%d truncated=%s",
+            len(readings),
+            rows_skipped,
+            truncated,
+        )
+
+    return SensitechParseResult(
+        readings=readings,
+        rows_skipped=rows_skipped,
+        truncated=truncated,
+    )
+
+
+def _parse_sensitech_csv(
+    content: str,
+    max_readings: int = MAX_SENSITECH_READINGS,
+) -> list[TemperatureReading]:
+    """Parse Sensitech TempTale CSV format.
+
+    Kept for backward compatibility; prefer ``_parse_sensitech_csv_with_stats``
+    when the caller needs to know about skipped or truncated rows.
+    """
+    return _parse_sensitech_csv_with_stats(content, max_readings=max_readings).readings
 
 
 def _normalize_iso_timestamp_or_400(raw: str) -> str:
@@ -241,7 +303,8 @@ async def import_sensitech(
     content = (await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Sensitech CSV")).decode(
         "utf-8-sig"
     )
-    readings = _parse_sensitech_csv(content)
+    parse_result = _parse_sensitech_csv_with_stats(content)
+    readings = parse_result.readings
 
     if not readings:
         raise HTTPException(status_code=400, detail="No temperature readings found in file")
@@ -313,4 +376,6 @@ async def import_sensitech(
         avg_temperature=round(avg_temp, 2),
         duration_hours=duration_hours,
         ingestion_result=ingestion_result,
+        rows_skipped=parse_result.rows_skipped,
+        truncated=parse_result.truncated,
     )
