@@ -37,13 +37,15 @@ jobs:
 
     steps:
       - name: Checkout PR (full history for diff vs main)
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Fetch base ref
-        run: git fetch origin ${{ github.event.pull_request.base.ref }} --quiet
+        env:
+          BASE_REF_NAME: ${{ github.event.pull_request.base.ref }}
+        run: git fetch origin "$BASE_REF_NAME" --quiet
 
       - name: Trusted config overlay (base ref, not PR head)
         # Everything Claude Code executes or loads as project config must come

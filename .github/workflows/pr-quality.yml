@@ -27,10 +27,10 @@ jobs:
 
       - name: Check PR size
         run: |
-          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
-          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          ADDITIONS=$(gh pr view "$PR_NUMBER" --json additions --jq '.additions')
+          DELETIONS=$(gh pr view "$PR_NUMBER" --json deletions --jq '.deletions')
           TOTAL=$((ADDITIONS + DELETIONS))
-          FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
+          FILES=$(gh pr view "$PR_NUMBER" --json files --jq '.files | length')
 
           echo "### 📊 PR Size" >> $GITHUB_STEP_SUMMARY
           echo "- **Lines changed:** +$ADDITIONS / -$DELETIONS ($TOTAL total)" >> $GITHUB_STEP_SUMMARY
@@ -44,6 +44,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
 
   # ── Conventional Commits ────────────────────────────────
   commit-lint:
