@@ -81,7 +81,7 @@ def test_with_check_arm_is_inspected():
 
 
 def test_policy_predicate_patterns_alternate_using_and_with_check():
-    """A bare constant tenant in the write arm, with no COALESCE to fall back on.
+    r"""A bare constant tenant in the write arm, with no COALESCE to fall back on.
 
     The COALESCE patterns cannot see this one, so it fails only if the
     policy-predicate patterns really do alternate ``USING|WITH CHECK``. Without
@@ -113,8 +113,7 @@ def test_any_constant_tenant_fallback_is_rejected():
 def test_alembic_sql_is_in_the_scan_surface():
     """alembic/sql holds live policies that a fresh `upgrade head` executes."""
     assert (_REPO_ROOT / "alembic" / "sql") in guard.SCAN_DIRS, (
-        "alembic/sql dropped out of SCAN_DIRS — 23 live CREATE POLICY "
-        "statements would go unscanned (#2935)"
+        "alembic/sql dropped out of SCAN_DIRS — 23 live CREATE POLICY statements would go unscanned (#2935)"
     )
     for directory in guard.SCAN_DIRS:
         assert directory.is_dir(), f"configured scan directory does not exist: {directory}"
