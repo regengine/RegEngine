@@ -4,7 +4,7 @@ This module had no dedicated tests. These tests exercise it only
 (product edits here belong to another worker). Covered:
 
 1. ``get_secret`` namespace mapping, missing secret, invalid JSON,
-   and ``lru_cache`` staleness behavior.
+   and rotation visibility (every call reads the environment fresh).
 2. Credential getters and their localhost fallbacks.
 3. ``validate_production_secrets`` skip/fail/pass matrix.
 4. ``require_secure_secrets_in_production`` skip-check gate.
@@ -68,17 +68,12 @@ def _fresh_singleton(monkeypatch):
         if var.startswith("REGENGINE_SECRET_"):
             monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(sm, "_secrets_manager", None)
-    mgr = sm.SecretsManager()
-    mgr.get_secret.cache_clear()
     yield
-    mgr.get_secret.cache_clear()
     sm._secrets_manager = None
 
 
 def _mgr() -> sm.SecretsManager:
-    mgr = sm.SecretsManager()
-    mgr.get_secret.cache_clear()
-    return mgr
+    return sm.SecretsManager()
 
 
 # ---------------------------------------------------------------------------
@@ -99,20 +94,24 @@ class TestGetSecret:
         with pytest.raises(RuntimeError, match="Failed to retrieve secret"):
             _mgr().get_secret("regengine/test/bad")
 
-    def test_result_is_cached_per_instance(self, monkeypatch):
+    def test_rotation_visible_without_restart(self, monkeypatch):
+        """Rotated secrets must take effect on the next call, no restart.
+
+        Regression guard: get_secret used to be lru_cached, so a rotated
+        secret stayed stale until the process restarted (or someone called
+        cache_clear). Now every call reads the environment fresh.
+        """
         monkeypatch.setenv("REGENGINE_SECRET_REGENGINE_TEST_C", '{"v": 1}')
         mgr = _mgr()
-        first = mgr.get_secret("regengine/test/c")
+        assert mgr.get_secret("regengine/test/c") == {"v": 1}
         monkeypatch.setenv("REGENGINE_SECRET_REGENGINE_TEST_C", '{"v": 2}')
-        assert mgr.get_secret("regengine/test/c") == first == {"v": 1}
+        assert mgr.get_secret("regengine/test/c") == {"v": 2}
 
-    def test_cache_clear_picks_up_rotation(self, monkeypatch):
+    def test_rotation_visible_on_shared_singleton(self, monkeypatch):
         monkeypatch.setenv("REGENGINE_SECRET_REGENGINE_TEST_R", '{"v": 1}')
-        mgr = _mgr()
-        assert mgr.get_secret("regengine/test/r") == {"v": 1}
+        assert sm.get_secrets_manager().get_secret("regengine/test/r") == {"v": 1}
         monkeypatch.setenv("REGENGINE_SECRET_REGENGINE_TEST_R", '{"v": 2}')
-        mgr.get_secret.cache_clear()
-        assert mgr.get_secret("regengine/test/r") == {"v": 2}
+        assert sm.get_secrets_manager().get_secret("regengine/test/r") == {"v": 2}
 
 
 # ---------------------------------------------------------------------------

@@ -7,14 +7,16 @@ environment variables with optional namespace-based lookups.
 from __future__ import annotations
 
 import os
-from functools import lru_cache
 from typing import Optional
 
 import structlog
 
 logger = structlog.get_logger("secrets")
 
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+def _current_environment_label() -> str:
+    """Read the environment label fresh so process-wide changes apply."""
+    return os.getenv("ENVIRONMENT", "development")
 
 
 def _is_production_environment(environment: Optional[str] = None) -> bool:
@@ -45,13 +47,17 @@ class SecretsManager:
         self.region_name = region_name
         logger.info(
             "secrets_manager_initialized",
-            environment=ENVIRONMENT,
+            environment=_current_environment_label(),
             source="environment_variables",
         )
 
-    @lru_cache(maxsize=128)
     def get_secret(self, secret_name: str) -> dict:
-        """Retrieve a namespaced secret from environment variables (cached).
+        """Retrieve a namespaced secret from environment variables.
+
+        The value is read from the environment on every call and never
+        cached, so rotated secrets take effect without restarting the
+        process. Environment reads plus one JSON parse are cheap enough
+        that no cache is needed here.
 
         Args:
             secret_name: Secret namespace (example: ``regengine/production/database``)

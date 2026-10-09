@@ -19,7 +19,7 @@ production there's one app per process, so this collision doesn't apply.
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
 
@@ -102,6 +102,30 @@ def test_metrics_endpoint_requires_auth_by_default(monkeypatch):
     assert "text/plain" in resp.headers["content-type"]
     # Default RED metrics should be present as soon as the endpoint is live.
     assert "http_request" in resp.text or "python_info" in resp.text
+
+
+def test_metrics_key_rotation_without_restart(monkeypatch):
+    """Rotating METRICS_API_KEY takes effect immediately, no reload needed.
+
+    Regression guard: the key used to be cached at import time, so a
+    rotated key only took effect after a process restart (tests had to
+    importlib.reload the module). Now require_metrics_key reads the
+    environment on every call.
+    """
+    import shared.observability.metrics_auth as ma
+
+    monkeypatch.setenv("METRICS_API_KEY", "first-key")
+
+    app = FastAPI()
+    app.get("/metrics", dependencies=[Depends(ma.require_metrics_key)])(lambda: {"ok": True})
+    client = TestClient(app)
+
+    assert client.get("/metrics", headers={"X-Metrics-Key": "first-key"}).status_code == 200
+
+    monkeypatch.setenv("METRICS_API_KEY", "second-key")
+
+    assert client.get("/metrics", headers={"X-Metrics-Key": "first-key"}).status_code == 403
+    assert client.get("/metrics", headers={"X-Metrics-Key": "second-key"}).status_code == 200
 
 
 def test_metrics_endpoint_without_auth_in_tests(monkeypatch):
