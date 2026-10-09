@@ -1,4 +1,4 @@
-"""QA5 robustness pass for ``app/sandbox`` — real-behavior regression tests.
+"""QA5 robustness pass for ``app/sandbox``: real-behavior regression tests.
 
 Covers failure paths the existing #1342 sweep left open:
 
