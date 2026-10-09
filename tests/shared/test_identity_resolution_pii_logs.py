@@ -32,7 +32,6 @@ sys.path.insert(0, str(service_dir))
 
 from shared import pii  # noqa: E402
 
-
 # ── 1. Public API surface ──────────────────────────────────────────────────
 
 
@@ -86,7 +85,8 @@ def test_mask_identifier_handles_edge_inputs():
     assert pii.mask_identifier("") == "<empty>"
     # Short values get no suffix leak
     masked = pii.mask_identifier("ab", keep_suffix=2)
-    assert "ab" not in masked or masked.startswith("***")
+    assert "ab" not in masked
+    assert masked.startswith("***")
 
 
 def test_mask_identifier_keep_suffix_zero_hides_all():
@@ -122,9 +122,7 @@ def test_mask_alias_value_uses_identifier_path_for_sensitive_types(alias_type):
     raw = "VERY_SENSITIVE_ID_12345"
     masked = pii.mask_alias_value(alias_type, raw)
     # Identifier mask format starts with '***' (no leading plaintext)
-    assert masked.startswith("***"), (
-        f"sensitive alias_type {alias_type!r} leaked leading plaintext: {masked}"
-    )
+    assert masked.startswith("***"), f"sensitive alias_type {alias_type!r} leaked leading plaintext: {masked}"
     # Raw value must not be embedded anywhere
     assert raw not in masked
 
@@ -182,12 +180,7 @@ def test_service_source_routes_logs_through_mask():
     The service was split into sibling modules (registration.py,
     resolver.py, ...) — scan every module in the package so the
     invariant follows the code wherever it lives."""
-    pkg_dir = (
-        Path(__file__).resolve().parents[2]
-        / "services"
-        / "shared"
-        / "identity_resolution"
-    )
+    pkg_dir = Path(__file__).resolve().parents[2] / "services" / "shared" / "identity_resolution"
     src = "\n".join(p.read_text() for p in sorted(pkg_dir.glob("*.py")))
 
     # Find every logger.info/warning/error call block and its extra={...}
@@ -225,16 +218,9 @@ def test_service_imports_mask_helpers():
     fields would still be logged but through a NameError path. Lock
     in the import statically. Scans every module in the (now split)
     identity_resolution package."""
-    pkg_dir = (
-        Path(__file__).resolve().parents[2]
-        / "services"
-        / "shared"
-        / "identity_resolution"
-    )
+    pkg_dir = Path(__file__).resolve().parents[2] / "services" / "shared" / "identity_resolution"
     src = "\n".join(p.read_text() for p in sorted(pkg_dir.glob("*.py")))
-    assert "from shared.pii import" in src, (
-        "#1233: identity_resolution must import mask helpers from shared.pii"
-    )
+    assert "from shared.pii import" in src, "#1233: identity_resolution must import mask helpers from shared.pii"
     assert "mask_alias_value" in src or "mask_identifier" in src
     assert "mask_name" in src
 
