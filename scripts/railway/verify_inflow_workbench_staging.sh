@@ -7,7 +7,9 @@ set -euo pipefail
 #   INGESTION_URL  Public ingestion-service URL, for example https://...up.railway.app
 # Optional:
 #   REGENGINE_API_KEY  Added as X-RegEngine-API-Key when set
-#   TENANT_ID          UUID tenant to use for the smoke run
+#   TENANT_ID          UUID tenant for the smoke run. When unset, a
+#                      disposable random UUID is generated so concurrent
+#                      verifiers never share one namespace.
 
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required" >&2
@@ -34,7 +36,21 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 2
 fi
 
-TENANT_ID="${TENANT_ID:-11111111-1111-4111-8111-111111111111}"
+if [[ -z "${TENANT_ID:-}" ]]; then
+  TENANT_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+  echo "TENANT_ID not set; generated disposable tenant ${TENANT_ID}"
+fi
+if ! python3 - "$TENANT_ID" <<'PY' >/dev/null 2>&1
+import sys
+import uuid
+
+uuid.UUID(sys.argv[1])
+PY
+then
+  echo "TENANT_ID must be a valid UUID, got '${TENANT_ID}'" >&2
+  exit 2
+fi
+RUN_TAG="$(python3 -c 'import uuid; print(uuid.uuid4().hex[:8])')"
 INGESTION_URL="${INGESTION_URL%/}"
 AUTH_ARGS=()
 if [[ -n "${REGENGINE_API_KEY:-}" ]]; then
@@ -78,15 +94,19 @@ response_file="$(mktemp)"
 summary_file="$(mktemp)"
 trap 'rm -f "$payload_file" "$response_file" "$summary_file"' EXIT
 
-python3 - "$TENANT_ID" > "$payload_file" <<'PY'
+python3 - "$TENANT_ID" "$RUN_TAG" > "$payload_file" <<'PY'
 import json
 import sys
 
 tenant_id = sys.argv[1]
+run_tag = sys.argv[2]
+lot_code = f"TLC-STAGING-VERIFY-{run_tag}"
+bol = f"BOL-STAGING-VERIFY-{run_tag}"
 payload = {
     "tenant_id": tenant_id,
     "source": "railway-staging-verifier",
-    "csv": "cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document\nshipping,TLC-STAGING-VERIFY,Romaine Lettuce,12,cases,Salinas Dock,2026-04-30T10:00:00Z,Salinas Packhouse,Bay Area DC,BOL-STAGING-VERIFY",
+    "csv": "cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document\n"
+    f"shipping,{lot_code},Romaine Lettuce,12,cases,Salinas Dock,2026-04-30T10:00:00Z,Salinas Packhouse,Bay Area DC,{bol}",
     "result": {
         "total_events": 1,
         "compliant_events": 1,
@@ -102,7 +122,7 @@ payload = {
             {
                 "event_index": 0,
                 "cte_type": "shipping",
-                "traceability_lot_code": "TLC-STAGING-VERIFY",
+                "traceability_lot_code": lot_code,
                 "product_description": "Romaine Lettuce",
                 "kde_errors": [],
                 "rules_evaluated": 1,
