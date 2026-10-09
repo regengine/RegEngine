@@ -49,7 +49,10 @@ def get_compliance_date_facts(run_id):
         except ValueError as e:
             log(f"❌ Fatal error: authorities response is not valid JSON: {e}")
             return []
-        fda_docs = [d for d in docs if d.get("original_file_path") == unique_url]
+        if not isinstance(docs, list):
+            log("❌ Fatal error: unexpected authorities response shape; expected a list.")
+            return []
+        fda_docs = [d for d in docs if isinstance(d, dict) and d.get("original_file_path") == unique_url]
 
         if not fda_docs:
             log("⚠️ No FDA documents found.")
@@ -77,8 +80,22 @@ def get_compliance_date_facts(run_id):
                         log(f"❌ Fatal error: export for {doc_code} is not valid JSON: {e}")
                         continue
                     # Flatten facts from documents
-                    for d in data.get("documents", []):
-                        for f in d.get("facts", []):
+                    if not isinstance(data, dict):
+                        log(f"❌ Fatal error: unexpected export shape for {doc_code}; expected an object.")
+                        continue
+                    documents = data.get("documents", [])
+                    if not isinstance(documents, list):
+                        log(f"❌ Fatal error: unexpected export shape for {doc_code}; expected a documents list.")
+                        continue
+                    for d in documents:
+                        if not isinstance(d, dict):
+                            continue
+                        facts_list = d.get("facts", [])
+                        if not isinstance(facts_list, list):
+                            continue
+                        for f in facts_list:
+                            if not isinstance(f, dict):
+                                continue
                             if f.get("key") == "Compliance Date":
                                 f["_doc_version"] = d.get("version")  # annotated for convenience
                                 facts.append(f)

@@ -73,6 +73,36 @@ def test_fetch_distinguishes_fatal_from_transient_errors(monkeypatch, capsys) ->
     assert "transient" not in fatal_out
 
 
+def test_fetch_returns_empty_for_dict_authorities_body(monkeypatch, capsys) -> None:
+    def dict_body_get(*args, **kwargs):
+        return _Resp(status_code=200, payload={"error": "paginated envelope"})
+
+    monkeypatch.setattr(_MODULE.requests, "get", dict_body_get)
+    assert _MODULE.get_compliance_date_facts("run-dict-shape") == []
+    out = capsys.readouterr().out.lower()
+    assert "fatal" in out
+
+
+def test_fetch_returns_empty_for_list_export_body(monkeypatch, capsys) -> None:
+    docs = [
+        {
+            "id": "d1",
+            "document_code": "DOC1",
+            "original_file_path": _MODULE.LIVE_FDA_URL + "?run=r2",
+        }
+    ]
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/pcos/authorities"):
+            return _Resp(status_code=200, payload=docs)
+        return _Resp(status_code=200, payload=[{"not": "an object"}])
+
+    monkeypatch.setattr(_MODULE.requests, "get", fake_get)
+    assert _MODULE.get_compliance_date_facts("r2") == []
+    out = capsys.readouterr().out.lower()
+    assert "fatal" in out
+
+
 def test_fetch_skips_doc_missing_document_code(monkeypatch) -> None:
     docs = [{"id": "d1", "original_file_path": _MODULE.LIVE_FDA_URL + "?run=r1"}]
 
