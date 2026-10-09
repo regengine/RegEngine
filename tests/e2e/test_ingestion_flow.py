@@ -100,7 +100,7 @@ class TestIngestionFlow:
         return str(uuid4())
 
     def test_submit_url_returns_job_id(self, ingestion_client):
-        """Submitting a URL should return a job ID."""
+        """Submitting a URL with a valid key should return the normalized event."""
         response = ingestion_client.post(
             "/v1/ingest/url",
             json={
@@ -110,12 +110,30 @@ class TestIngestionFlow:
             headers={"X-RegEngine-API-Key": "test-key"},
         )
 
-        # Should return 200/202 with job info
-        assert response.status_code in [200, 202, 401, 403], f"Unexpected status: {response.status_code}"
+        # Success is exactly 200 with the normalized event. Auth failures
+        # (401/403) must fail here, they are covered separately by
+        # test_submit_url_rejects_unauthenticated below.
+        assert response.status_code == 200, f"Unexpected status: {response.status_code}"
 
-        if response.status_code in [200, 202]:
-            data = response.json()
-            assert "job_id" in data or "id" in data or "task_id" in data
+        data = response.json()
+        assert "event_id" in data
+
+    def test_submit_url_rejects_unauthenticated(self, ingestion_client):
+        """Submitting a URL without a valid key must be rejected."""
+        payload = {
+            "url": "https://www.fda.gov/food/food-safety-modernization-act-fsma/fsma-final-rule-requirements-additional-traceability-records-certain-foods",
+            "source_system": "fda",
+        }
+
+        # Missing key is rejected with 401 (services/shared/auth.py).
+        response = ingestion_client.post("/v1/ingest/url", json=payload)
+        assert response.status_code == 401, f"Unexpected status: {response.status_code}"
+
+        # Unknown key is rejected with 401 as well.
+        response = ingestion_client.post(
+            "/v1/ingest/url", json=payload, headers={"X-RegEngine-API-Key": "invalid-test-key"}
+        )
+        assert response.status_code == 401, f"Unexpected status: {response.status_code}"
 
     def test_job_status_endpoint_exists(self, ingestion_client):
         """Job status endpoint should be accessible."""
