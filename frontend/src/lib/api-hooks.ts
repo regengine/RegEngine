@@ -17,13 +17,22 @@ function isAbortError(err: unknown): boolean {
     return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
+/** Methods safe to retry: a repeated request cannot apply twice. */
+function isRetryableMethod(method: string | undefined): boolean {
+    const upper = (method ?? 'GET').toUpperCase();
+    return upper === 'GET' || upper === 'HEAD' || upper === 'OPTIONS';
+}
+
 /** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
 async function apiFetch<T>(path: string, _apiKey?: string | null, options: RequestInit = {}): Promise<T> {
     const MAX_RETRIES = 2;
     const RETRY_DELAYS = [500, 1500];
+    // Non-idempotent requests (POST and friends) are attempted exactly once:
+    // retrying one after a 500 could apply the action twice.
+    const maxRetries = isRetryableMethod(options.method) ? MAX_RETRIES : 0;
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
             const res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
@@ -53,7 +62,7 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
             }
         }
 
-        if (attempt < MAX_RETRIES) {
+        if (attempt < maxRetries) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
         }
     }

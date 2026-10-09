@@ -75,6 +75,55 @@ describe('internal api hooks', () => {
         expect(new Headers(scoreInit.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
+    it('attempts a failed POST exactly once so a 500 cannot apply the action twice', async () => {
+        fetchWithCsrfMock.mockResolvedValue({
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+        });
+
+        const { acknowledgeAlert } = await import('@/lib/api-hooks');
+        await expect(acknowledgeAlert('tenant-123', null, 'alert-1')).rejects.toThrow('API error: 500');
+
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('attempts a POST with a network failure exactly once', async () => {
+        fetchWithCsrfMock.mockRejectedValue(new TypeError('fetch failed'));
+
+        const { acknowledgeAlert } = await import('@/lib/api-hooks');
+        await expect(acknowledgeAlert('tenant-123', null, 'alert-1')).rejects.toThrow('fetch failed');
+
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('still retries a failed GET and returns the recovery response', async () => {
+        fetchWithCsrfMock
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                statusText: 'Internal Server Error',
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    tenant_id: 'tenant-123',
+                    overall_score: 94,
+                    grade: 'A',
+                }),
+            });
+
+        const { fetchComplianceScore } = await import('@/lib/api-hooks');
+        const result = await fetchComplianceScore('tenant-123');
+
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);
+        expect(result).toEqual({
+            tenant_id: 'tenant-123',
+            overall_score: 94,
+            grade: 'A',
+        });
+    });
+
     it('creates checkout sessions via the billing proxy without client tenant payload', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,
