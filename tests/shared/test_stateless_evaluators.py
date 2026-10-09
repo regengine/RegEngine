@@ -63,44 +63,44 @@ class TestFieldPresence:
 
     def test_missing_field_fails(self):
         event = _make_event()
-        result = evaluate_field_presence({"field": "kdes.lot_code"}, event, _make_rule())
+        result = evaluate_field_presence(event, {"field": "kdes.lot_code"}, _make_rule())
         assert result.result == "fail"
         assert result.why_failed
         assert "lot code" in result.why_failed
 
     def test_zero_and_false_count_as_present(self):
         assert (
-            evaluate_field_presence({"field": "kdes.qty"}, _make_event(kdes={"qty": 0}), _make_rule()).result == "pass"
+            evaluate_field_presence(_make_event(kdes={"qty": 0}), {"field": "kdes.qty"}, _make_rule()).result == "pass"
         )
         assert (
-            evaluate_field_presence({"field": "kdes.flag"}, _make_event(kdes={"flag": False}), _make_rule()).result
+            evaluate_field_presence(_make_event(kdes={"flag": False}), {"field": "kdes.flag"}, _make_rule()).result
             == "pass"
         )
 
     def test_blank_string_and_empty_list_count_as_absent(self):
         assert (
-            evaluate_field_presence({"field": "kdes.a"}, _make_event(kdes={"a": "   "}), _make_rule()).result == "fail"
+            evaluate_field_presence(_make_event(kdes={"a": "   "}), {"field": "kdes.a"}, _make_rule()).result == "fail"
         )
-        assert evaluate_field_presence({"field": "kdes.b"}, _make_event(kdes={"b": []}), _make_rule()).result == "fail"
+        assert evaluate_field_presence(_make_event(kdes={"b": []}), {"field": "kdes.b"}, _make_rule()).result == "fail"
 
 
 class TestFieldFormat:
     def test_matching_value_passes(self):
         event = _make_event(kdes={"lot_code": "ABC-123"})
         logic = {"field": "kdes.lot_code", "params": {"pattern": r"^[A-Z]+-\d+$"}}
-        result = evaluate_field_format(logic, event, _make_rule())
+        result = evaluate_field_format(event, logic, _make_rule())
         assert result.result == "pass"
 
     def test_mismatched_value_fails(self):
         event = _make_event(kdes={"lot_code": "not a code!!"})
         logic = {"field": "kdes.lot_code", "params": {"pattern": r"^[A-Z]+-\d+$"}}
-        result = evaluate_field_format(logic, event, _make_rule())
+        result = evaluate_field_format(event, logic, _make_rule())
         assert result.result == "fail"
         assert result.why_failed
 
     def test_missing_value_fails_not_skips(self):
         logic = {"field": "kdes.lot_code", "params": {"pattern": r"^.+$"}}
-        result = evaluate_field_format(logic, _make_event(), _make_rule())
+        result = evaluate_field_format(_make_event(), logic, _make_rule())
         assert result.result == "fail"
 
 
@@ -108,25 +108,25 @@ class TestMultiFieldPresence:
     def test_any_mode_passes_when_one_field_present(self):
         event = _make_event(kdes={"lot_code": "ABC"})
         logic = {"params": {"fields": ["kdes.lot_code", "kdes.po_number"]}}
-        assert evaluate_multi_field_presence(logic, event, _make_rule()).result == "pass"
+        assert evaluate_multi_field_presence(event, logic, _make_rule()).result == "pass"
 
     def test_any_mode_fails_when_none_present(self):
         logic = {"params": {"fields": ["kdes.lot_code", "kdes.po_number"]}}
-        result = evaluate_multi_field_presence(logic, _make_event(), _make_rule())
+        result = evaluate_multi_field_presence(_make_event(), logic, _make_rule())
         assert result.result == "fail"
         assert result.why_failed
 
     def test_all_mode_requires_every_field(self):
         logic = {"params": {"fields": ["kdes.lot_code", "kdes.po_number"], "require": "all"}}
         partial = _make_event(kdes={"lot_code": "ABC"})
-        result = evaluate_multi_field_presence(logic, partial, _make_rule())
+        result = evaluate_multi_field_presence(partial, logic, _make_rule())
         assert result.result == "fail"
         assert "po number" in (result.why_failed or "")
         full = _make_event(kdes={"lot_code": "ABC", "po_number": "PO-1"})
-        assert evaluate_multi_field_presence(logic, full, _make_rule()).result == "pass"
+        assert evaluate_multi_field_presence(full, logic, _make_rule()).result == "pass"
 
     def test_empty_field_list_fails(self):
-        result = evaluate_multi_field_presence({"params": {"fields": []}}, _make_event(), _make_rule())
+        result = evaluate_multi_field_presence(_make_event(), {"params": {"fields": []}}, _make_rule())
         assert result.result == "fail"
 
 
@@ -171,27 +171,27 @@ class TestGs1CheckDigit:
 
     def test_valid_identifier_passes(self):
         event = _make_event(kdes={"location_gln": self.VALID_GS1_13})
-        result = evaluate_gs1_check_digit({"field": "kdes.location_gln"}, event, _make_rule())
+        result = evaluate_gs1_check_digit(event, {"field": "kdes.location_gln"}, _make_rule())
         assert result.result == "pass"
 
     def test_bad_check_digit_fails(self):
         event = _make_event(kdes={"location_gln": "1234567890123"})
-        result = evaluate_gs1_check_digit({"field": "kdes.location_gln"}, event, _make_rule())
+        result = evaluate_gs1_check_digit(event, {"field": "kdes.location_gln"}, _make_rule())
         assert result.result == "fail"
         assert result.why_failed and "check digit" in result.why_failed
 
     def test_wrong_length_fails(self):
         event = _make_event(kdes={"location_gln": "12345678"})
-        result = evaluate_gs1_check_digit({"field": "kdes.location_gln"}, event, _make_rule())
+        result = evaluate_gs1_check_digit(event, {"field": "kdes.location_gln"}, _make_rule())
         assert result.result == "fail"
 
     def test_missing_value_skips(self):
-        result = evaluate_gs1_check_digit({"field": "kdes.location_gln"}, _make_event(), _make_rule())
+        result = evaluate_gs1_check_digit(_make_event(), {"field": "kdes.location_gln"}, _make_rule())
         assert result.result == "skip"
 
     def test_location_description_skips(self):
         event = _make_event(kdes={"location_gln": "Dock 7 warehouse"})
-        result = evaluate_gs1_check_digit({"field": "kdes.location_gln"}, event, _make_rule())
+        result = evaluate_gs1_check_digit(event, {"field": "kdes.location_gln"}, _make_rule())
         assert result.result == "skip"
 
 
