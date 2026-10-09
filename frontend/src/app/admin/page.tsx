@@ -24,6 +24,15 @@ import { useAuth } from '@/lib/auth-context';
 import { useAPIKeys, useCreateAPIKey, useGenerateAPIKey, useRevokeAPIKey } from '@/hooks/use-api';
 import { Key, Plus, Trash2, CheckCircle, Copy, Shield, ArrowRight } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
+import type { APIKeyResponse } from '@/types/api';
+
+// The backend may return the new key value as `key` or `api_key`, and a
+// listed key's identifier as `key_id` or `id`. Accept both spellings so no
+// live credential is silently hidden and revoke always has an identifier.
+const getCreatedKeyValue = (result: APIKeyResponse): string | undefined =>
+  result.key ?? result.api_key;
+
+const getListKeyId = (key: APIKeyResponse): string => key.key_id ?? key.id;
 
 export default function AdminPage() {
   const {
@@ -57,8 +66,9 @@ export default function AdminPage() {
       });
       setNewKeyDescription('');
       setIsCreating(false);
-      if (result.api_key) {
-        setCopiedKey(result.api_key);
+      const createdKey = getCreatedKeyValue(result);
+      if (createdKey) {
+        setCopiedKey(createdKey);
       }
       refetch();
     } catch (error) {
@@ -71,8 +81,9 @@ export default function AdminPage() {
 
     try {
       const result = await generateKeyMutation.mutateAsync({ tenantId: tenantId || undefined });
-      if (result.api_key) {
-        setGeneratedKey(result.api_key);
+      const generatedKeyValue = getCreatedKeyValue(result);
+      if (generatedKeyValue) {
+        setGeneratedKey(generatedKeyValue);
       }
     } catch (error) {
       console.error('Failed to generate API key:', error);
@@ -343,15 +354,17 @@ export default function AdminPage() {
                   </div>
                 ) : apiKeys && apiKeys.length > 0 ? (
                   <ul className="divide-y divide-re-border-subtle">
-                    {apiKeys.map((key) => (
+                    {apiKeys.map((key) => {
+                      const rowKeyId = getListKeyId(key);
+                      return (
                       <li
-                        key={key.key_id}
+                        key={rowKeyId}
                         className="flex items-center justify-between gap-3 px-5 py-4 transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 flex flex-wrap items-center gap-3">
                             <Key className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                            <code className="font-mono text-[0.8125rem] text-re-text-primary">{key.key_id}</code>
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">{rowKeyId}</code>
                             <StatusBadge state="compliant" label="Active" size="sm" />
                           </div>
                           {key.description && (
@@ -368,13 +381,14 @@ export default function AdminPage() {
                           size="icon"
                           aria-label="Revoke API key"
                           className="shrink-0"
-                          onClick={() => key.key_id && setPendingRevokeKeyId(key.key_id)}
+                          onClick={() => rowKeyId && setPendingRevokeKeyId(rowKeyId)}
                           disabled={revokeKeyMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         </Button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 ) : (
                   <EmptyState bare icon={Key} title="No API keys found" />
