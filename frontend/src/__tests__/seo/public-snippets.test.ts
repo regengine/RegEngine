@@ -23,7 +23,7 @@ const FRONTEND = process.cwd();
 const SRC = path.join(FRONTEND, 'src');
 const TITLE_LIMIT = 60;
 const DESCRIPTION_LIMIT = 155;
-const DASH = /[—–]/;
+const DASH = /[, -]/;
 
 const HOME_TITLE = 'FSMA 204 Recordkeeping Software | RegEngine';
 const HOME_DESCRIPTION =
