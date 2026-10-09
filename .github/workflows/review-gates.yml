@@ -216,7 +216,7 @@ jobs:
       - name: No f-string SQL in Python services
         run: |
           # Flag f-strings containing SQL keywords — high-confidence pattern for SQL injection
-          MATCHES=$(grep -rn 'f".*SELECT\|f".*INSERT\|f".*UPDATE\|f".*DELETE\|f".*DROP' \
+          MATCHES=$(grep -rn "f['\"].*SELECT\|f['\"].*INSERT\|f['\"].*UPDATE\|f['\"].*DELETE\|f['\"].*DROP" \
             services/ --include="*.py" 2>/dev/null || true)
           # Filter out comments and test files
           FILTERED=$(echo "$MATCHES" | grep -v '^\s*#\|test_\|_test\.py\|conftest' || true)
