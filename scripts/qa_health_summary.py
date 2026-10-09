@@ -114,7 +114,7 @@ def parse_playwright(path: Path | None) -> dict[str, float | int] | None:
             "failed": failed,
             "errors": error_count,
             "skipped": skipped,
-            "duration_seconds": _coerce_duration(stats.get("duration")),
+            "duration_seconds": _coerce_duration(stats.get("duration"), "ms"),
         }
 
     counts = {"passed": 0, "failed": 0, "skipped": 0, "errors": error_count}
@@ -412,14 +412,25 @@ def _walk_playwright_statuses(value: Any) -> list[str]:
     return statuses
 
 
-def _coerce_duration(value: Any) -> float | None:
+def _coerce_duration(value: Any, unit: str) -> float | None:
+    """Convert a raw duration to seconds using an explicit unit.
+
+    Playwright reports ``stats.duration`` in milliseconds, so its call site
+    passes ``"ms"``. The previous magnitude heuristic (values over 10000
+    treated as milliseconds) silently misreported legitimately long timings
+    and small millisecond values, so the unit is now required.
+    """
     if value is None:
         return None
     try:
         duration = float(value)
     except (TypeError, ValueError):
         return None
-    return round(duration / 1000 if duration > 10000 else duration, 2)
+    if unit in ("ms", "millisecond", "milliseconds"):
+        return round(duration / 1000, 2)
+    if unit in ("s", "sec", "secs", "second", "seconds"):
+        return round(duration, 2)
+    raise ValueError(f"unknown duration unit: {unit!r}")
 
 
 def _relpath(path: Path) -> str:

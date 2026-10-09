@@ -107,7 +107,7 @@ def test_parse_playwright_counts_top_level_errors(tmp_path: Path) -> None:
         "failed": 0,
         "errors": 1,
         "skipped": 0,
-        "duration_seconds": 1000,
+        "duration_seconds": 1.0,
     }
 
 
@@ -138,6 +138,37 @@ def test_parsers_tolerate_zero_byte_artifacts(tmp_path: Path) -> None:
         empty = tmp_path / name
         empty.write_bytes(b"")
         assert parser(empty) is None
+
+
+def test_coerce_duration_uses_explicit_units() -> None:
+    # Small millisecond values must convert, not pass through as seconds.
+    assert _MODULE._coerce_duration(1000, "ms") == 1.0
+    assert _MODULE._coerce_duration(44000, "ms") == 44.0
+    # Legitimately long second values must not be divided as milliseconds.
+    assert _MODULE._coerce_duration(15000, "s") == 15000.0
+    assert _MODULE._coerce_duration(None, "ms") is None
+    assert _MODULE._coerce_duration("bad", "ms") is None
+
+
+def test_coerce_duration_rejects_unknown_unit() -> None:
+    try:
+        _MODULE._coerce_duration(1000, "fortnights")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for unknown unit")
+
+
+def test_parse_playwright_converts_small_ms_duration(tmp_path: Path) -> None:
+    report = tmp_path / "playwright.json"
+    report.write_text(
+        json.dumps({"stats": {"expected": 1, "unexpected": 0, "skipped": 0, "duration": 1000}}),
+        encoding="utf-8",
+    )
+
+    counts = _MODULE.parse_playwright(report)
+
+    assert counts["duration_seconds"] == 1.0
 
 
 def test_build_summary_tolerates_missing_outputs(tmp_path: Path) -> None:
