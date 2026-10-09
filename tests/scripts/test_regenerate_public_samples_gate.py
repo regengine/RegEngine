@@ -47,8 +47,7 @@ class TestImportFailureIsRed:
         monkeypatch.setattr(script, "_try_import_production_helpers", lambda: None)
 
         assert script.main() != 0, (
-            "import failure returned 0 — the drift gate passes having "
-            "regenerated nothing (#2842)"
+            "import failure returned 0 — the drift gate passes having regenerated nothing (#2842)"
         )
 
     def test_main_writes_nothing_on_the_failure_path(self, script, monkeypatch, tmp_path):
@@ -74,21 +73,38 @@ class TestHappyPathStillReturnsZero:
     def test_main_succeeds_when_helpers_import(self, script, monkeypatch, tmp_path):
         """Guard against 'make it red' turning into 'always red'.
 
-        Exercises the real helper imports and the real synthetic inputs, so it
-        proves the gate can still pass on a healthy checkout. EXPORT_DIR is
-        redirected into tmp_path: all three writers read that module global at
-        call time (regenerate_public_samples.py:234, :290, :323), so the real
-        checked-in demo_exports/ is never touched by the test suite. Writing to
-        it would silently rewrite the public Proof Surface as a side effect of
-        running tests.
+        Uses stubbed helpers plus the real synthetic inputs, so the passing
+        case is exercised even where the production helpers are not
+        importable. A skip here would let an always-red gate look fine.
+        EXPORT_DIR is redirected into tmp_path: all three writers read that
+        module global at call time (regenerate_public_samples.py:234, :290,
+        :323), so the real checked-in demo_exports/ is never touched by the
+        test suite. Writing to it would silently rewrite the public Proof
+        Surface as a side effect of running tests.
         """
-        if script._try_import_production_helpers() is None:
-            pytest.skip("production helpers not importable in this environment")
 
+        def _fake_generate_csv(events, include_pii=True):
+            lines = ["event_type,event_timestamp,traceability_lot_code"]
+            for event in events:
+                lines.append(
+                    f"{event['event_type']},{event['event_timestamp']},{event.get('traceability_lot_code', '')}"
+                )
+            return "\r\n".join(lines) + "\r\n"
+
+        def _fake_compute_merkle_root(hashes):
+            return "stub-merkle-root"
+
+        monkeypatch.setattr(
+            script,
+            "_try_import_production_helpers",
+            lambda: (_fake_generate_csv, {}, _fake_compute_merkle_root),
+        )
         monkeypatch.setattr(script, "EXPORT_DIR", tmp_path / "demo_exports")
 
         assert script.main() == 0
         assert (tmp_path / "demo_exports" / "sample_fda_export.csv").exists()
+        assert (tmp_path / "demo_exports" / "sample_epcis.json").exists()
+        assert (tmp_path / "demo_exports" / "sample_audit_bundle.json").exists()
 
 
 class TestWorkflowInstallsTheLockfile:
