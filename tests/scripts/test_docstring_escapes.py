@@ -9,7 +9,6 @@ old code and passes once the docstring is a raw string.
 
 from __future__ import annotations
 
-import py_compile
 import warnings
 from pathlib import Path
 
@@ -19,7 +18,10 @@ _TARGET = Path(__file__).with_name("test_check_rls_fallback.py")
 def test_no_invalid_escape_sequences():
     # Python emits DeprecationWarning before 3.12 and SyntaxWarning from
     # 3.12 on, so promote both to errors to catch the bad escape anywhere.
+    # compile() on the file text raises without writing bytecode, so this
+    # stays green in read only checkouts.
+    source = _TARGET.read_text(encoding="utf-8")
     with warnings.catch_warnings():
         warnings.simplefilter("error", SyntaxWarning)
         warnings.simplefilter("error", DeprecationWarning)
-        py_compile.compile(str(_TARGET), doraise=True)
+        compile(source, str(_TARGET), "exec")
