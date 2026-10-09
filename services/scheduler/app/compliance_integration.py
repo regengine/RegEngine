@@ -76,6 +76,7 @@ class ComplianceIntegration:
         for tenant_id in tenant_ids:
             with self.Session() as session:
                 set_tenant_guc(session, tenant_id)
+                match = None
                 try:
                     matches = self._find_matching_tenants(
                         session,
@@ -108,7 +109,7 @@ class ComplianceIntegration:
                     # in Sentry.
                     logger.error(
                         "alert_creation_failed",
-                        tenant_id=str(match["tenant_id"]),
+                        tenant_id=str(match["tenant_id"]) if match is not None else str(tenant_id),
                         error=str(e),
                         error_type=type(e).__name__,
                     )
