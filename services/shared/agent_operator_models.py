@@ -76,6 +76,24 @@ class AdvisoryReceiptModel(Base):
             "sequence_num",
             name="ux_ingestion_run_receipts_run_sequence",
         ),
+        # Composite tenant-scoped FK to the one referenced table that has an
+        # ORM model. Name and ON DELETE RESTRICT match the v079 DDL exactly
+        # so autogenerate agrees. The sibling v079 FKs (event, evidence,
+        # rule-eval, export) point at raw-SQL-managed tables with no ORM
+        # model, so they cannot be declared here: an unresolvable string
+        # reference raises NoReferencedTableError during autogenerate
+        # comparison (use_alter does not help; the comparator still
+        # resolves). Those four stay covered by the one-directional
+        # foreign_key_constraint rule in alembic/env.py, which ignores
+        # database-only FKs the same way it ignores database-only indexes
+        # and CHECK constraints. Do NOT "complete" this set without adding
+        # ORM models for the referenced tables first.
+        ForeignKeyConstraint(
+            ["ingestion_run_id", "tenant_id"],
+            ["fsma.ingestion_runs.id", "fsma.ingestion_runs.tenant_id"],
+            name="fk_ingestion_run_receipts_run_tenant",
+            ondelete="RESTRICT",
+        ),
         {
             "schema": "fsma",
             "comment": "Tenant-scoped append-only state receipt ledger for ingestion runs.",
@@ -107,10 +125,7 @@ class AdvisoryReceiptModel(Base):
     receipt_hash = Column(
         String(64),
         nullable=False,
-        comment=(
-            "SHA-256 hash over receipt identity, state, links, payload hash, "
-            "and previous receipt hash."
-        ),
+        comment=("SHA-256 hash over receipt identity, state, links, payload hash, and previous receipt hash."),
     )
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
 
