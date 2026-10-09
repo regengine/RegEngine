@@ -3,8 +3,8 @@
 Spins up a disposable PostgreSQL container, creates a representative
 tenant_* feature table and ``fsma.task_queue`` in their pre-v090 shape
 (v051 four-policy text-compare on the feature table, v050/v063 fail-open
-``OR ... = ''`` policy on task_queue), applies v090's conversion helpers,
-and asserts the fail-hard contract:
+``OR ... = ''`` policy on task_queue), runs v090's real ``upgrade()``
+against that pre-v090 state, and asserts the fail-hard contract:
 
   1. A session scoped to tenant A sees only A's rows.
   2. A session scoped to tenant B does not see A's rows.
@@ -24,7 +24,9 @@ Run via:
 from __future__ import annotations
 
 import importlib.util
+import sys
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
@@ -157,27 +159,38 @@ def _bootstrap_pre_v090(engine: Engine) -> None:
         )
 
 
+# Every op.execute() statement v090.upgrade() ran, in order. Recorded so
+# the drift canary below can prove the real migration (including its
+# task_queue block) was what shaped this database — not a hand-written
+# copy of its SQL.
+APPLIED_STATEMENTS: list[str] = []
+
+
 def _apply_v090(engine: Engine) -> None:
+    """Run v090's real upgrade() against the pre-v090 fixture database.
+
+    The migration's ``op`` is pointed at the fixture connection so every
+    statement ``upgrade()`` emits executes here. Nothing is hand-written:
+    if the migration's task_queue block drifts (or is removed), the
+    behavioral tests below see the drifted policies and fail.
+    """
     v090 = _load_v090()
     with engine.begin() as conn:
-        conn.execute(text(v090._converge_feature_table(FEATURE_TABLE)))
-        # task_queue re-assertion block (verbatim from v090.upgrade).
-        conn.execute(
-            text("""
-            DO $mig$
-            BEGIN
-                IF to_regclass('fsma.task_queue') IS NULL THEN
-                    RETURN;
-                END IF;
-                EXECUTE 'ALTER TABLE fsma.task_queue ENABLE ROW LEVEL SECURITY';
-                EXECUTE 'ALTER TABLE fsma.task_queue FORCE ROW LEVEL SECURITY';
-                EXECUTE 'DROP POLICY IF EXISTS tenant_isolation_tasks ON fsma.task_queue';
-                EXECUTE 'CREATE POLICY tenant_isolation_tasks ON fsma.task_queue '
-                        'USING (tenant_id = get_tenant_context())';
-            END
-            $mig$;
-        """)
-        )
+
+        class _ConnOp:
+            @staticmethod
+            def execute(statement, *args, **kwargs) -> None:
+                sql = str(statement)
+                APPLIED_STATEMENTS.append(sql)
+                conn.execute(text(sql))
+
+        real_op = v090.op
+        v090.op = _ConnOp()
+        try:
+            v090.upgrade()
+        finally:
+            v090.op = real_op
+    assert APPLIED_STATEMENTS, "v090.upgrade() executed no statements"
 
 
 def _set_tenant(conn, tenant_id: uuid.UUID) -> None:
@@ -188,11 +201,59 @@ def _set_tenant(conn, tenant_id: uuid.UUID) -> None:
 # Tests
 # ---------------------------------------------------------------------------
 
+
+class _RecordingConn:
+    """Stand-in for a DBAPI connection: records SQL instead of running it."""
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+
+    def execute(self, statement, *args, **kwargs):
+        self.statements.append(str(statement))
+        return None
+
+
+class _RecordingEngine:
+    """Stand-in for an engine around one recording connection."""
+
+    def __init__(self, conn: _RecordingConn) -> None:
+        self._conn = conn
+
+    @contextmanager
+    def begin(self):
+        yield self._conn
+
+
+def test_apply_v090_runs_the_real_upgrade(monkeypatch) -> None:
+    """_apply_v090 must delegate to v090.upgrade(), not hand-written SQL.
+
+    Regression test: the old helper applied a hand-written copy of the
+    task_queue block, so real migration drift stayed green. It never
+    called upgrade(). Runs without Docker.
+    """
+    v090 = _load_v090()
+    upgrade_calls: list[bool] = []
+    real_upgrade = v090.upgrade
+
+    def _spy_upgrade() -> None:
+        upgrade_calls.append(True)
+        real_upgrade()
+
+    monkeypatch.setattr(v090, "upgrade", _spy_upgrade)
+    monkeypatch.setattr(sys.modules[__name__], "_load_v090", lambda: v090)
+    conn = _RecordingConn()
+    _apply_v090(_RecordingEngine(conn))  # type: ignore[arg-type]
+    assert upgrade_calls, "_apply_v090 must call v090.upgrade() itself"
+    assert any("task_queue" in sql for sql in conn.statements), (
+        "upgrade() must emit the task_queue policy block onto the connection"
+    )
+
+
 TENANT_A = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 TENANT_B = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
 
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="module")
 def _seed(pg_engine: Engine):
     """Insert one row for tenant A and one for tenant B in each table.
 
@@ -213,6 +274,7 @@ def _seed(pg_engine: Engine):
         )
 
 
+@pytest.mark.usefixtures("_seed")
 @pytest.mark.parametrize("table", [FEATURE_TABLE, "task_queue"])
 def test_tenant_a_sees_only_a(pg_engine: Engine, table: str):
     with pg_engine.connect() as conn:
@@ -222,6 +284,7 @@ def test_tenant_a_sees_only_a(pg_engine: Engine, table: str):
         assert rows == [TENANT_A], f"{table}: tenant A should see only A's row, saw {rows}"
 
 
+@pytest.mark.usefixtures("_seed")
 @pytest.mark.parametrize("table", [FEATURE_TABLE, "task_queue"])
 def test_tenant_b_does_not_see_a(pg_engine: Engine, table: str):
     with pg_engine.connect() as conn:
@@ -231,6 +294,7 @@ def test_tenant_b_does_not_see_a(pg_engine: Engine, table: str):
         assert TENANT_A not in rows, f"{table}: cross-tenant leak — tenant B saw A's row"
 
 
+@pytest.mark.usefixtures("_seed")
 @pytest.mark.parametrize("table", [FEATURE_TABLE, "task_queue"])
 def test_unset_guc_fails_hard(pg_engine: Engine, table: str):
     """Unset app.tenant_id must RAISE — never return other tenants' rows.
