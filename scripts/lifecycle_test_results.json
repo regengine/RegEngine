@@ -1,4 +1,8 @@
 {
+  "_archived": true,
+  "_note": "Archived historical snapshot committed 2026-03-28. Every API-dependent section recorded an HTTP error (401 or 404), so this file shows one failed run, not current system health. Do not treat these failures as current.",
+  "_generated_by": "scripts/seed_lifecycle_test.py",
+  "_regenerate": "Export REGENGINE_API_KEY and run: python3 scripts/seed_lifecycle_test.py",
   "suppliers": 3,
   "products": 3,
   "cte_events": {
