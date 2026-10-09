@@ -60,9 +60,11 @@ configMapGenerator:
 # secret manager. Do not generate placeholder Secret objects here; applying a
 # rendered placeholder would roll workloads with invalid credentials.
 
-# IMAGE_TAG is set by CI/CD (e.g. the git SHA or semver tag).
-# All base deployments use $(IMAGE_TAG) as a placeholder; kustomize
-# rewrites them to the concrete ghcr.io image + tag at deploy time.
+# Production image pins. The base deployments reference $(IMAGE_TAG) as a
+# placeholder; the images list below is what kustomize renders it to (the
+# concrete ghcr.io image plus tag) at build time. No CI job edits these
+# tags, so bump every newTag by hand on each release, or the next deploy
+# keeps shipping the previous tag.
 images:
   - name: regengine/compliance-service
     newName: ghcr.io/regengine/compliance
