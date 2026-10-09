@@ -37,12 +37,30 @@ shared_db_path="${PLAYWRIGHT_SHARED_DB_PATH:-/tmp/regengine-playwright-shared.db
 admin_db_path="${PLAYWRIGHT_ADMIN_DB_PATH:-/tmp/regengine-playwright-admin.db}"
 
 if [[ "${PLAYWRIGHT_PRESERVE_LOCAL_DB:-0}" != "1" ]]; then
+  echo "warning: start-e2e-backend.sh deleting fixture databases: $shared_db_path $admin_db_path (set PLAYWRIGHT_PRESERVE_LOCAL_DB=1 to keep them)" >&2
   rm -f "$shared_db_path" "$admin_db_path"
 fi
 
 export REGENGINE_ENV="${REGENGINE_ENV:-development}"
-export AUTH_SECRET_KEY="${AUTH_SECRET_KEY:-playwright-local-jwt-signing-key-2026}"
-export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-$AUTH_SECRET_KEY}"
+
+case "${REGENGINE_ENV}" in
+  development|test)
+    ;;
+  *)
+    if [[ -z "${AUTH_SECRET_KEY:-}" && -z "${JWT_SIGNING_KEY:-}" ]]; then
+      echo "error: REGENGINE_ENV=${REGENGINE_ENV} requires an explicit AUTH_SECRET_KEY or JWT_SIGNING_KEY; refusing to start with the local fixture default" >&2
+      exit 1
+    fi
+    ;;
+esac
+
+if [[ "${REGENGINE_ENV}" == "development" || "${REGENGINE_ENV}" == "test" ]]; then
+  export AUTH_SECRET_KEY="${AUTH_SECRET_KEY:-playwright-local-jwt-signing-key-2026}"
+  export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-$AUTH_SECRET_KEY}"
+else
+  export AUTH_SECRET_KEY="${AUTH_SECRET_KEY:-$JWT_SIGNING_KEY}"
+  export JWT_SIGNING_KEY="${JWT_SIGNING_KEY:-$AUTH_SECRET_KEY}"
+fi
 export DATABASE_URL="${DATABASE_URL:-sqlite:///$shared_db_path}"
 export ADMIN_FALLBACK_SQLITE="${ADMIN_FALLBACK_SQLITE:-sqlite:///$admin_db_path}"
 export DISABLE_TASK_WORKER="${DISABLE_TASK_WORKER:-true}"
