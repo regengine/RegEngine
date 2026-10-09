@@ -503,14 +503,15 @@ def test_create_access_token_embeds_tv_claim():
     assert "jti" in payload
 
 
-def test_create_access_token_respects_provided_jti():
-    """Elevation flow pre-allocates jti so it can store-then-hand-out."""
+def test_create_access_token_ignores_caller_supplied_jti():
+    """jti is always server-generated so callers cannot collide."""
     from services.admin.app.auth_utils import create_access_token, decode_access_token
 
     my_jti = "fixed-jti-12345"
     tok = create_access_token({"sub": "abc", "tv": 1, "jti": my_jti})
     payload = decode_access_token(tok)
-    assert payload["jti"] == my_jti
+    assert payload["jti"] != my_jti
+    assert payload["jti"]
 
 
 # ─────────────────────────────────────────────────────────────────────

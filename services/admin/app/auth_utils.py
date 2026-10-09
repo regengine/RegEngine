@@ -161,11 +161,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         expire = datetime.now(timezone.utc) + expires_delta
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # Ensure every token carries a jti we can revoke individually. Callers may
-    # still pass a pre-allocated jti (e.g. elevation tokens that must be stored
-    # in Redis at mint-time); we only generate one if the caller did not.
-    if "jti" not in to_encode:
-        to_encode["jti"] = str(uuid.uuid4())
+    # Ensure every token carries a server-generated jti we can revoke
+    # individually. Any caller-supplied jti is ignored so two callers can
+    # never collide on the same id and revoke (or replay) each other's token.
+    to_encode["jti"] = str(uuid.uuid4())
     to_encode["exp"] = expire
     # Stamp the session domain so tool-access tokens (signed with a separate
     # secret and audience) cannot be accepted in place of a session — see #1060.
