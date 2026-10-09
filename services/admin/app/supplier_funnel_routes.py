@@ -571,7 +571,7 @@ async def reset_supplier_demo(
     seeded_records: list[tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, SupplierFacilityModel]] = []
     for item in event_blueprints:
         facility = facilities_by_key[item["facility_key"]]
-        event, lot = _persist_supplier_cte_event(
+        event, lot, _bridge_status = _persist_supplier_cte_event(
             db,
             tenant_id=tenant_id,
             current_user=current_user,

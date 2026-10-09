@@ -288,7 +288,7 @@ async def submit_cte_event(
         facility_id=facility_uuid,
     )
 
-    event, lot = _persist_supplier_cte_event(
+    event, lot, bridge_status = _persist_supplier_cte_event(
         db,
         tenant_id=tenant_id,
         current_user=current_user,
@@ -329,6 +329,7 @@ async def submit_cte_event(
         merkle_hash=event.merkle_hash,
         merkle_prev_hash=event.merkle_prev_hash,
         merkle_sequence=int(event.sequence_number),
+        canonical_bridge_status=bridge_status,
     )
 
 

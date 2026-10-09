@@ -264,15 +264,18 @@ class TestBridgeToCanonicalHappyPath:
         # canonical_event_id is the UUID prepare_for_persistence finalized.
         assert isinstance(getattr(record, "canonical_event_id"), str)
 
-    def test_failure_path_swallows_and_warns(
+    def test_failure_path_returns_failed_and_logs_error(
         self,
         monkeypatch: pytest.MonkeyPatch,
         caplog: pytest.LogCaptureFixture,
         reset_fake_store,
     ):
-        """Counterpart to line 145 — line 153/154 warn-and-continue. A
-        raising ``CanonicalEventStore`` must not propagate; the supplier
-        write is authoritative even if the canonical bridge is down."""
+        """Counterpart to the happy path — a raising
+        ``CanonicalEventStore`` must not propagate (the supplier write
+        is authoritative even if the canonical bridge is down), but the
+        failure must be surfaced: the bridge returns ``"failed"`` and
+        logs at ERROR with the supplier event id and tenant id so the
+        gap can be reconciled instead of committing silently."""
 
         class _ExplodingStore:
             def __init__(self, *_args, **_kwargs):
@@ -293,7 +296,7 @@ class TestBridgeToCanonicalHappyPath:
 
         with caplog.at_level(logging.WARNING, logger="supplier-canonical-bridge"):
             # Must NOT raise.
-            _bridge_to_canonical(
+            status = _bridge_to_canonical(
                 db=MagicMock(),
                 tenant_id=TENANT_ID,
                 event=event,
@@ -302,14 +305,17 @@ class TestBridgeToCanonicalHappyPath:
                 kde_data={"quantity": 5, "unit_of_measure": "cases"},
             )
 
+        assert status == "failed"
         failed = [
             r
             for r in caplog.records
             if r.name == "supplier-canonical-bridge"
-            and r.levelno == logging.WARNING
+            and r.levelno == logging.ERROR
             and r.message == "supplier_canonical_bridge_failed"
         ]
         assert len(failed) == 1
+        assert getattr(failed[0], "supplier_event_id") == str(event.id)
+        assert getattr(failed[0], "tenant_id") == str(TENANT_ID)
 
 
 class TestBridgeToCanonicalRequiresQuantityAndUnit:

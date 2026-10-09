@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid as uuid_module
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -74,6 +74,9 @@ def _acquire_tenant_merkle_lock(db: Session, tenant_id: uuid_module.UUID) -> Non
         raise HTTPException(status_code=400, detail="Tenant not found")
 
 
+CanonicalBridgeStatus = Literal["bridged", "skipped", "failed"]
+
+
 def _bridge_to_canonical(
     db: Session,
     *,
@@ -82,13 +85,18 @@ def _bridge_to_canonical(
     facility: SupplierFacilityModel,
     tlc_code: str,
     kde_data: dict[str, Any],
-) -> None:
+) -> CanonicalBridgeStatus:
     """
     Bridge a supplier CTE event into the canonical TraceabilityEvent pipeline.
 
     This ensures supplier-contributed data is visible to FDA export,
     compliance scoring, and the canonical records API.
-    Non-blocking: failures are logged but do not abort the supplier write.
+    Non-blocking: the supplier write still commits when the bridge fails,
+    but the outcome is returned so callers surface it in the write
+    response instead of reporting a silent success. ``"skipped"`` means
+    the bridge deliberately did not write (required KDEs missing);
+    ``"failed"`` means the canonical write raised and was logged at
+    error level with the supplier event id and tenant id for reconcile.
     """
     import logging
 
@@ -150,7 +158,7 @@ def _bridge_to_canonical(
                     "reason": "missing " + ", ".join(missing),
                 },
             )
-            return
+            return "skipped"
 
         canonical_event = TraceabilityEvent(
             tenant_id=tenant_id,
@@ -186,11 +194,18 @@ def _bridge_to_canonical(
                 "tenant_id": str(tenant_id),
             },
         )
+        return "bridged"
     except Exception as exc:
-        _logger.warning(
+        _logger.error(
             "supplier_canonical_bridge_failed",
-            extra={"supplier_event_id": str(event.id), "error": str(exc)},
+            extra={
+                "supplier_event_id": str(event.id),
+                "tenant_id": str(tenant_id),
+                "error": str(exc),
+            },
+            exc_info=True,
         )
+        return "failed"
 
 
 def _persist_supplier_cte_event(
@@ -204,7 +219,7 @@ def _persist_supplier_cte_event(
     event_time: datetime | None,
     kde_data: dict[str, Any],
     obligation_ids: list[str],
-) -> tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel]:
+) -> tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, CanonicalBridgeStatus]:
     normalized_cte_type = _normalize_supplier_cte_type(cte_type)
     if normalized_cte_type not in SUPPORTED_CTE_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported cte_type: {cte_type}")
@@ -276,8 +291,10 @@ def _persist_supplier_cte_event(
     db.add(event)
     db.flush()
 
-    # Bridge to canonical pipeline for FDA export and compliance scoring
-    _bridge_to_canonical(
+    # Bridge to canonical pipeline for FDA export and compliance scoring.
+    # The bridge is non-blocking, but its outcome is returned so callers
+    # surface a failed or skipped bridge instead of committing silently.
+    bridge_status = _bridge_to_canonical(
         db,
         tenant_id=tenant_id,
         event=event,
@@ -286,4 +303,4 @@ def _persist_supplier_cte_event(
         kde_data=normalized_kde_data,
     )
 
-    return event, lot
+    return event, lot, bridge_status

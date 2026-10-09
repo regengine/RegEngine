@@ -186,6 +186,7 @@ def execute_bulk_commit(
 
     categories_by_facility: dict[uuid_module.UUID, list[dict[str, Any]]] = defaultdict(list)
     emitted_event_rows: list[tuple[SupplierCTEEventModel, SupplierTraceabilityLotModel, SupplierFacilityModel]] = []
+    canonical_bridge_warnings: list[str] = []
 
     existing_facilities = (
         db.execute(
@@ -349,7 +350,7 @@ def execute_bulk_commit(
             batch = sorted_events[batch_start : batch_start + BATCH_SIZE]
             for row in batch:
                 facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
-                event, lot = _persist_supplier_cte_event(
+                event, lot, bridge_status = _persist_supplier_cte_event(
                     db,
                     tenant_id=tenant_id,
                     current_user=current_user,
@@ -361,6 +362,8 @@ def execute_bulk_commit(
                     obligation_ids=row.get("obligation_ids") or [],
                 )
                 emitted_event_rows.append((event, lot, facility))
+                if bridge_status != "bridged":
+                    canonical_bridge_warnings.append(f"canonical_bridge:{bridge_status}:{event.id}")
             # Flush batch to DB (writes to Postgres, keeps transaction open)
             db.flush()
 
@@ -476,6 +479,10 @@ def execute_bulk_commit(
     # ONLY path for the first MAX_SYNC_EVENTS, with no outbox backup —
     # silent data loss on Neo4j outage.
     sync_warnings: list[str] = []
+    # Surface supplier-to-canonical bridge gaps in the commit summary so a
+    # bulk import that committed without canonical rows never reads as a
+    # silent success.
+    sync_warnings.extend(canonical_bridge_warnings)
 
     for facility_id, categories in categories_by_facility.items():
         facility = next((f for f in facilities_by_name.values() if f.id == facility_id), None)

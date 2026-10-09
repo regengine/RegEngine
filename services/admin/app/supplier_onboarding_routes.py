@@ -105,6 +105,11 @@ class SupplierCTEEventResponse(BaseModel):
     merkle_hash: str
     merkle_prev_hash: str | None
     merkle_sequence: int
+    # Outcome of the supplier-to-canonical bridge for this write:
+    # "bridged", "skipped" (required KDEs missing), or "failed".
+    # A non-bridged status means the supplier row committed without a
+    # canonical row, so FDA export and compliance scoring do not see it.
+    canonical_bridge_status: str
 
 
 class SupplierTLCUpsertRequest(BaseModel):

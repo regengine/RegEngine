@@ -721,3 +721,77 @@ class TestExecuteBulkCommitAdditional:
             )
 
         assert result["events_chained"] == 1
+
+    def _bulk_payload_with_event(self, kde_data):
+        return {
+            "facilities": [
+                {
+                    "name": "Farm A",
+                    "street": "123 Main",
+                    "city": "Salinas",
+                    "state": "CA",
+                    "postal_code": "93901",
+                }
+            ],
+            "events": [
+                {
+                    "facility_name": "Farm A",
+                    "cte_type": "shipping",
+                    "tlc_code": "TLC-EVT",
+                    "event_time": "2026-01-15T08:00:00Z",
+                    "kde_data": kde_data,
+                    "obligation_ids": [],
+                }
+            ],
+        }
+
+    def test_canonical_bridge_failure_surfaced_in_summary(self, db, user, monkeypatch):
+        """A bulk event whose canonical bridge raises must still commit,
+        but the summary must carry a ``canonical_bridge:failed`` warning
+        so the gap is visible instead of a silent success."""
+
+        class _ExplodingStore:
+            def __init__(self, *_args, **_kwargs):
+                raise RuntimeError("canonical pipeline offline")
+
+        import shared.canonical_persistence as cp_mod
+        import shared.canonical_persistence.writer as cp_writer
+
+        monkeypatch.setattr(cp_mod, "CanonicalEventStore", _ExplodingStore)
+        monkeypatch.setattr(cp_writer, "CanonicalEventStore", _ExplodingStore)
+
+        f = _add_facility(db)
+        _add_tlc(db, f, code="TLC-EVT")
+        db.commit()
+
+        with self._patch_graph():
+            result = execute_bulk_commit(
+                db,
+                tenant_id=TENANT_ID,
+                current_user=user,
+                normalized_payload=self._bulk_payload_with_event({"quantity": 10, "unit_of_measure": "cases"}),
+            )
+
+        assert result["events_chained"] == 1
+        warnings = result.get("sync_warnings", [])
+        assert any(w.startswith("canonical_bridge:failed:") for w in warnings)
+
+    def test_canonical_bridge_skip_surfaced_in_summary(self, db, user):
+        """A bulk event without quantity/unit skips the canonical write;
+        the summary must say so via a ``canonical_bridge:skipped``
+        warning."""
+        f = _add_facility(db)
+        _add_tlc(db, f, code="TLC-EVT")
+        db.commit()
+
+        with self._patch_graph():
+            result = execute_bulk_commit(
+                db,
+                tenant_id=TENANT_ID,
+                current_user=user,
+                normalized_payload=self._bulk_payload_with_event({"destination": "Warehouse A"}),
+            )
+
+        assert result["events_chained"] == 1
+        warnings = result.get("sync_warnings", [])
+        assert any(w.startswith("canonical_bridge:skipped:") for w in warnings)

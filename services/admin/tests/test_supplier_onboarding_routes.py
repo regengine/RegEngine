@@ -544,3 +544,89 @@ def test_funnel_summary_aggregates_views_and_completions(client: TestClient):
     assert steps_by_name["ftl_scoping"]["viewed"] == 1
     assert steps_by_name["ftl_scoping"]["completed"] == 2
     assert steps_by_name["ftl_scoping"]["completion_rate_pct"] == 200.0
+
+
+def _patch_canonical_store(monkeypatch: pytest.MonkeyPatch, store_cls) -> None:
+    import shared.canonical_persistence as cp_mod
+    import shared.canonical_persistence.writer as cp_writer
+
+    monkeypatch.setattr(cp_mod, "CanonicalEventStore", store_cls)
+    monkeypatch.setattr(cp_writer, "CanonicalEventStore", store_cls)
+
+
+def test_submit_cte_event_surfaces_bridged_status(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """The write response must report ``canonical_bridge_status`` so a
+    committed supplier row without a canonical row never reads as a
+    silent success."""
+
+    class _RecordingStore:
+        def __init__(self, *_args, **_kwargs):
+            self.persisted = []
+
+        def persist_event(self, canonical_event):
+            self.persisted.append(canonical_event)
+            return None
+
+    _patch_canonical_store(monkeypatch, _RecordingStore)
+    facility_id = _create_facility(client)
+
+    response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-9001",
+            "kde_data": {"quantity": 100, "unit_of_measure": "cases", "product_description": "Baby Spinach"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["canonical_bridge_status"] == "bridged"
+
+
+def test_submit_cte_event_surfaces_failed_status(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """When the canonical pipeline is down, the supplier write still
+    commits (200) but the response must say ``"failed"`` so the caller
+    can reconcile the missing canonical row."""
+
+    class _ExplodingStore:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("canonical pipeline offline")
+
+    _patch_canonical_store(monkeypatch, _ExplodingStore)
+    facility_id = _create_facility(client)
+
+    response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-9002",
+            "kde_data": {"quantity": 100, "unit_of_measure": "cases", "product_description": "Baby Spinach"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["canonical_bridge_status"] == "failed"
+
+
+def test_submit_cte_event_surfaces_skipped_status(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """KDEs without quantity/unit commit the supplier row but skip the
+    canonical write; the response must say ``"skipped"``."""
+
+    class _ExplodingStore:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("canonical store must not be touched on skip")
+
+    _patch_canonical_store(monkeypatch, _ExplodingStore)
+    facility_id = _create_facility(client)
+
+    response = client.post(
+        f"/v1/supplier/facilities/{facility_id}/cte-events",
+        json={
+            "cte_type": "shipping",
+            "tlc_code": "TLC-2026-SAL-9003",
+            "kde_data": {"product_description": "Baby Spinach"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["canonical_bridge_status"] == "skipped"
