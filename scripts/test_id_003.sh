@@ -1,8 +1,41 @@
 #!/bin/bash
+#
+# ID-003: Direct SQL Bypass Attempt
+#
+# Attempts to read another tenant's rows from vertical_projects while posing
+# as an adversary tenant. If rows from more than one tenant come back, RLS
+# is NOT enforced.
+#
+# Tenant IDs must come from the environment so this test always exercises
+# the tenants the current fixtures actually created. The IDs used to be
+# hardcoded here, which meant the test silently exercised the wrong tenants
+# after fixture rotation instead of failing.
+#
+# Usage:
+#   DEMO_TENANT_ID=<uuid> ADVERSARY_TENANT_ID=<uuid> ./scripts/test_id_003.sh
+#
+# Both variables are required and must be UUIDs. The script exits non-zero
+# before touching the database when either is absent, malformed, or when
+# both name the same tenant (which would make the bypass check vacuous).
 
-# Tenant IDs
-DEMO_TENANT="40e74bc9-4087-4612-8d94-215347138a68"
-ADVERSARY_TENANT="9f6ceefc-05d6-43a3-83c6-77cd5f954a2e"
+set -euo pipefail
+
+DEMO_TENANT="${DEMO_TENANT_ID:-}"
+ADVERSARY_TENANT="${ADVERSARY_TENANT_ID:-}"
+
+fail() {
+  echo "ERROR: $1" >&2
+  exit 1
+}
+
+[ -n "$DEMO_TENANT" ] || fail "DEMO_TENANT_ID is not set. Export the demo fixture tenant UUID first, e.g. DEMO_TENANT_ID=<uuid> ADVERSARY_TENANT_ID=<uuid> $0."
+[ -n "$ADVERSARY_TENANT" ] || fail "ADVERSARY_TENANT_ID is not set. Export the adversary fixture tenant UUID first, e.g. DEMO_TENANT_ID=<uuid> ADVERSARY_TENANT_ID=<uuid> $0."
+
+UUID_RE='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+[[ "$DEMO_TENANT" =~ $UUID_RE ]] || fail "DEMO_TENANT_ID is not a valid UUID: '$DEMO_TENANT'."
+[[ "$ADVERSARY_TENANT" =~ $UUID_RE ]] || fail "ADVERSARY_TENANT_ID is not a valid UUID: '$ADVERSARY_TENANT'."
+
+[ "$DEMO_TENANT" != "$ADVERSARY_TENANT" ] || fail "DEMO_TENANT_ID and ADVERSARY_TENANT_ID must differ; identical tenants cannot prove cross-tenant isolation."
 
 echo "Executing ID-003: Direct SQL Bypass Attempt"
 echo "-------------------------------------------"
