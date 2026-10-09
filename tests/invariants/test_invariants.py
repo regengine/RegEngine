@@ -20,6 +20,7 @@ import sys
 from copy import deepcopy
 from datetime import date, datetime, timezone
 from pathlib import Path
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
@@ -34,6 +35,7 @@ from shared.canonical_event import (
     TraceabilityEvent,
 )
 from shared.cte_persistence import compute_chain_hash
+from shared.identity_resolution import IdentityResolutionService
 from shared.rules.evaluators.stateless import (
     evaluate_field_presence,
     evaluate_multi_field_presence,
@@ -286,50 +288,135 @@ class TestAuditChainTamperEvidence:
 
 class TestMergePreservesTraceability:
     """Entity merges/splits must preserve full traceability history.
-    Both source and target entities remain referenceable."""
+    Both source and target entities remain referenceable.
+
+    These tests drive the real merge service
+    (``shared.identity_resolution.merging.MergeMixin``) with a fake DB
+    session, so a regression in the service fails them. The fake session
+    answers entity-existence checks positively and records every SQL
+    statement for assertion; no database is touched."""
+
+    def _merge_service(self, session=None):
+        """Build a merge service backed by a fake session whose
+        entity-existence checks all succeed."""
+        if session is None:
+            session = MagicMock()
+        session.execute.return_value.fetchone.return_value = (1,)
+        session.execute.return_value.fetchall.return_value = []
+        return IdentityResolutionService(session), session
 
     def test_merged_entity_retains_both_ids(self):
         """A merge operation should record both source entity IDs."""
+        svc, session = self._merge_service()
         source_ids = [str(uuid4()), str(uuid4())]
         target_id = str(uuid4())
 
-        merge_record = {
-            "action": "merge",
-            "source_entity_ids": source_ids,
-            "target_entity_id": target_id,
-            "performed_by": "operator@example.com",
-        }
+        merge_record = svc.merge_entities_bulk(
+            TENANT_DEFAULT,
+            source_ids,
+            target_id,
+            performed_by="operator@example.com",
+        )
 
-        assert len(merge_record["source_entity_ids"]) == 2
+        assert merge_record["action"] == "merge"
+        assert merge_record["source_entity_ids"] == source_ids
         assert merge_record["target_entity_id"] == target_id
+        # Exactly one history row carrying both source IDs (the pre-#1195
+        # bug wrote one row per source, which split could not reverse).
+        history_inserts = [
+            call_args
+            for call_args in session.execute.call_args_list
+            if "INSERT INTO fsma.entity_merge_history" in str(call_args[0][0])
+        ]
+        assert len(history_inserts) == 1
+        assert history_inserts[0][0][1]["source_entity_ids"] == source_ids
 
     def test_split_records_source_and_targets(self):
         """A split operation should record the source and all targets."""
-        source_id = str(uuid4())
-        target_ids = [str(uuid4()), str(uuid4())]
+        svc, _ = self._merge_service()
+        source_ids = [str(uuid4()), str(uuid4())]
+        target_id = str(uuid4())
+        merge_record = svc.merge_entities_bulk(
+            TENANT_DEFAULT,
+            source_ids,
+            target_id,
+            performed_by="operator@example.com",
+        )
 
-        split_record = {
-            "action": "split",
-            "source_entity_ids": [source_id],
-            "target_entity_id": target_ids[0],  # primary target
-        }
+        # Replay the recorded merge for split_entity on a fresh fake
+        # session, as if reading the history row back from the database.
+        split_session = MagicMock()
+        split_session.execute.return_value.fetchone.return_value = (
+            merge_record["merge_id"],
+            source_ids,
+            target_id,
+            "merge",
+            False,
+            {source_id: [] for source_id in source_ids},
+        )
+        split_svc = IdentityResolutionService(split_session)
+        split_record = split_svc.split_entity(
+            TENANT_DEFAULT,
+            merge_record["merge_id"],
+            performed_by="admin@example.com",
+        )
 
-        assert split_record["action"] == "split"
-        assert len(split_record["source_entity_ids"]) == 1
+        assert split_record["original_merge_id"] == merge_record["merge_id"]
+        assert sorted(split_record["source_entity_ids"]) == sorted(source_ids)
+        assert split_record["target_entity_id"] == target_id
 
     def test_undo_merge_is_reversible(self):
         """Merge operations can be undone (is_reversed flag)."""
-        merge_record = {
-            "action": "merge",
-            "source_entity_ids": [str(uuid4()), str(uuid4())],
-            "target_entity_id": str(uuid4()),
-            "is_reversed": False,
-        }
+        svc, session = self._merge_service()
+        source_ids = [str(uuid4()), str(uuid4())]
+        target_id = str(uuid4())
+        merge_record = svc.merge_entities_bulk(
+            TENANT_DEFAULT,
+            source_ids,
+            target_id,
+            performed_by="operator@example.com",
+        )
 
-        # Undo
-        merge_record["is_reversed"] = True
-        merge_record["reversed_by"] = "admin@example.com"
-        assert merge_record["is_reversed"] is True
+        # Undo via the real split path: the original merge row is marked
+        # reversed and a split row is recorded.
+        split_session = MagicMock()
+        split_session.execute.return_value.fetchone.return_value = (
+            merge_record["merge_id"],
+            source_ids,
+            target_id,
+            "merge",
+            False,
+            {source_id: [] for source_id in source_ids},
+        )
+        split_svc = IdentityResolutionService(split_session)
+        split_svc.split_entity(
+            TENANT_DEFAULT,
+            merge_record["merge_id"],
+            performed_by="admin@example.com",
+        )
+        reversals = [
+            call_args
+            for call_args in split_session.execute.call_args_list
+            if "SET is_reversed = TRUE" in str(call_args[0][0])
+        ]
+        assert len(reversals) == 1
+
+        # A second undo of the same merge is refused.
+        already_reversed = MagicMock()
+        already_reversed.execute.return_value.fetchone.return_value = (
+            merge_record["merge_id"],
+            source_ids,
+            target_id,
+            "merge",
+            True,
+            {source_id: [] for source_id in source_ids},
+        )
+        with pytest.raises(ValueError, match="already been reversed"):
+            IdentityResolutionService(already_reversed).split_entity(
+                TENANT_DEFAULT,
+                merge_record["merge_id"],
+                performed_by="admin@example.com",
+            )
 
 
 # ===================================================================
