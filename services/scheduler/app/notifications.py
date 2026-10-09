@@ -63,6 +63,19 @@ _RETRY_AFTER_CAP_SECONDS = 60.0
 _RESPONSE_BODY_MAX_BYTES = 1024 * 1024  # 1 MB
 
 
+def _durable_outbox_required() -> bool:
+    """True when running in production (mirrors the prod check in config.py).
+
+    Audit finding: webhook deliveries with no outbox file are acknowledged
+    and lost on restart. In production that configuration must fail closed
+    at startup instead of running with in-memory-only retries. Dev and test
+    keep the legacy behavior so local runs need no volume.
+    """
+    regengine_env = os.environ.get("REGENGINE_ENV", "").strip().lower()
+    env = regengine_env or os.environ.get("ENV", "").strip().lower()
+    return env == "production"
+
+
 def _parse_retry_after(value: Optional[str]) -> Optional[float]:
     """Parse an HTTP ``Retry-After`` header.
 
@@ -173,6 +186,13 @@ class WebhookNotifier:
         self._dead_letter: List[Dict] = []
         # #1150: persistence
         self._outbox_path: Optional[Path] = Path(outbox_path) if outbox_path else None
+        if self.urls and self._outbox_path is None and _durable_outbox_required():
+            raise ValueError(
+                "Webhook URLs are configured but no durable outbox path is set: "
+                "failed deliveries would live only in process memory and be lost "
+                "on restart. Set outbox_path (WEBHOOK_OUTBOX_PATH) to a path on "
+                "persistent storage."
+            )
         self._outbox_lock = Lock()
         # Deliveries that failed with nowhere durable to wait for retry.
         # Without an outbox file the dead letter lives only in process
