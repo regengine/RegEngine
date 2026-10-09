@@ -9,10 +9,29 @@ import {
     getPendingUploads,
     cleanupOfflineRecords,
 } from '@/lib/db';
+import type { ScanRecord } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
+
+export function buildOfflineScanIdempotencyKey(
+    scan: Pick<ScanRecord, 'id' | 'content' | 'timestamp'>,
+): string {
+    // The Dexie id is the durable identity: a retry of the same record after
+    // a lost response must reuse the key so the backend dedupes the replay.
+    if (typeof scan.id === 'number') {
+        return `offline-scan-${scan.id}`;
+    }
+    // Fallback for a record not yet persisted: deterministic in content and
+    // timestamp so retries within this session still share one key.
+    const seed = `${scan.timestamp ?? 0}:${scan.content ?? ''}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) {
+        hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+    }
+    return `offline-scan-noid-${scan.timestamp ?? 0}-${(hash >>> 0).toString(36)}`;
+}
 
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
@@ -23,12 +42,16 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
-    const syncEndpoint = useCallback(async (payload: string) => {
+    const syncEndpoint = useCallback(async (payload: string, idempotencyKey: string) => {
         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
             method: 'POST',
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
+                // Stable per scan record: a lost response followed by a retry
+                // replays the same key so the backend serves the cached
+                // response instead of persisting a duplicate compliance event.
+                'Idempotency-Key': idempotencyKey,
             },
             body: payload,
         });
@@ -64,9 +87,10 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    const idempotencyKey = buildOfflineScanIdempotencyKey(scan);
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        await syncEndpoint(scan.payload);
+                        await syncEndpoint(scan.payload, idempotencyKey);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -83,7 +107,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        await syncEndpoint(JSON.stringify(payload));
+                        await syncEndpoint(JSON.stringify(payload), idempotencyKey);
                     }
                     if (typeof scan.id === 'number') {
                         await markScanSynced(scan.id);

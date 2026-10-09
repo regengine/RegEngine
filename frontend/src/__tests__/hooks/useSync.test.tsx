@@ -45,7 +45,7 @@ vi.mock('@/lib/api-config', () => ({
     getServiceURL: () => '/api/ingestion',
 }));
 
-import { useSync } from '@/hooks/use-sync';
+import { buildOfflineScanIdempotencyKey, useSync } from '@/hooks/use-sync';
 
 function setOnlineState(isOnline: boolean) {
     Object.defineProperty(window.navigator, 'onLine', {
@@ -161,6 +161,129 @@ describe('useSync', () => {
         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
         expect(mockMutateAsync).not.toHaveBeenCalled();
         expect(dbMocks.getPendingUploads).not.toHaveBeenCalled();
+    });
+
+    it('sends a stable Idempotency-Key per scan so a lost response does not duplicate events', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 1,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-123',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-123' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-123',
+                },
+                {
+                    id: 2,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-123',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-456' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-456',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2));
+
+        const firstHeaders = new Headers(fetchWithCsrfMock.mock.calls[0]?.[1]?.headers);
+        const secondHeaders = new Headers(fetchWithCsrfMock.mock.calls[1]?.[1]?.headers);
+        expect(firstHeaders.get('Idempotency-Key')).toBe('offline-scan-1');
+        expect(secondHeaders.get('Idempotency-Key')).toBe('offline-scan-2');
+    });
+
+    it('reuses the same Idempotency-Key when a scan is retried after a failed attempt', async () => {
+        const scan = {
+            id: 3,
+            payload: JSON.stringify({
+                source: 'mobile_scanner_pwa',
+                tenant_id: 'tenant-123',
+                events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-789' }],
+            }),
+            timestamp: Date.now(),
+            cteType: 'receiving',
+            content: 'LOT-789',
+        };
+        dbMocks.getPendingUploads.mockResolvedValue({ scans: [scan], photos: [] });
+        // First attempt: the response is lost in flight.
+        fetchWithCsrfMock.mockRejectedValueOnce(new Error('network down'));
+
+        const { result } = renderHook(() => useSync());
+
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+        const retryHeaders = new Headers(fetchWithCsrfMock.mock.calls[0]?.[1]?.headers);
+        expect(retryHeaders.get('Idempotency-Key')).toBe('offline-scan-3');
+        expect(dbMocks.markScanSyncFailed).toHaveBeenCalledWith(3, expect.anything());
+
+        // Retry: the same record must replay the same key.
+        fetchWithCsrfMock.mockResolvedValue({ ok: true });
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2));
+        const secondHeaders = new Headers(fetchWithCsrfMock.mock.calls[1]?.[1]?.headers);
+        expect(secondHeaders.get('Idempotency-Key')).toBe('offline-scan-3');
+    });
+
+    it('sends an Idempotency-Key for legacy scans built without a stored payload', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 4,
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-000',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+        const headers = new Headers(fetchWithCsrfMock.mock.calls[0]?.[1]?.headers);
+        expect(headers.get('Idempotency-Key')).toBe('offline-scan-4');
+    });
+
+    it('buildOfflineScanIdempotencyKey is stable per record and unique across records', () => {
+        const scan = { id: 5, content: 'LOT-5', timestamp: 1700000000000 };
+        expect(buildOfflineScanIdempotencyKey(scan)).toBe('offline-scan-5');
+        expect(buildOfflineScanIdempotencyKey({ ...scan })).toBe(
+            buildOfflineScanIdempotencyKey(scan),
+        );
+        expect(buildOfflineScanIdempotencyKey({ ...scan, id: 6 })).not.toBe(
+            buildOfflineScanIdempotencyKey(scan),
+        );
+        const fallback = { content: 'LOT-X', timestamp: 1700000000000 };
+        expect(buildOfflineScanIdempotencyKey(fallback)).toBe(
+            buildOfflineScanIdempotencyKey({ ...fallback }),
+        );
     });
 
     it.fails('FE-004 does not replay a previous tenant photo after an account switch', async () => {
