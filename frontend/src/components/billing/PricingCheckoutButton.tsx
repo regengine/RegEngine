@@ -14,6 +14,30 @@ const PLAN_ID_MAP: Record<string, string> = {
     standard: 'scale',
 };
 
+// Hosts the backend is expected to return in `checkout_url`. Stripe owns
+// every host below; Checkout Sessions created by the backend use
+// checkout.stripe.com. Anything else (including http, relative paths, and
+// lookalike hosts such as checkout.stripe.com.evil.com) falls back to the
+// signup path already built for checkout failures.
+const TRUSTED_CHECKOUT_HOSTS = new Set([
+    'checkout.stripe.com',
+    'buy.stripe.com',
+    'billing.stripe.com',
+]);
+
+export function isTrustedCheckoutUrl(value: unknown): value is string {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 2048) return false;
+    let parsed: URL;
+    try {
+        parsed = new URL(value);
+    } catch {
+        return false;
+    }
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.username !== '' || parsed.password !== '') return false;
+    return TRUSTED_CHECKOUT_HOSTS.has(parsed.hostname);
+}
+
 interface PricingCheckoutButtonProps {
     tierId: string;
     label: string;
@@ -65,8 +89,11 @@ export function PricingCheckoutButton({
                 return;
             }
 
-            // Redirect to Stripe Checkout
-            if (data.checkout_url) {
+            // Redirect to Stripe Checkout, but only to a payment URL on an
+            // expected host. Anything else shows the signup fallback already
+            // built for checkout failures instead of sending a paying
+            // customer to an untrusted page.
+            if (isTrustedCheckoutUrl(data.checkout_url)) {
                 window.location.href = data.checkout_url;
             } else {
                 setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');

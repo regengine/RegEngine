@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
+import { PricingCheckoutButton, isTrustedCheckoutUrl } from '@/components/billing/PricingCheckoutButton';
 import { MARKETING_FOOTER_PRODUCT_LINKS } from '@/components/layout/marketing-nav';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { ARCHIVE_EXPORT_JOBS } from '@/lib/customer-readiness';
@@ -79,6 +79,63 @@ describe('public site launch-blocker fixes', () => {
 
         await userEvent.click(screen.getByRole('button', { name: /continue to signup/i }));
         expect(mocks.routerPush).toHaveBeenCalledWith('/signup?plan=base&billing=annual');
+    });
+
+    it('only trusts checkout URLs on expected payment hosts', () => {
+        expect(isTrustedCheckoutUrl('https://checkout.stripe.com/c/pay/cs_test_123')).toBe(true);
+        expect(isTrustedCheckoutUrl('https://buy.stripe.com/test_123')).toBe(true);
+        expect(isTrustedCheckoutUrl('https://billing.stripe.com/p/login/test_123')).toBe(true);
+
+        expect(isTrustedCheckoutUrl('https://evil.example/phish')).toBe(false);
+        expect(isTrustedCheckoutUrl('https://checkout.stripe.com.evil.example/c/pay/x')).toBe(false);
+        expect(isTrustedCheckoutUrl('https://evil.example/?x=checkout.stripe.com')).toBe(false);
+        expect(isTrustedCheckoutUrl('http://checkout.stripe.com/c/pay/cs_test_123')).toBe(false);
+        expect(isTrustedCheckoutUrl('/signup?plan=base')).toBe(false);
+        expect(isTrustedCheckoutUrl('javascript:alert(1)')).toBe(false);
+        expect(isTrustedCheckoutUrl('data:text/html,<h1>phish</h1>')).toBe(false);
+        expect(isTrustedCheckoutUrl('https://user:pass@checkout.stripe.com/c/pay/x')).toBe(false);
+        expect(isTrustedCheckoutUrl('')).toBe(false);
+        expect(isTrustedCheckoutUrl(null)).toBe(false);
+        expect(isTrustedCheckoutUrl(undefined)).toBe(false);
+        expect(isTrustedCheckoutUrl(42)).toBe(false);
+    });
+
+    it('shows the signup fallback when the backend returns an untrusted checkout URL', async () => {
+        mocks.fetchWithCsrf.mockResolvedValue({
+            ok: true,
+            json: async () => ({ checkout_url: 'https://evil.example/phish' }),
+        } as Response);
+
+        render(<PricingCheckoutButton tierId="base" label="Start Base Plan" />);
+        const locationBefore = window.location.href;
+
+        await userEvent.click(screen.getByRole('link', { name: /start base plan/i }));
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(/stripe checkout was unavailable/i);
+        expect(window.location.href).toBe(locationBefore);
+        expect(mocks.routerPush).not.toHaveBeenCalled();
+
+        await userEvent.click(screen.getByRole('button', { name: /continue to signup/i }));
+        expect(mocks.routerPush).toHaveBeenCalledWith('/signup?plan=base&billing=annual');
+    });
+
+    it('shows no fallback when the backend returns a Stripe checkout URL', async () => {
+        mocks.fetchWithCsrf.mockResolvedValue({
+            ok: true,
+            json: async () => ({ checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_123' }),
+        } as Response);
+
+        render(<PricingCheckoutButton tierId="base" label="Start Base Plan" />);
+
+        await userEvent.click(screen.getByRole('link', { name: /start base plan/i }));
+
+        await waitFor(() => {
+            expect(mocks.fetchWithCsrf).toHaveBeenCalledWith('/api/billing/checkout', expect.any(Object));
+        });
+        await waitFor(() => {
+            expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        });
     });
 
     it('routes Premium to signup without attempting checkout', async () => {
