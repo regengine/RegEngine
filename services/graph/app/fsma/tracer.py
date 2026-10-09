@@ -19,6 +19,13 @@ from .types import TraceResult
 logger = structlog.get_logger("fsma-utils")
 
 
+#: Hard ceiling on how many variable-length paths each trace query may
+#: expand before unwinding nodes. The trailing ``LIMIT 5000`` only trims
+#: the final row set, so without this earlier cap a dense graph can
+#: explode into far more paths than the limit ever trims.
+MAX_TRACE_PATHS = 1000
+
+
 # #2945: the deduplicated facilities/events/lots lists on ``TraceResult``
 # discard which lot took part in which event, and where. Exporters cannot
 # reconstruct that from three flat lists — the FDA trace CSV "compensated" by
@@ -201,6 +208,9 @@ async def trace_forward(
                  OR event_nodes[idx+1].event_date IS NULL
                  OR event_nodes[idx].event_date <= event_nodes[idx+1].event_date)
 
+    // Cap expansion server-side: bound the paths unwound into nodes so
+    // the trailing row LIMIT is not the only guard on dense graphs.
+    WITH path, path_nodes LIMIT $path_cap
     UNWIND path_nodes as node
     WITH DISTINCT node, path
     RETURN
@@ -226,6 +236,7 @@ async def trace_forward(
               n IN nodes(path) WHERE n.tenant_id = $tenant_id
           )
     WITH path, nodes(path) as path_nodes
+    WITH path, path_nodes LIMIT $path_cap
     UNWIND path_nodes as node
     WITH DISTINCT node, path
     RETURN
@@ -247,7 +258,7 @@ async def trace_forward(
     active_query = query if enforce_time_arrow else query_no_time_filter
 
     async with client.session() as session:
-        result = await session.run(active_query, tlc=tlc, tenant_id=tenant_id)
+        result = await session.run(active_query, tlc=tlc, tenant_id=tenant_id, path_cap=MAX_TRACE_PATHS)
 
         async for record in result:
             labels = record["labels"]
@@ -534,6 +545,7 @@ async def trace_backward(
                     END
           )
     WITH path, nodes(path) as path_nodes
+    WITH path, path_nodes LIMIT $path_cap
     UNWIND path_nodes as node
     WITH DISTINCT node, path
     RETURN
@@ -552,7 +564,7 @@ async def trace_backward(
     total_quantity = 0.0
 
     async with client.session() as session:
-        result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
+        result = await session.run(query, tlc=tlc, tenant_id=tenant_id, path_cap=MAX_TRACE_PATHS)
 
         async for record in result:
             labels = record["labels"]

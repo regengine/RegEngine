@@ -16,6 +16,13 @@ from .neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("overlay-resolver")
 
+#: Hard ceiling on how many jurisdiction provisions a single
+#: ``get_compliance_gaps`` call may load. The global query pages
+#: server-side (SKIP/LIMIT) so a large jurisdiction can never force the
+#: service to materialize the whole provision set before filtering.
+MAX_GAP_PAGE_SIZE = 2000
+DEFAULT_GAP_PAGE_SIZE = 500
+
 
 class OverlayResolver:
     """Merges global regulatory data with tenant-specific overlays."""
@@ -334,28 +341,55 @@ class OverlayResolver:
             await tenant_client.close()
             await global_client.close()
 
-    async def get_compliance_gaps(self, product_id: UUID, jurisdiction: str) -> dict[str, Any]:
+    async def get_compliance_gaps(
+        self,
+        product_id: UUID,
+        jurisdiction: str,
+        limit: int = DEFAULT_GAP_PAGE_SIZE,
+        offset: int = 0,
+    ) -> dict[str, Any]:
         """Identify regulatory provisions not yet mapped to controls for a product.
 
         Args:
             product_id: UUID of the customer product
             jurisdiction: Jurisdiction to check (e.g., "US", "EU")
+            limit: Maximum provisions to load for this page (clamped to
+                ``MAX_GAP_PAGE_SIZE`` so a large jurisdiction cannot force
+                an unbounded load)
+            offset: Page offset into the jurisdiction provision set
 
         Returns:
             Dict with unmapped provisions (potential compliance gaps)
         """
+        try:
+            page_limit = int(limit)
+        except (TypeError, ValueError):
+            page_limit = DEFAULT_GAP_PAGE_SIZE
+        try:
+            page_offset = int(offset)
+        except (TypeError, ValueError):
+            page_offset = 0
+        page_limit = max(1, min(page_limit, MAX_GAP_PAGE_SIZE))
+        page_offset = max(0, page_offset)
+
         global_client = Neo4jClient(database=self.global_db)
         tenant_client = Neo4jClient(database=self.tenant_db)
 
         try:
-            # Get all provisions for jurisdiction from global database
+            # Page server-side so only one bounded page is ever loaded;
+            # callers iterate with offset when they need the whole set.
             global_query = """
             MATCH (prov:Provision)-[:APPLIES_TO]->(j:Jurisdiction {name: $jurisdiction})
             RETURN prov
+            ORDER BY prov.hash
+            SKIP $offset LIMIT $limit
             """
             all_provisions = []
             async with global_client.session() as session:
-                result = await session.run(global_query, {"jurisdiction": jurisdiction})
+                result = await session.run(
+                    global_query,
+                    {"jurisdiction": jurisdiction, "offset": page_offset, "limit": page_limit},
+                )
                 all_provisions = [dict(record["prov"]) async for record in result]
 
             # Get mapped provision hashes for this product.
@@ -395,6 +429,8 @@ class OverlayResolver:
             return {
                 "product_id": str(product_id),
                 "jurisdiction": jurisdiction,
+                "limit": page_limit,
+                "offset": page_offset,
                 "total_provisions": len(all_provisions),
                 "mapped_provisions": len(all_provisions) - len(unmapped_provisions),
                 "unmapped_provisions": unmapped_provisions,
