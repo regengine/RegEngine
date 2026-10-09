@@ -42,3 +42,5 @@ services/ingestion/app/stripe_billing/ @PetrefiedThunder
 services/admin/app/routes.py @PetrefiedThunder
 frontend/src/app/api/auth/supabase/reset-email/route.ts @PetrefiedThunder
 services/shared/api_authentication.py @PetrefiedThunder
+services/shared/webhook_security.py @PetrefiedThunder
+services/shared/api_key_store.py @PetrefiedThunder
