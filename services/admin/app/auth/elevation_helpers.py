@@ -19,10 +19,10 @@ async def _revoke_all_elevation_tokens_for_user(session_store: RedisSessionStore
     """Scan the elevation-jti keyspace and delete entries belonging to this user.
 
     Called from broad session invalidation paths so a previously minted
-    elevation token cannot outlive an account-security revocation. Deletions
-    within a pass go out in one pipeline, and passes repeat until a full scan
-    finds nothing left to revoke, so tokens minted mid-cleanup converge away
-    instead of surviving logout-everywhere.
+    elevation token cannot outlive an account-security revocation. Each scan
+    page found in a pass is deleted in its own pipeline, and passes repeat
+    until a full scan finds nothing left to revoke, so tokens minted
+    mid-cleanup converge away instead of surviving logout-everywhere.
     """
     client = await session_store._get_client()
     owner = str(user_id)

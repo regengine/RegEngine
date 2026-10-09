@@ -859,7 +859,9 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
     read_pipe.__aenter__ = AsyncMock(return_value=read_pipe)
     read_pipe.__aexit__ = AsyncMock(return_value=None)
     read_pipe.hgetall = AsyncMock()
-    read_pipe.execute = AsyncMock(return_value=[session.to_redis_hash()])
+    # revoke_all_for_user re-lists in bounded passes: the first list read
+    # sees the session, later list reads see nothing left.
+    read_pipe.execute = AsyncMock(side_effect=[[session.to_redis_hash()], [], []])
     # Pipeline for the revoke write
     write_pipe = MagicMock()
     write_pipe.__aenter__ = AsyncMock(return_value=write_pipe)
@@ -868,9 +870,9 @@ async def test_revoke_all_for_user_drops_token_hash_mapping():
     write_pipe.delete = AsyncMock()
     write_pipe.execute = AsyncMock(return_value=[])
 
-    # pipeline() is called twice — first for read (transaction=False), then revoke (transaction=False).
-    pipelines = iter([read_pipe, write_pipe])
-    client.pipeline = MagicMock(side_effect=lambda transaction=False: next(pipelines))
+    # pipeline() serves pipes by call type across passes: reads use
+    # transaction=False, revoke writes use transaction=True, reusable.
+    client.pipeline = MagicMock(side_effect=lambda transaction=False: read_pipe if not transaction else write_pipe)
 
     store._client = client
     store._get_client = AsyncMock(return_value=client)

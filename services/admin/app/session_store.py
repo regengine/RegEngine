@@ -956,21 +956,22 @@ class RedisSessionStore:
         for _ in range(3):
             sessions = await self.list_user_sessions(user_id, active_only=True)
 
-            # Revoke all sessions in parallel (skip the caller's own session if requested)
-            revoked_this_pass = 0
+            # Revoke all sessions in parallel (skip the caller's own session if requested).
+            # No pipeline when there is nothing to revoke, so the empty case
+            # stays a pure read and later passes converge without empty writes.
+            to_revoke = [
+                session for session in sessions if except_session_id is None or session.id != except_session_id
+            ]
+            if not to_revoke:
+                break
             async with client.pipeline(transaction=True) as pipe:
-                for session in sessions:
-                    if except_session_id is not None and session.id == except_session_id:
-                        continue
+                for session in to_revoke:
                     await pipe.hset(self._session_key(session.id), "is_revoked", "true")
                     # Tear down the refresh-token mapping so /refresh can't claim it.
                     if session.refresh_token_hash:
                         await pipe.delete(self._token_hash_key(session.refresh_token_hash))
-                    revoked_this_pass += 1
                 await pipe.execute()
-            revoked += revoked_this_pass
-            if revoked_this_pass == 0:
-                break
+            revoked += len(to_revoke)
 
         logger.info(
             "user_sessions_revoked",

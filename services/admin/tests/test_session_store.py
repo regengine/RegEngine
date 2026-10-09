@@ -320,7 +320,10 @@ class TestRedisSessionStore:
         mock_redis.smembers.return_value = {session_id_str}
 
         pipe = mock_redis.pipeline.return_value.__aenter__.return_value
-        pipe.execute.return_value = [sample_session.to_redis_hash()]
+        # revoke_all_user_sessions re-lists in bounded passes: the first list
+        # read sees the session, the write consumes one result (ignored), and
+        # the second list read sees nothing left, so the count stays 1.
+        pipe.execute = AsyncMock(side_effect=[[sample_session.to_redis_hash()], [], []])
 
         # Execute
         count = await session_store.revoke_all_user_sessions(sample_session.user_id)
