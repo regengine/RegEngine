@@ -44,22 +44,24 @@ ADMIN_URL = "http://localhost:8400"
 
 
 @pytest.fixture
-def http_client(request):
+def http_client():
     """
-    Returns an HTTP client.
-    If --mock-services is passed or if services are unreachable,
-    it returns a Mock client for testing the test logic itself.
+    Returns a real HTTP client.
+
+    Skips the test explicitly when the ingestion or graph service is
+    unreachable, so the recall assertions can never pass against canned
+    mock responses with no services running.
     """
     try:
-        # Check if services are reachable
         with httpx.Client(timeout=2.0) as client:
-            client.get(f"{INGESTION_URL}/health")
+            client.get(f"{INGESTION_URL}/health").raise_for_status()
+        with httpx.Client(timeout=2.0) as client:
+            client.get(f"{GRAPH_URL}/health").raise_for_status()
+    except Exception as exc:
+        pytest.skip(f"Recall E2E services unreachable, skipping: {exc}")
 
-        with httpx.Client(timeout=30.0) as client:
-            yield client
-    except Exception:
-        print("\n⚠️  Services unreachable. Using MOCK client for verification.")
-        yield MockClient()
+    with httpx.Client(timeout=30.0) as client:
+        yield client
 
 
 class MockClient:
@@ -195,7 +197,7 @@ if __name__ == "__main__":
 
         try:
             with httpx.Client(timeout=2.0) as client:
-                client.get(f"{INGESTION_URL}/health")
+                client.get(f"{INGESTION_URL}/health").raise_for_status()
                 ingestion_ok = True
         except Exception:
             pass
@@ -222,10 +224,8 @@ if __name__ == "__main__":
                     print("\n✅ Partial pipeline test PASSED (ingestion verified)")
                 else:
                     raise
-        elif ingestion_ok:
-            print("⚠️  Ingestion service available but Graph service unreachable.")
-            print("   Falling back to mock client.")
-            test_full_recall_flow(MockClient())
         else:
-            print("Services unreachable. Switching to Mock Client for verification.")
-            test_full_recall_flow(MockClient())
+            print("Services unreachable. Refusing to run against the mock client:")
+            print(f"  ingestion reachable: {ingestion_ok}, graph reachable: {graph_ok}")
+            print("  Re-run with --mock only to exercise the test logic itself.")
+            sys.exit(2)
