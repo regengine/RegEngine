@@ -18,8 +18,13 @@ log = structlog.get_logger("compliance-sweep")
 SERVICES = ["admin", "compliance", "graph", "ingestion", "nlp", "scheduler"]
 
 
-async def roll_out_compliance(standard: str = "FSMA-204"):
-    """Dispatch the swarm to roll out compliance headers to all services."""
+async def roll_out_compliance(standard: str = "FSMA-204", auto_fix: bool = False):
+    """Dispatch the swarm to roll out compliance headers to all services.
+
+    Autonomous edits stay off unless the caller explicitly opts in with
+    auto_fix=True (or the --auto-fix CLI flag), so a bare legacy run can
+    never arm the CI auto-fix path on its own.
+    """
     if not legacy_swarm_enabled():
         raise RuntimeError(
             "Legacy compliance sweep is disabled by default. "
@@ -27,7 +32,11 @@ async def roll_out_compliance(standard: str = "FSMA-204"):
         )
 
     swarm = AgentSwarm()
-    os.environ["REGENGINE_CI_AUTO_FIX"] = "true"
+    if auto_fix:
+        os.environ["REGENGINE_CI_AUTO_FIX"] = "true"
+        log.info("compliance_autofix_enabled", standard=standard)
+    else:
+        log.info("compliance_autofix_disabled", standard=standard)
 
     header_spec = {"FSMA-204": "X-FSMA-204-Traceability: true", "Finance": "X-RegEngine-Financial-Audit: active"}.get(
         standard, "X-RegEngine-Compliance: standard"
@@ -56,5 +65,7 @@ async def roll_out_compliance(standard: str = "FSMA-204"):
 if __name__ == "__main__":
     import asyncio
 
-    standard = sys.argv[1] if len(sys.argv) > 1 else "FSMA-204"
-    asyncio.run(roll_out_compliance(standard))
+    argv = [a for a in sys.argv[1:] if a != "--auto-fix"]
+    auto_fix = "--auto-fix" in sys.argv[1:]
+    standard = argv[0] if argv else "FSMA-204"
+    asyncio.run(roll_out_compliance(standard, auto_fix=auto_fix))
