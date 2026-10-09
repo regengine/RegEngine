@@ -27,6 +27,28 @@ psycopg = pytest.importorskip("psycopg")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+
+def _require_db() -> bool:
+    """True when the suite must execute against a real database, never skip."""
+    return os.environ.get("REGENGINE_REQUIRE_DB", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _skip_or_fail(reason: str) -> None:
+    """Skip a live-DB assertion locally, but fail when the gate must execute.
+
+    Local runs without a database stay friendly (skip); any job that sets
+    ``REGENGINE_REQUIRE_DB=1`` has declared this RLS gate must run, so a
+    missing or unreachable database fails instead of going green by
+    skipping (see #2530).
+    """
+    if _require_db():
+        pytest.fail(f"{reason} (REGENGINE_REQUIRE_DB=1 — RLS gate must run a real Postgres, not skip)")
+    pytest.skip(reason)
+
+
+if not DATABASE_URL and _require_db():
+    pytest.fail("DATABASE_URL not set (REGENGINE_REQUIRE_DB=1 — RLS gate must run a real Postgres, not skip)")
+
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="DATABASE_URL not set — live DB required")
 
 _T_A = "11111111-1111-1111-1111-111111111111"
@@ -49,7 +71,8 @@ def _connect():
     try:
         conn = psycopg.connect(DATABASE_URL, connect_timeout=3)
     except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"cannot connect to DATABASE_URL: {exc}")
+        _skip_or_fail(f"cannot connect to DATABASE_URL: {exc}")
+        raise AssertionError("unreachable: _skip_or_fail always raises")
     conn.autocommit = False
     return conn
 
@@ -76,7 +99,7 @@ def conn():
     c = _connect()
     if not _rls_schema_present(c):
         c.close()
-        pytest.skip("RLS schema not migrated (get_tenant_context absent) — live RLS test needs a migrated DB")
+        _skip_or_fail("RLS schema not migrated (get_tenant_context absent) — live RLS test needs a migrated DB")
     try:
         yield c
     finally:
@@ -121,7 +144,7 @@ class TestRlsSchemaConfig:
         with conn.cursor() as cur:
             cur.execute("SELECT to_regclass('fsma.traceability_events')")
             if cur.fetchone()[0] is None:
-                pytest.skip("fsma.traceability_events not present")
+                _skip_or_fail("fsma.traceability_events not present — needs a migrated DB")
             cur.execute(
                 """
                 SELECT pg_get_expr(polqual, polrelid)
@@ -171,7 +194,7 @@ class TestRlsEnforcesIsolation:
             try:
                 cur.execute("CREATE ROLE rls_probe_pytest NOLOGIN NOSUPERUSER NOBYPASSRLS")
             except psycopg.errors.InsufficientPrivilege:
-                pytest.skip("connection role cannot CREATE ROLE — run enforcement check in CI as a privileged role")
+                _skip_or_fail("connection role cannot CREATE ROLE — run enforcement check in CI as a privileged role")
 
             cur.execute("CREATE SCHEMA rls_probe_schema")
             cur.execute("CREATE TABLE rls_probe_schema.t (id serial primary key, tenant_id uuid not null, val text)")
@@ -334,17 +357,17 @@ class TestFailClosedOnForcedTable:
             cur.execute("SELECT to_regclass('fsma.cte_events')")
             if cur.fetchone()[0] is None:
                 conn.rollback()
-                pytest.skip("fsma.cte_events not present — needs a migrated DB")
+                _skip_or_fail("fsma.cte_events not present — needs a migrated DB")
             cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'regengine' AND NOT rolbypassrls AND NOT rolsuper")
             if cur.fetchone() is None:
                 conn.rollback()
-                pytest.skip("non-bypass 'regengine' role not present")
+                _skip_or_fail("non-bypass 'regengine' role not present")
             try:
                 cur.execute("GRANT USAGE ON SCHEMA fsma TO regengine")
                 cur.execute("GRANT SELECT ON fsma.cte_events TO regengine")
             except psycopg.errors.InsufficientPrivilege:
                 conn.rollback()
-                pytest.skip("connection role cannot GRANT")
+                _skip_or_fail("connection role cannot GRANT")
             # Seed a row so the policy predicate actually evaluates
             # (Postgres never runs the predicate over an empty table).
             cur.execute(
@@ -495,14 +518,12 @@ class TestV111SysadminArm:
             assert cur.fetchone()[0] == "true"
 
             cur.execute(
-                "SELECT tenant_id::text FROM fsma.task_queue "
-                "WHERE task_type = %s ORDER BY tenant_id",
+                "SELECT tenant_id::text FROM fsma.task_queue WHERE task_type = %s ORDER BY tenant_id",
                 (task_type,),
             )
             assert {row[0] for row in cur.fetchall()} == {_T_A, _T_B}
             cur.execute(
-                "SELECT tenant_id::text FROM fsma.fsma_audit_trail "
-                "WHERE actor = %s ORDER BY tenant_id",
+                "SELECT tenant_id::text FROM fsma.fsma_audit_trail WHERE actor = %s ORDER BY tenant_id",
                 (actor,),
             )
             assert {row[0] for row in cur.fetchall()} == {_T_A, _T_B}
