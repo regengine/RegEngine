@@ -12,6 +12,11 @@ EPIC-L mandates one redaction strategy shared by every export path:
 * A fixed allowlist of PII column names gets replaced with a
   constant placeholder, *or* a stable SHA-256 hash prefix when the
   caller needs to correlate rows without learning the plaintext.
+* Fail-closed defaults: PII values of any type are redacted (phone
+  numbers and postal codes stored as numbers included, not just
+  strings), and row columns that are neither listed as PII nor
+  explicitly marked safe by the caller are redacted too, so a newly
+  added export column cannot leak by simply being unknown.
 * The ``fda.export.full_pii`` permission (a strict superset of
   ``fda.export``) opts out of redaction; every such call is audited
   by the surrounding router, not this module.
@@ -99,12 +104,28 @@ def _caller_has_full_pii(caller_scopes: Iterable[str] | None) -> bool:
     return False
 
 
-def hash_pii_value(value: str, *, length: int = 12) -> str:
+def _has_disclosable_value(value: object) -> bool:
+    """Return True when ``value`` carries content worth redacting.
+
+    Non-empty strings redact; every other type redacts when truthy.
+    In particular numeric values (phone numbers or postal codes stored
+    as ints) are redacted, while ``None``, ``""`` and other empty
+    values pass through unchanged so a blank cell stays blank.
+    """
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value != ""
+    return bool(value)
+
+
+def hash_pii_value(value: object, *, length: int = 12) -> str:
     """Return a stable short hash of ``value``.
 
     Used when the export caller needs to see that two rows carry the
     same underlying PII (e.g. same carrier across shipments) without
     receiving the plaintext. Empty or falsy values return ``""``.
+    Non-string values are hashed from their string form.
     """
     if not value:
         return ""
@@ -117,6 +138,7 @@ def redact_pii_row(
     caller_scopes: Iterable[str] | None = None,
     *,
     pii_columns: Iterable[str] | None = None,
+    safe_columns: Iterable[str] | None = None,
     strategy: str = "placeholder",
 ) -> dict[str, object]:
     """Return a copy of ``row`` with PII columns redacted.
@@ -135,16 +157,24 @@ def redact_pii_row(
     pii_columns:
         Override the default set of PII column names. Defaults to
         :data:`DEFAULT_PII_COLUMNS`.
+    safe_columns:
+        Column names the caller has classified as safe to emit (GLNs,
+        lot codes, hashes and other regulatory primary keys). Any
+        column that is neither in ``pii_columns`` nor in
+        ``safe_columns`` is treated as unknown and redacted, so a new
+        export column cannot leak PII by simply being unlisted. A
+        column listed in both sets is redacted.
     strategy:
-        ``"placeholder"`` (default) replaces PII values with
+        ``"placeholder"`` (default) replaces redacted values with
         :data:`PII_REDACTION_PLACEHOLDER`.
         ``"hash"`` replaces them with a short stable hash via
         :func:`hash_pii_value` — useful when downstream readers need to
         correlate rows without learning plaintext.
 
-    Empty string values are never substituted — a blank column stays
-    blank so a downstream reader sees a gap, not a confusing
-    "[REDACTED]" marker.
+    Empty values (``None``, ``""`` and other falsy values) are never
+    substituted — a blank column stays blank so a downstream reader
+    sees a gap, not a confusing "[REDACTED]" marker. Non-string values
+    such as numbers are redacted like strings.
     """
     if _caller_has_full_pii(caller_scopes):
         # Copy to keep the contract stable (callers shouldn't have to
@@ -152,9 +182,10 @@ def redact_pii_row(
         return dict(row)
 
     columns = set(pii_columns) if pii_columns is not None else set(DEFAULT_PII_COLUMNS)
+    safe = set(safe_columns) if safe_columns is not None else set()
     out: dict[str, object] = {}
     for key, value in row.items():
-        if key in columns and isinstance(value, str) and value:
+        if (key in columns or key not in safe) and _has_disclosable_value(value):
             if strategy == "hash":
                 out[key] = hash_pii_value(value)
             else:
@@ -171,8 +202,10 @@ def redact_pii_extras(
     """Redact PII values inside a freeform "Additional KDEs" blob.
 
     Preserves the key so auditors still see "this field existed but
-    was redacted"; only the string value is substituted. Non-string
-    values pass through (numeric PII is uncommon in KDE data).
+    was redacted"; only the value is substituted. Values of any type
+    are redacted, since phone numbers and postal codes also arrive as
+    numbers. Empty values (``None``, ``""`` and other falsy values)
+    pass through unchanged so a blank entry stays blank.
     """
     if _caller_has_full_pii(caller_scopes):
         return dict(extras)
@@ -180,7 +213,7 @@ def redact_pii_extras(
     for key, value in extras.items():
         key_lower = str(key).lower()
         is_pii = any(marker in key_lower for marker in _PII_KEY_SUBSTRINGS)
-        if is_pii and isinstance(value, str) and value:
+        if is_pii and _has_disclosable_value(value):
             out[key] = PII_REDACTION_PLACEHOLDER
         else:
             out[key] = value

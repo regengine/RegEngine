@@ -181,14 +181,59 @@ class TestRedactPiiRow:
         row = {
             "Location Name": "Sunrise Farms",
             "Ship From Name": "Valley Co",
-            "TLC Source GLN": "0614141000005",  # not PII
-            "Product Description": "Romaine",  # not PII
+            "TLC Source GLN": "0614141000005",  # explicitly safe
+            "Product Description": "Romaine",  # explicitly safe
         }
-        out = redact_pii_row(row, caller_scopes=["fda.export"])
+        out = redact_pii_row(
+            row,
+            caller_scopes=["fda.export"],
+            safe_columns={"TLC Source GLN", "Product Description"},
+        )
         assert out["Location Name"] == PII_REDACTION_PLACEHOLDER
         assert out["Ship From Name"] == PII_REDACTION_PLACEHOLDER
         assert out["TLC Source GLN"] == "0614141000005"
         assert out["Product Description"] == "Romaine"
+
+    def test_unknown_columns_redacted_by_default(self) -> None:
+        row = {"Brand New Column": "could be PII"}
+        out = redact_pii_row(row, caller_scopes=[])
+        assert out["Brand New Column"] == PII_REDACTION_PLACEHOLDER
+
+    def test_safe_columns_stay_visible(self) -> None:
+        row = {"TLC Source GLN": "0614141000005", "Lot Code": "LOT-1"}
+        out = redact_pii_row(
+            row,
+            caller_scopes=[],
+            safe_columns={"TLC Source GLN", "Lot Code"},
+        )
+        assert out == row
+
+    def test_pii_wins_over_safe(self) -> None:
+        row = {"Location Name": "Sunrise Farms"}
+        out = redact_pii_row(row, caller_scopes=[], safe_columns={"Location Name"})
+        assert out["Location Name"] == PII_REDACTION_PLACEHOLDER
+
+    def test_empty_unknown_columns_stay_empty(self) -> None:
+        row = {"Brand New Column": "", "Other Column": None}
+        out = redact_pii_row(row, caller_scopes=[])
+        assert out == {"Brand New Column": "", "Other Column": None}
+
+    def test_numeric_pii_values_redacted(self) -> None:
+        row = {"Location Name": 90210, "Ship From Name": 5551234567}
+        out = redact_pii_row(row, caller_scopes=[])
+        assert out["Location Name"] == PII_REDACTION_PLACEHOLDER
+        assert out["Ship From Name"] == PII_REDACTION_PLACEHOLDER
+
+    def test_numeric_pii_values_hashed(self) -> None:
+        row = {"Location Name": 90210}
+        out = redact_pii_row(row, caller_scopes=[], strategy="hash")
+        assert out["Location Name"] == hash_pii_value(90210)
+        assert out["Location Name"].startswith("pii_")
+
+    def test_numeric_safe_values_pass_through(self) -> None:
+        row = {"Quantity": 42}
+        out = redact_pii_row(row, caller_scopes=[], safe_columns={"Quantity"})
+        assert out["Quantity"] == 42
 
     def test_full_pii_permission_returns_row_unchanged(self) -> None:
         row = {"Location Name": "Sunrise Farms", "Ship From Name": "Valley"}
@@ -228,10 +273,24 @@ class TestRedactPiiRow:
 
     def test_override_pii_columns(self) -> None:
         row = {"custom_col": "secret", "Location Name": "Farm"}
+        out = redact_pii_row(
+            row,
+            caller_scopes=[],
+            pii_columns={"custom_col"},
+            safe_columns={"Location Name"},
+        )
+        assert out["custom_col"] == PII_REDACTION_PLACEHOLDER
+        # Location Name is not in the override PII set and is explicitly
+        # safe, so it stays visible.
+        assert out["Location Name"] == "Farm"
+
+    def test_override_pii_columns_unknown_still_redacted(self) -> None:
+        row = {"custom_col": "secret", "Location Name": "Farm"}
         out = redact_pii_row(row, caller_scopes=[], pii_columns={"custom_col"})
         assert out["custom_col"] == PII_REDACTION_PLACEHOLDER
-        # Location Name no longer in the override set — stays visible.
-        assert out["Location Name"] == "Farm"
+        # Location Name left the override PII set but was not marked
+        # safe, so it redacts as an unknown column.
+        assert out["Location Name"] == PII_REDACTION_PLACEHOLDER
 
 
 class TestHashPiiValue:
@@ -257,6 +316,22 @@ class TestRedactPiiExtras:
         assert out["facility_address"] == PII_REDACTION_PLACEHOLDER
         assert out["driver_name"] == PII_REDACTION_PLACEHOLDER
         assert out["carrier_speed_mph"] == "45"
+
+    def test_numeric_pii_values_redacted(self) -> None:
+        extras = {
+            "contact_phone": 5551234567,
+            "facility_address": 90210,
+            "carrier_speed_mph": 45,  # not PII, numeric stays visible
+        }
+        out = redact_pii_extras(extras, caller_scopes=[])
+        assert out["contact_phone"] == PII_REDACTION_PLACEHOLDER
+        assert out["facility_address"] == PII_REDACTION_PLACEHOLDER
+        assert out["carrier_speed_mph"] == 45
+
+    def test_empty_pii_values_stay_empty(self) -> None:
+        extras = {"contact_phone": "", "driver_name": None}
+        out = redact_pii_extras(extras, caller_scopes=[])
+        assert out == {"contact_phone": "", "driver_name": None}
 
     def test_full_pii_permission_leaves_extras_alone(self) -> None:
         extras = {"facility_address": "100 Main St"}
