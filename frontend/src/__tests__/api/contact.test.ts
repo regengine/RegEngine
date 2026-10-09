@@ -72,6 +72,23 @@ describe('POST /api/contact abuse controls', () => {
         expect(res.status).toBe(200);
     });
 
+    it('relays provider backpressure as 429 instead of masking it as 502', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(
+            new Response(null, { status: 429, headers: { 'Retry-After': '120' } }),
+        );
+        const res = await POST(makeRequest(valid, '198.51.100.210'));
+        expect(res.status).toBe(429);
+        expect((await res.json()).error).toBe('rate_limited');
+        expect(res.headers.get('Retry-After')).toBe('120');
+    });
+
+    it('defaults Retry-After when a rate-limited provider sends none', async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 429 }));
+        const res = await POST(makeRequest(valid, '198.51.100.211'));
+        expect(res.status).toBe(429);
+        expect(res.headers.get('Retry-After')).toBe('60');
+    });
+
     it('fails closed when delivery is not configured', async () => {
         delete process.env.CONTACT_WEBHOOK_URL;
 

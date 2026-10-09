@@ -13,7 +13,10 @@
  *     re-truncates every field server-side so a malicious caller cannot
  *     log-flood with megabyte strings.
  *   - Per-instance token bucket per client IP (best effort on serverless;
- *     each instance enforces independently) caps sustained abuse.
+ *     each instance enforces independently) dampens bursts rather than
+ *     enforcing a hard global cap. A distributed flood still reaches the
+ *     log drain, so the logging pipeline must absorb it; the 429 below
+ *     only tells well-behaved senders to back off.
  *   - Always responds 204 (or 429) with no body — the beacon is
  *     fire-and-forget and must never leak server state to the page.
  */
@@ -65,7 +68,10 @@ export async function POST(request: NextRequest) {
         request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
         'unknown';
     if (!allow(ip)) {
-        return new NextResponse(null, { status: 429 });
+        return new NextResponse(null, {
+            status: 429,
+            headers: { 'Retry-After': String(WINDOW_MS / 1000) },
+        });
     }
 
     let payload: Record<string, unknown>;

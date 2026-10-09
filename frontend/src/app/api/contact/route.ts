@@ -32,11 +32,16 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DESTINATION = 'chris@regengine.co';
 
 // Best-effort in-memory per-IP throttle. On serverless this is per-instance
-// (not shared across Vercel function instances), so it dampens bursts rather
-// than enforcing a hard global cap — a durable store (Vercel KV / Upstash)
-// would be the real fix. Combined with the honeypot it raises abuse cost.
+// (not shared across function instances), so it dampens bursts rather than
+// enforcing a hard global cap. A distributed flood still gets through to the
+// webhook below, so the receiving provider must enforce its own cap; when it
+// answers 429 this handler relays that backpressure instead of masking it.
+// A durable shared store (Vercel KV / Upstash) would be the real fix for a
+// global cap. Combined with the honeypot this raises abuse cost.
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+// Bound so rotating source IPs cannot grow process memory without limit.
+const MAX_TRACKED_IPS = 10_000;
 const _hits = new Map<string, number[]>();
 
 function clientIp(request: Request): string {
@@ -45,15 +50,39 @@ function clientIp(request: Request): string {
   return request.headers.get('x-real-ip') || 'unknown';
 }
 
+function pruneExpired(now: number): void {
+  for (const [key, times] of _hits) {
+    const latest = times[times.length - 1];
+    if (latest === undefined || now - latest >= RATE_WINDOW_MS) {
+      _hits.delete(key);
+    }
+  }
+  if (_hits.size >= MAX_TRACKED_IPS) _hits.clear();
+}
+
 function isRateLimited(ip: string, now: number): boolean {
   const recent = (_hits.get(ip) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
   if (recent.length >= RATE_LIMIT) {
     _hits.set(ip, recent);
     return true;
   }
+  // Opportunistic cleanup so the map cannot grow unbounded when callers
+  // rotate source IPs. Mirrors the bound in api/client-errors.
+  if (!_hits.has(ip) && _hits.size >= MAX_TRACKED_IPS) {
+    pruneExpired(now);
+  }
   recent.push(now);
   _hits.set(ip, recent);
   return false;
+}
+
+// Relay provider backpressure as-is (bounded) so a downstream cap that a
+// distributed flood trips is visible to the caller as "slow down".
+function providerRetryAfter(value: string | null): string {
+  if (value !== null && /^\d+$/.test(value.trim())) {
+    return String(Math.min(Math.max(parseInt(value.trim(), 10), 1), 3600));
+  }
+  return '60';
 }
 
 export async function POST(request: Request) {
@@ -138,6 +167,16 @@ export async function POST(request: Request) {
         reason: 'redirect',
       });
       return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
+    }
+    if (res.status === 429) {
+      console.error('[contact] delivery_refused', {
+        submissionId: submission.submission_id,
+        reason: 'provider_rate_limited',
+      });
+      return NextResponse.json(
+        { error: 'rate_limited', detail: 'Too many submissions. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': providerRetryAfter(res.headers.get('Retry-After')) } },
+      );
     }
     if (!res.ok) {
       console.error('[contact] delivery_refused', {

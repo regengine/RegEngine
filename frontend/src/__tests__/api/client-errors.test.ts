@@ -112,4 +112,14 @@ describe('POST /api/client-errors', () => {
         const blocked = await POST(makeRequest({ kind: 'error', message: 'e11' }, ip));
         expect(blocked.status).toBe(429);
     });
+
+    it('tells rate-limited senders when to retry', async () => {
+        const ip = '198.51.100.98';
+        for (let i = 0; i < 10; i++) {
+            await POST(makeRequest({ kind: 'error', message: `e${i}` }, ip));
+        }
+        const blocked = await POST(makeRequest({ kind: 'error', message: 'last' }, ip));
+        expect(blocked.status).toBe(429);
+        expect(blocked.headers.get('Retry-After')).toBe('60');
+    });
 });
