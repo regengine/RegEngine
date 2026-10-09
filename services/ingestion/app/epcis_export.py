@@ -98,6 +98,39 @@ _CTE_TO_BIZSTEP = {
 }
 
 
+def _fda_csv_row(r: dict, date_str: str, time_str: str) -> str:
+    """Render one tenant event as a sanitized FDA-spreadsheet CSV line.
+
+    Every cell passes through :func:`sanitize_cell` so a crafted lot code,
+    location, or carrier value stored raw at ingest cannot become a live
+    spreadsheet formula on the recipient's machine (CSV formula injection).
+    This matches the ``_event_to_fda_row`` posture in
+    ``fda_export_service.py``, which sanitizes every string-valued cell.
+    Stored values stay raw; neutralization happens here at export time so
+    evidence hashes and lot-code lookups are unaffected.
+
+    Columns are joined with bare commas, so commas inside values become
+    ``;`` (values without commas are unchanged).
+    """
+    cells = [
+        str(r.get("event_type") or "").upper(),
+        str(r.get("traceability_lot_code") or ""),
+        str(r.get("product_description") or ""),
+        str(r.get("quantity") or ""),
+        str(r.get("unit_of_measure") or ""),
+        date_str,
+        time_str,
+        str(r.get("ship_from") or r.get("location_name") or ""),
+        str(r.get("ship_from_gln") or r.get("location_gln") or ""),
+        str(r.get("ship_to") or ""),
+        str(r.get("ship_to_gln") or ""),
+        str(r.get("carrier") or ""),
+        str(r.get("temperature_c") or ""),
+        str(r.get("sha256_hash") or ""),
+    ]
+    return ",".join(sanitize_cell(cell).replace(",", ";") for cell in cells)
+
+
 def _validate_epcis_document(doc: dict) -> list[str]:
     """Validate an EPCIS 2.0 JSON-LD document structure.
 
@@ -342,26 +375,7 @@ async def export_fda(
             ts = r["event_timestamp"]
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
             time_str = ts.strftime("%H:%M:%SZ") if ts else ""
-            lines.append(
-                ",".join(
-                    [
-                        str(r["event_type"] or "").upper(),
-                        str(r["traceability_lot_code"] or ""),
-                        sanitize_cell(str(r["product_description"] or "")).replace(",", ";"),
-                        str(r["quantity"] or ""),
-                        str(r["unit_of_measure"] or ""),
-                        date_str,
-                        time_str,
-                        sanitize_cell(str(r["ship_from"] or r["location_name"] or "")).replace(",", ";"),
-                        str(r["ship_from_gln"] or r["location_gln"] or ""),
-                        sanitize_cell(str(r["ship_to"] or "")).replace(",", ";"),
-                        str(r["ship_to_gln"] or ""),
-                        sanitize_cell(str(r["carrier"] or "")).replace(",", ";"),
-                        str(r["temperature_c"] or ""),
-                        str(r["sha256_hash"] or ""),
-                    ]
-                )
-            )
+            lines.append(_fda_csv_row(r, date_str, time_str))
         csv_content = "\n".join(lines) + "\n"
         event_count = len(rows)
     else:
