@@ -2,6 +2,20 @@
 # FSMA 204 Recall — MockRecallEngine class
 # Split from monolithic fsma_recall.py — zero logic changes.
 # ============================================================
+"""Mock recall drill execution for FSMA 204 traceability readiness.
+
+This module runs recall drills against forward and backward trace
+functions, records the results as audit evidence, and tracks 24-hour
+SLA metrics per tenant. Drill history is scoped by tenant and persisted
+to PostgreSQL when configured, with an in-memory fallback otherwise.
+
+Key invariants: drills without a wired trace backend or target lot are
+marked simulated with a warning instead of reporting measured numbers;
+required trace fields raise when missing rather than defaulting to zero;
+unknown lot quantities or mixed units are reported as unknown rather than
+summed; SLA metrics include measured drills only.
+"""
+
 from __future__ import annotations
 
 import inspect
