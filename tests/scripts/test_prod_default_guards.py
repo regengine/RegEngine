@@ -432,6 +432,96 @@ def test_load_regctl_preserves_preexisting_modules():
             sys.modules["regctl_tenant"] = regctl_saved
 
 
+# --- phone_test_quickstart.sh: localhost default, production needs the flag,
+# and the replay idempotency key is honored ---
+
+
+def _make_fake_phone_bin(tmp_path: Path):
+    """Fake curl that never touches the network; logs calls under tmp_path."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    curl_log = tmp_path / "curl.log"
+    (bin_dir / "curl").write_text(
+        '#!/usr/bin/env bash\necho "curl-called" >> "$FAKE_CURL_LOG"\n'
+        'printf \'{"accepted": 1, "rejected": 0}\\n__HTTP_STATUS__:200\'\nexit 0\n'
+    )
+    os.chmod(bin_dir / "curl", 0o755)
+    return bin_dir, curl_log
+
+
+def _run_phone_with_fake_curl(tmp_path: Path, env_overrides=None, extra_args=()):
+    bin_dir, curl_log = _make_fake_phone_bin(tmp_path)
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "REGENGINE_API_KEY": uuid4().hex,
+        "REGENGINE_TENANT_ID": str(uuid4()),
+        "FAKE_CURL_LOG": str(curl_log),
+    }
+    env.pop("REGENGINE_ALLOW_PRODUCTION", None)
+    env.pop("REGENGINE_API_BASE", None)
+    env.pop("REGENGINE_IDEMPOTENCY_KEY", None)
+    if env_overrides:
+        env.update(env_overrides)
+    proc = subprocess.run(
+        ["bash", str(SCRIPTS / "phone_test_quickstart.sh"), *extra_args],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=30,
+    )
+    curl_calls = 0
+    if curl_log.exists():
+        curl_calls = len([line for line in curl_log.read_text().splitlines() if line.strip()])
+    return proc, curl_calls
+
+
+def test_phone_script_defaults_to_localhost():
+    text = (SCRIPTS / "phone_test_quickstart.sh").read_text()
+    assert "REGENGINE_API_BASE:-http://localhost" in text
+    assert "regengine.co" not in text
+    assert "--allow-production" in text
+
+
+def test_phone_script_honors_replay_idempotency_key():
+    text = (SCRIPTS / "phone_test_quickstart.sh").read_text()
+    assert "REGENGINE_IDEMPOTENCY_KEY" in text
+
+
+def test_phone_script_refuses_production_without_flag(tmp_path):
+    proc, curl_calls = _run_phone_with_fake_curl(tmp_path, {"REGENGINE_API_BASE": "https://regengine.co"})
+    assert proc.returncode == 2
+    assert curl_calls == 0
+    assert "allow-production" in (proc.stdout + proc.stderr).lower()
+
+
+def test_phone_script_allows_remote_with_explicit_opt_in(tmp_path):
+    proc, curl_calls = _run_phone_with_fake_curl(
+        tmp_path,
+        {"REGENGINE_API_BASE": "https://regengine.co"},
+        extra_args=("--allow-production",),
+    )
+    assert curl_calls == 1
+    assert proc.returncode == 0
+    assert "PASS: 1 event accepted" in proc.stdout
+
+
+def test_phone_script_uses_localhost_default_target(tmp_path):
+    proc, curl_calls = _run_phone_with_fake_curl(tmp_path)
+    assert curl_calls == 1
+    assert "POST http://localhost" in proc.stdout
+    assert proc.returncode == 0
+
+
+def test_phone_script_replays_with_given_idempotency_key(tmp_path):
+    replay_key = str(uuid4())
+    proc, curl_calls = _run_phone_with_fake_curl(tmp_path, {"REGENGINE_IDEMPOTENCY_KEY": replay_key})
+    assert curl_calls == 1
+    assert proc.returncode == 0
+    assert f"Idempotency-Key: {replay_key}" in proc.stdout
+    assert f"REGENGINE_IDEMPOTENCY_KEY={replay_key}" in proc.stdout
+
+
 def test_load_regctl_restores_absent_stubs():
     watched = (*_REGCTL_STUB_NAMES, "regctl_tenant")
     saved = {}
