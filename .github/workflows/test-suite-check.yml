@@ -34,7 +34,7 @@ concurrency:
 
 permissions:
   contents: read
-  checks: write
+  checks: read
 
 jobs:
   # ── Full-suite collection guard (#1435) ─────────────────

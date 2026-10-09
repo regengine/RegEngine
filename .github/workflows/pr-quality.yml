@@ -12,7 +12,7 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
-  checks: write
+  checks: read
 
 jobs:
   # ── PR Size Check ───────────────────────────────────────
