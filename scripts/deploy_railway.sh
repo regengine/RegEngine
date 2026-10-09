@@ -62,28 +62,41 @@ if [ -z "${NEO4J_URI:-}" ]; then
 else
   echo -e "${GREEN}✓${NC} NEO4J_URI set"
   cd "$REPO_ROOT"
-  # Pinned to the version in requirements.lock. No --break-system-packages
-  # fallback: that flag bypasses system-package protection, so a failed
-  # install must stop the deploy instead of retrying unprotected.
-  pip install "neo4j==6.3.1" --quiet
+  # Pinned to the versions in requirements.lock, with hashes from that lock
+  # file (pip-compile --generate-hashes). The pins live in a requirements
+  # file because pip only accepts --hash there, not on the command line.
+  # --require-hashes turns this into a verified install: an artifact that
+  # does not match fails instead of installing. pytz is listed because it
+  # is neo4j's only unconditional runtime dependency, and hash mode
+  # requires every installed distribution to carry a hash. No
+  # --break-system-packages fallback: that flag bypasses system-package
+  # protection, so a failed install must stop the deploy instead of
+  # retrying unprotected.
+  req_file="$(mktemp)"
+  trap 'rm -f "$req_file"' EXIT
+  cat > "$req_file" <<'EOF'
+neo4j==6.3.1 \
+    --hash=sha256:a1b702d356f88885c27bdcf7dcd56af76423dbff4e26064e5bf5dbf47af53044 \
+    --hash=sha256:e75530ca0691d69916c56acdb7401df4ee9e1d5084cfcfb3ede796db38667dcd
+pytz==2026.3.post1 \
+    --hash=sha256:2211d3fcf9a797d3405cac96ac7f61d80e6a644f72a3309607282fe8a2010c5d \
+    --hash=sha256:dd95840dd199baea12d9cc096a1d452caa6596a1c1e4b5f3dbd1541855d5e815
+EOF
+  pip install --require-hashes --quiet -r "$req_file"
+  rm -f "$req_file"
+  trap - EXIT
   python3 services/graph/scripts/init_db_constraints.py
 fi
 
 # ── Step 3: Verify monolith ────────────────────────────────
 echo ""
-echo "── Step 3: Verify monolith (waiting 30s for redeploy) ──"
-sleep 30
-
-for endpoint in "health" "readiness"; do
-  url="$MONOLITH_URL/$endpoint"
-  echo -n "  GET /$endpoint ... "
-  status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null || echo "000")
-  if [ "$status" = "200" ]; then
-    echo -e "${GREEN}$status OK${NC}"
-  else
-    echo -e "${YELLOW}$status (may still be deploying)${NC}"
-  fi
-done
+echo "── Step 3: Verify monolith (polling health, deadline ${MONOLITH_WAIT_SECS:-300}s) ──"
+# Polls /health and /readiness until both return 200 or the deadline
+# expires. A fixed sleep cannot know when Railway finishes the redeploy,
+# and the old single-shot check reported still-deploying as success.
+# wait_for_service.sh exits nonzero past the deadline, and set -e above
+# stops the deploy there instead of printing a false all-clear.
+WAIT_TIMEOUT_SECS="${MONOLITH_WAIT_SECS:-300}" "$SCRIPT_DIR/wait_for_service.sh" "$MONOLITH_URL"
 
 # Check feature flags
 echo ""
