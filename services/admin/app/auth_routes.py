@@ -153,12 +153,3 @@ def get_me(
         )
     finally:
         disarm_global_admin_context(db)
-
-
-@router.get("/check-permission", response_model=PermissionCheckResponse)
-def check_perm(
-    user: UserModel = Depends(get_current_user),
-    authorized: bool = Depends(PermissionChecker("admin.read")),
-):
-    """Test RBAC."""
-    return {"message": "Permission granted", "user": user.email}
