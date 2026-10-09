@@ -7,27 +7,29 @@
  * 
  * Prerequisites:
  * - Graph service running on port 8200
- * - API key in REGENGINE_API_KEY env var or .env file
+ * - API key in REGENGINE_API_KEY env var (required; .env files are never read)
  */
 
 const http = require('http');
 const https = require('https');
-const fs = require('fs');
-const path = require('path');
 
 // Configuration
 const BASE_URL = process.env.GRAPH_SERVICE_URL || 'http://localhost:8200';
-const API_KEY = process.env.REGENGINE_API_KEY || loadApiKeyFromEnv();
+// The API key must come from the environment. This script never reads .env
+// files and never falls back to a placeholder key, so a missing key fails
+// loudly instead of silently testing the wrong credentials.
+const API_KEY = process.env.REGENGINE_API_KEY || '';
 
-function loadApiKeyFromEnv() {
-    try {
-        const envPath = path.join(__dirname, '..', '.env');
-        const envContent = fs.readFileSync(envPath, 'utf-8');
-        const match = envContent.match(/REGENGINE_API_KEY=(.*)$/m);
-        return match ? match[1].trim() : 'test-key';
-    } catch {
-        return 'test-key';
+function requireApiKey() {
+    if (!API_KEY) {
+        console.error('Missing required REGENGINE_API_KEY environment variable. Export it before running this suite.');
+        process.exit(1);
     }
+}
+
+// Match the transport to the URL scheme so https targets are tested over TLS.
+function transportFor(url) {
+    return url.protocol === 'https:' ? https : http;
 }
 
 // Test results tracking
@@ -58,7 +60,7 @@ async function request(method, endpoint, body = null) {
             timeout: 10000,
         };
 
-        const req = http.request(options, (res) => {
+        const req = transportFor(url).request(options, (res) => {
             let data = '';
             res.on('data', (chunk) => { data += chunk; });
             res.on('end', () => {
@@ -94,15 +96,17 @@ async function request(method, endpoint, body = null) {
     });
 }
 
-// Test runner
-async function runTest(name, method, endpoint, expectedStatus = [200, 401, 404, 422]) {
+// Test runner. Each endpoint asserts its exact expected status; auth, routing,
+// and validation failures (401/404/422) are failures unless the caller
+// explicitly lists them as expected for that endpoint.
+async function runTest(name, method, endpoint, expectedStatus = 200, requestFn = request) {
     process.stdout.write(`  Testing ${name}... `);
 
     try {
-        const res = await request(method, endpoint);
+        const res = await requestFn(method, endpoint);
         const statusArray = Array.isArray(expectedStatus) ? expectedStatus : [expectedStatus];
 
-        if (statusArray.includes(res.status) || res.ok) {
+        if (statusArray.includes(res.status)) {
             console.log(`✅ ${res.status}`);
             results.passed++;
             return res;
@@ -126,10 +130,11 @@ async function runTest(name, method, endpoint, expectedStatus = [200, 401, 404, 
 
 // Main test suite
 async function runAllTests() {
+    requireApiKey();
     console.log('\n🧪 FSMA 204 Endpoint Test Suite');
     console.log('='.repeat(50));
     console.log(`Base URL: ${BASE_URL}`);
-    console.log(`API Key: ${API_KEY.substring(0, 8)}...`);
+    console.log('API Key: set (value hidden)');
     console.log('');
 
     // ============================================================================
@@ -258,12 +263,17 @@ async function runAllTests() {
     return results.failed === 0;
 }
 
-// Run tests
-runAllTests()
-    .then((success) => {
-        process.exit(success ? 0 : 1);
-    })
-    .catch((err) => {
-        console.error('Test suite error:', err);
-        process.exit(1);
-    });
+// Run tests when executed directly; requiring this file (for example from a
+// test harness) must not run the suite as a side effect.
+if (require.main === module) {
+    runAllTests()
+        .then((success) => {
+            process.exit(success ? 0 : 1);
+        })
+        .catch((err) => {
+            console.error('Test suite error:', err);
+            process.exit(1);
+        });
+}
+
+module.exports = { request, runTest, runAllTests, transportFor, requireApiKey, results };
