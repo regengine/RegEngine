@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-
 from shared.schemas import (
     ExtractionPayload,
     ObligationType,
@@ -20,7 +19,6 @@ from shared.schemas import (
 from ..classification import SignalClassifier
 from ..extractor import infer_obligation_type
 from ..resolution import MASTER_DATA_SOURCE, EntityResolver
-
 from .constants import (
     _LEGACY_HEURISTIC_CONFIDENCE_CAP,
     _LLM_EXTRACTION_CONFIDENCE_CAP,
@@ -65,9 +63,7 @@ def _modality_verdict(entity: dict) -> dict:
     attrs = entity.get("attrs") or {}
     modality = attrs.get("obligation")
     scope = attrs.get("negation_scope")
-    if (modality, scope if modality in _MODALITIES_WITH_SCOPE else None) in (
-        _MODALITY_TO_OBLIGATION_TYPE
-    ):
+    if (modality, scope if modality in _MODALITIES_WITH_SCOPE else None) in (_MODALITY_TO_OBLIGATION_TYPE):
         return {
             "obligation": modality,
             "negation_detected": bool(attrs.get("negation_detected")),
@@ -103,9 +99,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _convert_entities_to_extraction(
-    entities: list, doc_id: str, source_url: str
-) -> list[ExtractionPayload]:
+def _convert_entities_to_extraction(entities: list, doc_id: str, source_url: str) -> list[ExtractionPayload]:
     """Convert legacy entity format to canonical ExtractionPayload format.
 
     Confidence scores from this path are capped at
@@ -190,10 +184,9 @@ def _convert_entities_to_extraction(
                 if resolution:
                     entity_info["normalized_name"] = resolution["name"]
                     entity_info["entity_type"] = resolution["type"]
-                    entity_info["match_strategy"] = resolution.get(
-                        "match_strategy", "unknown"
-                    )
+                    entity_info["match_strategy"] = resolution.get("match_strategy", "unknown")
                     entity_info["match_score"] = resolution.get("match_score")
+                    entity_info["review_recommended"] = bool(resolution.get("review_recommended", False))
                     source = resolution.get("source")
                     entity_info["resolution_source"] = source or "unknown"
                     if source and source != MASTER_DATA_SOURCE:
@@ -207,9 +200,7 @@ def _convert_entities_to_extraction(
                         # like an MDM resolution, so the field is omitted
                         # rather than stubbed. The raw name, the candidate
                         # name and the match score still reach the reviewer.
-                        entity_info["entity_id_withheld_reason"] = (
-                            "stub_master_data_is_not_an_authoritative_identifier"
-                        )
+                        entity_info["entity_id_withheld_reason"] = "stub_master_data_is_not_an_authoritative_identifier"
 
                 resolved_entities.append(entity_info)
 
@@ -325,9 +316,7 @@ def _llm_field(item, name: str, default=None):
     return default if value is None else value
 
 
-def _convert_llm_results_to_extractions(
-    llm_results: list, doc_id: str, source_url: str
-) -> list[ExtractionPayload]:
+def _convert_llm_results_to_extractions(llm_results: list, doc_id: str, source_url: str) -> list[ExtractionPayload]:
     """Bridge ``LLMGenerativeExtractor`` output into canonical extractions.
 
     Before this existed the consumer called the extractor, logged
@@ -364,9 +353,7 @@ def _convert_llm_results_to_extractions(
             reported_confidence = float(_llm_field(item, "confidence", 0.0))
         except (TypeError, ValueError):
             reported_confidence = 0.0
-        confidence = max(
-            0.0, min(reported_confidence, _LLM_EXTRACTION_CONFIDENCE_CAP)
-        )
+        confidence = max(0.0, min(reported_confidence, _LLM_EXTRACTION_CONFIDENCE_CAP))
 
         span_start = _llm_field(item, "source_span_start", 0)
         parts = provision_text.split()
@@ -407,6 +394,7 @@ def _convert_llm_results_to_extractions(
         )
 
     return extractions
+
 
 def _score_regulatory_date(date_value: Optional[str], attrs: dict) -> float:
     """Score a REGULATORY_DATE match by signal quality (#1206).

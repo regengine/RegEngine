@@ -76,9 +76,7 @@ class EntityResolutionMixin:
         # Fallback: sequential GLNs across the document for mapping
         gln_occurrences: List[str] = []
         for pattern in self.PATTERNS.get("gln", []):
-            gln_occurrences.extend(
-                [m.group(1) for m in re.finditer(pattern, text, re.IGNORECASE)]
-            )
+            gln_occurrences.extend([m.group(1) for m in re.finditer(pattern, text, re.IGNORECASE)])
 
         unique_glns: List[str] = []
         for gln_value in gln_occurrences:
@@ -124,9 +122,7 @@ class EntityResolutionMixin:
         gln_roles = self._extract_gln_roles(text)
 
         kde.tlc_source_gln = kde.tlc_source_gln or gln_roles.get("tlc_source_gln")
-        kde.tlc_source_fda_reg = kde.tlc_source_fda_reg or gln_roles.get(
-            "tlc_source_fda_reg"
-        )
+        kde.tlc_source_fda_reg = kde.tlc_source_fda_reg or gln_roles.get("tlc_source_fda_reg")
         kde.ship_from_gln = kde.ship_from_gln or gln_roles.get("ship_from_gln")
         kde.ship_to_gln = kde.ship_to_gln or gln_roles.get("ship_to_gln")
 
@@ -259,9 +255,31 @@ class EntityResolutionMixin:
 
         return kde
 
+    @staticmethod
+    def _is_ambiguous_numeric_date(date_str: str) -> bool:
+        """Return True when a numeric date reads two ways.
+
+        A date like ``01/02/2024`` parses validly both month-first and
+        day-first with different results, so the pinned month-first
+        normalization is a guess. Dates with only one valid reading
+        (``13/01/2024``), dates where both readings agree (``05/05/2024``),
+        and ISO dates are not ambiguous.
+        """
+        match = re.match(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$", date_str.strip())
+        if not match:
+            return False
+        first, second = int(match.group(1)), int(match.group(2))
+        return 1 <= first <= 12 and 1 <= second <= 12 and first != second
+
     def _normalize_date(self, date_str: str) -> str:
-        """Normalize date string to ISO format."""
-        # Try common formats
+        """Normalize date string to ISO format.
+
+        Numeric dates that read two ways keep the pinned month-first
+        value but emit an auditable warning so a reviewer can check
+        the source document.
+        """
+        # Try common formats (month-first entries come first: that order
+        # is the pin, not an accident).
         formats = [
             "%m/%d/%Y",
             "%m-%d-%Y",
@@ -272,10 +290,18 @@ class EntityResolutionMixin:
             "%Y-%m-%d",
         ]
 
+        ambiguous = self._is_ambiguous_numeric_date(date_str)
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str, fmt)
-                return dt.strftime("%Y-%m-%d")
+                normalized = dt.strftime("%Y-%m-%d")
+                if ambiguous:
+                    logger.warning(
+                        "ambiguous_numeric_date_assumed_month_first",
+                        raw=date_str,
+                        normalized=normalized,
+                    )
+                return normalized
             except ValueError:
                 continue
 

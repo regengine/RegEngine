@@ -140,10 +140,15 @@ class EntityResolver:
 
         Returns:
             ``{"id", "name", "type", "match_strategy", "match_score",
-            "source"}`` on a resolved match, or ``None`` if confidence is
-            insufficient. ``match_strategy`` is one of ``exact``, ``fuzzy`` so
-            callers can audit which path was taken; ``source`` says where the
-            record came from (#2944).
+            "source", "review_recommended"}`` on a resolved match, or ``None``
+            if confidence is insufficient. ``match_strategy`` is one of
+            ``exact``, ``fuzzy`` so callers can audit which path was taken;
+            ``source`` says where the record came from (#2944).
+            ``review_recommended`` is False for exact matches and True for
+            fuzzy matches: a fuzzy match relies on tokens beyond the master
+            key, which the two-token-key limitation above shows can conflate
+            a legitimate extension with a hostile one, so a reviewer should
+            confirm it.
         """
 
         if not raw_name or not isinstance(raw_name, str):
@@ -160,6 +165,7 @@ class EntityResolver:
             record["match_strategy"] = "exact"
             record["match_score"] = 100.0
             record["source"] = MASTER_DATA_SOURCE
+            record["review_recommended"] = False
             logger.info(
                 "entity_resolved_exact",
                 raw=raw_name,
@@ -196,6 +202,7 @@ class EntityResolver:
             record["match_strategy"] = "fuzzy"
             record["match_score"] = best[0]
             record["source"] = MASTER_DATA_SOURCE
+            record["review_recommended"] = True
             logger.info(
                 "entity_resolved_fuzzy",
                 raw=raw_name,
