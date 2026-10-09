@@ -349,19 +349,6 @@ KNOWN_GAPS = [
         ],
     },
     {
-        "file": "routers/lineage_traversal.py",
-        "snippet": "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-        "bug": "BUG-004 LINEAGE_BY_TLC_QUERY returns prev.tlc from an unscoped "
-        "OPTIONAL MATCH, and the Python invariant check only inspects the "
-        "anchor fact, so a cross-tenant predecessor leaks its TLC",
-        "fix": [
-            (
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) WHERE prev.tenant_id = $tenant_id",
-            ),
-        ],
-    },
-    {
         "file": "fsma/data_quality.py",
         "snippet": "sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
         "bug": "BUG-005 analyze_kde_completeness counts a cross-tenant Lot as "

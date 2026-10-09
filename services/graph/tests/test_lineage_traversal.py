@@ -302,6 +302,55 @@ def _has_repeated_adjacent_segment(path: str) -> bool:
     return any(a == b for a, b in zip(segments, segments[1:]))
 
 
+def test_lineage_fallback_query_is_bounded_and_tenant_scoped():
+    """Fallback TLC lookup must be bounded and tenant-scope its edge target.
+
+    The fallback query runs when the chain traversal returns nothing. It
+    used to have no LIMIT and its ``OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev)``
+    left ``prev`` unscoped, so a cross-tenant node could leak in through
+    ``superseded_by`` and a TLC matching many rows could return them all.
+    """
+    from services.graph.app.routers import lineage_traversal as lt
+
+    # Static net: the fallback query text itself must bound rows and scope
+    # the SUPERSEDES edge target to the caller's tenant.
+    assert "LIMIT" in lt.LINEAGE_BY_TLC_QUERY.upper()
+    optional_tail = lt.LINEAGE_BY_TLC_QUERY.upper().split("OPTIONAL MATCH", 1)[1]
+    assert "TENANT_ID" in optional_tail
+
+    # Dynamic net: force the fallback path (chain returns nothing) and check
+    # the second Cypher run is still parameterised with the caller's tenant.
+    app = _build_app(TENANT_A)
+    client = TestClient(app)
+
+    fallback_row = {
+        "tlc": "FALLBACK-TLC",
+        "version": 1,
+        "record_hash": "hash-fb",
+        "prev_hash": None,
+        "created_at": "2026-05-01T00:00:00Z",
+        "superseded_at": None,
+        "source_document": "doc-A",
+        "fact_type": "RegulatoryFact",
+        "is_current": True,
+        "all_props": {"tlc": "FALLBACK-TLC", "tenant_id": str(TENANT_A)},
+    }
+    mock_client_cls, mock_session = _make_session_mock([[], [fallback_row]])
+
+    with patch(
+        "services.graph.app.routers.lineage_traversal.Neo4jClient",
+        mock_client_cls,
+    ):
+        response = client.get("/api/v1/lineage/FALLBACK-TLC/history", headers=_AUTH_HEADERS)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["total_versions"] == 1
+    assert mock_session.run.await_count == 2
+    _, fallback_kwargs = mock_session.run.await_args_list[1]
+    assert fallback_kwargs["tenant_id"] == str(TENANT_A)
+    assert fallback_kwargs["tlc"] == "FALLBACK-TLC"
+
+
 def test_assembled_graph_routes_have_no_new_duplicated_segment():
     """#2946: no route may repeat an adjacent path segment.
 

@@ -88,12 +88,15 @@ RETURN
 ORDER BY v.version DESC
 """
 
-# Simpler alternative: find all facts with same TLC regardless of chain
+# Simpler alternative: find all facts with same TLC regardless of chain.
+# Bounded to the same 51-version window as the chain traversal above
+# (*0..50 hops), and the SUPERSEDES edge target is tenant-scoped so a
+# cross-tenant node can never leak in via `superseded_by`.
 LINEAGE_BY_TLC_QUERY = """
 MATCH (f:RegulatoryFact {tenant_id: $tenant_id})
 WHERE f.tlc = $tlc OR f.lot_number = $tlc OR f.identifier = $tlc
 WITH f ORDER BY f.version DESC, f.created_at DESC
-OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)
+OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact {tenant_id: $tenant_id})
 RETURN
     f.tlc AS tlc,
     coalesce(f.version, 1) AS version,
@@ -106,6 +109,7 @@ RETURN
     f.is_current AS is_current,
     prev.tlc AS superseded_by,
     properties(f) AS all_props
+LIMIT 51
 """
 
 
