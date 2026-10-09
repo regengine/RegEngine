@@ -34,11 +34,14 @@ Usage:
 
 import argparse
 import hashlib
+import ipaddress
 import os
+import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 from uuid import UUID, uuid4
 
 import requests
@@ -53,6 +56,9 @@ from services.nlp.app.extractors import DORAExtractor, NYDFSExtractor, SECSCIExt
 
 class DocumentIngestion:
     """Handles regulatory document ingestion workflow."""
+
+    # Maximum redirects followed when downloading a document URL.
+    MAX_DOWNLOAD_REDIRECTS = 5
 
     EXTRACTORS = {
         "nydfs": NYDFSExtractor,
@@ -195,12 +201,52 @@ class DocumentIngestion:
         with open(path, "rb") as f:
             return f.read()
 
+    def _validate_download_url(self, url: str) -> str:
+        """Check that a download URL points at a public host.
+
+        Rejects non http/https schemes, hosts without a hostname,
+        unresolvable hosts, and hosts resolving to a non-public address
+        (loopback, private, link-local, multicast, reserved, or otherwise
+        non-global). Every redirect target goes through this same check.
+
+        Returns the URL unchanged when it passes.
+        """
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Refusing to fetch URL with scheme {parsed.scheme!r}: only http and https are allowed")
+        try:
+            hostname = parsed.hostname
+            port = parsed.port
+        except ValueError as exc:
+            raise ValueError(f"Refusing to fetch malformed URL {url!r}: {exc}") from exc
+        if not hostname:
+            raise ValueError(f"Refusing to fetch URL without a hostname: {url!r}")
+        default_port = 443 if parsed.scheme == "https" else 80
+        try:
+            addrinfo = socket.getaddrinfo(hostname, port or default_port)
+        except socket.gaierror as exc:
+            raise ValueError(f"Refusing to fetch URL with unresolvable host {hostname!r}: {exc}") from exc
+        for _family, _socktype, _proto, _canonname, sockaddr in addrinfo:
+            resolved = ipaddress.ip_address(sockaddr[0])
+            if not resolved.is_global:
+                raise ValueError(
+                    f"Refusing to fetch URL resolving to non-public address {resolved} (host {hostname!r})"
+                )
+        return url
+
     def _download_file(self, url: str) -> bytes:
-        """Download file from URL."""
-        print(f"   Downloading from {url}...")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.content
+        """Download file from URL, following redirects only to public hosts."""
+        current_url = url
+        for _ in range(self.MAX_DOWNLOAD_REDIRECTS + 1):
+            self._validate_download_url(current_url)
+            print(f"   Downloading from {current_url}...")
+            response = requests.get(current_url, timeout=30, allow_redirects=False)
+            if response.is_redirect and "location" in response.headers:
+                current_url = urljoin(current_url, response.headers["location"])
+                continue
+            response.raise_for_status()
+            return response.content
+        raise ValueError(f"Refusing to follow more than {self.MAX_DOWNLOAD_REDIRECTS} redirects from {url!r}")
 
     def _calculate_hash(self, content: bytes) -> str:
         """Calculate SHA-256 hash of content."""
