@@ -17,7 +17,8 @@ Browser Cookie/Authorization requests and /auth operations bypass this cache,
 preserving session revocation and single-use authentication checks. Webhook
 replays bind the signature and current signing secret as well as request bytes.
 API-key replay fingerprints include fresh database scopes and jurisdictions,
-so same-key permission changes invalidate older responses. A replay still skips
+so same-key permission changes invalidate older responses. Principal-resolved
+replays bind the principal identity, scopes and expiry the same way. A replay still skips
 route dependencies: unrelated dynamic authorization policies and rate limits
 require an outer enforcement layer or a future route-level replay boundary.
 
@@ -143,6 +144,71 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
         return None
 
 
+def _principal_authorization_fingerprint(principal: Any) -> str:
+    """Bind a pre-authenticated principal's identity and authorization state.
+
+    The replay path serves cached 2xx bodies before route dependencies run,
+    so without this binding a cached response would outlive a permission
+    change for the full 24-hour TTL: narrowing (or swapping) the principal
+    behind the same tenant and idempotency key would replay the older,
+    more-privileged body. Hashing the identity plus the current scopes and
+    expiry into the request fingerprint turns that replay into a 409
+    conflict instead, mirroring the API-key authorization snapshot above.
+    Only strictly typed values contribute, so test doubles and partial
+    principals degrade to a tenant-only binding instead of raising.
+    """
+    identity = ""
+    for attr in ("key_id", "principal_id", "user_id", "sub", "username", "user_email", "email"):
+        try:
+            value = getattr(principal, attr, None)
+        except Exception:
+            continue
+        if isinstance(value, str) and value.strip():
+            identity = value.strip()
+            break
+    authorization: list[str] = []
+    for attr in ("scopes", "roles", "permissions"):
+        try:
+            value = getattr(principal, attr, None)
+        except Exception:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                authorization.append(value.strip())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            authorization.extend(sorted(str(item) for item in value))
+    expiry = ""
+    for attr in ("expires_at", "exp"):
+        try:
+            value = getattr(principal, attr, None)
+        except Exception:
+            continue
+        if isinstance(value, datetime):
+            expiry = value.isoformat()
+            break
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            expiry = str(int(value))
+            break
+        if isinstance(value, str) and value.strip():
+            expiry = value.strip()
+            break
+    try:
+        raw_tenant = getattr(principal, "tenant_id", None)
+    except Exception:
+        raw_tenant = None
+    snapshot = json.dumps(
+        [
+            str(raw_tenant) if isinstance(raw_tenant, (str, UUID)) else "",
+            identity,
+            authorization,
+            expiry,
+        ]
+    )
+    return hashlib.sha256(snapshot.encode()).hexdigest()
+
+
 class IdempotencyMiddleware(BaseHTTPMiddleware):
     """Middleware that caches POST responses keyed by Idempotency-Key header.
 
@@ -240,6 +306,19 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         principal_tenant = getattr(principal, "tenant_id", None) if principal else None
         tenant = _tenant_value_to_str(principal_tenant)
         if tenant:
+            # A cached response would otherwise outlive a permission change
+            # for the 24-hour TTL: the replay path runs before route
+            # dependencies, so a narrowed or swapped principal behind the
+            # same tenant and idempotency key would receive the older,
+            # more-privileged body. Bind the principal snapshot into the
+            # request fingerprint (same mechanism as the API-key branch
+            # above) so the retry conflicts (409) instead of replaying.
+            # Fail closed when the snapshot cannot be built.
+            try:
+                request.state.idempotency_authorization_fingerprint = _principal_authorization_fingerprint(principal)
+            except Exception:
+                logger.debug("idempotency_principal_fingerprint_failed")
+                return None
             return tenant
         state_tenant = getattr(request.state, "tenant_id", None)
         tenant = _tenant_value_to_str(state_tenant)
