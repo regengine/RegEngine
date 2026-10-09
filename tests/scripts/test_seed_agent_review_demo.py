@@ -208,3 +208,56 @@ def test_database_url_safety_guard_defaults_to_local_development_only() -> None:
         )
         is False
     )
+
+
+def test_seed_script_has_no_builtin_database_url_default() -> None:
+    module = _load_module()
+
+    assert not hasattr(module, "DEFAULT_DEV_DATABASE_URL")
+
+    source = Path(module.__file__).read_text()
+    assert "DEFAULT_DEV_DATABASE_URL" not in source
+    assert "@postgres:5432/regengine" not in source
+
+
+def test_main_refuses_to_seed_without_an_explicit_database_url(monkeypatch, capsys) -> None:
+    module = _load_module()
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    for marker in ("RAILWAY_ENVIRONMENT", "RAILWAY_SERVICE_NAME", "VERCEL_ENV", "VERCEL_URL"):
+        monkeypatch.delenv(marker, raising=False)
+
+    assert module.main([]) == 2
+    assert "DATABASE_URL" in capsys.readouterr().err
+
+
+def test_main_accepts_database_url_flag(monkeypatch, capsys) -> None:
+    module = _load_module()
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(module, "seed_agent_review_demo", lambda session, artifacts: module.SeedResult())
+    monkeypatch.setattr(module, "_environment_looks_production", lambda: False)
+    monkeypatch.setattr(
+        module,
+        "is_safe_database_url_for_demo_seed",
+        lambda database_url: database_url == "sqlite:///:memory:",
+    )
+
+    class _Session:
+        def commit(self) -> None:
+            return None
+
+        def rollback(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    import shared.database
+
+    monkeypatch.setattr(shared.database, "SessionLocal", lambda: _Session())
+
+    assert module.main(["--database-url", "sqlite:///:memory:"]) == 0
+    assert "Seeded FSMA agent-review demo artifacts" in capsys.readouterr().out

@@ -8,7 +8,12 @@ advisory ingestion-run receipts.
 
 Usage:
     PYTHONPATH=services python3 scripts/seed_agent_review_demo.py --dry-run
-    PYTHONPATH=services python3 scripts/seed_agent_review_demo.py
+    DATABASE_URL=<database-url> PYTHONPATH=services python3 scripts/seed_agent_review_demo.py
+
+The database URL must always be provided explicitly, either through the
+``DATABASE_URL`` environment variable or the ``--database-url`` flag. There
+is no built-in default. For local development, see ``docker-compose.dev.yml``
+and ``.env.example`` for the local configuration.
 """
 
 from __future__ import annotations
@@ -58,15 +63,6 @@ DEMO_REQUEST_ID = "synthetic-agent-review-demo"
 DEMO_AGENT_NAME = "fsma-agent-review-demo-seeder"
 DEMO_AGENT_VERSION = "2026.05.19"
 DEMO_MODEL_NAME = "synthetic-deterministic-fixture"
-DEFAULT_DEV_DATABASE_URL = "".join(
-    (
-        "postgresql://",
-        "regengine",
-        ":",
-        "regengine",
-        "@postgres:5432/regengine",
-    )
-)
 
 ARTIFACT_TYPES = (
     "field_mapping_suggestion",
@@ -365,6 +361,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Build and print artifacts without opening a database connection.",
     )
     parser.add_argument(
+        "--database-url",
+        default=None,
+        help="Database URL to seed. Defaults to the DATABASE_URL environment variable. "
+        "There is no built-in default: set it explicitly, even for local development.",
+    )
+    parser.add_argument(
         "--allow-production-demo-seed",
         action="store_true",
         help="Allow seeding when environment or DATABASE_URL looks production.",
@@ -380,7 +382,15 @@ def main(argv: list[str] | None = None) -> int:
         _print_dry_run(artifacts)
         return 0
 
-    database_url = os.environ.get("DATABASE_URL") or DEFAULT_DEV_DATABASE_URL
+    database_url = args.database_url or os.environ.get("DATABASE_URL")
+    if not database_url:
+        print(
+            "Refusing to seed synthetic agent-review demo data because no database URL was provided. "
+            "Set the DATABASE_URL environment variable or pass --database-url explicitly. "
+            "For local development, see docker-compose.dev.yml and .env.example for the local configuration.",
+            file=sys.stderr,
+        )
+        return 2
     if not args.allow_production_demo_seed and (
         _environment_looks_production() or not is_safe_database_url_for_demo_seed(database_url)
     ):
