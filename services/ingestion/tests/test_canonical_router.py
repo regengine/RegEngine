@@ -618,6 +618,90 @@ class TestListIngestionRuns:
 
 
 # ---------------------------------------------------------------------------
+# Pagination bounds (GET /api/v1/records, GET /api/v1/records/ingestion-runs)
+# ---------------------------------------------------------------------------
+# Regulator-facing reads must reject degenerate page sizes before they reach
+# SQL: ``limit=0`` buys two DB round trips for an empty page, and unvalidated
+# negatives historically reached Postgres (``OFFSET -n`` errors, ``LIMIT -n``
+# means unlimited) as 500s. Both list endpoints therefore require ``ge=1``.
+
+
+class TestPaginationBounds:
+    def test_list_records_rejects_limit_zero(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        resp = c.get("/api/v1/records", params={"tenant_id": TENANT_ID, "limit": 0})
+        assert resp.status_code == 422
+
+    def test_ingestion_runs_rejects_limit_zero(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        resp = c.get(
+            "/api/v1/records/ingestion-runs",
+            params={"tenant_id": TENANT_ID, "limit": 0},
+        )
+        assert resp.status_code == 422
+
+    def test_list_records_rejects_negative_pagination(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        assert (
+            c.get(
+                "/api/v1/records",
+                params={"tenant_id": TENANT_ID, "limit": -1},
+            ).status_code
+            == 422
+        )
+        assert (
+            c.get(
+                "/api/v1/records",
+                params={"tenant_id": TENANT_ID, "offset": -1},
+            ).status_code
+            == 422
+        )
+
+    def test_ingestion_runs_rejects_negative_pagination(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        assert (
+            c.get(
+                "/api/v1/records/ingestion-runs",
+                params={"tenant_id": TENANT_ID, "limit": -5},
+            ).status_code
+            == 422
+        )
+        assert (
+            c.get(
+                "/api/v1/records/ingestion-runs",
+                params={"tenant_id": TENANT_ID, "offset": -5},
+            ).status_code
+            == 422
+        )
+
+    def test_list_records_rejects_limit_above_max(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        resp = c.get("/api/v1/records", params={"tenant_id": TENANT_ID, "limit": 501})
+        assert resp.status_code == 422
+
+    def test_ingestion_runs_rejects_limit_above_max(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(0,)), _Result(rows=[])])
+        c = _make_app_and_client(principal, session)
+        resp = c.get(
+            "/api/v1/records/ingestion-runs",
+            params={"tenant_id": TENANT_ID, "limit": 101},
+        )
+        assert resp.status_code == 422
+
+    def test_limit_one_still_accepted(self, principal: IngestionPrincipal) -> None:
+        session = _FakeSession([_Result(row=(1,)), _Result(rows=[_make_event_row(event_id="evt-1")])])
+        c = _make_app_and_client(principal, session)
+        resp = c.get("/api/v1/records", params={"tenant_id": TENANT_ID, "limit": 1})
+        assert resp.status_code == 200
+        assert len(resp.json()["events"]) == 1
+
+
+# ---------------------------------------------------------------------------
 # get_ingestion_run  (GET /api/v1/records/ingestion-runs/{run_id})
 # ---------------------------------------------------------------------------
 
