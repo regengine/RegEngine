@@ -16,8 +16,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .dependencies import get_current_user, get_session
 from .database import arm_global_admin_context
+from .dependencies import get_current_user, get_session
 from .models import TenantContext
 from .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from .qa_health import QAHealthResponse, load_qa_health_summary
@@ -142,9 +142,7 @@ def _is_consolidated() -> bool:
     service to loopback (i.e. it lives in THIS process), this returns True.
     """
     return bool(
-        os.getenv("RAILWAY_ENVIRONMENT")
-        or os.getenv("RAILWAY_ENVIRONMENT_NAME")
-        or os.getenv("RAILWAY_PROJECT_ID")
+        os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_PROJECT_ID")
     )
 
 
@@ -507,11 +505,11 @@ async def get_system_metrics(
     total_events = max(ingestion_events, supplier_event_count)
     chain_len = chain_data.get("chain_length") or supplier_chain_length
 
-    # Chain validity: trust ingestion service if available, otherwise
-    # assume valid if supplier events exist with sequential hashes
+    # Chain validity: only the ingestion chain-verify service verifies
+    # hashes. Supplier rows carry sequence numbers but are never hash
+    # verified here, so when the verifier is silent report unknown (None)
+    # instead of assuming valid.
     chain_valid = chain_data.get("chain_valid")
-    if chain_valid is None and supplier_chain_length > 0:
-        chain_valid = True  # Supplier events have Merkle chain by construction
 
     # Query open alerts from the compliance_alerts table
     open_alert_count = 0
