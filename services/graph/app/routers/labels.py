@@ -163,6 +163,90 @@ def generate_zpl_code(desc: str, plu: Optional[str], qr: str, serial: str, gtin:
 ^XZ"""
 
 
+# Serial-range reservation queries.
+#
+# Concurrent batch requests for the same lot must never receive overlapping
+# serial ranges. The primary query delegates the read-modify-write to the
+# APOC atomic counter, which performs it under a lock inside the procedure.
+# The fallback covers deployments without APOC: it takes the Lot node's
+# exclusive write lock with a timestamp write (which reads nothing) BEFORE
+# reading next_serial, so concurrent transactions serialize on the lock and
+# each one reads a fresh counter value. A plain read-then-SET without that
+# lock lets two transactions compute the same start value and mint
+# duplicate serials, so the lock write must stay ahead of the read.
+ATOMIC_RESERVE_CYPHER = """
+MERGE (tenant:Tenant {id: $tenant_id})
+MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
+
+MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+ON CREATE SET
+    l.gtin = $gtin,
+    l.product_description = $desc,
+    l.created_at = datetime(),
+    l.next_serial = 1,
+    l.tlc_source_gln = $packer_gln
+
+MERGE (l)-[:BELONGS_TO]->(tenant)
+MERGE (l)-[:ASSIGNED_BY]->(packer)
+
+// Atomic reservation via the APOC atomic counter.
+WITH l
+CALL apoc.atomic.add(l, 'next_serial', $quantity) YIELD oldValue AS start, newValue AS next
+RETURN start, (start + $quantity - 1) as end
+"""
+
+LOCKED_RESERVE_CYPHER = """
+MERGE (tenant:Tenant {id: $tenant_id})
+MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
+
+MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
+ON CREATE SET
+    l.gtin = $gtin,
+    l.product_description = $desc,
+    l.created_at = datetime(),
+    l.next_serial = 1,
+    l.tlc_source_gln = $packer_gln
+
+MERGE (l)-[:BELONGS_TO]->(tenant)
+MERGE (l)-[:ASSIGNED_BY]->(packer)
+
+// Serialize concurrent reservations: this write takes the Lot node's
+// exclusive lock (held until commit) before next_serial is read, so a
+// second transaction waits here and then reads the committed counter.
+SET l._serial_lock = timestamp()
+WITH l, coalesce(l.next_serial, 1) AS start
+SET l.next_serial = start + $quantity
+REMOVE l._serial_lock
+RETURN start, (start + $quantity - 1) as end
+"""
+
+
+def _is_apoc_unavailable(exc: Exception) -> bool:
+    """Check whether a failed reservation means APOC is not installed."""
+    code = getattr(exc, "code", "")
+    if code and "ProcedureNotFound" in str(code):
+        return True
+    message = str(exc).lower()
+    return "apoc" in message and ("not found" in message or "no procedure" in message or "unknown" in message)
+
+
+async def _reserve_serial_range(session, **params):
+    """Reserve one serial range, preferring the APOC atomic counter.
+
+    Falls back to the lock-ordered query when APOC is unavailable. Any
+    other database error is re-raised for the caller to convert to a 500.
+    """
+    try:
+        result = await session.run(ATOMIC_RESERVE_CYPHER, **params)
+        return await result.single()
+    except Exception as exc:
+        if not _is_apoc_unavailable(exc):
+            raise
+        logger.warning("labels_apoc_unavailable", error=str(exc))
+        result = await session.run(LOCKED_RESERVE_CYPHER, **params)
+        return await result.single()
+
+
 # ============================================================================
 # ENDPOINTS (Secured)
 # ============================================================================
@@ -191,62 +275,21 @@ async def initialize_label_batch(
 
     logger.info("batch_init_start", tenant_id=tenant_id_str, tlc=tlc)
 
-    # ✅ ATOMICITY FIX: Single Transaction for Create + Reserve
-    cypher = """
-    MERGE (tenant:Tenant {id: $tenant_id})
-    MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
-
-    MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
-    ON CREATE SET
-        l.gtin = $gtin,
-        l.product_description = $desc,
-        l.created_at = datetime(),
-        l.next_serial = 1,
-        l.tlc_source_gln = $packer_gln
-
-    MERGE (l)-[:BELONGS_TO]->(tenant)
-    MERGE (l)-[:ASSIGNED_BY]->(packer)
-
-    // Atomic Reservation: Lock node, read current, add quantity, write back
-    WITH l
-    CALL apoc.atomic.add(l, 'next_serial', $quantity) YIELD oldValue AS start, newValue AS next
-    RETURN start, (start + $quantity - 1) as end
-    """
-
-    # Fallback Cypher if APOC is not available
-    fallback_cypher = """
-    MERGE (tenant:Tenant {id: $tenant_id})
-    MERGE (packer:Facility {gln: $packer_gln, tenant_id: $tenant_id})
-    MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id})
-    ON CREATE SET
-        l.gtin = $gtin,
-        l.product_description = $desc,
-        l.created_at = datetime(),
-        l.next_serial = 1,
-        l.tlc_source_gln = $packer_gln
-
-    MERGE (l)-[:BELONGS_TO]->(tenant)
-    MERGE (l)-[:ASSIGNED_BY]->(packer)
-
-    WITH l, coalesce(l.next_serial, 1) AS start
-    SET l.next_serial = start + $quantity
-    RETURN start, (start + $quantity - 1) as end
-    """
+    # Serial reservation is atomic: _reserve_serial_range tries the APOC
+    # atomic counter first and falls back to the lock-ordered query where
+    # APOC is unavailable, so concurrent calls cannot duplicate IDs.
+    reservation_params = {
+        "tenant_id": tenant_id_str,
+        "packer_gln": request.packer_gln,
+        "tlc": tlc,
+        "gtin": request.product.gtin,
+        "desc": request.product.description,
+        "quantity": request.quantity,
+    }
 
     try:
         async with neo4j.session() as session:
-            # Note: We prioritize the fallback_cypher here for broader compatibility
-            # unless APOC is explicitly confirmed.
-            result = await session.run(
-                fallback_cypher,
-                tenant_id=tenant_id_str,
-                packer_gln=request.packer_gln,
-                tlc=tlc,
-                gtin=request.product.gtin,
-                desc=request.product.description,
-                quantity=request.quantity,
-            )
-            record = await result.single()
+            record = await _reserve_serial_range(session, **reservation_params)
 
             if not record:
                 raise RuntimeError("Transaction returned no result")

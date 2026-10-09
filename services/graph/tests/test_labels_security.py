@@ -208,13 +208,16 @@ class TestAtomicSerialGeneration:
         # Verify session.run() was called (atomic transaction)
         assert mock_session.run.call_count == 1
 
-        # Verify the Cypher query includes atomic serial increment
+        # Verify the Cypher query uses the APOC atomic counter so
+        # concurrent reservations cannot compute the same start value.
         cypher_call = mock_session.run.call_args
         cypher_query = cypher_call[0][0]
 
-        # Should have WITH clause for atomic operation
-        assert "WITH l, coalesce(l.next_serial, 1) AS start" in cypher_query
-        assert "SET l.next_serial = start + $quantity" in cypher_query
+        # Should reserve through the atomic counter primitive
+        assert "apoc.atomic.add" in cypher_query
+        assert "next_serial" in cypher_query
+        # Must not use the old unguarded read-then-write as the first attempt
+        assert "coalesce(l.next_serial, 1) AS start" not in cypher_query
 
         # Verify response has correct serial range
         assert response.reserved_range["start"] == 1
