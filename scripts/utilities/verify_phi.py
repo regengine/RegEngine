@@ -1,7 +1,12 @@
-import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.getcwd())
+# Pinned path derived from this file's location, never from the caller's
+# working directory, so running from an untrusted directory cannot redirect
+# this import.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from services.compliance.app.analysis import AnalysisEngine
 

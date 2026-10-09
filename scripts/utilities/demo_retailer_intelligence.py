@@ -1,20 +1,24 @@
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
-import os
+logger = logging.getLogger(__name__)
 
-print(f"DEBUG: CWD = {os.getcwd()}")
-print(f"DEBUG: LS = {os.listdir('.')}")
-print(f"DEBUG: PRE-PATH = {sys.path}")
-
-# Add service paths to sys.path to simulate being inside the service
-# If we are in /app, and /app/app exists...
-sys.path.append(os.getcwd())
-sys.path.append(os.path.join(os.getcwd(), "app"))
+# Pinned paths derived from this file's location, never from the caller's
+# working directory, so running from an untrusted directory cannot redirect
+# these imports.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+# Add the nlp service directory so "from app.x import ..." resolves to the
+# repo's own service code, simulating running inside that service.
+_NLP_SERVICE_DIR = str(REPO_ROOT / "services" / "nlp")
+if _NLP_SERVICE_DIR not in sys.path:
+    sys.path.insert(0, _NLP_SERVICE_DIR)
 
 # Mock classes to avoid full docker dependencies if running locally
 try:
@@ -35,8 +39,8 @@ try:
             title: str
             jurisdiction_code: str
 
-    except ImportError as e_inner:
-        print(f"DEBUG: Inner import failed: {e_inner}")
+    except ImportError:
+        logger.debug("Primary import failed, trying repo-rooted service packages.")
         # Fallback to absolute paths if context is root
         from services.ingestion.app.scrapers.state_adaptors.base import Source
         from services.nlp.app.classification import SignalClassifier
