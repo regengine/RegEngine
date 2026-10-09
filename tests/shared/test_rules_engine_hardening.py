@@ -330,8 +330,11 @@ class TestIssue1344TenantIsolation:
 
         # The DB lookup must have used the kwarg tenant, not the payload.
         assert session._captured.get("tenant_id") == "VICTIM-TENANT"
-        # And the evaluator must not have crashed.
-        assert result.result in {"pass", "fail", "skip"}
+        # The mock DB holds no related events for the authenticated tenant,
+        # so the identity check must return the specific "pass" verdict.
+        # A membership check against all verdict strings would also accept
+        # a wrong-tenant "fail" or "skip", hiding a tenant-isolation bug.
+        assert result.result == "pass"
 
     def test_kwarg_wins_when_payload_mismatches(self):
         """The kwarg tenant_id always wins over a divergent payload value."""
