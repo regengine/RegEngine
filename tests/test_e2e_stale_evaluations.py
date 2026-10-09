@@ -300,7 +300,7 @@ class TestStaleEvaluationDetection:
         assert len(stale_blockers) == 0, f"Expected no stale evaluation blockers initially, got {stale_blockers}"
 
     def test_06_simulate_event_amendment(self, db_session, tenant_id):
-        """Step 6: Simulate event amendment by setting amended_at in the future."""
+        """Step 6: Simulate event amendment by stamping amended_at at the real current time."""
         from sqlalchemy import text
 
         # Get one event ID
@@ -317,9 +317,10 @@ class TestStaleEvaluationDetection:
         amended_event_id = str(event_row[0])
         self.__class__._amended_event_id = amended_event_id
 
-        # Set amended_at to now (after evaluation time)
-        future_time = datetime.now(timezone.utc) + timedelta(minutes=5)
-        self.__class__._amended_at = future_time
+        # Stamp the amendment at the real current time, which is after the
+        # evaluations test_02 persisted, so the stale check trips on genuine
+        # clock order instead of a fake future timestamp.
+        amended_at = datetime.now(timezone.utc)
         db_session.execute(
             text("""
                 UPDATE fsma.traceability_events
@@ -327,12 +328,17 @@ class TestStaleEvaluationDetection:
                 WHERE event_id = :eid AND tenant_id = :tid
             """),
             {
-                "amended_at": future_time.isoformat(),
+                "amended_at": amended_at.isoformat(),
                 "eid": amended_event_id,
                 "tid": tenant_id,
             },
         )
         db_session.flush()
+        # Commit so the database transaction clock advances. The fresh
+        # evaluations test_08 persists default evaluated_at to the
+        # transaction start time, so without a new transaction they could
+        # never stamp after this amendment.
+        db_session.commit()
 
     def test_07_stale_evaluation_blocks_submission(self, db_session, tenant_id, workflow):
         """Step 7: After event amendment, stale_evaluations blocker should appear."""
@@ -388,27 +394,39 @@ class TestStaleEvaluationDetection:
         if event_dict.get("kdes") and isinstance(event_dict["kdes"], str):
             event_dict["kdes"] = json.loads(event_dict["kdes"])
 
+        # Genuine re-evaluation: the engine persists fresh rows whose
+        # evaluated_at defaults to the current transaction start time, which
+        # test_06's commit guarantees is after the amendment. No manual
+        # restamping: if re-evaluation stops superseding the amendment,
+        # test_09 must fail.
         rules_engine.evaluate_event(event_dict, persist=True, tenant_id=tenant_id)
+        db_session.flush()
 
-        # The fresh evaluations get evaluated_at = now(), which is frozen at
-        # transaction start and therefore EARLIER than the artificial
-        # amended_at that test_06 set 5 minutes in the future. Stamp them
-        # after the simulated amendment — symmetric with test_06's
-        # simulation — so the re-evaluation actually supersedes it.
-        re_evaluated_at = self.__class__._amended_at + timedelta(seconds=1)
-        db_session.execute(
+        # Guard against a vacuous pass: the stale query inner-joins
+        # evaluations, so zero re-persisted rows would also clear test_09.
+        # Fail loudly here unless fresh rows genuinely supersede the
+        # amendment in real clock order.
+        amended_at = db_session.execute(
             text("""
-                UPDATE fsma.rule_evaluations
-                SET evaluated_at = :ts
+                SELECT amended_at FROM fsma.traceability_events
                 WHERE event_id = :eid AND tenant_id = :tid
             """),
-            {
-                "ts": re_evaluated_at.isoformat(),
-                "eid": amended_event_id,
-                "tid": tenant_id,
-            },
+            {"eid": amended_event_id, "tid": tenant_id},
+        ).scalar()
+        fresh = db_session.execute(
+            text("""
+                SELECT COUNT(*), MAX(evaluated_at)
+                FROM fsma.rule_evaluations
+                WHERE event_id = :eid AND tenant_id = :tid
+            """),
+            {"eid": amended_event_id, "tid": tenant_id},
+        ).fetchone()
+        assert fresh[0] > 0, (
+            f"Re-evaluation persisted no rows for event {amended_event_id}; test_09 would pass vacuously"
         )
-        db_session.flush()
+        assert amended_at is not None and fresh[1] is not None and fresh[1] > amended_at, (
+            f"Fresh evaluations (latest {fresh[1]}) do not supersede the amendment ({amended_at}); test_09 must fail"
+        )
 
     def test_09_stale_blocker_cleared_after_re_evaluation(self, db_session, tenant_id, workflow):
         """Step 9: After re-evaluation, stale_evaluations blocker should be gone."""
