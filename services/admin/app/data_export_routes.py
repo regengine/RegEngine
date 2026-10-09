@@ -87,9 +87,11 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     for m in membership_rows:
         role = db.get(RoleModel, m.role_id)
         role_name = role.name if role else str(m.role_id)
+        # Tenant ids are withheld: this export spans every tenant the user
+        # belongs to, and one tenant's id must not leak through another
+        # tenant's request context.
         memberships.append(
             {
-                "tenant_id": _serialize(m.tenant_id),
                 "role": role_name,
                 "is_active": m.is_active,
                 "created_at": _serialize(m.created_at),
@@ -171,10 +173,10 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     # -------------------------------------------------------------------------
     # 6. Supplier-scoped rows
     # -------------------------------------------------------------------------
+    # Supplier rows below also withhold tenant_id (same cross-tenant reason).
     supplier_facilities = [
         {
             "id": _serialize(f.id),
-            "tenant_id": _serialize(f.tenant_id),
             "name": f.name,
             "street": f.street,
             "city": f.city,
@@ -191,7 +193,6 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     supplier_traceability_lots = [
         {
             "id": _serialize(tl.id),
-            "tenant_id": _serialize(tl.tenant_id),
             "facility_id": _serialize(tl.facility_id),
             "tlc_code": tl.tlc_code,
             "product_description": tl.product_description,
@@ -212,7 +213,6 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
     supplier_funnel_events = [
         {
             "id": _serialize(fe.id),
-            "tenant_id": _serialize(fe.tenant_id),
             "event_name": fe.event_name,
             "step": fe.step,
             "status": fe.status,
@@ -240,7 +240,6 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
             audit_entries.append(
                 {
                     "id": row.id,
-                    "tenant_id": _serialize(row.tenant_id),
                     "timestamp": _serialize(row.timestamp),
                     "event_type": row.event_type,
                     "action": row.action,

@@ -185,11 +185,16 @@ async def create_invite(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
+    # Email matching is case-insensitive everywhere on this path (as in
+    # accept_invite and identity_helpers): without this, inviting a case
+    # variant of an existing member or pending invite creates a duplicate.
+    normalized_email = invite_data.email.strip().lower()
+
     # Check if user already exists in this tenant
     existing_member = db.execute(
         select(MembershipModel)
         .join(UserModel)
-        .where(MembershipModel.tenant_id == tenant_id, UserModel.email == invite_data.email)
+        .where(MembershipModel.tenant_id == tenant_id, func.lower(UserModel.email) == normalized_email)
     ).scalar_one_or_none()
 
     if existing_member:
@@ -199,7 +204,7 @@ async def create_invite(
     existing_invite = db.execute(
         select(InviteModel).where(
             InviteModel.tenant_id == tenant_id,
-            InviteModel.email == invite_data.email,
+            func.lower(InviteModel.email) == normalized_email,
             InviteModel.revoked_at.is_(None),
             InviteModel.accepted_at.is_(None),
             InviteModel.expires_at > datetime.now(timezone.utc),
@@ -258,9 +263,11 @@ async def create_invite(
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
 
+    # Store the normalized address so the per-tenant unique index also
+    # blocks a case-variant duplicate racing this request.
     new_invite = InviteModel(
         tenant_id=tenant_id,
-        email=invite_data.email,
+        email=normalized_email,
         role_id=invite_data.role_id,
         token_hash=token_hash,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
@@ -279,7 +286,7 @@ async def create_invite(
         resource_type="invite",
         resource_id=str(new_invite.id),
         actor_id=current_user.id,
-        metadata={"email": invite_data.email, "role_id": str(invite_data.role_id)},
+        metadata={"email": normalized_email, "role_id": str(invite_data.role_id)},
     )
     if audit_entry_id is None:
         logger.error(
@@ -300,7 +307,6 @@ async def create_invite(
                 ),
             },
         )
-
 
     db.commit()
     db.refresh(new_invite)
@@ -424,7 +430,6 @@ async def revoke_invite(
                 ),
             },
         )
-
 
     db.commit()
     return {"status": "revoked"}
@@ -617,7 +622,6 @@ async def accept_invite(
                 ),
             },
         )
-
 
     db.commit()
 

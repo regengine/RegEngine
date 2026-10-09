@@ -108,11 +108,17 @@ def _other_authenticating_owners(db: Session, tenant_id: UUID, exclude_user_id: 
 )
 async def list_users(
     pagination: PaginationParams = Depends(),
+    current_user: Optional[UserModel] = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
+
+    # The platform admin flag is only disclosed to sysadmin callers. Tenant
+    # admins with users.read must not learn which listed users hold
+    # cross-tenant access.
+    caller_is_sysadmin = bool(getattr(current_user, "is_sysadmin", False))
 
     # Count total
     count_stmt = (
@@ -142,7 +148,7 @@ async def list_users(
                 id=user.id,
                 email=user.email,
                 status="inactive" if not membership.is_active else user.status,
-                is_sysadmin=user.is_sysadmin,
+                is_sysadmin=bool(user.is_sysadmin and caller_is_sysadmin),
                 role_id=role.id,
                 role_name=role.name,
                 created_at=user.created_at,
@@ -185,9 +191,7 @@ async def update_user_role(
         raise HTTPException(status_code=404, detail="User not found in this tenant")
 
     target_role = db.get(RoleModel, update.role_id)
-    if not target_role or (
-        target_role.tenant_id is not None and target_role.tenant_id != tenant_id
-    ):
+    if not target_role or (target_role.tenant_id is not None and target_role.tenant_id != tenant_id):
         # Treat a cross-tenant custom role exactly like an unknown role. A
         # caller must never be able to attach another tenant's permissions to
         # a membership or use this response as a role-enumeration oracle.
