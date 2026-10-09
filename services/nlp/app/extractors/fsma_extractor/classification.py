@@ -1,5 +1,6 @@
 """Document-type classification and FTL scoping for the FSMA extractor."""
 
+import re
 from typing import Optional, Tuple
 
 import structlog
@@ -45,6 +46,17 @@ class _ClassificationResult(tuple):
         return repr(self.document_type)
 
 
+def _indicator_present(text_lower: str, indicator: str) -> bool:
+    """Match an indicator on word boundaries.
+
+    Plain substring matching fires inside unrelated words (``bol`` in
+    ``symbol``, ``inv`` in ``inventory``, ``qc`` in random tokens), which
+    inflates scores and misclassifies documents. Anchoring on ``\\b`` keeps
+    short tokens and multi-word phrases matching whole words only.
+    """
+    return re.search(r"\b" + re.escape(indicator) + r"\b", text_lower) is not None
+
+
 class DocumentClassificationMixin:
     """Pass 1: document type classification and FTL category scoping."""
 
@@ -59,7 +71,7 @@ class DocumentClassificationMixin:
 
         scores = {}
         for doc_type, indicators in self.DOC_TYPE_INDICATORS.items():
-            score = sum(1 for ind in indicators if ind in text_lower)
+            score = sum(1 for ind in indicators if _indicator_present(text_lower, ind))
             scores[doc_type] = score
 
         max_score = max(scores.values())

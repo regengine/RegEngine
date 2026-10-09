@@ -164,19 +164,22 @@ class TestFDARecallsParser_Issue1154:
         assert item.affected_products == []
         assert isinstance(item.published_date, datetime)
 
-    def test_get_by_classification_returns_filtered_result(self):
+    def test_get_by_classification_returns_filtered_result(self, monkeypatch):
         scraper = FDARecallsScraper()
-        scraper.session.get = lambda *_args, **_kwargs: _FakeResponse(
-            json_payload={
-                "results": [
-                    {
-                        "recall_number": "F-4444-2026",
-                        "classification": "Class II",
-                        "report_date": "20260420",
-                        "recalling_firm": "Filtered Farms",
-                    }
-                ]
-            }
+        monkeypatch.setattr(
+            "app.scrapers.fda_recalls.fetch_with_retry",
+            lambda *_args, **_kwargs: _FakeResponse(
+                json_payload={
+                    "results": [
+                        {
+                            "recall_number": "F-4444-2026",
+                            "classification": "Class II",
+                            "report_date": "20260420",
+                            "recalling_firm": "Filtered Farms",
+                        }
+                    ]
+                }
+            ),
         )
 
         result = scraper.get_by_classification("Class II")
@@ -343,7 +346,7 @@ class TestFDAWarningLettersParser_Issue1154:
 
         assert scraper._scrape_rss() == []
 
-    def test_scrape_api_maps_severity_and_skips_bad_rows(self, monkeypatch):
+    def test_scrape_api_maps_severity_and_flags_bad_date_row(self, monkeypatch):
         scraper = FDAWarningLettersScraper()
 
         monkeypatch.setattr(
@@ -372,10 +375,14 @@ class TestFDAWarningLettersParser_Issue1154:
 
         items = scraper._scrape_api()
 
-        assert len(items) == 1
+        assert len(items) == 2
         assert items[0].severity == EnforcementSeverity.CRITICAL
         assert items[0].affected_products == ["Bagged salad kits"]
         assert isinstance(items[0].published_date, datetime)
+        # A bad report date no longer drops the row silently: the item is
+        # kept with an inferred timestamp flagged in raw_data.
+        assert isinstance(items[1].published_date, datetime)
+        assert items[1].raw_data.get("published_date_inferred") is True
 
     def test_scrape_api_keeps_class_ii_high_not_critical(self, monkeypatch):
         scraper = FDAWarningLettersScraper()

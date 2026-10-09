@@ -54,4 +54,16 @@ def load_s3_artifact(s3_uri: str) -> str:
             params["ExpectedBucketOwner"] = owner
         obj = s3.get_object(**params)
         data = obj["Body"].read()
-        return data.decode(errors="ignore")
+        try:
+            return data.decode("utf-8")
+        except UnicodeDecodeError:
+            # Never drop bytes silently: log the fallback and decode with
+            # visible replacement characters so downstream text shows the
+            # gap instead of hiding it.
+            logger.warning(
+                "s3_fallback_body_not_utf8_using_replace (bucket=%s key=%s bytes=%d)",
+                bucket,
+                key,
+                len(data),
+            )
+            return data.decode("utf-8", errors="replace")

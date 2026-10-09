@@ -30,9 +30,7 @@ class TabularExtractionMixin:
                 self._table_extractor = False  # Mark as unavailable
         return self._table_extractor if self._table_extractor else None
 
-    def _extract_tabular_data(
-        self, text: str, pdf_bytes: Optional[bytes] = None
-    ) -> List[LineItem]:
+    def _extract_tabular_data(self, text: str, pdf_bytes: Optional[bytes] = None) -> List[LineItem]:
         """
         Extract line items from tabular data in the document.
 
@@ -102,9 +100,7 @@ class TabularExtractionMixin:
                         unit_of_measure=qty_match[1] if qty_match else None,
                         gtin=gtin,
                         row_index=row.row_index,
-                        bounding_box=(
-                            row.bounding_box.to_dict() if row.bounding_box else None
-                        ),
+                        bounding_box=(row.bounding_box.to_dict() if row.bounding_box else None),
                         confidence=0.9 if lot_code and description else 0.7,
                     )
                     line_items.append(item)
@@ -130,7 +126,9 @@ class TabularExtractionMixin:
         # Pattern for tabular rows with lot label
         tabular_row_pattern = re.compile(
             r"^(?P<desc>[A-Za-z][A-Za-z0-9\s,\-]{3,50}?)"  # Description (3-50 chars)
-            r"\s{2,}"  # At least 2 whitespace chars (indicates column separation)
+            r"\s+"  # Column separation: one or more whitespace chars. The
+            # LOT/BATCH/TLC keyword anchors the split, so single-space rows
+            # ("Romaine Lettuce LOT-A-2024 50 cases") match too.
             r"(?:LOT|BATCH|TLC)[:\s#-]*(?P<lot>[A-Za-z0-9\-\.]{3,})"  # Lot keyword + code
             r"(?:\s+(?P<qty>\d+(?:\.\d+)?)\s*(?P<unit>cases?|units?|lbs?|kg|ea|pallets?)?)?",  # Optional quantity
             re.IGNORECASE,
@@ -191,12 +189,8 @@ class TabularExtractionMixin:
                     item = LineItem(
                         description=desc[:100],
                         lot_code=lot_code,
-                        quantity=(
-                            float(match.group("qty")) if match.group("qty") else None
-                        ),
-                        unit_of_measure=(
-                            match.group("unit").lower() if match.group("unit") else None
-                        ),
+                        quantity=(float(match.group("qty")) if match.group("qty") else None),
+                        unit_of_measure=(match.group("unit").lower() if match.group("unit") else None),
                         row_index=idx,
                         confidence=0.75,
                     )
@@ -213,12 +207,8 @@ class TabularExtractionMixin:
                     item = LineItem(
                         description=desc[:100],
                         lot_code=lot_code,
-                        quantity=(
-                            float(match.group("qty")) if match.group("qty") else None
-                        ),
-                        unit_of_measure=(
-                            match.group("unit").lower() if match.group("unit") else None
-                        ),
+                        quantity=(float(match.group("qty")) if match.group("qty") else None),
+                        unit_of_measure=(match.group("unit").lower() if match.group("unit") else None),
                         row_index=idx,
                         confidence=0.75,
                     )
@@ -240,11 +230,7 @@ class TabularExtractionMixin:
             match = re.search(pattern, row_text, re.IGNORECASE)
             if match:
                 qty = float(match.group(1))
-                unit = (
-                    match.group(2).lower()
-                    if len(match.groups()) > 1 and match.group(2)
-                    else None
-                )
+                unit = match.group(2).lower() if len(match.groups()) > 1 and match.group(2) else None
                 return (qty, unit)
         return None
 

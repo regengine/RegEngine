@@ -196,6 +196,13 @@ class TestFDAImportAlertsParser_Issue1140:
         items, _ = self.scraper.parse_html(REALISTIC_LISTING_HTML)
         assert all(i.source_type.value == "fda_import_alert" for i in items)
 
+    def test_inferred_date_flagged_in_raw_data(self):
+        # The listing page carries no per-row date, so published_date is
+        # now(); it must be flagged so consumers never mistake it for real.
+        items, _ = self.scraper.parse_html(REALISTIC_LISTING_HTML)
+        assert len(items) > 0
+        assert all(i.raw_data.get("published_date_inferred") is True for i in items)
+
     # --- shapes the old regex missed --------------------------------------
 
     def test_three_digit_suffix_extracted(self):

@@ -214,7 +214,11 @@ class FDAImportAlertsScraper(BaseScraper):
                     title=(f"Import Alert {alert_number}: {title}" if title else f"Import Alert {alert_number}"),
                     summary=(f"FDA Import Alert regarding: {title}" if title else f"FDA Import Alert {alert_number}"),
                     url=absolute_url,
-                    published_date=datetime.now(timezone.utc),  # Page has no per-row date
+                    # The listing page carries no per-row date, so the
+                    # timestamp is inferred. Flag it in raw_data (same
+                    # convention as the FDA recalls scrapers) so downstream
+                    # consumers never mistake it for a published date.
+                    published_date=datetime.now(timezone.utc),
                     severity=EnforcementSeverity.HIGH,
                     affected_products=[],
                     affected_companies=[],
@@ -222,6 +226,7 @@ class FDAImportAlertsScraper(BaseScraper):
                     raw_data={
                         "alert_number": alert_number,
                         "raw_title": title,
+                        "published_date_inferred": True,
                     },
                 )
             )

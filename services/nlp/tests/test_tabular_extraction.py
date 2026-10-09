@@ -443,6 +443,41 @@ class TestCriticalRequirement:
                 assert all("romaine" not in p.lower() for p in products), f"LOT-B incorrectly associated with Romaine"
 
 
+class TestSingleSpaceTabularRows:
+    """Audit bundle: the heuristic row pattern required 2+ whitespace chars,
+    so single-space rows (``Romaine Lettuce LOT-A-2024 50 cases``) were
+    missed. The LOT/BATCH/TLC keyword anchors the split, so one space is
+    enough."""
+
+    def test_single_space_row_extracts_with_correct_lot(self):
+        extractor = FSMAExtractor()
+        items = extractor._extract_line_items_heuristic("Romaine Lettuce LOT-A-2024 50 cases")
+
+        assert len(items) == 1
+        assert items[0].description == "Romaine Lettuce"
+        assert items[0].lot_code == "A-2024"
+        assert items[0].quantity == 50.0
+        assert items[0].unit_of_measure == "cases"
+
+    def test_single_space_rows_flow_through_extract(self):
+        extractor = FSMAExtractor()
+        extractor._table_extractor = False  # Force the heuristic path
+        text = (
+            "BILL OF LADING\n"
+            "Ship Date: 2024-12-02\n"
+            "GLN: 1234567890123\n"
+            "\n"
+            "Romaine Lettuce LOT-A-2024 50 cases\n"
+            "Spinach Baby LOT-B-2024 75 cases\n"
+        )
+
+        result = extractor.extract(text, "single-space-001", tenant_id="11111111-1111-1111-1111-111111111111")
+
+        lots = {item.lot_code for item in result.line_items if item.lot_code}
+        assert "A-2024" in lots
+        assert "B-2024" in lots
+
+
 class TestTableExtractorSizeCaps:
     """F-NLP-4: byte/page caps must be enforced when callers pass
     ``pdf_bytes`` directly, bypassing the ``text_loader`` envelope."""
