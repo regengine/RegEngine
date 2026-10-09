@@ -22,6 +22,7 @@ Skip if no Docker:
 from __future__ import annotations
 
 import csv
+import importlib.util
 import io
 import os
 import sys
@@ -182,6 +183,39 @@ def postgres_url(_module_env):
         yield url
 
 
+# Unique name for the ingestion app module loaded by _load_ingestion_app.
+# It must not be "main" or "services.ingestion.main": those shared names are
+# also used by other services' tests, and deleting or overwriting them here
+# poisons whichever module runs next depending on collection order.
+_INGESTION_MAIN_MODULE_NAME = "fsma_happy_path_e2e_ingestion_main"
+
+
+def _load_ingestion_app():
+    """Import services/ingestion/main.py under a unique module name.
+
+    Returns the FastAPI ``app`` without touching the shared ``main`` or
+    ``services.ingestion.main`` entries in ``sys.modules``. Entries for this
+    service's own ``app`` package are set aside during the load and restored
+    afterwards so the ``from app...`` imports inside main.py resolve to the
+    ingestion service even when a sibling service's ``app`` is cached.
+    """
+    main_path = _INGESTION_DIR / "main.py"
+    shadowed = [key for key in sys.modules if key == "app" or key.startswith("app.")]
+    saved = {key: sys.modules.pop(key) for key in shadowed}
+    try:
+        spec = importlib.util.spec_from_file_location(_INGESTION_MAIN_MODULE_NAME, main_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load ingestion app from {main_path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[_INGESTION_MAIN_MODULE_NAME] = module
+        spec.loader.exec_module(module)
+        return module.app
+    finally:
+        for key in [key for key in sys.modules if key == "app" or key.startswith("app.")]:
+            sys.modules.pop(key, None)
+        sys.modules.update(saved)
+
+
 @pytest.fixture(scope="module")
 def test_client(postgres_url):
     """
@@ -191,13 +225,10 @@ def test_client(postgres_url):
     """
     from fastapi.testclient import TestClient
 
-    # Force re-import so the app picks up the DATABASE_URL we just set
-    if "services.ingestion.main" in sys.modules:
-        del sys.modules["services.ingestion.main"]
-    if "main" in sys.modules:
-        del sys.modules["main"]
-
-    from main import app
+    # Load under a unique module name so the app picks up the DATABASE_URL
+    # we just set, without deleting shared sys.modules entries that belong
+    # to other test modules.
+    app = _load_ingestion_app()
 
     with TestClient(app) as client:
         yield client
