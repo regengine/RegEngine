@@ -85,3 +85,89 @@ def test_cli_returns_nonzero_when_violations_exist(tmp_path: Path, capsys):
     assert exit_code == 1
     assert "Browser storage PII scan failed" in output
     assert "lead_payload" in output
+
+
+def test_scan_flags_property_assignment_write(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text("localStorage.userEmail = email;\n", encoding="utf-8")
+
+    violations = scanner.scan_paths([component])
+
+    assert len(violations) == 1
+    assert "sensitive term 'email'" in violations[0].reason
+
+
+def test_scan_flags_bracket_assignment_write(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text(
+        'sessionStorage["lead_payload"] = JSON.stringify(payload);\n',
+        encoding="utf-8",
+    )
+
+    violations = scanner.scan_paths([component])
+
+    assert len(violations) == 1
+    assert violations[0].storage == "sessionStorage"
+    assert "sensitive term 'lead'" in violations[0].reason
+
+
+def test_scan_ignores_reads_comparisons_and_removal(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text(
+        "const saved = localStorage.getItem('saved_theme');\n"
+        "if (localStorage.theme == 'dark') {\n"
+        "  setDark(true);\n"
+        "}\n"
+        "localStorage.removeItem('old_flag');\n"
+        "const count = localStorage.length;\n",
+        encoding="utf-8",
+    )
+
+    assert scanner.scan_paths([component]) == []
+
+
+def test_bare_suppression_marker_does_not_suppress(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text(
+        "localStorage.setItem('lead_payload', data); // pii-storage-allow\n",
+        encoding="utf-8",
+    )
+
+    violations = scanner.scan_paths([component])
+
+    assert len(violations) == 1
+    assert "sensitive term 'lead'" in violations[0].reason
+
+
+def test_reasoned_suppression_is_recorded_centrally(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text(
+        "localStorage.setItem('lead_payload', data); // pii-storage-allow: synthetic e2e fixture\n",
+        encoding="utf-8",
+    )
+
+    violations, suppressions = scanner.scan_paths_with_suppressions([component])
+
+    assert violations == []
+    assert len(suppressions) == 1
+    assert "synthetic e2e fixture" in suppressions[0].reason
+
+
+def test_whole_word_matching_ignores_embedded_terms(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_text(
+        "localStorage.setItem('leader_stats', '1');\n",
+        encoding="utf-8",
+    )
+
+    assert scanner.scan_paths([component]) == []
+
+
+def test_unreadable_file_is_a_finding(tmp_path: Path):
+    component = tmp_path / "Widget.ts"
+    component.write_bytes(b"\xff\xfe\x00not-valid-utf8\xff\nlocalStorage.setItem('x', '1');\n")
+
+    violations = scanner.scan_paths([component])
+
+    assert len(violations) == 1
+    assert "unreadable" in violations[0].reason

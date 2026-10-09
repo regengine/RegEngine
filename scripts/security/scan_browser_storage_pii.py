@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Detect likely PII persisted in browser local/session storage."""
+"""Detect likely PII persisted in browser local/session storage.
+
+Coverage: every write form is inspected, not just setItem calls: property
+assignment (localStorage.email = ...) and bracket assignment
+(localStorage["email"] = ...) persist exactly like setItem and are flagged
+the same way. Reads (getItem, bracket reads, comparisons) never match because
+every write pattern requires a bare ``=`` after the key.
+
+Suppressions: the ONLY way to silence a finding is an inline marker carrying
+a reason (``pii-storage-allow: <reason>``). A bare marker with no reason does
+not suppress. Every applied suppression is collected and printed by main, so
+the full suppression list appears in one place in CI logs for review.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +23,13 @@ from pathlib import Path
 from typing import Iterable
 
 STORAGE_CALL_START = re.compile(r"(?:window\.)?(?P<storage>localStorage|sessionStorage)\.setItem\s*\(")
+STORAGE_PROP_WRITE = re.compile(
+    r"(?:window\.)?(?P<storage>localStorage|sessionStorage)\s*\.\s*(?P<key>[A-Za-z_$][\w$]*)\s*=(?![=>])"
+)
+STORAGE_INDEX_WRITE = re.compile(
+    r"(?:window\.)?(?P<storage>localStorage|sessionStorage)\s*\[\s*(?P<quote>['\"`])(?P<key>.*?)(?P=quote)\s*\]\s*=(?![=>])"
+)
+SUPPRESSION_RE = re.compile(r"pii-storage-allow\s*:\s*(?P<reason>\S(?:.*\S)?)")
 
 SENSITIVE_KEY_TERMS = (
     "access_token",
@@ -72,6 +91,14 @@ class Violation:
     snippet: str
 
 
+@dataclass(frozen=True)
+class Suppression:
+    path: Path
+    line_no: int
+    storage: str
+    reason: str
+
+
 def _is_skipped(path: Path) -> bool:
     return bool(SKIPPED_PARTS.intersection(path.parts)) or path.name.endswith(
         (".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")
@@ -115,11 +142,44 @@ def _paren_delta(text: str) -> int:
     return delta
 
 
-def _storage_calls(path: Path) -> Iterable[StorageCall]:
+def _read_lines(path: Path) -> tuple[list[str] | None, str | None]:
+    """Return (lines, error). A file that cannot be read reports its error so
+    callers can record it as a finding instead of passing silently."""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except UnicodeDecodeError:
-        return
+        return path.read_text(encoding="utf-8").splitlines(), None
+    except (OSError, UnicodeDecodeError) as exc:
+        return None, str(exc)
+
+
+def _write_calls_in_lines(path: Path, lines: list[str]) -> Iterable[StorageCall]:
+    for index, line in enumerate(lines):
+        prop_match = STORAGE_PROP_WRITE.search(line)
+        if prop_match and prop_match.group("key") not in {
+            "setItem",
+            "getItem",
+            "removeItem",
+            "clear",
+            "key",
+            "length",
+        }:
+            yield StorageCall(
+                path=path,
+                line_no=index + 1,
+                storage=prop_match.group("storage"),
+                text=line.strip(),
+            )
+            continue
+        index_match = STORAGE_INDEX_WRITE.search(line)
+        if index_match:
+            yield StorageCall(
+                path=path,
+                line_no=index + 1,
+                storage=index_match.group("storage"),
+                text=line.strip(),
+            )
+
+
+def _set_item_calls_in_lines(path: Path, lines: list[str]) -> Iterable[StorageCall]:
 
     index = 0
     while index < len(lines):
@@ -152,25 +212,48 @@ def _literal_storage_key(call_text: str) -> str | None:
         call_text,
         flags=re.DOTALL,
     )
-    if not match:
-        return None
-    return match.group("key")
+    if match:
+        return match.group("key")
+    match = STORAGE_INDEX_WRITE.search(call_text)
+    if match:
+        return match.group("key")
+    match = STORAGE_PROP_WRITE.search(call_text)
+    if match:
+        return match.group("key")
+    return None
+
+
+def _words(text: str) -> set[str]:
+    """Split text into lowercase words on every non-alphanumeric boundary,
+    treating underscores and lower-to-Upper transitions as separators, so
+    snake_case and camelCase identifiers match by whole word."""
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", text)
+    return {word.lower() for word in re.split(r"[^A-Za-z0-9]+", spaced) if word}
 
 
 def _contains_any(text: str, terms: Iterable[str]) -> str | None:
-    lowered = text.lower()
-    return next((term for term in terms if term in lowered), None)
+    words = _words(text)
+    return next((term for term in terms if term in words), None)
+
+
+def find_suppression(call_text: str) -> str | None:
+    """Return the stated reason when a suppression marker with a reason is
+    present, else None. A bare marker with no reason suppresses nothing."""
+    match = SUPPRESSION_RE.search(call_text)
+    if not match:
+        return None
+    return match.group("reason")
 
 
 def inspect_call(call: StorageCall) -> Violation | None:
-    if "pii-storage-allow" in call.text:
+    if find_suppression(call.text) is not None:
         return None
 
     key = _literal_storage_key(call.text)
     key_lower = key.lower() if key else ""
 
     if key_lower not in SAFE_STORAGE_KEYS:
-        key_term = _contains_any(key_lower, SENSITIVE_KEY_TERMS)
+        key_term = _contains_any(key or "", SENSITIVE_KEY_TERMS)
         if key_term:
             return Violation(
                 path=call.path,
@@ -180,9 +263,9 @@ def inspect_call(call: StorageCall) -> Violation | None:
                 snippet=call.text.strip().splitlines()[0],
             )
 
-    value_context = call.text.lower()
+    value_context = call.text
     if key:
-        value_context = value_context.replace(key_lower, "")
+        value_context = re.sub(re.escape(key), "", value_context, flags=re.IGNORECASE)
 
     value_term = _contains_any(value_context, SENSITIVE_VALUE_TERMS)
     if value_term:
@@ -197,13 +280,60 @@ def inspect_call(call: StorageCall) -> Violation | None:
     return None
 
 
-def scan_paths(paths: Iterable[Path]) -> list[Violation]:
+def _calls_in_file(path: Path) -> tuple[list[StorageCall], str | None]:
+    lines, error = _read_lines(path)
+    if error is not None or lines is None:
+        return [], error
+    calls = list(_set_item_calls_in_lines(path, lines))
+    seen = {(call.line_no, call.text) for call in calls}
+    for call in _write_calls_in_lines(path, lines):
+        if (call.line_no, call.text) not in seen:
+            seen.add((call.line_no, call.text))
+            calls.append(call)
+    return calls, None
+
+
+def scan_paths_with_suppressions(
+    paths: Iterable[Path],
+) -> tuple[list[Violation], list[Suppression]]:
+    """Return (violations, applied suppressions). Files that cannot be read
+    are reported as violations (fail closed). Every applied suppression is
+    collected here so main can print one central review trail."""
     violations: list[Violation] = []
+    suppressions: list[Suppression] = []
     for path in _source_files(paths):
-        for call in _storage_calls(path):
+        calls, error = _calls_in_file(path)
+        if error is not None:
+            violations.append(
+                Violation(
+                    path=path,
+                    line_no=0,
+                    storage="",
+                    reason=f"unreadable file treated as a finding: {error}",
+                    snippet="",
+                )
+            )
+            continue
+        for call in calls:
+            suppression_reason = find_suppression(call.text)
+            if suppression_reason is not None:
+                suppressions.append(
+                    Suppression(
+                        path=call.path,
+                        line_no=call.line_no,
+                        storage=call.storage,
+                        reason=suppression_reason,
+                    )
+                )
+                continue
             violation = inspect_call(call)
             if violation:
                 violations.append(violation)
+    return violations, suppressions
+
+
+def scan_paths(paths: Iterable[Path]) -> list[Violation]:
+    violations, _ = scan_paths_with_suppressions(paths)
     return violations
 
 
@@ -217,15 +347,25 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    violations = scan_paths(Path(path) for path in args.paths)
+    violations, suppressions = scan_paths_with_suppressions(Path(path) for path in args.paths)
+    if suppressions:
+        print(f"Suppressed {len(suppressions)} storage write(s) via pii-storage-allow (central trail):")
+        for suppression in suppressions:
+            print(f"{suppression.path}:{suppression.line_no}: {suppression.reason}")
     if not violations:
         print("Browser storage PII scan passed.")
         return 0
 
     print("Browser storage PII scan failed:")
     for violation in violations:
-        print(f"{violation.path}:{violation.line_no}: {violation.reason} in {violation.storage}.setItem")
-        print(f"  {violation.snippet}")
+        location = f"{violation.path}:{violation.line_no}"
+        if violation.storage:
+            location += f": {violation.reason} in {violation.storage}.setItem"
+        else:
+            location += f": {violation.reason}"
+        print(location)
+        if violation.snippet:
+            print(f"  {violation.snippet}")
     return 1
 
 
