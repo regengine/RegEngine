@@ -83,9 +83,10 @@ def _fetch_with_browser_sync(url: str) -> Dict[str, Any]:
     """Run the Playwright-based fetch synchronously.
 
     SSRFError must not reach this function — callers strip it out — but we
-    re-validate defensively. NOTE: ``run_browser_fetch`` does not currently
-    re-validate redirect hops; cross-hop SSRF protection inside the headless
-    browser is a TODO tracked separately.
+    re-validate defensively. ``run_browser_fetch`` constrains navigation to
+    the validated host: every request is re-validated and cross-host
+    document navigation is aborted, with a post-navigation final-URL check
+    as backstop.
     """
     try:
         url = validate_url(url)

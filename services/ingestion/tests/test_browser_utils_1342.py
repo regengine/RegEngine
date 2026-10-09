@@ -88,14 +88,19 @@ class _FakeResponse:
 
 
 class _FakePage:
-    def __init__(self, response=None, content_html="<html>ok</html>", goto_exc=None):
+    def __init__(self, response=None, content_html="<html>ok</html>", goto_exc=None, url=None):
         self._response = response
         self._content = content_html
         self._goto_exc = goto_exc
+        # Landed document URL after navigation (None = unknown, skips the
+        # final-URL check like Playwright builds without it).
+        self.url = url
 
     async def goto(self, url, wait_until="networkidle", timeout=30000):
         if self._goto_exc is not None:
             raise self._goto_exc
+        if self.url is None:
+            self.url = url
         return self._response
 
     async def content(self):
@@ -105,9 +110,38 @@ class _FakePage:
 class _FakeContext:
     def __init__(self, page):
         self._page = page
+        self.route_pattern = None
+        self.route_handler = None
 
     async def new_page(self):
         return self._page
+
+    async def route(self, pattern, handler):
+        self.route_pattern = pattern
+        self.route_handler = handler
+
+
+class _FakeRoute:
+    """Records whether the guard aborted or continued the request."""
+
+    def __init__(self):
+        self.aborted = False
+        self.continued = False
+
+    async def abort(self):
+        self.aborted = True
+
+    async def continue_(self):
+        self.continued = True
+
+
+class _FakeRequest:
+    def __init__(self, url, is_navigation=True):
+        self.url = url
+        self._is_navigation = is_navigation
+
+    def is_navigation_request(self):
+        return self._is_navigation
 
 
 class _FakeBrowser:
@@ -115,10 +149,12 @@ class _FakeBrowser:
         self._page = page
         self.closed = False
         self.last_user_agent = None
+        self.last_context = None
 
     async def new_context(self, user_agent=None):
         self.last_user_agent = user_agent
-        return _FakeContext(self._page)
+        self.last_context = _FakeContext(self._page)
+        return self.last_context
 
     async def close(self):
         self.closed = True
@@ -152,10 +188,10 @@ class _FakeAsyncPlaywright:
         return None
 
 
-def _install_fake_browser(monkeypatch, *, response=None, content_html="<html>ok</html>", goto_exc=None):
+def _install_fake_browser(monkeypatch, *, response=None, content_html="<html>ok</html>", goto_exc=None, url=None):
     """Install a fake playwright chain and return the _FakeBrowser so
     tests can assert close() was called."""
-    page = _FakePage(response=response, content_html=content_html, goto_exc=goto_exc)
+    page = _FakePage(response=response, content_html=content_html, goto_exc=goto_exc, url=url)
     browser = _FakeBrowser(page)
     chromium = _FakeChromium(browser)
     session = _FakePlaywrightSession(chromium)
@@ -313,3 +349,150 @@ class TestModuleConstants:
     def test_user_agent_is_chrome_like(self):
         assert "Chrome" in bu.USER_AGENT
         assert "Mozilla/5.0" in bu.USER_AGENT
+
+
+# ---------------------------------------------------------------------------
+# Redirect-hop validation: navigation must stay on the validated host.
+#
+# Regression tests for the audit finding "Browser fallback leaves redirect
+# hops unvalidated". The old code validated only the initial URL and
+# returned whatever document the browser landed on, so a redirect chain
+# could carry it to an attacker host. The fix constrains navigation to
+# the validated host via a route guard plus a post-navigation final-URL
+# check. Each behavioral test below fails on the old code (it returns the
+# off-host content without error) and passes on the new code.
+# ---------------------------------------------------------------------------
+
+
+class TestNavigationAllowedHelper:
+    def test_same_host_allowed(self):
+        assert bu._navigation_allowed("https://example.com/other", "example.com") is True
+
+    def test_case_and_trailing_dot_insensitive(self):
+        assert bu._navigation_allowed("https://EXAMPLE.com./x", "example.com") is True
+
+    def test_different_host_denied(self):
+        assert bu._navigation_allowed("https://evil.example/page", "example.com") is False
+
+    def test_suffix_match_does_not_count(self):
+        assert bu._navigation_allowed("https://notexample.com/", "example.com") is False
+
+    def test_empty_allowed_host_denies(self):
+        assert bu._navigation_allowed("https://example.com/", "") is False
+
+
+class TestRedirectHopValidation:
+    def test_cross_host_final_url_rejected(self, monkeypatch):
+        """A redirect landing off-host must raise, not return content."""
+        monkeypatch.setattr(bu, "validate_url", lambda url: url)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(
+            monkeypatch,
+            response=response,
+            content_html="<html>evil</html>",
+            url="https://evil.example/stolen",
+        )
+
+        with pytest.raises(ValueError, match="outside validated host"):
+            asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+
+        assert browser.closed is True
+
+    def test_final_url_failing_validation_rejected(self, monkeypatch):
+        """A landed URL that fails SSRF validation must raise."""
+
+        def _validate(url):
+            if "169.254.169.254" in url:
+                raise SSRFError("blocked host")
+            return url
+
+        monkeypatch.setattr(bu, "validate_url", _validate)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(
+            monkeypatch,
+            response=response,
+            url="http://169.254.169.254/latest/meta-data/",
+        )
+
+        with pytest.raises(ValueError, match="URL validation failed"):
+            asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+
+        assert browser.closed is True
+
+    def test_same_host_final_url_accepted(self, monkeypatch):
+        """Same-host redirects keep working and return content."""
+        monkeypatch.setattr(bu, "validate_url", lambda url: url)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(
+            monkeypatch,
+            response=response,
+            content_html="<html>same host</html>",
+            url="https://example.com/landing",
+        )
+
+        result = asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+
+        assert result["status_code"] == 200
+        assert result["content"] == b"<html>same host</html>"
+        assert browser.closed is True
+
+    def test_route_guard_registered(self, monkeypatch):
+        """The fetch must install a request guard before navigating."""
+        monkeypatch.setattr(bu, "validate_url", lambda url: url)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(monkeypatch, response=response)
+
+        asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+
+        assert browser.last_context.route_pattern == "**/*"
+        assert browser.last_context.route_handler is not None
+
+    def test_route_guard_aborts_cross_host_navigation(self, monkeypatch):
+        """The guard aborts off-host document navigation before connect."""
+        monkeypatch.setattr(bu, "validate_url", lambda url: url)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(monkeypatch, response=response)
+
+        asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+        handler = browser.last_context.route_handler
+
+        route = _FakeRoute()
+        asyncio.run(handler(route, _FakeRequest("https://evil.example/x", is_navigation=True)))
+
+        assert route.aborted is True
+        assert route.continued is False
+
+    def test_route_guard_allows_same_host_navigation(self, monkeypatch):
+        monkeypatch.setattr(bu, "validate_url", lambda url: url)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(monkeypatch, response=response)
+
+        asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+        handler = browser.last_context.route_handler
+
+        route = _FakeRoute()
+        asyncio.run(handler(route, _FakeRequest("https://example.com/next", is_navigation=True)))
+
+        assert route.continued is True
+        assert route.aborted is False
+
+    def test_route_guard_aborts_request_failing_validation(self, monkeypatch):
+        """Subresources aimed at blocked targets are aborted too."""
+
+        def _validate(url):
+            if "169.254.169.254" in url:
+                raise SSRFError("blocked host")
+            return url
+
+        monkeypatch.setattr(bu, "validate_url", _validate)
+        response = _FakeResponse(status=200, headers={"content-type": "text/html"})
+        browser = _install_fake_browser(monkeypatch, response=response)
+
+        asyncio.run(bu.fetch_with_browser("https://example.com/start"))
+        handler = browser.last_context.route_handler
+
+        route = _FakeRoute()
+        asyncio.run(handler(route, _FakeRequest("http://169.254.169.254/pixel.png", is_navigation=False)))
+
+        assert route.aborted is True
+        assert route.continued is False
