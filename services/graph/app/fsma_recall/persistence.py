@@ -74,161 +74,147 @@ def _upsert_drill_row(engine, drill: "RecallDrill") -> None:
     #1199: the row's task_queue.status is ALWAYS 'completed' so the
     generic task_processor never claims and corrupts the row. The real
     drill status lives in payload->>'status'.
+
+    Database errors raise to the caller: a drill whose history cannot be
+    persisted must not be reported as fully recorded.
     """
     import json as _json
 
-    try:
-        from sqlalchemy import text as _text
+    from sqlalchemy import text as _text
 
-        payload = _json.dumps(drill.to_dict())
-        with engine.connect() as conn:
-            conn.execute(
-                _text("""
-                    INSERT INTO fsma.task_queue
-                        (task_type, payload, status, tenant_id, created_at,
-                         started_at, completed_at)
-                    VALUES
-                        ('recall_drill', CAST(:payload AS jsonb), :queue_status,
-                         :tenant_id, :created_at, :started_at, :completed_at)
-                    ON CONFLICT DO NOTHING
-                """),
-                {
-                    "payload": payload,
-                    # #1199: Never write drill status (in_progress, cancelled)
-                    # into the task_queue status column — those values violate
-                    # the CHECK constraint.  Use the sentinel completed status
-                    # so the worker skips this row.
-                    "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
-                    "tenant_id": drill.tenant_id,
-                    "created_at": drill.created_at,
-                    "started_at": drill.started_at,
-                    "completed_at": drill.completed_at,
-                },
-            )
-            conn.commit()
-    except Exception as exc:  # pragma: no cover
-        import logging
-
-        logging.getLogger("fsma_recall").warning("Failed to persist recall drill: %s", exc)
+    payload = _json.dumps(drill.to_dict())
+    with engine.connect() as conn:
+        conn.execute(
+            _text("""
+                INSERT INTO fsma.task_queue
+                    (task_type, payload, status, tenant_id, created_at,
+                     started_at, completed_at)
+                VALUES
+                    ('recall_drill', CAST(:payload AS jsonb), :queue_status,
+                     :tenant_id, :created_at, :started_at, :completed_at)
+                ON CONFLICT DO NOTHING
+            """),
+            {
+                "payload": payload,
+                # #1199: Never write drill status (in_progress, cancelled)
+                # into the task_queue status column — those values violate
+                # the CHECK constraint.  Use the sentinel completed status
+                # so the worker skips this row.
+                "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
+                "tenant_id": drill.tenant_id,
+                "created_at": drill.created_at,
+                "started_at": drill.started_at,
+                "completed_at": drill.completed_at,
+            },
+        )
+        conn.commit()
 
 
 def _update_drill_row(engine, drill: "RecallDrill") -> None:
     """Update an existing recall drill row by drill_id stored in payload.
 
     #1199: task_queue.status stays 'completed' regardless of drill status.
+
+    Database errors raise to the caller; see _upsert_drill_row.
     """
     import json as _json
 
-    try:
-        from sqlalchemy import text as _text
+    from sqlalchemy import text as _text
 
-        payload = _json.dumps(drill.to_dict())
-        with engine.connect() as conn:
-            conn.execute(
-                _text("""
-                    UPDATE fsma.task_queue
-                    SET payload       = CAST(:payload AS jsonb),
-                        status        = :queue_status,
-                        started_at    = :started_at,
-                        completed_at  = :completed_at
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                      AND payload->>'drill_id' = :drill_id
-                """),
-                {
-                    "payload": payload,
-                    "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
-                    "tenant_id": drill.tenant_id,
-                    "started_at": drill.started_at,
-                    "completed_at": drill.completed_at,
-                    "drill_id": drill.drill_id,
-                },
-            )
-            conn.commit()
-    except Exception as exc:  # pragma: no cover
-        import logging
-
-        logging.getLogger("fsma_recall").warning("Failed to update recall drill: %s", exc)
+    payload = _json.dumps(drill.to_dict())
+    with engine.connect() as conn:
+        conn.execute(
+            _text("""
+                UPDATE fsma.task_queue
+                SET payload       = CAST(:payload AS jsonb),
+                    status        = :queue_status,
+                    started_at    = :started_at,
+                    completed_at  = :completed_at
+                WHERE task_type = 'recall_drill'
+                  AND tenant_id  = :tenant_id
+                  AND payload->>'drill_id' = :drill_id
+            """),
+            {
+                "payload": payload,
+                "queue_status": _RECALL_DRILL_TASK_QUEUE_STATUS,
+                "tenant_id": drill.tenant_id,
+                "started_at": drill.started_at,
+                "completed_at": drill.completed_at,
+                "drill_id": drill.drill_id,
+            },
+        )
+        conn.commit()
 
 
 def _load_drills_from_db(engine, tenant_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-    """Query drill rows for a tenant from fsma.task_queue."""
-    try:
-        from sqlalchemy import text as _text
+    """Query drill rows for a tenant from fsma.task_queue.
 
-        with engine.connect() as conn:
-            rows = conn.execute(
-                _text("""
-                    SELECT payload
-                    FROM fsma.task_queue
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                    ORDER BY created_at DESC
-                    LIMIT :limit
-                """),
-                {"tenant_id": tenant_id, "limit": limit},
-            ).fetchall()
-        return [row[0] for row in rows]
-    except Exception as exc:  # pragma: no cover
-        import logging
+    Database errors raise to the caller: an unreadable history must not
+    pose as an empty history.
+    """
+    from sqlalchemy import text as _text
 
-        logging.getLogger("fsma_recall").warning("Failed to load recall drills: %s", exc)
-        return []
+    with engine.connect() as conn:
+        rows = conn.execute(
+            _text("""
+                SELECT payload
+                FROM fsma.task_queue
+                WHERE task_type = 'recall_drill'
+                  AND tenant_id  = :tenant_id
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"tenant_id": tenant_id, "limit": limit},
+        ).fetchall()
+    return [row[0] for row in rows]
 
 
 def _load_drill_by_id_from_db(engine, tenant_id: str, drill_id: str) -> Optional[Dict[str, Any]]:
-    """Query a single drill row by drill_id from fsma.task_queue."""
-    try:
-        from sqlalchemy import text as _text
+    """Query a single drill row by drill_id from fsma.task_queue.
 
-        with engine.connect() as conn:
-            row = conn.execute(
-                _text("""
-                    SELECT payload
-                    FROM fsma.task_queue
-                    WHERE task_type = 'recall_drill'
-                      AND tenant_id  = :tenant_id
-                      AND payload->>'drill_id' = :drill_id
-                    LIMIT 1
-                """),
-                {"tenant_id": tenant_id, "drill_id": drill_id},
-            ).fetchone()
-        return row[0] if row else None
-    except Exception as exc:  # pragma: no cover
-        import logging
+    Returns None only when no such drill exists. Database errors raise to
+    the caller: an unreadable row must not pose as "not found".
+    """
+    from sqlalchemy import text as _text
 
-        logging.getLogger("fsma_recall").warning("Failed to load recall drill by id: %s", exc)
-        return None
+    with engine.connect() as conn:
+        row = conn.execute(
+            _text("""
+                SELECT payload
+                FROM fsma.task_queue
+                WHERE task_type = 'recall_drill'
+                  AND tenant_id  = :tenant_id
+                  AND payload->>'drill_id' = :drill_id
+                LIMIT 1
+            """),
+            {"tenant_id": tenant_id, "drill_id": drill_id},
+        ).fetchone()
+    return row[0] if row else None
 
 
 def _select_random_target_lot(engine, tenant_id: str) -> Optional[str]:
     """Pick a random TLC from the tenant's active lots (fsma.cte_events).
 
     Mirrors the mock-audit target picker: any CTE event with a
-    traceability_lot_code is an eligible drill target. Returns None when the
-    tenant has no lots or the query fails (callers decide how to surface it).
+    traceability_lot_code is an eligible drill target. Returns None only
+    when the tenant has no lots. Database errors raise to the caller so a
+    query outage is never mistaken for "no lots".
     """
-    try:
-        from sqlalchemy import text as _text
+    from sqlalchemy import text as _text
 
-        with engine.connect() as conn:
-            row = conn.execute(
-                _text("""
-                    SELECT traceability_lot_code
-                    FROM fsma.cte_events
-                    WHERE tenant_id = :tenant_id
-                      AND traceability_lot_code IS NOT NULL
-                    ORDER BY random()
-                    LIMIT 1
-                """),
-                {"tenant_id": tenant_id},
-            ).fetchone()
-        return row[0] if row else None
-    except Exception as exc:  # pragma: no cover
-        import logging
-
-        logging.getLogger("fsma_recall").warning("Failed to select random target lot: %s", exc)
-        return None
+    with engine.connect() as conn:
+        row = conn.execute(
+            _text("""
+                SELECT traceability_lot_code
+                FROM fsma.cte_events
+                WHERE tenant_id = :tenant_id
+                  AND traceability_lot_code IS NOT NULL
+                ORDER BY random()
+                LIMIT 1
+            """),
+            {"tenant_id": tenant_id},
+        ).fetchone()
+    return row[0] if row else None
 
 
 def _dict_to_recall_drill(d: Dict[str, Any]) -> "RecallDrill":

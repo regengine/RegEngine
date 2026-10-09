@@ -515,7 +515,8 @@ class MockRecallEngine:
         Get drill history for a tenant.
 
         Reads from PostgreSQL when available so history survives restarts.
-        Falls back to the in-process cache when the DB is unreachable.
+        Falls back to the in-process cache when no database is configured;
+        database errors raise rather than posing as an empty history.
 
         Args:
             tenant_id: Tenant identifier

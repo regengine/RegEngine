@@ -970,13 +970,14 @@ class TestSelectRandomTargetLot:
 
         assert _select_random_target_lot(engine, "tenant_1") is None
 
-    def test_returns_none_on_query_error(self):
+    def test_raises_on_query_error(self):
         from services.graph.app.fsma_recall.persistence import _select_random_target_lot
 
         engine, conn = self._mock_engine()
         conn.execute.side_effect = RuntimeError("db gone")
 
-        assert _select_random_target_lot(engine, "tenant_1") is None
+        with pytest.raises(RuntimeError, match="db gone"):
+            _select_random_target_lot(engine, "tenant_1")
 
 
 @pytest.mark.asyncio
