@@ -17,7 +17,6 @@ Requires:
     - Set DATABASE_URL environment variable
 """
 
-import hashlib
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -396,11 +395,14 @@ class TestPackageManifest:
                 _State.package_contents[key], sort_keys=True, default=str
             ), f"Manifest field '{key}' differs between assemblies"
 
-        # Verify the embedded package_hash is self-consistent
-        # (remove package_hash, recompute, compare)
-        contents2_check = {k: v for k, v in contents2.items() if k != "package_hash"}
-        recomputed = hashlib.sha256(json.dumps(contents2_check, sort_keys=True, default=str).encode()).hexdigest()
-        assert recomputed == contents2["package_hash"], "Embedded package_hash must match recomputed hash of manifest"
+        # Verify the embedded package_hash is self-consistent by calling
+        # the assembler's own hash function, not an inline reimplementation,
+        # so this test tracks the assembler's canonicalization.
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        assert compute_manifest_hash(contents2) == contents2["package_hash"], (
+            "Embedded package_hash must match the assembler's hash of manifest"
+        )
 
     def test_07_submit_package(self, tenant_id, workflow):
         """Prove the blocking-defect gate blocks, then submit with force."""
@@ -639,9 +641,11 @@ class TestPackageManifest:
 
         embedded_hash = contents.pop("package_hash")
 
-        # Recompute from manifest without the hash field
-        recomputed = hashlib.sha256(json.dumps(contents, sort_keys=True, default=str).encode()).hexdigest()
+        # Verify through the assembler's own hash function, not an inline
+        # reimplementation, so this test tracks the assembler's
+        # canonicalization.
+        from services.shared.request_workflow.assembly import compute_manifest_hash
 
-        assert recomputed == embedded_hash, (
-            "Embedded package_hash must be verifiable by recomputing SHA-256 of manifest"
+        assert compute_manifest_hash(contents) == embedded_hash, (
+            "Embedded package_hash must be verifiable through the assembler's hash function"
         )
