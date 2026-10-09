@@ -1,4 +1,4 @@
-"""#3241 — /v1/scheduler/status must reflect live unpersisted webhook loss.
+"""#3241: /v1/scheduler/status must reflect live unpersisted webhook loss.
 
 Before the fix, ``webhook_dlq.at_risk`` derived only from settings (URLs
 configured + outbox path empty). A deploy WITH a configured outbox path
