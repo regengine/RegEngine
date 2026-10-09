@@ -93,12 +93,10 @@ def test_populated_chain_requires_content_verification(monkeypatch) -> None:
 def test_merkle_root_handler_forwards_no_chain_evidence(monkeypatch) -> None:
     """The /export/merkle-root handler surfaces the marker (#2698)."""
     import asyncio
-    import sys
     from pathlib import Path
 
     ingestion_dir = Path(__file__).resolve().parent.parent.parent / "services" / "ingestion"
-    if str(ingestion_dir) not in sys.path:
-        sys.path.insert(0, str(ingestion_dir))
+    monkeypatch.syspath_prepend(str(ingestion_dir))
     from services.ingestion.app.fda_export import merkle as merkle_mod
 
     session = _MerkleSession(chain_hashes=[], event_count=3)
