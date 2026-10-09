@@ -21,7 +21,7 @@ import ssl
 import sys
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.error import HTTPError, URLError
@@ -1559,7 +1559,7 @@ def _write_evidence(
     payload: dict[str, Any] = {
         "schema_version": 1,
         "status": status,
-        "verification_date": datetime.now(UTC).isoformat(),
+        "verification_date": datetime.now(timezone.utc).isoformat(),
         "manifest_sha256": manifest_sha256,
         "plan_sha256": plan_sha256,
         "target": {

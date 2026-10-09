@@ -3,8 +3,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -751,9 +753,7 @@ def test_identity_mutator_observation_is_prerendered_before_network(
 ):
     identity_manifest, identity_plan = _with_identity_isolation(manifest, plan)
     identity_plan["variables"]["MUTATOR_PREFLIGHT_NONCE"] = "STAGING_MUTATOR_PREFLIGHT_NONCE"
-    _identity_probe(identity_plan)["mutator_observe"]["request"] = {
-        "query": {"nonce": "{{MUTATOR_PREFLIGHT_NONCE}}"}
-    }
+    _identity_probe(identity_plan)["mutator_observe"]["request"] = {"query": {"nonce": "{{MUTATOR_PREFLIGHT_NONCE}}"}}
     _validate(identity_manifest, identity_plan)
     identity_environment = dict(environment)
     identity_environment["STAGING_MUTATOR_PREFLIGHT_NONCE"] = "{{MALFORMED_AT_RUNTIME}}"
@@ -1184,3 +1184,54 @@ def test_identity_isolation_write_rejects_noop_erasure_that_still_returns_200(
             timeout=1,
             transport=transport,
         )
+
+
+def test_gate_imports_without_py311_datetime_utc(monkeypatch):
+    """The gate must import on interpreters without datetime.UTC (Python 3.9/3.10)."""
+    stub = types.ModuleType("datetime")
+    stub.datetime = datetime
+    stub.timezone = timezone
+    assert not hasattr(stub, "UTC")
+    monkeypatch.setitem(sys.modules, "datetime", stub)
+    spec = importlib.util.spec_from_file_location("staging_release_gate_py39", SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, module)
+    # Raises ImportError on the old `from datetime import UTC, datetime`.
+    spec.loader.exec_module(module)
+    stamped = module.datetime.now(module.timezone.utc)
+    assert stamped.tzinfo is not None
+    assert stamped.utcoffset().total_seconds() == 0
+
+
+def test_write_evidence_verification_date_is_utc_aware(tmp_path):
+    """Evidence keeps a timezone-aware UTC verification_date after the compat fix."""
+    path = tmp_path / "evidence.json"
+    _GATE._write_evidence(
+        path,
+        status="pass",
+        manifest_sha256="m" * 64,
+        plan_sha256="p" * 64,
+        plan={
+            "target": {
+                "expected_origin": "https://staging.example.test",
+                "deployment_id": "staging-deployment-123",
+                "base_url_env": "STAGING_BASE_URL",
+            },
+            "variables": {},
+            "actors": {},
+        },
+        coverage=_GATE.Coverage(
+            operation_count=1,
+            adapter_count=1,
+            classification_counts={},
+            request_count=1,
+        ),
+        results=[],
+        failure=None,
+        negative_probe_interval_seconds=1.0,
+    )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    stamped = datetime.fromisoformat(payload["verification_date"])
+    assert stamped.tzinfo is not None
+    assert stamped.utcoffset().total_seconds() == 0
