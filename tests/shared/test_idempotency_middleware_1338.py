@@ -207,9 +207,19 @@ class TestShouldCache:
 
     @pytest.mark.parametrize("method", ["POST", "post", "Post", "PoSt"])
     def test_post_is_cached_regardless_of_case(self, middleware, method):
-        """HTTP methods are case-insensitive per RFC 9110, and the
-        middleware should normalize before comparing."""
+        """RFC 9110 Section 4.1: method tokens are case-sensitive,
+        so "post" is not "POST" on the wire. The middleware
+        normalizes defensively before comparing so a
+        non-conformant lowercase method cannot silently bypass dedup."""
         assert middleware._should_cache(method) is True
+
+    def test_lowercase_post_cached_by_defensive_normalization_only(self, middleware):
+        """Locks in the defensive normalization: "post" is cached only
+        because _should_cache upper-cases before comparing, not
+        because the RFC treats methods as case-insensitive."""
+        assert middleware._should_cache("POST") is True
+        assert middleware._should_cache("post") is True
+        assert middleware._should_cache("get") is False
 
     @pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
     def test_non_post_methods_not_cached(self, middleware, method):
