@@ -17,7 +17,6 @@ Covers issue #1134.
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock, patch
@@ -373,20 +372,36 @@ class TestNLPToComplianceE2E:
 
         for cte in result.ctes:
             kde = cte.kdes
-            tlc = kde.traceability_lot_code or "FALLBACK-TLC"
-            qty = kde.quantity or 1.0
-            uom = kde.unit_of_measure or "units"
-            ts = kde.event_date or datetime.now(tz=timezone.utc).isoformat()
+
+            # No fallback defaults here: a missing KDE must fail this
+            # test, not pass behind a fabricated value. SAMPLE_BOL
+            # carries a lot code, a quantity/unit pair, a ship date,
+            # and a product line, so the extractor must produce all of
+            # them for every CTE it emits from this document.
+            assert kde.traceability_lot_code, f"extractor dropped the traceability lot code for {cte.type}"
+            assert "2025-1110-RLH" in kde.traceability_lot_code, (
+                f"extracted TLC {kde.traceability_lot_code!r} does not match SAMPLE_BOL"
+            )
+            assert kde.quantity == 80.0, f"extracted quantity {kde.quantity!r} does not match SAMPLE_BOL '80 cases'"
+            assert kde.unit_of_measure == "cases", (
+                f"extracted unit {kde.unit_of_measure!r} does not match SAMPLE_BOL '80 cases'"
+            )
+            assert kde.event_date == "2025-11-10", (
+                f"extracted event date {kde.event_date!r} does not match SAMPLE_BOL ship date"
+            )
+            assert kde.product_description and "Romaine" in kde.product_description, (
+                f"extracted product {kde.product_description!r} does not match SAMPLE_BOL"
+            )
 
             # Build the kwargs dict that would be passed to store_event.
             kwargs = {
                 "tenant_id": result.tenant_id,
                 "event_type": cte.type.value,
-                "traceability_lot_code": tlc,
-                "product_description": kde.product_description or "Unknown Product",
-                "quantity": qty,
-                "unit_of_measure": uom,
-                "event_timestamp": ts,
+                "traceability_lot_code": kde.traceability_lot_code,
+                "product_description": kde.product_description,
+                "quantity": kde.quantity,
+                "unit_of_measure": kde.unit_of_measure,
+                "event_timestamp": kde.event_date,
                 "source": "nlp-pipeline",
                 "location_gln": kde.location_identifier,
                 "kdes": {
