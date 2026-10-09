@@ -6,8 +6,14 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+from shared.env import CLOUD_ENV_VARS
 
 from services.admin.app.e2e_safety import CriticalSecurityError, e2e_mode_enabled
+
+
+def _clear_cloud_markers(monkeypatch):
+    for marker in CLOUD_ENV_VARS:
+        monkeypatch.delenv(marker, raising=False)
 
 
 def _load_passwordless_seed_script():
@@ -60,5 +66,34 @@ def test_e2e_mode_allowed_in_test_environment(monkeypatch):
     monkeypatch.setenv("REGENGINE_E2E_MODE", "true")
     monkeypatch.delenv("ENV", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    _clear_cloud_markers(monkeypatch)
 
     assert e2e_mode_enabled() is True
+
+
+def test_e2e_mode_fatally_rejected_on_deployed_staging(monkeypatch):
+    # A deployed staging environment keeps a non-production name, so the
+    # production check alone would allow E2E mode here. The cloud marker
+    # must forbid it: otherwise the passwordless seed script could mint
+    # maximum-rate wildcard keys outside the local fixture.
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("REGENGINE_E2E_MODE", "true")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "staging")
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(CriticalSecurityError, match="E2E mode is strictly forbidden in production"):
+        e2e_mode_enabled()
+
+
+def test_passwordless_seed_script_fatally_rejects_e2e_mode_on_deployed_staging(monkeypatch):
+    seed_passwordless_e2e_user = _load_passwordless_seed_script()
+
+    monkeypatch.setenv("REGENGINE_ENV", "staging")
+    monkeypatch.setenv("REGENGINE_E2E_MODE", "true")
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "staging")
+    monkeypatch.delenv("ENV", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(CriticalSecurityError, match="E2E mode is strictly forbidden in production"):
+        seed_passwordless_e2e_user._require_e2e_mode()

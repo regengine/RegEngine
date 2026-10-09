@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from shared.env import is_production
+from shared.env import is_cloud_deployment, is_production
 
 REGENGINE_E2E_MODE_ENV = "REGENGINE_E2E_MODE"
 _E2E_TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -19,8 +19,11 @@ def _raw_e2e_mode_enabled() -> bool:
 
 
 def assert_e2e_mode_allowed() -> None:
-    """Fail closed if E2E mode is enabled in production."""
-    if _raw_e2e_mode_enabled() and is_production():
+    """Fail closed if E2E mode is enabled outside the local fixture."""
+    # Production is always forbidden. Any cloud-deployment marker (Railway,
+    # Vercel, Render, Fly, Kubernetes) also forbids it, including staging or
+    # preview environments that deliberately keep a non-production name.
+    if _raw_e2e_mode_enabled() and (is_production() or is_cloud_deployment()):
         raise CriticalSecurityError("E2E mode is strictly forbidden in production")
 
 
