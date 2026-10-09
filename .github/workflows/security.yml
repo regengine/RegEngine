@@ -688,6 +688,44 @@ jobs:
           retention-days: 90
 
   # ──────────────────────────────────────────────
+  # 7a. Container Scan (PR light, Trivy filesystem scan)
+  # ──────────────────────────────────────────────
+  # Pull requests get this fast signal instead of the full image scan
+  # below. It needs no Docker build, so it stays cheap, and it fails
+  # the run on the same severity bar with the same .trivyignore acceptances. The full
+  # image scan and the signed SBOM stay post-merge only (see #2032).
+  # This job is advisory, not a branch-protection required context: do
+  # not add its name to scripts/workflow_inventory.txt without also
+  # updating the branch-protection settings (see docs/runbooks/BRANCH_PROTECTION.md).
+  container-scan-pr:
+    name: Container Scan (PR light)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # 0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "json"
+          output: "trivy-pr.json"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          trivyignores: ".trivyignore"
+          exit-code: "1"
+
+      - name: Upload PR Trivy results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: trivy-pr
+          path: trivy-pr.json
+          retention-days: 90
+
+  # ──────────────────────────────────────────────
   # 7. Container Scan (Trivy) — consolidated monolith image
   # ──────────────────────────────────────────────
   # Scans the single image Railway actually deploys (repo-root Dockerfile).

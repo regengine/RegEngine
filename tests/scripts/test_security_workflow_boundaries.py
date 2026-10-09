@@ -15,6 +15,29 @@ def jobs():
     return yaml.safe_load((ROOT / ".github/workflows/security.yml").read_text())["jobs"]
 
 
+def _uses_trivy_scan(job):
+    return any("trivy" in str(step.get("uses", "")).lower() for step in job.get("steps", []))
+
+
+def _runs_on_pull_request(job):
+    return "github.event_name != 'pull_request'" not in job.get("if", "")
+
+
+def test_pull_request_gets_a_light_trivy_scan_without_image_build():
+    # The full image scan and the SBOM stay post-merge only for cost
+    # reasons (#2032), so pull requests need a lighter scan that still
+    # runs before merge. Fails if every Trivy scan skips pull requests.
+    pr_scan_jobs = {
+        job_id: job for job_id, job in jobs().items() if _uses_trivy_scan(job) and _runs_on_pull_request(job)
+    }
+    assert pr_scan_jobs, (
+        "No Trivy scan runs on pull requests: container-scan and sbom are "
+        "post-merge only, so a vulnerable base image can merge with no signal."
+    )
+    for job_id, job in pr_scan_jobs.items():
+        assert "docker build" not in str(job), f"{job_id} must stay light on pull requests: no image build."
+
+
 def test_tenant_job_is_unconditional_and_uses_only_disposable_role_targets():
     job = jobs()["tenant-isolation"]
     assert "if" not in job
