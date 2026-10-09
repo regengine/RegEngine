@@ -105,12 +105,22 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--allow-production",
         action="store_true",
-        help="Override the production guard. Almost never what you want.",
+        help="Override the production guard. Almost never what you want. "
+        "Requires interactive confirmation when production is detected.",
     )
     return parser.parse_args()
 
 
-def _guard_against_production(args: argparse.Namespace, database_url: str) -> None:
+PRODUCTION_CONFIRM_PHRASE = "mint-production-key"
+
+
+def _guard_against_production(
+    args: argparse.Namespace,
+    database_url: str,
+    *,
+    _prompt=input,
+    _is_tty=None,
+) -> None:
     env = os.getenv("REGENGINE_ENV", "").strip().lower()
     problems = []
     if env == "production":
@@ -125,6 +135,27 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
             "creates keys via POST /v1/admin/keys or the /admin page. "
             "Pass --allow-production only if you are certain."
         )
+    if problems and args.allow_production:
+        is_tty = _is_tty() if _is_tty is not None else sys.stdin.isatty()
+        if not is_tty:
+            sys.exit(
+                "Refusing to mint a test key: "
+                + " and ".join(problems)
+                + ". --allow-production requires interactive confirmation "
+                "from a terminal. Aborted."
+            )
+        print(
+            "WARNING: about to mint a TEST key against a production-like target ("
+            + " and ".join(problems)
+            + "). Prefer POST /v1/admin/keys or the /admin page.",
+            file=sys.stderr,
+        )
+        try:
+            answer = _prompt(f"Type '{PRODUCTION_CONFIRM_PHRASE}' to confirm: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            sys.exit("Aborted: production confirmation not given; refusing to mint a test key.")
+        if answer != PRODUCTION_CONFIRM_PHRASE:
+            sys.exit("Aborted: production confirmation not given; refusing to mint a test key.")
 
 
 def _async_url(database_url: str) -> str:
