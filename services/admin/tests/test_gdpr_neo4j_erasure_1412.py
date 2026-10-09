@@ -70,20 +70,38 @@ async def test_neo4j_user_graph_deleted_with_tenant_and_user_id(monkeypatch):
 
         await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
 
-    mock_session.run.assert_awaited_once()
-    call_args = mock_session.run.call_args
-    cypher = call_args[0][0]
-    kwargs = call_args[1]
+    assert mock_session.run.await_count == 2, (
+        "erasure must run two tenant-scoped queries: identity delete, then shared-record anonymization"
+    )
+    calls = mock_session.run.await_args_list
+    delete_cypher = calls[0][0][0]
+    delete_kwargs = calls[0][1]
+    anonymize_cypher = calls[1][0][0]
+    anonymize_kwargs = calls[1][1]
 
-    # Cypher must use parameter placeholders, not formatted identifiers.
-    assert "$tenant_id" in cypher, "tenant_id must be a Cypher parameter"
-    assert "$user_id" in cypher, "user_id must be a Cypher parameter"
-    assert TEST_TENANT_ID not in cypher, "tenant_id must NOT be string-formatted into the Cypher query"
-    assert TEST_USER_ID not in cypher, "user_id must NOT be string-formatted into the Cypher query"
-    assert "WHERE" in cypher, "delete query must filter by user data"
-    assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in cypher
-    assert kwargs.get("tenant_id") == TEST_TENANT_ID
-    assert kwargs.get("user_id") == TEST_USER_ID
+    for cypher in (delete_cypher, anonymize_cypher):
+        # Cypher must use parameter placeholders, not formatted identifiers.
+        assert "$tenant_id" in cypher, "tenant_id must be a Cypher parameter"
+        assert "$user_id" in cypher, "user_id must be a Cypher parameter"
+        assert TEST_TENANT_ID not in cypher, "tenant_id must NOT be string-formatted into the Cypher query"
+        assert TEST_USER_ID not in cypher, "user_id must NOT be string-formatted into the Cypher query"
+        assert "WHERE" in cypher, "query must filter by user data"
+    assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in delete_cypher
+    assert delete_kwargs.get("tenant_id") == TEST_TENANT_ID
+    assert delete_kwargs.get("user_id") == TEST_USER_ID
+    assert anonymize_kwargs.get("tenant_id") == TEST_TENANT_ID
+    assert anonymize_kwargs.get("user_id") == TEST_USER_ID
+
+    # Identity delete must not match on actor_id: shared records that only
+    # reference the user must survive the delete step.
+    assert "actor_id" not in delete_cypher, "delete query must not match shared records via actor_id"
+    assert "DETACH DELETE" in delete_cypher
+
+    # Anonymization must rewrite the actor reference to a stable token,
+    # never delete the record.
+    assert "DETACH DELETE" not in anonymize_cypher
+    assert "$erased_actor_id" in anonymize_cypher
+    assert anonymize_kwargs.get("erased_actor_id"), "anonymize query must carry the erased-actor token"
 
 
 # ---------------------------------------------------------------------------

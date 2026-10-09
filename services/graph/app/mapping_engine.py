@@ -52,22 +52,31 @@ class MappingEngine:
 
         Args:
             obligation_id: The obligation text to find mappings for.
-            tenant_id: Optional tenant UUID string for multi-tenant isolation.
+            tenant_id: Tenant UUID string for multi-tenant isolation.
+                Required; null-tenant calls previously read and linked
+                obligations across all tenants.
 
         Returns:
             List of detected mappings.
+
+        Raises:
+            ValueError: if `tenant_id` is None or empty.
         """
+        if not tenant_id:
+            raise ValueError(
+                "map_requirement requires a non-empty tenant_id; null-tenant queries are no longer supported"
+            )
+
         if not self.llm:
             logger.warning("mapping_engine_disabled_no_llm")
             return []
 
         # 1. Fetch the source obligation and its context
         async with self.driver.session() as session:
-            tenant_filter = "AND o.tenant_id = $tenant_id" if tenant_id else ""
             source_res = await session.run(
-                f"""
-                MATCH (o:Obligation {{text: $id}})<-[:REQUIRES]-(s:Section)
-                WHERE true {tenant_filter}
+                """
+                MATCH (o:Obligation {text: $id})<-[:REQUIRES]-(s:Section)
+                WHERE o.tenant_id = $tenant_id
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 1
             """,
@@ -80,9 +89,9 @@ class MappingEngine:
 
             # 2. Find candidate obligations from OTHER regulations
             candidates_res = await session.run(
-                f"""
+                """
                 MATCH (o:Obligation)<-[:REQUIRES]-(s:Section)
-                WHERE s.regulation <> $reg {tenant_filter}
+                WHERE s.regulation <> $reg AND o.tenant_id = $tenant_id
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 20
             """,
@@ -140,13 +149,12 @@ class MappingEngine:
 
         # 4. Persistence: Create MAPPED_TO relationships in the graph
         if mappings:
-            tenant_match = ", tenant_id: $tenant_id" if tenant_id else ""
             async with self.driver.session() as session:
                 await session.run(
-                    f"""
+                    """
                     UNWIND $mappings as map
-                    MATCH (o1:Obligation {{text: map.source_id{tenant_match}}})
-                    MATCH (o2:Obligation {{text: map.target_id{tenant_match}}})
+                    MATCH (o1:Obligation {text: map.source_id, tenant_id: $tenant_id})
+                    MATCH (o2:Obligation {text: map.target_id, tenant_id: $tenant_id})
                     MERGE (o1)-[r:MAPPED_TO]->(o2)
                     SET r.confidence = map.confidence,
                         r.justification = map.justification,

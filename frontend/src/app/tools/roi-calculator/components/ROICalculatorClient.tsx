@@ -87,7 +87,7 @@ export function ROICalculatorClient() {
                         <h5 className="mb-2 text-label text-re-text-muted">Methodology Note</h5>
                         <p className="text-small leading-relaxed text-re-text-tertiary">
                             Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
-                            We don&apos;t have verified customer ROI data yet — early-design partner pricing reflects that.
+                            We don&apos;t have verified customer ROI data yet, and the Founding rate reflects that.
                             Current public FDA posture points to July 20, 2028 as the earliest enforcement date; no public fine schedule exists, so the
                             risk-concentration tile is illustrative only. Actual results depend on your contracts,
                             existing systems, staffing, and data hygiene.
@@ -130,7 +130,7 @@ export function ROICalculatorClient() {
                     {[
                         {
                             title: 'Labor time avoided',
-                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet — early-design partner pricing reflects that.',
+                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet, and the Founding rate reflects that.',
                             icon: Clock
                         },
                         {

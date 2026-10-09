@@ -12,6 +12,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_async
+
 from .base import (
     AuthType,
     ConnectionStatus,
@@ -46,16 +48,15 @@ class FoodReadyConnector(IntegrationConnector):
             self._status = ConnectionStatus.DISCONNECTED
             return False
         try:
-            import httpx
-
-            async with httpx.AsyncClient(
+            resp = await safe_httpx_get_async(
+                f"{self.config.base_url}/me",
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
                 timeout=self.config.timeout_seconds,
-            ) as client:
-                resp = await client.get(f"{self.config.base_url}/me")
-                if resp.status_code == 200:
-                    self._status = ConnectionStatus.CONNECTED
-                    return True
+                max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+            )
+            if resp.status_code == 200:
+                self._status = ConnectionStatus.CONNECTED
+                return True
         except Exception as exc:
             logger.error("foodready_connection_failed error=%s", str(exc))
         self._status = ConnectionStatus.ERROR
@@ -69,24 +70,21 @@ class FoodReadyConnector(IntegrationConnector):
     ) -> tuple[List[NormalizedCTEEvent], Optional[str]]:
         """Fetch food safety records from FoodReady."""
         try:
-            import httpx
-
             params: Dict[str, Any] = {"limit": limit}
             if since:
                 params["since"] = since.isoformat()
             if cursor:
                 params["cursor"] = cursor
 
-            async with httpx.AsyncClient(
+            resp = await safe_httpx_get_async(
+                f"{self.config.base_url}/records",
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
+                params=params,
                 timeout=self.config.timeout_seconds,
-            ) as client:
-                resp = await client.get(
-                    f"{self.config.base_url}/records",
-                    params=params,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+                max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
             events = [self.normalize_event(r) for r in data.get("records", [])]
             next_cursor = data.get("next_cursor")
@@ -179,24 +177,21 @@ class FoodDocsConnector(IntegrationConnector):
     ) -> tuple[List[NormalizedCTEEvent], Optional[str]]:
         """Fetch monitoring records from FoodDocs."""
         try:
-            import httpx
-
             params: Dict[str, Any] = {"limit": limit}
             if since:
                 params["modified_after"] = since.isoformat()
             if cursor:
                 params["page"] = cursor
 
-            async with httpx.AsyncClient(
+            resp = await safe_httpx_get_async(
+                f"{self.config.base_url}/monitoring-tasks",
                 headers={"X-Api-Key": self.config.api_key},
+                params=params,
                 timeout=self.config.timeout_seconds,
-            ) as client:
-                resp = await client.get(
-                    f"{self.config.base_url}/monitoring-tasks",
-                    params=params,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+                max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
             events = [self.normalize_event(t) for t in data.get("tasks", [])]
             next_page = data.get("next_page")
@@ -273,16 +268,15 @@ class TiveConnector(IntegrationConnector):
             self._status = ConnectionStatus.DISCONNECTED
             return False
         try:
-            import httpx
-
-            async with httpx.AsyncClient(
+            resp = await safe_httpx_get_async(
+                f"{self.config.base_url}/trackers",
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
                 timeout=self.config.timeout_seconds,
-            ) as client:
-                resp = await client.get(f"{self.config.base_url}/trackers")
-                if resp.status_code == 200:
-                    self._status = ConnectionStatus.CONNECTED
-                    return True
+                max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+            )
+            if resp.status_code == 200:
+                self._status = ConnectionStatus.CONNECTED
+                return True
         except Exception as exc:
             logger.error("tive_connection_failed error=%s", str(exc))
         self._status = ConnectionStatus.ERROR
@@ -296,22 +290,19 @@ class TiveConnector(IntegrationConnector):
     ) -> tuple[List[NormalizedCTEEvent], Optional[str]]:
         """Fetch completed shipment tracking data from Tive."""
         try:
-            import httpx
-
             params: Dict[str, Any] = {"limit": limit, "status": "delivered"}
             if since:
                 params["since"] = since.isoformat()
 
-            async with httpx.AsyncClient(
+            resp = await safe_httpx_get_async(
+                f"{self.config.base_url}/shipments",
                 headers={"Authorization": f"Bearer {self.config.api_key}"},
+                params=params,
                 timeout=self.config.timeout_seconds,
-            ) as client:
-                resp = await client.get(
-                    f"{self.config.base_url}/shipments",
-                    params=params,
-                )
-                resp.raise_for_status()
-                data = resp.json()
+                max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
             events: List[NormalizedCTEEvent] = []
             for shipment in data.get("shipments", []):
