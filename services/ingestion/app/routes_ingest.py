@@ -81,7 +81,7 @@ from .shared.upload_limits import (
     stream_upload_to_file_with_limit,
     validate_regulation_upload_content,
 )
-from .task_handlers_regulation import get_staging_path
+from .task_handlers_regulation import _remove_staging_file_quietly, get_staging_path
 
 PARSER_REGISTRY = create_default_registry()
 
@@ -101,8 +101,14 @@ PROHIBITED_NETWORKS = [
     ip_network("::1/128"),
     ip_network("fc00::/7"),
 ]
+# Size tiers for ingest payloads. Regulation filings stage large PDFs/DOCXs
+# to disk (100 MB cap, enforced at staging time), while every other ingest
+# path (direct text, file upload, URL fetch) shares one 25 MB cap enforced
+# both while streaming and after the full body is buffered.
 MAX_PAYLOAD_BYTES = 25 * 1024 * 1024
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB hard limit
+# Back-compat alias: previously a separate 50 MB fetch cap that disagreed
+# with the 25 MB post-fetch enforcement. Kept for existing importers.
+MAX_FILE_SIZE = MAX_PAYLOAD_BYTES
 
 
 def _registered_metric(name: str):
@@ -348,13 +354,11 @@ async def ingest_regulation(
             raise HTTPException(status_code=400, detail="Empty file uploaded")
         validate_regulation_upload_content(file_type, prefix, path=file_path)
     except HTTPException:
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
+        _remove_staging_file_quietly(file_path)
         raise
     except OSError as e:
         logger.error("regulation_staging_write_failed", name=name, error=str(e))
+        _remove_staging_file_quietly(file_path)
         raise HTTPException(status_code=500, detail="Failed to stage ingestion file")
 
     try:
@@ -387,10 +391,7 @@ async def ingest_regulation(
     except Exception as e:
         db.rollback()
         # Clean up staged file if we can't enqueue
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
+        _remove_staging_file_quietly(file_path)
         logger.error("regulation_ingestion_queue_failed", name=name, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to queue ingestion job")
     finally:
@@ -1014,7 +1015,7 @@ async def _fetch(url: str) -> tuple[bytes, str]:
 
                     async for chunk in response.aiter_bytes():
                         raw_bytes.extend(chunk)
-                        if len(raw_bytes) > MAX_FILE_SIZE:
+                        if len(raw_bytes) > MAX_PAYLOAD_BYTES:
                             logger.error(
                                 "payload_too_large",
                                 url=current_url,
@@ -1022,7 +1023,7 @@ async def _fetch(url: str) -> tuple[bytes, str]:
                             )
                             raise HTTPException(
                                 status_code=413,
-                                detail="Payload Too Large (Exceeds 50MB)",
+                                detail="Payload Too Large (Exceeds 25MB)",
                             )
                     return bytes(raw_bytes), content_type
 
