@@ -2,7 +2,7 @@
 
 ``_classify_row`` had two identical ``if row.get("tlc_code")`` branches:
 the first (events) shadowed the second (TLCs) into dead code, so a CSV
-without a ``record_type`` column could never create lots — every lot
+without a ``record_type`` column could never create lots: every lot
 row became an event with an empty ``cte_type`` and failed validation.
 Typeless rows now classify as TLCs unless they carry event signals
 (``cte_type``/timestamp/payload), which still classify as events.
