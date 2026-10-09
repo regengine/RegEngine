@@ -150,15 +150,26 @@ class TestQueryTenantEvents:
             "date_to": "2026-04-19",
         }
 
-    def test_swallow_exception_returns_empty_list(
+    def test_query_exception_raises_503(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
+        from fastapi import HTTPException
+
         session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        result = _query_tenant_events("tenant-x", None, None, None)
-        assert result == []
+        with pytest.raises(HTTPException) as exc_info:
+            _query_tenant_events("tenant-x", None, None, None)
+        assert exc_info.value.status_code == 503
         # ``finally:`` still closes the session.
         assert session.closed is True
+
+    def test_unavailable_db_session_raises_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from fastapi import HTTPException
+
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: None)
+        with pytest.raises(HTTPException) as exc_info:
+            _query_tenant_events("tenant-x", None, None, None)
+        assert exc_info.value.status_code == 503
 
 
 # ---------------------------------------------------------------------------

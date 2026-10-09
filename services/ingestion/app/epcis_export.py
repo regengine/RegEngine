@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
@@ -30,8 +30,20 @@ logger = logging.getLogger("epcis-export")
 def _query_tenant_events(
     tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
 ) -> list[dict]:
-    """Query real CTE events from fsma.cte_events for export."""
+    """Query real CTE events from fsma.cte_events for export.
+
+    Returns an empty list when the tenant genuinely has no matching
+    events (callers then serve labeled sample data). Raises
+    HTTPException(503) when the database itself is unreachable or the
+    query fails, so callers never disguise an outage as sample evidence.
+    """
     db = get_db_safe()
+    if db is None:
+        logger.warning("db_unavailable_for_export")
+        raise HTTPException(
+            status_code=503,
+            detail="Export temporarily unavailable: database is unreachable.",
+        )
     try:
         where = ["e.tenant_id = :tenant_id"]
         params: dict = {"tenant_id": tenant_id}
@@ -80,9 +92,14 @@ def _query_tenant_events(
             params,
         ).fetchall()
         return [dict(row._mapping) for row in rows]
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("db_query_failed_for_export", extra={"error": str(exc)})
-        return []
+        raise HTTPException(
+            status_code=503,
+            detail="Export temporarily unavailable: database query failed.",
+        ) from exc
     finally:
         db.close()
 
