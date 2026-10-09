@@ -1,4 +1,4 @@
-"""Deep QA tests for ``app.scrapers`` — SSRF parity, per-item robustness,
+"""Deep QA tests for ``app.scrapers``: SSRF parity, per-item robustness,
 failure-type honesty, tenant passthrough, and input sanitization.
 
 Each test below fails on the pre-fix code and passes after the fix.
