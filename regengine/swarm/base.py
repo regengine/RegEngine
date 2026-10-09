@@ -9,6 +9,7 @@ Provides:
 import abc
 import json
 import os
+import re
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -69,6 +70,20 @@ class AgentMessage:
 # ── Agent Memory ──────────────────────────────────────────
 
 
+def safe_log_stem(agent_name: str) -> str:
+    """Map an agent name to a safe single-path-component file stem.
+
+    Agent names are code-defined today, but BaseAgent accepts any string,
+    so a name containing separators or ".." must never escape the memory
+    directory. Anything outside alphanumerics, dot, underscore and dash
+    becomes an underscore, and names with no usable characters are rejected.
+    """
+    stem = re.sub(r"[^A-Za-z0-9._-]", "_", agent_name)
+    if not stem.strip("._-"):
+        raise ValueError(f"Invalid agent name: {agent_name!r}")
+    return stem
+
+
 class AgentMemory:
     """Persistent memory via JSON append-log.
 
@@ -79,7 +94,7 @@ class AgentMemory:
     def __init__(self, agent_name: str, base_dir: Optional[Path] = None):
         self.agent_name = agent_name
         self.base_dir = base_dir or Path.cwd() / ".swarm_memory"
-        self.log_file = self.base_dir / f"{agent_name}.jsonl"
+        self.log_file = self.base_dir / f"{safe_log_stem(agent_name)}.jsonl"
         self._ensure_dir()
 
     def _ensure_dir(self) -> None:
