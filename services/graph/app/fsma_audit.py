@@ -489,7 +489,35 @@ class FSMAAuditEntry:
             self.checksum = self._calculate_checksum()
 
     def _calculate_checksum(self) -> str:
-        """Calculate SHA-256 checksum for tamper detection."""
+        """Calculate SHA-256 checksum for tamper detection.
+
+        Covers the field diff and the tenant alongside the identity
+        fields, so altering what changed or whose record it is breaks
+        the checksum. Entries persisted before this coverage keep a
+        legacy checksum (see :meth:`verify_integrity`).
+        """
+        data = {
+            "event_id": self.event_id,
+            "actor": self.actor,
+            "action": (self.action.value if isinstance(self.action, Enum) else self.action),
+            "timestamp": self.timestamp,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "tenant_id": self.tenant_id,
+            "diff": [d.to_dict() for d in self.diff],
+            "evidence_link": self.evidence_link,
+            "previous_checksum": self.previous_checksum,
+        }
+        content = json.dumps(data, sort_keys=True, default=str)
+        return hashlib.sha256(content.encode()).hexdigest()
+
+    def _calculate_legacy_checksum(self) -> str:
+        """Checksum shape used before diff and tenant were covered.
+
+        Verification-only fallback so entries persisted by older
+        releases still verify instead of flagging every pre-existing
+        row as tampered after upgrade.
+        """
         data = {
             "event_id": self.event_id,
             "actor": self.actor,
@@ -523,9 +551,15 @@ class FSMAAuditEntry:
         }
 
     def verify_integrity(self) -> bool:
-        """Verify the entry hasn't been tampered with."""
-        expected = self._calculate_checksum()
-        return self.checksum == expected
+        """Verify the entry hasn't been tampered with.
+
+        Accepts the legacy checksum shape for entries persisted before
+        diff and tenant coverage, so upgrades do not flag pre-existing
+        rows. New entries always carry the full checksum.
+        """
+        if self.checksum == self._calculate_checksum():
+            return True
+        return self.checksum == self._calculate_legacy_checksum()
 
 
 # ============================================================================
