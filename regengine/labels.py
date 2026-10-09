@@ -201,6 +201,16 @@ def generate_label_png(label: LabelData) -> bytes:
 
 # ─── ZPL Label ───────────────────────────────────────────────────────────────
 
+# ZPL command prefixes (^ and ~) plus ASCII control characters would let field
+# text break out of its ^FD...^FS block and inject printer commands, so every
+# product-supplied value is stripped of them before printing.
+_ZPL_UNSAFE_CHARS = re.compile(r"[\x00-\x1f\x7f^~]")
+
+
+def _sanitize_zpl_field(value: object) -> str:
+    """Strip ZPL command characters from a field value before printing."""
+    return _ZPL_UNSAFE_CHARS.sub("", str(value))
+
 
 def generate_label_zpl(label: LabelData) -> str:
     """
@@ -208,17 +218,22 @@ def generate_label_zpl(label: LabelData) -> str:
 
     Standard 4x2" label at 203 DPI.
     """
-    tlc = label.traceability_lot_code
+    tlc = _sanitize_zpl_field(label.traceability_lot_code)
+    product = _sanitize_zpl_field(label.product_description)
+    lot_date = _sanitize_zpl_field(label.lot_date)
+    origin = _sanitize_zpl_field(label.location_name)
+    gln = _sanitize_zpl_field(label.location_gln)
+    unit = _sanitize_zpl_field(label.unit_of_measure)
     return f"""^XA
 ^PW812
 ^LL406
 ^FO20,20^BQN,2,5^FDMA,{tlc}^FS
-^FO200,20^A0N,28,28^FD{label.product_description}^FS
+^FO200,20^A0N,28,28^FD{product}^FS
 ^FO200,55^A0N,20,20^FDTLC: {tlc}^FS
-^FO200,85^A0N,20,20^FDDate: {label.lot_date}^FS
-^FO200,110^A0N,20,20^FDOrigin: {label.location_name}^FS
-^FO200,135^A0N,20,20^FDGLN: {label.location_gln}^FS
-^FO200,160^A0N,20,20^FDQty: {label.quantity} {label.unit_of_measure}^FS
+^FO200,85^A0N,20,20^FDDate: {lot_date}^FS
+^FO200,110^A0N,20,20^FDOrigin: {origin}^FS
+^FO200,135^A0N,20,20^FDGLN: {gln}^FS
+^FO200,160^A0N,20,20^FDQty: {label.quantity} {unit}^FS
 ^FO20,360^A0N,16,16^FDregengine.co/v/{tlc}^FS
 ^FO550,360^A0N,16,16^FDFSMA 204 Compliant^FS
 ^XZ"""
