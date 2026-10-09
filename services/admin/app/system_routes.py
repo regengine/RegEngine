@@ -1,3 +1,16 @@
+"""System status, metrics, and sysadmin operations for the admin service.
+
+This module serves the /system routes: service status, tenant scoped
+metrics, QA health, task queue inspection and replay, JWT key management,
+and dead letter queue replay.
+
+Key invariants: tenant scoped reads fail closed when tenant context is
+missing instead of falling back to another tenant; task queue, DLQ, and
+JWT routes require high assurance sysadmin access; replay operations keep
+audit history and never delete rows; metrics degrade to database backed
+counts when the ingestion service is unreachable.
+"""
+
 import asyncio
 import inspect
 import os
@@ -16,8 +29,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .dependencies import get_current_user, get_session
 from .database import arm_global_admin_context
+from .dependencies import get_current_user, get_session
 from .models import TenantContext
 from .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from .qa_health import QAHealthResponse, load_qa_health_summary
@@ -28,17 +41,23 @@ logger = structlog.get_logger("admin.system")
 
 
 class ServiceHealth(BaseModel):
+    """Health state of one downstream service."""
+
     name: str
     status: str
     details: Dict[str, Any]
 
 
 class SystemStatusResponse(BaseModel):
+    """Aggregate system status across checked services."""
+
     overall_status: str
     services: List[ServiceHealth]
 
 
 class SystemMetricsResponse(BaseModel):
+    """Tenant scoped compliance and ingestion metrics."""
+
     total_tenants: int
     total_documents: int
     active_jobs: int
@@ -52,6 +71,8 @@ class SystemMetricsResponse(BaseModel):
 
 
 class TaskQueueSummaryResponse(BaseModel):
+    """Summary of task queue depth, retries, and staleness."""
+
     counts_by_status: Dict[str, int]
     retrying_count: int
     stale_processing_count: int
@@ -60,6 +81,8 @@ class TaskQueueSummaryResponse(BaseModel):
 
 
 class TaskQueueReplayRequest(BaseModel):
+    """Select dead task queue rows to replay, by id or by limit."""
+
     ids: List[str] = Field(
         default_factory=list,
         description="Specific fsma.task_queue ids to replay. If empty, replays up to limit dead rows.",
@@ -68,12 +91,16 @@ class TaskQueueReplayRequest(BaseModel):
 
 
 class TaskQueueReplayResult(BaseModel):
+    """Per row outcome of a task queue replay request."""
+
     id: str
     success: bool
     error: Optional[str] = None
 
 
 class TaskQueueReplayResponse(BaseModel):
+    """Aggregate counts and per row outcomes of a replay request."""
+
     replayed: int
     failed: int
     results: List[TaskQueueReplayResult]
@@ -142,9 +169,7 @@ def _is_consolidated() -> bool:
     service to loopback (i.e. it lives in THIS process), this returns True.
     """
     return bool(
-        os.getenv("RAILWAY_ENVIRONMENT")
-        or os.getenv("RAILWAY_ENVIRONMENT_NAME")
-        or os.getenv("RAILWAY_PROJECT_ID")
+        os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME") or os.getenv("RAILWAY_PROJECT_ID")
     )
 
 
@@ -276,6 +301,12 @@ async def get_system_status(
     current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_session),
 ):
+    """Return service health and overall status.
+
+    Overall status becomes degraded when any checked service reports
+    unhealthy. In the consolidated topology, in process services are
+    backed by database and Redis probes instead of a loopback check.
+    """
     service_urls = _get_service_urls()
 
     results: List[ServiceHealth] = []
