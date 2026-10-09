@@ -58,9 +58,17 @@ jobs:
           # Inflow Lab is an optional simulator with a separate smoke workflow;
           # its health contract must not open a product outage issue.
           # /api/health is dynamic and reports configured backend failures.
+          # Each probe carries a forbidden-content pattern (ERE for grep -E):
+          # a 200 whose body matches it counts as degraded, not healthy, so a
+          # soft-error page can never pass as up. The homepage patterns cover
+          # the Vercel platform pause page behind the 2026-08-18 silent outage
+          # (DEPLOYMENT_PAUSED), the Next.js production error page, and generic
+          # proxy/gateway error pages. /api/health answers 200 only when every
+          # configured backend reports healthy, so its pattern additionally
+          # matches any non-healthy backend status word in a 200 body.
           PROBES=(
-            "/|"
-            "/api/health|"
+            "/|DEPLOYMENT_PAUSED|Application error|Internal Server Error|Service Unavailable|Bad Gateway|Gateway Time-?out|Something went wrong"
+            "/api/health|degraded|unhealthy|unreachable|DEPLOYMENT_PAUSED|Application error|Internal Server Error"
           )
 
           probe_path() {
