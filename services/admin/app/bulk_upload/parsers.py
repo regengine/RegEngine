@@ -1,3 +1,15 @@
+"""Parse uploaded supplier bulk files into normalized bulk upload sections.
+
+Supports CSV, XLSX, JSON, and PDF uploads and returns a plain dict with
+facilities, ftl_scopes, tlcs, events, and warnings. Column headers are
+normalized through an alias map so downstream code uses canonical keys.
+
+Key invariants: parsing never writes to the database, validation and commit
+happen in later steps. Upload size and PDF page count are capped to bound
+large or hostile files. Unrecognized rows are skipped with a warning instead
+of raising, while empty, unsupported, or oversized uploads raise HTTPException.
+"""
+
 from __future__ import annotations
 
 import csv
@@ -695,6 +707,18 @@ async def _extract_pdf_with_agent(content: bytes, filename: str, parsed: dict[st
 
 
 async def parse_incoming_file(file: UploadFile) -> dict[str, Any]:
+    """Read an uploaded file and parse it into bulk upload sections.
+
+    Reads the upload in chunks bounded by the configured size limit, picks
+    a format parser from the file extension, and returns a dict with
+    detected_format plus facilities, ftl_scopes, tlcs, events, and warnings.
+    A PDF with no table rows falls back to the document extraction agent
+    when one is configured, and facility names referenced by other rows are
+    scaffolded into minimal facility records.
+
+    Raises HTTPException for unsupported formats and for empty or
+    oversized uploads.
+    """
     extension = os.path.splitext(file.filename or "")[1].lower()
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Unsupported file format")
