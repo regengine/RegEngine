@@ -1,8 +1,19 @@
+extensions:
+  bearertokenauth:
+    # Token comes from the environment so no credential is committed.
+    # With this extension wired into the receivers below, the collector
+    # rejects OTLP data that carries no valid bearer token.
+    token: ${env:OTEL_AUTH_TOKEN}
+
 receivers:
   otlp:
     protocols:
       grpc:
+        auth:
+          authenticator: bearertokenauth
       http:
+        auth:
+          authenticator: bearertokenauth
 
 processors:
   batch:
@@ -10,8 +21,18 @@ processors:
     check_interval: 1s
     limit_percentage: 80
     spike_limit_percentage: 25
-  probabilistic_sampler:
-    sampling_percentage: 20
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 10000
+    policies:
+      - name: errors-always-keep
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: probabilistic-default
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 20
   filter/dlq:
     error_mode: ignore
     logs:
@@ -36,12 +57,18 @@ exporters:
     verbosity: basic
   debug/dlq:
     verbosity: basic
+  file/logs:
+    # Durable copy of the log pipeline so logs survive collector restarts
+    # and are available to later review. The path can be overridden per
+    # environment without editing this file.
+    path: ${env:OTEL_LOGS_PATH:-/var/log/otel-collector/logs.jsonl}
 
 service:
+  extensions: [bearertokenauth]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, probabilistic_sampler, batch]
+      processors: [memory_limiter, tail_sampling, batch]
       exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
@@ -50,4 +77,4 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, filter/dlq, batch]
-      exporters: [debug, debug/dlq]
+      exporters: [debug, debug/dlq, file/logs]
