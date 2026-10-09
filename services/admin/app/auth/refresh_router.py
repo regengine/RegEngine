@@ -46,6 +46,39 @@ logger = structlog.get_logger("auth")
 _DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = SESSION_IDLE_TIMEOUT_MINUTES
 
 
+# Refresh-token reuse is a possible-theft signal, so the audit entry written
+# on this path is security evidence, not best-effort telemetry. Failures to
+# persist it are alertable via this counter (the audit logger already bumps
+# admin_audit_log_failures_total, but that counter covers every caller, so
+# this one lets ops alarm specifically on lost reuse evidence), mirroring
+# the duplicate-guard pattern in review_consumer.py.
+try:
+    from prometheus_client import Counter
+
+    REFRESH_REUSE_AUDIT_FAILURES_COUNTER = Counter(
+        "admin_auth_refresh_reuse_audit_failures_total",
+        "Refresh-token-reuse audit entries that could not be persisted after a retry, by reason.",
+        ["reason"],
+    )
+except ImportError:  # prometheus_client not installed
+    REFRESH_REUSE_AUDIT_FAILURES_COUNTER = None
+except ValueError:  # already registered (double-import / module reload)
+    from prometheus_client import REGISTRY
+
+    REFRESH_REUSE_AUDIT_FAILURES_COUNTER = REGISTRY._names_to_collectors.get(
+        "admin_auth_refresh_reuse_audit_failures_total"
+    )
+
+
+def _count_reuse_audit_failure(reason: str) -> None:
+    if REFRESH_REUSE_AUDIT_FAILURES_COUNTER is None:
+        return
+    try:
+        REFRESH_REUSE_AUDIT_FAILURES_COUNTER.labels(reason=reason).inc()
+    except Exception:  # metrics must never break the auth path
+        pass
+
+
 class RefreshRequest(BaseModel):
     refresh_token: str
 
@@ -113,18 +146,30 @@ async def refresh_session(
                     "revoke_all_for_family",
                     lambda: session_store.revoke_all_for_family(reused_session.family_id),
                 )
-                try:
-                    arm_global_admin_context(db)
-                    audit_tenant_id = db.execute(
-                        select(MembershipModel.tenant_id)
-                        .where(
-                            MembershipModel.user_id == reused_session.user_id,
-                            MembershipModel.is_active == True,  # noqa: E712
-                        )
-                        .limit(1)
-                    ).scalar_one_or_none()
-                    if audit_tenant_id:
-                        AuditLogger.log_event(
+                # The reuse audit entry is possible-theft evidence: unlike the
+                # general best-effort audit path, a lost write here is
+                # retried once, then alarmed (error log plus metric) so ops
+                # can notice instead of silently losing the signal.
+                for audit_attempt in (1, 2):
+                    try:
+                        arm_global_admin_context(db)
+                        audit_tenant_id = db.execute(
+                            select(MembershipModel.tenant_id)
+                            .where(
+                                MembershipModel.user_id == reused_session.user_id,
+                                MembershipModel.is_active == True,  # noqa: E712
+                            )
+                            .limit(1)
+                        ).scalar_one_or_none()
+                        if not audit_tenant_id:
+                            logger.warning(
+                                "refresh_token_reuse_audit_skipped_no_tenant",
+                                session_id=str(reused_session_id),
+                                family_id=str(reused_session.family_id),
+                                user_id=str(reused_session.user_id),
+                            )
+                            break
+                        audit_entry_id = AuditLogger.log_event(
                             db,
                             tenant_id=audit_tenant_id,
                             event_type="auth.refresh_token_reuse",
@@ -143,24 +188,43 @@ async def refresh_session(
                                 "response": "session_family_revoked",
                             },
                         )
+                        if audit_entry_id is None:
+                            # AuditLogger swallows its own errors and returns
+                            # None; treat that as a failed attempt so the
+                            # retry below can re-try the write.
+                            raise RuntimeError("audit log write returned no entry id")
                         db.commit()
-                    else:
-                        logger.warning(
-                            "refresh_token_reuse_audit_skipped_no_tenant",
-                            session_id=str(reused_session_id),
-                            family_id=str(reused_session.family_id),
-                            user_id=str(reused_session.user_id),
-                        )
-                except Exception as exc:
-                    db.rollback()
-                    logger.warning(
-                        "refresh_token_reuse_audit_failed",
-                        session_id=str(reused_session_id),
-                        family_id=str(reused_session.family_id),
-                        error=str(exc),
-                    )
-                finally:
-                    disarm_global_admin_context(db)
+                        break
+                    except Exception as exc:
+                        db.rollback()
+                        if audit_attempt >= 2:
+                            _count_reuse_audit_failure(type(exc).__name__)
+                            logger.error(
+                                "refresh_token_reuse_audit_failed",
+                                session_id=str(reused_session_id),
+                                family_id=str(reused_session.family_id),
+                                user_id=str(reused_session.user_id),
+                                attempts=audit_attempt,
+                                error=str(exc),
+                                error_class=type(exc).__name__,
+                            )
+                        else:
+                            logger.warning(
+                                "refresh_token_reuse_audit_retrying",
+                                session_id=str(reused_session_id),
+                                family_id=str(reused_session.family_id),
+                                attempt=audit_attempt,
+                                error=str(exc),
+                                error_class=type(exc).__name__,
+                            )
+                    finally:
+                        try:
+                            disarm_global_admin_context(db)
+                        except Exception:
+                            # The session may already be rolled back; the arm
+                            # flag clears with the next transaction, so a
+                            # disarm failure must not mask the audit outcome.
+                            pass
                 logger.warning(
                     "refresh_token_reuse_detected",
                     session_id=str(reused_session_id),
@@ -341,9 +405,9 @@ async def refresh_session(
         )
         active_role = db.get(RoleModel, active_membership.role_id) if active_membership else None
 
-    # #1401 — Re-query the real tenant status instead of hardcoding "active".
-    # The query above already filters for active memberships/tenants, but the
-    # status we embed in the token should reflect the DB truth at refresh time.
+        # #1401 — Re-query the real tenant status instead of hardcoding "active".
+        # The query above already filters for active memberships/tenants, but the
+        # status we embed in the token should reflect the DB truth at refresh time.
         real_tenant_status: Optional[str] = None
         if active_tenant_id:
             tenant_row = db.get(TenantModel, active_tenant_id)
