@@ -10,6 +10,17 @@ Usage in conftest.py:
 """
 
 import os
+import secrets
+
+
+def _random_secret(nbytes: int = 32) -> str:
+    """Return a fresh random secret for test defaults.
+
+    Generated per pytest process at import time so test runs never share
+    a hard-coded credential that production validation would accept.
+    """
+    return secrets.token_urlsafe(nbytes)
+
 
 _DEFAULTS = {
     "REGENGINE_ENV": "test",
@@ -25,10 +36,12 @@ _DEFAULTS = {
     # Lets services/admin/app/database.py build its import-time engine without
     # ADMIN_DATABASE_URL (honored only with REGENGINE_ENV=test/development).
     "ADMIN_FALLBACK_SQLITE": "sqlite:///:memory:",
-    # Auth
-    "AUTH_SECRET_KEY": "dev_secret_key_change_me",
-    "AUTH_TEST_BYPASS_TOKEN": "test-bypass-ci-only-not-for-production",
-    "INTERNAL_SERVICE_SECRET": "trusted-internal-v1",
+    # Auth: random per-run secrets (no hard-coded values). A fixed test
+    # credential that passes validation hides gaps production would catch,
+    # so every pytest process mints its own.
+    "AUTH_SECRET_KEY": _random_secret(48),
+    "AUTH_TEST_BYPASS_TOKEN": _random_secret(),
+    "INTERNAL_SERVICE_SECRET": _random_secret(),
 }
 
 
