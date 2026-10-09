@@ -41,19 +41,17 @@ async def auth_token():
 
 @pytest.fixture
 async def tenant_id(auth_token):
-    """Get tenant ID for current user"""
+    """Get tenant ID for current user.
+
+    Authentication failures are never masked: a non-200 identity response
+    or a missing tenant_id fails the test, and transport errors propagate.
+    """
     async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(f"{ADMIN_URL}/v1/users/me", headers={"Authorization": f"Bearer {auth_token}"})
-
-            if response.status_code == 200:
-                user_data = response.json()
-                return user_data["tenant_id"]
-            else:
-                return "default-tenant"
-
-        except Exception:
-            return "default-tenant"
+        response = await client.get(f"{ADMIN_URL}/v1/users/me", headers={"Authorization": f"Bearer {auth_token}"})
+        assert response.status_code == 200, f"Failed to resolve tenant_id: /v1/users/me returned {response.status_code}"
+        user_data = response.json()
+        assert "tenant_id" in user_data, "Failed to resolve tenant_id: response has no tenant_id"
+        return user_data["tenant_id"]
 
 
 @pytest.fixture
