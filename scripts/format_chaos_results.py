@@ -72,13 +72,24 @@ def main():
     )
     args = parser.parse_args()
 
+    if not Path(args.input).exists():
+        print(
+            f"::error::Chaos results file not found: {args.input}",
+            file=sys.stderr,
+        )
+        print("| Metric | Value |")
+        print("|--------|-------|")
+        print(f"| Tests Run | 0 (no results at {args.input}) |")
+        print("| Status | FAIL: No results file found |")
+        return 1
+
     results = load_results(args.input)
     if not results:
         print("| Metric | Value |")
         print("|--------|-------|")
         print(f"| Tests Run | 0 (no results at {args.input}) |")
-        print("| Status | No results file found |")
-        return 0
+        print("| Status | FAIL: No results found |")
+        return 1
 
     markdown = format_markdown(results)
 
