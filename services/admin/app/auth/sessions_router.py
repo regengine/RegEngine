@@ -17,6 +17,7 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from jwt.exceptions import PyJWTError
 from shared.pagination import PaginationParams
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -153,7 +154,15 @@ async def logout(
     user's refresh sessions because no narrower family can be proven.
     """
     token = _bearer_token_from_request(request)
-    payload = decode_access_token(token)
+    try:
+        payload = decode_access_token(token)
+    except PyJWTError as exc:
+        logger.warning("logout_token_rejected", error_type=type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
     # Keep the bearer/session valid when an early cleanup step fails so the
     # caller can retry. Once the refresh session has been revoked, its binding
