@@ -22,6 +22,27 @@ logger = logging.getLogger("sop-generator")
 
 router = APIRouter(prefix="/api/v1/sop", tags=["SOP Generator"])
 
+# Markdown control characters in user-supplied text. They are
+# backslash-escaped so the text renders literally instead of acting as
+# formatting, links, headings, or table structure. The set deliberately
+# excludes "." and "@" so ordinary names, emails, and places pass through
+# unchanged.
+_MARKDOWN_ESCAPE_CHARS = frozenset("\\`*_{}[]()#+-!|")
+
+
+def _sanitize_markdown(value: str) -> str:
+    """Make user-supplied text safe to interpolate into generated markdown.
+
+    Newlines are collapsed to spaces so a value cannot start a new markdown
+    block (heading, list item, code fence, or table row), angle brackets are
+    removed so raw HTML cannot be injected into HTML or PDF exports, and
+    markdown control characters are backslash-escaped so they render
+    literally.
+    """
+    text = " ".join(str(value).split())
+    text = text.replace("<", "").replace(">", "")
+    return "".join(f"\\{ch}" if ch in _MARKDOWN_ESCAPE_CHARS else ch for ch in text)
+
 
 class SOPRequest(BaseModel):
     """Request to generate an SOP / Traceability Plan."""
@@ -52,7 +73,7 @@ class SOPResponse(BaseModel):
 
 def _generate_cte_procedures(company_type: str, products: list[str], has_iot: bool) -> str:
     """Generate CTE-specific SOPs based on company type."""
-    product_list = ", ".join(products[:5])
+    product_list = ", ".join(_sanitize_markdown(p) for p in products[:5])
     sections = []
 
     if company_type in ("grower", "manufacturer"):
@@ -193,12 +214,17 @@ async def generate_sop(
     """Generate a complete FSMA 204 SOP document."""
 
     now = datetime.now(timezone.utc)
-    product_list = ", ".join(request.products[:10])
-    facility_list = "\n".join([f"   - {f}" for f in request.facilities])
+    company_name = _sanitize_markdown(request.company_name)
+    company_type = _sanitize_markdown(request.company_type)
+    primary_contact = _sanitize_markdown(request.primary_contact)
+    contact_title = _sanitize_markdown(request.contact_title) if request.contact_title else None
+    contact_email = _sanitize_markdown(request.contact_email) if request.contact_email else None
+    product_list = ", ".join(_sanitize_markdown(p) for p in request.products[:10])
+    facility_list = "\n".join([f"   - {_sanitize_markdown(f)}" for f in request.facilities])
     retailer_section = ""
 
     if request.target_retailers:
-        retailer_list = ", ".join(request.target_retailers)
+        retailer_list = ", ".join(_sanitize_markdown(r) for r in request.target_retailers)
         retailer_section = f"""
 ### 8.1 Retailer-Specific Requirements
 
@@ -236,18 +262,18 @@ async def generate_sop(
 
     markdown = f"""# FSMA 204 Traceability Plan & Standard Operating Procedures
 
-**Company**: {request.company_name}
-**Company Type**: {request.company_type.title()}
+**Company**: {company_name}
+**Company Type**: {company_type.title()}
 **Document Version**: 1.0
 **Generated**: {now.strftime("%B %d, %Y")}
-**Compliance Contact**: {request.primary_contact}{f" — {request.contact_title}" if request.contact_title else ""}
-{f"**Contact Email**: {request.contact_email}" if request.contact_email else ""}
+**Compliance Contact**: {primary_contact}{f" — {contact_title}" if contact_title else ""}
+{f"**Contact Email**: {contact_email}" if contact_email else ""}
 
 ---
 
 ## 1. Purpose & Scope
 
-This Traceability Plan establishes the procedures and controls that {request.company_name} uses to maintain records required under the Food Safety Modernization Act (FSMA), Section 204 — Requirements for Additional Traceability Records for Certain Foods (21 CFR Part 1, Subpart S).
+This Traceability Plan establishes the procedures and controls that {company_name} uses to maintain records required under the Food Safety Modernization Act (FSMA), Section 204 — Requirements for Additional Traceability Records for Certain Foods (21 CFR Part 1, Subpart S).
 
 **Products Covered**: {product_list}
 
@@ -267,7 +293,7 @@ FSMA Section 204 requires persons who manufacture, process, pack, or hold foods 
 ## 3. Traceability Lot Code (TLC) Assignment
 
 ### 3.1 TLC Format
-{request.company_name} uses the following TLC format:
+{company_name} uses the following TLC format:
 
 ```
 [PRODUCT CODE]-[MMDD]-[FACILITY]-[SEQUENCE]
@@ -288,7 +314,7 @@ Example: `ROM-0226-F3-001` (Romaine Lettuce, Feb 26, Facility 3, Lot 001)
 ## 5. Record Keeping & Data Management
 
 ### 5.1 System of Record
-{request.company_name} uses **RegEngine** as the primary traceability records system.
+{company_name} uses **RegEngine** as the primary traceability records system.
 
 - All CTE events are entered into RegEngine via {"API integration" if request.has_erp_integration else "manual entry or CSV upload"}
 - Each event is cryptographically hashed (SHA-256) and chained to an immutable audit trail
@@ -353,11 +379,11 @@ All personnel involved in traceability operations must complete:
 
 | Version | Date | Author | Changes |
 |---|---|---|---|
-| 1.0 | {now.strftime("%Y-%m-%d")} | {request.primary_contact} | Initial plan generated via RegEngine |
+| 1.0 | {now.strftime("%Y-%m-%d")} | {primary_contact} | Initial plan generated via RegEngine |
 
 ---
 
-*This Traceability Plan was generated by RegEngine. It should be reviewed, customized, and approved by {request.company_name}'s food safety team before implementation. Contact support@regengine.co for assistance.*
+*This Traceability Plan was generated by RegEngine. It should be reviewed, customized, and approved by {company_name}'s food safety team before implementation. Contact support@regengine.co for assistance.*
 """
 
     sections = [
@@ -378,7 +404,7 @@ All personnel involved in traceability operations must complete:
     return SOPResponse(
         company_name=request.company_name,
         generated_at=now.isoformat(),
-        document_title=f"FSMA 204 Traceability Plan — {request.company_name}",
+        document_title=f"FSMA 204 Traceability Plan — {company_name}",
         markdown_content=markdown,
         sections=sections,
         page_estimate=max(8, len(markdown) // 3000 + 1),

@@ -12,6 +12,7 @@ Coverage:
 from __future__ import annotations
 
 import hashlib
+import json
 from unittest.mock import MagicMock
 
 import app.routes_discovery as routes_discovery
@@ -229,3 +230,82 @@ class TestRegisterDiscoveryHandlers:
         TASK_HANDLERS.pop("discovery_scrape", None)
         register_discovery_handlers()
         assert "discovery_scrape" in TASK_HANDLERS
+
+
+# ---------------------------------------------------------------------------
+# Queue entry codec: JSON entries round-trip, legacy colon entries still read
+# ---------------------------------------------------------------------------
+
+
+def _json_entry(body: str, url: str) -> bytes:
+    return json.dumps({"body": body, "url": url}).encode("utf-8")
+
+
+class TestDecodeQueueEntry:
+    decode = routes_discovery._decode_queue_entry
+
+    def test_json_entry_decodes(self):
+        assert self.decode(_json_entry("FDA Recall", "https://fda.gov/recall/1")) == (
+            "FDA Recall",
+            "https://fda.gov/recall/1",
+        )
+
+    def test_json_entry_with_colons_in_body_round_trips(self):
+        """The old f"{body}:{url}" split mangled bodies containing colons."""
+        body = "FDA Recall: June update: enforcement reports"
+        assert self.decode(_json_entry(body, "https://fda.gov/recall/2")) == (
+            body,
+            "https://fda.gov/recall/2",
+        )
+
+    def test_legacy_colon_entry_still_decodes(self):
+        assert self.decode(b"CPPA Warning:https://cppa.ca.gov/item/1") == (
+            "CPPA Warning",
+            "https://cppa.ca.gov/item/1",
+        )
+
+    def test_legacy_entry_without_colon_has_no_url(self):
+        assert self.decode(b"just-a-body") == ("just-a-body", None)
+
+    def test_undecodable_bytes_return_none(self):
+        assert self.decode(b"\xff\xfe\x00bad") is None
+
+
+class TestApproveWithNewCodec:
+    ENDPOINT = "/v1/ingest/discovery/approve"
+
+    def test_approve_json_entry_with_colon_body(self, monkeypatch):
+        client, fake_redis, mock_enqueue, _ = _build_client(monkeypatch)
+        body = "FDA Recall: June update"
+        fake_redis.lindex.return_value = _json_entry(body, "https://fda.gov/recall/2")
+
+        resp = client.post(self.ENDPOINT, params={"index": 0})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "approved", "body": body, "url": "https://fda.gov/recall/2"}
+        kw = mock_enqueue.call_args.kwargs
+        assert kw["payload"] == {"body": body, "url": "https://fda.gov/recall/2"}
+
+    def test_approve_malformed_entry_returns_422_not_500(self, monkeypatch):
+        client, fake_redis, mock_enqueue, _ = _build_client(monkeypatch)
+        fake_redis.lindex.return_value = b"not-a-queue-entry"
+
+        resp = client.post(self.ENDPOINT, params={"index": 0})
+
+        assert resp.status_code == 422
+        mock_enqueue.assert_not_called()
+
+    def test_bulk_approve_skips_malformed_entry(self, monkeypatch):
+        client, fake_redis, mock_enqueue, _ = _build_client(monkeypatch)
+        fake_redis.lindex.side_effect = [
+            _json_entry("Reg A", "https://example.com/a"),
+            b"not-a-queue-entry",
+        ]
+
+        resp = client.post("/v1/ingest/discovery/bulk-approve", json={"indices": [0, 1]})
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+        assert mock_enqueue.call_count == 1
+        payloads = [c.kwargs["payload"] for c in mock_enqueue.call_args_list]
+        assert payloads == [{"body": "Reg A", "url": "https://example.com/a"}]

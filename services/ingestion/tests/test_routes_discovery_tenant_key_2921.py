@@ -16,6 +16,7 @@ cannot pass by accident.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -24,8 +25,9 @@ import app.routes_discovery as routes_discovery
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from services.ingestion.app import discovery as discovery_mod
 from shared.auth import APIKey, require_api_key
+
+from services.ingestion.app import discovery as discovery_mod
 
 _APP_DIR = Path(routes_discovery.__file__).resolve().parent
 
@@ -113,13 +115,18 @@ def _queue_via_robots_denial(fake_redis: FakeRedisLists, tenant_id: str, body: s
     return asyncio.run(scraper.scrape(body=body, source_url=url, tenant_id=tenant_id))
 
 
+def _queued_entry(body: str, url: str) -> bytes:
+    """The exact bytes the producer writes for one queued item (JSON codec)."""
+    return json.dumps({"body": body, "url": url}).encode("utf-8")
+
+
 @pytest.fixture()
 def seeded() -> FakeRedisLists:
     """Tenant A has one robots-denied item queued by the real producer."""
     fake = FakeRedisLists()
     result = _queue_via_robots_denial(fake, "tenant-a", "FDA Recall", "https://fda.gov/recall/1")
     assert result["status"] == "queued_manual"
-    assert fake.lists == {"manual_upload_queue:tenant-a": [b"FDA Recall:https://fda.gov/recall/1"]}
+    assert fake.lists == {"manual_upload_queue:tenant-a": [_queued_entry("FDA Recall", "https://fda.gov/recall/1")]}
     return fake
 
 
@@ -212,7 +219,7 @@ class TestCrossTenantIsolation:
 
         assert resp.status_code == 404
         mock_enqueue.assert_not_called()
-        assert seeded.lists["manual_upload_queue:tenant-a"] == [b"FDA Recall:https://fda.gov/recall/1"]
+        assert seeded.lists["manual_upload_queue:tenant-a"] == [_queued_entry("FDA Recall", "https://fda.gov/recall/1")]
 
     def test_tenant_b_cannot_reject_tenant_a_item(self, monkeypatch, seeded):
         client, _ = _client(monkeypatch, seeded, "tenant-b")
@@ -220,7 +227,7 @@ class TestCrossTenantIsolation:
         resp = client.post("/v1/ingest/discovery/reject", params={"index": 0})
 
         assert resp.status_code == 404
-        assert seeded.lists["manual_upload_queue:tenant-a"] == [b"FDA Recall:https://fda.gov/recall/1"]
+        assert seeded.lists["manual_upload_queue:tenant-a"] == [_queued_entry("FDA Recall", "https://fda.gov/recall/1")]
 
     def test_tenant_b_bulk_approve_cannot_drain_tenant_a(self, monkeypatch, seeded):
         client, mock_enqueue = _client(monkeypatch, seeded, "tenant-b")
@@ -230,7 +237,7 @@ class TestCrossTenantIsolation:
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         mock_enqueue.assert_not_called()
-        assert seeded.lists["manual_upload_queue:tenant-a"] == [b"FDA Recall:https://fda.gov/recall/1"]
+        assert seeded.lists["manual_upload_queue:tenant-a"] == [_queued_entry("FDA Recall", "https://fda.gov/recall/1")]
 
     def test_tenant_b_bulk_reject_cannot_drain_tenant_a(self, monkeypatch, seeded):
         client, _ = _client(monkeypatch, seeded, "tenant-b")
@@ -239,7 +246,7 @@ class TestCrossTenantIsolation:
 
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
-        assert seeded.lists["manual_upload_queue:tenant-a"] == [b"FDA Recall:https://fda.gov/recall/1"]
+        assert seeded.lists["manual_upload_queue:tenant-a"] == [_queued_entry("FDA Recall", "https://fda.gov/recall/1")]
 
 
 # ---------------------------------------------------------------------------
@@ -301,3 +308,30 @@ def test_producer_and_consumer_build_the_same_key():
 
     produced_key = next(iter(fake.lists))
     assert produced_key == routes_discovery._manual_queue_key("tenant-xyz")
+
+
+class TestColonBodyRoundTrip:
+    def test_body_with_colon_survives_producer_to_approve(self, monkeypatch):
+        """A body containing ':' must come back intact, not split apart.
+
+        The old f"{body}:{url}" encoding split on the first colon, so
+        "FDA Recall: June update" approved as body "FDA Recall" with a
+        garbage url. The JSON codec keeps both halves exact.
+        """
+        fake = FakeRedisLists()
+        result = _queue_via_robots_denial(fake, "tenant-a", "FDA Recall: June update", "https://fda.gov/recall/2")
+        assert result["status"] == "queued_manual"
+
+        client, mock_enqueue = _client(monkeypatch, fake, "tenant-a")
+        resp = client.post("/v1/ingest/discovery/approve", params={"index": 0})
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "status": "approved",
+            "body": "FDA Recall: June update",
+            "url": "https://fda.gov/recall/2",
+        }
+        assert mock_enqueue.call_args.kwargs["payload"] == {
+            "body": "FDA Recall: June update",
+            "url": "https://fda.gov/recall/2",
+        }

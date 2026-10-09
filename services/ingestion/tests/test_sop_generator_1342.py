@@ -23,6 +23,7 @@ from app.sop_generator import (
     SOPRequest,
     SOPResponse,
     _generate_cte_procedures,
+    _sanitize_markdown,
     generate_sop,
     router,
 )
@@ -470,3 +471,82 @@ class TestPydanticModels:
             compliance_citations=["21 CFR Part 1, Subpart S"],
         )
         assert r.page_estimate == 8
+
+
+# ===========================================================================
+# Markdown injection — user input must not reshape the generated document
+# ===========================================================================
+
+
+class TestSanitizeMarkdownUnit:
+    def test_plain_text_passes_through(self):
+        assert _sanitize_markdown("Acme Produce") == "Acme Produce"
+        assert _sanitize_markdown("Salinas, CA") == "Salinas, CA"
+        assert _sanitize_markdown("jane@acme.example") == "jane@acme.example"
+
+    def test_newlines_collapse_to_spaces(self):
+        assert _sanitize_markdown("Evil\n# Pwned") == "Evil # Pwned"
+        assert _sanitize_markdown("a\r\nb") == "a b"
+
+    def test_markdown_syntax_is_escaped(self):
+        out = _sanitize_markdown("[Click](https://evil.example)")
+        assert "[Click](" not in out
+        assert "\\[Click\\]" in out
+        assert _sanitize_markdown("a|b") == "a\\|b"
+        assert _sanitize_markdown("# hi") == "\\# hi"
+
+    def test_angle_brackets_are_removed(self):
+        out = _sanitize_markdown("<script>alert(1)</script>")
+        assert "<" not in out
+        assert ">" not in out
+
+
+def _evil_payload():
+    return _minimal_payload(
+        company_name="Evil Co\n# Pwned Heading\n[Click me](https://evil.example) <script>alert(1)</script>",
+        products=["Romaine\n- injected bullet"],
+        facilities=["Salinas, CA\n## Fake Section", "Yuma | AZ"],
+        primary_contact="Jane | 2.0 | extra",
+        contact_title="VP *Compliance*",
+    )
+
+
+def _headings(markdown: str) -> list[str]:
+    return [line for line in markdown.splitlines() if line.startswith("#")]
+
+
+class TestMarkdownInjectionEndpoint:
+    def test_no_injected_heading_lines(self, client):
+        clean = client.post("/api/v1/sop/generate", json=_minimal_payload()).json()["markdown_content"]
+        evil = client.post("/api/v1/sop/generate", json=_evil_payload()).json()["markdown_content"]
+        assert "\n# Pwned Heading" not in evil
+        assert "\n## Fake Section" not in evil
+        # The attacker adds no new headings at all.
+        assert _headings(evil) == _headings(clean)
+
+    def test_no_injected_link_or_html(self, client):
+        resp = client.post("/api/v1/sop/generate", json=_evil_payload())
+        md = resp.json()["markdown_content"]
+        assert "[Click me](" not in md
+        assert "<script>" not in md
+
+    def test_no_injected_bullet_line(self, client):
+        resp = client.post("/api/v1/sop/generate", json=_evil_payload())
+        md = resp.json()["markdown_content"]
+        assert "\n- injected bullet" not in md
+
+    def test_doc_control_table_row_stays_intact(self, client):
+        resp = client.post("/api/v1/sop/generate", json=_evil_payload())
+        md = resp.json()["markdown_content"]
+        rows = [line for line in md.splitlines() if line.startswith("| 1.0 |")]
+        assert len(rows) == 1
+        # 5 structural pipes plus the 2 escaped pipes from the contact name.
+        assert rows[0].count("|") == 7
+        assert rows[0].count("\\|") == 2
+
+    def test_user_text_still_present_in_readable_form(self, client):
+        resp = client.post("/api/v1/sop/generate", json=_evil_payload())
+        md = resp.json()["markdown_content"]
+        assert "Evil Co" in md
+        assert "Salinas, CA" in md
+        assert "Jane" in md

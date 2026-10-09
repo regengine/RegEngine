@@ -9,6 +9,8 @@ All HTTP is faked; Redis is faked. No network.
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -67,7 +69,9 @@ async def test_scrape_with_forbidden_robots_queues_manual_without_source_fetch(m
     result = await scraper.scrape("FDA", "https://example.com/rules")
     assert result["status"] == "queued_manual"
     assert calls == ["https://example.com/robots.txt"]
-    assert scraper.redis.lists.get("manual_upload_queue:system") == ["FDA:https://example.com/rules"]
+    assert scraper.redis.lists.get("manual_upload_queue:system") == [
+        json.dumps({"body": "FDA", "url": "https://example.com/rules"})
+    ]
 
 
 @pytest.mark.parametrize("status", [200, 401, 403])
@@ -99,4 +103,6 @@ async def test_oversized_robots_response_denies_and_queues_manual(monkeypatch, s
     result = await scraper.scrape("FDA", "https://example.com/rules")
     assert result["status"] == "queued_manual"
     assert calls == ["https://example.com/robots.txt"] * 2
-    assert scraper.redis.lists["manual_upload_queue:system"] == ["FDA:https://example.com/rules"]
+    assert scraper.redis.lists["manual_upload_queue:system"] == [
+        json.dumps({"body": "FDA", "url": "https://example.com/rules"})
+    ]

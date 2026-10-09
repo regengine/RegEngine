@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -113,7 +114,11 @@ class EthicalScraper:
         if not robots_allowed:
             logger.info("scraping_denied_by_robots", body=body, url=source_url)
             queue_key = f"manual_upload_queue:{tenant_id}"
-            self.redis.rpush(queue_key, f"{body}:{source_url}")
+            # JSON encoding: the legacy f"{body}:{source_url}" format was
+            # ambiguous because both halves can contain colons (bodies like
+            # "FDA Recall: update", URLs like "https://..."), so readers
+            # could not split them back apart reliably.
+            self.redis.rpush(queue_key, json.dumps({"body": body, "url": source_url}))
             return {"status": "queued_manual", "reason": "robots.txt disallowed", "queue": queue_key}
 
         # Polite delay — avoid hammering official gov sites

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import hashlib
-from typing import List
+import json
+from typing import List, Optional, Tuple
 
 import redis
 import structlog
@@ -38,6 +39,33 @@ def _manual_queue_key(tenant_id: str) -> str:
     return f"manual_upload_queue:{tenant_id}"
 
 
+def _decode_queue_entry(raw: bytes) -> Optional[Tuple[str, Optional[str]]]:
+    """Decode one manual-upload queue entry into (body, url).
+
+    Entries are JSON objects (``{"body": ..., "url": ...}``) written by
+    ``EthicalScraper.scrape``. Entries written before the JSON switch used
+    the ``f"{body}:{url}"`` format, which is ambiguous when the body itself
+    contains a colon; those still decode through the legacy fallback. The
+    url is None only for legacy entries with no colon at all. Returns None
+    when the entry is undecodable.
+    """
+    try:
+        val = raw.decode("utf-8")
+    except Exception:
+        return None
+    try:
+        data = json.loads(val)
+    except ValueError:
+        data = None
+    if isinstance(data, dict) and isinstance(data.get("url"), str):
+        body = data.get("body", "")
+        return (body if isinstance(body, str) else str(body), data["url"])
+    if ":" in val:
+        body, url = val.split(":", 1)
+        return body, url
+    return (val, None)
+
+
 def _discovery_task_key(tenant_id: str, body: str, url: str) -> str:
     source_hash = hashlib.sha256(f"{body}{url}".encode("utf-8")).hexdigest()
     return f"discovery_scrape:{tenant_id}:{source_hash}"
@@ -54,10 +82,13 @@ async def get_discovery_queue(api_key: APIKey = Depends(require_api_key)):
     results = []
     for i, item in enumerate(items):
         try:
-            val = item.decode("utf-8")
-            if ":" in val:
-                body, url = val.split(":", 1)
-                results.append(DiscoveryQueueItem(body=body, url=url, index=i))
+            decoded = _decode_queue_entry(item)
+            if decoded is None:
+                continue
+            body, url = decoded
+            if url is None:
+                continue
+            results.append(DiscoveryQueueItem(body=body, url=url, index=i))
         except Exception as e:
             logger.debug("discovery_queue_parse_skip", index=i, error=str(e))
             continue
@@ -82,12 +113,11 @@ async def get_manual_queue(
     items = []
     for i, raw in enumerate(raw_items):
         try:
-            val = raw.decode("utf-8")
-            if ":" in val:
-                body, url = val.split(":", 1)
-                items.append({"index": skip + i, "body": body, "url": url})
-            else:
-                items.append({"index": skip + i, "body": val, "url": None})
+            decoded = _decode_queue_entry(raw)
+            if decoded is None:
+                continue
+            body, url = decoded
+            items.append({"index": skip + i, "body": body, "url": url})
         except Exception as e:
             logger.debug("manual_queue_parse_skip", index=skip + i, error=str(e))
             continue
@@ -121,8 +151,10 @@ async def approve_discovery(
     if not item:
         raise HTTPException(status_code=404, detail="Discovery item not found at index")
 
-    val = item.decode("utf-8")
-    body, url = val.split(":", 1)
+    decoded = _decode_queue_entry(item)
+    if decoded is None or decoded[1] is None:
+        raise HTTPException(status_code=422, detail="Discovery item is malformed")
+    body, url = decoded
     r.lrem(queue_key, 1, item)
 
     db = SessionLocal()
@@ -186,8 +218,12 @@ async def bulk_approve_discovery(
     db = SessionLocal()
     try:
         for item in items_to_process:
-            val = item.decode("utf-8")
-            body, url = val.split(":", 1)
+            decoded = _decode_queue_entry(item)
+            if decoded is None or decoded[1] is None:
+                logger.warning("bulk_discovery_malformed_skip", tenant_id=api_key.tenant_id)
+                r.lrem(queue_key, 1, item)
+                continue
+            body, url = decoded
             r.lrem(queue_key, 1, item)
             enqueue_task(
                 db,
