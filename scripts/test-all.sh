@@ -29,11 +29,15 @@ SKIPPED=0
 
 run_test() {
     local name=$1
-    local cmd=$2
-    
+    local tail_lines=$2
+    shift 2
+
     echo -e "${YELLOW}▶ Running: ${name}${NC}"
-    
-    if eval "$cmd"; then
+
+    # The command arrives as separate arguments and runs with no shell
+    # interpretation, so a value from the environment can never be
+    # reinterpreted as extra commands. Output still passes through tail.
+    if "$@" 2>&1 | tail -n "$tail_lines"; then
         echo -e "${GREEN}✓ ${name} PASSED${NC}"
         ((PASSED++))
     else
@@ -70,9 +74,9 @@ echo -e "${BLUE}━━━ 2. Unit Tests (shared/) ━━━${NC}"
 echo ""
 
 if $QUICK_MODE; then
-    run_test "Unit Tests (quick)" "python3 -m pytest tests/shared/ -q --tb=no -x 2>&1 | tail -5"
+    run_test "Unit Tests (quick)" 5 python3 -m pytest tests/shared/ -q --tb=no -x
 else
-    run_test "Unit Tests" "python3 -m pytest tests/shared/ -v --tb=short 2>&1 | tail -30"
+    run_test "Unit Tests" 30 python3 -m pytest tests/shared/ -v --tb=short
 fi
 
 # 3. Contract Tests (need live services)
@@ -83,7 +87,7 @@ if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping contract tests in quick mode (require live services)${NC}"
     ((SKIPPED++))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
-    run_test "Contract Tests" "python3 -m pytest tests/contract/ -v --tb=short 2>&1 | tail -20"
+    run_test "Contract Tests" 20 python3 -m pytest tests/contract/ -v --tb=short
 else
     echo -e "${YELLOW}⚠ Skipping contract tests - some services are down${NC}"
     ((SKIPPED++))
@@ -95,9 +99,9 @@ echo ""
 
 if [[ -d "tests/security" ]]; then
     if $QUICK_MODE; then
-        run_test "Security Tests (quick)" "python3 -m pytest tests/security/ -q --tb=no -x 2>&1 | tail -5"
+        run_test "Security Tests (quick)" 5 python3 -m pytest tests/security/ -q --tb=no -x
     else
-        run_test "Security Tests" "python3 -m pytest tests/security/ -v --tb=short 2>&1 | tail -20"
+        run_test "Security Tests" 20 python3 -m pytest tests/security/ -v --tb=short
     fi
 else
     echo -e "${YELLOW}⚠ Security tests directory not found${NC}"
@@ -112,7 +116,7 @@ if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping E2E tests in quick mode (require live services)${NC}"
     ((SKIPPED++))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
-    run_test "E2E Tests" "python3 -m pytest tests/e2e/ -v --tb=short 2>&1 | tail -20"
+    run_test "E2E Tests" 20 python3 -m pytest tests/e2e/ -v --tb=short
 else
     echo -e "${YELLOW}⚠ Skipping E2E tests - some services are down${NC}"
     ((SKIPPED++))

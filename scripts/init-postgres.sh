@@ -5,8 +5,16 @@
 
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v runtime_pw="$POSTGRES_PASSWORD" -v admin_runtime_pw="$POSTGRES_PASSWORD" <<-EOSQL
+# The password must never appear on a command line: `psql -v name=value`
+# exposes the value in `ps` output. `\getenv` below reads it from the
+# process environment instead, so no argv ever carries the secret.
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set}"
+: "${POSTGRES_USER:?POSTGRES_USER is not set}"
+: "${POSTGRES_DB:?POSTGRES_DB is not set}"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+\getenv runtime_pw POSTGRES_PASSWORD
+\getenv admin_runtime_pw POSTGRES_PASSWORD
     -- Independent application logins. Local development reuses the container
     -- password for convenience; production provisions unrelated secrets in
     -- the provider control plane.
