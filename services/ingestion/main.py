@@ -1,3 +1,12 @@
+"""Local debug entrypoint for the ingestion service.
+
+Builds the FastAPI app by wiring shared middleware, exception handlers,
+and the ingestion routers. This module is for local development and tests
+only: production serves server.main:app, and importing this module in
+production raises. It requires DATABASE_URL, and compliance-critical
+routers stay mounted unless explicitly allowed to be disabled.
+"""
+
 # --- Standardized Bootstrap ---
 import sys
 from contextlib import asynccontextmanager
@@ -56,6 +65,12 @@ from app.routes import router as ingestion_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Run startup and shutdown steps for the ingestion app.
+
+    Logs lifecycle events, probes object storage configuration, and
+    registers integration connectors and task handlers on a best effort
+    basis so missing optional services do not block startup.
+    """
     # Startup
     logger.info("ingestion_service_startup")
     # #2348: warn at boot if document-storage credentials are absent —
@@ -464,6 +479,7 @@ if _router_enabled("billing"):
 
     @app.get("/billing/plans", tags=["Billing"], include_in_schema=False)
     async def list_billing_plans_compat():
+        """Return the billing plans through the legacy /billing/plans path."""
         return await _list_billing_plans()
 
 
@@ -674,4 +690,5 @@ if _router_enabled("email_ingest"):
 
 @app.get("/")
 async def root():
+    """Return a simple status payload showing the service is running."""
     return {"message": "Ingestion Service Operational"}
