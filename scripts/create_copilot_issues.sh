@@ -1,16 +1,28 @@
 #!/bin/bash
+set -euo pipefail
 # Create batch of Copilot-assignable issues for vertical development
 # Each issue is scoped to be completable by Copilot coding agent
 
 REPO="regengine/RegEngine"
 
+FAILED=0
+
 create_issue() {
   local title="$1"
   local body="$2"
-  local labels="$3"
-  
+  local labels="${3:-}"
+  local status=0
+
   echo "Creating: $title"
-  gh issue create --repo "$REPO" --title "$title" --body "$body" 2>&1 | tail -1
+  if [ -n "$labels" ]; then
+    gh issue create --repo "$REPO" --title "$title" --body "$body" --label "$labels" || status=$?
+  else
+    gh issue create --repo "$REPO" --title "$title" --body "$body" || status=$?
+  fi
+  if [ "$status" -ne 0 ]; then
+    echo "FAILED to create issue: $title (gh exited with status $status)" >&2
+    FAILED=$((FAILED + 1))
+  fi
   sleep 2
 }
 
@@ -332,6 +344,11 @@ Check if admin or energy service already has CORS/rate limiting and follow that 
 - CORS headers present in responses
 - Rate limit headers (X-RateLimit-Remaining, X-RateLimit-Reset) in responses
 - Request ID in response headers and logs"
+
+if [ "$FAILED" -gt 0 ]; then
+  echo "$FAILED issue(s) failed to create. Check the output above." >&2
+  exit 1
+fi
 
 echo ""
 echo "✅ All issues created! Run 'gh issue list --repo $REPO' to see them."
