@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
+from .audit import AuditLogger
 from .database import arm_global_admin_context, get_session
 from .dependencies import get_current_user
 from .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
@@ -304,6 +305,7 @@ async def update_partner_status(
         raise HTTPException(status_code=404, detail="Tenant not found")
 
     current = tenant.settings or {}
+    previous_tier = current.get("partner_tier")
     if payload.tier:
         current["partner_tier"] = payload.tier
     else:
@@ -311,6 +313,21 @@ async def update_partner_status(
 
     tenant.settings = current
     flag_modified(tenant, "settings")
+    # Billing-tier changes must leave a tamper-evident trail: structlog
+    # alone is not queryable evidence. The entry is flushed here and
+    # committed atomically with the settings change below.
+    AuditLogger.log_event(
+        db,
+        tenant_id=tenant_id,
+        event_type="tenant.partner_tier_change",
+        event_category="data_modification",
+        actor_id=user.id,
+        actor_email=getattr(user, "email", None),
+        action="tenant.partner_tier_change",
+        resource_type="tenant",
+        resource_id=str(tenant_id),
+        metadata={"previous_tier": previous_tier, "new_tier": payload.tier},
+    )
     db.commit()
 
     logger.info(

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..audit import AuditLogger
 from ..database import arm_global_admin_context, get_session
 from ..privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
 from ..sqlalchemy_models import OrganizationModel, UserModel
@@ -71,7 +72,7 @@ def require_super_admin(
 async def update_organization_sso_policy(
     org_id: uuid.UUID,
     payload: OrganizationSsoPolicyUpdate,
-    _: UserModel = Depends(require_super_admin),
+    actor: UserModel = Depends(require_super_admin),
     db: Session = Depends(get_session),
 ) -> OrganizationSsoPolicyResponse:
     # ``require_super_admin`` has already completed high-assurance human
@@ -81,9 +82,39 @@ async def update_organization_sso_policy(
     if organization is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
 
+    previous_policy = {
+        "domain_name": organization.domain_name,
+        "domain_verified": bool(organization.domain_verified),
+        "enforced_auth_policy": organization.enforced_auth_policy,
+    }
     organization.domain_name = payload.domain_name
     organization.domain_verified = payload.domain_verified
     organization.enforced_auth_policy = payload.enforced_auth_policy
+
+    # Security-setting changes must leave a tamper-evident trail.
+    # Organizations have no tenant row, and audit_logs.tenant_id is
+    # non-nullable, so the entry is chained under the organization id:
+    # it forms a per-organization chain that never collides with tenant
+    # chains (both are UUIDs minted from different tables).
+    AuditLogger.log_event(
+        db,
+        tenant_id=org_id,
+        event_type="organization.sso_policy_change",
+        event_category="data_modification",
+        actor_id=actor.id,
+        actor_email=getattr(actor, "email", None),
+        action="organization.sso_policy_change",
+        resource_type="organization",
+        resource_id=str(org_id),
+        metadata={
+            "previous_policy": previous_policy,
+            "new_policy": {
+                "domain_name": payload.domain_name,
+                "domain_verified": payload.domain_verified,
+                "enforced_auth_policy": payload.enforced_auth_policy,
+            },
+        },
+    )
 
     try:
         response = OrganizationSsoPolicyResponse(
