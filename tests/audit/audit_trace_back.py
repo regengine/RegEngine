@@ -182,7 +182,13 @@ def run_pytest(test_path: str, timeout: int = 60) -> Tuple[int, int, str]:
 
 
 def run_tsc(timeout: int = 120) -> Tuple[bool, str]:
-    """Run TypeScript compiler check and return (success, output)."""
+    """Run TypeScript compiler check and return (success, output).
+
+    Grades the full `tsc --noEmit` output with no path exclusions, so a
+    type error in any file fails the check. A previous version silently
+    dropped output lines mentioning "e2e/" or "security-audit" before
+    grading, which let new errors in those files score as clean.
+    """
     try:
         result = subprocess.run(
             ["npx", "tsc", "--noEmit"],
@@ -192,9 +198,8 @@ def run_tsc(timeout: int = 120) -> Tuple[bool, str]:
             cwd=str(REPO_ROOT / "frontend"),
         )
         output = result.stdout + result.stderr
-        # Filter out pre-existing e2e errors
-        lines = [l for l in output.splitlines() if l.strip() and "e2e/" not in l and "security-audit" not in l]
-        clean = len(lines) == 0
+        lines = [l for l in output.splitlines() if l.strip()]
+        clean = result.returncode == 0 and len(lines) == 0
         return clean, "\n".join(lines) if lines else "Clean"
     except subprocess.TimeoutExpired:
         return False, "TIMEOUT"
@@ -627,7 +632,7 @@ def audit_frontend_wiring(report: AuditReport):
     tsc_ok, tsc_output = run_tsc()
     report.add(
         Check(
-            name="C6: TypeScript --noEmit passes (excluding pre-existing e2e errors)",
+            name="C6: TypeScript --noEmit passes (full output, no path exclusions)",
             section=section,
             max_points=2,
             earned=2 if tsc_ok else 0,
