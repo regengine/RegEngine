@@ -22,6 +22,12 @@ const COMPLIANCE_URL = 'http://localhost:8500';
 const FRONTEND_URL = 'http://localhost:3000';
 const API_KEY = process.env.REGENGINE_API_KEY || '';
 const TENANT_ID = process.env.REGENGINE_TENANT_ID || '';
+// Per-request timeout so one hung endpoint cannot stall the suite and CI.
+const REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url, options = {}) {
+    return fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+}
 
 let passed = 0;
 let failed = 0;
@@ -60,21 +66,21 @@ async function runTests() {
     console.log('\n📋 Health Checks\n');
 
     await test('Admin API health', async () => {
-        const res = await fetch(`${ADMIN_URL}/health`);
+        const res = await fetchWithTimeout(`${ADMIN_URL}/health`);
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(data.status === 'ok', 'Expected status=ok');
     });
 
     await test('Ingestion Service health', async () => {
-        const res = await fetch(`${INGESTION_URL}/health`);
+        const res = await fetchWithTimeout(`${INGESTION_URL}/health`);
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(data.status === 'ok', 'Expected status=ok');
     });
 
     await test('Compliance API health', async () => {
-        const res = await fetch(`${COMPLIANCE_URL}/health`);
+        const res = await fetchWithTimeout(`${COMPLIANCE_URL}/health`);
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(data.status === 'healthy', 'Expected status=healthy');
@@ -86,7 +92,7 @@ async function runTests() {
     console.log('\n📋 Ingestion Service\n');
 
     await test('Ingest URL requires auth', async () => {
-        const res = await fetch(`${INGESTION_URL}/ingest/url`, {
+        const res = await fetchWithTimeout(`${INGESTION_URL}/ingest/url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -98,7 +104,7 @@ async function runTests() {
     });
 
     await test('Ingest URL validates source_system (after auth)', async () => {
-        const res = await fetch(`${INGESTION_URL}/ingest/url`, {
+        const res = await fetchWithTimeout(`${INGESTION_URL}/ingest/url`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -117,12 +123,12 @@ async function runTests() {
     console.log('\n📋 Compliance API\n');
 
     await test('List checklists requires auth', async () => {
-        const res = await fetch(`${COMPLIANCE_URL}/checklists`);
+        const res = await fetchWithTimeout(`${COMPLIANCE_URL}/checklists`);
         assert(res.status === 401 || res.status === 403, `Expected 401/403, got ${res.status}`);
     });
 
     await test('Checklists loaded count > 0', async () => {
-        const res = await fetch(`${COMPLIANCE_URL}/health`);
+        const res = await fetchWithTimeout(`${COMPLIANCE_URL}/health`);
         const data = await res.json();
         assert(data.checklists_loaded > 0, `Expected checklists_loaded > 0, got ${data.checklists_loaded}`);
     });
@@ -133,7 +139,7 @@ async function runTests() {
     console.log('\n📋 Frontend API\n');
 
     await test('Frontend setup-demo returns credentials', async () => {
-        const res = await fetch(`${FRONTEND_URL}/api/setup-demo`, { method: 'POST' });
+        const res = await fetchWithTimeout(`${FRONTEND_URL}/api/setup-demo`, { method: 'POST' });
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(data.apiKey, 'Expected apiKey in response');
@@ -141,7 +147,7 @@ async function runTests() {
     });
 
     await test('Frontend review items returns array', async () => {
-        const res = await fetch(`${FRONTEND_URL}/api/review/items`);
+        const res = await fetchWithTimeout(`${FRONTEND_URL}/api/review/items`);
         assert(res.ok, `Expected 200, got ${res.status}`);
         const data = await res.json();
         assert(Array.isArray(data), 'Expected array response');

@@ -57,11 +57,18 @@ const EXPECTATIONS = [
   },
 ];
 
+// Per-request timeout so one hung endpoint cannot stall the probe and CI.
+const REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url, options) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+}
+
 let failures = 0;
 for (const { method, url, expect, mustBeJson, mustStayOnHost, note } of EXPECTATIONS) {
   let status, contentType, finalUrl;
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'regengine-surface-probe' },
       body: method === 'POST' ? '{}' : undefined,
