@@ -427,7 +427,7 @@ class TestCompleteStepEndpoint:
         state = fake_jsonb.data[("t1", "tenant_onboarding", "state")]
         assert state["current_step"] == 5
 
-    def test_complete_unknown_step_id_no_advance(self, client, fake_jsonb, no_seed):
+    def test_complete_unknown_step_id_rejected(self, client, fake_jsonb, no_seed):
         _onboarding_store["t1"] = {
             "current_step": 2,
             "completed_steps": ["company_profile"],
@@ -435,10 +435,13 @@ class TestCompleteStepEndpoint:
             "first_cte_at": None,
         }
         resp = client.post("/api/v1/onboarding/t1/step/mystery_step")
-        assert resp.status_code == 200
-        state = fake_jsonb.data[("t1", "tenant_onboarding", "state")]
-        assert state["current_step"] == 2  # unchanged
-        assert "mystery_step" in state["completed_steps"]  # still appended
+        assert resp.status_code == 404
+        state = fake_jsonb.data.get(("t1", "tenant_onboarding", "state"))
+        if state is not None:
+            assert "mystery_step" not in state["completed_steps"]
+            assert state["completed_steps"] == ["company_profile"]
+            assert state["current_step"] == 2  # unchanged
+        assert no_seed == []  # no seeding for unknown steps
 
     def test_complete_step_uses_db_state_when_available(self, client, fake_jsonb, no_seed):
         fake_jsonb.data[("t1", "tenant_onboarding", "state")] = {
@@ -459,17 +462,25 @@ class TestCompleteStepEndpoint:
         # Memory cache reflects the change
         assert "company_profile" in _onboarding_store["t1"]["completed_steps"]
 
-    def test_complete_next_step_is_none_when_past_last(self, client, fake_jsonb, no_seed):
-        # Force current_step past total via memory seed
+    def test_complete_unknown_step_does_not_count_toward_completion(self, client, fake_jsonb, no_seed):
         _onboarding_store["t1"] = {
-            "current_step": 10,  # out of bounds
-            "completed_steps": [],
+            "current_step": 5,
+            "completed_steps": ["company_profile", "first_facility", "first_product", "first_cte"],
             "started_at": "2026-04-18T00:00:00+00:00",
             "first_cte_at": None,
         }
         resp = client.post("/api/v1/onboarding/t1/step/mystery")
-        assert resp.status_code == 200
-        assert resp.json()["next_step"] is None
+        assert resp.status_code == 404
+        assert resp.json()["detail"]
+        # Unknown step must not tip a nearly-done tenant into complete
+        progress = client.get("/api/v1/onboarding/t1/progress").json()
+        assert progress["completed_steps"] == [
+            "company_profile",
+            "first_facility",
+            "first_product",
+            "first_cte",
+        ]
+        assert progress["percent_complete"] == 80  # still 4 of 5
 
 
 # ---------------------------------------------------------------------------

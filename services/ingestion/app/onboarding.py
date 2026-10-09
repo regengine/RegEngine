@@ -17,7 +17,7 @@ import threading
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.tenant_context import TenantContext
 from shared.tenant_settings import get_jsonb, set_jsonb
@@ -223,6 +223,10 @@ async def complete_step(
     tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
 
+    step_ids = [s["id"] for s in ONBOARDING_STEPS]
+    if step_id not in step_ids:
+        raise HTTPException(status_code=404, detail=f"Unknown onboarding step: {step_id}")
+
     # Try DB first
     state = _db_get_onboarding(tenant_id)
     if state is None:
@@ -244,11 +248,9 @@ async def complete_step(
     if step_id == "company_profile":
         _seed_obligations_if_needed(tenant_id)
 
-    # Advance current step
-    step_ids = [s["id"] for s in ONBOARDING_STEPS]
-    if step_id in step_ids:
-        idx = step_ids.index(step_id)
-        state["current_step"] = min(idx + 2, len(ONBOARDING_STEPS))
+    # Advance current step (step_id is known valid here)
+    idx = step_ids.index(step_id)
+    state["current_step"] = min(idx + 2, len(ONBOARDING_STEPS))
 
     # Track first CTE time
     if step_id == "first_cte" and not state.get("first_cte_at"):
