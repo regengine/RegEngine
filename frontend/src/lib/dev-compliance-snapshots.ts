@@ -109,8 +109,10 @@ export function createDevComplianceSnapshot(params: {
         created_by: params.createdBy,
         is_auto_created: false,
         is_attested: false,
-        compliance_status: 'COMPLIANT',
-        compliance_status_emoji: '✅',
+        // This store runs only when the real backend is unreachable, so no
+        // evaluation backs it. It must never claim COMPLIANT.
+        compliance_status: 'UNKNOWN',
+        compliance_status_emoji: '⚠️',
         active_alert_count: 0,
         critical_alert_count: 0,
         content_hash: computeSnapshotHash({
@@ -139,11 +141,22 @@ export function verifyDevComplianceSnapshot(params: {
     const snapshot = findSnapshot(params.tenantId, params.snapshotId);
     if (!snapshot) return null;
 
+    // Recompute from the stored fields instead of echoing the stored hash,
+    // so tampered snapshots fail closed.
+    const computedHash = computeSnapshotHash({
+        tenant_id: snapshot.tenant_id,
+        snapshot_name: snapshot.snapshot_name,
+        snapshot_reason: snapshot.snapshot_reason,
+        created_by: snapshot.created_by,
+        captured_at: snapshot.captured_at,
+    });
+    const hashMatch = computedHash === snapshot.content_hash;
+
     return {
-        is_valid: true,
+        is_valid: hashMatch,
         stored_hash: snapshot.content_hash,
-        computed_hash: snapshot.content_hash,
-        hash_match: true,
+        computed_hash: computedHash,
+        hash_match: hashMatch,
         verified_by: params.verifiedBy,
         verified_at: new Date().toISOString(),
     };
@@ -274,6 +287,7 @@ export function buildDevComplianceSnapshotFdaResponse(params: {
     return {
         text: [
             'FDA Response Template',
+            'Dev/test fallback snapshot. Not for regulatory submission.',
             '',
             `Snapshot Name: ${snapshot.snapshot_name}`,
             `Snapshot ID: ${snapshot.id}`,
@@ -300,6 +314,7 @@ export function buildDevComplianceSnapshotAuditPack(params: {
 
     return [
         'RegEngine Zero-Trust Audit Pack',
+        'Dev/test fallback snapshot. Not for regulatory submission.',
         '',
         `Snapshot Name: ${snapshot.snapshot_name}`,
         `Snapshot ID: ${snapshot.id}`,
