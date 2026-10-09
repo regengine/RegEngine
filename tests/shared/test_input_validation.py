@@ -406,6 +406,19 @@ class TestURLField:
         with pytest.raises(ValidationError, match="scheme"):
             validator.validate("http://example.com", "url")
 
+    def test_is_labeled_syntax_only_not_a_safety_gate(self):
+        """URLField must say it is syntax-only, since it accepts unsafe hosts."""
+        from shared.input_validation import URLField
+
+        assert "syntax-only" in URLField.__doc__.lower()
+        assert "ssrf" in URLField.__doc__.lower()
+        assert "shared.url_validation.validate_url" in URLField.__doc__
+
+        validator = URLField()
+        # These pass the syntax check but must not be treated as safe to fetch.
+        assert validator.validate("http://localhost/", "url")
+        assert validator.validate("http://169.254.169.254/latest/meta-data", "url")
+
 
 class TestTextContentField:
     """Test TextContentField validator."""

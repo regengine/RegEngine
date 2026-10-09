@@ -300,7 +300,12 @@ class EmailField:
 
 
 class URLField:
-    """Validate http(s) URLs and optionally restrict schemes."""
+    """Syntax-only check for http(s) URLs, with optional scheme restriction.
+
+    This is not a safety gate. It does not resolve DNS, block private or
+    internal hosts, reject embedded credentials, or protect against SSRF.
+    Use shared.url_validation.validate_url before fetching a URL.
+    """
 
     def __init__(self, *, allowed_schemes: set[str] | None = None) -> None:
         self.allowed_schemes = allowed_schemes or {"http", "https"}
@@ -412,6 +417,7 @@ class InputValidator:
         return EmailField().validate(value, field_name)
 
     def validate_url(self, value: str, *, field_name: str = "url") -> str:
+        """Syntax-only URL shape check, not a safety gate for fetching."""
         return URLField().validate(value, field_name)
 
     def check_injection(self, value: str, *, field_name: str = "input") -> str:
