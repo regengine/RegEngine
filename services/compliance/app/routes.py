@@ -1,3 +1,16 @@
+"""FSMA compliance catalog, validation, and audit export routes.
+
+This module serves the compliance service HTTP surface: the FSMA rules
+catalog (industries and checklists loaded from fsma_rules.json), the
+FTL scoped POST /validate endpoint, and the FDA audit spreadsheet export.
+
+Key invariants: tenant scope always comes from the authenticated API key,
+never from a client header; validation only covers FDA Food Traceability
+List commodities and fails closed when the rules engine gives no verdict;
+spreadsheet exports use bounded date windows and return errors (not empty
+files) when storage is unreachable or no events match.
+"""
+
 from __future__ import annotations
 
 import json
@@ -67,6 +80,8 @@ def _is_ftl_commodity(value: str) -> bool:
 
 
 class ComplianceRequirement(BaseModel):
+    """One FSMA checklist requirement with its status."""
+
     id: str
     title: str
     description: str
@@ -76,6 +91,8 @@ class ComplianceRequirement(BaseModel):
 
 
 class ComplianceChecklist(BaseModel):
+    """One FSMA compliance checklist with its requirements."""
+
     id: str
     name: str
     description: str | None = None
@@ -87,6 +104,8 @@ class ComplianceChecklist(BaseModel):
 
 
 class Industry(BaseModel):
+    """One industry entry from the FSMA rules catalog."""
+
     id: str
     name: str
     description: str | None = None
@@ -94,11 +113,15 @@ class Industry(BaseModel):
 
 
 class IndustriesResponse(BaseModel):
+    """Paginated style wrapper for the industry list and its count."""
+
     industries: list[dict[str, Any]]
     total: int
 
 
 class ChecklistsResponse(BaseModel):
+    """Wrapper for the checklist list and its count."""
+
     checklists: list[dict[str, Any]]
     total: int
 
@@ -162,9 +185,7 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # literal comparison and yields an empty list, so the documented
 # unknown-industry behaviour is unchanged.
 _INDUSTRY_FILTER_ALIASES: dict[str, str] = {
-    alias.lower(): _i["name"].lower()
-    for _i in _rules["industries"]
-    for alias in (_i["id"], _i["name"])
+    alias.lower(): _i["name"].lower() for _i in _rules["industries"] for alias in (_i["id"], _i["name"])
 }
 
 
@@ -185,11 +206,13 @@ _INDUSTRY_FILTER_ALIASES: dict[str, str] = {
 
 @router.get("/industries", dependencies=[Depends(require_api_key)], response_model=IndustriesResponse)
 async def list_industries() -> IndustriesResponse:
+    """Return all industries from the loaded FSMA rules catalog."""
     return {"industries": [i.model_dump() for i in _INDUSTRIES], "total": len(_INDUSTRIES)}
 
 
 @router.get("/checklists", dependencies=[Depends(require_api_key)], response_model=ChecklistsResponse)
 async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
+    """Return checklists, optionally filtered by industry id or name."""
     results = _CHECKLISTS
     if industry:
         key = industry.strip().lower()
@@ -200,6 +223,7 @@ async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
 
 @router.get("/checklists/{checklist_id}", dependencies=[Depends(require_api_key)], response_model=ComplianceChecklist)
 async def get_checklist(checklist_id: str) -> ComplianceChecklist:
+    """Return one checklist by id, or 404 when it is unknown."""
     checklist = _CHECKLIST_INDEX.get(checklist_id)
     if not checklist:
         raise HTTPException(status_code=404, detail=f"Checklist '{checklist_id}' not found")
@@ -282,6 +306,7 @@ _ALLOWED_VALIDATE_CTE_TYPES = {
     "RECEIVING",
     "TRANSFORMATION",
 }
+
 
 def _validation_issue(
     path: str,
