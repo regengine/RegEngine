@@ -1,3 +1,15 @@
+"""LLM-backed extraction of compliance obligations from regulation text.
+
+This module sends regulation text to a configured LLM provider (OpenAI,
+Vertex AI, or a local Ollama fallback) and validates the returned JSON
+against a fixed schema, retrying with sanitized feedback when the model
+returns bad output. Key invariants: untrusted document text is always
+delimited and sanitized before it reaches the model, PII is redacted
+before any external API call, each returned quote is checked against the
+original text and fabricated items are dropped, and one bad item never
+discards the rest of the batch.
+"""
+
 import abc
 import json
 import os
@@ -246,11 +258,13 @@ class BaseLLMClient(abc.ABC):
     """Abstract base for LLM providers to ensure consistent agent behavior."""
 
     def __init__(self, model: str, timeout: int = 30):
+        """Store the model name and request timeout."""
         self.model = model
         self.timeout = timeout
 
     @abc.abstractmethod
     def generate(self, prompt: str, system_prompt: str = "") -> str:
+        """Generate a completion for the given prompt and return the raw model text."""
         pass
 
 
@@ -258,12 +272,14 @@ class OpenAILegacyClient(BaseLLMClient):
     """Production client for OpenAI GPT-4/3.5."""
 
     def __init__(self, model: str, api_key: str, timeout: int):
+        """Connect an OpenAI client for the given model."""
         super().__init__(model, timeout)
         from openai import OpenAI
 
         self.client = OpenAI(api_key=api_key)
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
+        """Generate a completion through the OpenAI chat API, keeping system and user content in separate roles."""
         # OpenAI chat API already separates system and user roles at the
         # transport layer, so the system prompt is never confused with user
         # content. F-NLP-7: still wrap user content in delimiters and
@@ -290,6 +306,7 @@ class VertexAIClient(BaseLLMClient):
     """Production client for Google Gemini via Vertex AI."""
 
     def __init__(self, model: str, project_id: str, location: str, timeout: int):
+        """Initialize the Vertex AI generative model for the given project and location."""
         super().__init__(model, timeout)
         import vertexai
         from vertexai.generative_models import GenerativeModel
@@ -298,6 +315,7 @@ class VertexAIClient(BaseLLMClient):
         self.client = GenerativeModel(model)
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
+        """Generate a completion through Vertex AI, wrapping user content in delimiters with a guardrail."""
         # Fix #1226: Vertex generate_content takes a single prompt. Naive
         # concatenation (system + "\n\n" + user) lets a malicious document
         # start with "Ignore previous instructions..." and have the model
@@ -319,10 +337,12 @@ class OllamaClient(BaseLLMClient):
     """Local fallback client."""
 
     def __init__(self, model: str, host: str, timeout: int):
+        """Point the client at the given Ollama host."""
         super().__init__(model, timeout)
         self.host = host
 
     def generate(self, prompt: str, system_prompt: str = "") -> str:
+        """Generate a completion through the local Ollama HTTP API."""
         # Fix #1226: Ollama /api/generate is a single-prompt API. Use the
         # same delimiter+guardrail defense as VertexAIClient so prompt
         # injection via the regulation text cannot override the system
@@ -365,6 +385,7 @@ class LLMClientFactory:
 
     @staticmethod
     def create() -> BaseLLMClient:
+        """Create the LLM client matching the current environment configuration."""
         model = os.getenv("LLM_MODEL", "llama3:8b")
         timeout = int(os.getenv("LLM_TIMEOUT_S", "45"))
 
@@ -488,6 +509,7 @@ class LLMGenerativeExtractor:
     }
 
     def __init__(self):
+        """Build the provider client, JSON validator, and retry and input limits from the environment."""
         self.client = LLMClientFactory.create()
         self.validator = Draft202012Validator(self.JSON_SCHEMA)
         self.max_retries = int(os.getenv("LLM_MAX_RETRIES", "3"))
@@ -641,6 +663,7 @@ class LLMGenerativeExtractor:
         jurisdiction: str,
         correlation_id: Optional[str] = None,
     ) -> List[LLMExtraction]:
+        """Extract validated obligations from regulation text, returning an empty list when extraction fails."""
         start_time = time.perf_counter()
         log = logger.bind(
             corr_id=correlation_id,
