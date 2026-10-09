@@ -24,14 +24,17 @@ actual exposure the advisory describes, exercised end to end.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 
 from tests.migrations.rls_db import rls_postgres_or_skip, skip_or_fail_db
 from tests.migrations.test_rls_coverage import _provision_app_roles
@@ -66,6 +69,33 @@ V098_TABLES = [
 ]
 
 LOCKDOWN_TABLES = V092_TABLES + V098_TABLES
+
+# Postgres reports an RLS insert/update denial as SQLSTATE 42501
+# ("new row violates row-level security policy ..."), which SQLAlchemy
+# surfaces as a DBAPIError. Only that error proves policy denial: any
+# other failure (a NOT NULL or FK "violates ..." IntegrityError, a
+# connection fault, or a plain setup bug) must fail the test instead of
+# satisfying it, so the type is narrowed to DBAPIError and the message
+# must name the row-level security policy itself.
+_POLICY_DENIAL_MATCH = "row-level security policy"
+
+
+@contextmanager
+def _expect_policy_denial(conn, statement):
+    """Run ``conn.execute(statement)``; pass only on a DB policy denial.
+
+    A database error that does not name the row-level security policy is
+    re-raised unchanged so it fails the test instead of satisfying it,
+    and non-database faults propagate untouched.
+    """
+    try:
+        conn.execute(statement)
+    except DBAPIError as exc:
+        if not re.search(_POLICY_DENIAL_MATCH, str(exc)):
+            raise
+        yield
+    else:
+        pytest.fail("write succeeded for the client-shaped role; RLS did not deny it")
 
 
 @pytest.fixture(scope="module")
@@ -145,9 +175,7 @@ def test_v092_tables_have_approved_head_policy(upgraded_engine: Engine) -> None:
                 ("fsma", "exchange_packages"),
             }:
                 if policies:
-                    problems.append(
-                        f"{schema}.{table}: disabled surface has policies {sorted(policies)}"
-                    )
+                    problems.append(f"{schema}.{table}: disabled surface has policies {sorted(policies)}")
             elif (schema, table) == ("public", "funnel_events"):
                 if "tenant_isolation_funnel_events" not in policies:
                     problems.append(f"{schema}.{table}: tenant policy missing")
@@ -163,10 +191,7 @@ def test_v092_tables_have_approved_head_policy(upgraded_engine: Engine) -> None:
             elif (schema, table) == ("public", "admin_mfa_recovery_codes"):
                 replacement = "admin_mfa_recovery_codes_self_or_admin"
                 if policies != {replacement}:
-                    problems.append(
-                        f"{schema}.{table}: expected only {replacement}, "
-                        f"found {sorted(policies)}"
-                    )
+                    problems.append(f"{schema}.{table}: expected only {replacement}, found {sorted(policies)}")
                 else:
                     policy = conn.execute(
                         text(
@@ -202,9 +227,7 @@ def test_v092_tables_have_approved_head_policy(upgraded_engine: Engine) -> None:
                         expected_guard,
                     )
                     if observed != expected:
-                        problems.append(
-                            f"{schema}.{table}: v111 self-or-admin policy drifted"
-                        )
+                        problems.append(f"{schema}.{table}: v111 self-or-admin policy drifted")
             elif f"app_only_{table}" not in policies:
                 problems.append(f"{schema}.{table}: app_only policy missing")
     assert not problems, "v092/v098 lockdown drifted:\n" + "\n".join(problems)
@@ -241,15 +264,16 @@ def test_client_shaped_role_sees_nothing_app_role_unaffected(
             assert visible == 0, (
                 f"client-shaped role can read {visible} rule_definitions rows — the rules catalog is still exposed"
             )
-            with pytest.raises(Exception, match="policy|denied|violates"):
-                conn.execute(
-                    text(
-                        """
-                        INSERT INTO public.funnel_events (tenant_id, event_name, metadata)
-                        VALUES (gen_random_uuid(), 'first_ingest', '{}'::jsonb)
-                        """
-                    )
-                )
+            with _expect_policy_denial(
+                conn,
+                text(
+                    """
+                    INSERT INTO public.funnel_events (tenant_id, event_name, metadata)
+                    VALUES (gen_random_uuid(), 'first_ingest', '{}'::jsonb)
+                    """
+                ),
+            ):
+                pass
             conn.rollback()
 
         # App role keeps its explicitly granted read-only rules-catalog access.
@@ -262,3 +286,73 @@ def test_client_shaped_role_sees_nothing_app_role_unaffected(
             conn.execute(text(f"DROP OWNED BY {role} CASCADE"))
             conn.execute(text(f"DROP ROLE IF EXISTS {role}"))
         engine.dispose()
+
+
+class _RaisingConn:
+    """Minimal stub exposing ``execute`` for the policy-denial gate."""
+
+    def __init__(self, error: Exception) -> None:
+        self._error = error
+
+    def execute(self, _statement):
+        raise self._error
+
+
+def _db_error(exc_type, message: str):
+    return exc_type("INSERT INTO public.funnel_events ...", {}, Exception(message))
+
+
+def test_policy_denial_gate_accepts_rls_violation() -> None:
+    """A genuine RLS denial satisfies the gate."""
+    error = _db_error(
+        DBAPIError,
+        'new row violates row-level security policy for table "funnel_events"',
+    )
+    with _expect_policy_denial(_RaisingConn(error), text("INSERT")):
+        pass
+
+
+def test_policy_denial_gate_rejects_constraint_violation() -> None:
+    """A NOT NULL "violates ..." IntegrityError must not satisfy the gate.
+
+    The old ``pytest.raises(Exception, match="policy|denied|violates")``
+    clause swallowed this error, so a broken insert that never reached a
+    policy check still passed as policy denial.
+    """
+    from sqlalchemy.exc import IntegrityError
+
+    error = _db_error(
+        IntegrityError,
+        'null value in column "tenant_id" violates not-null constraint',
+    )
+    with pytest.raises(IntegrityError):
+        with _expect_policy_denial(_RaisingConn(error), text("INSERT")):
+            pass
+
+
+def test_policy_denial_gate_rejects_setup_fault() -> None:
+    """A non-database setup fault must not satisfy the gate.
+
+    The old base-``Exception`` clause swallowed any error whose message
+    happened to contain "denied", so fixture or role-setup faults passed
+    as policy denial.
+    """
+    with pytest.raises(RuntimeError, match="setup denied"):
+        with _expect_policy_denial(
+            _RaisingConn(RuntimeError("setup denied: fixture misconfigured")),
+            text("INSERT"),
+        ):
+            pass
+
+
+def test_policy_denial_gate_rejects_successful_write() -> None:
+    """A write that succeeds must fail the gate instead of passing."""
+    from _pytest.outcomes import Failed
+
+    class _OkConn:
+        def execute(self, _statement):
+            return None
+
+    with pytest.raises(Failed, match="RLS did not deny"):
+        with _expect_policy_denial(_OkConn(), text("INSERT")):
+            pass
