@@ -57,8 +57,11 @@ export default function AdminPage() {
       });
       setNewKeyDescription('');
       setIsCreating(false);
-      if (result.api_key) {
-        setCopiedKey(result.api_key);
+      // Creation responses carry the plaintext under `api_key`; some
+      // endpoints use `key`. Read both so the key is never silently dropped.
+      const createdKey = result.api_key || result.key;
+      if (createdKey) {
+        setCopiedKey(createdKey);
       }
       refetch();
     } catch (error) {
@@ -71,8 +74,11 @@ export default function AdminPage() {
 
     try {
       const result = await generateKeyMutation.mutateAsync({ tenantId: tenantId || undefined });
-      if (result.api_key) {
-        setGeneratedKey(result.api_key);
+      // Creation responses carry the plaintext under `api_key`; some
+      // endpoints use `key`. Read both so the key is never silently dropped.
+      const freshKey = result.api_key || result.key;
+      if (freshKey) {
+        setGeneratedKey(freshKey);
       }
     } catch (error) {
       console.error('Failed to generate API key:', error);
@@ -343,15 +349,18 @@ export default function AdminPage() {
                   </div>
                 ) : apiKeys && apiKeys.length > 0 ? (
                   <ul className="divide-y divide-re-border-subtle">
-                    {apiKeys.map((key) => (
+                    {apiKeys.map((key) => {
+                      // List items carry `key_id`; some endpoints use `id`.
+                      const keyId = key.key_id || key.id;
+                      return (
                       <li
-                        key={key.key_id}
+                        key={keyId}
                         className="flex items-center justify-between gap-3 px-5 py-4 transition-colors duration-120 hover:bg-re-surface-inset motion-reduce:transition-none"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 flex flex-wrap items-center gap-3">
                             <Key className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                            <code className="font-mono text-[0.8125rem] text-re-text-primary">{key.key_id}</code>
+                            <code className="font-mono text-[0.8125rem] text-re-text-primary">{keyId}</code>
                             <StatusBadge state="compliant" label="Active" size="sm" />
                           </div>
                           {key.description && (
@@ -368,13 +377,14 @@ export default function AdminPage() {
                           size="icon"
                           aria-label="Revoke API key"
                           className="shrink-0"
-                          onClick={() => key.key_id && setPendingRevokeKeyId(key.key_id)}
+                          onClick={() => keyId && setPendingRevokeKeyId(keyId)}
                           disabled={revokeKeyMutation.isPending}
                         >
                           <Trash2 className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                         </Button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 ) : (
                   <EmptyState bare icon={Key} title="No API keys found" />

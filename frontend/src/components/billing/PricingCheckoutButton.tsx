@@ -14,6 +14,26 @@ const PLAN_ID_MAP: Record<string, string> = {
     standard: 'scale',
 };
 
+// Hosts allowed to receive a full-page checkout redirect. The backend creates
+// a Stripe Checkout session, and those sessions live on Stripe's hosted
+// checkout domains. Any other URL (including a non-HTTPS URL) is rejected so
+// a compromised or forged response cannot redirect the buyer elsewhere.
+const ALLOWED_CHECKOUT_HOSTS = new Set([
+    'checkout.stripe.com',
+    'buy.stripe.com',
+]);
+
+export function isAllowedCheckoutUrl(rawUrl: unknown): boolean {
+    if (typeof rawUrl !== 'string' || rawUrl.length === 0) return false;
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return false;
+    }
+    return parsed.protocol === 'https:' && ALLOWED_CHECKOUT_HOSTS.has(parsed.hostname.toLowerCase());
+}
+
 interface PricingCheckoutButtonProps {
     tierId: string;
     label: string;
@@ -65,8 +85,9 @@ export function PricingCheckoutButton({
                 return;
             }
 
-            // Redirect to Stripe Checkout
-            if (data.checkout_url) {
+            // Redirect to Stripe Checkout only when the backend returns a URL
+            // on the allowlisted Stripe checkout hosts.
+            if (isAllowedCheckoutUrl(data.checkout_url)) {
                 window.location.href = data.checkout_url;
             } else {
                 setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');

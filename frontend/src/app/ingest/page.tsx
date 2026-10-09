@@ -142,7 +142,7 @@ export default function IngestPage() {
   }, [storedApiKey, apiKey]);
 
   useEffect(() => {
-    if (!jobId || jobId === 'demo-job-123') return;
+    if (!jobId) return;
 
     const intervalId = window.setInterval(async () => {
       try {
@@ -196,17 +196,6 @@ export default function IngestPage() {
       setCsvError(null);
       setCteSuggestion(null);
       setErrorColumnSuggestions([]);
-
-      // Demonstration Override for the Sales Demo flow
-      if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
-        setJobId('demo-job-123');
-
-        // Simulate real ingestion stages over 3.5 seconds
-        setTimeout(() => setJobStatus('parsing'), 800);
-        setTimeout(() => setJobStatus('extracting'), 1800);
-        setTimeout(() => setJobStatus('completed'), 3500);
-        return;
-      }
 
       try {
         if (activeTab === 'file') {
@@ -262,12 +251,6 @@ export default function IngestPage() {
         ? 'warning'
         : 'success'
     : 'neutral';
-
-  const demoBanner = (
-    <Callout tone="warning">
-      Simulated walkthrough — sample output
-    </Callout>
-  );
 
   return (
     <PageContainer>
@@ -548,7 +531,6 @@ export default function IngestPage() {
 
                   {jobId && (
                     <div className="mt-6 space-y-4 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4">
-                      {jobId === 'demo-job-123' && demoBanner}
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-ui font-medium text-re-text-primary">Ingestion Progress</p>
                         <Badge size="sm" mono>Job {jobId}</Badge>
@@ -644,7 +626,6 @@ export default function IngestPage() {
             ) : (
               <Card>
                 <CardContent className="space-y-4">
-                  {jobId === 'demo-job-123' && demoBanner}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-subheading text-re-text-primary">
                       Ingestion request completed
