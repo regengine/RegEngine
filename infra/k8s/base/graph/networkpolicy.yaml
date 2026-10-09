@@ -37,27 +37,42 @@ spec:
         - protocol: TCP
           port: 8200
 
-  # Allow egress to PostgreSQL, Neo4j, Redis, Kafka, and external HTTPS
+  # Data-store egress is pinned to the database pods. An empty `to` admits
+  # any destination on the database port, so a compromised pod could reach
+  # a rogue database. The data-store pods carry these `app` labels.
+  # Neo4j is Bolt-only: services connect over encrypted Bolt
+  # (NEO4J_URI=bolt+s://neo4j:7687, NEO4J_ENCRYPTED=true), so the plaintext
+  # Neo4j HTTP port 7474 is not opened.
   egress:
     # PostgreSQL
-    - to: []
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
       ports:
         - protocol: TCP
           port: 5432
     # Redis
-    - to: []
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
       ports:
         - protocol: TCP
           port: 6379
-    # Neo4j Bolt
-    - to: []
+    # Neo4j Bolt (TLS)
+    - to:
+        - podSelector:
+            matchLabels:
+              app: neo4j
       ports:
         - protocol: TCP
           port: 7687
-        - protocol: TCP
-          port: 7474  # Neo4j HTTP
     # Kafka / Redpanda
-    - to: []
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redpanda
       ports:
         - protocol: TCP
           port: 9092  # Kafka

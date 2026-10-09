@@ -31,15 +31,23 @@ spec:
         - protocol: TCP
           port: 8400
 
-  # Allow egress to PostgreSQL, Redis, external HTTPS, and internal services
+  # Data-store egress is pinned to the database pods. An empty `to` admits
+  # any destination on the database port, so a compromised pod could reach
+  # a rogue database. The data-store pods carry these `app` labels.
   egress:
     # PostgreSQL
-    - to: []
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
       ports:
         - protocol: TCP
           port: 5432
     # Redis
-    - to: []
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
       ports:
         - protocol: TCP
           port: 6379
