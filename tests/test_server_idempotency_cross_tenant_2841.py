@@ -105,15 +105,30 @@ class _Principal:
         self.key_id = key_id
 
 
-@pytest.fixture
-def victim_route(server_main):
-    """A realistically-protected POST route mounted on the real monolith app.
+def _victim_route_count(app) -> int:
+    """How many global routes are currently mounted at the test path."""
+    return sum(1 for r in app.router.routes if getattr(r, "path", None) == _VICTIM_PATH)
+
+
+def _remove_victim_routes(app) -> None:
+    """Drop every route mounted at the test path, in place."""
+    app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != _VICTIM_PATH]
+
+
+def _install_victim_route(app):
+    """Mount the realistically-protected POST route on the real monolith app.
 
     The auth dependency 401s without a recognised API key, exactly like the
     production ingest routes guarded by ``require_permission`` — so a 200 for
     an unauthenticated caller can only have come from the idempotency cache.
+
+    Setup first removes any residue at the test path, so an interrupted
+    earlier run cannot shadow the fresh handler (Starlette matches routes in
+    registration order). Returns the handler call counts plus a snapshot of
+    the router to restore at teardown.
     """
-    app = server_main.app
+    _remove_victim_routes(app)
+    snapshot = list(app.router.routes)
     calls: Dict[str, int] = {}
 
     async def _auth(request: Request) -> _Principal:
@@ -135,8 +150,22 @@ def victim_route(server_main):
             "calls": calls[principal.tenant_id],
         }
 
-    yield calls
-    app.router.routes[:] = [r for r in app.router.routes if getattr(r, "path", None) != _VICTIM_PATH]
+    return calls, snapshot
+
+
+@pytest.fixture
+def victim_route(server_main):
+    """Mount the test route on the real monolith app with guaranteed cleanup.
+
+    Teardown restores the router to the exact snapshot taken at setup, so the
+    test path never leaks into other tests whatever the outcome here.
+    """
+    app = server_main.app
+    calls, snapshot = _install_victim_route(app)
+    try:
+        yield calls
+    finally:
+        app.router.routes[:] = snapshot
 
 
 def _victim_seeds_cache(client: TestClient, key: str) -> dict:
@@ -148,6 +177,46 @@ def _victim_seeds_cache(client: TestClient, key: str) -> dict:
     assert resp.status_code == 200, resp.text
     assert resp.json()["tenant"] == _VICTIM_TENANT
     return resp.json()
+
+
+# ---------------------------------------------------------------------------
+# Route isolation: the test route must not pollute the global app router.
+# ---------------------------------------------------------------------------
+
+
+def test_mount_clears_stale_residue_and_teardown_restores_router(server_main, fake_redis):
+    """Residue from an interrupted run must not shadow the fresh handler.
+
+    Plants a stale route at the test path (what a killed run would leave
+    behind), then mounts through the same setup path the fixture uses. Fails
+    against a plain ``@app.post`` mount with no setup cleanup: the stale
+    route was registered first, so Starlette serves it instead of the fresh
+    handler and the fresh call counts stay empty.
+    """
+    app = server_main.app
+    assert _victim_route_count(app) == 0
+
+    @app.post(_VICTIM_PATH)
+    async def _stale():
+        return {"stale": True}
+
+    try:
+        calls, snapshot = _install_victim_route(app)
+        try:
+            assert _victim_route_count(app) == 1
+            client = TestClient(app)
+            resp = client.post(
+                _VICTIM_PATH,
+                headers={"Idempotency-Key": "stale-residue-2841", "X-RegEngine-API-Key": "victim-key"},
+            )
+            assert resp.status_code == 200, resp.text
+            assert resp.json().get("tenant") == _VICTIM_TENANT, resp.text
+            assert calls == {_VICTIM_TENANT: 1}
+        finally:
+            app.router.routes[:] = snapshot
+    finally:
+        _remove_victim_routes(app)
+    assert _victim_route_count(app) == 0
 
 
 # ---------------------------------------------------------------------------
