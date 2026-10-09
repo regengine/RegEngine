@@ -141,10 +141,11 @@ async function createTenant() {
         } else if (res.status === 409) {
             throw new Error('Demo tenant already exists; set DEMO_TENANT_ID to reuse it');
         }
+        throw new Error(`Tenant creation failed with status ${res.status}`);
     } catch (e) {
         log('✗', 'Failed to create tenant', e.message);
+        throw e;
     }
-    return null;
 }
 
 async function seedReviewQueue(tenantId) {
@@ -188,7 +189,17 @@ async function main() {
 
     // Create tenant
     console.log('\n👤 Setting up demo tenant...\n');
-    const tenantId = await createTenant();
+    let tenantId;
+    try {
+        tenantId = await createTenant();
+    } catch (e) {
+        console.error('✗ Demo setup failed, refusing to seed without a tenant:', e.message);
+        process.exit(1);
+    }
+    if (!tenantId) {
+        console.error('✗ Demo setup failed, refusing to seed without a tenant.');
+        process.exit(1);
+    }
 
     // Seed review queue
     console.log('\n📝 Seeding demo data...\n');
@@ -207,4 +218,11 @@ async function main() {
     console.log('\nOpen http://localhost:3000 to start the demo.\n');
 }
 
-main().catch(console.error);
+if (require.main === module) {
+    main().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}
+
+module.exports = { createTenant, seedReviewQueue, verifyCompliance, checkHealth, main };
