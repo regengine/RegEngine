@@ -54,6 +54,17 @@ if [ ! -d "$TEST_DIR" ]; then
   exit 1
 fi
 
+# The pytest invocation below passes --json-report flags, which require the
+# pytest-json-report plugin. That plugin is not installed everywhere this
+# script runs, and without it pytest exits with a confusing "unrecognized
+# arguments" error. Fail fast with a clear message instead.
+if ! python3 -c "import importlib.metadata; importlib.metadata.version('pytest-json-report')" 2>/dev/null; then
+  echo "ERROR: Missing required test dependency 'pytest-json-report'."
+  echo "It provides the --json-report flags used by this script."
+  echo "Install it with: pip install pytest-json-report"
+  exit 1
+fi
+
 echo "Running source tenant-boundary tests from $TEST_DIR ..."
 python3 -m pytest "$TEST_DIR" \
   -v \
