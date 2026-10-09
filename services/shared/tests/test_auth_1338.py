@@ -512,7 +512,17 @@ class TestInitDemoKeys:
 
 class TestGetTenantId:
     def test_returns_valid_uuid(self):
-        assert get_tenant_id(_VALID_TENANT_UUID) == _VALID_TENANT_UUID
+        with pytest.warns(DeprecationWarning, match="reconcile_tenant_scope"):
+            assert get_tenant_id(_VALID_TENANT_UUID) == _VALID_TENANT_UUID
+
+    def test_direct_use_is_deprecated(self):
+        """Direct use must warn so callers route through reconcile_tenant_scope.
+
+        The helper returns a client-supplied header value, not an authorized
+        tenant. The warning names the reconciling resolver to use instead.
+        """
+        with pytest.warns(DeprecationWarning, match="reconcile_tenant_scope"):
+            get_tenant_id(_VALID_TENANT_UUID)
 
     def test_missing_header_400(self):
         with pytest.raises(HTTPException) as exc:

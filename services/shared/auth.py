@@ -7,6 +7,7 @@ import os
 import secrets
 import threading
 import time
+import warnings
 from datetime import datetime, timezone
 from typing import Optional, Union
 
@@ -568,10 +569,25 @@ def get_tenant_id(
 ) -> str:
     """Resolve tenant_id from the X-Tenant-ID header.
 
+    .. deprecated::
+        Direct use is deprecated. This returns the raw client-supplied
+        header value after a syntax check only, so it must never be treated
+        as a resolved or authorized tenant. Route tenant resolution through
+        :func:`reconcile_tenant_scope` with the authenticated API-key
+        principal instead, which fails closed on mismatch and returns the
+        authenticated tenant as the single source of truth.
+
     This validates syntax only. Services must derive authorization from the
     authenticated principal and treat this header as a matching assertion,
     never as an independent authentication or tenant-selection mechanism.
     """
+    warnings.warn(
+        "get_tenant_id is deprecated: it returns a client-supplied header "
+        "value, not an authorized tenant. Use reconcile_tenant_scope with "
+        "the authenticated principal instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if not x_tenant_id:
         raise HTTPException(
             status_code=400,
