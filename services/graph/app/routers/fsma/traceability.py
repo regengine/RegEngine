@@ -372,7 +372,7 @@ async def get_governing_regulations_endpoint(
     except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         await linker.close()
         logger.error("get_governing_regulations_failed", lot_tlc=lot_tlc, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/traceability/impacted-lots")
@@ -392,7 +392,7 @@ async def get_impacted_lots_endpoint(
     except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         await linker.close()
         logger.error("get_impacted_lots_failed", obligation_id=obligation_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/traceability/link/{obligation_id}")
@@ -412,7 +412,7 @@ async def link_obligation_endpoint(
     except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         await linker.close()
         logger.error("link_obligation_failed", obligation_id=obligation_id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/search/events")
@@ -803,4 +803,4 @@ async def log_traceability_event(
 
     except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
         logger.error("mobile_event_logging_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to persist event: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")

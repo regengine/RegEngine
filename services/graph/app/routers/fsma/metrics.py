@@ -180,5 +180,5 @@ async def fsma_dashboard(tenant_id: uuid.UUID = Depends(get_current_tenant_id), 
         logger.exception("dashboard_error", error=str(e))
         return {
             "status": "degraded",
-            "error": str(e),
+            "error": "Internal server error",
         }
