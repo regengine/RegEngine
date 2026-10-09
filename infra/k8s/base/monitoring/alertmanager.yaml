@@ -1,3 +1,15 @@
+# High-availability note (audit re-platform-2-ops, low finding 94).
+# This StatefulSet intentionally runs a single Alertmanager replica with
+# clustering disabled (--cluster.listen-address= below). Silences and the
+# notification log live under --storage.path=/alertmanager, which is backed
+# by the volumeClaimTemplates PVC, so an ordinary pod reschedule keeps that
+# state when the same PVC reattaches. Accepted gaps: alerts firing while the
+# single pod is down are delayed until it is ready again, and all stored
+# state is lost if the PVC itself is deleted. Gossip clustering with one
+# replica would add nothing, so it stays off. To make this highly
+# available later, raise replicas to 3, set --cluster.listen-address to a
+# real port, add a headless Service, and pass --cluster.peer addresses, all
+# in this file together so peers never run unmeshed.
 apiVersion: v1
 kind: ConfigMap
 metadata:
