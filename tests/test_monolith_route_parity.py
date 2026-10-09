@@ -15,16 +15,21 @@ hard-coded pair:
 Auth guards are fingerprinted as the sorted ``module:name`` keys of every
 dependency in the route's FastAPI dependant tree, the same signal the
 production security manifest in ``server/route_security_policy.py`` derives
-its classification from.
+its classification from. Module paths are normalized by stripping a leading
+``services.<service>.`` segment, because the same guard is imported as
+``app.<mod>`` in a standalone service process and as
+``services.<svc>.app.<mod>`` inside the monolith.
 """
 
 from __future__ import annotations
 
 import functools
+import inspect
 import json
 import os
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -70,9 +75,35 @@ KNOWN_DIVERGENT_AUTH_OPERATIONS = {
     # monolith excludes in favour of the canonical endpoints.
     ("GET", "/api/v1/health"),
     ("GET", "/api/v1/metrics"),
+    # Issue #2517: the monolith deliberately re-gates GET /api/v1/features
+    # behind X-Metrics-Key (server/main.py, owner="features") because the
+    # router topology it returns is reconnaissance-grade, while the
+    # standalone ingestion handler only requires a standard API key.
+    ("GET", "/api/v1/features"),
 }
 
-ROUTE_SCRIPT = r"""
+
+def _normalize_guard_module(module_name: str) -> str:
+    """Strip the monolith-only ``services.<service>.`` import prefix.
+
+    The same guard callable is importable as ``app.<mod>`` in a standalone
+    service process and as ``services.<svc>.app.<mod>`` inside the monolith,
+    so raw ``__module__`` fingerprints compare unequal for identical guards.
+    Every other module path passes through unchanged.
+    """
+    parts = module_name.split(".")
+    if len(parts) > 2 and parts[0] == "services":
+        return ".".join(parts[2:])
+    return module_name
+
+
+def _callable_key(call) -> str:
+    module_name = getattr(call, "__module__", None) or call.__class__.__module__
+    name = getattr(call, "__name__", None) or call.__class__.__name__
+    return f"{_normalize_guard_module(module_name)}:{name}"
+
+
+_ROUTE_PREAMBLE = r"""
 import importlib
 import json
 import os
@@ -87,14 +118,9 @@ ensure_shared_importable()
 # which would make both apps look like they mount almost nothing and let
 # this parity check pass on two empty sets.
 from shared.route_introspection import iter_effective_routes
+"""
 
-
-def _callable_key(call):
-    module_name = getattr(call, "__module__", None) or call.__class__.__module__
-    name = getattr(call, "__name__", None) or call.__class__.__name__
-    return f"{module_name}:{name}"
-
-
+_ROUTE_TAIL = r"""
 def _dependency_keys(route):
     keys = set()
     stack = list(route.dependant.dependencies)
@@ -113,6 +139,54 @@ for path, route in iter_effective_routes(module.app):
 
 print("ROUTE_TABLE_JSON=" + json.dumps(table, sort_keys=True))
 """
+
+# The route table is extracted in a subprocess per service, so the key
+# helpers are embedded into the script from their source above. The unit
+# tests below exercise these same module-level functions, which keeps the
+# test logic and the subprocess logic from drifting apart.
+ROUTE_SCRIPT = (
+    _ROUTE_PREAMBLE
+    + textwrap.dedent(inspect.getsource(_normalize_guard_module))
+    + "\n"
+    + textwrap.dedent(inspect.getsource(_callable_key))
+    + _ROUTE_TAIL
+)
+
+
+@pytest.mark.parametrize(
+    ("module_name", "expected"),
+    [
+        ("app.privileged_auth", "app.privileged_auth"),
+        ("services.admin.app.privileged_auth", "app.privileged_auth"),
+        ("services.ingestion.app.deps", "app.deps"),
+        ("server.auth", "server.auth"),
+        ("shared.route_introspection", "shared.route_introspection"),
+        ("services", "services"),
+    ],
+)
+def test_normalize_guard_module_strips_service_prefix(module_name: str, expected: str) -> None:
+    assert _normalize_guard_module(module_name) == expected
+
+
+def test_callable_key_matches_across_import_styles() -> None:
+    def standalone_guard() -> None:
+        raise AssertionError("never called")
+
+    def monolith_guard() -> None:
+        raise AssertionError("never called")
+
+    standalone_guard.__module__ = "app.privileged_auth"
+    standalone_guard.__name__ = "require_sysadmin_high_assurance"
+    monolith_guard.__module__ = "services.admin.app.privileged_auth"
+    monolith_guard.__name__ = "require_sysadmin_high_assurance"
+
+    assert _callable_key(standalone_guard) == "app.privileged_auth:require_sysadmin_high_assurance"
+    assert _callable_key(standalone_guard) == _callable_key(monolith_guard)
+
+
+def test_route_script_embeds_normalized_key_helpers() -> None:
+    assert "_normalize_guard_module" in ROUTE_SCRIPT
+    assert 'parts[0] == "services"' in ROUTE_SCRIPT
 
 
 def _discover_service_modules() -> list[tuple[str, str]]:
