@@ -354,8 +354,18 @@ class MockRecallEngine:
                     warnings.append(f"Export warning: {str(e)}")
                 export_time = time.time() - export_start
 
-            # Calculate total time
-            total_time = time.time() - start_time
+            # Request to package: the FSMA 24-hour SLA runs from the
+            # recall request (drill creation) to the packaged result.
+            # Measuring only in-process compute seconds always yields a
+            # sub-second value, so the flag could never breach.
+            completed_at = datetime.now(timezone.utc)
+            created_at = drill.created_at
+            if created_at is not None and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            if created_at is not None:
+                total_time = (completed_at - created_at).total_seconds()
+            else:
+                total_time = time.time() - start_time
 
             # Determine SLA compliance
             sla_compliant = not simulated and lots_traced > 0 and total_time < self.SLA_LIMIT_SECONDS
@@ -393,7 +403,7 @@ class MockRecallEngine:
             )
 
             drill.status = RecallStatus.COMPLETED
-            drill.completed_at = datetime.now(timezone.utc)
+            drill.completed_at = completed_at
             drill.result = result
 
         except Exception as e:
@@ -402,15 +412,23 @@ class MockRecallEngine:
 
             logging.getLogger("fsma_recall").error(f"Recall drill execution failed: {e}", exc_info=True)
             errors.append(str(e))
+            failed_at = datetime.now(timezone.utc)
+            failed_created = drill.created_at
+            if failed_created is not None and failed_created.tzinfo is None:
+                failed_created = failed_created.replace(tzinfo=timezone.utc)
+            if failed_created is not None:
+                failed_total = (failed_at - failed_created).total_seconds()
+            else:
+                failed_total = time.time() - start_time
             result = RecallResult(
                 drill_id=drill.drill_id,
                 success=False,
-                total_time_seconds=time.time() - start_time,
+                total_time_seconds=failed_total,
                 sla_compliant=False,
                 errors=errors,
             )
             drill.status = RecallStatus.FAILED
-            drill.completed_at = datetime.now(timezone.utc)
+            drill.completed_at = failed_at
             drill.result = result
 
         # Update SLA metrics
