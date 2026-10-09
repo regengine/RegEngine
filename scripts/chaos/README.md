@@ -2,6 +2,13 @@
 
 This directory contains chaos engineering tests to validate system resiliency and data durability under various failure scenarios.
 
+## Status
+
+The helper scripts described below (`kill_neo4j.sh`, `kill_kafka.sh`) are not
+implemented yet, so `run_all_chaos_tests.sh` currently has no tests wired up
+and exits nonzero with "No chaos tests were executed". Follow "Adding New
+Tests" below when adding a helper, then wire it into the runner.
+
 ## Overview
 
 Chaos engineering helps us verify that the RegEngine platform can:

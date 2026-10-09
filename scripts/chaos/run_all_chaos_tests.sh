@@ -65,6 +65,16 @@ run_test() {
         return 0
     fi
 
+    # Fail loudly when the helper script is missing, so a dangling
+    # reference can never abort the run with a bare shell error and no
+    # summary.
+    if [ ! -f "${SCRIPT_DIR}/${test_script}" ]; then
+        echo -e "${RED}❌ FAILED${NC}: ${test_name} (helper script not found: ${test_script})"
+        TOTAL_TESTS=$((TOTAL_TESTS + 1))
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+        return 1
+    fi
+
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     echo ""
@@ -117,14 +127,12 @@ echo ""
 
 # Define and run tests
 # Format: run_test "test_name" "script.sh" quick_test_flag
-
-# Core infrastructure tests (quick)
-run_test "Neo4j Failure" "kill_neo4j.sh" true
-run_test "Kafka Failure" "kill_kafka.sh" true
-
-# Service-level tests (full suite only)
-# run_test "Admin API Failure" "kill_admin_api.sh" false
-# run_test "NLP Consumer Failure" "kill_nlp_consumer.sh" false
+#
+# No helpers are wired up right now: kill_neo4j.sh and kill_kafka.sh were
+# never committed, so the run_test lines that referenced them were removed.
+# Add one back per helper as helpers land; see README.md "Adding New Tests".
+# The exit block below fails while TOTAL_TESTS is zero, so an empty run can
+# never report success.
 
 # Print summary
 echo ""
@@ -142,7 +150,12 @@ echo "Completed: $(date)"
 echo "========================================="
 
 # Exit with appropriate code
-if [ $FAILED_TESTS -gt 0 ]; then
+if [ "$TOTAL_TESTS" -eq 0 ]; then
+    echo ""
+    echo -e "${RED}❌ No chaos tests were executed${NC}"
+    echo "Nothing ran: add a helper per README.md or fix the --test filter"
+    exit 1
+elif [ $FAILED_TESTS -gt 0 ]; then
     echo ""
     echo -e "${RED}❌ Some tests failed${NC}"
     echo "Review the output above for details"
