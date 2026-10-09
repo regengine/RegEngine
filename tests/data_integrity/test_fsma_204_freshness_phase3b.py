@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import uuid
 
@@ -9,7 +10,7 @@ import requests
 INGEST_URL = "http://localhost:8002/v1/ingest"
 ADMIN_API_URL = "http://localhost:8400"
 TENANT_ID = "00000000-0000-0000-0000-000000000000"
-API_KEY = "admin"
+API_KEY = os.getenv("REGENGINE_TEST_API_KEY")
 
 # Mock Content
 MOCK_SOURCE_URL = "http://mock-fsma.gov/rule-204"
@@ -34,6 +35,7 @@ CONTENT_V2 = """
 </html>
 """
 
+
 def _service_available(base_url: str) -> bool:
     try:
         response = requests.get(f"{base_url}/health", timeout=2)
@@ -44,6 +46,8 @@ def _service_available(base_url: str) -> bool:
 
 @pytest.fixture
 def auth_headers():
+    if not API_KEY:
+        pytest.skip("REGENGINE_TEST_API_KEY not set")
     return {
         "X-RegEngine-API-Key": API_KEY,
         "X-Tenant-ID": TENANT_ID,
