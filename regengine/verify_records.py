@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import quote, urlparse
 
 try:
     import requests
@@ -146,6 +147,22 @@ def verify_record_offline(record: dict) -> VerificationResult:
         return VerificationResult(tlc=tlc, expected_hash=expected_hash, computed_hash="", valid=False, error=str(e))
 
 
+def _invalid_base_url(base_url: str) -> Optional[str]:
+    """Return an error message unless ``base_url`` is a usable http(s) URL.
+
+    The verifier builds request URLs from this host, so a missing host or a
+    non-HTTP scheme is rejected here instead of producing a confusing request
+    failure later.
+    """
+    try:
+        parsed = urlparse(base_url)
+    except Exception:
+        return f"Invalid base URL: {base_url!r} (expected an http(s) URL)"
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return f"Invalid base URL: {base_url!r} (expected an http(s) URL)"
+    return None
+
+
 def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regengine.co") -> VerificationResult:
     """Verify a record against the RegEngine API."""
     if not HAS_REQUESTS:
@@ -157,25 +174,60 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regeng
             error="requests library not installed. Run: pip install requests",
         )
 
+    url_error = _invalid_base_url(base_url)
+    if url_error is not None:
+        return VerificationResult(tlc=tlc, expected_hash="", computed_hash="", valid=False, error=url_error)
+
+    # The TLC is user supplied, so it is percent-encoded before going into
+    # the path. Without this a code containing a slash, space or query
+    # characters breaks the URL or changes which resource is requested.
+    encoded_tlc = quote(str(tlc), safe="")
+    base = base_url.rstrip("/")
+
     try:
         # Fetch record
         headers = {"Authorization": f"Bearer {api_key}"}
-        resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}", headers=headers, timeout=30)
+        resp = requests.get(f"{base}/api/graph/fsma/v1/records/{encoded_tlc}", headers=headers, timeout=30)
         resp.raise_for_status()
-        record = resp.json()
+        try:
+            record = resp.json()
+        except ValueError as e:
+            return VerificationResult(
+                tlc=tlc,
+                expected_hash="",
+                computed_hash="",
+                valid=False,
+                error=f"Invalid JSON response from server: {e}",
+            )
+        if not isinstance(record, dict):
+            return VerificationResult(
+                tlc=tlc,
+                expected_hash="",
+                computed_hash="",
+                valid=False,
+                error="Invalid record payload from server: expected a JSON object",
+            )
 
         # Verify locally
         result = verify_record_offline(record)
 
         # Cross-check with server's verification endpoint
-        verify_resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}/verify", headers=headers, timeout=30)
+        verify_resp = requests.get(
+            f"{base}/api/graph/fsma/v1/records/{encoded_tlc}/verify", headers=headers, timeout=30
+        )
         if verify_resp.ok:
-            verify_data = verify_resp.json()
-            result.chain_position = verify_data.get("chain_position")
-            # Double-check: our hash should match server's
-            if verify_data.get("hash") != result.computed_hash:
-                result.valid = False
-                result.error = "Hash mismatch between local and server verification"
+            try:
+                verify_data = verify_resp.json()
+            except ValueError:
+                # The local verification already stands on its own; a broken
+                # cross-check body must not discard it.
+                return result
+            if isinstance(verify_data, dict):
+                result.chain_position = verify_data.get("chain_position")
+                # Double-check: our hash should match server's
+                if verify_data.get("hash") != result.computed_hash:
+                    result.valid = False
+                    result.error = "Hash mismatch between local and server verification"
 
         return result
 
