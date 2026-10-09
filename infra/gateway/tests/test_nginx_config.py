@@ -26,6 +26,156 @@ def nginx_config():
     return NGINX_CONF_PATH.read_text()
 
 
+def strip_nginx_comments(text):
+    """Return config text with nginx comments removed.
+
+    Full-line comments (optional whitespace then #) and trailing
+    comments are removed. A # inside single or double quotes is kept,
+    since quoted strings such as log formats may contain it.
+    """
+    stripped = []
+    for line in text.splitlines():
+        buf = []
+        quote = None
+        for ch in line:
+            if quote is not None:
+                buf.append(ch)
+                if ch == quote:
+                    quote = None
+            elif ch in ("'", '"'):
+                quote = ch
+                buf.append(ch)
+            elif ch == "#":
+                break
+            else:
+                buf.append(ch)
+        stripped.append("".join(buf).rstrip())
+    return "\n".join(stripped)
+
+
+def defined_limit_zones(active_text):
+    """Names from active limit_req_zone directives."""
+    return set(re.findall(r"limit_req_zone\s+\S+\s+zone=(\w+)", active_text))
+
+
+def referenced_limit_zones(active_text):
+    """Names from active limit_req zone= references."""
+    return set(re.findall(r"limit_req\s+zone=(\w+)", active_text))
+
+
+def iter_location_blocks(active_text):
+    """Yield (header, body) for each active location block.
+
+    Braces inside single or double quoted strings are ignored so
+    static JSON return bodies do not end the block early.
+    """
+    opener = re.compile(r"location\s+([^{]+)\{")
+    for match in opener.finditer(active_text):
+        depth = 1
+        quote = None
+        i = match.end()
+        while i < len(active_text) and depth > 0:
+            ch = active_text[i]
+            if quote is not None:
+                if ch == quote:
+                    quote = None
+            elif ch in ("'", '"'):
+                quote = ch
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+            i += 1
+        yield match.group(1).strip(), active_text[match.end() : i - 1]
+
+
+@pytest.fixture
+def active_nginx_config(nginx_config):
+    """Nginx configuration with comments removed.
+
+    Assertions about what the gateway actually serves must use this,
+    not the raw text: the TLS server block in nginx.conf is commented
+    out, so plain substring checks match disabled template text.
+    """
+    return strip_nginx_comments(nginx_config)
+
+
+# ============================================================================
+# COMMENT-PARSING UNIT TESTS
+# ============================================================================
+
+
+class TestActiveConfigParsing:
+    """The helpers above must tell active config from commented text.
+
+    These run against inline snippets so they prove the helpers can
+    fail: a snippet with only commented TLS must not count as active,
+    and a snippet with an unreferenced zone must be reported.
+    """
+
+    def test_full_line_comments_are_removed(self):
+        text = "listen 80;\n#     listen 443 ssl;\nserver_name x;"
+        active = strip_nginx_comments(text)
+        assert "listen 443 ssl" not in active
+        assert "listen 80;" in active
+
+    def test_trailing_comments_are_removed(self):
+        active = strip_nginx_comments("keepalive 32;  # Higher for trace queries")
+        assert active == "keepalive 32;"
+
+    def test_hash_inside_quotes_is_kept(self):
+        active = strip_nginx_comments("return 200 '{\"a#b\":1}';")
+        assert "#b" in active
+
+    def test_commented_tls_block_counts_as_inactive(self):
+        snippet = (
+            "server {\n"
+            "    listen 80;\n"
+            "}\n"
+            "# server {\n"
+            "#     listen 443 ssl http2;\n"
+            "#     ssl_certificate /etc/nginx/ssl/cert.pem;\n"
+            "# }"
+        )
+        active = strip_nginx_comments(snippet)
+        listens = re.findall(r"listen\s+([^;]+);", active)
+        assert not any("ssl" in directive for directive in listens)
+        assert "ssl_certificate" not in active
+
+    def test_active_tls_block_counts_as_active(self):
+        snippet = "server {\n    listen 443 ssl;\n    ssl_certificate /etc/nginx/ssl/cert.pem;\n}"
+        active = strip_nginx_comments(snippet)
+        listens = re.findall(r"listen\s+([^;]+);", active)
+        assert any("ssl" in directive for directive in listens)
+        assert "ssl_certificate" in active
+
+    def test_unreferenced_zone_is_reported(self):
+        snippet = (
+            "limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;\n"
+            "limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=5r/s;\n"
+            "location /admin/ {\n"
+            "    limit_req zone=api_limit burst=20 nodelay;\n"
+            "}"
+        )
+        active = strip_nginx_comments(snippet)
+        unreferenced = defined_limit_zones(active) - referenced_limit_zones(active)
+        assert unreferenced == {"auth_limit"}
+
+    def test_location_blocks_with_json_bodies_parse_fully(self):
+        snippet = (
+            "location /health {\n"
+            '    return 200 \'{"status":"ok"}\';\n'
+            "}\n"
+            "location /admin/ {\n"
+            "    limit_req zone=api_limit burst=20 nodelay;\n"
+            "    proxy_pass http://admin_service/;\n"
+            "}"
+        )
+        blocks = dict(iter_location_blocks(strip_nginx_comments(snippet)))
+        assert set(blocks) == {"/health", "/admin/"}
+        assert "proxy_pass" in blocks["/admin/"]
+
+
 # ============================================================================
 # UPSTREAM DEFINITION TESTS
 # ============================================================================
@@ -208,6 +358,37 @@ class TestRateLimiting:
         # Find FSMA location block and check it uses fsma_limit
         assert "limit_req zone=fsma_limit" in nginx_config
 
+    def test_every_proxy_location_enforces_a_limit(self, active_nginx_config):
+        """Each active location that proxies must reference a limit zone.
+
+        Uses the comment-stripped config so a commented limit cannot
+        satisfy this, and a new route without limit_req fails it.
+        """
+        missing = [
+            header
+            for header, body in iter_location_blocks(active_nginx_config)
+            if "proxy_pass" in body and "limit_req" not in body
+        ]
+        assert not missing, f"proxy locations without rate limiting: {missing}"
+
+    def test_referenced_zones_are_defined(self, active_nginx_config):
+        """Every referenced limit zone must have a limit_req_zone definition."""
+        dangling = referenced_limit_zones(active_nginx_config) - defined_limit_zones(active_nginx_config)
+        assert not dangling, f"limit_req references with no zone: {dangling}"
+
+    @pytest.mark.xfail(
+        reason="auth_limit zone is defined but never referenced; wire it to an auth location or remove it",
+        strict=True,
+    )
+    def test_all_defined_zones_are_referenced(self, active_nginx_config):
+        """Every defined limit zone must be referenced by a location.
+
+        A zone that no location references enforces nothing. This uses
+        the comment-stripped config so commented references do not count.
+        """
+        unreferenced = defined_limit_zones(active_nginx_config) - referenced_limit_zones(active_nginx_config)
+        assert not unreferenced, f"defined but unreferenced zones: {unreferenced}"
+
 
 # ============================================================================
 # UPSTREAM WIRING TESTS
@@ -217,10 +398,10 @@ class TestRateLimiting:
 class TestUpstreamWiring:
     """Every proxy_pass target must resolve to a defined upstream block."""
 
-    def test_all_proxy_pass_targets_are_defined_upstreams(self, nginx_config):
+    def test_all_proxy_pass_targets_are_defined_upstreams(self, active_nginx_config):
         """A proxy_pass to an undefined upstream fails at nginx startup."""
-        upstreams = set(re.findall(r"upstream\s+(\w+)", nginx_config))
-        targets = set(re.findall(r"proxy_pass\s+http://([A-Za-z0-9_]+)", nginx_config))
+        upstreams = set(re.findall(r"upstream\s+(\w+)", active_nginx_config))
+        targets = set(re.findall(r"proxy_pass\s+http://([A-Za-z0-9_]+)", active_nginx_config))
         assert targets, "no proxy_pass targets found"
         missing = targets - upstreams
         assert not missing, f"proxy_pass targets with no upstream block: {missing}"
@@ -258,6 +439,18 @@ class TestHealthChecks:
         """Prometheus metrics endpoint is defined."""
         assert "location /metrics" in nginx_config
         assert "stub_status" in nginx_config
+
+    def test_metrics_endpoint_is_access_restricted(self, active_nginx_config):
+        """The metrics endpoint must not be world readable.
+
+        Uses the comment-stripped config so commented allow or deny
+        lines cannot satisfy this.
+        """
+        blocks = dict(iter_location_blocks(active_nginx_config))
+        assert "/metrics" in blocks, "metrics location block not found"
+        body = blocks["/metrics"]
+        assert "allow" in body, "metrics endpoint has no allow rules"
+        assert "deny" in body, "metrics endpoint has no deny rule"
 
 
 # ============================================================================
@@ -387,7 +580,23 @@ class TestCORS:
 
 
 class TestSSLConfiguration:
-    """Tests for SSL/TLS configuration (even if commented)."""
+    """Tests for SSL/TLS configuration.
+
+    The tests below validate the commented template only. They pass
+    while the gateway serves plaintext, so they cannot prove TLS is
+    active. See test_tls_is_actively_served for the serving check.
+    """
+
+    @pytest.mark.xfail(
+        reason="gateway serves plaintext HTTP only; the 443 server block "
+        "is a commented template pending real certificates",
+        strict=True,
+    )
+    def test_tls_is_actively_served(self, active_nginx_config):
+        """An active server block must listen with TLS enabled."""
+        listens = re.findall(r"listen\s+([^;]+);", active_nginx_config)
+        assert any("ssl" in directive for directive in listens), f"no active listen directive enables ssl: {listens}"
+        assert "ssl_certificate" in active_nginx_config, "no active ssl_certificate directive found"
 
     def test_ssl_section_exists(self, nginx_config):
         """SSL server block template exists."""
