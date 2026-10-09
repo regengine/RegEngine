@@ -485,7 +485,7 @@ class TestSanitizeMarkdownUnit:
         assert _sanitize_markdown("jane@acme.example") == "jane@acme.example"
 
     def test_newlines_collapse_to_spaces(self):
-        assert _sanitize_markdown("Evil\n# Pwned") == "Evil # Pwned"
+        assert _sanitize_markdown("Evil\n# Pwned") == "Evil \\# Pwned"
         assert _sanitize_markdown("a\r\nb") == "a b"
 
     def test_markdown_syntax_is_escaped(self):

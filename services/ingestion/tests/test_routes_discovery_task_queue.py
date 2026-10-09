@@ -242,7 +242,7 @@ def _json_entry(body: str, url: str) -> bytes:
 
 
 class TestDecodeQueueEntry:
-    decode = routes_discovery._decode_queue_entry
+    decode = staticmethod(routes_discovery._decode_queue_entry)
 
     def test_json_entry_decodes(self):
         assert self.decode(_json_entry("FDA Recall", "https://fda.gov/recall/1")) == (
