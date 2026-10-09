@@ -82,6 +82,8 @@ class FakeCrypto:
     def hash_session_token(self, token: str) -> str:
         if token == "session-token":
             return "stored-session-digest"
+        if token == "refresh-token":
+            return "stored-refresh-digest"
         return f"browser-hash:{token}"
 
     def generate_secure_otp(self) -> str:
@@ -145,19 +147,11 @@ def _is_security_guc(statement) -> bool:
 
 
 def _data_execute_statements(db):
-    return [
-        statement
-        for statement in db.execute_statements
-        if not _is_security_guc(statement)
-    ]
+    return [statement for statement in db.execute_statements if not _is_security_guc(statement)]
 
 
 def _data_execute_calls(db):
-    return [
-        call
-        for call in db.execute.call_args_list
-        if not _is_security_guc(call.args[0])
-    ]
+    return [call for call in db.execute.call_args_list if not _is_security_guc(call.args[0])]
 
 
 class FakeTransaction:
@@ -295,9 +289,7 @@ def _mock_db_for_identity(identity=_DEFAULT_IDENTITY):
     db = MagicMock()
     identity_result = MagicMock()
     identity_result.first.return_value = _identity() if identity is _DEFAULT_IDENTITY else identity
-    db.execute.side_effect = lambda statement: (
-        MagicMock() if _is_security_guc(statement) else identity_result
-    )
+    db.execute.side_effect = lambda statement: MagicMock() if _is_security_guc(statement) else identity_result
     return db
 
 
@@ -570,6 +562,7 @@ async def test_known_and_unknown_email_get_same_response_but_only_known_identity
 @pytest.mark.asyncio
 async def test_identity_lookup_failure_returns_503_without_generating_otp():
     db = MagicMock()
+
     def _execute(statement):
         if _is_security_guc(statement):
             return MagicMock()
@@ -615,7 +608,7 @@ async def test_verify_auth_challenge_consumes_challenge_creates_session_and_sets
         ]
     )
     response = Response()
-    crypto = FakeCrypto(opaque_tokens=["session-token"])
+    crypto = FakeCrypto(opaque_tokens=["session-token", "refresh-token"])
 
     result = await cr.verify_auth_challenge(
         challenge_id=challenge.id,
@@ -638,10 +631,12 @@ async def test_verify_auth_challenge_consumes_challenge_creates_session_and_sets
     assert session.user_id == _identity()[0].id
     assert session.active_membership_id == _identity()[1].id
     assert session.token_hash == "stored-session-digest"
-    assert session.refresh_token_hash == "stored-session-digest"
+    assert session.refresh_token_hash == "stored-refresh-digest"
+    assert session.refresh_token_hash != session.token_hash
     assert session.auth_method == "email_otp"
     assert session.authenticated_at is not None
     assert "session-token" not in repr(session.__dict__)
+    assert "refresh-token" not in repr(session.__dict__)
     assert crypto.verify_calls == [
         {
             "expected_hash": "stored-hmac-digest",

@@ -207,8 +207,7 @@ def _webauthn_generate_authentication_options(
     from webauthn.helpers.structs import PublicKeyCredentialDescriptor, UserVerificationRequirement
 
     allow_credentials = [
-        PublicKeyCredentialDescriptor(id=_b64url_to_bytes(credential.credential_id))
-        for credential in credentials
+        PublicKeyCredentialDescriptor(id=_b64url_to_bytes(credential.credential_id)) for credential in credentials
     ]
     options = generate_authentication_options(
         rp_id=_rp_id(),
@@ -314,9 +313,7 @@ def _load_user_by_email(db: Session, normalized_email: str) -> UserModel | None:
 
 def _load_credential_for_update(db: Session, credential_id: str) -> WebAuthnCredentialModel | None:
     stmt = (
-        select(WebAuthnCredentialModel)
-        .where(WebAuthnCredentialModel.credential_id == credential_id)
-        .with_for_update()
+        select(WebAuthnCredentialModel).where(WebAuthnCredentialModel.credential_id == credential_id).with_for_update()
     )
     return db.execute(stmt).scalar_one_or_none()
 
@@ -538,6 +535,7 @@ async def verify_webauthn_login(
 
             session_token = crypto_service.generate_opaque_session_token()
             token_hash = crypto_service.hash_session_token(session_token)
+            refresh_token_hash = crypto_service.hash_session_token(crypto_service.generate_opaque_session_token())
             db.add(
                 SessionModel(
                     id=uuid.uuid4(),
@@ -546,7 +544,7 @@ async def verify_webauthn_login(
                     token_hash=token_hash,
                     auth_method="webauthn",
                     authenticated_at=now,
-                    refresh_token_hash=token_hash,
+                    refresh_token_hash=refresh_token_hash,
                     family_id=uuid.uuid4(),
                     is_revoked=False,
                     expires_at=now + timedelta(seconds=WEBAUTHN_SESSION_TTL_SECONDS),

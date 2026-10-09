@@ -140,12 +140,18 @@ class FakeDb:
 
 
 class FakeCrypto:
+    def __init__(self, *, opaque_tokens: list[str] | None = None):
+        self.opaque_tokens = list(opaque_tokens or ["raw-session-token", "raw-refresh-token"])
+
     def generate_opaque_session_token(self) -> str:
-        return "raw-session-token"
+        return self.opaque_tokens.pop(0) if self.opaque_tokens else "opaque-token"
 
     def hash_session_token(self, token: str) -> str:
-        assert token == "raw-session-token"
-        return "stored-session-digest"
+        if token == "raw-session-token":
+            return "stored-session-digest"
+        if token == "raw-refresh-token":
+            return "stored-refresh-digest"
+        return f"stored-digest:{token}"
 
 
 def _user(user_id: uuid.UUID | None = None):
@@ -180,8 +186,7 @@ def _stored_credential(*, user_id: uuid.UUID, credential_id: str = "credential-i
 
 def test_passkey_enrollment_routes_require_existing_high_assurance_session():
     dependencies = {
-        route.path: {dependency.call for dependency in route.dependant.dependencies}
-        for route in wr.router.routes
+        route.path: {dependency.call for dependency in route.dependant.dependencies} for route in wr.router.routes
     }
 
     for path in (
@@ -430,10 +435,12 @@ async def test_login_verify_updates_sign_count_consumes_challenge_and_sets_sessi
     assert session.user_id == user.id
     assert session.active_membership_id == membership_id
     assert session.token_hash == "stored-session-digest"
-    assert session.refresh_token_hash == "stored-session-digest"
+    assert session.refresh_token_hash == "stored-refresh-digest"
+    assert session.refresh_token_hash != session.token_hash
     assert session.auth_method == "webauthn"
     assert session.authenticated_at is not None
     assert "raw-session-token" not in repr(session.__dict__)
+    assert "raw-refresh-token" not in repr(session.__dict__)
 
     set_cookie = response.headers["set-cookie"]
     assert f"{wr.AUTH_SESSION_COOKIE}=raw-session-token" in set_cookie

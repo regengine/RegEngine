@@ -393,6 +393,9 @@ async def verify_auth_challenge(
                     user, membership = identity
                     session_token = crypto_service.generate_opaque_session_token()
                     token_hash = crypto_service.hash_session_token(session_token)
+                    refresh_token_hash = crypto_service.hash_session_token(
+                        crypto_service.generate_opaque_session_token()
+                    )
                     db.add(
                         SessionModel(
                             id=uuid.uuid4(),
@@ -401,7 +404,7 @@ async def verify_auth_challenge(
                             token_hash=token_hash,
                             auth_method="email_otp",
                             authenticated_at=now,
-                            refresh_token_hash=token_hash,
+                            refresh_token_hash=refresh_token_hash,
                             family_id=uuid.uuid4(),
                             is_revoked=False,
                             expires_at=now + timedelta(seconds=AUTH_SESSION_TTL_SECONDS),
