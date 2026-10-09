@@ -207,10 +207,29 @@ def _select_random_target_lot(engine, tenant_id: str) -> Optional[str]:
     Mirrors the mock-audit target picker: any CTE event with a
     traceability_lot_code is an eligible drill target. Returns None when the
     tenant has no lots or the query fails (callers decide how to surface it).
+
+    Uses COUNT plus a random OFFSET instead of ORDER BY random(), which sorts
+    the tenant's whole lot table on every drill.
     """
+    import random as _random
+
     try:
         from sqlalchemy import text as _text
 
+        with engine.connect() as conn:
+            count_row = conn.execute(
+                _text("""
+                    SELECT COUNT(*)
+                    FROM fsma.cte_events
+                    WHERE tenant_id = :tenant_id
+                      AND traceability_lot_code IS NOT NULL
+                """),
+                {"tenant_id": tenant_id},
+            ).fetchone()
+        count = count_row[0] if count_row and count_row[0] else 0
+        if count <= 0:
+            return None
+        offset = _random.randrange(int(count))
         with engine.connect() as conn:
             row = conn.execute(
                 _text("""
@@ -218,10 +237,10 @@ def _select_random_target_lot(engine, tenant_id: str) -> Optional[str]:
                     FROM fsma.cte_events
                     WHERE tenant_id = :tenant_id
                       AND traceability_lot_code IS NOT NULL
-                    ORDER BY random()
+                    OFFSET :offset
                     LIMIT 1
                 """),
-                {"tenant_id": tenant_id},
+                {"tenant_id": tenant_id, "offset": offset},
             ).fetchone()
         return row[0] if row else None
     except Exception as exc:  # pragma: no cover

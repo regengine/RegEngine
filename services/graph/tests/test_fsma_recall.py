@@ -948,27 +948,53 @@ class TestSelectRandomTargetLot:
         conn = engine.connect.return_value.__enter__.return_value
         return engine, conn
 
+    def _fetchones(self, conn, results):
+        """Queue one fetchone() result per conn.execute() call, in order."""
+        conn.execute.side_effect = [MagicMock(fetchone=MagicMock(return_value=result)) for result in results]
+
     def test_returns_lot_when_row_present(self):
         from services.graph.app.fsma_recall.persistence import _select_random_target_lot
 
         engine, conn = self._mock_engine()
-        conn.execute.return_value.fetchone.return_value = ("TLC-9",)
+        self._fetchones(conn, [(4,), ("TLC-9",)])
 
         assert _select_random_target_lot(engine, "tenant_1") == "TLC-9"
 
-        # Tenant-scoped: SQL filters on tenant_id and the bind carries it
-        sql = str(conn.execute.call_args[0][0])
-        assert "tenant_id = :tenant_id" in sql
-        assert "traceability_lot_code IS NOT NULL" in sql
-        assert conn.execute.call_args[0][1] == {"tenant_id": "tenant_1"}
+        # Two tenant-scoped queries: COUNT then OFFSET pick, no full-table sort
+        assert conn.execute.call_count == 2
+        count_sql = str(conn.execute.call_args_list[0][0][0])
+        assert "COUNT(*)" in count_sql
+        assert "tenant_id = :tenant_id" in count_sql
+        assert conn.execute.call_args_list[0][0][1] == {"tenant_id": "tenant_1"}
+        pick_sql = str(conn.execute.call_args_list[1][0][0])
+        assert "tenant_id = :tenant_id" in pick_sql
+        assert "traceability_lot_code IS NOT NULL" in pick_sql
+        assert "random()" not in pick_sql.lower()
+        binds = conn.execute.call_args_list[1][0][1]
+        assert binds["tenant_id"] == "tenant_1"
+        assert 0 <= binds["offset"] < 4
+
+    def test_never_sorts_the_lot_table(self):
+        """The picker must not ORDER BY random() over the tenant's lots."""
+        from services.graph.app.fsma_recall.persistence import _select_random_target_lot
+
+        engine, conn = self._mock_engine()
+        self._fetchones(conn, [(4,), ("TLC-9",)])
+
+        _select_random_target_lot(engine, "tenant_1")
+
+        for call in conn.execute.call_args_list:
+            assert "random()" not in str(call[0][0]).lower()
 
     def test_returns_none_when_tenant_has_no_lots(self):
         from services.graph.app.fsma_recall.persistence import _select_random_target_lot
 
         engine, conn = self._mock_engine()
-        conn.execute.return_value.fetchone.return_value = None
+        self._fetchones(conn, [(0,)])
 
         assert _select_random_target_lot(engine, "tenant_1") is None
+        # Zero lots means no second query
+        assert conn.execute.call_count == 1
 
     def test_returns_none_on_query_error(self):
         from services.graph.app.fsma_recall.persistence import _select_random_target_lot

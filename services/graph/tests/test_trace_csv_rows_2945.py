@@ -282,6 +282,25 @@ async def test_tracer_returns_lot_event_facility_associations():
 
 
 @pytest.mark.asyncio
+async def test_trace_row_id_lists_are_capped():
+    """The association query IN lists stay bounded on dense traces."""
+    from services.graph.app.fsma.tracer import _MAX_TRACE_ROW_IDS, _collect_trace_rows
+
+    client = FakeNeo4jClient(FakeGraph())
+    lots = [{"tlc": f"LOT-{i:05d}"} for i in range(_MAX_TRACE_ROW_IDS + 700)]
+    events = [{"event_id": f"evt-{i:05d}"} for i in range(_MAX_TRACE_ROW_IDS + 300)]
+
+    await _collect_trace_rows(client, "LOT-00000", TENANT, lots, events)
+
+    assert client.calls, "expected the association query to run"
+    _query, params = client.calls[-1]
+    assert len(params["tlcs"]) <= _MAX_TRACE_ROW_IDS, f"unbounded TLC list ({len(params['tlcs'])} ids) handed to Neo4j"
+    assert len(params["event_ids"]) <= _MAX_TRACE_ROW_IDS, (
+        f"unbounded event-id list ({len(params['event_ids'])} ids) handed to Neo4j"
+    )
+
+
+@pytest.mark.asyncio
 async def test_csv_rows_built_from_a_real_trace_are_not_a_cartesian_product():
     client = FakeNeo4jClient(_linear_chain())
 

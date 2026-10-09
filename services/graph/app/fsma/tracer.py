@@ -26,6 +26,11 @@ logger = structlog.get_logger("fsma-utils")
 # facility on each row, i.e. by fabricating the association. This query
 # re-reads the (lot, event, facility) edges for the nodes the traversal
 # already returned, so the association survives to the exporter.
+#
+# Bound on the id lists sent with that query. The traversal itself caps at
+# 5000 rows, so without a cap here a dense trace would hand Neo4j two
+# multi-thousand-entry IN lists. The row LIMIT below stays the backstop.
+_MAX_TRACE_ROW_IDS = 500
 _TRACE_ROWS_QUERY = """
 MATCH (l:Lot)-[:UNDERWENT|PRODUCED|CONSUMED]-(e:TraceEvent)
 WHERE l.tenant_id = $tenant_id
@@ -56,6 +61,16 @@ async def _collect_trace_rows(
     event_ids = sorted({event.get("event_id") for event in events if event.get("event_id")})
     if not tlcs or not event_ids:
         return []
+    if len(tlcs) > _MAX_TRACE_ROW_IDS or len(event_ids) > _MAX_TRACE_ROW_IDS:
+        logger.info(
+            "trace_rows_ids_capped",
+            tlc=tlc,
+            tlcs=len(tlcs),
+            event_ids=len(event_ids),
+            cap=_MAX_TRACE_ROW_IDS,
+        )
+        tlcs = tlcs[:_MAX_TRACE_ROW_IDS]
+        event_ids = event_ids[:_MAX_TRACE_ROW_IDS]
 
     rows: List[Dict[str, Any]] = []
     try:
