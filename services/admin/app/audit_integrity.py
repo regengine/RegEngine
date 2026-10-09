@@ -59,30 +59,39 @@ def verify_chain(entries: List[dict]) -> dict:
 
     errors = []
     legacy_v1_rows: List = []
-    expected_prev_hash = None
+    # Per-tenant chain state: each tenant has its own hash chain and
+    # sequence counter, since entries may span tenants in
+    # (tenant_id, sequence_num) order. A single global tracker would
+    # compare one tenant's rows against another's and report false
+    # breaks at every tenant boundary.
+    expected_prev_by_tenant = {}
     # #2513: track the previous entry's per-tenant sequence so a gap
     # (a removed/deleted middle row) is flagged with a distinct
     # contiguity error rather than masquerading as a prev_hash_mismatch.
-    prev_sequence_num = None
+    prev_sequence_by_tenant = {}
 
-    for i, entry in enumerate(entries):
+    for entry in entries:
         # Extract integrity block
         integrity = entry.get("integrity", {})
         actual_prev = integrity.get("prev_hash")
         actual_hash = integrity.get("hash")
         sequence_num = integrity.get("sequence_num")
+        # str() normalizes UUID vs string forms of the same tenant id
+        # to one chain; missing tenant ids group under "None".
+        tenant_key = str(entry.get("tenant_id"))
 
-        # Verify prev_hash linkage
-        if i == 0:
-            # First entry: prev_hash can be None (genesis)
-            expected_prev_hash = actual_prev
+        # Verify prev_hash linkage within this tenant's chain
+        if tenant_key not in expected_prev_by_tenant:
+            # First entry seen for this tenant: prev_hash can be
+            # None (genesis)
+            expected_prev_by_tenant[tenant_key] = actual_prev
         else:
-            if actual_prev != expected_prev_hash:
+            if actual_prev != expected_prev_by_tenant[tenant_key]:
                 errors.append(
                     {
                         "id": entry.get("id"),
                         "error": "prev_hash_mismatch",
-                        "expected": expected_prev_hash,
+                        "expected": expected_prev_by_tenant[tenant_key],
                         "actual": actual_prev,
                     }
                 )
@@ -92,6 +101,7 @@ def verify_chain(entries: List[dict]) -> dict:
         # non-increasing sequence means reordering/duplication. Only
         # checked when both sequences are present (legacy pre-#2513 rows
         # carry sequence_num=None and are exempt from the gap check).
+        prev_sequence_num = prev_sequence_by_tenant.get(tenant_key)
         if sequence_num is not None and prev_sequence_num is not None:
             if sequence_num != prev_sequence_num + 1:
                 errors.append(
@@ -103,7 +113,7 @@ def verify_chain(entries: List[dict]) -> dict:
                     }
                 )
         if sequence_num is not None:
-            prev_sequence_num = sequence_num
+            prev_sequence_by_tenant[tenant_key] = sequence_num
 
         # #1415/#2513: recompute using v3 (actor fields + sequence_num
         # folded in). Fall back to v2 then v1 for entries written before
@@ -159,8 +169,8 @@ def verify_chain(entries: List[dict]) -> dict:
                 }
             )
 
-        # Next entry should reference this hash
-        expected_prev_hash = actual_hash
+        # Next entry in this tenant's chain should reference this hash
+        expected_prev_by_tenant[tenant_key] = actual_hash
 
     return {
         "valid": len(errors) == 0,
