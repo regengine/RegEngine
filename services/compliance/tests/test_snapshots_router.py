@@ -526,6 +526,36 @@ def test_freeze_captures_live_alert_posture(engine) -> None:
     assert created["integrity_verified"] is True
 
 
+def test_freeze_ignores_tenantless_alerts(engine) -> None:
+    """Tenantless rows (tenant_id NULL) must not inflate any tenant's freeze.
+
+    Regression test for the null-tenant fallback in _capture_posture: rows
+    whose tenant_id was never backfilled but whose org_id matches the tenant
+    used to be counted into every tenant under that org.
+    """
+    with engine.begin() as conn:
+        for severity in ("critical", "critical", "warning"):
+            conn.exec_driver_sql(
+                "INSERT INTO fsma.compliance_alerts "
+                "(id, org_id, tenant_id, alert_type, severity, title, resolved, created_at) "
+                "VALUES (?, ?, NULL, 'missing_kde', ?, 'Alert', 0, ?)",
+                (
+                    str(uuid4()),
+                    TENANT_A,
+                    severity,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+    _seed_alerts(engine, TENANT_A, ["warning"])
+
+    client = _make_client(engine, TENANT_A)
+    created = _create(client, TENANT_A)
+
+    assert created["active_alert_count"] == 1
+    assert created["critical_alert_count"] == 0
+    assert created["compliance_status"] == "AT_RISK"
+
+
 def test_freeze_with_only_warnings_is_at_risk(engine) -> None:
     _seed_alerts(engine, TENANT_A, ["warning", "warning"])
     client = _make_client(engine, TENANT_A)
