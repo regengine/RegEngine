@@ -184,3 +184,39 @@ class TestMerkleTreeEdgeCases:
         restored = MerkleProofStep.from_dict(d)
         assert restored.position == "left"
         assert restored.hash == "abc123"
+
+
+class TestVerifyProofPositionHandling:
+    """Unknown proof positions must fail closed, not default to left."""
+
+    def test_hash_pair_is_order_sensitive(self):
+        from shared.merkle_tree import _hash_pair
+
+        assert _hash_pair("aaa", "bbb") != _hash_pair("bbb", "aaa")
+
+    def test_rejects_unknown_position(self):
+        # Leaf 1 of a two-leaf tree has a genuine "left" sibling step.
+        # The old code treated any non-"right" position as "left", so a
+        # mistyped position verified as True. It must now fail closed.
+        hashes = ["aaa", "bbb"]
+        tree = MerkleTree(hashes)
+        proof = tree.generate_proof(1)
+        assert proof[0]["position"] == "left"
+        tampered = [dict(s) for s in proof]
+        tampered[0]["position"] = "middle"
+        assert verify_proof(hashes[1], tampered, tree.root) is False
+
+    def test_rejects_wrong_case_position(self):
+        hashes = ["aaa", "bbb"]
+        tree = MerkleTree(hashes)
+        proof = tree.generate_proof(1)
+        tampered = [dict(s) for s in proof]
+        tampered[0]["position"] = "Left"
+        assert verify_proof(hashes[1], tampered, tree.root) is False
+
+    def test_valid_positions_still_verify(self):
+        hashes = ["aaa", "bbb"]
+        tree = MerkleTree(hashes)
+        for i in range(len(hashes)):
+            proof = tree.generate_proof(i)
+            assert verify_proof(hashes[i], proof, tree.root) is True

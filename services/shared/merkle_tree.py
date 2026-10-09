@@ -23,7 +23,12 @@ from typing import List, Optional
 
 
 def _hash_pair(left: str, right: str) -> str:
-    """Hash two hex-encoded SHA-256 digests together, sorted for canonical ordering."""
+    """Hash two hex-encoded SHA-256 digests together in the given order.
+
+    Order matters: swapping the inputs produces a different digest.
+    Callers must pass the left child first and the right child second,
+    since inclusion proofs depend on each sibling's position.
+    """
     combined = f"{left}|{right}"
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
@@ -164,8 +169,10 @@ class MerkleTree:
             sibling = step["hash"]
             if step["position"] == "right":
                 current = _hash_pair(current, sibling)
-            else:
+            elif step["position"] == "left":
                 current = _hash_pair(sibling, current)
+            else:
+                return False
 
         return current == root
 
