@@ -40,6 +40,13 @@ class TestFSMA204Invariants:
         """
         cur = db_connection.cursor(row_factory=dict_row)
 
+        # An empty corpus would pass every check below vacuously, so skip
+        # explicitly instead of reporting a pass with nothing checked.
+        cur.execute("SELECT COUNT(*) as count FROM pcos_authority_documents")
+        total = cur.fetchone()["count"]
+        if total == 0:
+            pytest.skip("pcos_authority_documents is empty: nothing to check.")
+
         # We query for any violation
         cur.execute("""
             SELECT id, document_code, issuer_name, effective_date 
@@ -58,18 +65,18 @@ class TestFSMA204Invariants:
         if result["count"] == 0:
             print("\nWARNING: Seed data for SAG_CBA_2023 missing. DB appears to be empty of default authorities.")
 
-        # Check total count
-        cur.execute("SELECT COUNT(*) as count FROM pcos_authority_documents")
-        total = cur.fetchone()["count"]
-        if total == 0:
-            print("\nNOTICE: pcos_authority_documents is empty. Invariant checks passed trivially.")
-
     def test_extracted_facts_polymorphic_consistency(self, db_connection):
         """
         Invariant: Extracted Facts must populate the value column matching their 'fact_value_type'.
         e.g., if type='decimal', fact_value_decimal must not be NULL.
         """
         cur = db_connection.cursor(row_factory=dict_row)
+
+        # An empty table would pass every check below vacuously, so skip
+        # explicitly instead of reporting a pass with nothing checked.
+        cur.execute("SELECT COUNT(*) as count FROM pcos_extracted_facts")
+        if cur.fetchone()["count"] == 0:
+            pytest.skip("pcos_extracted_facts is empty: nothing to check.")
 
         # Check Decimal
         cur.execute("""
@@ -94,6 +101,13 @@ class TestFSMA204Invariants:
         Invariant: Compliance Snapshots must have a cryptographic content_hash.
         """
         cur = db_connection.cursor(row_factory=dict_row)
+
+        # An empty table would pass the check below vacuously, so skip
+        # explicitly instead of reporting a pass with nothing checked.
+        cur.execute("SELECT COUNT(*) as count FROM compliance_snapshots")
+        if cur.fetchone()["count"] == 0:
+            pytest.skip("compliance_snapshots is empty: nothing to check.")
+
         cur.execute("""
             SELECT id, snapshot_name 
             FROM compliance_snapshots 
@@ -108,6 +122,13 @@ class TestFSMA204Invariants:
         (Referential integrity check beyond FKs, logic check).
         """
         cur = db_connection.cursor(row_factory=dict_row)
+
+        # With no facts there is no lineage to review, so skip explicitly
+        # instead of reporting a pass with nothing checked.
+        cur.execute("SELECT COUNT(*) as count FROM pcos_extracted_facts")
+        if cur.fetchone()["count"] == 0:
+            pytest.skip("pcos_extracted_facts is empty: nothing to check.")
+
         cur.execute("""
             SELECT f.id, f.fact_key, a.status as doc_status
             FROM pcos_extracted_facts f
