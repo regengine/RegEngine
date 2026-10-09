@@ -291,6 +291,23 @@ def test_bulk_upload_commit_succeeds_when_graph_sync_fails(
 
     monkeypatch.setattr(tx_manager.supplier_graph_sync, "record_cte_event", _raise_graph_sync)
 
+    # The canonical bridge needs the fsma.traceability_events table, which
+    # does not exist on this test's SQLite database. Patch the canonical
+    # store with a succeeding stub so the bridge reports "bridged" and this
+    # test isolates exactly the graph-sync failure (one warning).
+    class _SucceedingCanonicalStore:
+        def __init__(self, *_args, **_kwargs):
+            return None
+
+        def persist_event(self, _canonical_event):
+            return None
+
+    import shared.canonical_persistence as cp_mod
+    import shared.canonical_persistence.writer as cp_writer
+
+    monkeypatch.setattr(cp_mod, "CanonicalEventStore", _SucceedingCanonicalStore)
+    monkeypatch.setattr(cp_writer, "CanonicalEventStore", _SucceedingCanonicalStore)
+
     csv_payload = """record_type,name,street,city,state,postal_code,roles,facility_name,category_id,tlc_code,product_description,status,cte_type,event_time,kde_data
 facility,Salinas Packhouse,1200 Abbott St,Salinas,CA,93901,"Grower,Packer",,,,,,,,
 ftl_scope,,,,,,,Salinas Packhouse,2,,,,,,

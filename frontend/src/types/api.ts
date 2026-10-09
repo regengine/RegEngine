@@ -367,6 +367,7 @@ export interface SupplierCTEEventResponse {
     merkle_hash: string;
     merkle_prev_hash?: string | null;
     merkle_sequence: number;
+    canonical_bridge_status: string;
 }
 
 export interface SupplierTLCUpsertRequest {
