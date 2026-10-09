@@ -26,6 +26,10 @@ from .compliance_models import (
 
 logger = structlog.get_logger("compliance.service")
 
+# Alert states that close the lifecycle. Transitions out of these states
+# are rejected so a finished alert cannot be silently reopened.
+TERMINAL_ALERT_STATUSES = frozenset({AlertStatus.RESOLVED.value, AlertStatus.EXPIRED.value})
+
 
 class ComplianceServiceSync:
     """Synchronous service for managing tenant compliance status and alerts."""
@@ -92,9 +96,7 @@ class ComplianceServiceSync:
             query = query.where(ComplianceAlertModel.status == status_filter)
 
         query = (
-            query.order_by(desc(ComplianceAlertModel.created_at), ComplianceAlertModel.id)
-            .offset(offset)
-            .limit(limit)
+            query.order_by(desc(ComplianceAlertModel.created_at), ComplianceAlertModel.id).offset(offset).limit(limit)
         )
 
         result = self.session.execute(query)
@@ -120,20 +122,65 @@ class ComplianceServiceSync:
         )
         return result.scalar_one_or_none()
 
+    def _log_alert_transition(
+        self,
+        alert: ComplianceAlertModel,
+        previous_status: str,
+        new_status: str,
+        trigger_type: str,
+        description: str,
+    ) -> None:
+        """Append an immutable audit row for an alert state change."""
+        self.session.add(
+            ComplianceStatusLogModel(
+                tenant_id=alert.tenant_id,
+                previous_status=previous_status,
+                new_status=new_status,
+                trigger_type=trigger_type,
+                trigger_alert_id=alert.id,
+                trigger_description=description,
+            )
+        )
+
     def acknowledge_alert(
         self,
         alert_id: UUID,
         tenant_id: UUID,
         user_id: str,
     ) -> Optional[ComplianceAlertModel]:
-        """Mark an alert as acknowledged. Tenant-scoped per #1405."""
+        """Mark an alert as acknowledged. Tenant-scoped per #1405.
+
+        Transitions out of terminal states (RESOLVED, EXPIRED) are
+        rejected: the stored row is returned unchanged and no audit row
+        is written. Repeating the call on an already-acknowledged alert
+        is a no-op with the same guarantee.
+        """
         alert = self.get_alert(alert_id, tenant_id)
         if not alert:
             return None
 
+        if alert.status in TERMINAL_ALERT_STATUSES:
+            logger.info(
+                "alert_acknowledge_rejected_terminal",
+                alert_id=str(alert.id),
+                status=alert.status,
+            )
+            return alert
+
+        if alert.status == AlertStatus.ACKNOWLEDGED.value:
+            return alert
+
+        previous_status = alert.status
         alert.status = AlertStatus.ACKNOWLEDGED.value
         alert.acknowledged_at = datetime.now(timezone.utc)
         alert.acknowledged_by = user_id
+        self._log_alert_transition(
+            alert,
+            previous_status,
+            AlertStatus.ACKNOWLEDGED.value,
+            "ALERT_ACKNOWLEDGED",
+            f"Acknowledged by {user_id}",
+        )
 
         self.session.commit()
         self.session.refresh(alert)
@@ -146,15 +193,36 @@ class ComplianceServiceSync:
         user_id: str,
         notes: Optional[str] = None,
     ) -> Optional[ComplianceAlertModel]:
-        """Mark an alert as resolved. Tenant-scoped per #1405."""
+        """Mark an alert as resolved. Tenant-scoped per #1405.
+
+        Transitions out of terminal states (RESOLVED, EXPIRED) are
+        rejected: the stored row is returned unchanged, so the original
+        actor and notes cannot be overwritten and no audit row is added.
+        """
         alert = self.get_alert(alert_id, tenant_id)
         if not alert:
             return None
 
+        if alert.status in TERMINAL_ALERT_STATUSES:
+            logger.info(
+                "alert_resolve_rejected_terminal",
+                alert_id=str(alert.id),
+                status=alert.status,
+            )
+            return alert
+
+        previous_status = alert.status
         alert.status = AlertStatus.RESOLVED.value
         alert.resolved_at = datetime.now(timezone.utc)
         alert.resolved_by = user_id
         alert.resolution_notes = notes
+        self._log_alert_transition(
+            alert,
+            previous_status,
+            AlertStatus.RESOLVED.value,
+            "ALERT_RESOLVED",
+            f"Resolved by {user_id}",
+        )
 
         self.session.commit()
         self.session.refresh(alert)

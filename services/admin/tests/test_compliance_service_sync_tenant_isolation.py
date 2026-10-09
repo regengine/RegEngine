@@ -44,6 +44,7 @@ def session() -> Session:
     """
     from services.admin.app.compliance_models import (  # noqa: F401 — registers tables
         ComplianceAlertModel,
+        ComplianceStatusLogModel,
         TenantComplianceStatusModel,
     )
     from services.admin.app.sqlalchemy_models import Base
@@ -58,6 +59,7 @@ def session() -> Session:
     # the two compliance tables here.
     ComplianceAlertModel.__table__.create(engine, checkfirst=True)
     TenantComplianceStatusModel.__table__.create(engine, checkfirst=True)
+    ComplianceStatusLogModel.__table__.create(engine, checkfirst=True)
 
     SessionLocal = sessionmaker(bind=engine)
     sess = SessionLocal()
