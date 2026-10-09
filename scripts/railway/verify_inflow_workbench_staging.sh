@@ -40,6 +40,54 @@ AUTH_ARGS=()
 if [[ -n "${REGENGINE_API_KEY:-}" ]]; then
   AUTH_ARGS=(-H "X-RegEngine-API-Key: ${REGENGINE_API_KEY}")
 fi
+RUN_ID=""
+
+# Print a truncated, secret-redacted copy of a response body to stderr, so
+# full error payloads (which can echo credentials or connection details)
+# never land in logs verbatim.
+print_error_body() {
+  local file=$1
+  local max_bytes=${2:-2000}
+  python3 - "$file" "$max_bytes" >&2 <<'PY'
+import re
+import sys
+
+path, limit = sys.argv[1], int(sys.argv[2])
+try:
+    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+        body = fh.read()
+except OSError as exc:
+    print(f"(could not read error body: {exc})")
+    raise SystemExit
+
+truncated = len(body) > limit
+body = body[:limit]
+body = re.sub(
+    r"(?i)((?:api[_-]?key|x-regengine-api-key|client[_-]?secret|passwd|password|token)[\"']?\s*[:=]\s*[\"']?)([^\"'\s,};&]+)",
+    r"\1[REDACTED]",
+    body,
+)
+body = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1[REDACTED]", body)
+print(body)
+if truncated:
+    print(f"(error body truncated to {limit} bytes)")
+PY
+}
+
+# Best-effort removal of synthetic verifier rows. The runs and commit
+# decision tables are append-only by schema design (BEFORE UPDATE OR DELETE
+# triggers), so those probe rows are retained as audit evidence; the fix
+# items table permits deletion and is cleaned here. Never fails the run.
+cleanup_probe_rows() {
+  if [[ -z "${RUN_ID:-}" ]]; then
+    return 0
+  fi
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v tenant_id="$TENANT_ID" -v run_id="$RUN_ID" -tAc "
+    SELECT set_config('app.tenant_id', :'tenant_id', true);
+    DELETE FROM fsma.inflow_workbench_fix_items
+    WHERE tenant_id = :'tenant_id'::uuid AND run_id = :'run_id';
+  " > /dev/null 2>&1 || echo "warning: probe cleanup for run ${RUN_ID} failed; synthetic fix items may remain" >&2
+}
 
 echo "==> Checking Inflow Workbench tables"
 tables_ready="$(
@@ -76,7 +124,7 @@ fi
 payload_file="$(mktemp)"
 response_file="$(mktemp)"
 summary_file="$(mktemp)"
-trap 'rm -f "$payload_file" "$response_file" "$summary_file"' EXIT
+trap 'cleanup_probe_rows; rm -f "$payload_file" "$response_file" "$summary_file"' EXIT
 
 python3 - "$TENANT_ID" > "$payload_file" <<'PY'
 import json
@@ -129,11 +177,11 @@ http_code="$(
 )"
 if [[ "$http_code" != "200" ]]; then
   echo "Save run failed with HTTP ${http_code}" >&2
-  cat "$response_file" >&2
+  print_error_body "$response_file"
   exit 1
 fi
 
-run_id="$(python3 - "$response_file" <<'PY'
+RUN_ID="$(python3 - "$response_file" <<'PY'
 import json
 import sys
 
@@ -141,11 +189,11 @@ with open(sys.argv[1], "r", encoding="utf-8") as fh:
     print(json.load(fh)["run_id"])
 PY
 )"
-echo "Saved run: ${run_id}"
+echo "Saved run: ${RUN_ID}"
 
 echo "==> Verifying run and commit decision persisted in Postgres"
 persisted_count="$(
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v tenant_id="$TENANT_ID" -v run_id="$run_id" -tAc "
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -v tenant_id="$TENANT_ID" -v run_id="$RUN_ID" -tAc "
     SELECT set_config('app.tenant_id', :'tenant_id', true);
     SELECT
       (
@@ -172,11 +220,11 @@ http_code="$(
 )"
 if [[ "$http_code" != "200" ]]; then
   echo "Readiness summary failed with HTTP ${http_code}" >&2
-  cat "$summary_file" >&2
+  print_error_body "$summary_file"
   exit 1
 fi
 
-python3 - "$summary_file" "$run_id" <<'PY'
+python3 - "$summary_file" "$RUN_ID" <<'PY'
 import json
 import sys
 

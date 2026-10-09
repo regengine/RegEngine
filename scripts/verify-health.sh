@@ -34,17 +34,45 @@ echo ""
 FAILED=0
 WARNINGS=0
 
+# Portable TCP probe: prefers nc, then python3, then bash /dev/tcp.
+# Prints nothing; the exit status is the probe result.
+tcp_probe() {
+    local host=$1
+    local port=$2
+    local probe_timeout=$3
+    if command -v nc > /dev/null 2>&1; then
+        nc -z -w "$probe_timeout" "$host" "$port" > /dev/null 2>&1
+        return $?
+    fi
+    if command -v python3 > /dev/null 2>&1; then
+        python3 - "$host" "$port" "$probe_timeout" > /dev/null 2>&1 <<'PYEOF'
+import socket
+import sys
+host, port, timeout = sys.argv[1], int(sys.argv[2]), float(sys.argv[3])
+with socket.create_connection((host, port), timeout=timeout):
+    pass
+PYEOF
+        return $?
+    fi
+    if command -v timeout > /dev/null 2>&1; then
+        timeout "$probe_timeout" bash -c 'exec 3<>"/dev/tcp/$0/$1"' "$host" "$port" > /dev/null 2>&1
+        return $?
+    fi
+    bash -c 'exec 3<>"/dev/tcp/$0/$1"' "$host" "$port" > /dev/null 2>&1
+    return $?
+}
+
 check_service() {
     local url=$1
     local name=$2
     local required=$3
     local timeout=${4:-5}
-    
+
     if [[ $url == tcp://* ]]; then
         local host_port=${url#tcp://}
         local host=${host_port%:*}
         local port=${host_port#*:}
-        if nc -z -w $timeout $host $port > /dev/null 2>&1; then
+        if tcp_probe "$host" "$port" "$timeout"; then
             echo -e "  ${GREEN}✅${NC} $name"
             return 0
         fi
