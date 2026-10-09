@@ -45,7 +45,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     _exchange_store.clear()
 
 
-def test_send_receive_and_mark_received(client: TestClient) -> None:
+def test_send_returns_503_when_db_unavailable_even_with_fallback_enabled(
+    client: TestClient,
+) -> None:
+    # The DB seam in the fixture always raises, and the fixture explicitly
+    # enables the in-memory fallback. Send must still fail closed with 503
+    # instead of fabricating placeholder shipping records, and must store
+    # nothing in the in-memory package store.
     sender_tenant_id = "00000000-0000-0000-0000-000000000111"
     receiver_tenant_id = "00000000-0000-0000-0000-000000000222"
 
@@ -59,14 +65,33 @@ def test_send_receive_and_mark_received(client: TestClient) -> None:
             "receiver_email": "receiving@example.com",
         },
     )
-    assert send_response.status_code == 200
+    assert send_response.status_code == 503
+    assert send_response.json()["detail"] == "Exchange service unavailable"
+    assert _exchange_store == {}
 
-    send_payload = send_response.json()
-    package_id = send_payload["package_id"]
-    assert send_payload["status"] == "queued"
-    assert send_payload["event_count"] == 2
-    assert send_payload["traceability_lot_codes"] == ["LOT-2026-001"]
-    assert send_payload["notification"]["status"] == "queued"
+
+def test_receive_and_mark_received(client: TestClient) -> None:
+    # Seed the in-memory store directly (the receive fallback serves only
+    # previously stored packages, it never fabricates records).
+    sender_tenant_id = "00000000-0000-0000-0000-000000000111"
+    receiver_tenant_id = "00000000-0000-0000-0000-000000000222"
+    package_id = "11111111-1111-4111-8111-111111111111"
+    _exchange_store[package_id] = {
+        "id": package_id,
+        "sender_tenant_id": sender_tenant_id,
+        "receiver_tenant_id": receiver_tenant_id,
+        "status": "pending",
+        "traceability_lot_codes": ["LOT-2026-001"],
+        "event_count": 2,
+        "notification_target": "receiving@example.com",
+        "package_hash": "hash-seeded",
+        "payload": {
+            "package_id": package_id,
+            "records": [{"cte_event_id": "evt-1"}, {"cte_event_id": "evt-2"}],
+        },
+        "created_at": "2026-04-19T12:00:00+00:00",
+        "received_at": None,
+    }
 
     receive_response = client.get(
         "/api/v1/exchange/receive",

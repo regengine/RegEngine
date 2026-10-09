@@ -493,55 +493,13 @@ async def send_exchange_package(
     except HTTPException:
         raise
     except Exception as exc:
-        if not _allow_in_memory_fallback():
-            logger.error("exchange_send_failed_no_fallback error=%s", str(exc))
-            raise HTTPException(status_code=503, detail="Exchange service unavailable") from exc
-
-        logger.warning("exchange_send_failed_using_fallback error=%s", str(exc))
-        # Re-run extraction in fallback mode without DB package persistence.
-        package_id = str(uuid4())
-        created_at = datetime.now(timezone.utc).isoformat()
-        records = []
-        for event_id in request.event_ids:
-            records.append(
-                {
-                    "cte_event_id": event_id,
-                    "traceability_lot_code": request.traceability_lot_code,
-                    "event_type": "shipping",
-                    "event_timestamp": created_at,
-                    "product_description": "EDI/EPCIS Shipping Event",
-                    "quantity": None,
-                    "unit_of_measure": None,
-                    "ship_from": {},
-                    "ship_to": {},
-                    "tlc_source": {},
-                    "reference_document_number": None,
-                    "carrier": None,
-                    "integrity": {"record_hash": None, "chain_hash": None},
-                    "additional_kdes": {},
-                    "source": "exchange_fallback",
-                }
-            )
-
-        lot_codes = sorted({code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code})
-        package = {
-            "package_id": package_id,
-            "package_version": "1.0",
-            "created_at": created_at,
-            "sender_tenant_id": sender_tenant_id,
-            "receiver_tenant_id": request.receiver_tenant_id,
-            "notification_target": request.receiver_email,
-            "summary": {
-                "event_count": len(records),
-                "traceability_lot_codes": lot_codes,
-                "tlc_source_propagated": True,
-                "generated_from": "shipping_ctes",
-            },
-            "records": records,
-        }
-        package_hash = sha256(json.dumps(package, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
-        package["package_hash"] = package_hash
-        _store_package_fallback(package)
+        # Never fabricate shipping records when the database is unavailable.
+        # The old in-memory fallback built placeholder records from request
+        # fields and labeled them as propagated shipping truth
+        # (tlc_source_propagated=True, generated_from="shipping_ctes").
+        # Fail closed instead so callers retry against real evidence.
+        logger.error("exchange_send_failed error=%s", str(exc))
+        raise HTTPException(status_code=503, detail="Exchange service unavailable") from exc
 
     logger.info(
         "exchange_package_sent package_id=%s sender=%s receiver=%s events=%s",
