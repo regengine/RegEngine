@@ -100,14 +100,19 @@ async def query_traceability(
         plan=plan,
     )
 
-    emit_funnel_event(
-        tenant_id=tenant_id,
-        event_name="first_nlp_query",
-        metadata={
-            "intent": plan.intent,
-            "confidence": plan.confidence,
-        },
-    )
+    # Best-effort telemetry: a funnel write must never break the query
+    # path, so swallow any failure and keep serving the response.
+    try:
+        emit_funnel_event(
+            tenant_id=tenant_id,
+            event_name="first_nlp_query",
+            metadata={
+                "intent": plan.intent,
+                "confidence": plan.confidence,
+            },
+        )
+    except Exception as exc:
+        logger.warning("funnel_emit_failed", event_name="first_nlp_query", error=str(exc))
 
     filters = plan.model_dump(
         exclude={"intent", "warnings", "confidence"},

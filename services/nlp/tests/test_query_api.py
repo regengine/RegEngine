@@ -140,6 +140,36 @@ def test_query_api_rejects_x_tenant_id_override_header_mismatch():
     assert isinstance(detail, dict) and detail.get("code") == "E_TENANT_MISMATCH"
 
 
+def test_query_api_funnel_emit_failure_does_not_break_query():
+    """Query-path telemetry is best-effort: if the funnel hook raises, the
+    query must still return 200 with the normal response body."""
+    from services.nlp.app.routes import limiter
+
+    # The endpoint allows 5 requests/minute on shared in-memory storage;
+    # reset the budget so this test is independent of sibling tests.
+    limiter.reset()
+    app = _build_app(scopes=["graph.query"])
+    client = TestClient(app, raise_server_exceptions=False)
+
+    graph_payload = {"count": 0, "events": [], "next_cursor": None}
+
+    with patch("services.nlp.app.routes._graph_get", new_callable=AsyncMock) as mock_graph:
+        with patch(
+            "services.nlp.app.routes.emit_funnel_event",
+            side_effect=RuntimeError("funnel db down"),
+        ):
+            mock_graph.return_value = graph_payload
+
+            response = client.post(
+                "/api/v1/query/traceability",
+                json={"query": "show me all lettuce from Supplier X in the last 30 days"},
+                headers={"X-RegEngine-API-Key": "rge_test.secret"},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["results"] == []
+
+
 def test_query_api_trace_backward_route_selection():
     app = _build_app(scopes=["graph.query"])
     client = TestClient(app)
