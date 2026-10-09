@@ -6,6 +6,12 @@ from typing import Dict, Iterator, List, Optional
 from urllib.parse import urlencode
 
 import httpx
+from shared.safe_http import (
+    DEFAULT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_sync,
+)
+from shared.url_validation import SSRFError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from ..models import SourceMetadata
@@ -117,12 +123,19 @@ class FederalRegisterAdapter(SourceAdapter):
             self.rate_limiter.wait_if_needed("federalregister.gov")
 
             try:
-                doc_response = self.session.get(full_text_url)
+                # The URL comes from the API response, so it is untrusted
+                # input: validate it (SSRF check on every redirect hop with
+                # IP pinning) and cap the response body.
+                doc_response = safe_httpx_get_sync(
+                    full_text_url,
+                    headers={"User-Agent": self.user_agent},
+                    max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+                )
                 doc_response.raise_for_status()
                 content = doc_response.content
                 self.rate_limiter.record_success("federalregister.gov")
                 self.log_fetch(full_text_url, "success", doc_response.status_code)
-            except httpx.HTTPError as e:
+            except (httpx.HTTPError, SSRFError, ResponseTooLargeError) as e:
                 self.log_fetch(full_text_url, "failure", error=str(e))
                 backoff = self.rate_limiter.record_error("federalregister.gov")
                 if backoff:
