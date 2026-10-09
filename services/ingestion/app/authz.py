@@ -79,6 +79,51 @@ def _is_production_env() -> bool:
     return not _is_dev_env()
 
 
+def _strict_auth_required() -> bool:
+    """Return True when the runtime must never use the dev-open fallback.
+
+    Production, deployed staging/preview environments, and explicit
+    ``REGENGINE_AUTH_STRICT=1`` all require credential-bound auth. The
+    check also covers cloud deployments wearing a development/test name:
+    ``shared.env`` forces production at import when it sees platform
+    markers, but that runs only once, so a marker that appears later (or
+    a process that never imported ``shared.env``) must still not get the
+    fallback. Fail closed: any unexpected error resolves to strict.
+    """
+    try:
+        from shared.env import is_cloud_deployment, requires_strict_auth_runtime
+
+        if requires_strict_auth_runtime():
+            return True
+        return bool(_is_dev_env() and is_cloud_deployment())
+    except Exception:
+        logger.warning("strict_auth_probe_failed: failing closed to strict auth")
+        return True
+
+
+def assert_dev_open_disabled_in_production() -> None:
+    """Deploy-time assertion: production must never satisfy the dev-open gate.
+
+    Call once at service startup, before serving traffic. Raises
+    RuntimeError when the process is a strict-auth runtime yet
+    ``_is_dev_env()`` is True, which would let
+    :func:`get_ingestion_principal` authenticate requests without a
+    credential. Contradictory configuration must fail the deploy, not
+    open an auth bypass.
+    """
+    if _is_dev_env() and _strict_auth_required():
+        message = (
+            "Refusing to start: REGENGINE_ENV names a development/test "
+            "environment while the runtime requires strict authentication "
+            "(production or a deployed strict-auth environment). The "
+            "ingestion dev-open fallback would accept requests without an "
+            "API key. Use a production environment name on deployed "
+            "infrastructure and keep development names for local use only."
+        )
+        logger.critical(message)
+        raise RuntimeError(message)
+
+
 class IngestionPrincipal(BaseModel):
     """Authenticated caller context for ingestion endpoints."""
 
@@ -257,6 +302,16 @@ async def get_ingestion_principal(
 
     _dev = _is_dev_env()
     if not x_regengine_api_key:
+        if _dev and _strict_auth_required():
+            logger.warning(
+                "dev_open_auth_blocked: path=%s client_ip=%s - "
+                "development environment name with strict-auth runtime; "
+                "requiring an API key",
+                request.url.path,
+                client_ip,
+            )
+            _record_auth_failure(client_ip)
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
         if not _dev:
             _record_auth_failure(client_ip)
             raise HTTPException(status_code=401, detail="Invalid or missing API key")

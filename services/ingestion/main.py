@@ -58,6 +58,11 @@ from app.routes import router as ingestion_router
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("ingestion_service_startup")
+    # Deploy-time assertion: the dev-open auth fallback must never be
+    # reachable in production. Fail the deploy, not the request.
+    from app.authz import assert_dev_open_disabled_in_production
+
+    assert_dev_open_disabled_in_production()
     # #2348: warn at boot if document-storage credentials are absent —
     # /v1/ingest/{url,file,direct,regulation} will return 503 until configured.
     try:

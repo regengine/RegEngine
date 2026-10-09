@@ -81,6 +81,12 @@ def _env_flag(name: str, default: bool = False) -> bool:
 async def lifespan(app: FastAPI):
     logger.info("regengine_startup", mode="monolith")
 
+    # Deploy-time assertion: the ingestion dev-open auth fallback must
+    # never be reachable in production. Fail the deploy, not the request.
+    from services.ingestion.app.authz import assert_dev_open_disabled_in_production
+
+    assert_dev_open_disabled_in_production()
+
     # #2348: warn at boot if document-storage credentials are absent —
     # /v1/ingest/{url,file,direct,regulation} return 503 until configured.
     # Best-effort: a probe failure must never abort monolith startup. NOTE the
