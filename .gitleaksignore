@@ -155,17 +155,39 @@ a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/INVESTOR_DEMO_GUIDE.md:generic-api
 # against the localhost uvicorn the script spawns itself.
 3539b2dc367d24e8ca719734ed5320fc77473ac4:scripts/e2e_brutal_scenario.py:generic-api-key:96
 
-# NOT certified as a non-secret — pinned so this one historical line does not
-# block the gate, which is strictly narrower than the '''^scripts/''' ignore
-# that was hiding it. scripts/stress_test.py held ADMIN_KEY as a 62-char
-# lowercase-hex literal. #3081 (c249be41, 2026-09-07) removed it as "unused"
-# and replaced it with os.environ.get("ADMIN_KEY", ""), so it is gone from the
-# tree; the historical blob remains. No rotation was recorded for the value,
-# and it is NOT one of the .env.production secrets verified and rotated on
-# 2026-09-28 — compared exactly: different value, not a prefix or substring of
-# any of them. Its character distribution is consistent with a generated hex
-# token (omitting one hex digit in 62 chars happens ~25% of the time by
-# chance, so that is not evidence of hand-typing). Whether a key of this shape
-# was ever provisioned is unverified: it needs the same check as the two
-# rge_<id>.<secret> literals in the deleted scripts/test_id_*.py.
+# NOT certified as a non-secret. Pinned only so this one historical line does
+# not block the gate; that is strictly narrower than the '''^scripts/''' ignore
+# which was hiding it entirely, and it does not settle the open question below.
+#
+# scripts/stress_test.py held ADMIN_KEY as a 62-char lowercase-hex literal.
+# #3081 (c249be41, 2026-09-07) removed it as "unused", replacing it with
+# os.environ.get("ADMIN_KEY", ""), so it is gone from the tree; the historical
+# blob remains.
+#
+# It is derived from real credential material. Its first 8 hex characters are
+# identical to the ADMIN_MASTER_KEY that docs/audits/COMPREHENSIVE_AUDIT_
+# 2026_03_09.md lists under "Security Exposures" as a 128-char hex value in a
+# committed .env — an 8-character hex collision is about 1 in 4.3 billion, so
+# this literal was copied from or recalled off that key, and characters 9-62
+# may be a truncation of it rather than invention. It is NOT one of the
+# .env.production secrets verified and rotated on 2026-09-28 (compared
+# exactly: different value, no shared prefix or substring); that rotation does
+# not cover it. Its character distribution gives no evidence of hand-typing
+# either way (omitting one hex digit in 62 chars happens ~25% of the time by
+# chance).
+#
+# The issuance question is already tracked and still open, so this pin changes
+# nothing about it:
+#   - docs/engineering/security-findings-2026-09-10/dispositions.json, GL-057,
+#     this exact fingerprint: disposition synthetic_fixture_source, rationale
+#     literal_in_test_source_unverified_issuance — "test location alone cannot
+#     certify non-issuance; owner review remains required."
+#   - docs/engineering/security-findings-2026-09-10/README.md row 15,
+#     ADMIN_MASTER_KEY: "Unresolved ... determine whether it was issued/
+#     deployed; identify old administrative callers and provide provider/
+#     application revocation plus replay-denial evidence if real."
+# The same owner check is owed for the two rge_<id>.<secret> literals in the
+# deleted scripts/test_id_002.py and scripts/test_hash_001.py, which match the
+# legacy rge_<token_urlsafe(16)>.<token_urlsafe(32)> generator exactly and stay
+# masked by '''/test_'''.
 ad036009024a51c2804c1822233892296c39f594:scripts/stress_test.py:generic-api-key:23
