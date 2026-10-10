@@ -132,3 +132,40 @@ a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:37
 # the historical line (squash commit on main + the pre-squash branch commit).
 db6df3d2c2f25e395ef6f66204eb55af893f674a:.gitleaksignore:generic-api-key:108
 7020a8d88edbc8791e16f242cf1187204fb527bc:.gitleaksignore:generic-api-key:108
+
+# ─── Unmasked by removing the '''^docs/''' and '''^scripts/''' blanket
+# ignores from .gitleaks.toml (see the note there). Reviewed individually
+# 2026-10-10 against the blob at each commit, with the value compared to this
+# repository's own key generators in services/shared/api_key_store.py.
+#
+# Documentation placeholders a reader is meant to replace. All four files were
+# deleted from the tree long ago; each value is 12-23 chars of lowercase
+# letters/hyphens/underscores with no entropy, and the surrounding text is an
+# instruction to substitute your own key.
+#   BETA_TESTER_GUIDE.md      rge_your_... (12 chars)
+#   WEBSITE_COPY.md           your-api-key (12 chars)
+#   rls_deployment_runbook.md YOUR_API_KEY (13 chars)
+#   INVESTOR_DEMO_GUIDE.md    sk_live_abc1... illustrative console output
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/BETA_TESTER_GUIDE.md:curl-auth-header:102
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/WEBSITE_COPY.md:curl-auth-header:243
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/rls_deployment_runbook.md:curl-auth-header:63
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/INVESTOR_DEMO_GUIDE.md:generic-api-key:42
+
+# A test fixture: 24 chars, four hyphen-separated English words, used only
+# against the localhost uvicorn the script spawns itself.
+3539b2dc367d24e8ca719734ed5320fc77473ac4:scripts/e2e_brutal_scenario.py:generic-api-key:96
+
+# NOT certified as a non-secret — pinned so this one historical line does not
+# block the gate, which is strictly narrower than the '''^scripts/''' ignore
+# that was hiding it. scripts/stress_test.py held ADMIN_KEY as a 62-char
+# lowercase-hex literal. #3081 (c249be41, 2026-09-07) removed it as "unused"
+# and replaced it with os.environ.get("ADMIN_KEY", ""), so it is gone from the
+# tree; the historical blob remains. No rotation was recorded for the value,
+# and it is NOT one of the .env.production secrets verified and rotated on
+# 2026-09-28 — compared exactly: different value, not a prefix or substring of
+# any of them. Its character distribution is consistent with a generated hex
+# token (omitting one hex digit in 62 chars happens ~25% of the time by
+# chance, so that is not evidence of hand-typing). Whether a key of this shape
+# was ever provisioned is unverified: it needs the same check as the two
+# rge_<id>.<secret> literals in the deleted scripts/test_id_*.py.
+ad036009024a51c2804c1822233892296c39f594:scripts/stress_test.py:generic-api-key:23
