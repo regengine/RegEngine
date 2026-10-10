@@ -115,7 +115,7 @@ export function useRemediationManifest(tenantId: string, runId: string | null) {
     const { isAuthenticated } = useAuth();
     return useQuery({
         queryKey: ['remediation', 'manifest', tenantId, runId],
-        queryFn: () => remFetch<ManifestDetail>(`/api/v1/remediation/manifests/${encodeURIComponent(runId)}`),
+        queryFn: () => remFetch<ManifestDetail>(`/api/v1/remediation/manifests/${encodeURIComponent(runId ?? '')}`),
         enabled: !!tenantId && !!runId && isAuthenticated,
         refetchInterval: POLL_CONTROL_PLANE_MS,
     });
