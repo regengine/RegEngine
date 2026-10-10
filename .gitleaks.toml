@@ -88,10 +88,11 @@ paths = [
   # Measured with gitleaks v8.30.0 on main @ 4eb1006b: a random AWS secret
   # key pasted into a docs runbook and a random key in this repository's own
   # rge_<id>.<secret> format pasted into a script were detected 0 of 3 times
-  # with these two lines present and 3 of 3 times without them. The 6
-  # historical findings they were masking are reviewed and pinned by
-  # fingerprint in .gitleaksignore instead, so a new secret in either
-  # directory now fails the gate.
+  # with these two lines present and 3 of 3 times without them. Of the 6
+  # historical findings they were masking, 5 are reviewed and pinned by
+  # fingerprint in .gitleaksignore; the 6th (an unverified admin credential in
+  # scripts/stress_test.py) is deliberately left unpinned there, so a new
+  # secret in either directory now fails the gate and that one stays visible.
   '''/app/docs/''',
   '''/app/developer''',
   '''ONBOARDING_GUIDE\.md$''',

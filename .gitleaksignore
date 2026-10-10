@@ -176,18 +176,33 @@ a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/INVESTOR_DEMO_GUIDE.md:generic-api
 # either way (omitting one hex digit in 62 chars happens ~25% of the time by
 # chance).
 #
-# The issuance question is already tracked and still open, so this pin changes
-# nothing about it:
+# The issuance question is already tracked and still open:
 #   - docs/engineering/security-findings-2026-09-10/dispositions.json, GL-057,
-#     this exact fingerprint: disposition synthetic_fixture_source, rationale
+#     fingerprint ad036009...:scripts/stress_test.py:generic-api-key:23:
+#     disposition synthetic_fixture_source, rationale
 #     literal_in_test_source_unverified_issuance — "test location alone cannot
 #     certify non-issuance; owner review remains required."
 #   - docs/engineering/security-findings-2026-09-10/README.md row 15,
 #     ADMIN_MASTER_KEY: "Unresolved ... determine whether it was issued/
 #     deployed; identify old administrative callers and provide provider/
 #     application revocation plus replay-denial evidence if real."
+#
+# So it is deliberately NOT pinned here. AGENTS.md:77 is unambiguous: "A key
+# that appeared in chat, a log or git history is exposed: revoke it and issue a
+# new one." Pinning the fingerprint would hold the gate green while an
+# unverified admin credential stayed reachable in history, which is the one
+# thing an allowlist entry must never buy. This follows the precedent set for
+# the .env.production trio, which #3183 recorded as remaining "intentionally
+# red per #3174" until they were verified on 2026-09-28 and only then pinned
+# above.
+#
+# Effect, measured with gitleaks v8.30.0 on this branch: push and scheduled
+# runs scan full history and report this one finding, so Secrets Scan
+# (gitleaks) is red on main until the credential is verified or revoked;
+# pull_request runs scope to base..HEAD (security.yml), where it is out of
+# range, so they stay green and no PR is blocked by it.
+#
 # The same owner check is owed for the two rge_<id>.<secret> literals in the
 # deleted scripts/test_id_002.py and scripts/test_hash_001.py, which match the
 # legacy rge_<token_urlsafe(16)>.<token_urlsafe(32)> generator exactly and stay
-# masked by '''/test_'''.
-ad036009024a51c2804c1822233892296c39f594:scripts/stress_test.py:generic-api-key:23
+# masked by '''/test_''' in .gitleaks.toml.
