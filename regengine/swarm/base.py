@@ -63,8 +63,9 @@ class AgentMessage:
 
     @classmethod
     def from_dict(cls, data: dict) -> "AgentMessage":
-        data["message_type"] = MessageType(data["message_type"])
-        return cls(**data)
+        # Copy: the caller's dict keeps its "task" string instead of being
+        # rewritten to a MessageType in place.
+        return cls(**{**data, "message_type": MessageType(data["message_type"])})
 
 
 # ── Agent Memory ──────────────────────────────────────────

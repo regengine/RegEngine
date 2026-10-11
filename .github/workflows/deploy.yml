@@ -94,10 +94,8 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Install Railway CLI
-        env:
-          RAILWAY_CLI_VERSION: 4.44.0
         run: |
-          npm install -g "@railway/cli@${RAILWAY_CLI_VERSION}"
+          npm install -g "@railway/cli@4.44.0"
           railway --version
 
       - name: Validate Railway deployment secrets

@@ -125,3 +125,82 @@ class TestValidateFTLScoping:
         assert body["valid"] is True
         assert body["ftl_commodity"] == "leafy greens"
         assert body["errors"] == []
+
+
+class TestValidateHyphenatedFTLCommodities:
+    """Hyphenated FTL categories must clear the gate in every spelling.
+
+    The catalog stores entries such as "fresh-cut fruits" with hyphens
+    while the gate canonicalizer folds hyphens to spaces, so a direct
+    membership test rejected every spelling of those commodities with
+    400 E_NON_FTL_FOOD — an in-scope food the endpoint refused to
+    validate at all.
+    """
+
+    @pytest.mark.parametrize(
+        "commodity",
+        [
+            "Fresh-Cut Fruits",
+            "fresh-cut fruits",
+            "fresh_cut_fruits",
+            "Fresh Cut Fruits",
+            "FRESH-CUT VEGETABLES",
+            "Ready-to-Eat Deli Salads",
+            "ready_to_eat_deli_salads",
+        ],
+    )
+    def test_hyphenated_ftl_commodity_passes_gate(self, commodity: str) -> None:
+        resp = client.post(
+            "/validate",
+            json={"ftl_commodity": commodity},
+            headers=AUTH_HEADER,
+        )
+        assert resp.status_code == 200, (commodity, resp.text)
+        body = resp.json()
+        assert body["valid"] is True
+        assert body["errors"] == []
+
+    def test_every_catalog_entry_passes_gate_in_any_spelling(self) -> None:
+        """Every entry in the shared FTL catalog clears the gate whether
+        written with hyphens, underscores or spaces.
+        """
+        from shared.rules.ftl import FTL_CATEGORIES
+
+        from services.compliance.app.routes import _is_ftl_commodity
+
+        assert len(FTL_CATEGORIES) > 0
+        for entry in FTL_CATEGORIES:
+            assert _is_ftl_commodity(entry), entry
+            assert _is_ftl_commodity(entry.replace("-", "_")), entry
+            assert _is_ftl_commodity(entry.replace("-", " ")), entry
+
+    def test_engine_stamp_uses_a_catalog_form_the_engine_recognizes(self) -> None:
+        """The ftl_category stamped onto the engine event must match the
+        catalog exactly (the engine only lower-cases and strips), or the
+        engine classifies an in-scope food as not-FTL scoped.
+        """
+        from shared.rules.ftl import FTL_CATEGORIES, get_ftl_category
+
+        from services.compliance.app.routes import (
+            _config_to_engine_event,
+            _resolve_ftl_commodity,
+        )
+
+        for entry in FTL_CATEGORIES:
+            for spelling in (entry, entry.replace("-", "_"), entry.replace("-", " ")):
+                resolved = _resolve_ftl_commodity(spelling)
+                assert resolved is not None, spelling
+                event = _config_to_engine_event({"cte_type": "SHIPPING"}, resolved)
+                assert get_ftl_category(event) is not None, (spelling, event)
+
+    def test_non_ftl_lookalike_still_rejected(self) -> None:
+        """Near-miss spellings that are not catalog entries still fail
+        closed with E_NON_FTL_FOOD.
+        """
+        for commodity in ["fresh cut fruit", "cut fruits", "deli salads"]:
+            resp = client.post(
+                "/validate",
+                json={"ftl_commodity": commodity},
+                headers=AUTH_HEADER,
+            )
+            assert resp.status_code == 400, (commodity, resp.text)

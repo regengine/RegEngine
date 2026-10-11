@@ -8,13 +8,15 @@ permissive Markdown renderer, an attacker can smuggle ``<script>``
 payloads into the admin UI via a malicious supplier document.
 
 Strategy:
-- Store the raw text verbatim in the DB (so downstream analytics /
-  model training / audit exports can access the original). The raw
-  field is never returned to the client directly.
-- On API response, HTML-escape and strip anything that parses as an
-  HTML tag. We purposefully do NOT use ``bleach`` (optional
-  dependency) so that this ships without a new requirement -- the
-  escaping strategy used here is the one in the Python stdlib.
+- Sanitize before the DB store (strip tags, neutralize javascript:
+  URIs, HTML-escape) so a later unsanitized read path cannot leak
+  stored XSS into the admin UI. The stored form is the sanitized form.
+- On API response, re-sanitize idempotently: unescape once, then run
+  the same pipeline, so already-sanitized rows are returned stable
+  instead of double-escaped. We purposefully do NOT use ``bleach``
+  (optional dependency) so that this ships without a new
+  requirement -- the escaping strategy used here is the one in the
+  Python stdlib.
 
 If ``bleach`` is available in the environment, we fall through to it
 for defense-in-depth (attribute-level stripping), but it is optional.
@@ -86,10 +88,17 @@ def sanitize_source_text_for_response(value: Any) -> str:
     Re-sanitizes on read even if data was stored before the write-time
     sanitization was added. Callers should pass the raw ``text_raw``
     field from the DB row.
+
+    Idempotency: rows written after the store-time sanitization landed
+    already carry escaped entities (``&`` became ``&amp;``). Unescaping
+    once before re-sanitizing keeps the response stable instead of
+    double-escaping on every read (``&amp;amp;``). For legacy raw rows
+    the unescape is harmless: tags are still stripped and the result is
+    still escaped exactly once.
     """
     if value is None:
         return ""
-    return sanitize_source_text_for_store(str(value))
+    return sanitize_source_text_for_store(html.unescape(str(value)))
 
 
 __all__ = [
