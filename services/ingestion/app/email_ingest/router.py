@@ -5,10 +5,11 @@ recipient, oversized/wrong-type/undecodable attachment, zero valid CSV rows)
 returns **200** with a structured body — provider webhooks retry on 5xx, so
 turning a data-quality problem into a 5xx would just cause Postmark to
 hammer us with identical retries. A missing/invalid ``Authorization`` header
-(401, handled by ``verify_inbound_email_auth``), DB unavailability (503), and
+(401, handled by ``verify_inbound_email_auth``), a client IP blocked after
+repeated auth failures (429, same gate), DB unavailability (503), and
 — since v122's claim-then-act idempotency fix — a concurrent delivery of the
 same ``MessageID`` still being processed elsewhere (409, raised from
-``process_inbound_email``) are the non-200 cases; all three are exactly the
+``process_inbound_email``) are the non-200 cases; all four are exactly the
 kind of transient condition Postmark's retry-on-non-2xx contract is meant to
 recover from.
 """

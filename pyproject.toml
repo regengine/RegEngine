@@ -56,11 +56,15 @@ testpaths = [
     "services/ingestion/tests",
     "services/nlp/tests",
     "services/scheduler/tests",
+    "services/test_data/tests",
     # #2923: omitted until now, so the repo-root --collect-only import guard
     # in test-suite-check.yml — the check whose stated job is to stop "N test
     # files silently fail to import" — could not see these 53 files, and a
     # bare `pytest` from the repo root skipped them.
     "services/shared/tests",
+    # #3247: the nginx gateway tests never ran because this directory was not
+    # listed, so a bare `pytest` never collected infra/gateway/tests.
+    "infra/gateway/tests",
 ]
 asyncio_mode = "auto"
 python_files = "test_*.py"

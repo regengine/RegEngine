@@ -24,7 +24,14 @@ _METRICS_API_KEY = os.environ.get("METRICS_API_KEY", "")
 _api_key_header = APIKeyHeader(name="X-Metrics-Key", auto_error=False)
 
 
+def _configured_key() -> str:
+    # Read per call (falling back to the import-time value) so key
+    # rotation via the environment takes effect without a restart.
+    return os.environ.get("METRICS_API_KEY", _METRICS_API_KEY)
+
+
 def require_metrics_key(key: str | None = Security(_api_key_header)) -> None:
     """Raise 403 unless the request carries a valid metrics API key."""
-    if not _METRICS_API_KEY or not key or not hmac.compare_digest(key, _METRICS_API_KEY):
+    configured = _configured_key()
+    if not configured or not key or not hmac.compare_digest(key, configured):
         raise HTTPException(status_code=403, detail="Forbidden")

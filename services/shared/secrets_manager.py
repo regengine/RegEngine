@@ -17,6 +17,22 @@ logger = structlog.get_logger("secrets")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 
+def _is_production_environment(environment: Optional[str] = None) -> bool:
+    """Return True when credentials must be fail-closed, not defaulted.
+
+    An explicit ``environment`` argument wins (the credential getters accept
+    one). Otherwise use the central detector in ``shared.env``
+    (``REGENGINE_ENV``, then ``ENV``, then the ``DATABASE_URL`` heuristic)
+    so this module cannot drift from the rest of the repo. Imported locally
+    to match ``shared.auth`` and avoid import-time coupling.
+    """
+    if environment is not None:
+        return environment.strip().lower() == "production"
+    from shared.env import is_production  # noqa: PLC0415
+
+    return is_production()
+
+
 class SecretsManager:
     """Manages secrets retrieval from environment variables."""
 
@@ -65,6 +81,15 @@ class SecretsManager:
             )
             raise RuntimeError(f"Failed to retrieve secret {secret_name}: {exc}")
 
+    def invalidate_cache(self) -> None:
+        """Drop all cached secrets so the next read sees rotated values.
+
+        ``get_secret`` caches per process; without this, a rotated secret
+        (or one injected after first read) stays stale until restart.
+        Call it from rotation hooks or secret-refresh endpoints.
+        """
+        type(self).get_secret.cache_clear()
+
     def get_database_credentials(self, environment: Optional[str] = None) -> dict:
         """Get PostgreSQL database credentials.
 
@@ -73,14 +98,31 @@ class SecretsManager:
 
         Returns:
             Dict with username, password, host, port, database
+
+        Raises:
+            RuntimeError: If running in production with host or password missing
         """
         host = os.getenv("POSTGRES_HOST", "")
-        if not host:
+        password = os.getenv("POSTGRES_PASSWORD", "")
+        if _is_production_environment(environment):
+            missing = []
+            if not host:
+                missing.append("POSTGRES_HOST")
+            if not password:
+                missing.append("POSTGRES_PASSWORD")
+            if missing:
+                raise RuntimeError(
+                    "Missing required database credentials in production: "
+                    + ", ".join(missing)
+                    + ". Set them via environment variables; "
+                    + "the localhost fallback is for local development only."
+                )
+        elif not host:
             logger.warning("POSTGRES_HOST not set, defaulting to localhost (dev only)")
             host = "localhost"
         return {
             "username": os.getenv("POSTGRES_USER", "postgres"),
-            "password": os.getenv("POSTGRES_PASSWORD", ""),
+            "password": password,
             "host": host,
             "port": os.getenv("POSTGRES_PORT", "5432"),
             "database": os.getenv("POSTGRES_DB", "regengine"),
@@ -94,15 +136,32 @@ class SecretsManager:
 
         Returns:
             Dict with uri, username, password
+
+        Raises:
+            RuntimeError: If running in production with uri or password missing
         """
         uri = os.getenv("NEO4J_URI") or os.getenv("NEO4J_URL", "")
-        if not uri:
+        password = os.getenv("NEO4J_PASSWORD", "")
+        if _is_production_environment(environment):
+            missing = []
+            if not uri:
+                missing.append("NEO4J_URI")
+            if not password:
+                missing.append("NEO4J_PASSWORD")
+            if missing:
+                raise RuntimeError(
+                    "Missing required Neo4j credentials in production: "
+                    + ", ".join(missing)
+                    + ". Set them via environment variables; "
+                    + "the localhost fallback is for local development only."
+                )
+        elif not uri:
             logger.warning("NEO4J_URI not set, defaulting to localhost (dev only)")
             uri = "bolt://localhost:7687"
         return {
             "uri": uri,
             "username": os.getenv("NEO4J_USER", "neo4j"),
-            "password": os.getenv("NEO4J_PASSWORD", ""),
+            "password": password,
         }
 
     def get_kafka_credentials(self, environment: Optional[str] = None) -> dict:
@@ -113,9 +172,19 @@ class SecretsManager:
 
         Returns:
             Dict with bootstrap_servers, username, password, security_protocol
+
+        Raises:
+            RuntimeError: If running in production with bootstrap servers missing
         """
         servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "")
-        if not servers:
+        if _is_production_environment(environment):
+            if not servers:
+                raise RuntimeError(
+                    "Missing required Kafka credentials in production: "
+                    "KAFKA_BOOTSTRAP_SERVERS. Set it via environment variables; "
+                    "the localhost fallback is for local development only."
+                )
+        elif not servers:
             logger.warning("KAFKA_BOOTSTRAP_SERVERS not set, defaulting to localhost (dev only)")
             servers = "localhost:9092"
         return {
@@ -133,14 +202,32 @@ class SecretsManager:
 
         Returns:
             Dict with access_key_id, secret_access_key, region, bucket_prefix, endpoint_url
+
+        Raises:
+            RuntimeError: If running in production with storage keys missing
         """
+        access_key_id = os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", "")
+        secret_access_key = os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "")
+        if _is_production_environment(environment):
+            missing = []
+            if not access_key_id:
+                missing.append("OBJECT_STORAGE_ACCESS_KEY_ID")
+            if not secret_access_key:
+                missing.append("OBJECT_STORAGE_SECRET_ACCESS_KEY")
+            if missing:
+                raise RuntimeError(
+                    "Missing required object storage credentials in production: "
+                    + ", ".join(missing)
+                    + ". Set them via environment variables."
+                )
         return {
-            "access_key_id": os.getenv("OBJECT_STORAGE_ACCESS_KEY_ID", ""),
-            "secret_access_key": os.getenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", ""),
+            "access_key_id": access_key_id,
+            "secret_access_key": secret_access_key,
             "region": os.getenv("OBJECT_STORAGE_REGION", "us-east-1"),
             "bucket_prefix": os.getenv("S3_BUCKET_PREFIX", "regengine-dev"),
             "endpoint_url": os.getenv("OBJECT_STORAGE_ENDPOINT_URL", ""),
         }
+
 
 # Global instance for singleton pattern
 _secrets_manager: Optional[SecretsManager] = None
@@ -220,52 +307,109 @@ INSECURE_DEFAULTS = {
     "OBJECT_STORAGE_SECRET_ACCESS_KEY": ["test"],
 }
 
+# The only credential production always needs at startup: the database the
+# monolith cannot boot without (shared/database.py raises without it).
+# The localhost fallbacks in the getters are for local development only
+# and never satisfy this requirement.
+REQUIRED_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("DATABASE_URL",),)
+
+# Kafka consumers run only when EVENT_BACKBONE=kafka (default pg).
+KAFKA_PRODUCTION_CREDENTIALS: tuple[tuple[str, ...], ...] = (("KAFKA_BOOTSTRAP_SERVERS",),)
+
+# Neo4j is absent from the release-approved production router set; its
+# credentials stay fail-closed on use. Object storage is optional: absent
+# keys degrade document routes to 503 while the monolith still boots.
+
+
+def _production_env_label() -> str:
+    """Best-effort environment label for validation log lines."""
+    from shared.env import get_environment  # noqa: PLC0415
+
+    return get_environment()
+
 
 def validate_production_secrets() -> None:
-    """Validate that insecure default values are not used in production.
+    """Validate that required credentials are present and secure in production.
 
-    This function should be called at service startup to fail fast if production
-    mode is enabled with insecure default credentials.
+    This function should be called at service startup to fail fast if
+    production mode is enabled with missing or insecure default credentials.
 
     Raises:
-        RuntimeError: If running in production with insecure defaults
+        RuntimeError: If running in production with missing or insecure credentials
     """
-    env = os.getenv("REGENGINE_ENV", "development")
-
-    # Only enforce in production mode
-    if env.lower() != "production":
-        logger.info("secrets_validation_skipped", environment=env, reason="not_production")
+    # Only enforce in production mode, using the central detector
+    # (REGENGINE_ENV, then ENV, then the DATABASE_URL heuristic).
+    if not _is_production_environment():
+        logger.info(
+            "secrets_validation_skipped",
+            environment=_production_env_label(),
+            reason="not_production",
+        )
         return
 
+    env = _production_env_label()
     logger.info("validating_production_secrets", environment=env)
+
+    # DATABASE_URL is always required; subsystem credentials join the list
+    # only when their subsystem is actually enabled.
+    from shared.event_backbone import kafka_enabled  # noqa: PLC0415
+
+    required: list[tuple[str, ...]] = list(REQUIRED_PRODUCTION_CREDENTIALS)
+    if kafka_enabled():
+        required.extend(KAFKA_PRODUCTION_CREDENTIALS)
 
     errors = []
 
-    # Check each critical secret
+    # Every required credential must be set; the localhost fallbacks in
+    # the getters must never silently stand in for them.
+    for alternatives in required:
+        if not any(os.getenv(var_name, "") for var_name in alternatives):
+            if len(alternatives) == 1:
+                errors.append(f"{alternatives[0]} is not set")
+            else:
+                errors.append(f"{' / '.join(alternatives)} is not set")
+
+    # Insecure placeholders are rejected whenever SET, even for a disabled
+    # subsystem, but an unset optional value is fine. Comparison is exact
+    # (case-insensitive): a real credential that merely starts with a
+    # placeholder token (for example "test-key" or "secret-...") must boot.
     for var_name, insecure_values in INSECURE_DEFAULTS.items():
         current_value = os.getenv(var_name, "")
 
         if not current_value:
-            errors.append(f"{var_name} is not set")
             continue
 
         # Check if current value matches any insecure default
+        lowered = current_value.lower()
         for insecure_value in insecure_values:
-            if current_value == insecure_value or current_value.startswith(insecure_value):
+            if lowered == insecure_value.lower():
                 errors.append(f"{var_name} is using an insecure default value")
                 break
+
+    # Neo4j is optional at boot, but a half-wired Neo4j is not: when a URI
+    # is set in production the password must be set too, otherwise graph
+    # writes would authenticate with an empty password.
+    if os.getenv("NEO4J_URI", "") or os.getenv("NEO4J_URL", ""):
+        if not os.getenv("NEO4J_PASSWORD", ""):
+            errors.append("NEO4J_PASSWORD is not set (NEO4J_URI is set)")
 
     if errors:
         error_msg = "Production secret validation FAILED:\n" + "\n".join(f"  - {err}" for err in errors)
         error_msg += "\n\nProduction mode requires secure credentials. Set proper values via:"
         error_msg += "\n  1. Railway environment variables"
         error_msg += "\n  2. Managed secret stores wired to runtime env"
-        error_msg += "\n  3. For development, set REGENGINE_ENV=development"
+        error_msg += "\n  3. For local development only, set REGENGINE_ENV=development"
+        error_msg += "\n     (on cloud hosts the environment is forced back to production,"
+        error_msg += "\n     so fix the listed credential values instead)"
 
         logger.error("production_secrets_validation_failed", errors=errors, environment=env)
         raise RuntimeError(error_msg)
 
-    logger.info("production_secrets_validated", environment=env, checks_passed=len(INSECURE_DEFAULTS))
+    logger.info(
+        "production_secrets_validated",
+        environment=env,
+        checks_passed=len(required) + len(INSECURE_DEFAULTS),
+    )
 
 
 def require_secure_secrets_in_production() -> None:
@@ -274,16 +418,17 @@ def require_secure_secrets_in_production() -> None:
     Raises:
         RuntimeError: If running in production with secret checks disabled
     """
-    env = os.getenv("REGENGINE_ENV", "development")
-
-    if env.lower() != "production":
+    if not _is_production_environment():
         return
 
+    env = _production_env_label()
     if os.getenv("REGENGINE_SKIP_SECRET_CHECK", "false").lower() == "true":
         error_msg = (
             "Production mode requires secret validation to stay enabled.\n"
             "Unset REGENGINE_SKIP_SECRET_CHECK or set it to false.\n"
-            "For development, set REGENGINE_ENV=development"
+            "For local development only, set REGENGINE_ENV=development "
+            "(on cloud hosts the environment is forced back to production,"
+            " so fix the flag value instead)."
         )
         logger.error("secure_secrets_required_in_production", environment=env)
         raise RuntimeError(error_msg)
