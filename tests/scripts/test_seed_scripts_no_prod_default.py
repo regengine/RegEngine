@@ -325,25 +325,25 @@ def _redirect_pair():
         "NO_PROXY",
     ):
         saved_proxies[var] = os.environ.pop(var, None)
-    os.environ["no_proxy"] = "*"
-    server_b = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerB)
-    port_b = server_b.server_address[1]
-    thread_b = threading.Thread(target=server_b.serve_forever, daemon=True)
-    thread_b.start()
-    server_a = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerA)
     try:
-        thread_a = threading.Thread(target=server_a.serve_forever, daemon=True)
-        thread_a.start()
-        try:
+        os.environ["no_proxy"] = "*"
+        with contextlib.ExitStack() as cleanup:
+            server_b = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerB)
+            cleanup.callback(server_b.server_close)
+            port_b = server_b.server_address[1]
+            thread_b = threading.Thread(target=server_b.serve_forever, daemon=True)
+            thread_b.start()
+            cleanup.callback(thread_b.join, timeout=5)
+            cleanup.callback(server_b.shutdown)
+
+            server_a = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerA)
+            cleanup.callback(server_a.server_close)
+            thread_a = threading.Thread(target=server_a.serve_forever, daemon=True)
+            thread_a.start()
+            cleanup.callback(thread_a.join, timeout=5)
+            cleanup.callback(server_a.shutdown)
             yield f"http://127.0.0.1:{server_a.server_address[1]}", hits_a, hits_b
-        finally:
-            server_a.shutdown()
-            thread_a.join(timeout=5)
-            server_a.server_close()
     finally:
-        server_b.shutdown()
-        thread_b.join(timeout=5)
-        server_b.server_close()
         for var, value in saved_proxies.items():
             if value is None:
                 os.environ.pop(var, None)
