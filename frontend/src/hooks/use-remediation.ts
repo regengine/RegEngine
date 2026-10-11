@@ -115,7 +115,7 @@ export function useRemediationManifest(tenantId: string, runId: string | null) {
     const { isAuthenticated } = useAuth();
     return useQuery({
         queryKey: ['remediation', 'manifest', tenantId, runId],
-        queryFn: () => remFetch<ManifestDetail>(`/api/v1/remediation/manifests/${runId}`),
+        queryFn: () => remFetch<ManifestDetail>(`/api/v1/remediation/manifests/${encodeURIComponent(runId ?? '')}`),
         enabled: !!tenantId && !!runId && isAuthenticated,
         refetchInterval: POLL_CONTROL_PLANE_MS,
     });
@@ -147,7 +147,7 @@ export function useReleaseManifest(tenantId: string) {
     return useMutation({
         mutationFn: (runId: string) =>
             remFetch<{ released: unknown[]; skipped: unknown[] }>(
-                `/api/v1/remediation/manifests/${runId}/release`,
+                `/api/v1/remediation/manifests/${encodeURIComponent(runId)}/release`,
                 { method: 'POST', body: JSON.stringify({}) },
             ),
         onSuccess: () => {
@@ -161,7 +161,7 @@ export function useIssueCorrectionLink(tenantId: string) {
     return useMutation({
         mutationFn: ({ caseId, supplierEmail }: { caseId: string; supplierEmail?: string }) =>
             remFetch<{ correction_url: string; expires_at: string; token: string }>(
-                `/api/v1/remediation/cases/${caseId}/link`,
+                `/api/v1/remediation/cases/${encodeURIComponent(caseId)}/link`,
                 {
                     method: 'POST',
                     body: JSON.stringify(supplierEmail ? { supplier_email: supplierEmail } : {}),

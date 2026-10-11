@@ -71,12 +71,26 @@ def _webhook_dlq_status(service) -> dict:
         }
     urls_configured = bool(settings.webhook_url_list)
     persistent = bool(settings.webhook_outbox_path)
+    # Live count of failed deliveries with no durable retry behind them.
+    # A configured outbox path can still lose entries when the append
+    # itself fails (disk error), so settings alone cannot prove safety.
+    unpersisted = 0
+    getter = getattr(getattr(service, "notifier", None), "unpersisted_dead_letter_count", None)
+    if callable(getter):
+        try:
+            value = getter()
+        except Exception:
+            value = None
+        if isinstance(value, int):
+            unpersisted = value
     return {
         "urls_configured": urls_configured,
         "persistence_enabled": persistent,
         "outbox_path": settings.webhook_outbox_path or None,
-        # Only a problem once webhooks are actually enabled.
-        "at_risk": urls_configured and not persistent,
+        "unpersisted_dead_letter_count": unpersisted,
+        # Only a problem once webhooks are actually enabled, plus any
+        # live unpersisted loss regardless of how the path is configured.
+        "at_risk": (urls_configured and not persistent) or unpersisted > 0,
     }
 
 
