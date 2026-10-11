@@ -99,8 +99,17 @@ def _fake_service(monkeypatch, **overrides):
 # ---------------------------------------------------------------------------
 
 
-def test_unauthenticated_request_returns_401():
-    client = _build_client(HTTPException(status_code=401, detail="Missing credentials"))
+def test_unauthenticated_request_returns_401(monkeypatch):
+    """No API key means the real missing-key branch rejects the call.
+
+    The principal dependency is left intact so deleting the missing-key
+    branch in ``get_ingestion_principal`` turns this test red.
+    """
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    app = FastAPI()
+    app.include_router(remediation_router.router)
+    app.dependency_overrides[get_db_session] = lambda: MagicMock()
+    client = TestClient(app, raise_server_exceptions=False)
     resp = client.get("/api/v1/remediation/manifests")
     assert resp.status_code == 401
 
@@ -238,11 +247,15 @@ def test_database_unavailable_returns_503(monkeypatch):
     assert resp.status_code == 503
 
 
-def test_unknown_manifest_run_returns_404(client, monkeypatch):
-    def _missing(db, **kw):
-        raise HTTPException(status_code=404, detail="Run not found")
+def test_unknown_manifest_run_returns_404(monkeypatch, fake_db):
+    """A missing manifest row raises 404 inside the real ``get_run_meta``.
 
-    _fake_service(monkeypatch, get_run_meta=_missing)
+    The service function is left intact and the fake database returns no
+    row, so removing the ``if not row`` guard in the service turns this
+    test red instead of staying green behind an injected raise.
+    """
+    fake_db.execute.return_value.fetchone.return_value = None
+    client = _build_client(_make_principal(), fake_db)
     resp = client.get(f"/api/v1/remediation/manifests/{uuid.uuid4()}")
     assert resp.status_code == 404
 
@@ -344,6 +357,24 @@ def test_create_link_without_correctable_fields_returns_409(client, monkeypatch)
     )
     assert resp.status_code == 409
     assert [kind for kind, _kw in calls] == [], "no token may be issued for buyer-work cases"
+
+
+def test_create_link_with_disallowed_status_returns_409_without_minting(client, monkeypatch):
+    """A case whose status forbids links fails before any token work.
+
+    The status gate runs above revoke and mint, so a disallowed status
+    must leave zero token calls behind. Reverting the gate below the
+    mint turns this test red.
+    """
+    calls = []
+    _patch_link_collaborators(monkeypatch, calls, _case(status="closed"))
+    resp = client.post(
+        f"/api/v1/remediation/cases/{CASE_ID}/link",
+        params={"tenant_id": TENANT},
+        json={"supplier_email": "ops@acme.example"},
+    )
+    assert resp.status_code == 409
+    assert calls == [], "no token may be revoked or minted for a closed case"
 
 
 def test_create_link_with_unmatched_fields_returns_422(client, monkeypatch):

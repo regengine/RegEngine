@@ -52,7 +52,7 @@ class _FakeDiscovery:
 
     @staticmethod
     async def scrape(body, url, tenant_id="system"):
-        _scrape_calls.append((body, url, tenant_id))
+        _scrape_calls.append((body, url))
         return None
 
 

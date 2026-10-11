@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import List
+from typing import Any, List
 
 import redis
 import structlog
@@ -122,6 +122,11 @@ async def approve_discovery(
         raise HTTPException(status_code=404, detail="Discovery item not found at index")
 
     val = item.decode("utf-8")
+    if ":" not in val:
+        # The manual-queue reader allows entries without a URL; approve
+        # cannot split those, so reject instead of 500ing on ValueError.
+        # The entry stays queued and can still be rejected by index.
+        raise HTTPException(status_code=400, detail="Malformed discovery queue entry")
     body, url = val.split(":", 1)
     r.lrem(queue_key, 1, item)
 
@@ -172,12 +177,12 @@ async def bulk_approve_discovery(
     queue_key = _manual_queue_key(api_key.tenant_id)
 
     approved = []
-    items_to_process = []
+    items_to_process: list[tuple[int, Any]] = []
     skipped: list[int] = []
     for index in payload.indices:
         item = r.lindex(queue_key, index)
         if item:
-            items_to_process.append(item)
+            items_to_process.append((index, item))
         else:
             # #2921: an index that resolves to nothing used to vanish into a
             # 200/count:0, indistinguishable from "nothing was requested".
@@ -185,8 +190,14 @@ async def bulk_approve_discovery(
 
     db = SessionLocal()
     try:
-        for item in items_to_process:
+        for index, item in items_to_process:
             val = item.decode("utf-8")
+            if ":" not in val:
+                # Same malformed-entry shape the manual-queue reader
+                # allows: leave it queued, count it skipped, keep the
+                # batch going instead of 500ing on ValueError.
+                skipped.append(index)
+                continue
             body, url = val.split(":", 1)
             r.lrem(queue_key, 1, item)
             enqueue_task(

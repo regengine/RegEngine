@@ -192,7 +192,15 @@ class TestComplianceControlPlaneE2E:
         assert event_types == ["harvesting", "initial_packing", "shipping", "receiving"]
 
     def test_step2_evaluate_rules_compliant(self):
-        """Step 2: Evaluate a compliant event — all rules pass."""
+        """Step 2: Evaluate a compliant event.
+
+        Contract: every stateless rule evaluates to ``pass``, except
+        documented non-critical format checks (for example the GLN check
+        digit rule on a name string). No evaluation may return ``error``
+        or ``skip``. Relational rules need a live DB session, so this
+        DB-less suite defers exactly those, and they must stay a strict
+        minority of the rule set.
+        """
         chain = _build_supply_chain()
         receive = normalize_webhook_event(chain[3], TENANT_ID)  # receiving event with all KDEs
 
@@ -228,6 +236,18 @@ class TestComplianceControlPlaneE2E:
         from shared.rules.evaluators.stateless import EVALUATORS
 
         relational_deferred = []
+        stateless_failures = []
+
+        # The relational set is derived from the same registries the
+        # product engine uses: a rule is deferred if and only if its
+        # evaluation type has no stateless evaluator. Pinning the exact
+        # set (not just "a minority was deferred") keeps a silently
+        # skipped rule from hiding inside the deferral count.
+        expected_relational = sorted(
+            f"{rule_data['title']} [{rule_data['evaluation_logic'].get('type', 'field_presence')}]"
+            for rule_data in receiving_rules
+            if rule_data["evaluation_logic"].get("type", "field_presence") not in EVALUATORS
+        )
 
         # Check each rule manually
         for rule_data in receiving_rules:
@@ -258,19 +278,32 @@ class TestComplianceControlPlaneE2E:
                 continue
             result = evaluator(event_data, rule.evaluation_logic, rule)
 
-            # Compliant event should pass all rules
+            # A compliant event must never produce error or skip: those
+            # outcomes would silently excuse a rule that should have passed.
+            assert result.result in ("pass", "fail"), (
+                f"Rule '{rule.title}' returned '{result.result}' on a compliant event "
+                f"instead of pass/fail: {result.why_failed}"
+            )
+
+            # Compliant event should pass all rules. The only documented
+            # exception is non-critical format checks (for example the GLN
+            # check digit rule on a name string). Any critical failure, in
+            # any category, fails the test.
             if result.result == "fail":
-                # Some rules may legitimately fail (e.g., GLN format check on a name string)
-                # But critical KDE rules should pass
-                if rule.severity == "critical" and rule.category == "kde_presence":
-                    assert result.result == "pass", (
-                        f"Critical KDE rule '{rule.title}' failed on compliant event: {result.why_failed}"
-                    )
+                assert result.why_failed, f"Rule '{rule.title}' failed on a compliant event with no explanation"
+                if rule.severity == "critical":
+                    stateless_failures.append(f"{rule.title} [{rule.category}]: {result.why_failed}")
+
+        assert stateless_failures == [], "critical rules failed on a compliant event: " + "; ".join(stateless_failures)
 
         evaluated = len(receiving_rules) - len(relational_deferred)
         assert evaluated > 0, "no receiving rules were evaluated at all"
-        # Relational deferrals must stay a strict minority of the rule set;
-        # if most rules need a DB session, this DB-less test proves little.
+        # Relational deferrals must be exactly the relational-typed rules,
+        # and they must stay a strict minority of the rule set; if most
+        # rules need a DB session, this DB-less test proves little.
+        assert sorted(relational_deferred) == expected_relational, (
+            f"deferred set drifted from the relational-typed rules: {relational_deferred}"
+        )
         assert len(relational_deferred) < len(receiving_rules), (
             f"most receiving rules were deferred to the live-DB suite: {relational_deferred}"
         )

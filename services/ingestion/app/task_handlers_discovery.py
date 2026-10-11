@@ -24,10 +24,10 @@ def _handle_discovery_scrape(
     tenant_id: str = "system",
     **_: Any,
 ) -> None:
-    # ``tenant_id`` rides in the task payload (written by the approve
-    # routes). Forward it so a robots-denied scrape lands in the approving
-    # tenant's manual-upload queue, not the shared ``system`` bucket.
-    # Payloads enqueued before this field existed keep the old default.
+    # Forward the owning tenant so a robots-denied re-scrape re-queues to
+    # that tenant's manual_upload_queue instead of the system queue.
+    # The "system" default keeps payloads enqueued before this field
+    # existed working unchanged.
     asyncio.run(discovery.scrape(body, url, tenant_id=tenant_id))
 
 

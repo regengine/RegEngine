@@ -1,140 +1,187 @@
-# FIX-REPORT for PR #3232 (merge 154e45172f6f67c8980c2cb9b90ab4766f84f391)
+# FIX-REPORT: About page copy
 
-Scope: CONCERN and BLOCKER findings touching the SSRF-safe fetching change.
-Out of scope per the task order (noted, not fixed): the suspended-tenant
-deny on live auth, the tenant-scope gate failure, and the 7 xfail
-cross-tenant leaks. No critical findings were reported for #3232.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings table
+## Before and after
 
-| # | Source report | Severity | Finding in one line | Status |
-|---|---|---|---|---|
-| 1 | re-rv-3232-correct, lead-correct | High | Relative RSS item links dropped (no feedparser base URL) | FIXED AND TESTED |
-| 2 | re-rv-3232-correct, lead-correct, lead-blast | Medium | 5 MiB cap on FDA PDFs and discovery docs, silent HTML fallback | FIXED AND TESTED |
-| 3 | re-rv-3232-security, re-rv-3232-correct (low), lead-security | High | Compressed bodies expand before the size cap runs | FIXED AND TESTED |
-| 4 | re-rv-3232-security | Medium | Playwright fallback sidesteps cap and redirect checks | FIXED AND TESTED (decode and size slice; see boundary note) |
-| 5 | re-rv-3232-tenant, lead-tenant, lead-blast | Medium | Robots 401/403 pushes approvals into manual_upload_queue:system | FIXED AND TESTED |
-| 6 | re-rv-3232-tests, lead-tests | Medium | Async redirect tests stub the validator, no live async SSRF test | FIXED AND TESTED |
-| 7 | re-rv-lead-blast (3232b) | Medium | FoodReady, FoodDocs, Tive swallow refusals as empty sync | FIXED AND TESTED |
-| 8 | re-rv-lead-blast (3232c) | Medium | Private base_url fails late at sync instead of at configure | FIXED AND TESTED |
-| 9 | re-rv-lead-blast (3232a) | Medium | ResponseTooLargeError handled as generic ValueError at doc sites | FIXED AND TESTED |
-| 10 | re-rv-int-backend-suite | High | tests/test_discovery_hardening.py 2 deterministic failures | FIXED AND TESTED |
-| 11 | re-rv-3232-tests (low) | Low | FoodDocs and Tive lack unmocked 127.0.0.1 tests | FIXED AND TESTED |
-| 12 | re-rv-3232-security (low) | Low | SSRF refusal text echoes the resolved private IP | FIXED AND TESTED |
-| 13 | re-rv-lead-blast (low) | Low | SafetyCulture GETs carry Content-Type, an extra redirect refusal | FIXED AND TESTED |
-| 14 | re-rv-3232-security (low) | Low | follow_redirects_safely has no cap or header policy | FIXED AND TESTED (doc fix; no callers) |
-| 15 | re-rv-3232-correct (low) | Low | nydfs.py, fda.py, ecfr adapters still use plain clients | Not fixed, listed below |
-| 16 | re-rv-3232-ops (low), lead-ops | Low | 5 MiB cap has no env override | Not fixed, listed below |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## What each fix does
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. `generic.py` passes `response_headers={"content-location": <final URL>}`
-   to feedparser. The safe helpers record the logical final-hop URL at
-   `response.extensions["safe_final_url"]` (the transport rewrites
-   `request.url` to the pinned IP, so `resp.url` is unusable as a base).
-2. New `DOCUMENT_MAX_RESPONSE_BYTES` (20 MiB) used by the FDA warning
-   letter PDF deep fetch and the Google discovery document fetch.
-   Oversized PDFs log `fda_deep_fetch_pdf_too_large` /
-   `google_fetch_too_large` instead of the generic failure, and discovery
-   scrape returns a distinct `Response exceeds size cap` error.
-3. Capped readers use an adaptive chunk size
-   (`min(64 KiB, max_bytes + 1)`), so one gzip or brotli read cannot
-   allocate past the cap, while small budgets still trip immediately.
-   Non-integer Content-Length stays lenient (see notes).
-4. `fetch_content` no longer promotes `httpx.DecodingError` to the
-   Playwright fallback (size and SSRF refusals were already fatal).
-   Boundary: timeouts, connect errors, and HTTP errors still fall back,
-   since that retry is the feature and the initial URL was validated.
-5. `tenant_id` rides in the `discovery_scrape` payload (approve and bulk
-   approve), the handler forwards it to `scrape`, and
-   `run_all_regulations_ingest` accepts it (route passes the caller
-   tenant, scheduler keeps `system`). Old payloads default to `system`.
-6. Three live async tests with the real client and real validator:
-   link-local redirect blocked, canary zero hits with the hop re-check
-   isolated as the sole guard, and final-URL tagging.
-7. `fetch_events` in FoodReady, FoodDocs, and Tive re-raise
-   `ResponseTooLargeError` and `SSRFError`, so `sync` records errors
-   instead of reporting an empty finished sync.
-8. `configure_connector` rejects provably non-public literal base URLs
-   with 400 (DNS-free check, so setup needs no live lookup; private
-   hostnames are still refused per hop at fetch time).
-9. Same code as 2, plus scheduler JSON scrapers intentionally keep the
-   5 MiB default (measured payloads stay under it, failures there are
-   already visible as `success=False`).
-10. The two hardening tests now mock `safe_httpx_get_sync` (the seam the
-    PR moved fetching to) instead of the removed `session.get`.
-11. Unmocked `http://127.0.0.1:9` tests for FoodDocs and Tive fetch, plus
-    Tive connection refusal.
-12. Discovery SSRF refusal returns a fixed string; the resolved address
-    stays in server logs only.
-13. `Content-Type` dropped from SafetyCulture GET headers (no request
-    body, one fewer redirect refusal cause).
-14. Module and client docstrings now point new callers at the capped
-    `safe_httpx_get_async`, not the legacy helper. No production caller
-    exists, so no behavior changed.
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Test commands and results (all through ~/metacode/fleet/heavy)
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-- `.venv/bin/pytest tests/test_discovery_hardening.py services/ingestion/tests/security/test_ssrf_redirect.py services/ingestion/tests/security/test_fetcher_ssrf_size_cap.py services/ingestion/tests/security/test_fetch_fallback.py -p no:cacheprovider` => `28 passed in 6.88s`
-- `.venv/bin/pytest services/shared/tests/test_connector_safe_http.py services/shared/tests/test_safe_http_streaming_cap.py services/shared/tests/test_safe_http_redirect_headers.py services/shared/tests/test_safe_http_size_cap.py -p no:cacheprovider` => `51 passed in 1.33s`
-- `.venv/bin/pytest services/ingestion/tests/test_task_handlers_discovery_1342.py services/ingestion/tests/test_routes_discovery_tenant_key_2921.py services/ingestion/tests/test_fda_enforcement_scraper_1342.py services/ingestion/tests/test_integration_router_1342.py -p no:cacheprovider` => `81 passed in 3.31s`
-- `.venv/bin/pytest services/ingestion/tests/test_google_discovery_scraper_1342.py services/ingestion/tests/security/test_scrapers_ssrf.py services/ingestion/tests/security/ -p no:cacheprovider` => `58 passed in 6.86s`
-- `.venv/bin/pytest services/ingestion/tests/test_google_discovery_scraper_1342.py -p no:cacheprovider` (after budget tests) => `23 passed in 0.44s`
-- `.venv/bin/pytest services/scheduler/tests/test_fsma_nightly_sync_wired.py services/scheduler/tests/test_silent_failures_2697.py services/ingestion/tests/test_pipeline_1342.py tests/test_discovery_hardening.py -p no:cacheprovider` => `42 passed in 1.35s`
-- `.venv/bin/pytest services/shared/tests -p no:cacheprovider` => `1 failed, 1179 passed, 28 skipped in 9.61s`. The single failure is `test_extract_document_script.py::test_verbose_sends_wrapper_log_lines_to_stderr_only`, which passes in isolation (`19 passed`) and passes together with every file I touched (`70 passed`). It is order dependent, lives in an area I did not touch (document extract logging), and matches the integration report pattern of order dependent failures on main. Left as is.
-- `ruff check` on all 23 touched files => `All checks passed!`. `ruff format --check` on production files => clean.
-- `scripts/security/scan_tenant_scope.py` was not run: I touched no SQL or Cypher queries (only payload dicts, Redis keys, and HTTP plumbing).
+2. Faster iteration card
 
-## How new tests were confirmed to fail without the fix
+Before:
+`Design-partner feedback is scoped to`
 
-- Relative RSS links: direct feedparser probe in the repo venv. Parsing
-  the same bytes without `response_headers` leaves `notice.html` and
-  `/regs/item/2` unresolved; with `content-location` both resolve
-  absolute. Old code takes the first path, so both new tests fail there.
-- Async canary twin: with `current_url = validator(next_url)` temporarily
-  edited out by hand, the test fails (`Failed` at the `pytest.raises`
-  line, canary hit once). Restored after, suite green again. The
-  link-local twin keeps passing via the pin layer, which documents the
-  defense in depth.
-- Streaming cap: the first fixed 64 KiB chunk version failed 4 existing
-  streaming tests (over-buffering, exact consumption counts), which forced
-  the adaptive sizing. Final code passes all existing assertions
-  unmodified.
-- Discovery hardening: the integration suite on main documents both
-  failures (`AttributeError: NoneType has no attribute args`), caused by
-  mocking the removed `session.get` seam.
-- Connector propagation, FDA oversized log, Google oversized log,
-  configure 400s, handler tenant forwarding, payload tenant assertion,
-  PDF document budget, and the DecodingError fallback test each assert
-  behavior the old code cannot produce (old code returns `([], None)`,
-  logs the generic event, stores the base, drops the tenant, omits
-  `max_bytes`, or promotes to the browser mock), verified by reading both
-  sides. Existing assertions that pinned the old swallowing behavior were
-  updated to the audit required propagation contract.
+After:
+`Early tester feedback is scoped to`
 
-## Lows listed without fixing
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-- `nydfs.py` (single `validate_url`, then `requests.get` with unvalidated
-  redirects and no size cap) and `fda.py`, ecfr, federal_register, fsma
-  adapters (plain `httpx.Client`, hardcoded hosts). Routing them through
-  the safe helpers is its own task with retry and session implications.
-- No env override for the 5 MiB default. Per-caller document budgets now
-  cover the known large-document paths.
-- Non-integer `Content-Length` stays lenient: httpx joins repeated
-  headers with commas, so a hard error would refuse legitimate
-  responses. The streaming cap still bounds the body either way.
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-## Notes for Christopher (decisions needed)
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-1. On-prem connector bases: configure now rejects private literals with
-   400. If any tenant needs a VPC or on-prem vendor endpoint, that needs
-   an explicit allowlist decision first.
-2. Browser fallback stays default-on for transient failures. Dropping the
-   default until the browser path gets hop validation and a byte cap is a
-   product call.
-3. Scheduler FDA scrapers keep the 5 MiB default for JSON and index
-   pages. If a real payload exceeds it, that caller needs its own
-   `max_bytes`, same pattern as the PDF fix.
-4. One pre-existing lint warning (`I001` import sort in
-   `test_routes_discovery_tenant_key_2921.py`) predates this change and
-   was left alone.
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
