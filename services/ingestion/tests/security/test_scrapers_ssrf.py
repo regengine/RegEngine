@@ -192,4 +192,12 @@ def test_no_direct_httpx_get_in_state_adaptors():
         scrubbed = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
         if "httpx.get(" in scrubbed or "httpx.post(" in scrubbed:
             offenders.append(py.name)
-    assert offenders == [], f"Direct httpx calls found in: {offenders}"
+        # Raw ``requests`` calls bypass per-hop validation + IP pinning the
+        # same way (this is how the NYDFS adaptor regressed), as do
+        # feedparser/urllib fetches that take a URL. All outbound HTTP must
+        # go through ``safe_httpx_get_sync``.
+        if "requests.get(" in scrubbed or "requests.post(" in scrubbed:
+            offenders.append(f"{py.name} (requests)")
+        if "feedparser.parse(http" in scrubbed or "urlopen(" in scrubbed:
+            offenders.append(f"{py.name} (raw fetch)")
+    assert offenders == [], f"Direct HTTP calls found in: {offenders}"
