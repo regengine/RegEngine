@@ -52,6 +52,62 @@ describe('tools verify route', () => {
         );
     });
 
+    it('sets the cookie maxAge from the backend token lifetime', async () => {
+        process.env.ADMIN_SERVICE_URL = 'https://admin.example.com';
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(
+            JSON.stringify({ status: 'verified', token: 'jwt-token', expires_in_seconds: 7200 }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+        const { POST } = await import('@/app/api/tools/verify/route');
+
+        const response = await POST(makeRequest({
+            action: 'confirm',
+            email: 'user@example.com',
+            code: '123456',
+        }));
+
+        const setCookie = response.headers.get('set-cookie') ?? '';
+        expect(setCookie).toContain('re_tool_access=jwt-token');
+        expect(setCookie).toMatch(/Max-Age=7200/i);
+    });
+
+    it('defaults the cookie to a 24-hour maxAge when the backend omits the lifetime', async () => {
+        process.env.ADMIN_SERVICE_URL = 'https://admin.example.com';
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(
+            JSON.stringify({ status: 'verified', token: 'jwt-token' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+        const { POST } = await import('@/app/api/tools/verify/route');
+
+        const response = await POST(makeRequest({
+            action: 'confirm',
+            email: 'user@example.com',
+            code: '123456',
+        }));
+
+        const setCookie = response.headers.get('set-cookie') ?? '';
+        expect(setCookie).toMatch(/Max-Age=86400/i);
+        expect(setCookie).not.toMatch(/Max-Age=2592000/i);
+    });
+
+    it('caps an over-long backend lifetime at the 24-hour cookie maxAge', async () => {
+        process.env.ADMIN_SERVICE_URL = 'https://admin.example.com';
+        vi.mocked(fetch).mockResolvedValueOnce(new Response(
+            JSON.stringify({ status: 'verified', token: 'jwt-token', expires_in_seconds: 2592000 }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ));
+        const { POST } = await import('@/app/api/tools/verify/route');
+
+        const response = await POST(makeRequest({
+            action: 'confirm',
+            email: 'user@example.com',
+            code: '123456',
+        }));
+
+        const setCookie = response.headers.get('set-cookie') ?? '';
+        expect(setCookie).toMatch(/Max-Age=86400/i);
+    });
+
     it('rejects redirects without forwarding a Location response', async () => {
         process.env.ADMIN_SERVICE_URL = 'https://admin.example.com';
         vi.mocked(fetch).mockResolvedValueOnce(new Response(null, {

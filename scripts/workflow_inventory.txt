@@ -52,6 +52,7 @@ review-gates.yml
 sdk-ci.yml
 security.yml
 sentinel.yml
+supply-chain.yml
 test-suite-check.yml
 
 [required-contexts]
@@ -63,3 +64,4 @@ Secrets Audit (detect-secrets)
 Browser Storage PII Guard
 SAST (Semgrep)
 Dependency Audit
+Pinned supply chain

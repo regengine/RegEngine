@@ -66,6 +66,74 @@ def _configure_paths() -> None:
             sys.path.insert(0, root_text)
 
 
+PRODUCTION_DB_HINTS = (
+    "supabase.co",
+    "supabase.com",
+    "neon.tech",
+    "railway.app",
+    "amazonaws.com",
+    "ondigitalocean.com",
+    "render.com",
+)
+
+
+def _database_host(database_url: str) -> str:
+    try:
+        from sqlalchemy.engine import make_url
+
+        return (make_url(database_url).host or "").lower()
+    except Exception:  # noqa: BLE001 - unparseable URL, treat as non-local
+        return ""
+
+
+def _effective_db_hosts(database_url: str) -> list[str]:
+    """Every host a Postgres driver may connect to for this URL.
+
+    The authority host plus any libpq ``host`` / ``hostaddr`` query values,
+    which SQLAlchemy passes through to the driver and which override the
+    authority host. A URL that looks like localhost but carries a remote
+    query host is not local.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    hosts: list[str] = []
+    try:
+        parts = urlsplit(database_url)
+    except ValueError:
+        return [""]
+    if parts.hostname:
+        hosts.append(parts.hostname.lower())
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return hosts or [""]
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            # Multi-host values are comma-separated; each names a target.
+            hosts.extend(h.strip().lower() for h in value.split(",") if h.strip())
+    return hosts or [""]
+
+
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Compose service names from .env.example (local dev stack only).
+DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}
+LOCAL_HOSTS = LOOPBACK_HOSTS | DEV_COMPOSE_HOSTS
+
+
+def ensure_local_database(database_url: str, allow_production: bool) -> None:
+    """Refuse hosted or non-localhost databases without explicit opt-in."""
+    lowered = database_url.lower()
+    hosts = _effective_db_hosts(database_url)
+    env = os.getenv("REGENGINE_ENV", "").strip().lower()
+    is_local = bool(hosts) and all(h in LOCAL_HOSTS for h in hosts)
+    looks_hosted = any(hint in lowered for hint in PRODUCTION_DB_HINTS)
+    if (not is_local or looks_hosted or env == "production") and not allow_production:
+        raise VerificationError(
+            "Refusing to run against a non-localhost database. "
+            "Use a localhost DATABASE_URL or pass --allow-production only if you are certain."
+        )
+
+
 def _configure_environment(args: argparse.Namespace) -> None:
     database_url = args.database_url or os.getenv("DATABASE_URL")
     if not database_url:
@@ -76,6 +144,7 @@ def _configure_environment(args: argparse.Namespace) -> None:
         raise VerificationError(
             "This proof requires a real Postgres DATABASE_URL; sqlite/dev mocks are not accepted."
         )
+    ensure_local_database(database_url, getattr(args, "allow_production", False))
 
     os.environ["DATABASE_URL"] = database_url
     os.environ.setdefault("REGENGINE_ENV", "development")
@@ -109,6 +178,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--api-key",
         default="regengine-inflow-e2e-local-key",
         help="Process-local preshared API key used for TestClient calls.",
+    )
+    parser.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow a non-localhost DATABASE_URL. Almost never what you want.",
     )
     return parser.parse_args(argv)
 

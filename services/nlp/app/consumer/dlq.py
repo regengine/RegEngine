@@ -175,13 +175,7 @@ def _send_to_fsma_dlq(
             tenant_id=tenant_id,
             error=error,
         )
-    # KafkaError covers both KafkaTimeoutError (flush timeout, the common
-    # case under a slow broker) and produce-time failures (buffer full,
-    # unknown topic). Without it a transient broker stall while
-    # dead-lettering escaped _run_consumer_loop and killed the whole
-    # consumer thread, halting all processing with health 503. The sibling
-    # _send_to_dlq already catches KafkaTimeoutError for the same reason.
-    except (KafkaError, ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
+    except (KafkaTimeoutError, ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
         logger.error(
             "dlq_routing_failed",
             topic=topic,
