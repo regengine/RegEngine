@@ -1,7 +1,7 @@
 """Wave 2 QA coverage for services/admin auth, roles, invites, exports, tenant scope.
 
 Fills unit-level gaps with fast, deterministic tests (MagicMock only, no DB,
-no network, no clock dependence). Each test pins behavior the service already
+no network, wide clock margins). Each test pins behavior the service already
 relies on for tenant isolation and access control:
 
 * ``dependencies._parse_token_version`` coercion rules
@@ -19,6 +19,7 @@ Product files intentionally untouched (tests only).
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -180,7 +181,8 @@ class TestEnforceSessionBoundToken:
         assert exc.value.status_code == 401
 
     def test_expired_session_is_rejected(self):
-        past = datetime.now(timezone.utc) - timedelta(seconds=1)
+        # Wide margin so a small clock step between the two now() calls cannot flip it.
+        past = datetime.now(timezone.utc) - timedelta(minutes=5)
         with pytest.raises(HTTPException) as exc:
             _check_session_bound_token(
                 local_session_id=SESSION_ID,
@@ -325,10 +327,17 @@ class TestResolveSessionTenantId:
 
 
 class TestResolveSessionPermissions:
-    def test_none_tenant_returns_empty(self):
+    def test_none_tenant_returns_empty_without_touching_db(self):
         from services.admin.app import auth_routes as routes
 
-        assert routes._resolve_session_permissions(user_id=USER_ID, tenant_id=None, db=MagicMock()) == []
+        # The double would yield a role carrying a permission, so removing the
+        # no-tenant guard (which must skip the query entirely) fails this test.
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = SimpleNamespace(permissions=["users.read"])
+        db = MagicMock()
+        db.execute.return_value = result
+        assert routes._resolve_session_permissions(user_id=USER_ID, tenant_id=None, db=db) == []
+        db.execute.assert_not_called()
 
     def test_missing_role_returns_empty(self):
         from services.admin.app import auth_routes as routes
@@ -352,9 +361,7 @@ class TestResolveSessionPermissions:
         from services.admin.app import auth_routes as routes
 
         result = MagicMock()
-        result.scalar_one_or_none.return_value = SimpleNamespace(
-            permissions=["users.read", 42, None, "audit.read"]
-        )
+        result.scalar_one_or_none.return_value = SimpleNamespace(permissions=["users.read", 42, None, "audit.read"])
         db = MagicMock()
         db.execute.return_value = result
         assert routes._resolve_session_permissions(user_id=USER_ID, tenant_id=TENANT_ID, db=db) == [
@@ -395,6 +402,89 @@ class TestLoadActiveOrganizationMembership:
         db = MagicMock()
         db.execute.return_value = result
         assert routes._load_active_organization_membership(context=self._context(membership.id), db=db) is membership
+
+
+# ---------------------------------------------------------------------------
+# Tenant-scope SQL predicates (captured statements, not canned rows)
+# ---------------------------------------------------------------------------
+
+
+def _executed_statement(db):
+    assert db.execute.call_count == 1
+    return db.execute.call_args.args[0]
+
+
+def _bound_param_values(stmt):
+    return list(stmt.compile().params.values())
+
+
+class TestTenantScopePredicates:
+    def test_resolve_session_tenant_id_scopes_to_user_and_active(self):
+        from services.admin.app import auth_routes as routes
+
+        db = _db_with_scalars_all([TENANT_ID])
+        assert routes._resolve_session_tenant_id(user_id=USER_ID, db=db) == TENANT_ID
+        stmt = _executed_statement(db)
+        assert USER_ID in _bound_param_values(stmt)
+        rendered = str(stmt)
+        assert "memberships.user_id" in rendered
+        assert "memberships.is_active" in rendered
+
+    def test_resolve_session_permissions_scopes_to_user_and_tenant(self):
+        from services.admin.app import auth_routes as routes
+
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = SimpleNamespace(permissions=["users.read"])
+        db = MagicMock()
+        db.execute.return_value = result
+        assert routes._resolve_session_permissions(user_id=USER_ID, tenant_id=TENANT_ID, db=db) == ["users.read"]
+        stmt = _executed_statement(db)
+        assert USER_ID in _bound_param_values(stmt)
+        assert TENANT_ID in _bound_param_values(stmt)
+        rendered = str(stmt)
+        assert "memberships.user_id" in rendered
+        assert "memberships.tenant_id" in rendered
+        assert "memberships.is_active" in rendered
+
+    def test_permission_checker_scopes_to_user_and_tenant(self, monkeypatch):
+        from services.admin.app import dependencies as deps
+
+        monkeypatch.setattr(deps.TenantContext, "get_tenant_context", staticmethod(lambda _db: TENANT_ID))
+        role = SimpleNamespace(permissions=["users.read"])
+        db = _checker_db_with_role(role)
+        assert (
+            deps.PermissionChecker("users.read")(
+                user=SimpleNamespace(id=USER_ID),
+                db=db,
+            )
+            is True
+        )
+        stmt = _executed_statement(db)
+        assert USER_ID in _bound_param_values(stmt)
+        assert TENANT_ID in _bound_param_values(stmt)
+        rendered = str(stmt)
+        assert "memberships.user_id" in rendered
+        assert "memberships.tenant_id" in rendered
+
+    def test_load_active_membership_scopes_to_row_and_user(self):
+        from services.admin.app import auth_routes as routes
+
+        membership_id = uuid.uuid4()
+        membership = SimpleNamespace(id=membership_id)
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = membership
+        db = MagicMock()
+        db.execute.return_value = result
+        context = SimpleNamespace(
+            user=SimpleNamespace(id=USER_ID),
+            session=SimpleNamespace(active_membership_id=membership_id),
+        )
+        assert routes._load_active_organization_membership(context=context, db=db) is membership
+        stmt = _executed_statement(db)
+        assert membership_id in _bound_param_values(stmt)
+        assert USER_ID in _bound_param_values(stmt)
+        rendered = str(stmt)
+        assert "organization_memberships.user_id" in rendered
 
 
 # ---------------------------------------------------------------------------
@@ -477,9 +567,53 @@ class TestInviteBaseUrl:
 
 
 class TestRecordE2EInviteEmail:
+    def _clear_cloud_markers(self, monkeypatch):
+        from shared.env import CLOUD_ENV_VARS
+
+        for marker in CLOUD_ENV_VARS:
+            monkeypatch.delenv(marker, raising=False)
+
     def test_disabled_without_outbox_returns_false(self, monkeypatch):
         from services.admin.app import invite_routes
 
         monkeypatch.delenv("REGENGINE_E2E_EMAIL_OUTBOX", raising=False)
         monkeypatch.delenv("REGENGINE_E2E_MODE", raising=False)
         assert invite_routes._record_e2e_invite_email("buyer@example.com", "https://x/accept#token=t") is False
+
+    def test_fully_enabled_local_outbox_writes_one_record(self, monkeypatch, tmp_path):
+        from services.admin.app import invite_routes
+
+        outbox = tmp_path / "outbox.jsonl"
+        monkeypatch.setenv("REGENGINE_E2E_EMAIL_OUTBOX", str(outbox))
+        monkeypatch.setenv("REGENGINE_E2E_MODE", "true")
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        self._clear_cloud_markers(monkeypatch)
+        assert invite_routes._record_e2e_invite_email("buyer@example.com", "https://x/accept#token=t") is True
+        lines = outbox.read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        record = json.loads(lines[0])
+        assert record["to"] == "buyer@example.com"
+        assert record["invite_link"] == "https://x/accept#token=t"
+
+    def test_cloud_marker_blocks_write(self, monkeypatch, tmp_path):
+        from services.admin.app import invite_routes
+
+        outbox = tmp_path / "outbox.jsonl"
+        monkeypatch.setenv("REGENGINE_E2E_EMAIL_OUTBOX", str(outbox))
+        monkeypatch.setenv("REGENGINE_E2E_MODE", "true")
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        self._clear_cloud_markers(monkeypatch)
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT", "test-cloud")
+        assert invite_routes._record_e2e_invite_email("buyer@example.com", "https://x/accept#token=t") is False
+        assert not outbox.exists()
+
+    def test_e2e_mode_off_blocks_write(self, monkeypatch, tmp_path):
+        from services.admin.app import invite_routes
+
+        outbox = tmp_path / "outbox.jsonl"
+        monkeypatch.setenv("REGENGINE_E2E_EMAIL_OUTBOX", str(outbox))
+        monkeypatch.delenv("REGENGINE_E2E_MODE", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+        self._clear_cloud_markers(monkeypatch)
+        assert invite_routes._record_e2e_invite_email("buyer@example.com", "https://x/accept#token=t") is False
+        assert not outbox.exists()

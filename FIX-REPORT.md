@@ -1,87 +1,187 @@
-# FIX-REPORT: PR #3220 (merge a587084b, scope obligation lookups by tenant)
+# FIX-REPORT: About page copy
 
-Sources read: all six re-rv-3220-<angle> SUMMARY.md files (correct, security,
-tenant, tests, ops, blast, plus blast REPORT.md), and every lead, area and
-integration report mentioning #3220 (lead-blast, lead-ops, lead-security,
-lead-tenant, lead-tests, area-tenant, int-backend-suite, int-perf,
-int-rollback, int-semgrep-gates).
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings
+## Before and after
 
-| Source report | Severity | Status | Reason |
-|---|---|---|---|
-| re-rv-3220-security Medium: null tenant_id still matches every obligation (traceability_linker.py:31), carried as lead-security #19 | Medium | BLOCKED | Code fact confirmed, but the suggested fix (strict `o.tenant_id = $tenant_id`) contradicts the documented design and later locked tests; needs C.Lee decision, see below |
-| re-rv-3220-security Low: `get_governing_regulations` and `get_impacted_lots` do not scope the joined TraceEvent (traceability_linker.py:112-132) | Low | Not fixed (low) | Overlaps the out of scope BUG-002/BUG-003 xfails owned by another task; adding the predicate would flip those strict xfails to XPASS failures |
-| re-rv-3220-tests Medium: cross-tenant test pre-seeds its own empty row (test file lines 161-168), carried by lead-tests | Medium | FIXED AND TESTED | Test now also asserts the exact captured Cypher predicate, so a predicate revert fails it |
-| re-rv-3220-tests Medium: substring checks pass wrong booleans such as OR true (test file lines 129-204), carried by lead-tests | Medium | FIXED AND TESTED | All four query tests now assert the exact WHERE clause through a literal helper, plus a new OR-true mutation test |
-| Out of scope per task brief: tenant-scope gate failure (int-backend-suite High, int-semgrep-gates BLOCKER on linker :31 and :112) | n/a | Noted only | Owned by another task |
-| Out of scope per task brief: 7 xfail cross-tenant leaks, including BUG-002/BUG-003 on these queries | n/a | Noted only | Owned by another task |
-| Out of scope per task brief: suspended-tenant deny on live auth | n/a | Noted only | No 3220 report raised it against these routes; tenant angle verified key-bound tenant resolution |
-| int-rollback High: reverting 3220 while keeping 3237/3246 breaks them | n/a | Noted only | Informational revert-ordering note, no code change needed |
-| re-rv-3220-correct, tenant, ops, blast: no findings | n/a | n/a | Nothing to fix |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Why the security Medium is BLOCKED, not fixed
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-Three facts from the code, all verified by reading:
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. Obligation nodes are a shared global catalog by design. The only in-repo
-   writers (`services/ingestion/app/regulation_loader.py:132`,
-   `services/admin/app/supplier_graph_sync.py:157`) MERGE without any
-   `tenant_id`, and neither sets an `id` property. Strict equality would make
-   every catalog read return nothing, breaking the feature the PR protects.
-2. PR #3237 (commit 90dc0551, merged later) locks the exact
-   `(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)` predicate into passing
-   non-xfail scan tests (`test_cypher_tenant_scope_scan.py` lines 808-858).
-   Switching to strict equality breaks those tests.
-3. The sibling strict-equality reads (`mapping_engine.py:78-79`,
-   `compliance.py:977`) match different node shapes
-   (`{text: $id}` via REQUIRES, `{tenant_id: $tenant_id}` property match),
-   so they are not proof this linker can do the same on catalog nodes.
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-The report itself calls exploitability "a gap, not a closed hole" and guesses
-about hand-loaded nodes with `id` set and no `tenant_id`, which no in-repo
-evidence confirms. The honest fix is a catalog redesign (private obligations
-on a separate label, strict equality on `:Obligation`), which is beyond the
-smallest correct change. Decision needed from C.Lee, listed below.
+2. Faster iteration card
 
-## Code change
+Before:
+`Design-partner feedback is scoped to`
 
-`services/graph/tests/test_traceability_linker_tenant_scope.py` only; no
-production code touched:
+After:
+`Early tester feedback is scoped to`
 
-- Added `_EXPECTED_OBLIGATION_PREDICATE` literal, `_OBLIGATION_WHERE_RE`
-  regex and `_assert_obligation_scoped` helper (literal expectation, never
-  imports the product constant).
-- All four query tests assert the exact WHERE clause before MATCH/RETURN/MERGE
-  with `$tenant_id` bound and no interpolation, replacing substring checks.
-- Cross-tenant test now asserts the captured Cypher carries the exact
-  predicate, so deleting the predicate fails the test.
-- New `test_obligation_predicate_rejects_or_true_mutation` proves an
-  OR-true-weakened predicate is rejected.
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-## Test commands and results
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-1. `~/metacode/fleet/heavy .venv/bin/python -m pytest services/graph/tests/test_traceability_linker_tenant_scope.py -q --no-cov`
-   Result: `......... [100%]`, 9 passed.
-2. Fail-without-fix probe `/tmp/probe_3220.py` (monkeypatches the predicate to
-   the pre-PR empty shape and to an OR-true variant containing all old
-   substring tokens, then runs the new assertions):
-   Result: `pre-PR (empty predicate): both queries REJECTED by new assertions`,
-   `OR-true mutation: REJECTED by new assertions (old substring checks passed it)`,
-   `PROBE OK`.
-3. `~/metacode/fleet/heavy .venv/bin/python -m pytest services/graph/tests/test_cypher_tenant_scope_scan.py -q --no-cov -k "obligation or governing or impacted or linker"`
-   Result: 7 passed, 2 xfailed (BUG-002 and BUG-003, the out of scope xfails).
-4. `~/metacode/fleet/heavy .venv/bin/ruff check services/graph/tests/test_traceability_linker_tenant_scope.py services/graph/app/traceability_linker.py`
-   Result: `All checks passed!`
-5. `scripts/security/scan_tenant_scope.py` was not run: no queries were
-   touched (test-only change), and the gate failure is out of scope.
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-## Needs C.Lee's decision
+## Diff
 
-1. Null-tenant obligation readability: keep the shared-catalog
-   `IS NULL OR` predicate (current, locked by PR 3237 tests), or redesign so
-   tenant-private obligations live on a separate label with strict equality
-   on `:Obligation`? The security reviewers want the latter; it changes
-   product behavior for the global catalog.
-2. TraceEvent scoping (BUG-002/BUG-003) and the red tenant-scope gate are
-   owned by other tasks; confirm they stay out of this lane.
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
