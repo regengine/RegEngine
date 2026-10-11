@@ -27,6 +27,7 @@ from shared.audit_logging.schema import (  # noqa: F401
 # Storage backends
 from shared.audit_logging.storage import (  # noqa: F401
     AuditStorageBackend,
+    AuditStorageError,
     InMemoryAuditStorage,
     PostgresHashChainAuditStorage,
 )

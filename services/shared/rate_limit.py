@@ -198,7 +198,19 @@ class BruteForceLimiter:
                 try:
                     count = int(raw)
                 except (ValueError, TypeError):
-                    return False
+                    # A corrupt counter must not mean unlimited attempts:
+                    # reset the key so the next request starts clean, and
+                    # deny this one when running in closed fail mode.
+                    logger.warning(
+                        "brute_force_limiter_corrupt_counter",
+                        namespace=self._namespace,
+                        subject=subject,
+                    )
+                    try:
+                        self._redis.delete(self._key(subject))
+                    except Exception:
+                        pass
+                    return self._fail_mode() == "closed"
                 if self._degraded:
                     self._degraded = False
                     logger.info("brute_force_limiter_backend_recovered", namespace=self._namespace)
@@ -249,9 +261,11 @@ class BruteForceLimiter:
 
                     raise RateLimitBackendUnavailable() from exc
 
-        # In-memory fallback
+        # In-memory fallback. Prune expired entries first (mirroring
+        # is_limited) so the returned count never includes stale failures.
         now = time.time()
         with self._mem_lock:
+            self._mem_failures[subject] = [t for t in self._mem_failures[subject] if now - t < self._window]
             self._mem_failures[subject].append(now)
             if len(self._mem_failures[subject]) > self._max * 4:
                 self._mem_failures[subject] = self._mem_failures[subject][-(self._max * 2) :]

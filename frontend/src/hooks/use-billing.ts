@@ -180,7 +180,7 @@ export function usePricingTiers() {
 
 async function fetchCurrentSubscription(tenantId: string): Promise<SubscriptionData> {
     const res = await fetchWithCsrf(
-        `${getServiceURL('ingestion')}/api/v1/billing/subscription/${tenantId}`,
+        `${getServiceURL('ingestion')}/api/v1/billing/subscription/${encodeURIComponent(tenantId)}`,
         {
             credentials: 'include',
             headers: {

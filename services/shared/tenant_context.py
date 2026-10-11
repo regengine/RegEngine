@@ -166,8 +166,10 @@ def assert_tenant_claim_matches(
     """Reject client-supplied tenant claims that conflict with auth context."""
     if claimed_tenant_id in (None, ""):
         return
-    claimed = str(claimed_tenant_id)
-    if claimed == ctx.tenant_id:
+    # Compare case-insensitively: UUID hex case carries no meaning, and a
+    # 409 on a legitimate same-tenant request is an availability bug.
+    claimed = str(claimed_tenant_id).strip().lower()
+    if claimed == str(ctx.tenant_id).strip().lower():
         return
 
     logger.warning(

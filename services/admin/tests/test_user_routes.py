@@ -328,13 +328,15 @@ class TestUpdateUserRole_Issue1341:
 
         db.get.side_effect = _get
 
-        # Two execute calls: membership lookup + other-owner lookup.
-        # Second call returns a non-empty list so the last-owner check
-        # passes.
+        # Three execute calls: membership lookup + other-owner lookup +
+        # caller-role lookup for the #1387 tier check. Second call returns
+        # a non-empty list so the last-owner check passes; the actor performs
+        # this demotion as an Owner, so the tier check passes too.
         other_owner = _fake_membership(
             user_id=uuid.uuid4(),
             role_id=OWNER_ROLE_ID,
         )
+        caller_owner_role = _fake_role(OWNER_ROLE_ID, "Owner")
         call_count = {"n": 0}
 
         def _execute(stmt):
@@ -342,8 +344,10 @@ class TestUpdateUserRole_Issue1341:
             result = MagicMock()
             if call_count["n"] == 1:
                 result.scalar_one_or_none.return_value = current_membership
-            else:
+            elif call_count["n"] == 2:
                 result.all.return_value = [(other_owner,)]
+            else:
+                result.scalar_one_or_none.return_value = caller_owner_role
             return result
 
         db.execute.side_effect = _execute
@@ -394,8 +398,10 @@ class TestUpdateUserRole_Issue1341:
 
         db.get.side_effect = _get
 
-        # Only ONE execute call should be made (membership lookup) —
-        # no second call for the owner lock since current role is not Owner.
+        # Two execute calls: membership lookup + caller-role lookup for the
+        # #1387 tier check. No owner-lock query since current role is not
+        # Owner — a third call means the last-Owner guard fired too eagerly.
+        caller_owner_role = _fake_role(OWNER_ROLE_ID, "Owner")
         call_count = {"n": 0}
 
         def _execute(stmt):
@@ -403,6 +409,8 @@ class TestUpdateUserRole_Issue1341:
             result = MagicMock()
             if call_count["n"] == 1:
                 result.scalar_one_or_none.return_value = current_membership
+            elif call_count["n"] == 2:
+                result.scalar_one_or_none.return_value = caller_owner_role
             else:
                 pytest.fail(
                     "Should not query locked owners when demoting a "

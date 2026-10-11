@@ -399,7 +399,7 @@ class APIClient {
   }
 
   async revokeAPIKey(keyId: string): Promise<void> {
-    await this.adminClient.delete(`/v1/admin/keys/${keyId}`);
+    await this.adminClient.delete(`/v1/admin/keys/${encodeURIComponent(keyId)}`);
   }
 
   // Ingestion API
@@ -501,7 +501,7 @@ class APIClient {
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${jobId}`);
+    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`);
     return data;
   }
 
@@ -550,7 +550,7 @@ class APIClient {
   }
 
   async getChecklist(checklistId: string): Promise<ComplianceChecklist> {
-    const { data } = await this.complianceClient.get(`/checklists/${checklistId}`);
+    const { data } = await this.complianceClient.get(`/checklists/${encodeURIComponent(checklistId)}`);
     return data;
   }
 
@@ -561,7 +561,7 @@ class APIClient {
   // RulesEngine.
 
   async getDocumentAnalysis(documentId: string, apiKey: string): Promise<AnalysisSummary> {
-    const { data } = await this.ingestionClient.get(`/v1/ingest/documents/${documentId}/analysis`, {
+    const { data } = await this.ingestionClient.get(`/v1/ingest/documents/${encodeURIComponent(documentId)}/analysis`, {
       headers: credentialHeader('X-RegEngine-API-Key', apiKey)
     });
     return data;
@@ -653,11 +653,11 @@ class APIClient {
   }
 
   async approveReviewItem(itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/approve`, {});
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${encodeURIComponent(itemId)}/approve`, {});
   }
 
   async rejectReviewItem(itemId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${itemId}/reject`, {});
+    await this.adminClient.post(`/v1/admin/review/flagged-extractions/${encodeURIComponent(itemId)}/reject`, {});
   }
 
   // --- User Management ---
@@ -668,11 +668,11 @@ class APIClient {
   }
 
   async updateUserRole(userId: string, roleId: string): Promise<void> {
-    await this.adminClient.patch(`/v1/admin/users/${userId}/role`, { role_id: roleId });
+    await this.adminClient.patch(`/v1/admin/users/${encodeURIComponent(userId)}/role`, { role_id: roleId });
   }
 
   async deactivateUser(userId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/users/${userId}/deactivate`);
+    await this.adminClient.post(`/v1/admin/users/${encodeURIComponent(userId)}/deactivate`);
   }
 
   async getRoles(): Promise<Role[]> {
@@ -694,7 +694,7 @@ class APIClient {
   }
 
   async revokeInvite(inviteId: string): Promise<void> {
-    await this.adminClient.post(`/v1/admin/invites/${inviteId}/revoke`);
+    await this.adminClient.post(`/v1/admin/invites/${encodeURIComponent(inviteId)}/revoke`);
   }
 
   async acceptInvite(data: AcceptInviteRequest): Promise<void> {
@@ -727,7 +727,7 @@ class APIClient {
     request: FacilityFTLScopingRequest,
   ): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.put<FacilityFTLScopingResponse>(
-      `/v1/supplier/facilities/${facilityId}/ftl-categories`,
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/ftl-categories`,
       request,
     );
     return data;
@@ -735,7 +735,7 @@ class APIClient {
 
   async getFacilityRequiredCTEs(facilityId: string): Promise<FacilityFTLScopingResponse> {
     const { data } = await this.adminClient.get<FacilityFTLScopingResponse>(
-      `/v1/supplier/facilities/${facilityId}/required-ctes`,
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/required-ctes`,
     );
     return data;
   }
@@ -745,7 +745,7 @@ class APIClient {
     request: SupplierCTEEventCreateRequest,
   ): Promise<SupplierCTEEventResponse> {
     const { data } = await this.adminClient.post<SupplierCTEEventResponse>(
-      `/v1/supplier/facilities/${facilityId}/cte-events`,
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/cte-events`,
       request,
     );
     return data;
@@ -860,7 +860,7 @@ class APIClient {
 
   async getSupplierBulkUploadStatus(sessionId: string): Promise<SupplierBulkUploadStatusResponse> {
     const { data } = await this.adminClient.get<SupplierBulkUploadStatusResponse>(
-      `/v1/supplier/bulk-upload/status/${sessionId}`,
+      `/v1/supplier/bulk-upload/status/${encodeURIComponent(sessionId)}`,
     );
     return data;
   }
@@ -894,7 +894,7 @@ class APIClient {
   }
 
   async revokePortalLink(portalId: string): Promise<void> {
-    await this.ingestionClient.patch(`/api/v1/portal/links/${portalId}/revoke`);
+    await this.ingestionClient.patch(`/api/v1/portal/links/${encodeURIComponent(portalId)}/revoke`);
   }
 
   // Supplier Integration Profiles — saved field mappings for portal and file feeds
@@ -902,7 +902,7 @@ class APIClient {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
     const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
-      `/api/v1/integrations/profiles/${tenantId}`,
+      `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}`,
     );
     return data;
   }
@@ -911,7 +911,7 @@ class APIClient {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
     const { data } = await this.ingestionClient.post<IntegrationProfile>(
-      `/api/v1/integrations/profiles/${tenantId}`,
+      `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}`,
       request,
     );
     return data;
@@ -924,7 +924,7 @@ class APIClient {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
     const { data } = await this.ingestionClient.post<MappingPreviewResponse>(
-      `/api/v1/integrations/profiles/${tenantId}/${profileId}/preview`,
+      `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}/${encodeURIComponent(profileId)}/preview`,
       { events },
     );
     return data;
@@ -953,7 +953,7 @@ class APIClient {
   // --- Tenant Settings & Onboarding ---
 
   async updateTenantSettings(tenantId: string, settings: Record<string, unknown>): Promise<void> {
-    await this.adminClient.patch(`/v1/tenants/${tenantId}/settings`, settings);
+    await this.adminClient.patch(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, settings);
   }
 
   async getOnboardingStatus(tenantId: string): Promise<{
@@ -962,7 +962,7 @@ class APIClient {
     is_complete: boolean;
     partner_tier?: string | null;
   }> {
-    const { data } = await this.adminClient.get(`/v1/tenants/${tenantId}/onboarding`);
+    const { data } = await this.adminClient.get(`/v1/tenants/${encodeURIComponent(tenantId)}/onboarding`);
     return data;
   }
 

@@ -58,7 +58,7 @@ class OverlayResolver:
             # Step 1: Get product and its controls from tenant database
             product_controls_query = """
             MATCH (product:CustomerProduct {id: $product_id, tenant_id: $tenant_id})
-            OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)
+            OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl {tenant_id: $tenant_id})
             RETURN product, collect(control) as controls
             """
             async with tenant_client.session() as session:

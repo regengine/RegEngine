@@ -33,6 +33,21 @@ from sqlalchemy.types import CHAR, TypeDecorator
 from .sqlalchemy_models import GUID, Base, JSONType
 
 
+def _as_aware_utc(value: datetime | None) -> datetime | None:
+    """Coerce a DB timestamp to an aware UTC datetime for arithmetic.
+
+    Postgres timestamptz columns come back aware, but SQLite and plain
+    timestamp columns come back naive; subtracting ``datetime.now(timezone.utc)``
+    from a naive value raises TypeError and turns the status widget into
+    a 500. Naive values are read as UTC.
+    """
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 class ComplianceStatus(str, Enum):
     """Binary compliance status levels."""
 
@@ -113,7 +128,7 @@ class TenantComplianceStatusModel(Base):
         countdown_display = None
 
         if self.next_deadline:
-            delta = self.next_deadline - now
+            delta = _as_aware_utc(self.next_deadline) - now
             countdown_seconds = max(0, int(delta.total_seconds()))
             hours, remainder = divmod(countdown_seconds, 3600)
             minutes, _ = divmod(remainder, 60)
@@ -215,7 +230,7 @@ class ComplianceAlertModel(Base):
         is_expired = False
 
         if self.countdown_end:
-            delta = self.countdown_end - now
+            delta = _as_aware_utc(self.countdown_end) - now
             countdown_seconds = int(delta.total_seconds())
 
             if countdown_seconds > 0:

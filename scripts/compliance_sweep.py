@@ -11,7 +11,12 @@ import sys
 
 import structlog
 
-from regengine.swarm.coordinator import LEGACY_SWARM_ENV, AgentSwarm, legacy_swarm_enabled
+from regengine.swarm.coordinator import (
+    LEGACY_SWARM_ENV,
+    AgentSwarm,
+    legacy_swarm_enabled,
+    swarm_auto_pr_approved,
+)
 
 log = structlog.get_logger("compliance-sweep")
 
@@ -46,11 +51,19 @@ async def roll_out_compliance(standard: str = "FSMA-204"):
         tasks.append(task)
 
     log.info("launching_fleet_sweep", task_count=len(tasks))
-    results = await swarm.sweep(tasks, concurrency=10)
+    approved = swarm_auto_pr_approved()
+    if not approved:
+        log.info("auto_fix_pr_blocked", reason="missing_human_approval")
+    results = await swarm.sweep(tasks, concurrency=10, human_approved=approved)
 
     for i, result in enumerate(results):
         service = SERVICES[i]
-        log.info("service_processed", service=service, status=result.status)
+        log.info(
+            "service_processed",
+            service=service,
+            status=result.status,
+            errors=result.errors,
+        )
 
 
 if __name__ == "__main__":

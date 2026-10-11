@@ -21,8 +21,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://regengine.co'),
-  title: 'RegEngine — Food Traceability That Protects Your Brand',
-  description: 'Supply chain traceability infrastructure for food companies. Respond to recall requests in minutes, satisfy Walmart and Kroger supplier requirements, and build the visibility your brand depends on.',
+  title: 'FSMA 204 Recordkeeping Software | RegEngine',
+  description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.',
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
@@ -31,8 +31,8 @@ export const metadata: Metadata = {
     canonical: './',
   },
   openGraph: {
-    title: 'RegEngine — Food Traceability That Protects Your Brand',
-    description: 'FSMA 204 Food Traceability Compliance',
+    title: 'FSMA 204 Recordkeeping Software | RegEngine',
+    description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.',
     siteName: 'RegEngine',
     // Relative, like alternates.canonical above: pages that do not declare
     // their own openGraph inherit this block, and an absolute root URL made
@@ -72,8 +72,7 @@ export default async function RootLayout({
             name: 'RegEngine',
             url: 'https://regengine.co',
             logo: 'https://regengine.co/icon.png',
-            description: 'FSMA 204 food traceability platform. Ingest supplier data, verify chain of custody, and export review-ready records.',
-            sameAs: [],
+            description: 'Pre-revenue FSMA 204 recordkeeping software for the Food Traceability Rule.',
           }}
         />
 
@@ -104,30 +103,16 @@ export default async function RootLayout({
           }}
         />
 
-        {/* Product schema (#568) */}
+        {/* Software application. No offers or prices: RegEngine is pre-revenue. */}
         <JSONLD
           data={{
             '@context': 'https://schema.org',
-            '@type': 'Product',
-            name: 'RegEngine FSMA 204 Compliance Platform',
-            description: 'FSMA 204 food traceability software. Ingest supplier data, hash-chain records, and produce FDA-oriented sortable exports where configured data supports the request. Your operation remains responsible for compliance.',
+            '@type': 'SoftwareApplication',
+            name: 'RegEngine',
+            applicationCategory: 'BusinessApplication',
+            operatingSystem: 'Web',
             url: 'https://regengine.co',
-            brand: {
-              '@type': 'Brand',
-              name: 'RegEngine',
-            },
-            offers: {
-              '@type': 'AggregateOffer',
-              priceCurrency: 'USD',
-              lowPrice: '425',
-              highPrice: '1499',
-              offerCount: 3,
-              offers: [
-                { '@type': 'Offer', name: 'Base Plan', price: '425', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
-                { '@type': 'Offer', name: 'Standard Plan', price: '549', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
-                { '@type': 'Offer', name: 'Premium Plan', price: '639', priceCurrency: 'USD', priceSpecification: { '@type': 'UnitPriceSpecification', referenceQuantity: { '@type': 'QuantitativeValue', value: 1, unitCode: 'MON' } } },
-              ],
-            },
+            description: 'Pre-revenue FSMA 204 recordkeeping software for the Food Traceability Rule. Not legal advice.',
           }}
         />
       </head>

@@ -52,6 +52,9 @@ export const options = {
     http_req_failed: ['rate<0.01'],       // Less than 1% failure
     errors: ['rate<0.01'],                // Custom error rate < 1%
     'admin_exports_total': ['rate>100'],  // > 100 exports/min aggregate
+    // A failed isolation check must fail the run: every check() above,
+    // including rls_isolation, feeds this threshold.
+    checks: ['rate==1'],
   },
 };
 
@@ -118,9 +121,19 @@ export default function () {
       'has compliance_status': (r) => r.json('status') !== undefined || r.json('data') !== undefined,
       'response time < 1s': (r) => r.timings.duration < 1000,
       'rls_enforced (no data leakage)': (r) => {
-        // Verify RLS isolation: only see data for own tenant
+        // Verify RLS isolation: only see data for own tenant. A leak in
+        // this payload must fail the check, not pass as "an array".
         const data = r.json('data') || [];
-        return Array.isArray(data);
+        if (!Array.isArray(data)) {
+          return false;
+        }
+        return data.every((it) => {
+          if (!it || typeof it !== 'object') {
+            return true;
+          }
+          const marker = it.tenant_id !== undefined ? it.tenant_id : it.tenant && it.tenant.id;
+          return marker === undefined || marker === tenantId;
+        });
       },
     });
 
@@ -177,15 +190,33 @@ export default function () {
 
     errorRate.add(listSuccess ? 0 : 1);
 
-    // Verify RLS: should only see own tenant's data
+    // Verify RLS: should only see own tenant's data. The check result
+    // feeds the error rate, so a cross-tenant page fails the run instead
+    // of exiting 0 with a red check nobody reads.
     if (listSuccess) {
-      const exports = listRes.json('exports') || listRes.json('data') || [];
-      check(listRes, {
-        'rlS_isolation: no cross_tenant_data': (r) => {
-          // This is a best-effort check; actual RLS enforcement happens at DB level
-          return true; // DB should enforce tenant isolation
+      const isolationOk = check(listRes, {
+        'rls_isolation: no cross_tenant_data': (r) => {
+          const items = r.json('exports') || r.json('data') || [];
+          if (!Array.isArray(items)) {
+            return false;
+          }
+          // An empty page shows no leak and passes. A non-empty page must
+          // have EVERY item marked with this VU's tenant: unmarked rows
+          // are treated as a leak, so a mixed page of marked and unmarked
+          // rows fails instead of passing on the marked subset.
+          return items.every((it) => {
+            if (!it) {
+              return false;
+            }
+            const marker = it.tenant_id !== undefined ? it.tenant_id : it.tenant && it.tenant.id;
+            return marker !== undefined && marker === tenantId;
+          });
         },
       });
+      errorRate.add(isolationOk ? 0 : 1);
+      if (!isolationOk) {
+        console.error(`RLS isolation check failed for ${tenantId}: unexpected tenant data in export list`);
+      }
     }
   });
 

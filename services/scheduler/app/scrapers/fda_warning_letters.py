@@ -136,7 +136,19 @@ class FDAWarningLettersScraper(BaseScraper):
             raise e
 
         items = []
-        root = ElementTree.fromstring(response.content)
+        try:
+            root = ElementTree.fromstring(response.content)
+        except Exception as parse_error:
+            # ParseError is a SyntaxError, so scrape() lets it escape and
+            # the API fallback never runs. EntitiesForbidden is a ValueError
+            # that scrape() records as a failed scrape, again with no
+            # fallback. An unreadable body is an empty feed.
+            logger.warning(
+                "rss_unreadable_falling_back_to_api",
+                error=str(parse_error),
+                error_type=type(parse_error).__name__,
+            )
+            return []
 
         # RSS structure: rss/channel/item
         for item in root.findall(".//item"):

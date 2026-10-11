@@ -960,8 +960,14 @@ async def get_compliance_score(
     """
     generated_at = datetime.now(timezone.utc).isoformat()
 
+    # Scope to the tenant database like every other endpoint in this module.
+    # On Community Neo4j the client pins to the global database either way,
+    # so this is a no-op there; on Enterprise it keeps the score query on
+    # the same per-tenant database as the rest of the FSMA surface.
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+
     try:
-        async with Neo4jClient() as client:
+        async with Neo4jClient(database=db_name) as client:
             async with client.session() as session:
                 # #1273 — every OPTIONAL MATCH must repeat the tenant filter.
                 # The Obligation anchor was scoped, but Control and Evidence
