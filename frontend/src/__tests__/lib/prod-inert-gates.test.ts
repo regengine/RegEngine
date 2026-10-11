@@ -2,10 +2,11 @@
  * WS-10 item 4 — explicit tests that the two dev-convenience surfaces are
  * production-inert:
  *
- *   1. allowDevComplianceSnapshotFallback() must return false in production
- *      (and fail closed when the environment is unknown/empty), so the
- *      in-memory dev snapshot store can never serve data to a production
- *      tenant.
+ *   1. allowDevComplianceSnapshotFallback() must return true only when the
+ *      explicit REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS flag is set, and
+ *      false in production no matter what, so the in-memory dev snapshot
+ *      store (hardcoded COMPLIANT payloads) can never serve data to a
+ *      production tenant.
  *   2. /auth/sso/mock must remain a static handoff screen: it renders a
  *      return-to-login link and has no ability to mint a session (no
  *      cookies, no API handler in its route directory).
@@ -14,13 +15,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-const ENV_KEYS = ['REGENGINE_ENV', 'NODE_ENV'] as const;
+const ENV_KEYS = ['REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS', 'NODE_ENV'] as const;
 const savedEnv: Record<string, string | undefined> = {};
 for (const key of ENV_KEYS) savedEnv[key] = process.env[key];
 
-async function gateWithEnv(regengineEnv?: string, nodeEnv?: string) {
-    if (regengineEnv === undefined) delete process.env.REGENGINE_ENV;
-    else process.env.REGENGINE_ENV = regengineEnv;
+async function gateWithEnv(flag?: string, nodeEnv?: string) {
+    if (flag === undefined) delete process.env.REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS;
+    else process.env.REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS = flag;
     if (nodeEnv === undefined) delete (process.env as Record<string, unknown>).NODE_ENV;
     else (process.env as Record<string, string>).NODE_ENV = nodeEnv;
     const { allowDevComplianceSnapshotFallback } = await import('@/lib/dev-compliance-snapshots');
@@ -36,25 +37,29 @@ describe('allowDevComplianceSnapshotFallback is prod-inert', () => {
         }
     });
 
-    it('returns false in production (REGENGINE_ENV)', async () => {
-        expect(await gateWithEnv('production', 'production')).toBe(false);
+    it('returns false in production even when the flag is set', async () => {
+        expect(await gateWithEnv('1', 'production')).toBe(false);
     });
 
-    it('returns false in production even when NODE_ENV is inconsistent', async () => {
-        expect(await gateWithEnv('production', 'development')).toBe(false);
+    it('returns false in staging without the flag', async () => {
+        expect(await gateWithEnv(undefined, 'staging')).toBe(false);
     });
 
-    it('returns false in staging', async () => {
-        expect(await gateWithEnv('staging', 'production')).toBe(false);
-    });
-
-    it('fails closed when no environment is set at all', async () => {
+    it('fails closed when nothing is set at all', async () => {
         expect(await gateWithEnv(undefined, undefined)).toBe(false);
     });
 
-    it('still allows the fallback in development and test', async () => {
-        expect(await gateWithEnv('development', 'development')).toBe(true);
-        expect(await gateWithEnv(undefined, 'test')).toBe(true);
+    it('stays off in development and test unless the explicit flag is set', async () => {
+        // Environment names alone must never enable hardcoded COMPLIANT data.
+        expect(await gateWithEnv(undefined, 'development')).toBe(false);
+        expect(await gateWithEnv(undefined, 'test')).toBe(false);
+        expect(await gateWithEnv('', 'development')).toBe(false);
+        expect(await gateWithEnv('0', 'development')).toBe(false);
+    });
+
+    it('allows the fallback only with the explicit flag outside production', async () => {
+        expect(await gateWithEnv('1', 'development')).toBe(true);
+        expect(await gateWithEnv('1', 'test')).toBe(true);
     });
 });
 
