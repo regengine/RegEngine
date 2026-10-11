@@ -667,6 +667,14 @@ def attest_snapshot(
     """Record a human attestation on a snapshot."""
     db = _require_db(db)
     row = _fetch_snapshot(db, ctx.tenant_id, snapshot_id)
+    if row["snapshot_state"] == _STATE_SUPERSEDED:
+        # Append-only evidence (#2964): a superseded freeze is history. Its
+        # seal must keep covering the content that was actually frozen, so a
+        # fresh sign-off cannot be attached to it after a refreeze.
+        raise HTTPException(
+            status_code=409,
+            detail="Snapshot has been superseded; attest its successor instead",
+        )
     seal_version = _seal_version(row)
     if seal_version is None:
         # #2966: attesting re-seals the row, so signing a record that already
@@ -759,6 +767,14 @@ def refreeze_snapshot(
     """
     db = _require_db(db)
     row = _fetch_snapshot(db, ctx.tenant_id, snapshot_id)
+    if _seal_version(row) is None:
+        # Same rule as attest: re-freezing copies the stored name and reason
+        # into a new sealed row, so re-freezing a tampered row would launder
+        # attacker text under a fresh valid hash. Refuse, fail closed.
+        raise HTTPException(
+            status_code=409,
+            detail="Snapshot failed integrity verification; refusing to refreeze",
+        )
     if row["snapshot_state"] == _STATE_SUPERSEDED:
         raise HTTPException(
             status_code=409,

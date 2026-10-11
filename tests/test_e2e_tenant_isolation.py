@@ -46,6 +46,71 @@ pytestmark = pytest.mark.skipif(
 
 
 # ---------------------------------------------------------------------------
+# RLS probe helper
+# ---------------------------------------------------------------------------
+
+# Tables (and readable columns) the RLS probes below may touch. Fixed
+# allowlist, so table/column names never come from test input.
+_RLS_PROBE_COLUMNS = {
+    "fsma.traceability_events": ("tenant_id", "product_reference"),
+    "fsma.request_cases": ("tenant_id", "request_case_id"),
+    "fsma.rule_evaluations": ("tenant_id", "event_id"),
+    "fsma.hash_chain": ("tenant_id",),
+    "fsma.exception_cases": ("tenant_id", "case_id"),
+}
+
+
+def _rls_unfiltered_rows(db_session, table, guc_tenant):
+    """Read a whole table with NO tenant predicate, as the app role.
+
+    ``SET ROLE regengine`` drops the test connection's RLS bypass (the
+    suite connects as a superuser/owner, for whom RLS is inert), and
+    ``app.tenant_id`` supplies the tenant context the RLS policies match
+    on. Whatever comes back passed real row-level security. Role and GUC
+    are reset before returning so later steps run exactly as before.
+
+    Fails loudly when the connection cannot assume the app role: a
+    skipped probe would leave the RLS proof unexecuted while the job
+    stays green, which is exactly how an isolation regression hides.
+    The caller's transaction is left alone (no rollback), so earlier
+    uncommitted scenario rows survive for the failure output.
+    """
+    from sqlalchemy import text
+
+    if table not in _RLS_PROBE_COLUMNS:
+        raise ValueError(f"RLS probe allowlist has no table {table!r}")
+    select_cols = ", ".join(f"{col}::text" for col in _RLS_PROBE_COLUMNS[table])
+    try:
+        db_session.execute(text("SET ROLE regengine"))
+    except Exception as exc:
+        try:
+            db_session.execute(text("RESET ROLE"))
+        except Exception:
+            pass
+        pytest.fail(
+            f"cannot SET ROLE regengine for RLS probe: {exc}. "
+            "The RLS proof cannot run without the app role; fix the grant, do not skip."
+        )
+    try:
+        db_session.execute(
+            text("SELECT set_config('app.tenant_id', :tid, false)"),
+            {"tid": guc_tenant},
+        )
+        return db_session.execute(text(f"SELECT {select_cols} FROM {table}")).fetchall()
+    finally:
+        # Both settings are session-level: a rollback alone would NOT
+        # clear them, so reset explicitly. If the transaction aborted,
+        # roll back first, then reset.
+        try:
+            db_session.execute(text("RESET app.tenant_id"))
+            db_session.execute(text("RESET ROLE"))
+        except Exception:
+            db_session.rollback()
+            db_session.execute(text("RESET app.tenant_id"))
+            db_session.execute(text("RESET ROLE"))
+
+
+# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -300,6 +365,14 @@ class TestTenantIsolationE2E:
                 f"Event {evt['event_id']} has wrong product: {evt['product_reference']}"
             )
 
+        # RLS proof: the query above filters by tenant_id itself, so it
+        # passes whether or not RLS is enforced. Read with NO tenant
+        # predicate as the app role under tenant_a's context: RLS alone
+        # must surface only tenant_a's events.
+        rls_rows = _rls_unfiltered_rows(db_session, "fsma.traceability_events", tenant_a)
+        assert len(rls_rows) >= 2, f"RLS hid tenant_a's own events: saw {len(rls_rows)} unfiltered rows"
+        assert {row[0] for row in rls_rows} == {tenant_a}, "RLS leaked another tenant's events into tenant_a's context"
+
     # ------------------------------------------------------------------
     # Step 5: Tenant B cannot see Tenant A's request case
     # ------------------------------------------------------------------
@@ -345,6 +418,16 @@ class TestTenantIsolationE2E:
         b_product_names = [r[0] for r in b_products]
         assert PRODUCT_A not in b_product_names, "Tenant A product leaked into Tenant B's view"
         assert PRODUCT_B in b_product_names, "Tenant B should see their own product"
+
+        # RLS proof: same check with NO tenant predicate, as the app role
+        # under tenant_b's context. Only RLS stands between tenant_b and
+        # tenant_a's rows here.
+        rls_rows = _rls_unfiltered_rows(db_session, "fsma.traceability_events", tenant_b)
+        assert rls_rows, "RLS hid tenant_b's own events"
+        assert {row[0] for row in rls_rows} == {tenant_b}, "RLS leaked another tenant's events into tenant_b's context"
+        rls_products = {row[1] for row in rls_rows}
+        assert PRODUCT_A not in rls_products, "Tenant A product leaked into Tenant B's RLS view: isolation breach!"
+        assert PRODUCT_B in rls_products, "Tenant B should see their own product through RLS"
 
     # ------------------------------------------------------------------
     # Step 7: Rules evaluated for Tenant A don't leak to Tenant B
@@ -639,17 +722,16 @@ class TestTenantIsolationE2E:
                 assert a_count > 0, f"Tenant A should have data in {table}"
                 assert b_count > 0, f"Tenant B should have data in {table}"
 
-            # Cross-check: verify no data from one tenant leaked to the other
-            # by checking that tenant_a's count + tenant_b's count equals the
-            # total for both tenants combined
-            combined = db_session.execute(
-                text(f"""
-                    SELECT COUNT(*) FROM {table}
-                    WHERE {col} IN (:tid_a, :tid_b)
-                """),
-                {"tid_a": tenant_a, "tid_b": tenant_b},
-            ).scalar()
-
-            assert combined == a_count + b_count, (
-                f"Data integrity issue in {table}: combined({combined}) != a({a_count}) + b({b_count})"
-            )
+            # RLS cross-check: with NO tenant predicate, each tenant's
+            # RLS context must surface exactly its own row count. (The old
+            # check compared tenant_a + tenant_b against a query already
+            # filtered to those two tenants, which is true by construction.)
+            for tid, expected in ((tenant_a, a_count), (tenant_b, b_count)):
+                rls_rows = _rls_unfiltered_rows(db_session, table, tid)
+                assert len(rls_rows) == expected, (
+                    f"RLS mismatch in {table} for tenant {tid[:8]}...: "
+                    f"unfiltered RLS read saw {len(rls_rows)} rows, expected {expected}"
+                )
+                assert {row[0] for row in rls_rows} <= {tid}, (
+                    f"RLS leaked another tenant's {table} rows into tenant {tid[:8]}..."
+                )

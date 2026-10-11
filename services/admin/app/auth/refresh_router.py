@@ -245,7 +245,7 @@ async def refresh_session(
 
     # Update session with new token hash and timestamps.
     # old_token_hash already deleted by claim_session_by_token (GETDEL).
-    await _session_store_call(
+    updated = await _session_store_call(
         "update_session",
         lambda: session_store.update_session(
             session.id,
@@ -259,6 +259,13 @@ async def refresh_session(
             old_token_hash=input_hash,
         ),
     )
+    if not updated:
+        # The claimed row vanished between GETDEL and the rotation write
+        # (expiry race). The old mapping is already gone, so minting tokens
+        # here would issue a refresh token with no backing row. Fail closed:
+        # the client re-authenticates instead of holding half-valid tokens.
+        logger.warning("refresh_session_lost_during_rotation", session_id=str(session.id))
+        raise HTTPException(status_code=401, detail="Session expired")
 
     # SECURITY (#1859): tombstone the consumed hash so a replay can be
     # detected as reuse (not just "unknown token"). TTL matches refresh

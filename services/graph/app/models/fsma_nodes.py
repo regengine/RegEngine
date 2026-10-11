@@ -74,10 +74,12 @@ def compute_chain_hash(previous_chain_hash: Optional[str], event_hash: str) -> s
     """
     Compute the chained hash: ``SHA-256(previous_chain_hash | event_hash)``.
 
-    Uses ``GENESIS`` as the seed when *previous_chain_hash* is ``None``
-    (first event in the tenant chain).
+    Uses ``GENESIS`` as the seed only when *previous_chain_hash* is ``None``
+    (first event in the tenant chain). An empty string is not a valid
+    chain hash, so it is hashed as-is instead of silently becoming
+    genesis, which would mask a broken chain link.
     """
-    prev = previous_chain_hash or _GENESIS_HASH
+    prev = _GENESIS_HASH if previous_chain_hash is None else previous_chain_hash
     return _compute_sha256(f"{prev}|{event_hash}")
 
 
@@ -220,8 +222,12 @@ class Lot:
         return None
 
     def has_valid_tlc_source(self) -> bool:
-        """Check if this Lot has a valid TLC source identifier."""
-        return bool(self.tlc_source_gln or self.tlc_source_fda_reg)
+        """Check if this Lot has a valid TLC source identifier.
+
+        Blank strings carry no identifier, so whitespace-only values
+        do not count as a valid source.
+        """
+        return bool((self.tlc_source_gln or "").strip() or (self.tlc_source_fda_reg or "").strip())
 
     @staticmethod
     def validate_tlc_source_for_event(cte_type: str) -> bool:
@@ -232,8 +238,13 @@ class Lot:
         - CREATION: Initial assignment of TLC at the farm/source
         - INITIAL_PACKING: First packing of product with TLC
         - TRANSFORMATION: Creation of new TLC from input lots
+
+        Accepts a ``CTEType`` member or a string in any letter case, so
+        callers passing canonical lowercase values still trigger the
+        mandate instead of silently skipping validation.
         """
-        return cte_type in {"CREATION", "INITIAL_PACKING", "TRANSFORMATION"}
+        value = getattr(cte_type, "value", cte_type)
+        return str(value).upper() in {"CREATION", "INITIAL_PACKING", "TRANSFORMATION"}
 
 
 @dataclass
@@ -317,6 +328,23 @@ class TraceEvent:
         return """
         CREATE (e:TraceEvent $properties)
         SET e.created_at = datetime()
+        RETURN e
+        """
+
+    @staticmethod
+    def merge_cypher() -> str:
+        """Return Cypher MERGE statement for TraceEvent node.
+
+        Matches on ``(event_id, tenant_id)`` so that a retried write
+        carrying the same idempotent event id resolves to the existing
+        node instead of creating a duplicate. Other properties are
+        applied on both create and match so a retry repairs a partial
+        first write. ``created_at`` is only set on first create.
+        """
+        return """
+        MERGE (e:TraceEvent {event_id: $event_id, tenant_id: $tenant_id})
+        ON CREATE SET e.created_at = datetime()
+        SET e += $properties
         RETURN e
         """
 

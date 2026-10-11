@@ -181,7 +181,9 @@ def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Option
 
 
 def _verify_partner_id(x_partner_id: Optional[str]) -> None:
-    required = os.getenv("EDI_REQUIRE_PARTNER_ID", "").lower() in {"1", "true", "yes"}
+    # Accept the same truthy spellings as EDI_STRICT_MODE so ``=on``
+    # cannot silently leave the gate open.
+    required = os.getenv("EDI_REQUIRE_PARTNER_ID", "").lower() in {"1", "true", "yes", "on"}
     if required and not x_partner_id:
         raise HTTPException(status_code=400, detail="X-Partner-ID header required for EDI ingest")
 

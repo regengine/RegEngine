@@ -443,6 +443,10 @@ def _parse_csv_to_events(
     When track_normalizations=True, also returns normalization actions via
     a side-channel key "__normalizations__" on the first event (list of dicts).
     """
+    # Strip a UTF-8 BOM so spreadsheet exports (Excel writes one) map
+    # their headers correctly instead of reporting a missing column.
+    csv_text = csv_text.lstrip("\ufeff")
+
     # Build column map — start with defaults, merge ERP preset if specified
     col_map = dict(_CSV_COLUMN_MAP)
     if erp_preset and erp_preset in _ERP_PRESETS:
