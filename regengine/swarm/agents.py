@@ -20,12 +20,30 @@ logger = structlog.get_logger("swarm.agents")
 
 
 def is_path_within_base(base_dir: Path, full_path: Path) -> bool:
-    """Check that a resolved path stays inside the working directory.
+    """Check that a path stays inside the working directory.
 
-    Uses path-aware comparison so a sibling directory that shares a text
-    prefix (for example /repo-backup next to /repo) is not accepted.
+    Both sides are resolved first so an unresolved caller path containing
+    ``..`` cannot slip past the comparison, and path-aware comparison is
+    used so a sibling directory that shares a text prefix (for example
+    /repo-backup next to /repo) is not accepted.
     """
-    return full_path.is_relative_to(base_dir)
+    try:
+        return full_path.resolve().is_relative_to(base_dir.resolve())
+    except Exception:
+        return False
+
+
+def is_sensitive_write_path(base_dir: Path, full_path: Path) -> bool:
+    """Check whether a resolved in-workdir path must never be model-written.
+
+    Repository config (``.git/``) can execute commands during later git runs
+    (hooks, fsmonitor, sshCommand), and pushed workflow files
+    (``.github/workflows/``) run in CI, so the coder refuses them even
+    though they sit inside the working directory.
+    """
+    git_dir = base_dir / ".git"
+    workflows_dir = base_dir / ".github" / "workflows"
+    return full_path.is_relative_to(git_dir) or full_path.is_relative_to(workflows_dir)
 
 
 # ── Planner Agent ─────────────────────────────────────────
@@ -170,6 +188,9 @@ class CoderAgent(BaseAgent):
                 full_path = (base_dir / path).resolve()
                 if not is_path_within_base(base_dir, full_path):
                     self.log.warning("path_traversal_blocked", path=path)
+                    continue
+                if is_sensitive_write_path(base_dir, full_path):
+                    self.log.warning("sensitive_path_blocked", path=path)
                     continue
                 full_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(full_path, "w", encoding="utf-8") as f:

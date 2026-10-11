@@ -167,6 +167,17 @@ async def _delete_neo4j_user_graph_data(
 
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+        if not neo4j_password:
+            # Never open the driver with an empty password: skip the graph
+            # delete (the HTTP response still reports the Postgres erasure)
+            # and leave a warning so the half-wired Neo4j gets fixed.
+            logger.warning(
+                "erasure_neo4j_skip",
+                reason="NEO4J_PASSWORD not configured",
+                tenant_id=tenant_id,
+                user_id=user_id,
+            )
+            return
         async with AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as neo4j_driver:
             async with neo4j_driver.session() as session:
                 await session.run(

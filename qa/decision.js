@@ -4,6 +4,10 @@
  * Aggregates results from fast-gate and system-sim stages.
  * Blocks deploy if critical checks failed.
  * Allows deploy with warnings for non-critical issues.
+ *
+ * The ai-analysis stage is advisory-only and intentionally not an input
+ * here, so a failing analysis never blocks deploy. Fast-gate and
+ * system-sim failures are the only blockers.
  */
 
 const fastGate = process.env.FAST_GATE_RESULT || 'unknown';

@@ -361,7 +361,9 @@ def validate_production_secrets() -> None:
                 errors.append(f"{' / '.join(alternatives)} is not set")
 
     # Insecure placeholders are rejected whenever SET, even for a disabled
-    # subsystem — but an unset optional value is fine.
+    # subsystem, but an unset optional value is fine. Comparison is exact
+    # (case-insensitive): a real credential that merely starts with a
+    # placeholder token (for example "test-key" or "secret-...") must boot.
     for var_name, insecure_values in INSECURE_DEFAULTS.items():
         current_value = os.getenv(var_name, "")
 
@@ -369,17 +371,27 @@ def validate_production_secrets() -> None:
             continue
 
         # Check if current value matches any insecure default
+        lowered = current_value.lower()
         for insecure_value in insecure_values:
-            if current_value == insecure_value or current_value.startswith(insecure_value):
+            if lowered == insecure_value.lower():
                 errors.append(f"{var_name} is using an insecure default value")
                 break
+
+    # Neo4j is optional at boot, but a half-wired Neo4j is not: when a URI
+    # is set in production the password must be set too, otherwise graph
+    # writes would authenticate with an empty password.
+    if os.getenv("NEO4J_URI", "") or os.getenv("NEO4J_URL", ""):
+        if not os.getenv("NEO4J_PASSWORD", ""):
+            errors.append("NEO4J_PASSWORD is not set (NEO4J_URI is set)")
 
     if errors:
         error_msg = "Production secret validation FAILED:\n" + "\n".join(f"  - {err}" for err in errors)
         error_msg += "\n\nProduction mode requires secure credentials. Set proper values via:"
         error_msg += "\n  1. Railway environment variables"
         error_msg += "\n  2. Managed secret stores wired to runtime env"
-        error_msg += "\n  3. For development, set REGENGINE_ENV=development"
+        error_msg += "\n  3. For local development only, set REGENGINE_ENV=development"
+        error_msg += "\n     (on cloud hosts the environment is forced back to production,"
+        error_msg += "\n     so fix the listed credential values instead)"
 
         logger.error("production_secrets_validation_failed", errors=errors, environment=env)
         raise RuntimeError(error_msg)
@@ -405,7 +417,9 @@ def require_secure_secrets_in_production() -> None:
         error_msg = (
             "Production mode requires secret validation to stay enabled.\n"
             "Unset REGENGINE_SKIP_SECRET_CHECK or set it to false.\n"
-            "For development, set REGENGINE_ENV=development"
+            "For local development only, set REGENGINE_ENV=development "
+            "(on cloud hosts the environment is forced back to production,"
+            " so fix the flag value instead)."
         )
         logger.error("secure_secrets_required_in_production", environment=env)
         raise RuntimeError(error_msg)

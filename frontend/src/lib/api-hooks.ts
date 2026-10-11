@@ -18,14 +18,24 @@ function isAbortError(err: unknown): boolean {
     return err instanceof Error && (err.name === 'AbortError' || err.name === 'TimeoutError');
 }
 
-/** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies. */
+/** Methods safe to retry: replaying them cannot cause a duplicate side effect. */
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
+
+function isIdempotentMethod(method: string | undefined): boolean {
+    return IDEMPOTENT_METHODS.has((method || 'GET').toUpperCase());
+}
+
+/** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies.
+ * Only idempotent methods are retried; POST and PATCH are attempted once so
+ * a slow upstream cannot turn one user action into two side effects. */
 async function apiFetch<T>(path: string, _apiKey?: string | null, options: RequestInit = {}): Promise<T> {
-    const MAX_RETRIES = 2;
+    const retryable = isIdempotentMethod(options.method);
+    const MAX_RETRIES = retryable ? 2 : 0;
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        let res: Response;
+        let res: Response | undefined;
         try {
             res = await fetchWithCsrf(`${BASE()}${path}`, {
                 ...options,
@@ -48,11 +58,30 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
             continue;
         }
 
+        if (res === undefined) {
+            // Transport failure — retry with backoff.
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
+        }
+
         if (res.ok) {
-            // Parse outside the retryable section. A malformed success body is
-            // a contract error, not a transient failure, and retrying here
-            // would re-execute POST mutations that have side effects.
             return res.json();
+        }
+
+        // Don't retry client errors (4xx): the request itself is wrong, so
+        // resending it only repeats the failure. Thrown outside the
+        // try/catch above so this throw is never mistaken for a retryable
+        // transport failure.
+        if (res.status >= 400 && res.status < 500) {
+            throw new Error(`API error: ${res.status} ${res.statusText}`);
+        }
+
+        // Server error (5xx) — retry with backoff.
+        lastError = new Error(`API error: ${res.status} ${res.statusText}`);
+        if (attempt < MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
         }
 
         // 429 and 5xx are transient: retry. Every other 4xx is final, in
@@ -82,21 +111,21 @@ export async function fetchAlerts(tenantId: string, apiKey?: string | null, para
     if (params?.category) search.set('category', params.category);
     if (params?.acknowledged !== undefined) search.set('acknowledged', String(params.acknowledged));
     const qs = search.toString() ? `?${search}` : '';
-    return apiFetch(`/api/v1/alerts/${tenantId}${qs}`, apiKey);
+    return apiFetch(`/api/v1/alerts/${encodeURIComponent(tenantId)}${qs}`, apiKey);
 }
 
 export async function acknowledgeAlert(tenantId: string, apiKey: string | null | undefined, alertId: string) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/${alertId}/acknowledge`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/alerts/${encodeURIComponent(tenantId)}/${encodeURIComponent(alertId)}/acknowledge`, apiKey, { method: 'POST' });
 }
 
 export async function fetchAlertSummary(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/alerts/${tenantId}/summary`, apiKey);
+    return apiFetch(`/api/v1/alerts/${encodeURIComponent(tenantId)}/summary`, apiKey);
 }
 
 // ── Compliance ──
 
 export async function fetchComplianceScore(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/compliance/score/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/compliance/score/${encodeURIComponent(tenantId)}`, apiKey);
 }
 
 export interface WorkbenchReadinessSnapshot {
@@ -187,34 +216,34 @@ export async function createCheckout(_apiKey: string, planId: string, _tenantId:
 }
 
 export async function fetchSubscription(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/billing/subscription/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/billing/subscription/${encodeURIComponent(tenantId)}`, apiKey);
 }
 
 // ── Supplier Management ──
 
 export async function fetchSupplierDashboard(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey);
+    return apiFetch(`/api/v1/suppliers/${encodeURIComponent(tenantId)}`, apiKey);
 }
 
 export async function addSupplier(tenantId: string, apiKey: string, name: string, email: string, products: string[]) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}`, apiKey, {
+    return apiFetch(`/api/v1/suppliers/${encodeURIComponent(tenantId)}`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ name, contact_email: email, products }),
     });
 }
 
 export async function sendPortalLink(tenantId: string, apiKey: string, supplierId: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/${supplierId}/send-link`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/suppliers/${encodeURIComponent(tenantId)}/${encodeURIComponent(supplierId)}/send-link`, apiKey, { method: 'POST' });
 }
 
 export async function fetchSupplierHealth(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/suppliers/${tenantId}/health`, apiKey);
+    return apiFetch(`/api/v1/suppliers/${encodeURIComponent(tenantId)}/health`, apiKey);
 }
 
 // ── Recall Readiness ──
 
 export async function fetchRecallReport(tenantId: string, apiKey?: string | null) {
-    return apiFetch(`/api/v1/recall/${tenantId}/report`, apiKey);
+    return apiFetch(`/api/v1/recall/${encodeURIComponent(tenantId)}/report`, apiKey);
 }
 
 // ── Onboarding ──
@@ -224,11 +253,11 @@ export async function fetchOnboardingSteps(apiKey: string) {
 }
 
 export async function fetchOnboardingProgress(tenantId: string, apiKey: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/progress`, apiKey);
+    return apiFetch(`/api/v1/onboarding/${encodeURIComponent(tenantId)}/progress`, apiKey);
 }
 
 export async function completeOnboardingStep(tenantId: string, apiKey: string, stepId: string) {
-    return apiFetch(`/api/v1/onboarding/${tenantId}/step/${stepId}`, apiKey, { method: 'POST' });
+    return apiFetch(`/api/v1/onboarding/${encodeURIComponent(tenantId)}/step/${encodeURIComponent(stepId)}`, apiKey, { method: 'POST' });
 }
 
 // ── Mock Audit ──
@@ -241,11 +270,11 @@ export async function startDrill(apiKey: string, scenario: string, tenantId: str
 }
 
 export async function fetchDrillStatus(apiKey: string, drillId: string) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}`, apiKey);
+    return apiFetch(`/api/v1/audit/drill/${encodeURIComponent(drillId)}`, apiKey);
 }
 
 export async function submitDrillResponse(apiKey: string, drillId: string, checklist: Record<string, boolean>) {
-    return apiFetch(`/api/v1/audit/drill/${drillId}/submit`, apiKey, {
+    return apiFetch(`/api/v1/audit/drill/${encodeURIComponent(drillId)}/submit`, apiKey, {
         method: 'POST',
         body: JSON.stringify({ checklist }),
     });

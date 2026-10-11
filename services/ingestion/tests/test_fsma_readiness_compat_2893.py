@@ -89,6 +89,19 @@ class TestNotImplementedStatus:
 # 2. Operator gate
 # ---------------------------------------------------------------------------
 
+
+def _synthetic_fernet_key() -> str:
+    """Fresh Fernet key per parent process for the strict-auth MFA gate.
+
+    Generated at runtime so no key material lives in the file. The child
+    boots under production posture, which is always strict, and strict
+    runtimes refuse to boot without a valid MFA_ENCRYPTION_KEY (#3238).
+    """
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key().decode()
+
+
 _PROD_ENV = {
     "REGENGINE_ENV": "production",
     "ENVIRONMENT": "production",
@@ -99,6 +112,7 @@ _PROD_ENV = {
     "ADMIN_DATABASE_URL": "postgresql+psycopg://localhost:5432/regengine_admin_test",
     "AUTH_SECRET_KEY": "test-secret-key-with-enough-length",  # pragma: allowlist secret
     "TOOL_ACCESS_SECRET": "tool-access-secret-distinct-and-long-enough",  # pragma: allowlist secret
+    "MFA_ENCRYPTION_KEY": _synthetic_fernet_key(),
 }
 
 _ENUMERATE = r"""

@@ -25,13 +25,12 @@ jobs:
           python3 scripts/ci/check_supply_chain.py --root .
 
       - name: Install actionlint
-        env:
+        run: |
           # Exact version, not a floating tag. Go module downloads are
           # verified against the checksum database, so this is both
-          # pinned and verified.
-          ACTIONLINT_VERSION: 1.7.12
-        run: |
-          go install "github.com/rhysd/actionlint/cmd/actionlint@v${ACTIONLINT_VERSION}"
+          # pinned and verified. The version is inline so the pinning
+          # gate can see it; do not move it back into an env var.
+          go install "github.com/rhysd/actionlint/cmd/actionlint@v1.7.12"
           "$(go env GOPATH)/bin/actionlint" --version
 
       - name: Lint workflows with actionlint

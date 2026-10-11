@@ -68,6 +68,10 @@ jobs:
         run: node qa/export-validate.js
 
   # ── Stage 3: AI Analysis ───────────────────────────────
+  # Advisory-only: copy, pricing, and credibility warnings for human
+  # follow-up. Its result is intentionally NOT in decision.needs, so a
+  # failing analysis never blocks deploy. Only fast-gate and system-sim
+  # failures block.
   ai-analysis:
     name: AI Content Analysis
     needs: system-sim
@@ -94,6 +98,8 @@ jobs:
     # decision.js and blocks. A superseded run must not post BLOCK DEPLOY
     # for a stage that never finished.
     if: always() && !cancelled()
+    # ai-analysis is advisory-only and intentionally excluded here, so its
+    # failures never block deploy. See the ai-analysis job comment above.
     needs: [fast-gate, system-sim]
     runs-on: ubuntu-latest
     timeout-minutes: 2

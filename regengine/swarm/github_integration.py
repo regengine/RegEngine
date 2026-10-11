@@ -168,7 +168,8 @@ class GitHubClient:
         """Require explicit approval and, by default, successful CI signals.
 
         Capture one head SHA for both checks and GitHub's atomic merge guard.
-        Only an explicit success counts as green; missing data blocks merging.
+        Only a green state counts (success, skipped or neutral conclusions);
+        missing data blocks merging.
         """
         if not human_approved:
             logger.warning("pr_merge_blocked", number=pr_number, reason="missing_human_approval")
@@ -210,14 +211,20 @@ class GitHubClient:
         head_sha = pr.head.sha
         return self._get_commit_checks_state(head_sha)
 
+    # Conclusions GitHub itself counts as green for mergeability: a job
+    # skipped by a conditional still reports Success and does not block
+    # merging, and neutral is not a failure. Everything else that is
+    # completed but not in this set blocks the merge.
+    GREEN_CONCLUSIONS = frozenset({"success", "skipped", "neutral"})
+
     def _get_commit_checks_state(self, commit_sha: str) -> str:
         """Require every reported status and Check Run to succeed.
 
         An explicit empty status list permits Check-Runs-only success; GitHub
         reports its combined state as pending. An absent list is unavailable.
         No signals, incomplete runs or missing data remain pending. Completed
-        runs with neutral/skipped or any other non-success conclusion fail.
-        GitHub still enforces repository branch protection on the merge call.
+        runs with a conclusion outside GREEN_CONCLUSIONS fail. GitHub still
+        enforces repository branch protection on the merge call.
         """
         commit = self.repo.get_commit(commit_sha)
         combined = commit.get_combined_status()
@@ -253,7 +260,7 @@ class GitHubClient:
             conclusion = getattr(run, "conclusion", None)
             if conclusion is None:
                 return "pending"
-            if conclusion != "success":
+            if conclusion not in self.GREEN_CONCLUSIONS:
                 return "failure"
 
         return "success"
