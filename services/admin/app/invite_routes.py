@@ -20,7 +20,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
-from .auth.identity_helpers import ensure_passwordless_identity
+from .auth.identity_helpers import EmailOwnershipConflictError, ensure_passwordless_identity
 from .database import get_session
 from .dependencies import PermissionChecker, get_current_user
 from .e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
@@ -513,8 +513,13 @@ async def accept_invite(
     if invite.revoked_at or invite.accepted_at:
         raise generic_400
 
-    # Check if user exists (Global)
-    user = db.execute(select(UserModel).where(UserModel.email == invite.email)).scalar_one_or_none()
+    # Check if user exists (Global). The comparison is case-insensitive so
+    # an invite addressed to a case variant of an existing user's email
+    # attaches to that user instead of creating a duplicate account that
+    # would then claim their verified email row.
+    user = db.execute(
+        select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
+    ).scalar_one_or_none()
 
     if user is not None:
         if user.status != "active":
@@ -560,13 +565,23 @@ async def accept_invite(
     # organization_memberships) or sign-in code emails for this user are
     # silently suppressed. The invite token is proof of mailbox control.
     invite_role = db.get(RoleModel, invite.role_id)
-    ensure_passwordless_identity(
-        db,
-        user=user,
-        email=invite.email,
-        organization_id=invite.tenant_id,
-        role_name=invite_role.name if invite_role is not None else None,
-    )
+    try:
+        ensure_passwordless_identity(
+            db,
+            user=user,
+            email=invite.email,
+            organization_id=invite.tenant_id,
+            role_name=invite_role.name if invite_role is not None else None,
+        )
+    except EmailOwnershipConflictError:
+        # The invited address (up to case) is verified for a different user.
+        # Refuse without revealing which account holds it (uniform 400).
+        logger.warning(
+            "accept_invite_email_ownership_conflict",
+            email=mask_email(invite.email),
+        )
+        db.rollback()
+        raise generic_400
 
     # Update Invite (single-use).
     accepted_at = datetime.now(timezone.utc)

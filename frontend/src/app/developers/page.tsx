@@ -217,7 +217,7 @@ export default function DevelopersPage() {
                         </Button>
                     </div>
                     <p className="mt-6 text-small text-re-text-tertiary">
-                        Already a customer?{' '}
+                        Have a RegEngine workspace?{' '}
                         <Link href="/login" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">
                             Sign in
                         </Link>

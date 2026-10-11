@@ -64,7 +64,7 @@ class RegulationOverride:
     @staticmethod
     def merge_cypher() -> str:
         return """
-        MERGE (r:RegulationOverride {override_id: $override_id})
+        MERGE (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
         ON CREATE SET r += $properties, r.created_at = datetime()
         ON MATCH SET r += $properties
         RETURN r
@@ -77,6 +77,6 @@ class OverlayRelationships:
     # Tenant HAS_OVERLAY -> RegulationOverride
     TENANT_HAS_OVERRIDE = """
     MATCH (t:TenantOverlay {tenant_id: $tenant_id})
-    MATCH (r:RegulationOverride {override_id: $override_id})
+    MATCH (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
     MERGE (t)-[:HAS_OVERRIDE]->(r)
     """

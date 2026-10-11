@@ -18,13 +18,21 @@ Recall Scenario:
 
 Usage:
     python3 scripts/seed_lifecycle_test.py
+    python3 scripts/seed_lifecycle_test.py --allow-production \
+        # only to target a non-localhost REGENGINE_BASE_URL
+
+Localhost is the default target. Pointing REGENGINE_BASE_URL (or
+--base-url) at anything else, or running with REGENGINE_ENV=production,
+requires the explicit --allow-production flag.
 """
 
+import argparse
 import json
 import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 
@@ -32,7 +40,8 @@ from datetime import datetime, timedelta
 # This script seeds a live environment, so the API key is read from the
 # environment rather than committed. Export REGENGINE_API_KEY (and
 # optionally REGENGINE_BASE_URL / REGENGINE_TENANT_ID) before running.
-BASE = os.getenv("REGENGINE_BASE_URL", "https://regengine-production.up.railway.app")
+LOCAL_DEFAULT_BASE = "http://localhost:8000"
+BASE = os.getenv("REGENGINE_BASE_URL", LOCAL_DEFAULT_BASE)
 API_KEY = os.getenv("REGENGINE_API_KEY", "")
 TENANT_ID = os.getenv("REGENGINE_TENANT_ID", "5946c58f-ddf9-4db0-9baa-acb11c6fce91")
 if not API_KEY:
@@ -51,6 +60,42 @@ HEADERS = {
     "X-RegEngine-API-Key": API_KEY,
     "X-Tenant-ID": TENANT_ID,
 }
+
+
+def is_production_base(base: str) -> bool:
+    """True when a base URL points anywhere other than local loopback."""
+    try:
+        host = (urllib.parse.urlsplit(base).hostname or "").lower()
+    except ValueError:
+        return True
+    return host not in {"localhost", "127.0.0.1", "::1"}
+
+
+def ensure_local_target(base: str, allow_production: bool) -> None:
+    """Refuse non-localhost targets (or REGENGINE_ENV=production) without opt-in."""
+    env = os.getenv("REGENGINE_ENV", "").strip().lower()
+    if (is_production_base(base) or env == "production") and not allow_production:
+        print(
+            "Refusing to seed non-localhost target "
+            f"({base}). Re-run with --allow-production only if you are certain.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+def _parse_args(argv=None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Seed a lifecycle test scenario.")
+    parser.add_argument(
+        "--base-url",
+        default=os.getenv("REGENGINE_BASE_URL", LOCAL_DEFAULT_BASE),
+        help="API base URL (default http://localhost:8000)",
+    )
+    parser.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow targeting a non-localhost environment. Almost never what you want.",
+    )
+    return parser.parse_args(argv)
 
 
 def api_post(url, payload):
@@ -542,7 +587,14 @@ def build_supply_chain_events():
 # ══════════════════════════════════════════════════════════════════════
 
 
-def main():
+def main(argv=None):
+    global BASE, INGEST_URL, PRODUCTS_URL, SUPPLIERS_URL
+    args = _parse_args(argv)
+    BASE = args.base_url
+    ensure_local_target(BASE, args.allow_production)
+    INGEST_URL = f"{BASE}/api/v1/webhooks/ingest"
+    PRODUCTS_URL = f"{BASE}/api/v1/products/{TENANT_ID}"
+    SUPPLIERS_URL = f"{BASE}/api/v1/suppliers/{TENANT_ID}"
     results = {}
 
     # ── Step 1: Add suppliers ──

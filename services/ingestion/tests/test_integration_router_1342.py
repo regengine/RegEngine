@@ -583,7 +583,7 @@ class TestInboundWebhook:
         )
         assert resp.status_code == 404
 
-    def test_happy_path_returns_accepted_events(self, client, monkeypatch):
+    def test_happy_path_returns_count_only(self, client, monkeypatch):
         connector = _FakeConnector()
         monkeypatch.setattr(
             registry_mod,
@@ -598,7 +598,11 @@ class TestInboundWebhook:
         assert resp.status_code == 200
         body = resp.json()
         assert body["accepted"] == 2
-        assert len(body["events"]) == 2
+        assert body["connector_id"] == CONNECTOR_ID
+        # The webhook caller is authenticated only by the shared
+        # secret, so normalized inspection data must never be echoed
+        # back in the response.
+        assert "events" not in body
         # Signature header was passed through for the connector to
         # verify — not stripped by the router.
         assert connector.webhook_called_with["headers"].get("x-signature") == "sha256=abc123"
