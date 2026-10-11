@@ -518,6 +518,37 @@ async def configure_connector(
             detail=f"Unknown connector: {config_req.connector_id}",
         )
 
+    # Fail fast on a provably non-public base URL: every connector GET runs
+    # through SSRF validation, so a loopback, link-local, or otherwise
+    # non-global literal base could never sync. Rejecting here surfaces the
+    # misconfiguration at setup instead of as a late "Connection test
+    # failed" during sync. This check is deliberately DNS-free (no live
+    # lookup at setup time); hostnames that resolve to private addresses
+    # are still refused per hop at fetch time. On-prem bases are not
+    # supported; that needs an explicit allowlist decision first.
+    if config_req.base_url:
+        from ipaddress import ip_address
+        from urllib.parse import urlparse
+
+        from shared.url_validation import SSRFError, validate_url
+
+        try:
+            validate_url(config_req.base_url, resolve_dns=False)
+            host = urlparse(config_req.base_url).hostname or ""
+            try:
+                literal = ip_address(host)
+            except ValueError:
+                literal = None
+            if literal is not None:
+                mapped = getattr(literal, "ipv4_mapped", None)
+                if not (mapped or literal).is_global:
+                    raise SSRFError(f"base_url IP {literal} is not a public global address")
+        except SSRFError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"base_url is not a publicly reachable URL: {exc}",
+            ) from exc
+
     # Derive the category from the connector class metadata if available,
     # falling back to the connector's class name rather than hardcoding "unknown".
     _category = "unknown"

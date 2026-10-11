@@ -404,10 +404,13 @@ from shared.auth import validate_auth_config
 validate_auth_config()
 
 # Fail fast in production when required credentials are missing or still
-# set to insecure defaults. The credential getters fall back to localhost
-# with empty passwords for local development only; without this gate a
-# production deploy missing its secret wiring would boot against those
-# fallbacks and serve traffic unauthenticated to its backends.
+# set to insecure placeholders. Startup requires DATABASE_URL always, plus
+# KAFKA_BOOTSTRAP_SERVERS only when EVENT_BACKBONE=kafka; unset optional
+# subsystem values (Neo4j, object storage) stay unset so those paths degrade
+# (no-op or 503) instead of aborting boot. This gate does not change the
+# credential getters, which keep their own fail-closed-on-use contract:
+# they raise in production when their variables are missing instead of
+# returning the localhost defaults they use for local development.
 from shared.secrets_manager import (
     require_secure_secrets_in_production,
     validate_production_secrets,

@@ -21,9 +21,14 @@ def _handle_discovery_scrape(
     *,
     body: str,
     url: str,
+    tenant_id: str = "system",
     **_: Any,
 ) -> None:
-    asyncio.run(discovery.scrape(body, url))
+    # Forward the owning tenant so a robots-denied re-scrape re-queues to
+    # that tenant's manual_upload_queue instead of the system queue.
+    # The "system" default keeps payloads enqueued before this field
+    # existed working unchanged.
+    asyncio.run(discovery.scrape(body, url, tenant_id=tenant_id))
 
 
 def register_discovery_handlers() -> None:

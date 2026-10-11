@@ -7,10 +7,17 @@ the graph layer. It has two halves:
 1. Static scan (no Neo4j needed). Every triple-quoted Cypher literal under
    ``services/graph/app`` is extracted with ``ast`` and checked:
    every node with a tenant-owned label must be tenant scoped, either
-   inline (``{tenant_id: $tenant_id}``), by alias predicate
-   (``alias.tenant_id = $tenant_id`` before the RETURN clause), or by the
-   variable-length path guard (``ALL(n IN nodes(path) ...)``). The
-   fail-open ``$tenant_id IS NULL OR ...`` shim is rejected everywhere.
+   inline (``{tenant_id: $tenant_id}``), by strict alias equality
+   (``alias.tenant_id = $tenant_id`` before the RETURN clause; a bare
+   mention, ``IS NOT NULL``, ``<>`` or ``OR true`` never counts), or by a
+   path guard bound to its own path variable
+   (``ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id)`` covers only
+   that path). Obligation, Section, Regulation and Citation count as
+   tenant-owned: the loader writes them as shared catalog, but reads
+   return their fields, so each read must scope them (strict equality or
+   null-or-own for mixed catalog). The fail-open ``$tenant_id IS NULL``
+   shim is rejected everywhere, and ``//`` and ``/* */`` comments are
+   stripped before matching so a commented predicate never counts.
 2. Runtime capture. Queries composed at runtime (f-strings, depth
    interpolation) cannot be judged from source text, so these tests invoke
    the real functions with mocked sessions and run the same checker over
@@ -20,10 +27,12 @@ Out of scope for this suite, by design:
 
 * Write templates (any literal containing MERGE or CREATE). They are
   covered by the per-module regression tests instead.
-* Global catalog reads (Obligation, Provision, Concept, Jurisdiction and
-  the Document rows served from the separate global database). These carry
+* Global catalog reads (Provision, Concept, Jurisdiction, and the
+  Document rows served from the separate global database). These carry
   no tenant rows by design and are listed in CATALOG_ALLOWLIST with the
-  reason for each entry.
+  reason and the exact waived labels for each entry. Obligation, Section,
+  Regulation and Citation are NOT catalog: they are mixed shared-or-own
+  content and stay in the requiring set.
 * Dynamically composed queries are listed in DYNAMIC_INVENTORY. Each entry
   names how it is covered (runtime test in this file, or catalog).
 
@@ -54,6 +63,11 @@ TENANT_A = "11111111-1111-1111-1111-111111111111"
 
 # Labels whose nodes carry tenant rows (composite uniqueness constraints
 # pair the business key with tenant_id, so two tenants can share the key).
+# Obligation, Section, Regulation and Citation are deliberately included:
+# the regulation loader writes them as shared catalog today, but nothing
+# stops a tenant-private row under the same labels, and several reads
+# already return their fields. Every read touching them must carry a
+# tenant predicate (strict equality, or null-or-own for mixed catalog).
 REQUIRING_LABELS = frozenset(
     {
         "Lot",
@@ -70,19 +84,18 @@ REQUIRING_LABELS = frozenset(
         "Tenant",
         "Document",
         "RegulationOverride",
+        "Obligation",
+        "Section",
+        "Regulation",
+        "Citation",
     }
 )
 
 # Labels treated as global catalog: they never require a tenant predicate on
 # their own. A query that touches only these labels is a catalog read.
-# (Obligation, Section, Regulation and Citation are shared regulatory
-# content; Provision, Concept and Jurisdiction live in the global database.)
+# (Provision, Concept and Jurisdiction live in the global database.)
 CATALOG_LABELS = frozenset(
     {
-        "Obligation",
-        "Section",
-        "Regulation",
-        "Citation",
         "Provision",
         "Concept",
         "Jurisdiction",
@@ -94,10 +107,21 @@ FAILOPEN_SHIM = "$tenant_id IS NULL"
 
 NODE_RE = re.compile(r"\(\s*([A-Za-z_]\w*)\s*:((?:\s*:\s*[A-Za-z_]\w*|\s*[A-Za-z_]\w*)+)")
 ANON_NODE_RE = re.compile(r"\(\s*:\s*([A-Za-z_]\w*)")
-GUARD_RE = re.compile(r"ALL\s*\([^()]*?nodes\s*\(\s*\w+\s*\)[^()]*?tenant_id")
+# A tenant path guard names the path it protects and binds every node in it
+# with a strict equality: ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id).
+GUARD_RE = re.compile(
+    r"ALL\s*\(\s*[A-Za-z_]\w*\s+IN\s+nodes\s*\(\s*([A-Za-z_]\w*)\s*\)"
+    r"[^()]*?tenant_id\s*=\s*\$tenant_id"
+)
 PATH_ASSIGN_RE = re.compile(r"(\w+)\s*=\s*\(")
 CLAUSE_RE = re.compile(r"\b(WHERE|WITH|UNWIND|RETURN|ORDER|LIMIT|SKIP|OPTIONAL|MATCH|CALL|USING)\b")
-ALIAS_PRED_RE_TEMPLATE = r"(?<![\w$]){alias}\.tenant_id"
+# Strict equality only: a bare mention, IS NOT NULL, <> or OR-true never
+# counts as a tenant filter.
+ALIAS_PRED_RE_TEMPLATE = r"(?<![\w$]){alias}\.tenant_id\s*=\s*\$tenant_id\b"
+INLINE_TENANT_RE = re.compile(r"tenant_id\s*:\s*\$tenant_id")
+# Unlabeled aliases, e.g. the (end) of a variable-length path. The leading
+# guard keeps function calls such as nodes(path) and count(s) out.
+UNLABELED_ALIAS_RE = re.compile(r"(?<![\w:])\(\s*([A-Za-z_]\w*)\s*\)")
 
 
 class QueryScopeError(AssertionError):
@@ -105,8 +129,13 @@ class QueryScopeError(AssertionError):
 
 
 def _flatten(query: str) -> str:
-    """Strip ``//`` comments and collapse whitespace for stable matching."""
-    no_comments = re.sub(r"//[^\n]*", "", query)
+    """Strip ``//`` and ``/* */`` comments and collapse whitespace.
+
+    Comments are stripped so a predicate mentioned only in a comment can
+    never satisfy the checker.
+    """
+    no_comments = re.sub(r"/\*.*?\*/", "", query, flags=re.DOTALL)
+    no_comments = re.sub(r"//[^\n]*", "", no_comments)
     return " ".join(no_comments.split())
 
 
@@ -123,23 +152,43 @@ def _matching_paren(text: str, open_idx: int) -> int:
 
 
 def _path_bound_aliases(flat: str) -> set[str]:
-    """Aliases bound inside a ``name = (pattern)`` path assignment that is
-    protected by an ALL(nodes(path)) tenant guard."""
-    if not GUARD_RE.search(flat):
+    """Aliases inside a ``name = (pattern)`` path assignment that is
+    protected by an ALL(... nodes(name) ... = $tenant_id) guard.
+
+    The guard is bound to the path variable it names: the equality covers
+    every node in that path, labeled or not, so all aliases in the
+    assignment region are covered. A guard on one path never covers a
+    different path assignment.
+    """
+    guarded_vars = {match.group(1) for match in GUARD_RE.finditer(flat)}
+    if not guarded_vars:
         return set()
     bound: set[str] = set()
     for assign in PATH_ASSIGN_RE.finditer(flat):
-        rest = flat[assign.end() :]
+        if assign.group(1) not in guarded_vars:
+            continue
+        # Start at the opening paren so the first node in the path pattern
+        # is covered too, not just the nodes after it.
+        rest = flat[assign.end() - 1 :]
         clause = CLAUSE_RE.search(rest)
         region = rest[: clause.start()] if clause else rest
         for node in NODE_RE.finditer(region):
             if node.group(1):
                 bound.add(node.group(1))
+        for unlabeled in UNLABELED_ALIAS_RE.finditer(region):
+            bound.add(unlabeled.group(1))
     return bound
 
 
-def assert_query_scoped(source: str, query: str) -> None:
+def assert_query_scoped(source: str, query: str, exempt_labels: frozenset = frozenset()) -> None:
     """Assert one Cypher read query is tenant scoped.
+
+    Every node with a tenant-owned label must be tenant scoped, either
+    inline (``{tenant_id: $tenant_id}``), by alias predicate
+    (``alias.tenant_id = $tenant_id`` before the RETURN clause), or by a
+    path guard bound to its path variable. ``exempt_labels`` waives named
+    labels for one allowlisted catalog query; it never waives other labels
+    in the same query.
 
     Raises QueryScopeError (an AssertionError) describing the first gap.
     """
@@ -164,7 +213,7 @@ def assert_query_scoped(source: str, query: str) -> None:
         occurrences.append(("", anon.group(1), anon.start()))
 
     for alias, label, start in occurrences:
-        if label in CATALOG_LABELS:
+        if label in CATALOG_LABELS or label in exempt_labels:
             continue
         if label not in REQUIRING_LABELS:
             continue
@@ -174,7 +223,7 @@ def assert_query_scoped(source: str, query: str) -> None:
             close = _matching_paren(flat, start)
         except QueryScopeError:
             close = start
-        if "tenant_id" in flat[start:close]:
+        if INLINE_TENANT_RE.search(flat[start:close]):
             continue
         if alias and re.search(ALIAS_PRED_RE_TEMPLATE.format(alias=re.escape(alias)), zone):
             continue
@@ -182,7 +231,7 @@ def assert_query_scoped(source: str, query: str) -> None:
             raise QueryScopeError(f"{source}: anonymous (:{label}) node has no tenant predicate")
         raise QueryScopeError(
             f"{source}: (:{label}) aliased {alias!r} has no tenant predicate "
-            "(no inline tenant_id, no alias.tenant_id predicate, no path guard)"
+            "(no inline tenant_id, no alias.tenant_id = $tenant_id predicate, no bound path guard)"
         )
 
 
@@ -333,90 +382,50 @@ def _labels_of(text: str) -> str:
 # forces removal of the entry. Product files are not edited by this task.
 
 
-KNOWN_GAPS = [
-    {
-        "file": "fsma/chain_integrity.py",
-        "snippet": "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-        "bug": "BUG-001 find_gaps inner Lot in the NOT EXISTS sub-query "
-        "carries no tenant predicate, so a cross-tenant Lot satisfies the "
-        "lot linkage and suppresses a genuine missing_lot gap (fail-open "
-        "null-tenant shim removed in #3227; Lot remainder retained)",
-        "fix": [
-            (
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }",
-            ),
-        ],
-    },
-    {
-        "file": "routers/lineage_traversal.py",
-        "snippet": "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-        "bug": "BUG-004 LINEAGE_BY_TLC_QUERY returns prev.tlc from an unscoped "
-        "OPTIONAL MATCH, and the Python invariant check only inspects the "
-        "anchor fact, so a cross-tenant predecessor leaks its TLC",
-        "fix": [
-            (
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)",
-                "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact) WHERE prev.tenant_id = $tenant_id",
-            ),
-        ],
-    },
-    {
-        "file": "fsma/data_quality.py",
-        "snippet": "sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-        "bug": "BUG-005 analyze_kde_completeness counts a cross-tenant Lot as "
-        "satisfying the lot linkage, undercounting missing_lot for the caller "
-        "(same NOT EXISTS shape fixed per-node in #1301 for chain_integrity)",
-        "fix": [
-            (
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) }",
-                "NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }",
-            ),
-        ],
-    },
-    {
-        "file": "overlay_resolver.py",
-        "snippet": "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)",
-        "bug": "BUG-006 get_regulatory_requirements anchors on a scoped product "
-        "but the OPTIONAL MATCH join into TenantControl has no tenant "
-        "predicate, surfacing another tenant's controls (same class as the "
-        "#1278/#1289/#1294 fixes for the sibling queries in this file)",
-        "fix": [
-            (
-                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl)",
-                "OPTIONAL MATCH (product)<-[:MAPS_TO]-(control:TenantControl {tenant_id: $tenant_id})",
-            ),
-        ],
-    },
-]
+# All seven documented gaps (BUG-001 through BUG-007) are fixed and their
+# xfail marks removed; each case below is now an enforcing test. New gaps
+# follow the same pattern: add an entry here with an xfail mark until the
+# query carries a tenant predicate.
+KNOWN_GAPS: list = []
 
 # Reads that are catalog by design: no tenant rows exist behind them, so no
 # tenant predicate is required. Each entry must still match a live query
 # (test_catalog_allowlist_entries_current fails on stale entries).
+# The waiver is per label, not per query: "labels" names exactly which
+# labels in the matched query are waived, and the checker still requires a
+# tenant predicate on every other tenant-owned label in that same query
+# (test_catalog_allowlist_labels_exact locks this). Document stays waived
+# only for these global-session reads; on the default shared database a
+# tenant Document behind an IN_DOCUMENT edge would still be returned, see
+# the residual note in test_catalog_allowlist_labels_exact.
 CATALOG_ALLOWLIST = [
     {
         "file": "overlay_resolver.py",
-        "snippet": "WHERE prov.hash IN $hashes",
+        "snippet": "WHERE prov.hash IN $hashes\n                OPTIONAL MATCH (prov)-[:IN_DOCUMENT]->(doc:Document)",
         "reason": "global regulation database (separate global_db session); "
         "provisions and their documents are shared catalog content",
+        "labels": ["Provision", "Document"],
     },
     {
         "file": "overlay_resolver.py",
         "snippet": "MATCH (prov:Provision {hash: $hash})",
         "reason": "global regulation database (separate global_db session); "
         "provision, document, concept and jurisdiction are shared catalog",
+        "labels": ["Provision", "Document", "Concept", "Jurisdiction"],
     },
     {
         "file": "overlay_resolver.py",
-        "snippet": "MATCH (prov:Provision)\n                WHERE prov.hash IN $hashes",
+        "snippet": "MATCH (prov:Provision)\n                WHERE prov.hash IN $hashes\n                RETURN prov",
         "reason": "global regulation database (separate global_db session); "
         "provision lookup by hash for control details",
+        "labels": ["Provision"],
     },
     {
         "file": "overlay_resolver.py",
         "snippet": "MATCH (prov:Provision)-[:APPLIES_TO]->(j:Jurisdiction {name: $jurisdiction})",
         "reason": "global regulation database (separate global_db session); "
         "jurisdiction provision listing is shared catalog content",
+        "labels": ["Provision", "Jurisdiction"],
     },
 ]
 
@@ -446,8 +455,11 @@ def _gap_for(rel: str, text: str):
     return None
 
 
-def _allowlisted(rel: str, text: str) -> bool:
-    return any(entry["file"] == rel and entry["snippet"] in text for entry in CATALOG_ALLOWLIST)
+def _allowlist_entry(rel: str, text: str):
+    for entry in CATALOG_ALLOWLIST:
+        if entry["file"] == rel and entry["snippet"] in text:
+            return entry
+    return None
 
 
 def _case_id(rel: str, lineno: int, text: str) -> str:
@@ -461,11 +473,15 @@ def _scan_params():
         marks: list = []
         # A known gap always wins over the catalog allowlist, so a shared
         # substring can never hide a scoping gap behind a skip.
+        exempt: tuple = ()
         if gap is not None:
-            marks.append(pytest.mark.xfail(strict=True, reason=gap["bug"]))
-        elif _allowlisted(rel, text):
-            marks.append(pytest.mark.skip(reason="global catalog read, see CATALOG_ALLOWLIST"))
-        params.append(pytest.param(rel, text, marks=marks, id=_case_id(rel, lineno, text)))
+            marks.append(pytest.mark.xfail(strict=True, raises=QueryScopeError, reason=gap["bug"]))
+        else:
+            entry = _allowlist_entry(rel, text)
+            if entry is not None:
+                marks.append(pytest.mark.skip(reason="global catalog read, see CATALOG_ALLOWLIST"))
+                exempt = tuple(entry["labels"])
+        params.append(pytest.param(rel, text, exempt, marks=marks, id=_case_id(rel, lineno, text)))
     return params
 
 
@@ -475,10 +491,10 @@ def test_read_query_inventory_sane():
     assert DYNAMIC_SITES, "extractor found no dynamic query sites; check _extract"
 
 
-@pytest.mark.parametrize("rel,text", _scan_params())
-def test_read_query_is_tenant_scoped(rel: str, text: str):
+@pytest.mark.parametrize("rel,text,exempt", _scan_params())
+def test_read_query_is_tenant_scoped(rel: str, text: str, exempt: tuple):
     """Every static Cypher read of tenant data carries a tenant predicate."""
-    assert_query_scoped(_case_id(rel, 0, text), text)
+    assert_query_scoped(_case_id(rel, 0, text), text, exempt_labels=frozenset(exempt))
 
 
 def test_known_gap_entries_current():
@@ -525,6 +541,162 @@ def test_checker_accepts_fixed_shape(gap):
         assert old in fixed, f"fix pattern no longer applies: {old!r}"
         fixed = fixed.replace(old, new)
     assert_query_scoped(f"fixed-shape {gap['bug'].split(' ', 1)[0]}", fixed)
+
+
+@pytest.mark.parametrize(
+    "weak",
+    [
+        # IS NOT NULL is not a tenant filter (fails pre-strict-equality checker).
+        "MATCH (l:Lot) WHERE l.tenant_id IS NOT NULL AND $tenant_id = $tenant_id RETURN l",
+        # <> excludes one tenant instead of selecting the caller.
+        "MATCH (l:Lot) WHERE l.tenant_id <> $tenant_id RETURN l",
+        # Inline map binds the wrong key; tenant_id only appears as a value.
+        "MATCH (l:Lot {id: $tenant_id}) RETURN l",
+        # Substring inside the parens is not a tenant binding.
+        "MATCH (l:Lot {not_tenant_id: 1}) WHERE $tenant_id = $tenant_id RETURN l",
+        # A predicate inside a block comment never runs.
+        "MATCH (l:Lot) /* l.tenant_id = $tenant_id */ WHERE $tenant_id = $tenant_id RETURN l",
+        # A guard on p1 must not cover a second, unguarded path p2.
+        "MATCH p1 = (a:Lot)-[*1..3]-(b) WHERE a.tenant_id = $tenant_id "
+        "AND ALL(n IN nodes(p1) WHERE n.tenant_id = $tenant_id) "
+        "MATCH p2 = (c:Lot)-[*1..3]-(d) RETURN a, c",
+        # A guard without a strict equality binds nothing.
+        "MATCH path = (a:Lot)-[*1..3]-(b) "
+        "WHERE ALL(n IN nodes(path) WHERE n.tenant_id IS NOT NULL) "
+        "AND $tenant_id = $tenant_id RETURN a",
+    ],
+    ids=[
+        "is-not-null",
+        "not-equal",
+        "wrong-inline-key",
+        "substring-inline",
+        "block-comment",
+        "second-unguarded-path",
+        "weak-guard",
+    ],
+)
+def test_checker_rejects_weak_predicate_shapes(weak: str):
+    """Weak shapes must fail: strict equality, bound guards, no comment tricks."""
+    with pytest.raises(QueryScopeError):
+        assert_query_scoped("weak-shape", weak)
+
+
+@pytest.mark.parametrize(
+    "sound",
+    [
+        # Null-or-own on the property keeps shared catalog rows readable
+        # while excluding another tenant's private rows. This is not the
+        # fail-open $tenant_id IS NULL parameter shim.
+        "MATCH (o:Obligation)<-[:REQUIRES]-(s:Section) "
+        "WHERE (o.tenant_id IS NULL OR o.tenant_id = $tenant_id) "
+        "AND (s.tenant_id IS NULL OR s.tenant_id = $tenant_id) RETURN o, s",
+        # A guard bound to its own path covers the unlabeled end node too.
+        "MATCH path = (a:Lot)-[*1..3]-(b) WHERE a.tenant_id = $tenant_id "
+        "AND ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id) RETURN a",
+        # The guard alone covers the path's first node: no per-alias
+        # predicate is needed inside a guarded path assignment.
+        "MATCH path = (a:Lot)-[*1..3]-(b) "
+        "WHERE ALL(n IN nodes(path) WHERE n.tenant_id = $tenant_id) "
+        "AND $tenant_id = $tenant_id RETURN a",
+    ],
+    ids=["null-or-own", "bound-path-guard", "guard-only-coverage"],
+)
+def test_checker_accepts_sound_predicate_shapes(sound: str):
+    """The strict checker must keep accepting the shapes production uses."""
+    assert_query_scoped("sound-shape", sound)
+
+
+def test_known_gap_anchors_still_scoped():
+    """Reverting an anchor predicate must fail even while its gap stays xfailed.
+
+    The KNOWN_GAPS xfails match the whole literal, so deleting the anchor
+    predicate on the already-scoped node would stay green. This separate,
+    non-xfailed test locks each anchor in place.
+    """
+    anchors = {
+        "fsma/chain_integrity.py": ["e.tenant_id = $tenant_id"],
+        "fsma/data_quality.py": ["e.tenant_id = $tenant_id"],
+        "overlay_resolver.py": ["CustomerProduct {id: $product_id, tenant_id: $tenant_id}"],
+        "routers/lineage_traversal.py": ["RegulatoryFact {tenant_id: $tenant_id}"],
+    }
+    by_file: dict[str, list[str]] = {}
+    for rel, _, _, text in READ_QUERIES:
+        by_file.setdefault(rel, []).append(text)
+    for rel, needles in anchors.items():
+        assert rel in by_file, f"anchor file vanished from the scan: {rel}"
+        for needle in needles:
+            assert any(needle in text for text in by_file[rel]), f"anchor predicate lost in {rel}: {needle!r}"
+
+
+def _labels_in_query(text: str) -> set[str]:
+    flat = _flatten(text)
+    labels = {label for _, label in NODE_RE.findall(flat)} | set(ANON_NODE_RE.findall(flat))
+    return labels
+
+
+def test_catalog_allowlist_labels_exact():
+    """Each allowlist entry waives exactly the labels it names, nothing more.
+
+    A later edit that adds a tenant-owned node to an allowlisted query must
+    fail here (and in the scan, which now exempts per label instead of per
+    query). Residual: Document stays waived for these global-session reads;
+    on the default shared database a tenant Document behind an IN_DOCUMENT
+    edge would still be returned. No in-repo writer creates IN_DOCUMENT
+    edges, so doc is null today, but Christopher should confirm whether
+    tenant Documents can ever sit behind that edge before treating the
+    waiver as proof.
+    """
+    for entry in CATALOG_ALLOWLIST:
+        assert entry["labels"], f"allowlist entry has no waived labels: {entry['snippet'][:60]!r}"
+        matched = [text for rel, _, _, text in READ_QUERIES if entry["file"] == rel and entry["snippet"] in text]
+        assert matched, f"allowlist entry matches nothing: {entry['snippet'][:60]!r}"
+        for text in matched:
+            labels = _labels_in_query(text)
+            waived = set(entry["labels"])
+            requiring = {label for label in labels if label in REQUIRING_LABELS}
+            assert requiring <= waived, (
+                f"allowlisted query covers unwaived tenant labels {requiring - waived}: {entry['snippet'][:60]!r}"
+            )
+            assert waived <= labels, f"stale label waiver {waived - labels} matches no node: {entry['snippet'][:60]!r}"
+
+
+# Dynamically composed MATCH queries keyed by (file, function), each naming
+# the runtime capture test in this module that proves its scoping.
+RUNTIME_COVERAGE = {
+    ("fsma/tracer.py", "trace_forward"): ["test_trace_forward_composed_queries_scoped"],
+    ("fsma/tracer.py", "trace_backward"): ["test_trace_backward_composed_queries_scoped"],
+    ("routers/regulations.py", "list_regulations"): ["test_list_regulations_composed_query_scoped"],
+    ("routers/regulations.py", "get_requirement_mappings"): [
+        "test_requirement_mappings_composed_scopes_obligations",
+        "test_requirement_mappings_composed_scopes_sections",
+    ],
+    ("traceability_linker.py", "link_obligation_to_traceability"): [
+        "test_link_obligation_queries_carry_obligation_predicate"
+    ],
+    ("traceability_linker.py", "get_governing_regulations"): [
+        "test_get_governing_regulations_composed_obligation_predicate",
+        "test_get_governing_regulations_composed_traceevent_scoped",
+    ],
+    ("traceability_linker.py", "get_impacted_lots"): [
+        "test_get_impacted_lots_composed_obligation_predicate",
+        "test_get_impacted_lots_composed_traceevent_scoped",
+    ],
+}
+
+
+def test_dynamic_inventory_runtime_covered():
+    """Every disposition:runtime inventory site must name a live test in this module."""
+    for key, names in RUNTIME_COVERAGE.items():
+        assert key in DYNAMIC_INVENTORY, f"coverage names an unknown inventory site: {key}"
+        assert DYNAMIC_INVENTORY[key]["disposition"] == "runtime", f"coverage names a catalog site: {key}"
+        for name in names:
+            assert callable(globals().get(name)), f"coverage test {name} is missing for site {key}"
+    uncovered = [
+        key
+        for key, entry in DYNAMIC_INVENTORY.items()
+        if entry["disposition"] == "runtime" and key not in RUNTIME_COVERAGE
+    ]
+    assert not uncovered, f"runtime-composed sites with no coverage test: {uncovered}"
 
 
 # ── Runtime capture helpers ────────────────────────────────────────────────
@@ -676,12 +848,6 @@ async def test_requirement_mappings_composed_scopes_obligations(captured_queries
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-007 get_requirement_mappings scopes o1/o2 but not the joined "
-    "s1/s2 Sections, so a cross-tenant REQUIRES edge leaks the other "
-    "tenant's regulation name into the mapping rows",
-)
 async def test_requirement_mappings_composed_scopes_sections(captured_queries, monkeypatch):
     """Joined Section nodes in the mappings query must be tenant filtered."""
     from services.graph.app.routers import regulations as regulations_router
@@ -762,11 +928,13 @@ async def test_map_requirement_empty_tenant_rejected_before_query(tenant_id):
 # ── Runtime tests: traceability linker composed queries ──────────────────────
 # #3220 rebuilt the linker queries as f-strings interpolating
 # _OBLIGATION_TENANT_PREDICATE, so they are invisible to the static scan and
-# are covered here instead (see DYNAMIC_INVENTORY). Obligation nodes are a
-# shared global catalog that may one day include tenant-private rows, so
-# each composed query must carry the shared-catalog predicate with
-# $tenant_id bound as a parameter, never interpolated. Fake sessions only;
-# no driver or network is touched.
+# are covered here instead (see DYNAMIC_INVENTORY). Obligation rows are
+# quarantined by Decision 3: only rows stamped ``catalog = true`` by a
+# catalog writer are shared, tenant-stamped rows are confined to their
+# tenant, and unmarked null-tenant rows match no tenant. Each composed
+# query must carry the quarantine predicate with $tenant_id bound as a
+# parameter, never interpolated. Fake sessions only; no driver or network
+# is touched.
 
 
 class _LinkerCaptureSession:
@@ -805,14 +973,16 @@ def _linker_with_capture(store):
     return linker, session
 
 
-# Independent expectation: shared-or-own catalog predicate. Literal on
-# purpose — importing the product constant would mirror the implementation.
-_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+# Independent expectation: quarantine predicate. Literal on purpose —
+# importing the product constant would mirror the implementation. There is
+# deliberately no ``IS NULL`` arm: unmarked null-tenant rows must match no
+# tenant, and only ``catalog = true`` rows are shared.
+_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id = $tenant_id OR o.catalog = true)"
 _OBLIGATION_WHERE_RE = re.compile(r"WHERE\s*" + re.escape(_EXPECTED_OBLIGATION_PREDICATE) + r"\s*(MATCH|RETURN|MERGE)")
 
 
 def _assert_obligation_predicate(source: str, query: str, kwargs: dict) -> None:
-    """The exact shared-catalog WHERE predicate is present, bound, not interpolated."""
+    """The exact quarantine WHERE predicate is present, bound, not interpolated."""
     flat = _flatten(query)
     assert _OBLIGATION_WHERE_RE.search(flat), (
         f"{source}: missing exact shared-catalog WHERE {_EXPECTED_OBLIGATION_PREDICATE!r} "
@@ -830,7 +1000,7 @@ async def test_obligation_predicate_weakened_or_true_rejected(monkeypatch):
     monkeypatch.setattr(
         linker_module,
         "_OBLIGATION_TENANT_PREDICATE",
-        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id OR true)",
+        "(o.tenant_id = $tenant_id OR o.catalog = true OR true)",
     )
     store: list = []
     linker, session = _linker_with_capture(store)
@@ -839,6 +1009,30 @@ async def test_obligation_predicate_weakened_or_true_rejected(monkeypatch):
     query, kwargs = store[0]
     with pytest.raises(AssertionError):
         _assert_obligation_predicate("weakened-predicate", query, kwargs)
+
+
+@pytest.mark.asyncio
+async def test_obligation_predicate_old_null_shim_rejected(monkeypatch):
+    """The pre-quarantine null-tenant shim must fail the quarantine check.
+
+    Decision 3 removed the ``o.tenant_id IS NULL`` arm because it showed
+    every unmarked null-tenant obligation to every tenant. If that shape
+    ever returns, this test goes red.
+    """
+    import services.graph.app.traceability_linker as linker_module
+
+    monkeypatch.setattr(
+        linker_module,
+        "_OBLIGATION_TENANT_PREDICATE",
+        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)",
+    )
+    store: list = []
+    linker, session = _linker_with_capture(store)
+    session.queue(rows=[{"regulation": "FSMA", "requirement": "x", "requirement_id": "obl-9"}])
+    await linker.get_governing_regulations("tlc-1", TENANT_A)
+    query, kwargs = store[0]
+    with pytest.raises(AssertionError):
+        _assert_obligation_predicate("null-shim-predicate", query, kwargs)
 
 
 @pytest.mark.asyncio
@@ -876,14 +1070,6 @@ async def test_get_governing_regulations_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-002 get_governing_regulations joins (e:TraceEvent) with no "
-    "tenant predicate, so an event from another tenant reached through a "
-    "cross-tenant UNDERWENT edge leaks its governing obligations "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_governing_regulations_composed_traceevent_scoped():
     """Composed governing query must scope the joined TraceEvent (BUG-002)."""
     store: list = []
@@ -916,15 +1102,6 @@ async def test_get_impacted_lots_composed_obligation_predicate():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    raises=QueryScopeError,
-    reason="BUG-003 get_impacted_lots joins (e:TraceEvent) with no tenant "
-    "predicate: the Lot is scoped but the event reached from the global "
-    "Obligation is not, so another tenant's event can pull its lots "
-    "into this tenant's impact list "
-    "(runtime-composed since #3220; captured query still unscoped)",
-)
 async def test_get_impacted_lots_composed_traceevent_scoped():
     """Composed impacted-lots query must scope the joined TraceEvent (BUG-003)."""
     store: list = []

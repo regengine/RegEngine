@@ -64,3 +64,4 @@ Secrets Audit (detect-secrets)
 Browser Storage PII Guard
 SAST (Semgrep)
 Dependency Audit
+Pinned supply chain

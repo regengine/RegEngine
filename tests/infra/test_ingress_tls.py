@@ -30,7 +30,17 @@ def test_ingress_has_tls_block_with_secret():
     assert tls, "ingress spec has no tls block, the host serves plaintext"
     for entry in tls:
         assert entry.get("hosts"), "tls entry must list hosts"
-        assert entry.get("secretName"), "tls entry must name a secretName"
+        assert entry.get("secretName") == "regengine-tls", (
+            f"tls entry names {entry.get('secretName')!r}, expected the issued regengine-tls secret"
+        )
+
+
+def test_cluster_issuer_annotation_is_pinned():
+    """The tls block is only issued by the letsencrypt-prod ClusterIssuer."""
+    annotations = _ingress()["metadata"].get("annotations", {})
+    assert annotations.get("cert-manager.io/cluster-issuer") == "letsencrypt-prod", (
+        "issuer annotation drifted, cert-manager will not issue regengine-tls"
+    )
 
 
 def test_tls_hosts_cover_every_rule_host():
