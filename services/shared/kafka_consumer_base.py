@@ -318,6 +318,12 @@ class ConsumerHealthMonitor:
         if self._last_poll and is_alive:
             seconds_since_poll = (now - self._last_poll).total_seconds()
             poll_stale = seconds_since_poll > self._stale_threshold
+        elif self._started_at and is_alive and self._last_poll is None:
+            # Started but never polled: a wedged consumer thread must not
+            # report healthy. The startup grace is the stale threshold
+            # itself, measured from start.
+            seconds_since_poll = (now - self._started_at).total_seconds()
+            poll_stale = seconds_since_poll > self._stale_threshold
 
         return {
             "alive": is_alive,

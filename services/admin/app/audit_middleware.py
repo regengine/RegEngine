@@ -8,6 +8,7 @@ Route handlers access via: request.state.audit_context
 
 import ipaddress
 import os
+import re
 import uuid
 
 import structlog
@@ -47,6 +48,26 @@ _AUDIT_SKIP_PREFIXES: tuple[str, ...] = (
     "/redoc/",
     "/metrics/",
 )
+
+
+# Same shape the signed proxy attestation accepts. Anything else is not
+# used as audit evidence, because the request id is caller-controlled.
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
+
+
+def _audit_request_id(request: Request) -> str:
+    """Return a bounded request id, or a fresh id when the candidate is hostile."""
+    candidate = str(getattr(request.state, "request_id", "") or "").strip()
+    if _REQUEST_ID_RE.fullmatch(candidate):
+        return candidate
+    return str(uuid.uuid4())
+
+
+def _audit_user_agent(request: Request) -> str:
+    """Drop control characters and cap the user agent stored in audit context."""
+    raw = request.headers.get("user-agent") or ""
+    cleaned = "".join(ch for ch in raw if ch.isprintable())
+    return cleaned[:512]
 
 
 def _should_skip(path: str) -> bool:
@@ -153,11 +174,10 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
         # consolidated app and runs before this middleware. The standalone
         # admin service has no request-ID middleware, so retain a local UUID
         # fallback there.
-        request_id = str(getattr(request.state, "request_id", "") or uuid.uuid4())
         request.state.audit_context = {
-            "request_id": request_id,
+            "request_id": _audit_request_id(request),
             "actor_ip": self._get_client_ip(request),
-            "actor_ua": (request.headers.get("user-agent") or "")[:512],
+            "actor_ua": _audit_user_agent(request),
             "endpoint": f"{request.method} {request.url.path}",
         }
 

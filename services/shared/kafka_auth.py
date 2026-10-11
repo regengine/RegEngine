@@ -162,9 +162,14 @@ def _max_signature_age() -> int:
     if raw is None:
         return DEFAULT_MAX_SIGNATURE_AGE_SECONDS
     try:
-        return int(raw)
+        parsed = int(raw)
     except (ValueError, TypeError):
         return DEFAULT_MAX_SIGNATURE_AGE_SECONDS
+    # A non-positive window would reject every fresh envelope (self-DoS)
+    # in strict mode; fall back to the default instead.
+    if parsed <= 0:
+        return DEFAULT_MAX_SIGNATURE_AGE_SECONDS
+    return parsed
 
 
 # -----------------------------------------------------------------------------
