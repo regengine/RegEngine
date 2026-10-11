@@ -52,13 +52,13 @@ class TestLooksSequential:
 
     def test_new_sequential_pattern_flagged(self):
         """A new nibble-shift ID that isn't grandfathered must be flagged."""
-        # Pattern: each byte incremented by 0x11 relative to the previous.
-        # Shift by 2 from the grandfathered series so it isn't in the set.
-        new_seq = "c3d4e5f6a7b8"  # happens to be grandfathered — skip  # pragma: allowlist secret
+        # "c3d4e5f6a7b8" is itself grandfathered, so it can never
+        # exercise the new-ID path; use a different ID for the new case.
+        assert "c3d4e5f6a7b8" in GRANDFATHERED_IDS
+        assert not _looks_sequential("c3d4e5f6a7b8")
         # Build one that is definitely not grandfathered:
-        # bytes 0x10, 0x21, 0x32, 0x43, 0x54, 0x65 → "102132435465"  (diff=+0x11 each? no)
-        # Simpler: bytes 0x20, 0x31, 0x42, 0x53, 0x64, 0x75 → diff=0x11 each
-        candidate = "203142536475"
+        # bytes 0x20, 0x31, 0x42, 0x53, 0x64, 0x75 → diff=0x11 each
+        candidate = "203142536475"  # pragma: allowlist secret
         assert candidate not in GRANDFATHERED_IDS
         assert _looks_sequential(candidate)
 

@@ -1,53 +1,187 @@
-# FIX-REPORT: PR #3233 ([qa] Admin auth, role, invite, export and tenant-scope unit coverage)
+# FIX-REPORT: About page copy
 
-Merge commit f9ea84fa29cfe0f0241bceb297fd0748ed57f1ad. PR #3233 added only
-`services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py`
-(485 lines); no product code changed. All fixes below are test-only
-strengthening in that same file. Product files (`auth_routes.py`,
-`dependencies.py`, `invite_routes.py`) were temporarily mutated to prove
-each new test fails without the fix, then restored by hand edit.
-`git status` confirms only the test file differs.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-Reports read: all six re-rv-3233-<angle> SUMMARY.md files (correct,
-security, tenant, tests, blast, ops SUMMARY.md plus ops REPORT.md), and
-lead/area mentions of #3233 in re-rv-lead-tests, re-rv-lead-blast,
-re-rv-lead-correct, re-rv-lead-ops, re-rv-lead-security, re-rv-lead-tenant,
-re-rv-area-tenant, re-rv-int-rollback.
+## Before and after
 
-## Findings
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-| # | Source report | Severity | Finding | Status | Reason / proof |
-|---|---------------|----------|---------|--------|----------------|
-| 1 | re-rv-3233-tests Medium 1 (also re-rv-lead-tests, re-rv-area-tenant item 13) | Medium | `test_none_tenant_returns_empty` passed a bare MagicMock and asserted `== []`, so deleting the no-tenant fail-closed guard in `_resolve_session_permissions` stayed green | FIXED AND TESTED | Renamed to `test_none_tenant_returns_empty_without_touching_db`: db double now yields a role with `permissions=["users.read"]` and the test asserts `db.execute` was not called. Temporarily replacing the guard with `pass` made only this test FAIL; restored, full file green. |
-| 2 | re-rv-3233-tests Medium 2 (also re-rv-3233-tenant Low, re-rv-lead-tests, re-rv-area-tenant item 13) | Medium | Tenant/user SQL predicates replaced by canned mock rows; removing WHERE filters in PermissionChecker, `_resolve_session_tenant_id`, `_resolve_session_permissions`, `_load_active_organization_membership` stayed green | FIXED AND TESTED | Added `TestTenantScopePredicates` (4 tests) capturing the statement passed to `db.execute` and asserting bound params plus table-qualified columns (`memberships.user_id`, `memberships.tenant_id`, `memberships.is_active`, `organization_memberships.user_id`). Proved each: dropping the tenant predicate in `_resolve_session_permissions` FAILED the permissions test; dropping it in PermissionChecker FAILED the checker test; dropping the user predicate in `_resolve_session_tenant_id` FAILED the resolver test. All mutations restored by hand; file green. |
-| 3 | re-rv-3233-tests Medium 3 (also re-rv-lead-tests, re-rv-area-tenant item 13) | Medium | E2E outbox test covered only the missing-path return; an always-False function passed | FIXED AND TESTED | Added 3 tests for 4 total gate branches: fully enabled local outbox writes exactly one JSON line and returns True; cloud marker set returns False with no file; e2e mode off returns False with no file; missing path returns False (pre-existing). Temporarily stubbing `_record_e2e_invite_email` to `return False` made the positive test FAIL; restored, green. |
-| 4 | re-rv-3233-tests Low 4 (also re-rv-lead-tests lows) | Low | `test_expired_session_is_rejected` used a 1-second expiry margin, so a backward clock step over 1 second between two `now()` calls could flake | FIXED AND TESTED | Trivial low, fixed: margin widened to 5 minutes; module docstring corrected from "no clock dependence" to "wide clock margins". Full file green. |
-| 5 | re-rv-3233-correct, re-rv-3233-security, re-rv-3233-ops, re-rv-3233-blast | None | All four returned verdict OK with no findings | No action | Nothing to confirm or fix. |
-| 6 | Out of scope per task brief | N/A | Suspended-tenant deny on live auth; tenant-scope gate failure; 7 xfail cross-tenant leaks | Not touched | Owned by other tasks, noted only. |
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Test commands and results
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-Baseline before changes (all through the slot queue):
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-- `~/metacode/fleet/heavy .venv/bin/python -m pytest services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py -q --no-cov -p no:cacheprovider` => 40 passed.
+2. Faster iteration card
 
-After changes:
+Before:
+`Design-partner feedback is scoped to`
 
-- Same file => 47 passed (40 existing incl. 1 renamed, plus 7 new: 4 predicate, 3 outbox).
-- `~/metacode/fleet/heavy .venv/bin/python -m pytest services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py services/admin/tests/test_e2e_safety.py -q --no-cov -p no:cacheprovider` => 51 passed.
-- `~/metacode/fleet/heavy .venv/bin/ruff check services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py` => All checks passed.
-- `~/metacode/fleet/heavy .venv/bin/ruff format --check services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py` => 1 file already formatted (after running `ruff format` once, which also normalized one pre-existing block).
+After:
+`Early tester feedback is scoped to`
 
-Fail-without-fix proof (temporary product mutations, each restored by hand edit, verified via `git status` showing only the test file modified):
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-- Guard `if tenant_id is None: return []` replaced with `pass` => `test_none_tenant_returns_empty_without_touching_db` FAILED, all others passed.
-- `MembershipModel.tenant_id == tenant_id` removed from `_resolve_session_permissions` => `test_resolve_session_permissions_scopes_to_user_and_tenant` FAILED (first attempt with params-only assertion did not catch it because `TENANT_ID` is also bound by the RoleModel predicate; strengthened to table-qualified `memberships.tenant_id` string check, then it failed as required).
-- `MembershipModel.tenant_id == current_tenant_id` removed from PermissionChecker => `test_permission_checker_scopes_to_user_and_tenant` FAILED.
-- `MembershipModel.user_id == user_id` removed from `_resolve_session_tenant_id` => `test_resolve_session_tenant_id_scopes_to_user_and_active` FAILED.
-- `_record_e2e_invite_email` stubbed to `return False` => `test_fully_enabled_local_outbox_writes_one_record` FAILED.
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-`scripts/security/scan_tenant_scope.py` was not run because no queries were touched (test-file-only change).
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-## Needs C.Lee's decision
+## Diff
 
-None. Test-only change, no product behavior altered, no migration, no API change.
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

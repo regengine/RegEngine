@@ -188,6 +188,23 @@ class TestMfaMissingStoreFailsClosed:
         )
         assert result == "999111"
 
+    def test_require_mfa_bad_token_still_rejected_in_dev(self, monkeypatch):
+        # The dev skip only bypasses throttling, not verification: a wrong
+        # token must still fail with 403 when no store is wired.
+        from services.admin.app.mfa import require_mfa
+
+        _set_non_strict(monkeypatch)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                require_mfa(
+                    x_mfa_token="000000",
+                    current_user=_mfa_user(),
+                    db=MagicMock(),
+                    session_store=None,
+                )
+            )
+        assert exc.value.status_code == 403
+
     def test_dormant_counter_helpers_without_store_denied_in_strict(self, monkeypatch):
         from services.admin.app import mfa as mfa_module
 
@@ -237,6 +254,7 @@ class TestApiKeySuspendedTenant:
         with pytest.raises(HTTPException) as exc:
             asyncio.run(deps_mod.get_current_tenant(key="valid-key", db=db))
         assert exc.value.status_code == 403
+        assert exc.value.detail == "Invalid API Key"
 
     def test_archived_tenant_api_key_rejected(self, monkeypatch):
         from services.admin.app import dependencies as deps_mod  # noqa: F401
@@ -245,6 +263,7 @@ class TestApiKeySuspendedTenant:
         with pytest.raises(HTTPException) as exc:
             asyncio.run(deps_mod.get_current_tenant(key="valid-key", db=db))
         assert exc.value.status_code == 403
+        assert exc.value.detail == "Invalid API Key"
 
     def test_missing_tenant_row_api_key_rejected(self, monkeypatch):
         from services.admin.app import dependencies as deps_mod  # noqa: F401
@@ -253,6 +272,7 @@ class TestApiKeySuspendedTenant:
         with pytest.raises(HTTPException) as exc:
             asyncio.run(deps_mod.get_current_tenant(key="valid-key", db=db))
         assert exc.value.status_code == 403
+        assert exc.value.detail == "Invalid API Key"
 
     def test_tenant_lookup_failure_fails_closed_503(self, monkeypatch):
         from services.admin.app import dependencies as deps_mod  # noqa: F401
@@ -304,26 +324,41 @@ def _role(role_id, name, permissions):
 
 
 class TestRoleChangeTierCheck:
-    def _db_for_role_change(self, current_role_name, target_role, caller_role_name="Member"):
+    def _db_for_role_change(
+        self,
+        current_role_name,
+        target_role,
+        caller_role_name="Member",
+        caller_permissions=(),
+        current_role_permissions=(),
+        membership_role_id=None,
+    ):
         """Mock db: membership lookup, caller-role lookup, role gets."""
+        membership_role_id = membership_role_id or MEMBER_ROLE_ID
         db = MagicMock()
         membership = SimpleNamespace(
             user_id=TARGET_USER_ID,
             tenant_id=TENANT_ID,
-            role_id=MEMBER_ROLE_ID,
+            role_id=membership_role_id,
             is_active=True,
         )
         caller_role = SimpleNamespace(
-            id=uuid.uuid4(), name=caller_role_name, tenant_id=TENANT_ID, permissions=[]
+            id=uuid.uuid4(),
+            name=caller_role_name,
+            tenant_id=TENANT_ID,
+            permissions=list(caller_permissions),
         )
         current_role = SimpleNamespace(
-            id=MEMBER_ROLE_ID, name=current_role_name, tenant_id=TENANT_ID, permissions=[]
+            id=membership_role_id,
+            name=current_role_name,
+            tenant_id=TENANT_ID,
+            permissions=list(current_role_permissions),
         )
 
         def _get(model, ident):
             if ident == target_role.id:
                 return target_role
-            if ident == MEMBER_ROLE_ID:
+            if ident == membership_role_id:
                 return current_role
             return None
 
@@ -359,6 +394,67 @@ class TestRoleChangeTierCheck:
             )
         assert exc.value.status_code == 403
         assert membership.role_id == MEMBER_ROLE_ID
+        assert audit_calls == []
+        db.commit.assert_not_called()
+
+    def test_grant_owner_hatch_does_not_promote_via_role_route(self, monkeypatch):
+        # users.invite.grant_owner lets a non-Owner invite a future Owner.
+        # It must not let them promote a current member (self included) to
+        # Owner through PATCH /admin/users/{user_id}/role.
+        user_routes_mod, audit_calls = _load_user_routes(monkeypatch)
+        owner_role = _role(OWNER_ROLE_ID, "Owner", ["*"])
+        db, membership = self._db_for_role_change(
+            "Member",
+            owner_role,
+            caller_role_name="Admin",
+            caller_permissions=["users.manage_roles", "users.invite.grant_owner"],
+        )
+        actor = SimpleNamespace(id=ACTOR_ID, email="actor@example.com", is_sysadmin=False)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                user_routes_mod.update_user_role(
+                    user_id=TARGET_USER_ID,
+                    update=user_routes_mod.RoleUpdate(role_id=OWNER_ROLE_ID),
+                    current_user=actor,
+                    db=db,
+                )
+            )
+        assert exc.value.status_code == 403
+        assert membership.role_id == MEMBER_ROLE_ID
+        assert audit_calls == []
+        db.commit.assert_not_called()
+
+    def test_admin_cannot_demote_other_owner(self, monkeypatch):
+        # The tier check compares the caller to the destination role only.
+        # An Admin must also be blocked from moving a member whose current
+        # role outranks their own, even when another Owner remains.
+        user_routes_mod, audit_calls = _load_user_routes(monkeypatch)
+        monkeypatch.setattr(
+            user_routes_mod,
+            "_other_authenticating_owners",
+            lambda _db, _tenant_id, _exclude: [SimpleNamespace(user_id=uuid.uuid4())],
+        )
+        member_role = _role(uuid.uuid4(), "Member", [])
+        db, membership = self._db_for_role_change(
+            "Owner",
+            member_role,
+            caller_role_name="Admin",
+            caller_permissions=["users.manage_roles"],
+            current_role_permissions=["*"],
+            membership_role_id=OWNER_ROLE_ID,
+        )
+        actor = SimpleNamespace(id=ACTOR_ID, email="actor@example.com", is_sysadmin=False)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                user_routes_mod.update_user_role(
+                    user_id=TARGET_USER_ID,
+                    update=user_routes_mod.RoleUpdate(role_id=member_role.id),
+                    current_user=actor,
+                    db=db,
+                )
+            )
+        assert exc.value.status_code == 403
+        assert membership.role_id == OWNER_ROLE_ID
         assert audit_calls == []
         db.commit.assert_not_called()
 

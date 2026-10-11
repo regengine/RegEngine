@@ -51,8 +51,10 @@ def _resolve_tenant_id(
     header_tid = str(header_tenant_id).strip() if header_tenant_id else None
     payload_tid = str(payload_tenant_id).strip() if payload_tenant_id else None
     # Treat empty / sentinel strings as absent so they can't satisfy the
-    # "present" check further down.
-    if not header_tid:
+    # "present" check further down. The header is advisory-only (unsigned),
+    # so a sentinel there is not a tenant claim and must not trigger the
+    # hostile-mismatch path against a valid signed payload.
+    if not header_tid or header_tid.lower() in {"default", "none", "null"}:
         header_tid = None
     if not payload_tid or payload_tid.lower() in {"default", "none", "null"}:
         payload_tid = None
