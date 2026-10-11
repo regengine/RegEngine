@@ -35,7 +35,7 @@ import { useIngestFile } from '@/hooks/use-api';
 import { useSync } from '@/hooks/use-sync';
 import { useAuth } from '@/lib/auth-context';
 import { getServiceURL } from '@/lib/api-config';
-import { savePhoto, saveScan } from '@/lib/db';
+import { newScanIdempotencyKey, savePhoto, saveScan } from '@/lib/db';
 import { parseGS1 } from '@/lib/gs1-parser';
 import { Keyboard } from 'lucide-react';
 
@@ -97,16 +97,13 @@ export function FieldCaptureClient() {
     const [manualLot, setManualLot] = useState('');
 
     const { tenantId } = useAuth();
-    const [hintedTenantId, setHintedTenantId] = useState<string | null>(null);
     const { toast } = useToast();
     const { isOnline, isSyncing } = useSync();
     const ingestFileMutation = useIngestFile();
-    const effectiveTenantId = tenantId || hintedTenantId || undefined;
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        setHintedTenantId(new URLSearchParams(window.location.search).get('tenant_id'));
-    }, []);
+    // The session tenant is the only accepted tenant. A ?tenant_id= URL hint
+    // is never trusted: it is caller-controlled and would attribute scans to
+    // a tenant the signed-in user may not belong to.
+    const effectiveTenantId = tenantId || undefined;
 
     useEffect(() => {
         const loadCatalog = async () => {
@@ -140,42 +137,17 @@ export function FieldCaptureClient() {
         [selectedCTEType],
     );
 
-    const ingestScannedEvent = useCallback(
-        async (scanState: ParsedScanState) => {
-            const traceabilityLotCode =
-                scanState.traceabilityLotCode ||
-                scanState.serial ||
-                scanState.gtin ||
-                `SCAN-${Date.now()}`;
-
-            const eventPayload = {
-                source: 'mobile_scanner_pwa',
-                tenant_id: effectiveTenantId,
-                events: [
-                    {
-                        cte_type: scanState.cteType,
-                        traceability_lot_code: traceabilityLotCode,
-                        product_description: scanState.productDescription,
-                        quantity: 1,
-                        unit_of_measure: 'cases',
-                        timestamp: new Date().toISOString(),
-                        location_name: 'Field Capture Mobile',
-                        kdes: {
-                            gtin: scanState.gtin,
-                            serial: scanState.serial,
-                            expiry_date: scanState.expiryDate,
-                            pack_date: scanState.packDate,
-                            raw_scan: scanState.raw,
-                        },
-                    },
-                ],
-            };
-
+    const postEventPayload = useCallback(
+        async (eventPayload: Record<string, unknown>, idempotencyKey: string) => {
             const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
+                    // Same key on the live attempt and every offline replay,
+                    // with byte-identical bodies, so a retry replays the first
+                    // response instead of recording the scan twice.
+                    'Idempotency-Key': idempotencyKey,
                 },
                 body: JSON.stringify(eventPayload),
             });
@@ -185,10 +157,21 @@ export function FieldCaptureClient() {
                 throw new Error(detail || `Ingest failed with status ${response.status}`);
             }
         },
-        [effectiveTenantId],
+        [],
     );
 
     const handleScan = async (rawScan: string) => {
+        // Refuse scans until the session carries a tenant. URL hints are
+        // ignored, so there is no tenant to attribute the scan to yet.
+        if (!tenantId) {
+            toast({
+                title: 'Tenant required',
+                description: 'Sign in with a tenant before capturing scans.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         const parsed = parseGS1(rawScan);
         const productDescription = resolveProductDescription(parsed, catalogByGtin);
 
@@ -208,16 +191,18 @@ export function FieldCaptureClient() {
         const timestamp = new Date().toLocaleTimeString();
         setScannedData((prev) => [`[${timestamp}] ${cteLabel}: ${rawScan}`, ...prev]);
 
-        // Build the ingest payload so we can replay it offline
+        // Build the ingest payload once so the live attempt and any offline
+        // replay send byte-identical bodies under one idempotency key.
         const traceabilityLotCode =
             parsedState.traceabilityLotCode ||
             parsedState.serial ||
             parsedState.gtin ||
             `SCAN-${Date.now()}`;
 
-        const offlinePayload = {
+        const idempotencyKey = newScanIdempotencyKey();
+        const eventPayload = {
             source: 'mobile_scanner_pwa',
-            tenant_id: effectiveTenantId,
+            tenant_id: tenantId,
             events: [
                 {
                     cte_type: parsedState.cteType,
@@ -239,7 +224,7 @@ export function FieldCaptureClient() {
         };
 
         if (!isOnline) {
-            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+            await saveScan(rawScan, eventPayload, parsedState.cteType, idempotencyKey);
             toast({
                 title: 'Saved Offline',
                 description: 'Scan saved locally. Will sync when online.',
@@ -248,13 +233,13 @@ export function FieldCaptureClient() {
         }
 
         try {
-            await ingestScannedEvent(parsedState);
+            await postEventPayload(eventPayload, idempotencyKey);
             toast({
                 title: 'Scan Ingested',
                 description: parsedState.traceabilityLotCode || parsedState.gtin || parsedState.raw,
             });
         } catch {
-            await saveScan(rawScan, offlinePayload, parsedState.cteType);
+            await saveScan(rawScan, eventPayload, parsedState.cteType, idempotencyKey);
             toast({
                 title: 'Upload Failed - Saved Offline',
                 description: 'Connection error. Scan saved locally.',
@@ -268,6 +253,18 @@ export function FieldCaptureClient() {
 
         const res = await fetchWithCsrf(imageData);
         const blob = await res.blob();
+
+        // No session tenant means the vision event cannot be attributed, so
+        // keep the photo in the offline queue instead of ingesting it.
+        if (!tenantId) {
+            await savePhoto(blob);
+            toast({
+                title: 'Tenant required',
+                description: 'Photo saved locally. Sign in with a tenant to sync it.',
+                variant: 'destructive',
+            });
+            return;
+        }
 
         if (!isOnline) {
             await savePhoto(blob);
@@ -301,7 +298,7 @@ export function FieldCaptureClient() {
 
                 const payload = {
                     source: 'mobile_capture_pwa_vision',
-                    tenant_id: effectiveTenantId,
+                    tenant_id: tenantId,
                     events: [{
                         cte_type: selectedCTEType,
                         traceability_lot_code: lotCode,
@@ -325,6 +322,7 @@ export function FieldCaptureClient() {
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Idempotency-Key': newScanIdempotencyKey(),
                     },
                     body: JSON.stringify(payload),
                 });
@@ -387,6 +385,16 @@ export function FieldCaptureClient() {
             </div>
 
             <div className="p-4 max-w-md mx-auto space-y-4">
+                {!tenantId && (
+                    <Card role="alert">
+                        <CardContent>
+                            <p className="text-small text-re-text-secondary">
+                                Tenant required. Sign in with a tenant before capturing scans.
+                                URL tenant hints are ignored.
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
                 <Card>
                     <CardHeader>
                         <CardTitle>CTE Type</CardTitle>

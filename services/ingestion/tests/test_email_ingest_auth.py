@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import base64
 
+import app.email_ingest.auth as auth_mod
 import pytest
 from app.email_ingest.auth import _configured_credentials, email_inbound_auth_configured, verify_inbound_email_auth
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from shared.rate_limit import BruteForceLimiter
 
 _USER = "postmark"
 _PASSWORD = "s3cret"  # pragma: allowlist secret
@@ -126,6 +128,85 @@ class TestVerifyInboundEmailAuth:
         header = _basic_header(_USER, _PASSWORD)
         # No exception == success; the dependency has no return value.
         assert await verify_inbound_email_auth(authorization=header) is None
+
+    async def test_password_containing_colons_is_supported(self, monkeypatch):
+        # RFC 7617: the user-id ends at the first colon, everything after
+        # it is the password. A password containing colons must authenticate.
+        _configure(monkeypatch, password="with:several:colons")
+        header = _basic_header(_USER, "with:several:colons")
+        assert await verify_inbound_email_auth(authorization=header) is None
+
+
+class TestBruteForceLimiting:
+    def _request(self, ip: str = "10.9.8.7") -> Request:
+        return Request(
+            {"type": "http", "method": "POST", "path": "/webhooks/email/inbound", "headers": [], "client": (ip, 5000)}
+        )
+
+    def _fresh_limiter(self, monkeypatch, *, max_failures: int = 3):
+        limiter = BruteForceLimiter(
+            namespace="test-email-inbound-auth-fail", max_failures=max_failures, window_seconds=60, redis_client=None
+        )
+        limiter._redis = None  # ignore any env-provided Redis; per-test memory budget
+        monkeypatch.setattr(auth_mod, "_email_auth_limiter", limiter)
+        return limiter
+
+    async def test_repeated_failures_block_further_attempts_with_429(self, monkeypatch):
+        _configure(monkeypatch)
+        self._fresh_limiter(monkeypatch, max_failures=3)
+        bad = _basic_header(_USER, "wrong-password")
+        request = self._request()
+        for _ in range(3):
+            with pytest.raises(HTTPException) as ei:
+                await verify_inbound_email_auth(request, authorization=bad)
+            assert ei.value.status_code == 401
+        with pytest.raises(HTTPException) as ei:
+            await verify_inbound_email_auth(request, authorization=bad)
+        assert ei.value.status_code == 429
+        assert ei.value.detail == "Too many authentication failures"
+
+    async def test_block_is_scoped_to_the_attacker_ip(self, monkeypatch):
+        _configure(monkeypatch)
+        self._fresh_limiter(monkeypatch, max_failures=2)
+        bad = _basic_header(_USER, "wrong-password")
+        attacker = self._request("10.9.8.7")
+        for _ in range(2):
+            with pytest.raises(HTTPException):
+                await verify_inbound_email_auth(attacker, authorization=bad)
+        with pytest.raises(HTTPException) as ei:
+            await verify_inbound_email_auth(attacker, authorization=bad)
+        assert ei.value.status_code == 429
+        # A different client presenting bad creds gets its own budget:
+        # still 401, not 429.
+        other = self._request("10.9.8.99")
+        with pytest.raises(HTTPException) as ei:
+            await verify_inbound_email_auth(other, authorization=bad)
+        assert ei.value.status_code == 401
+
+    async def test_correct_credentials_below_threshold_still_pass(self, monkeypatch):
+        # A couple of stray failures (stale credential during rotation)
+        # must not lock out the real sender.
+        _configure(monkeypatch)
+        self._fresh_limiter(monkeypatch, max_failures=3)
+        request = self._request()
+        bad = _basic_header(_USER, "wrong-password")
+        for _ in range(2):
+            with pytest.raises(HTTPException):
+                await verify_inbound_email_auth(request, authorization=bad)
+        assert await verify_inbound_email_auth(request, authorization=_basic_header(_USER, _PASSWORD)) is None
+
+    async def test_unconfigured_gate_does_not_consume_budget(self, monkeypatch):
+        # No credential configured means nothing to guess: these 401s must
+        # not count, or the first real deliveries after setup would arrive
+        # to an already-blocked budget.
+        self._fresh_limiter(monkeypatch, max_failures=2)
+        request = self._request()
+        for _ in range(5):
+            with pytest.raises(HTTPException) as ei:
+                await verify_inbound_email_auth(request, authorization=_basic_header(_USER, _PASSWORD))
+            assert ei.value.status_code == 401
+        _configure(monkeypatch)
+        assert await verify_inbound_email_auth(request, authorization=_basic_header(_USER, _PASSWORD)) is None
 
     async def test_scheme_match_is_case_insensitive(self, monkeypatch):
         _configure(monkeypatch)

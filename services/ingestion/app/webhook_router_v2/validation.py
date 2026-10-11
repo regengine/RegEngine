@@ -24,20 +24,38 @@ _pkg = sys.modules[__package__]
 # ---------------------------------------------------------------------------
 
 
+def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
+    """Merge top-level fields over ``event.kdes`` for presence checks.
+
+    The typed top-level fields are authoritative: a colliding KDE entry
+    (for example ``kdes: {"location_name": ""}``) must neither erase a
+    real top-level value (false rejection) nor override it with an
+    unvalidated one. KDE entries still fill gaps where the top level is
+    absent, preserving the historical pass for KDE-carried locations.
+    """
+    available: dict[str, object] = dict(event.kdes)
+    for _key, _val in (
+        ("traceability_lot_code", event.traceability_lot_code),
+        ("product_description", event.product_description),
+        ("quantity", event.quantity),
+        ("unit_of_measure", event.unit_of_measure),
+        ("location_name", event.location_name),
+        ("location_gln", event.location_gln),
+    ):
+        if _val is None:
+            continue
+        if isinstance(_val, str) and _val.strip() == "":
+            continue
+        available[_key] = _val
+    return available
+
+
 def _validate_event_kdes(event: IngestEvent) -> list[str]:
     """Validate that an event has all required KDEs for its CTE type."""
     errors: list[str] = []
     required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
 
-    available: dict[str, object] = {
-        "traceability_lot_code": event.traceability_lot_code,
-        "product_description": event.product_description,
-        "quantity": event.quantity,
-        "unit_of_measure": event.unit_of_measure,
-        "location_name": event.location_name,
-        "location_gln": event.location_gln,
-        **event.kdes,
-    }
+    available = _authoritative_kdes(event)
 
     for kde_name in required:
         val = available.get(kde_name)
@@ -126,16 +144,9 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             return []
 
         alerts = []
-        # Build available KDE values from event
-        available = {
-            "traceability_lot_code": event.traceability_lot_code,
-            "product_description": event.product_description,
-            "quantity": event.quantity,
-            "unit_of_measure": event.unit_of_measure,
-            "location_name": event.location_name,
-            "location_gln": event.location_gln,
-            **event.kdes,
-        }
+        # Build available KDE values from event (top-level authoritative,
+        # KDE-carried values fill gaps — see _authoritative_kdes).
+        available = _authoritative_kdes(event)
 
         for row in rows:
             rule_id, obl_id, cte_type, kde_key, validation_rule, desc, obl_text, risk = row

@@ -53,6 +53,90 @@ def _validate_identifier(name: str, label: str = "identifier") -> str:
     return name
 
 
+def mask_api_key(api_key: str) -> str:
+    """Return a masked key for display, never the full secret.
+    Shows the key prefix plus the last 4 characters (e.g. sk_live_...9f3a).
+    """
+    if not api_key or len(api_key) <= 10:
+        return "***"
+    return f"{api_key[:7]}...{api_key[-4:]}"
+
+
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Compose service names from .env.example (local dev stack only).
+DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}
+LOCAL_HOSTS = LOOPBACK_HOSTS | DEV_COMPOSE_HOSTS
+
+
+def _effective_db_hosts(database_url: str) -> list:
+    """Every host a Postgres driver may connect to for this URL.
+
+    The authority host plus any libpq ``host`` / ``hostaddr`` query values,
+    which override the authority host. A URL that looks like localhost but
+    carries a remote query host is not local.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    hosts = []
+    try:
+        parts = urlsplit(database_url)
+    except ValueError:
+        return [""]
+    if parts.hostname:
+        hosts.append(parts.hostname.lower())
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return hosts or [""]
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            hosts.extend(h.strip().lower() for h in value.split(",") if h.strip())
+    return hosts or [""]
+
+
+def ensure_local_database(database_url: str, allow_production: bool = False) -> None:
+    """Refuse a non-localhost DATABASE_URL without explicit opt-in.
+
+    regctl create drops/creates schemas and delete runs DROP SCHEMA CASCADE,
+    so a shell that already exports a production DATABASE_URL must not run
+    by accident.
+    """
+    hosts = _effective_db_hosts(database_url)
+    if (not hosts or any(h not in LOCAL_HOSTS for h in hosts)) and not allow_production:
+        raise SystemExit(
+            "Refusing regctl against a non-localhost DATABASE_URL. "
+            "Use a localhost DATABASE_URL or pass --allow-production "
+            "only if you are certain."
+        )
+
+
+def _chmod_private(path: str) -> None:
+    """Restrict an existing secrets file to owner-only (0600), if present."""
+    if os.path.exists(path) and not os.path.islink(path):
+        os.chmod(path, 0o600)
+
+
+def _open_private_append(path: str):
+    """Open a secrets file for append without following symlinks.
+
+    O_NOFOLLOW refuses a symlink planted at the path; the 0600 mode keeps a
+    newly created file owner-only from the start instead of relying on the
+    process umask plus a later chmod.
+    """
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600), "a")
+
+
+def _open_private_write(path: str):
+    """Open a secrets file for rewrite without following symlinks."""
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600), "w")
+
+
+def _write_private_file(path: str, write) -> None:
+    """Run a file write callback, then restrict the file to owner-only (0600)."""
+    write(path)
+    _chmod_private(path)
+
+
 class TenantManager:
     """Manages tenant provisioning and lifecycle."""
 
@@ -60,7 +144,9 @@ class TenantManager:
         """Initialize tenant manager."""
         self.tenants_db_file = str(REPO_ROOT / ".tenants.db")
 
-    def create_tenant(self, name: str, demo_mode: bool = False, framework: str = "nist") -> dict:
+    def create_tenant(
+        self, name: str, demo_mode: bool = False, framework: str = "nist", allow_production: bool = False
+    ) -> dict:
         """
         Create a new tenant with complete infrastructure.
 
@@ -68,10 +154,15 @@ class TenantManager:
             name: Tenant name
             demo_mode: Whether to load demo data
             framework: Control framework for demo data (nist, soc2, iso27001)
+            allow_production: Allow a non-localhost DATABASE_URL (almost never)
 
         Returns:
             dict with tenant_id, name, api_key, database info
         """
+        ensure_local_database(
+            os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine"),
+            allow_production,
+        )
         tenant_id = uuid4()
 
         click.echo(f"\n🚀 Creating tenant: {name}")
@@ -137,6 +228,9 @@ class TenantManager:
             console.print("[yellow]No tenants found.[/yellow]")
             return []
 
+        # Tighten a file left world-readable by an older run before reading.
+        _chmod_private(self.tenants_db_file)
+
         with open(self.tenants_db_file, "r") as f:
             import json
 
@@ -160,19 +254,24 @@ class TenantManager:
             except (ValueError, KeyError):
                 created_str = tenant.get("created_at", "N/A")
 
-            table.add_row(tenant["name"], tenant["tenant_id"], tenant["api_key"], created_str)
+            table.add_row(tenant["name"], tenant["tenant_id"], mask_api_key(tenant.get("api_key", "")), created_str)
 
         console.print(table)
         console.print(f"[dim]Total: {len(tenants)} tenant(s)[/dim]")
         return tenants
 
-    def delete_tenant(self, tenant_id: UUID):
+    def delete_tenant(self, tenant_id: UUID, allow_production: bool = False):
         """
         Delete a tenant and all associated data.
 
         Args:
             tenant_id: Tenant UUID to delete
+            allow_production: Allow a non-localhost DATABASE_URL (almost never)
         """
+        ensure_local_database(
+            os.getenv("DATABASE_URL", "postgresql://regengine:regengine@localhost:5432/regengine"),
+            allow_production,
+        )
         click.echo(f"\n🗑️  Deleting tenant: {tenant_id}")
 
         # Step 1: Delete Neo4j database
@@ -192,13 +291,14 @@ class TenantManager:
 
         click.echo(f"\n✅ Tenant deleted successfully!")
 
-    def reset_tenant(self, tenant_id: UUID, framework: str = "nist"):
+    def reset_tenant(self, tenant_id: UUID, framework: str = "nist", allow_production: bool = False):
         """
         Reset a tenant by deleting and recreating with demo data.
 
         Args:
             tenant_id: Tenant UUID to reset
             framework: Control framework for new demo data
+            allow_production: Allow a non-localhost DATABASE_URL (almost never)
         """
         # Get tenant info before deletion
         tenant_info = self._get_tenant_info(tenant_id)
@@ -211,11 +311,11 @@ class TenantManager:
         click.echo(f"\n🔄 Resetting tenant: {name}")
 
         # Delete existing tenant
-        self.delete_tenant(tenant_id)
+        self.delete_tenant(tenant_id, allow_production=allow_production)
 
         # Recreate with demo data
         click.echo(f"\n🚀 Recreating tenant with demo data...")
-        self.create_tenant(name, demo_mode=True, framework=framework)
+        self.create_tenant(name, demo_mode=True, framework=framework, allow_production=allow_production)
 
     # Internal helper methods
 
@@ -306,7 +406,7 @@ class TenantManager:
             click.echo("         ⚠️  Demo data loader not found (continuing)")
 
     def _save_tenant_record(self, tenant_id: UUID, name: str, api_key: str):
-        """Save tenant record to local database."""
+        """Save tenant record to a local file restricted to owner-only (0600)."""
         import json
 
         record = {
@@ -316,9 +416,12 @@ class TenantManager:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Append to tenants database file
-        with open(self.tenants_db_file, "a") as f:
-            f.write(json.dumps(record) + "\n")
+        # Append to tenants database file; the file holds secrets, keep it 0600.
+        def _append(path: str) -> None:
+            with _open_private_append(path) as f:
+                f.write(json.dumps(record) + "\n")
+
+        _write_private_file(self.tenants_db_file, _append)
 
     def _delete_neo4j_database(self, tenant_id: UUID):
         """Delete Neo4j database for tenant."""
@@ -369,6 +472,8 @@ class TenantManager:
         if not os.path.exists(self.tenants_db_file):
             return
 
+        _chmod_private(self.tenants_db_file)
+
         # Read all tenants
         with open(self.tenants_db_file, "r") as f:
             tenants = [json.loads(line) for line in f if line.strip()]
@@ -376,10 +481,13 @@ class TenantManager:
         # Filter out the deleted tenant
         tenants = [t for t in tenants if t["tenant_id"] != str(tenant_id)]
 
-        # Rewrite file
-        with open(self.tenants_db_file, "w") as f:
-            for tenant in tenants:
-                f.write(json.dumps(tenant) + "\n")
+        # Rewrite file; it holds secrets, keep it 0600.
+        def _rewrite(path: str) -> None:
+            with _open_private_write(path) as f:
+                for tenant in tenants:
+                    f.write(json.dumps(tenant) + "\n")
+
+        _write_private_file(self.tenants_db_file, _rewrite)
 
     def _get_tenant_info(self, tenant_id: UUID) -> Optional[dict]:
         """Get tenant information."""
@@ -387,6 +495,8 @@ class TenantManager:
 
         if not os.path.exists(self.tenants_db_file):
             return None
+
+        _chmod_private(self.tenants_db_file)
 
         with open(self.tenants_db_file, "r") as f:
             tenants = [json.loads(line) for line in f if line.strip()]
@@ -416,10 +526,15 @@ def tenant():
     default="nist",
     help="Control framework for demo data",
 )
-def create(name: str, demo_mode: bool, framework: str):
+@click.option(
+    "--allow-production",
+    is_flag=True,
+    help="Allow a non-localhost DATABASE_URL. Almost never what you want.",
+)
+def create(name: str, demo_mode: bool, framework: str, allow_production: bool):
     """Create a new tenant."""
     manager = TenantManager()
-    manager.create_tenant(name, demo_mode, framework)
+    manager.create_tenant(name, demo_mode, framework, allow_production=allow_production)
 
 
 @tenant.command()
@@ -432,7 +547,12 @@ def list():
 @tenant.command()
 @click.argument("tenant_id")
 @click.confirmation_option(prompt="Are you sure you want to delete this tenant?")
-def delete(tenant_id: str):
+@click.option(
+    "--allow-production",
+    is_flag=True,
+    help="Allow a non-localhost DATABASE_URL. Almost never what you want.",
+)
+def delete(tenant_id: str, allow_production: bool):
     """Delete a tenant."""
     try:
         tid = UUID(tenant_id)
@@ -441,7 +561,7 @@ def delete(tenant_id: str):
         return
 
     manager = TenantManager()
-    manager.delete_tenant(tid)
+    manager.delete_tenant(tid, allow_production=allow_production)
 
 
 @tenant.command()
@@ -452,7 +572,12 @@ def delete(tenant_id: str):
     default="nist",
     help="Control framework for new demo data",
 )
-def reset(tenant_id: str, framework: str):
+@click.option(
+    "--allow-production",
+    is_flag=True,
+    help="Allow a non-localhost DATABASE_URL. Almost never what you want.",
+)
+def reset(tenant_id: str, framework: str, allow_production: bool):
     """Reset a tenant (delete and recreate with demo data)."""
     try:
         tid = UUID(tenant_id)
@@ -461,7 +586,7 @@ def reset(tenant_id: str, framework: str):
         return
 
     manager = TenantManager()
-    manager.reset_tenant(tid, framework)
+    manager.reset_tenant(tid, framework, allow_production=allow_production)
 
 
 if __name__ == "__main__":
