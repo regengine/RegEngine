@@ -809,6 +809,32 @@ class DatabaseAPIKeyStore:
             await self._record_key_usage(key_id, session)
             return response
 
+    async def get_tenant_status(self, tenant_id: Optional[str]) -> Optional[str]:
+        """Return the live ``tenants.status`` for one key-bound tenant.
+
+        The caller passes only the cryptographically validated API key's
+        ``tenant_id``; request-supplied tenant values are never accepted
+        here. ``tenants`` is FORCE RLS, so the key's tenant is bound first
+        (same primitive as the admin API-key path). One indexed primary-key
+        read, no writes, so the per-request cost stays small.
+
+        Returns the status string, or None when the tenant row is missing.
+        Raises on lookup failure so the caller can fail closed (503): a
+        status that cannot be read must never authenticate.
+        """
+        if not tenant_id:
+            return None
+        async with self._session() as session:
+            await self._set_context(session, str(tenant_id))
+            result = await session.execute(
+                text("SELECT status FROM tenants WHERE id = CAST(:tid AS uuid)"),
+                {"tid": str(tenant_id)},
+            )
+            row = result.fetchone()
+            if row is None:
+                return None
+            return row[0]
+
     async def check_rate_limit(
         self,
         key_id: str,
