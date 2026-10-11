@@ -18,8 +18,27 @@ from shared.fsma_validation import (
 )
 
 # Add shared utilities (portable path resolution)
+from shared.idempotency import IdempotencyDependency
 from shared.middleware import get_current_tenant_id
 from shared.rate_limit import limiter
+
+# Pattern 1 (idempotency keys): validate the shared ``Idempotency-Key``
+# header on event-creating POSTs. The key itself is optional so existing
+# callers keep working, but when present the write below derives stable
+# node ids from (tenant, key) and MERGEs instead of CREATEs, so a
+# retried request resolves to the same node. In the production monolith
+# ``IdempotencyMiddleware`` additionally replays the cached 2xx for 24h.
+_optional_idempotency_key = IdempotencyDependency(strict=False)
+
+
+def idempotent_event_id(tenant_id: str, idempotency_key: str) -> str:
+    """Derive a stable event id from (tenant, key) for safe retries."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"regengine:trace-event:{tenant_id}:{idempotency_key}"))
+
+
+def idempotent_document_id(tenant_id: str, idempotency_key: str) -> str:
+    """Derive a stable evidence document id from (tenant, key)."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"regengine:trace-document:{tenant_id}:{idempotency_key}"))
 
 from ...audit_failure_policy import handle_audit_failure
 from ...fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log
@@ -400,8 +419,14 @@ async def link_obligation_endpoint(
     obligation_id: str,
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    idempotency_key: Optional[str] = Depends(_optional_idempotency_key),
 ):
-    """Trigger automated linking of a regulation to supply chain events."""
+    """Trigger automated linking of a regulation to supply chain events.
+
+    Accepts the shared ``Idempotency-Key`` header so retried link calls
+    replay the cached response instead of relinking (the linker MERGEs
+    edges, and the monolith middleware replays the 2xx for 24h).
+    """
     from ...config import settings
 
     linker = TraceabilityLinker(uri=settings.neo4j_uri, user=settings.neo4j_user, password=settings.neo4j_password)
@@ -592,10 +617,18 @@ async def log_traceability_event(
     payload: TraceabilityEventRequest = Body(...),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
+    idempotency_key: Optional[str] = Depends(_optional_idempotency_key),
 ):
     """
     High-integrity endpoint for logging Critical Tracking Events from mobile dock.
     Performs real-time validation of identifiers and persists directly to Neo4j.
+
+    Send a caller-stable ``Idempotency-Key`` header and reuse it across
+    retries: the event id is then derived from (tenant, key) and the
+    TraceEvent node is MERGEd, so a retry after a partial write resolves
+    to the same node instead of duplicating compliance evidence. The
+    canonical Postgres bridge already dedupes identical content by its
+    own idempotency key. Without the header each call mints a fresh id.
     """
     logger.info("logging_mobile_event", event_type=payload.event_type, tlc=payload.tlc)
 
@@ -616,7 +649,13 @@ async def log_traceability_event(
     # 2. Persistence to Neo4j
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     client = Neo4jClient(database=db_name)
-    event_id = str(uuid.uuid4())
+    # Retry safety: a caller-stable key maps to a stable event id, so a
+    # retry after a partial write (Neo4j succeeded, bridge or response
+    # failed) MERGEs onto the same node instead of duplicating evidence.
+    if idempotency_key:
+        event_id = idempotent_event_id(str(tenant_id), idempotency_key)
+    else:
+        event_id = str(uuid.uuid4())
 
     try:
         # #2833: entering the client as a context manager closes the
@@ -630,7 +669,8 @@ async def log_traceability_event(
         # the real client, and this form keeps working for callers that
         # hold the constructed instance (test doubles included).
         async with client, client.session() as session:
-            # Create TraceEvent
+            # Create TraceEvent (MERGE when the caller sent a stable key,
+            # so a retried request resolves to the same node).
             trace_event = TraceEvent(
                 event_id=event_id,
                 type=payload.event_type,
@@ -638,7 +678,15 @@ async def log_traceability_event(
                 tenant_id=str(tenant_id),
                 responsible_party_contact=payload.responsible_party_contact,
             )
-            await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
+            if idempotency_key:
+                await session.run(
+                    TraceEvent.merge_cypher(),
+                    event_id=event_id,
+                    tenant_id=str(tenant_id),
+                    properties=trace_event.node_properties,
+                )
+            else:
+                await session.run(TraceEvent.create_cypher(), properties=trace_event.node_properties)
 
             # Create/Merge Lot
             lot = Lot(
@@ -686,7 +734,13 @@ async def log_traceability_event(
 
             # 3. Handle Evidence (BOL Photo)
             if payload.image_data:
-                doc_id = str(uuid.uuid4())
+                # Stable evidence id under a retry key: Document.merge_cypher
+                # already matches on document_id, so this keeps a retried
+                # photo from becoming a second evidence node.
+                if idempotency_key:
+                    doc_id = idempotent_document_id(str(tenant_id), idempotency_key)
+                else:
+                    doc_id = str(uuid.uuid4())
                 document = Document(
                     document_id=doc_id,
                     document_type="BOL",
