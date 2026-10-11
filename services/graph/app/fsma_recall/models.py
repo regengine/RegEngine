@@ -251,6 +251,10 @@ class RecallResult:
         return {
             "drill_id": self.drill_id,
             "success": self.success,
+            # Consumers of the summary must be able to tell a measured
+            # trace from an unwired one: without this flag a simulated
+            # drill looks like a clean, fast, successful drill.
+            "simulated": self.simulated,
             "lots_traced": self.lots_traced,
             "facilities_identified": self.facilities_identified,
             "total_time_seconds": self.total_time_seconds,
