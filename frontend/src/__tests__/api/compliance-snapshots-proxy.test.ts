@@ -91,6 +91,7 @@ describe('Compliance snapshot proxy routes', () => {
         vi.clearAllMocks();
         _resetDevComplianceSnapshotsForTesting();
         vi.stubEnv('NODE_ENV', 'development');
+        vi.stubEnv('REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS', '1');
         vi.stubGlobal('fetch', mockFetch);
     });
 
@@ -194,6 +195,34 @@ describe('Compliance snapshot proxy routes', () => {
             created_by: 'qa@regengine.local',
             snapshot_state: 'VALID',
         });
+    });
+
+    it('serves a 503 instead of fallback data when the explicit flag is not set', async () => {
+        vi.stubEnv('REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS', '');
+        mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+        const createResponse = await createSnapshot(
+            makeRequest({
+                method: 'POST',
+                url: `http://localhost/api/v1/compliance/snapshots/${TENANT_ID}`,
+                headers: { 'content-type': 'application/json' },
+                body: {
+                    snapshot_name: 'Manual Freeze',
+                    created_by: 'playwright@regengine.local',
+                },
+            }),
+            { params: Promise.resolve({ tenantId: TENANT_ID }) },
+        );
+        expect(createResponse.status).toBe(503);
+
+        const listResponse = await listSnapshots(
+            makeRequest({
+                url: `http://localhost/api/v1/compliance/snapshots/${TENANT_ID}`,
+            }),
+            { params: Promise.resolve({ tenantId: TENANT_ID }) },
+        );
+        expect(listResponse.status).toBe(503);
+        await expect(listResponse.json()).resolves.toMatchObject({ items: [] });
     });
 
     it('rejects invalid tenant or snapshot identifiers before reaching the backend', async () => {

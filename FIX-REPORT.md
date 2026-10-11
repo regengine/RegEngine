@@ -1,55 +1,187 @@
-# FIX-REPORT: PR #3231 (merge a8ca551d) CONCERN and BLOCKER findings
+# FIX-REPORT: About page copy
 
-Base: origin/main e854dadc. Reports read: all six re-rv-3231-<angle> SUMMARY.md
-plus REPORT.md for correct and blast, and every angle, area and integration
-lead that mentions #3231. Out of scope items (suspended-tenant deny on live
-auth, tenant-scope gate failure, 7 xfail cross-tenant leaks) do not arise
-from PR #3231; nothing in this diff touches request paths, so they are
-noted here only as untouched.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings
+## Before and after
 
-| # | Source report | Severity | Status | Reason / note |
-|---|---|---|---|---|
-| 1 | correct, blast, lead-correct #5, lead-blast 3231a, area-infra H1: default `--scopes epcis.ingest,csv.ingest` matches no `require_permission` name, README mint flow 403s on `webhooks.ingest` routes | High | FIXED AND TESTED | Default is now `webhooks.ingest`, the permission the webhook and CSV routes check (`webhook_router_v2/routes.py:107`, `csv_templates.py:1370`). `test_api_key_default_scope_passes_ingest_permissions` asserts `has_permission` against the real matcher. Old default fails that check (proven in /tmp/fx3231/old_behavior.py). |
-| 2 | security, lead-security #5, area-infra M9: `?host=` / `?hostaddr=` query values bypass the loopback guard while SQLAlchemy passes them to the driver | High | FIXED AND TESTED | `diag_db.py`, `seed_chaos_data.py`, `verify_inflow_to_regengine_e2e.py` now collect authority host plus every `host`/`hostaddr` query value (comma-split) and refuse unless all are local. Refusal (fail closed) was chosen over rebuilding the engine from checked parts. New tests pin `?host=`, `?hostaddr=` and multi-host refusal with zero connect calls (pure unit checks, no socket opened). |
-| 3 | ops, blast, lead-ops #7, lead-blast 3231b: R2 runbook probes localhost after the smoke default changed | High | FIXED AND TESTED | Runbook step 3 now sets `REGENGINE_API_BASE=https://regengine.co/api/ingestion` and passes `--allow-production`, and states a localhost pass does not count. The script header carries the same production example. Loopback passes print "Local endpoints functional (... only; not a production R2 check)" instead of "R2 wired". |
-| 4 | tests, lead-tests #6, lead-ops #24: `test_prod_default_guards.py` runs in no required merge job | High | FIXED AND TESTED | Added to the `repo-root-suite` pytest list in `.github/workflows/backend-ci.yml` (that job already triggers on `scripts/**`). `test_guard_suite_runs_in_required_backend_ci` pins the membership. |
-| 5 | security, tenant, lead-security 3231b, lead-tenant M4: `create_test_api_key.py` guard covers only Supabase substrings and `REGENGINE_ENV` | Medium | FIXED AND TESTED | `_guard_against_production` now also refuses any non-local `DATABASE_URL` (with the finding 2 query-host check) and any non-local `REDIS_URL`, unless `--allow-production`. Parametrized tests cover Railway, Neon, raw IP, and crafted query hosts with env unset. |
-| 6 | tenant, lead-tenant M4: `_seed_billing_status` writes `trialing` to whatever `REDIS_URL` is set | Medium | FIXED AND TESTED | Takes `allow_production`, returns a SKIPPED note instead of writing when `REDIS_URL` is non-local without the flag. `_main` passes the flag through. Test pins the skip note. |
-| 7 | tenant, lead-tenant M4: regctl create/delete have no production guard before schema create / `DROP SCHEMA CASCADE` | Medium | FIXED AND TESTED | `ensure_local_database` runs first in `create_tenant`, `delete_tenant` (and `reset_tenant` passes the flag through); CLI gains `--allow-production`. `click.confirmation_option` on delete is unchanged. Tests assert `SystemExit` before any write, proven to proceed on pre-fix code via /tmp/fx3231/old_regctl.py (HEAD file, stubbed side effects). |
-| 8 | security, lead-security 3231c: `seed_lifecycle_test.py` follows 301/302/303 and resends `X-RegEngine-API-Key` to the redirect host | Medium | FIXED AND TESTED | `_NoRedirect` handler exits 2 instead of following, used by both `api_post` and `api_get`. Live two-server tests prove the second host receives nothing. Old `urlopen` behavior proven to leak (key resent, follow-up becomes GET) in /tmp/fx3231/redirect_old.py. |
-| 9 | correct: guards refuse `.env.example` compose hostnames (`postgres`, `neo4j`) unless `--allow-production` | Medium | FIXED AND TESTED | Explicit `DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}` allowlist (exactly the `.env.example` service names) added to all five Python guards. `test_compose_hostnames_count_as_local` pins it. Any other docker hostname still needs `--allow-production`; needs Chris sign-off (see decisions). |
-| 10 | correct: smoke success text readable as a production R2 pass | Medium | FIXED AND TESTED | Covered in finding 3; loopback test now asserts exit 0 plus the local-only line and absence of the R2 line. |
-| 11 | tests, lead-tests: guards tested as bare functions, dropping the `main` call stays green; `REGENGINE_ENV=production` on localhost untested | Medium | FIXED AND TESTED | Entrypoint tests call `main` / `_configure_environment` / `_main` with production URLs and production env on localhost, pinning exit code 2 (guard) so a seeding failure (exit 1) cannot masquerade as a refusal. |
-| 12 | tests: `create_tenant` still prints the raw key against a "never print" header | Medium | FIXED AND TESTED | One-time display at creation is intentional (list masks afterward and the file is the durable copy), so the test module docstring now states that exception instead of claiming "never print". No behavior change. |
-| 13 | security, correct: `.tenants.db` stays 0644 until next write; symlink-unsafe creation | Low | FIXED AND TESTED | Trivial: chmod 0600 before every read path; `O_NOFOLLOW` plus 0600-at-create for append and rewrite. Tests pin tighten-on-list and symlink refusal. |
-| 14 | security: smoke curl may send the key to a configured proxy | Low | FIXED AND TESTED | Trivial: loopback probes pass `--noproxy '*'` via a `smoke_curl` wrapper; production path unchanged. Header text test pins `--noproxy`. |
-| 15 | (found during fix) unquoted semicolon in the two multipart `probe` lines aborts the script under `set -u` before any RESULT line | Low | FIXED AND TESTED | Quoted the `-F` payload argument. The loopback test now asserts a full exit 0 run, which fails on the old lines. |
-| 16 | tests: Railway/Neon URLs and the regctl delete path unasserted | Low | FIXED AND TESTED | Covered in findings 5 and 7. |
-| 17 | tenant: diag probe inserts `is_sysadmin=true` with literal `hash` | Low | NOT FIXED, listed | Tenant lead kept this out of the confirmed list: no password verifier compares `password_hash`, so the row is not a working credential. Left untouched; flagging for Chris in case the probe should insert a non-admin row instead. |
-| 18 | blast: any non-loopback host (incl. docker names) treated as production | Low | NOT FIXED, listed | Partially addressed by finding 9 for the documented compose names. Remaining docker hostnames still require `--allow-production` by design (fail closed). |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-No BLOCKER or critical findings were reported for #3231 (security: "Critical: None").
-No fix was backed out; every attempted fix held.
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Exact test commands and results
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-- `~/metacode/fleet/heavy .venv/bin/python -m pytest tests/scripts/test_prod_default_guards.py --no-cov -o testpaths=tests` then `tail -1`
-  result: `80 passed in 9.32s` (final run; earlier runs: 78 passed, then 80 passed).
-- `~/metacode/fleet/heavy .venv/bin/ruff check scripts/create_test_api_key.py scripts/seed_chaos_data.py scripts/seed_lifecycle_test.py scripts/regctl/tenant.py scripts/utilities/diag_db.py scripts/verify_inflow_to_regengine_e2e.py tests/scripts/test_prod_default_guards.py`
-  result: `All checks passed!` (a later probe that wrongly included the `.sh` file reported 271 errors, all inside the shell script which ruff cannot parse; `bash -n` on the script passes).
-- `bash -n scripts/smoke_test_ingest.sh` then a stub-curl render on localhost
-  result: `RESULT: ... Local endpoints functional (http://localhost:8000 only; not a production R2 check).`, `rc=0`.
-- Fail-without-fix proofs (scratch, kept under /tmp/fx3231, not committed):
-  `/tmp/fx3231/old_behavior.py` confirms old default fails `has_permission`, old authority-only check calls the crafted URL local, old Supabase-only guard allows a Railway URL with env unset;
-  `/tmp/fx3231/redirect_old.py` confirms plain `urlopen` delivers the API key to the redirect target;
-  `/tmp/fx3231/old_regctl.py` (HEAD copy of `regctl/tenant.py` with stubbed side effects) confirms pre-fix `create_tenant` proceeds on a Railway `DATABASE_URL` with zero `ensure_local_database` references in the file.
-- Not run: full suite (targeted file only, per fleet guidance); `scripts/security/scan_tenant_scope.py` (no SQL or Cypher touched); the two `*_pg.py` tests importing the inflow verifier (they call only `_configure_paths`, which is unchanged, and need a local Postgres that was not provisioned).
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-## Needs Chris decision
+2. Faster iteration card
 
-1. Runbook production base: step 3 uses `https://regengine.co/api/ingestion` (the pre-3231 script default). Confirm that is still the live ingest base, or name the current one.
-2. Default key scope is now `webhooks.ingest` only. A general local key still needs `--scopes '*'` (documented in help). Confirm, or add `fda.export` to the default.
-3. `postgres`, `neo4j`, `redis` now count as local without DNS proof. Confirm acceptable, or restrict to `REGENGINE_ENV=development`.
-4. Diag probe still inserts an `is_sysadmin=true` row (finding 17). Confirm acceptable, or direct a non-admin probe row.
+Before:
+`Design-partner feedback is scoped to`
+
+After:
+`Early tester feedback is scoped to`
+
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
+
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

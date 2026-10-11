@@ -87,8 +87,8 @@ const FTL_CATEGORIES = [
         name: 'Leafy Greens (fresh, intact)',
         category: 'Produce',
         icon: Leaf,
-        examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens',
-        exclusions: 'Does not include whole head cabbages (green, red, savoy) or banana/grape/tree leaves. See fresh-cut leafy greens for pre-cut/bagged products.',
+        examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard. Leafy greens listed in 21 CFR 112.2(a)(1), such as collards, are exempt under §1.1305(e).',
+        exclusions: 'Does not include whole head cabbages (green, red, savoy) or banana/grape/tree leaves. Leafy greens listed in 21 CFR 112.2(a)(1), such as collards, are exempt under §1.1305(e). See fresh-cut leafy greens for pre-cut/bagged products.',
         covered: true,
         outbreakFrequency: 'HIGH',
         ctes: ['Harvesting', 'Cooling', 'Initial Packing', 'Shipping', 'Receiving'],
@@ -220,10 +220,10 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-histamine',
-        name: 'Finfish — Scombrotoxin/Histamine-Forming',
+        name: 'Finfish, histamine-producing species',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito',
+        examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito, swordfish',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
         covered: true,
         outbreakFrequency: 'HIGH',
@@ -233,7 +233,7 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-ciguatoxin',
-        name: 'Finfish — Ciguatoxin-Associated',
+        name: 'Finfish, species potentially contaminated with ciguatoxin',
         category: 'Seafood',
         icon: Fish,
         examples: 'Barracuda, grouper, snapper, moray eel (tropical reef species)',
@@ -246,10 +246,10 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-other',
-        name: 'Finfish — Other (fresh/frozen/previously frozen)',
+        name: 'Finfish, species not associated with histamine or ciguatoxin',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Salmon, cod, halibut, tilapia, trout, bass, swordfish',
+        examples: 'Salmon, cod, halibut, tilapia, trout, bass',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
         covered: true,
         outbreakFrequency: 'HIGH',
@@ -287,8 +287,8 @@ const FTL_CATEGORIES = [
         name: 'Molluscan Shellfish (bivalves)',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Oysters, clams, mussels, scallops',
-        exclusions: 'Except when product consists entirely of shucked adductor muscle. Raw bivalves under NSSP may be exempt per §1.1305(f)',
+        examples: 'Oysters, clams, mussels, scallops. The scallop adductor muscle alone is excluded.',
+        exclusions: 'The scallop adductor muscle alone is excluded. Raw bivalves under NSSP may be exempt per §1.1305(f)',
         covered: true,
         outbreakFrequency: 'HIGH',
         ctes: ['First Land-Based Receiving', 'Shipping', 'Receiving', 'Transformation'],
@@ -312,8 +312,8 @@ const FTL_CATEGORIES = [
         name: 'Shell Eggs',
         category: 'Eggs',
         icon: Egg,
-        examples: 'Shell eggs as defined under the FDA FTL — typically chicken shell eggs from farms with ≥3,000 laying hens',
-        exclusions: 'Farms with fewer than 3,000 laying hens are exempt per §1.1305(a)(2). Other species (duck, quail) may not be on the FTL — verify directly.',
+        examples: 'Shell eggs of the domesticated chicken',
+        exclusions: 'Shell egg means the egg of the domesticated chicken.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Shipping', 'Receiving'],
@@ -675,7 +675,7 @@ export function FTLCheckerClient() {
                 <Breadcrumbs
                     items={[
                         { label: "Free Tools", href: "/tools" },
-                        { label: "FTL Checker" }
+                        { label: "FTL List Checker" }
                     ]}
                 />
             </Container>
@@ -695,7 +695,7 @@ export function FTLCheckerClient() {
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-small text-re-text-tertiary">
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> No account required</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> FDA date: July 20, 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> FDA won't enforce before July 20, 2028</span>
                         </div>
                     </motion.div>
                 </Container>

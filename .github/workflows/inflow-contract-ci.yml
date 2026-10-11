@@ -200,7 +200,6 @@ jobs:
         working-directory: regengine
         run: |
           pip install --require-hashes -r requirements.lock
-          pip install uvicorn
 
       - name: Install Inflow Lab dependencies
         working-directory: inflow-lab

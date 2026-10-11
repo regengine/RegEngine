@@ -257,6 +257,10 @@ class CSVSFTPConnector(IntegrationConnector):
         # Build mapping: CSV column → RegEngine field
         col_mapping = self._resolve_column_mapping(reader.fieldnames)
 
+        # A headers-only file has no data rows, so the loop below never
+        # assigns row_num. Default it so the summary log cannot raise
+        # UnboundLocalError on an otherwise valid (empty) upload.
+        row_num = 0
         for row_num, row in enumerate(reader, start=2):
             try:
                 event = self._row_to_event(row, col_mapping, source_file, row_num)
