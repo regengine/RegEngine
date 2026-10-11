@@ -218,6 +218,35 @@ def test_comma_from_list_checks_every_table(tmp_path: Path):
     assert violations[0].target == "fsma.task_queue"
 
 
+def test_fstring_cypher_map_with_tenant_passes(tmp_path: Path):
+    # The Lot map is the only tenant predicate here, mirroring
+    # get_governing_regulations: stripping literal {...} spans deleted it
+    # and falsely flagged the query.
+    violations = scan_text(
+        tmp_path,
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent)\n'
+        'RETURN l\n"""\n',
+    )
+    assert violations == []
+
+
+def test_fstring_cypher_map_without_tenant_is_flagged(tmp_path: Path):
+    violations = scan_text(
+        tmp_path,
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc}})-[:UNDERWENT]->(e:TraceEvent)\nRETURN l\n"""\n',
+    )
+    assert [v.rule for v in violations] == ["cypher-match-without-tenant"]
+    assert violations[0].target == "Lot,TraceEvent"
+
+
+def test_fstring_interpolation_alone_does_not_scope(tmp_path: Path):
+    violations = scan_text(
+        tmp_path,
+        'QUERY = f"""\nMATCH (l:Lot)-[:UNDERWENT]->(e:TraceEvent)\nWHERE {shared_predicate}\n"""\n',
+    )
+    assert [v.rule for v in violations] == ["cypher-match-without-tenant"]
+
+
 def test_catalog_only_query_passes(tmp_path: Path):
     violations = scan_text(
         tmp_path,

@@ -39,7 +39,7 @@ describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
 
     // FE-002: invalid percent encodings must become a rejected scan, not an
     // uncaught URIError in receiving, field capture, or the public scanner.
-    it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+    it.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
         expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
     });
 });

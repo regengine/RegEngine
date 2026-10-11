@@ -1,123 +1,187 @@
-# FIX-REPORT: PR #3246 tenant-scope query gate
+# FIX-REPORT: About page copy
 
-Merge commit 242420eb. Scanner: scripts/security/scan_tenant_scope.py.
-Gate status after this fix: exit 1, 0 stale baseline rows, 60 fresh
-findings for owning-team triage (grouped below). No product code changed.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Finding table
+## Before and after
 
-| # | Source report | Severity | Status | Reason |
-|---|---|---|---|---|
-| F1 | correct-H1, security-H1, tenant-H7, lead-security-3246a: any mention of tenant_id/org_id/tid counts as predicate | High | FIXED AND TESTED | Real comparisons required per label and per table. Comments, string literals, select lists, SET targets, join conditions, and bare :tid values no longer count. MERGE needs tenant_id in the merge map. |
-| F2 | correct-H2, security-H2, tenant-H8, lead-security-3246b: one key hides all queries in a function, stale rows exit 0 | High | FIXED AND TESTED | Baseline rows pin the reviewed query text with qhash. Stale rows fail the run (exit 1). 9 multi-query keys expanded into per-query rows. |
-| F3 | correct-H3, security-H2, tenant-H8: two shipped baseline rows match nothing | High | FIXED AND TESTED | Deleted find_gaps shim row and merge_cypher row. Both sites verified fixed in product code first. |
-| F4 | correct-H4: assignment resolution uses empty map, first wins, includes nested functions | High | FIXED AND TESTED | Source-order walk, last assignment wins, nested scopes excluded. AnnAssign also handled. |
-| F5 | security-H3: f-string eraser deletes Cypher maps and interpolated predicates | High | FIXED AND TESTED | Literal doubled braces preserved, module and local names inline into holes, unresolvable holes keep a marker instead of vanishing. The :112 false positive is gone. |
-| F6 | correct-M5: comma FROM list checks only the first table | Medium | FIXED AND TESTED | FROM lists split on top-level commas (paren aware), every table checked. |
-| F7 | correct-M6, security-M5: global_catalog_labels ignored by the gate | Medium | FIXED AND TESTED | Catalog set flows into analyze_text. Catalog-only labels exempt; Document and Provision stay fail-closed as TENANT_LABELS members. |
-| F8 | security-M4: second-position and backtick labels missed | Medium | FIXED AND TESTED | Node patterns parsed per label with backtick support; binds and map keys excluded by context. |
-| F9 | tenant-M4: unqualified table names invisible | Medium | FIXED AND TESTED | Bare names matching a known fsma tenant table are flagged as fsma.name. Unknown bare names stay ignored. |
-| F10 | tenant-M3: shim regex over-matches, f-string artifact reddens gate | Medium | FIXED AND TESTED | Shim exempts catalog-alias uses with real node patterns; parens and coalesce variants now match. The bare shim constant stays flagged fail-closed by design. |
-| F11 | security-M6: unreadable files and missing roots exit 0 | Medium | FIXED AND TESTED | Missing roots, unreadable files, and syntax errors raise ConfigError, exit 2. |
-| F12 | tests-H: scanner tests outside the merge gate | High | FIXED AND TESTED | Unit file added to the blocking backend-ci offline step (backend-ci already triggers on scripts/**). scripts/** and .semgrep/** added to test-suite-check filters. Live-tree test split into test_tenant_scope_gate.py, kept out of blocking suites until the tree is green. CI run itself is not observable from here; YAML validity checked locally. |
-| F13 | tests-M: no test calls main or checks exit codes | Medium | FIXED AND TESTED | Subprocess tests assert exit 0 clean, 1 on violation, 1 on stale-only, 2 on missing allowlist. Missing root raises ConfigError. |
-| F14 | tests-M: DELETE and INSERT untested | Medium | FIXED AND TESTED | Flagged and passing cases for both verbs added. INSERT counts a tenant column mention (it has no WHERE); upsert ON CONFLICT tails are not second statements. |
-| B1 | ops-H, blast-Critical, int-tenant-gate, int-semgrep-gates: gate exits 1 on main | Blocker | BLOCKED | Out of scope. Owned by re-fix-tenant-gate. The 60 fresh hits are listed below for triage. |
-| B2 | ops-M: repo-gate test red in fast shard | Medium | BLOCKED | Same family as B1. Test moved to test_tenant_scope_gate.py, still non-blocking. |
-| B3 | lead-security Critical 1: suspended tenant API keys still accepted | Critical | BLOCKED | Out of scope. Owned by re-fix-suspended-tenant. Untouched. |
-| B4 | 7 xfail cross-tenant leaks (lead-security 3237, int-tenant-gate) | High | BLOCKED | Out of scope. Owned by re-fix-xfail-leaks. Four overlap fresh gate hits (linker TraceEvent x2, chain_integrity Lot, overlay TenantControl, data_quality Lot). |
-| L1 | correct-L7, security-L7, tenant-L5: semgrep editor rules never match tenant labels, unwired | Low | Not fixed | Left unwired on purpose until the tree is green. See decision D4. |
-| L2 | security-L8: SECURITY DEFINER SQL and scripts outside the gate | Low | Not fixed | Dynamic function names stay unjudged and unflagged (documented limitation). |
-| L3 | tests-L: semgrep never executed, catalog test gap | Low | Partly fixed | Plus-concat and Document fail-closed cases added. Semgrep execution still absent. |
-| L4 | lead-security low: merge_cypher ON MATCH SET can retag tenant_id | Low | Not fixed | Product code owned by graph team. Flagged in notes. |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Test commands and results
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. `~/metacode/fleet/heavy .venv/bin/python -m pytest tests/security/test_tenant_scope_scan.py tests/security/test_tenant_scope_gate.py --no-cov -p no:cacheprovider`
-   Result: `1 failed, 53 passed in 3.23s`. The single failure is
-   test_repo_gate_has_no_new_violations (60 fresh tree findings, expected,
-   see B1). Its sibling test_repo_gate_has_no_stale_baseline_entries passes.
-2. `.venv/bin/python scripts/security/scan_tenant_scope.py`
-   Result: exit 1, 0 stale rows, 60 fresh findings. Same 60 before and
-   after the final cleanup edits (diffed, identical).
-3. `.venv/bin/python /tmp/old_probe.py` against the pre-fix scanner from
-   git HEAD: all 12 key assertions (select list, comment, literal, SET,
-   :tid value, MERGE SET, comma FROM, backtick, second label, other node,
-   coalesce, parenthesized shim) fail on old code and pass on new code.
-   qhash pinning and stale-exit-1 confirmed by code reading of old main.
-4. `.venv/bin/ruff check` on the three Python files: All checks passed.
-   `.venv/bin/ruff format` applied (repo enforces it via pre-commit).
-5. YAML parse of backend-ci.yml, test-suite-check.yml, and the allowlist:
-   OK. Full-suite and CI runs not done here: the change is covered by the
-   targeted files, and CI is not observable from this checkout. No Postgres
-   was needed; every test is offline. No migrations added.
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Fresh gate hits for owning-team triage (60)
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-Out of scope for this task; each needs a product fix or a baseline row
-with a reason from its owning team. I read the flagged query plus its
-enclosing function for every site below. Items marked builder or context
-rely on the seeding or guard visible there, which the owning team must
-confirm before baselining.
+2. Faster iteration card
 
-1. Other tasks own these, do not duplicate: traceability_linker.py:31
-   (bare shim constant, intentionally still flagged), :112 and :126
-   (TraceEvent hops, xfail-leaks family), chain_integrity.py:47 Lot
-   (BUG-001, xfail-leaks), overlay_resolver.py:59 TenantControl (H2,
-   xfail-leaks), data_quality.py:239 Lot (xfail data_quality count).
-2. Runtime-seeded WHERE builders, statically invisible (team confirms the
-   seed, then baselines with the standard builder reason):
-   audit_export_log.py:146 (conditions seeded with tenant_id = :tid,
-   verified), auditor_router.py:253 (dynamic where_sql plus RLS backstop),
-   exchange_api.py:109, fda_export/queries.py:148, 306, 649,
-   compliance_score.py:169, task_queue.py:758 (_claim_one, global queue
-   role), agent_operator_view.py:147, 164, exception_queue.py:338,
-   request_workflow/queries.py:32, canonical_persistence/writer.py:1263.
-3. Joined or correlated tables with the predicate on the sibling (same
-   shape as the baselined epcis_export reason): compliance_score.py:295
-   (cte_kdes joined on scoped event) and :1154 (NOT EXISTS),
-   webhook_router_v2/validation.py:193 (hash_chain joined on scoped event),
-   auditor_router.py:556 and :606 (correlated signoff, package, and
-   submission counts), remediation/service.py:881, 916, 934 and
-   remediation/state.py:109 (correlated EXISTS and subselects),
-   assembly.py:480, 605, 644, request_workflow/queries.py:74,
-   canonical verification.py:175, cte_persistence verification.py:59, 197
-   and queries.py:713 and writes.py:351 and batch.py:477 (hash_chain paired
-   with scoped events), canonical writer.py:1294, identity_resolution
-   matching.py:47, 183, 228 and review.py:431 and assembly.py:177 (entity
-   tables), task_processor.py:518 (global admin claim).
-4. Token, id, or message keyed reads with no tenant predicate (team
-   decides predicate vs token-as-auth baseline like the sibling row):
-   supplier_portal.py:245 (SECURITY DEFINER function), :269 and :307
-   (link_token reads), email_ingest/service.py:124 (message_id, SECURITY
-   DEFINER), mock_audit.py:100 (drill_id), inflow_workbench.py:623
-   (run_id, tenant context is set), remediation/service.py:830
-   (run listing), metrics_router.py:119, agent_operator_view.py:412, 476.
-5. Deliberately global reads needing explicit acceptance plus baseline:
-   fsma_audit.py:364 and :890 (hash-chain control plane, same family as
-   the baselined _load_last_checksum), compliance_integration.py:155
-   (finds which tenants own lot codes; only runs when tenant_id is None),
-   tenant_models.py:113 (creates a hash-keyed Provision node),
-   snapshots.py:309 (dual-key tenant_id OR null-tenant with org fallback).
-6. Tenant-suffixed or correlated shapes the strict rule still flags but a
-   team may clear with a one-line predicate: auditor and remediation rows
-   in group 3 whose subquery is the only unscoped part.
+Before:
+`Design-partner feedback is scoped to`
 
-## Decisions needed from Christopher
+After:
+`Early tester feedback is scoped to`
 
-D1. Who triages the 60 fresh hits above, and in what order. Highest
-   information value first: snapshots.py:309 (real null-tenant OR shape),
-   supplier_portal reads (secret-token keying), compliance_integration
-   cross-tenant lookup (accept the design or scope it).
-D2. Bare shim constants stay flagged by this scanner (linker :31). If
-   re-fix-tenant-gate baselines it instead, that row needs a qhash and a
-   catalog-design reason, or the two tasks will fight over the same site.
-D3. compliance_integration.py:155 reads every tenant on purpose when no
-   tenant is passed. Accept and baseline, or require a tenant argument.
-D4. Keep .semgrep/tenant-query-scope.yaml out of the blocking semgrep
-   step until the tree is green and baselines are gone, as its own header
-   already says. Recommended: yes.
-D5. merge_cypher ON MATCH SET r += $properties can overwrite tenant_id if
-   a caller passes it in the properties map. No production caller does
-   today. Graph team should either strip tenant_id from that map or assert
-   it matches.
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
+
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

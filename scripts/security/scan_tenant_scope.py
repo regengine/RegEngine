@@ -197,19 +197,11 @@ TENANT_SUFFIX_CMP_RE = re.compile(
     r"(?=(?:__DYNAMIC__|%s|[:$][^\s,;)]*ten[^\s,;)]*|[:$][^\s,;)]*org[^\s,;)]*|[:$]tid\b))(?=\S)",
     re.IGNORECASE,
 )
-# A dynamic fragment the gate cannot see through (``WHERE {col} = :tid``,
-# ``WHERE %s = :tenant_id``) still shows its shape: compared against a
-# tenant-named bind it constrains the row to the caller's tenant.
-HOLE_TENANT_CMP_RE = re.compile(
-    r"(?:__DYNAMIC__|(?<![\w%])%s)\s*=\s*[:$]?(?:[\w$]*(?:tenant|org)[\w$]*|tid)\b",
-    re.IGNORECASE,
-)
-# Map-key binding inside a MATCH/MERGE node pattern, e.g.
-# ``(l:Lot {tlc: $tlc, tenant_id: $tenant_id})``.
-MAP_TENANT_RE = re.compile(r"(?<![\w$])tenant_id\s*:", re.IGNORECASE)
-# Map value carrying the tenant bind, e.g. ``(t:Tenant {id: $tenant_id})``:
-# the node's identity is the tenant itself.
-MAP_TENANT_VALUE_RE = re.compile(r":\s*[$:](tenant_id|org_id)\b", re.IGNORECASE)
+# Predicate evidence. org_id is the established equivalent for tables
+# keyed by organisation (for example fsma.compliance_alerts); bare :tid
+# covers helpers that pass the tenant only as a bind parameter.
+SQL_PRED_RE = re.compile(r"tenant_id|org_id|\btid\b", re.IGNORECASE)
+CYPHER_PRED_RE = re.compile(r"tenant_id", re.IGNORECASE)
 TABLE_REF_RE = re.compile(
     r"\b(?:FROM|JOIN)\s+([A-Za-z_][\w.]*)\b|\bUPDATE\s+([A-Za-z_][\w.]*)\b"
     r"|\bINSERT\s+INTO\s+([A-Za-z_][\w.]*)\b|\bDELETE\s+FROM\s+([A-Za-z_][\w.]*)\b",
@@ -356,7 +348,12 @@ class QueryResolver:
                     resolved = self.assigns.get(value.value.id)
                     parts.append(resolved if isinstance(resolved, str) else DYNAMIC_HOLE)
                 else:
-                    parts.append(DYNAMIC_HOLE)
+                    parts.append(" ")
+            # Literal {...} spans in an f-string are author-written text such
+            # as Cypher maps, not placeholders: interpolations arrive as AST
+            # nodes and are already blanked above. Stripping the literals
+            # deleted real tenant predicates (for example a Lot map holding
+            # tenant_id), so keep them.
             return "".join(parts)
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             left = self.resolve(node.left)

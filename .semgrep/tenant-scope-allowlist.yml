@@ -45,6 +45,16 @@ global_sql_tables:
   food_traceability_list: "Static FDA food traceability list; no tenant rows."
 
 baseline:
+  # Obligation nodes are a shared global catalog by design: the regulation
+  # loader and supplier graph sync MERGE them with no tenant_id, so the null
+  # arm matches only those global rows. The equality arm confines private
+  # tenant-stamped obligations to their tenant, and _require_tenant_id
+  # rejects empty tenants, so a null parameter cannot match every row.
+  - file: services/graph/app/traceability_linker.py
+    scope: _OBLIGATION_TENANT_PREDICATE
+    rule: tenant-failopen-shim
+    target: query
+    reason: "Intended global-or-own Obligation catalog predicate (see the design comment at the constant); every caller passes a non-empty tenant_id."
   # The four queries below run against the shared global regulatory
   # database through global_client, never a tenant database. The provision
   # hashes they look up come from tenant-scoped ControlMapping rows read

@@ -66,6 +66,7 @@ class IngestionEngine:
             job_id=str(uuid.uuid4()),
             vertical=ingestion_config.vertical,
             source_type=ingestion_config.source_type.value,
+            tenant_id=ingestion_config.tenant_id,
             status=JobStatus.PENDING,
             config=vars(ingestion_config),
         )
@@ -128,6 +129,7 @@ class IngestionEngine:
                     document = Document(
                         id=document_id,
                         title=doc_metadata.get("title", "Untitled"),
+                        tenant_id=ingestion_config.tenant_id or "",
                         source_type=ingestion_config.source_type.value,
                         document_type=DocumentType(doc_metadata.get("document_type", "other")),
                         vertical=ingestion_config.vertical,
