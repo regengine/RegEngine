@@ -463,7 +463,7 @@ async def require_api_key(
 
     # Check rate limit
     if isinstance(key_store, DatabaseAPIKeyStore):
-        rate_info = await key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute)
+        rate_info = await key_store.check_all_rate_limits(api_key)
         if not rate_info.allowed:
             logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
             raise HTTPException(
