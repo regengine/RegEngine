@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Literal, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.rate_limit import limiter
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
@@ -696,6 +697,7 @@ async def upload_csv(
     "/webhook/{tenant_id}/{connector_id}",
     summary="Receive inbound webhook from external system",
 )
+@limiter.limit("60/minute")
 async def receive_webhook(
     tenant_id: str,
     connector_id: str,
@@ -708,6 +710,10 @@ async def receive_webhook(
 
     Note: This endpoint does NOT require API key auth — it uses
     the connector's webhook secret for verification instead.
+    Connectors must fail closed (raise ValueError, mapped to 401)
+    when their webhook secret is not configured or the signature
+    is missing or invalid. The response carries only an accepted
+    count, never the normalized inspection data.
     """
     from shared.external_connectors.registry import (
         get_tenant_connectors,
@@ -728,16 +734,19 @@ async def receive_webhook(
 
     try:
         events = await connector.handle_webhook(payload, headers)
-        ingest_events = [e.to_ingest_dict() for e in events]
         logger.info(
             "webhook_received connector=%s tenant=%s events=%d",
             connector_id,
             tenant_id,
             len(events),
         )
+        # Never return normalized inspection data to the webhook
+        # caller. The caller is authenticated only by the shared
+        # webhook secret, so echoing tenant records here would leak
+        # one tenant's data to anyone holding the secret.
         return {
             "accepted": len(events),
-            "events": ingest_events,
+            "connector_id": connector_id,
         }
     except NotImplementedError:
         raise HTTPException(

@@ -68,7 +68,7 @@ export function PricingPageClient({
                     priced for facility teams.
                 </h1>
                 <p className="mx-auto mb-3 mt-4 max-w-[68ch] text-body text-re-text-secondary">
-                    Three indicative plans sized by facility count. Founding Design Partner discounts are documented in the executed order form or design-partner agreement.
+                    Three indicative plans sized by facility count. Founding rate discounts are documented in the executed order form or design-partner agreement.
                 </p>
                 <p className="mx-auto max-w-[68ch] text-body font-medium text-re-text-primary">
                     Pricing shown is indicative. Executed agreement controls final plan, billing period, and checkout availability.
@@ -102,7 +102,7 @@ export function PricingPageClient({
                                     </div>
                                     <p className="mb-3 text-small text-re-text-tertiary">{tier.description}</p>
                                     <Badge tone="brand" size="sm" className="mb-4 self-start">
-                                        Founding design partner rate
+                                        Founding rate
                                     </Badge>
 
                                     <div className="mb-5">
@@ -112,7 +112,7 @@ export function PricingPageClient({
                                         </div>
                                         <p className="mt-1 text-small text-re-text-tertiary">
                                             <span className="line-through">${tier.gaAnnual}/mo</span>
-                                            {' '}Post-pilot list price · billed annually
+                                            {' '}Standard list price · billed annually
                                         </p>
                                         <p className="mt-0.5 text-small text-re-text-tertiary">
                                             ${tier.partnerMonthly}/mo if billed monthly
@@ -148,10 +148,10 @@ export function PricingPageClient({
                         Founding Design Partner Program
                     </p>
                     <p className="mx-auto mb-2 max-w-[60ch] text-ui leading-relaxed text-re-text-secondary">
-                        50% off post-pilot list pricing under your executed design-partner terms. White-glove onboarding, custom integration scoping, and direct founder support.
+                        50% off standard list pricing under your executed design-partner terms. White-glove onboarding, custom integration scoping, and direct founder support.
                     </p>
                     <p className="mx-auto mb-3 max-w-[60ch] text-small leading-relaxed text-re-text-tertiary">
-                        We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement, including scope for facilities, add-ons, taxes, and plan changes.
+                        We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement, including scope for facilities, add-ons, taxes, and plan changes.
                     </p>
                     <p className="mx-auto mb-5 max-w-[60ch] text-small leading-relaxed text-re-text-tertiary">
                         Larger deployments are scoped with the team so onboarding, billing, and integration support match your operating model.
@@ -194,7 +194,7 @@ export function PricingPageClient({
                         RegEngine is priced around facility operations, not a long enterprise procurement cycle.
                     </p>
                     <p className="mx-auto mb-10 max-w-[64ch] text-center text-small leading-relaxed text-re-text-tertiary">
-                        A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine starts at $425/mo (billed annually) for Founding Design Partners.
+                        A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine&apos;s Founding rate starts at $425/mo (billed annually).
                     </p>
                     <div className="overflow-x-auto rounded-lg border border-re-border bg-re-surface-card">
                         <table className="w-full min-w-[640px] border-collapse text-ui">
@@ -223,7 +223,7 @@ export function PricingPageClient({
                         </table>
                     </div>
                     <p className="mt-4 text-center text-small text-re-text-tertiary">
-                        Operating-model comparison based on public information and RegEngine&apos;s current design-partner posture; validate competitor capabilities directly before procurement decisions.
+                        Operating-model comparison based on public information and RegEngine&apos;s current early access posture; validate competitor capabilities directly before procurement decisions.
                     </p>
                 </Container>
             </section>
@@ -251,7 +251,7 @@ export function PricingPageClient({
                         Become a founding design partner
                     </h2>
                     <p className="mx-auto mb-8 mt-3 max-w-[64ch] text-body text-re-text-secondary">
-                        Founding Design Partners start at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
+                        The Founding rate starts at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">

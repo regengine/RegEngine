@@ -1,0 +1,253 @@
+# Tenant-scope query gate allowlist.
+#
+# Consumed by scripts/security/scan_tenant_scope.py (the blocking CI
+# check) and documented for the semgrep rules in tenant-query-scope.yaml,
+# which cannot read this file. Three sections:
+#
+# global_catalog_labels: Neo4j labels that live in the shared global
+#   regulatory database (Neo4jClient.DB_GLOBAL) and are readable across
+#   tenants by design. Queries touching ONLY these labels need no tenant
+#   predicate. A query that also touches a tenant label still needs one.
+# global_sql_tables: tables under the fsma schema that hold shared,
+#   non-tenant reference data. Every other fsma.* table is treated as
+#   tenant data and requires a tenant predicate.
+# baseline: sites that violate the gate today, each with a reason. A new
+#   violation fails CI; fixing a baselined site should remove its entry
+#   (stale entries print a warning). Do NOT edit product code in this
+#   task; baselined fixes belong to the owning teams.
+
+version: 1
+
+global_catalog_labels:
+  # Core FSMA regulation text shared by every tenant (DB_GLOBAL).
+  Obligation: "Global regulatory obligation catalog in the shared Neo4j database; readable across tenants by design."
+  Section: "Global regulation section catalog in the shared Neo4j database; readable across tenants by design."
+  Regulation: "Global regulation catalog in the shared Neo4j database; readable across tenants by design."
+  Citation: "Global citation catalog in the shared Neo4j database; readable across tenants by design."
+  # Jurisdiction hierarchy is global data; tenant overlays reference it but never own it.
+  Jurisdiction: "Global jurisdiction hierarchy (see hierarchy_builder INVARIANT #1304); tenant queries filter it explicitly when needed."
+  # Control framework catalogs loaded by operator scripts, not tenant writes.
+  Framework: "Global control-framework catalog loaded by operator scripts; no tenant rows."
+  Concept: "Global regulatory concept nodes read from the global database only."
+  RegulatoryObligation: "Global obligation nodes written by the regulation loader; no tenant rows."
+  Penalty: "Global penalty text written by the regulation loader; no tenant rows."
+  FTLCategory: "Static FDA food-traceability-list categories; shared reference data."
+  CTE: "Static critical-tracking-event type definitions used by constraints; no tenant rows."
+  Threshold: "Static threshold reference nodes; no tenant rows."
+
+global_sql_tables:
+  rule_definitions: "Shared detection-rule catalog read by every tenant; no tenant rows."
+  obligation_cte_rules: "Shared obligation-to-CTE mapping catalog; no tenant rows."
+  obligations: "Shared obligation reference table; no tenant rows."
+  food_traceability_list: "Static FDA food traceability list; no tenant rows."
+
+baseline:
+  # Live fail-open: tenant_id is optional, so a null tenant matches every
+  # tenant's TraceEvents. Product fix is to require tenant_id and raise on
+  # empty, the same change find_broken_chains received under #1301.
+  - file: services/graph/app/fsma/chain_integrity.py
+    scope: find_gaps
+    rule: tenant-failopen-shim
+    target: Lot,TraceEvent
+    reason: "Known fail-open shim in find_gaps; fix owned by graph team (require tenant_id, see #1301). New shims still fail the gate."
+  # Tenant-optional override merge keyed on override_id alone. In-flight fix
+  # under #3227 requires the tenant; baselined until that merges.
+  - file: services/graph/app/models/tenant_nodes.py
+    scope: RegulationOverride.merge_cypher
+    rule: cypher-merge-without-tenant
+    target: RegulationOverride
+    reason: "Tenant-optional override merge; fix in flight (#3227). New unscoped MERGEs still fail the gate."
+  # The four queries below run against the shared global regulatory
+  # database through global_client, never a tenant database. The provision
+  # hashes they look up come from tenant-scoped ControlMapping rows read
+  # moments earlier in the same function.
+  - file: services/graph/app/overlay_resolver.py
+    scope: OverlayResolver.get_regulatory_requirements
+    rule: cypher-match-without-tenant
+    target: Document,Provision
+    reason: "Reads the global regulatory database via global_client; hashes anchored in tenant-scoped mappings."
+  - file: services/graph/app/overlay_resolver.py
+    scope: OverlayResolver.get_provision_with_overlays
+    rule: cypher-match-without-tenant
+    target: Document,Provision
+    reason: "Reads the global regulatory database via global_client; hash comes from the caller, mappings read tenant-scoped."
+  - file: services/graph/app/overlay_resolver.py
+    scope: OverlayResolver.get_control_details
+    rule: cypher-match-without-tenant
+    target: Provision
+    reason: "Reads the global regulatory database via global_client; hashes come from tenant-scoped mappings."
+  - file: services/graph/app/overlay_resolver.py
+    scope: OverlayResolver.get_compliance_gaps
+    rule: cypher-match-without-tenant
+    target: Provision
+    reason: "Reads the global regulatory database via global_client for the jurisdiction provision list; mapping check is tenant-scoped."
+  # Dynamic WHERE builders below seed tenant_id unconditionally at runtime
+  # (see the where_clauses seed in each function); the static gate cannot
+  # see through the builder variable, so each site is recorded here.
+  - file: services/ingestion/app/canonical_router.py
+    scope: list_records
+    rule: sql-without-tenant-predicate
+    target: fsma.traceability_events
+    reason: "WHERE built from _ALLOWED_WHERE_FRAGMENTS seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/ingestion/app/canonical_router.py
+    scope: list_ingestion_runs
+    rule: sql-without-tenant-predicate
+    target: fsma.ingestion_runs
+    reason: "WHERE built from _ALLOWED_WHERE_FRAGMENTS seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/shared/cte_persistence/queries.py
+    scope: QueryPathMixin.query_events_by_tlc
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "WHERE clause seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/shared/cte_persistence/queries.py
+    scope: QueryPathMixin.query_events_by_tlcs
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "WHERE clause seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/shared/cte_persistence/queries.py
+    scope: QueryPathMixin.query_all_events
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "WHERE clause seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/ingestion/app/epcis/persistence.py
+    scope: _list_events_from_db
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "WHERE list seeded with tenant_id = :tenant_id; verified scoped at runtime."
+  - file: services/ingestion/app/epcis_export.py
+    scope: _query_tenant_events
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events,fsma.cte_kdes
+    reason: "WHERE list seeded with e.tenant_id = :tenant_id; verified scoped at runtime (cte_kdes joined on the scoped event)."
+  - file: services/ingestion/app/incident_router.py
+    scope: list_incidents
+    rule: sql-without-tenant-predicate
+    target: fsma.incidents
+    reason: "WHERE built from _ALLOWED_WHERE_FRAGMENTS seeded with tenant_id = :tid; verified scoped at runtime."
+  - file: services/shared/request_workflow/collection.py
+    scope: CollectionMixin.collect_records
+    rule: sql-without-tenant-predicate
+    target: fsma.traceability_events
+    reason: "Interpolated where_clause seeded with te.tenant_id = :tenant_id; verified scoped at runtime."
+  - file: services/shared/request_workflow/utils.py
+    scope: WorkflowBase._get_scope_event_ids
+    rule: sql-without-tenant-predicate
+    target: fsma.traceability_events
+    reason: "Interpolated where_clause seeded with te.tenant_id = :tenant_id; verified scoped at runtime."
+  # Scoped by an unguessable row id rather than a tenant predicate. Each
+  # id below is minted server-side inside a tenant-checked flow, so the
+  # row cannot be reached by guessing. Weakest entries in this file; adding
+  # an explicit tenant_id predicate is recommended hardening.
+  - file: services/shared/request_workflow/assembly.py
+    scope: AssemblyMixin.assemble_response_package
+    rule: sql-without-tenant-predicate
+    target: fsma.request_signoffs
+    reason: "Scoped by request_case_id after a tenant-checked case load; consider adding tenant_id as hardening."
+  - file: services/ingestion/app/stripe_billing/label_billing.py
+    scope: charge_for_label
+    rule: sql-without-tenant-predicate
+    target: fsma.label_charges
+    reason: "Row id comes from the tenant-scoped claim seconds earlier in the same transaction; not caller-supplied."
+  - file: services/ingestion/app/supplier_portal.py
+    scope: _db_update_portal_link_status
+    rule: sql-without-tenant-predicate
+    target: fsma.tenant_portal_links
+    reason: "Gated by the secret link_token credential with tenant context set; token is the auth, not guessable."
+  - file: services/shared/rules/deadletter_replay.py
+    scope: replay_deadletter_for_tenant
+    rule: sql-without-tenant-predicate
+    target: fsma.rule_evaluation_deadletter
+    reason: "Row ids come from the tenant-scoped select in the same function; the update narrows by primary key."
+  # Deliberately global control-plane reads. The checksum chain and
+  # retention counters span tenants by design and run under the audited
+  # admin role, never a tenant credential.
+  - file: services/graph/app/fsma_audit.py
+    scope: FSMAAuditLog._load_last_checksum
+    rule: sql-without-tenant-predicate
+    target: fsma.fsma_audit_trail
+    reason: "Global hash-chain tip by design (comment at the call site); read through the audited control-plane role."
+  - file: services/scheduler/service.py
+    scope: SchedulerService.enforce_kde_retention
+    rule: sql-without-tenant-predicate
+    target: fsma.fsma_audit_trail
+    reason: "Global retention guard via arm_global_admin_context; audited control-plane action."
+  - file: services/scheduler/service.py
+    scope: SchedulerService.purge_old_tasks
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Cross-tenant retention purge via arm_global_admin_context; audited control-plane action."
+  - file: services/scheduler/service.py
+    scope: SchedulerService.archive_expired_records
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "Retention delete runs inside a per-tenant tenant_scope loop (RLS confines each pass); audited control-plane action."
+  # Queue mechanics are cross-tenant by design (see the ADR #1644 note at
+  # the call sites): workers lease and transition rows by task id plus
+  # worker identity under the admin engine role, never by tenant.
+  - file: services/shared/task_queue.py
+    scope: _get_task_queue_summary_inner
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Aggregate ops counters via the sysadmin queue role; queue mechanics cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: _replay_dead_tasks_inner
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Sysadmin dead-task replay keyed by task id; queue mechanics cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._release_stale_locks
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker lease recovery by lock state under the admin engine role; cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._release_claim
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker lease release keyed by task id plus worker identity; cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._mark_completed
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker state transition keyed by leased task id; cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._mark_failed
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker state transition keyed by leased task id; cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._mark_dead
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker state transition keyed by leased task id; cross-tenant by design (ADR #1644)."
+  - file: server/workers/task_processor.py
+    scope: _complete_task
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker completion keyed by task id plus worker identity under arm_global_admin_context; cross-tenant by design."
+  - file: server/workers/task_processor.py
+    scope: _heartbeat_extend
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Lease heartbeat keyed by task id plus worker identity under arm_global_admin_context; cross-tenant by design."
+  - file: server/workers/task_processor.py
+    scope: _fail_task_inner
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Worker failure transition keyed by task id plus worker identity under arm_global_admin_context."
+  - file: server/workers/task_processor.py
+    scope: _release_abandoned_task_lock
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    reason: "Abandoned-lease recovery keyed by task id plus worker identity under arm_global_admin_context."
+  # Health probe returning a single existence bit; no tenant data leaves the query.
+  - file: services/ingestion/app/export_monitoring.py
+    scope: _check_db_connectivity
+    rule: sql-without-tenant-predicate
+    target: fsma.cte_events
+    reason: "Liveness probe (SELECT 1 LIMIT 1); returns no tenant data."
+  # System seed action log; the row records the seed itself, not tenant data.
+  - file: services/shared/rules/seeds.py
+    scope: seed_rule_definitions
+    rule: sql-without-tenant-predicate
+    target: fsma.rule_audit_log
+    reason: "INSERT of a system seed record (changed_by system_seed); carries no tenant data."
