@@ -32,7 +32,14 @@ class SignalClassifier:
 
         Returns:
             Tuple of (Category, Risk_Level, Confidence)
+
+        Raises:
+            TypeError: when ``text`` is not a string. A missing document must
+                not read as "processed OK, nothing found" (same rule as
+                ``extract_entities`` rejecting None, see #1274).
         """
+        if not isinstance(text, str):
+            raise TypeError(f"classify_signal requires str, got {type(text).__name__}")
         text_lower = text.lower()
 
         best_category = "UNCATEGORIZED"

@@ -37,6 +37,31 @@ _CSV_COLUMNS = [
     "released_event_id",
 ]
 
+# Event-date fallback order for the accepted-records CSV: the top-level
+# timestamp first, then every CTE date KDE (mirrors the date map in
+# service._CTE_DATE_KDE). Previously only receive/ship dates were shown,
+# so harvesting, cooling, packing, landing, and transformation records
+# exported with a blank event date.
+_EVENT_DATE_KDE_FALLBACK = (
+    "receive_date",
+    "ship_date",
+    "harvest_date",
+    "cooling_date",
+    "packing_date",
+    "landing_date",
+    "transformation_date",
+)
+
+
+def _event_date(event: Dict[str, Any], kdes: Dict[str, Any]) -> Any:
+    if event.get("timestamp"):
+        return event["timestamp"]
+    for key in _EVENT_DATE_KDE_FALLBACK:
+        if kdes.get(key):
+            return kdes[key]
+    return ""
+
+
 _DISCLAIMER = (
     "Hashes in this bundle demonstrate post-ingest integrity only: they prove "
     "the accepted data has not changed since export, not that the original "
@@ -65,7 +90,7 @@ def _accepted_csv(records: List[Dict[str, Any]]) -> str:
             event.get("product_description", ""),
             event.get("quantity", ""),
             event.get("unit_of_measure", ""),
-            event.get("timestamp") or kdes.get("receive_date") or kdes.get("ship_date") or "",
+            _event_date(event, kdes),
             event.get("location_name") or kdes.get("receiving_location") or "",
             kdes.get("tlc_source_reference", ""),
             kdes.get("reference_document", ""),

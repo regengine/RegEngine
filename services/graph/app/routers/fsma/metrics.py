@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from shared.auth import require_api_key
+from shared.auth import reconcile_tenant_scope, require_api_key
 from shared.metrics_auth import require_metrics_key
 
 # Add shared utilities (portable path resolution)
@@ -114,14 +114,22 @@ async def get_data_quality_metrics(
 
 
 @router.get("/dashboard")
-async def fsma_dashboard(tenant_id: uuid.UUID = Depends(get_current_tenant_id), api_key=Depends(require_api_key)):
+async def fsma_dashboard(
+    request: Request,
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
+    api_key=Depends(require_api_key),
+):
     """
     FSMA compliance dashboard with aggregated health metrics.
 
     Returns a JSON summary of all FSMA compliance metrics suitable
     for dashboard display.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # Fail closed when the middleware-resolved tenant differs from the
+    # authenticated API-key tenant (same reconcile as the gaps routes).
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    scoped_uuid = uuid.UUID(scoped_tenant_id)
+    db_name = Neo4jClient.get_tenant_database_name(scoped_uuid)
 
     try:
         # #2833: `async with` closes the driver — and its connection
@@ -131,13 +139,13 @@ async def fsma_dashboard(tenant_id: uuid.UUID = Depends(get_current_tenant_id), 
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             # Get gap metrics
-            gaps = await find_gaps(client, str(tenant_id))
+            gaps = await find_gaps(client, scoped_tenant_id)
 
             # Get orphan metrics
-            orphans = await find_orphaned_lots(client, str(tenant_id))
+            orphans = await find_orphaned_lots(client, scoped_tenant_id)
 
             # Get KDE completeness
-            completeness = await analyze_kde_completeness(client, str(tenant_id))
+            completeness = await analyze_kde_completeness(client, scoped_tenant_id)
 
         # Update Prometheus gauges
         record_gap_detection(len(gaps), "all")
