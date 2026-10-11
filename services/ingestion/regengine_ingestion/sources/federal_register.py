@@ -158,7 +158,9 @@ class FederalRegisterAdapter(SourceAdapter):
         if not header_value:
             return None
         try:
-            return datetime.strptime(header_value, "%a, %d %b %Y %H:%M:%S GMT")
+            # Last-Modified is always GMT; return an aware datetime so it can
+            # be compared with the aware timestamps used everywhere else.
+            return datetime.strptime(header_value, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
         except ValueError:
             return None
 
