@@ -650,13 +650,30 @@ async def test_request_erasure_cannot_mutate_another_identity():
                 """,
                 {"before_id": before_outbox_id},
             )
-            assert len(new_outbox) == 3
+            # Erasure writes two graph rows per marker tenant: an identity
+            # delete row plus a shared-record anonymize row carrying the
+            # erased-actor token.
+            assert len(new_outbox) == 6
             assert {row["tenant_id"] for row in new_outbox} == {
                 fixture["tenant_a"],
                 fixture["tenant_b"],
                 fixture["tenant_c"],
             }
-            assert all(row["params"] == {"user_id": str(fixture["user_a"])} for row in new_outbox)
+            delete_rows = [row for row in new_outbox if row["dedupe_key"].startswith("user_erasure:")]
+            anonymize_rows = [
+                row for row in new_outbox if row["dedupe_key"].startswith("user_erasure_anonymize:")
+            ]
+            assert len(delete_rows) == 3
+            assert len(anonymize_rows) == 3
+            assert all(
+                row["params"] == {"user_id": str(fixture["user_a"])} for row in delete_rows
+            )
+            expected_token = erasure._erased_actor_token(str(fixture["user_a"]))
+            assert all(
+                row["params"]
+                == {"user_id": str(fixture["user_a"]), "erased_actor_id": expected_token}
+                for row in anonymize_rows
+            )
             assert str(fixture["user_b"]) not in json.dumps(new_outbox, default=str)
     finally:
         try:

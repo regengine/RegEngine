@@ -392,7 +392,7 @@ class SafetyCultureConnector(IntegrationConnector):
         router), so an unauthenticated caller can never trigger a
         fetch with the tenant's SafetyCulture key.
         """
-        if not self.config.webhook_secret:
+        if not (self.config.webhook_secret or "").strip():
             raise ValueError("SafetyCulture webhook secret is not configured for this tenant")
         lowered = {str(key).lower(): value for key, value in (headers or {}).items()}
         signature = str(lowered.get("x-sc-signature") or lowered.get("x-safetyculture-signature") or "").strip()

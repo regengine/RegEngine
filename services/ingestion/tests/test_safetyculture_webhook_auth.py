@@ -98,6 +98,15 @@ async def test_missing_signature_rejected():
     connector._fetch_audit_detail.assert_not_awaited()
 
 
+async def test_blank_secret_rejected_as_not_configured():
+    connector = _connector(secret="   ")
+    body = json.dumps(PAYLOAD).encode()
+    with pytest.raises(ValueError, match="not configured"):
+        await connector.handle_webhook(body, {"x-sc-signature": _sign(body, SECRET)})
+    # A blank secret is the same as no secret: never fetch with the tenant key.
+    connector._fetch_audit_detail.assert_not_awaited()
+
+
 async def test_bad_signature_rejected():
     connector = _connector()
     body = json.dumps(PAYLOAD).encode()
@@ -191,6 +200,21 @@ async def test_nested_completion_without_id_ignored_without_fetch():
     connector._fetch_audit_detail.assert_not_awaited()
 
 
+async def test_nested_shape_missing_signature_rejected():
+    connector = _connector()
+    with pytest.raises(ValueError, match="Missing.*signature"):
+        await connector.handle_webhook(json.dumps(NESTED_PAYLOAD).encode(), {})
+    connector._fetch_audit_detail.assert_not_awaited()
+
+
+async def test_nested_shape_bad_signature_rejected():
+    connector = _connector()
+    body = json.dumps(NESTED_PAYLOAD).encode()
+    with pytest.raises(ValueError, match="Invalid.*signature"):
+        await connector.handle_webhook(body, {"x-sc-signature": "0" * 64})
+    connector._fetch_audit_detail.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Router level: 401 mapping and count-only responses
 # ---------------------------------------------------------------------------
@@ -265,6 +289,13 @@ def test_router_nested_shape_returns_count_only(client, monkeypatch):
     resp = _post(client, body, {"X-Sc-Signature": _sign(body)})
     assert resp.status_code == 200
     assert resp.json()["accepted"] == 1
+
+
+def test_router_nested_shape_missing_signature_returns_401(client, monkeypatch):
+    monkeypatch.setattr(registry_mod, "get_tenant_connectors", lambda _tid: {CONNECTOR_ID: _connector()})
+    resp = _post(client, json.dumps(NESTED_PAYLOAD).encode())
+    assert resp.status_code == 401
+    assert "signature" in resp.json()["detail"].lower()
 
 
 def test_reconfigure_rotates_webhook_secret(client, monkeypatch):

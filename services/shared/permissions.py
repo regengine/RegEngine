@@ -39,14 +39,30 @@ def permission_implies(granted_permission: str, required_permission: str) -> boo
 
     if granted.endswith(".*"):
         namespace = granted[:-2]
-        return required.startswith(f"{namespace}.")
+        # Require a non-empty action after the namespace dot so the
+        # vacuous permission "fda." is never implied by "fda.*".
+        return len(required) > len(namespace) + 1 and required.startswith(f"{namespace}.")
 
     return False
 
 
+def _permission_list(permissions: Optional[Iterable[str]]) -> list[str]:
+    """Normalize a permissions value to a list.
+
+    A bare string is one permission, not an iterable of characters:
+    iterating ``"admin.*"`` would otherwise check ``"a"``, ``"d"``,
+    ... and silently defeat wildcard-tier detection in :func:`role_rank`.
+    """
+    if permissions is None:
+        return []
+    if isinstance(permissions, str):
+        return [permissions]
+    return list(permissions)
+
+
 def has_permission(granted_permissions: Iterable[str], required_permission: str) -> bool:
     """Check whether any granted permission satisfies a required permission."""
-    for granted in granted_permissions:
+    for granted in _permission_list(granted_permissions):
         if permission_implies(granted, required_permission):
             return True
     return False
@@ -91,11 +107,10 @@ def role_rank(role_name: Optional[str], permissions: Optional[Iterable[str]] = N
     name = (role_name or "").strip().lower()
     name_rank = _ROLE_RANK_BY_NAME.get(name, 0)
     perm_rank = 0
-    if permissions:
-        for p in permissions:
-            if _normalize(p) in _OWNER_TIER_PERMISSIONS:
-                perm_rank = max(perm_rank, _ROLE_RANK_BY_NAME["owner"])
-                break
+    for p in _permission_list(permissions):
+        if _normalize(p) in _OWNER_TIER_PERMISSIONS:
+            perm_rank = max(perm_rank, _ROLE_RANK_BY_NAME["owner"])
+            break
     return max(name_rank, perm_rank)
 
 
