@@ -31,6 +31,7 @@ from app.disaster_recovery import (
 from app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from shared.cte_persistence import compute_chain_hash
 from sqlalchemy.exc import SQLAlchemyError
 
 # ---------------------------------------------------------------------------
@@ -78,6 +79,19 @@ class _FakeSession:
 
     def close(self) -> None:
         self.closed = True
+
+
+def _linked_chain_rows(length: int = 1, break_at: int | None = None) -> list[tuple]:
+    """Real chain rows. ``break_at`` stores a null previous hash on that sequence."""
+    rows = []
+    previous = None
+    for seq in range(1, length + 1):
+        event_hash = f"event-{seq}"
+        chain_hash = compute_chain_hash(event_hash, previous)
+        stored_prev = None if break_at == seq else previous
+        rows.append((seq, event_hash, stored_prev, chain_hash))
+        previous = chain_hash
+    return rows
 
 
 def _set_db(monkeypatch, session_or_factory):
@@ -201,32 +215,31 @@ class TestCheckHashChain:
         assert "database unavailable" in check.details
 
     def test_no_records(self, monkeypatch):
-        session = _FakeSession(rows=[(0, 0)])
+        session = _FakeSession(rows=[[], (0,)])
         _set_db(monkeypatch, session)
         check = _check_hash_chain_integrity("t1")
         assert check.status == "warn"
         assert "No hash chain" in check.details
 
     def test_intact(self, monkeypatch):
-        session = _FakeSession(rows=[(100, 0)])
+        session = _FakeSession(rows=[_linked_chain_rows(2)])
         _set_db(monkeypatch, session)
         check = _check_hash_chain_integrity("t1")
         assert check.status == "pass"
-        assert "100 entries" in check.details
+        assert "2 entries" in check.details
 
-    def test_intact_null_gaps(self, monkeypatch):
-        session = _FakeSession(rows=[(100, None)])
-        _set_db(monkeypatch, session)
-        check = _check_hash_chain_integrity("t1")
-        # `int(row[1]) if row[1] else 0` -> 0
-        assert check.status == "pass"
-
-    def test_has_gaps(self, monkeypatch):
-        session = _FakeSession(rows=[(100, 3)])
+    def test_missing_chain_hash_fails(self, monkeypatch):
+        session = _FakeSession(rows=[[(1, "event-1", None, None)]])
         _set_db(monkeypatch, session)
         check = _check_hash_chain_integrity("t1")
         assert check.status == "fail"
-        assert "3 gap(s)" in check.details
+
+    def test_has_gaps(self, monkeypatch):
+        session = _FakeSession(rows=[_linked_chain_rows(2, break_at=2)])
+        _set_db(monkeypatch, session)
+        check = _check_hash_chain_integrity("t1")
+        assert check.status == "fail"
+        assert "1 gap(s)" in check.details
 
     def test_sql_error(self, monkeypatch):
         session = _FakeSession(raises=[SQLAlchemyError("oops")])
@@ -249,18 +262,19 @@ class TestCheckHashChain:
         columns = _ddl_columns("V002__fsma_cte_persistence.sql", "fsma.hash_chain")
         assert {"sequence_num", "previous_chain_hash"} <= columns  # the DDL parse itself still works
 
-        session = _FakeSession(rows=[(1, 0)])
+        session = _FakeSession(rows=[_linked_chain_rows(1)])
         _set_db(monkeypatch, session)
         _check_hash_chain_integrity("t1")
         sql, params = session.calls[0]
 
         assert "FROM fsma.hash_chain WHERE tenant_id = :tid" in sql
+        assert "ORDER BY sequence_num ASC" in sql
+        assert "chain_hash" in sql
         assert params == {"tid": "t1"}
 
         # Keywords are upper-case in the statement, so every lower-case word
         # is an identifier. These are the ones that are not columns.
         not_columns = {
-            *("total", "gaps"),  # output aliases
             *("fsma", "hash_chain", "tid"),
         }
         referenced = set(re.findall(r"\b[a-z_]+\b", sql)) - not_columns
@@ -634,7 +648,7 @@ class TestReadinessEndpoint:
         calls = {"n": 0}
         sessions = [
             _CountedSession([(1,), ("streaming",)]),  # db connectivity
-            _CountedSession([(100, 0)]),  # hash chain
+            _CountedSession([_linked_chain_rows(1)]),  # hash chain
             _CountedSession([(5, "2026-04-18")]),  # export
             _CountedSession([(1500, 12, 30.0)]),  # data volume
             _CountedSession([(10, 9)]),  # supplier
@@ -720,7 +734,7 @@ class TestRecoverySimulationEndpoint:
     def test_successful_recovery(self, monkeypatch):
         sessions = [
             _CountedSession([(1500, 12, 30.0)]),  # data volume
-            _CountedSession([(100, 0)]),  # hash chain
+            _CountedSession([_linked_chain_rows(1)]),  # hash chain
             _kde_session(85.5),  # KDE
         ]
         it = iter(sessions)
@@ -744,7 +758,7 @@ class TestRecoverySimulationEndpoint:
     def test_chain_failure_blocks_rebuild(self, monkeypatch):
         sessions = [
             _CountedSession([(1000, 10, 5.0)]),  # data volume
-            _CountedSession([(50, 5)]),  # hash chain: gaps → fail
+            _CountedSession([_linked_chain_rows(2, break_at=2)]),  # hash chain: gap → fail
             _CountedSession([[], []]),  # KDE: tenant has no events
         ]
         it = iter(sessions)
@@ -763,7 +777,7 @@ class TestRecoverySimulationEndpoint:
     def test_kde_low_average(self, monkeypatch):
         sessions = [
             _CountedSession([(500, 5, 2.0)]),
-            _CountedSession([(50, 0)]),  # hash chain: pass
+            _CountedSession([_linked_chain_rows(1)]),  # hash chain: pass
             _kde_session(45.0),  # KDE: < 80 → warn
         ]
         it = iter(sessions)
@@ -785,7 +799,7 @@ class TestRecoverySimulationEndpoint:
             if calls["n"] == 1:
                 return _CountedSession([(1000, 5, 2.0)])
             if calls["n"] == 2:
-                return _CountedSession([(50, 0)])
+                return _CountedSession([_linked_chain_rows(1)])
 
             # Third call is the KDE query — raise on execute
             class _RaisingSession:
@@ -813,7 +827,7 @@ class TestRecoverySimulationEndpoint:
         calls = {"n": 0}
         sessions = [
             _CountedSession([(1000, 5, 2.0)]),  # volume
-            _CountedSession([(50, 0)]),  # chain
+            _CountedSession([_linked_chain_rows(1)]),  # chain
         ]
 
         def _db():
@@ -837,7 +851,7 @@ class TestRecoverySimulationEndpoint:
     def test_zero_events_flags_re_export_warn(self, monkeypatch):
         sessions = [
             _CountedSession([(0, 0, 0)]),  # zero events → warn
-            _CountedSession([(100, 0)]),
+            _CountedSession([_linked_chain_rows(1)]),
             _kde_session(90.0),
         ]
         it = iter(sessions)
@@ -854,7 +868,7 @@ class TestRecoverySimulationEndpoint:
         """Events whose type has no required-KDE checklist are named, never counted as covered."""
         sessions = [
             _CountedSession([(500, 5, 2.0)]),
-            _CountedSession([(50, 0)]),
+            _CountedSession([_linked_chain_rows(1)]),
             _CountedSession([[("growing", 7)], []]),  # KDE: only an unchecked type
         ]
         it = iter(sessions)
@@ -882,7 +896,7 @@ class TestRecoverySimulationEndpoint:
         kde_session = _FakeSession()
         sessions = [
             _CountedSession([(1500, 12, 30.0)]),
-            _CountedSession([(100, 0)]),
+            _CountedSession([_linked_chain_rows(1)]),
             kde_session,
         ]
         it = iter(sessions)

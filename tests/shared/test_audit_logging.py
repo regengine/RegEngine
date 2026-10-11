@@ -10,6 +10,7 @@ Tests cover:
 """
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -30,6 +31,7 @@ from shared.audit_logging import (
     AuditSeverity,
     # Storage
     AuditStorageBackend,
+    AuditStorageError,
     InMemoryAuditStorage,
     # Decorators
     audit_action,
@@ -952,6 +954,148 @@ class TestAuditDecorator:
         assert len(events) == 1
         assert events[0].outcome == "failure"
         assert events[0].severity == AuditSeverity.ERROR
+
+
+# =============================================================================
+# Test: Failed Audit Writes Surface As Errors
+# =============================================================================
+
+
+class _FalseReturningStorage(AuditStorageBackend):
+    """Backend that reports failure via a False return."""
+
+    async def store(self, event):
+        return False
+
+    async def query(self, **kwargs):
+        return []
+
+    async def get_by_id(self, event_id):
+        return None
+
+
+class _ExplodingStorage(AuditStorageBackend):
+    """Backend that reports failure via an exception."""
+
+    async def store(self, event):
+        raise ConnectionError("audit database unreachable")
+
+    async def query(self, **kwargs):
+        return []
+
+    async def get_by_id(self, event_id):
+        return None
+
+
+def _log_kwargs(actor):
+    return dict(
+        event_type=AuditEventType.DATA_DELETE,
+        category=AuditEventCategory.DATA_MODIFICATION,
+        severity=AuditSeverity.INFO,
+        actor=actor,
+        action="gdpr_erasure",
+        outcome="success",
+    )
+
+
+class TestAuditWriteFailures:
+    """A failed audit write must surface as an error, never silent success."""
+
+    @pytest.mark.asyncio
+    async def test_log_raises_and_logs_error_when_storage_returns_false(self, actor, caplog):
+        """Storage returning False must raise and log at error level."""
+        audit_logger = AuditLogger(
+            storage=_FalseReturningStorage(),
+            service_name="test-service",
+            environment="test",
+        )
+        with caplog.at_level(logging.ERROR, logger="shared.audit_logging.writer"):
+            with pytest.raises(AuditStorageError):
+                await audit_logger.log(**_log_kwargs(actor))
+        assert any(
+            record.levelno >= logging.ERROR and "AUDIT WRITE FAILED" in record.getMessage() for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_log_propagates_storage_exception(self, actor):
+        """A storage exception must reach the caller, not read as success."""
+        audit_logger = AuditLogger(
+            storage=_ExplodingStorage(),
+            service_name="test-service",
+            environment="test",
+        )
+        with pytest.raises(ConnectionError, match="audit database unreachable"):
+            await audit_logger.log(**_log_kwargs(actor))
+
+    @pytest.mark.asyncio
+    async def test_chain_storage_raises_when_chain_write_returns_none(self, actor):
+        """A swallowed chain write (None entry id) must raise, not return False."""
+        from shared.audit_logging.storage import PostgresHashChainAuditStorage
+
+        event = AuditEvent(
+            event_id="evt-chain-fail-1",
+            timestamp=datetime.now(timezone.utc),
+            event_type=AuditEventType.DATA_DELETE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            severity=AuditSeverity.INFO,
+            actor=AuditActor(
+                actor_id="11111111-1111-1111-1111-111111111111",
+                actor_type="user",
+                tenant_id="22222222-2222-2222-2222-222222222222",
+            ),
+            action="gdpr_erasure",
+            outcome="success",
+        )
+        session = MagicMock()
+        storage = PostgresHashChainAuditStorage(session_factory=lambda: session)
+        with patch(
+            "services.admin.app.audit.AuditLogger.log_event",
+            return_value=None,
+        ):
+            with pytest.raises(AuditStorageError):
+                await storage.store(event)
+        session.rollback.assert_called_once()
+        session.commit.assert_not_called()
+        session.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_decorator_raises_when_audit_write_fails_on_success(self, actor):
+        """Decorated success with a failed audit write must fail closed."""
+        AuditLogger.configure(storage=_FalseReturningStorage())
+
+        @audit_action(
+            event_type=AuditEventType.DATA_CREATE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            action="create_item",
+        )
+        async def create_item(data: dict, actor: AuditActor):
+            return {"id": "new-123"}
+
+        with pytest.raises(AuditStorageError):
+            await create_item({"name": "test"}, actor=actor)
+
+    @pytest.mark.asyncio
+    async def test_decorator_does_not_mask_function_error_with_audit_error(self, actor, caplog):
+        """When both fail, the function's own error propagates, not the audit one."""
+        AuditLogger.configure(storage=_FalseReturningStorage())
+
+        @audit_action(
+            event_type=AuditEventType.DATA_CREATE,
+            category=AuditEventCategory.DATA_MODIFICATION,
+            action="create_item",
+        )
+        async def failing_action(actor: AuditActor):
+            raise ValueError("Test error")
+
+        with caplog.at_level(logging.ERROR, logger="shared.audit_logging.writer"):
+            with pytest.raises(ValueError, match="Test error"):
+                await failing_action(actor=actor)
+        # The dropped audit failure must still be visible at error level,
+        # or a full revert of the fail-closed decorator stays green here.
+        assert any(
+            record.levelno >= logging.ERROR and "audit_action write failed" in record.getMessage()
+            for record in caplog.records
+        )
 
 
 # =============================================================================

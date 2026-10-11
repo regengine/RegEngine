@@ -9,14 +9,15 @@ from __future__ import annotations
 from typing import Iterable, Optional
 
 import feedparser
-import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_sync
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper
 
 logger = structlog.get_logger("ingestion.scraper.generic")
+
+FEED_MAX_BYTES = DEFAULT_MAX_RESPONSE_BYTES
 
 
 class GenericRSSScraper(StateRegistryScraper):
@@ -41,15 +42,41 @@ class GenericRSSScraper(StateRegistryScraper):
     def list_sources(self) -> Iterable[Source]:
         """Parse RSS feed and yield sources for each entry.
 
-        The feed is fetched through ``safe_httpx_get_sync`` (SSRF-checked,
-        IP-pinned, timed out) and only the response bytes are handed to
-        feedparser, so discovery never performs a raw HTTP fetch.
+        The feed bytes are downloaded through ``safe_httpx_get_sync`` (SSRF
+        validation on every hop plus a size cap) and only then handed to
+        feedparser, so feedparser never fetches a URL itself.
         """
         try:
             resp = safe_httpx_get_sync(
                 self.feed_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
+            )
+            resp.raise_for_status()
+            # feedparser resolves relative item links only when it knows the
+            # feed URL. The safe helper pins the transport IP, so resp.url
+            # carries the IP literal; the logical final-hop URL rides in
+            # extensions (falling back to the request URL when a stubbed
+            # response in tests does not carry it).
+            extensions = getattr(resp, "extensions", None) or {}
+            base_url = extensions.get("safe_final_url", self.feed_url)
+            feed = feedparser.parse(
+                resp.content,
+                response_headers={"content-location": base_url},
+            )
+        except Exception as e:
+            logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
+            return
+        for entry in feed.entries:
+            yield Source(
+                url=entry.link,
+                title=f"{self.title_prefix}: {entry.title}",
+                jurisdiction_code=self.jurisdiction,
+                metadata={
+                    "published": entry.get("published"),
+                    "summary": entry.get("summary"),
+                },
             )
             resp.raise_for_status()
             feed = feedparser.parse(resp.content)
@@ -90,6 +117,7 @@ class GenericRSSScraper(StateRegistryScraper):
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             return FetchedItem(
@@ -148,6 +176,7 @@ class GenericListScraper(StateRegistryScraper):
                 self.list_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.content, "html.parser")
@@ -183,6 +212,7 @@ class GenericListScraper(StateRegistryScraper):
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             return FetchedItem(

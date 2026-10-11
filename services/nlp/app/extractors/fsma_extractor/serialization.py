@@ -77,6 +77,12 @@ class GraphEventSerializationMixin:
                 "quantity": cte.kdes.quantity,
                 "unit_of_measure": cte.kdes.unit_of_measure,
                 "location_identifier": cte.kdes.location_identifier,
+                # GTIN and FTL scoping are computed by the extractor
+                # (#1104, #1116) so they must travel with the event;
+                # dropping them left downstream with no mark to route on.
+                "gtin": cte.kdes.gtin,
+                "is_ftl_covered": cte.kdes.is_ftl_covered,
+                "ftl_category": cte.kdes.ftl_category,
                 "tlc_source_gln": cte.kdes.tlc_source_gln,
                 "tlc_source_fda_reg": cte.kdes.tlc_source_fda_reg,
                 "ship_from_gln": cte.kdes.ship_from_gln,
@@ -138,7 +144,10 @@ class GraphEventSerializationMixin:
                 product = {
                     "text": cte.kdes.product_description,
                     "sku": self._extract_sku_fallback(result.raw_text or ""),
-                    "gtin": self._extract_gtin_from_tlc(cte.kdes.traceability_lot_code),
+                    # Prefer the separately stored GTIN (#1104); fall back
+                    # to the TLC prefix only when no GTIN was captured.
+                    "gtin": cte.kdes.gtin
+                    or self._extract_gtin_from_tlc(cte.kdes.traceability_lot_code),
                 }
 
             # Build locations
@@ -162,6 +171,7 @@ class GraphEventSerializationMixin:
 
             event = {
                 "tlc": cte.kdes.traceability_lot_code,
+                "tenant_id": result.tenant_id,
                 "cte_type": cte.type.value,
                 "date": cte.kdes.event_date,
                 "quantity": cte.kdes.quantity,

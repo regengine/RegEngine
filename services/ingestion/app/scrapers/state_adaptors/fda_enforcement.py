@@ -6,7 +6,11 @@ from urllib.parse import urljoin
 import defusedxml.ElementTree as ET
 import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import (
+    DOCUMENT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_sync,
+)
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper
@@ -123,12 +127,22 @@ class FDAEnforcementScraper(StateRegistryScraper):
                     return FetchedItem(source=source, content_bytes=content, content_type=content_type)
 
                 try:
+                    # Warning-letter PDFs are whole documents: they get the
+                    # document budget, not the 5 MiB page default.
                     pdf_resp = safe_httpx_get_sync(
-                        validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"}
+                        validated_pdf_url,
+                        timeout=45,
+                        headers={"User-Agent": "RegEngine/1.0"},
+                        max_bytes=DOCUMENT_MAX_RESPONSE_BYTES,
                     )
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"
+                except ResponseTooLargeError as pdf_err:
+                    # Log distinctly: an oversized PDF falling back to HTML
+                    # changes stored evidence and must be visible as such.
+                    logger.warning("fda_deep_fetch_pdf_too_large", url=pdf_url, error=str(pdf_err))
+                    # Fallback to original HTML content if PDF fetch fails
                 except Exception as pdf_err:
                     logger.warning("fda_deep_fetch_failed", error=str(pdf_err))
                     # Fallback to original HTML content if PDF fetch fails

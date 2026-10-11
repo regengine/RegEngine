@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Dict, List, Optional
 
 import regex as re
@@ -13,8 +14,14 @@ THRESHOLD_PATTERN = re.compile(
     re.I,
 )
 JURISDICTION_HINTS = re.compile(r"\b(United States|US|USA|European Union|EU|California|New York|San Francisco)\b")
+# The inner word run is bounded to {0,5} (at most a six-word name). An
+# unbounded ``*`` made failure backtracking superlinear: a long run of plain
+# words with no corporate suffix (matched case-insensitively, so ANY words
+# qualify) took seconds at a few thousand words and would stall the worker on
+# multi-MB documents. Six words covers real names ("Acme Fresh Produce
+# Distribution Company LLC"); longer runs still match on their trailing words.
 ORGANIZATION_PATTERN = re.compile(
-    r"\b([A-Z][\w&'\.]+(?:\s+[A-Z][\w&'\.]+)*)\s+(Inc\.?|LLC|Corp\.?|Co\.?|Company|Ltd\.?|Group|Holdings|Foods|Farms|Grocery)\b",
+    r"\b([A-Z][\w&'\.]+(?:\s+[A-Z][\w&'\.]+){0,5})\s+(Inc\.?|LLC|Corp\.?|Co\.?|Company|Ltd\.?|Group|Holdings|Foods|Farms|Grocery)\b",
     re.M | re.I,
 )
 
@@ -167,6 +174,8 @@ def infer_obligation_type(text: str) -> dict:
     5. Negated permissive ("may not") caught by phase 1.
     6. Fallback → MANDATORY (conservative default).
     """
+    if not isinstance(text, str):
+        raise TypeError(f"infer_obligation_type requires str, got {type(text).__name__}")
     text_lower = text.lower()
     tokens = _tokenise(text)
 
@@ -199,7 +208,7 @@ def infer_obligation_type(text: str) -> dict:
 
     # --- Phase 2: conditional hedge ------------------------------------------
     _MANDATORY_KW = ["shall", "must", "required"]
-    has_mandatory = any(kw in text_lower for kw in _MANDATORY_KW)
+    has_mandatory = any(kw in tokens for kw in _MANDATORY_KW)
     if has_mandatory and _CONDITIONAL_PATTERNS.search(text):
         logger.warning(
             "obligation_type CONDITIONAL inferred from hedge phrase",
@@ -221,7 +230,7 @@ def infer_obligation_type(text: str) -> dict:
     # "required"; an attributive "required" defers to phase 4 and is picked
     # up by phase 4b when no permissive modal governs the sentence.
     for kw in ("shall", "must"):
-        if kw in text_lower and not _has_negation_near(kw):
+        if kw in tokens and not _has_negation_near(kw):
             return {
                 "obligation": "MANDATORY",
                 "negation_detected": False,
@@ -237,7 +246,7 @@ def infer_obligation_type(text: str) -> dict:
     # --- Phase 4: positive permissive keywords --------------------------------
     _PERMISSIVE_KW = ["may", "can", "permitted", "allowed"]
     for kw in _PERMISSIVE_KW:
-        if kw in text_lower and not _has_negation_near(kw):
+        if kw in tokens and not _has_negation_near(kw):
             return {
                 "obligation": "PERMITTED",
                 "negation_detected": False,
@@ -248,7 +257,7 @@ def infer_obligation_type(text: str) -> dict:
     # The keyword is the only modality signal left, so the pre-#3009 reading
     # stands: sentences where "required" IS the operative word ("the required
     # records: lot code, quantity, and date") remain MANDATORY.
-    if "required" in text_lower and not _has_negation_near("required"):
+    if "required" in tokens and not _has_negation_near("required"):
         return {
             "obligation": "MANDATORY",
             "negation_detected": False,
@@ -257,7 +266,7 @@ def infer_obligation_type(text: str) -> dict:
 
     # --- Phase 5: negated permissive → PROHIBITED ----------------------------
     for kw in _PERMISSIVE_KW:
-        if kw in text_lower and _has_negation_near(kw):
+        if kw in tokens and _has_negation_near(kw):
             return {
                 "obligation": "PROHIBITED",
                 "negation_detected": True,
@@ -311,6 +320,12 @@ def extract_entities(text: str) -> List[Dict]:
         raw_unit = match.group("unit")
         normalized_unit = UNIT_NORMALIZATION.get(raw_unit.lower(), raw_unit.lower())
         val = float(match.group("value"))
+        if not math.isfinite(val):
+            # A digit run hundreds of digits long overflows to inf, which
+            # serializes as nonstandard JSON ("Infinity") and poisons numeric
+            # columns downstream. No real threshold looks like that, so drop
+            # the entity rather than propagate a non-finite value.
+            continue
         ents.append(
             {
                 "type": "THRESHOLD",
