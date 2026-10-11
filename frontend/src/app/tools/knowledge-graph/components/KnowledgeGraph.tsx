@@ -1,12 +1,8 @@
 'use client';
 
-import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Callout } from "@/components/ui/callout";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,11 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
-import { useAuth } from "@/lib/auth-context";
-import { useTenant } from "@/lib/tenant-context";
-import { getServiceURL } from "@/lib/api-config";
-import { AlertTriangle, GitBranch, Search } from "lucide-react";
+import { GitBranch, Search } from "lucide-react";
 
 // ── Utilities ──
 function mulberry32(seed: number) {
@@ -41,28 +33,6 @@ type GraphNode = { id: string; type: NodeType; label: string; meta?: Record<stri
 type GraphEdge = { id: string; type: EdgeType; from: string; to: string; meta?: Record<string, unknown> };
 type TraceMode = "forward" | "backward" | "bidirectional";
 type Viewport = { scale: number; panX: number; panY: number };
-type TraceabilityQueryEvidence = {
-    endpoint: string;
-    params?: Record<string, unknown>;
-    result_count?: number;
-    next_cursor?: string | null;
-};
-type TraceabilityQueryResponse = {
-    intent: string;
-    filters?: Record<string, unknown>;
-    answer: string;
-    results: Array<Record<string, unknown>>;
-    evidence: TraceabilityQueryEvidence[];
-    confidence: number;
-    warnings: string[];
-};
-type TraceabilityTableRow = {
-    tlc: string;
-    product: string;
-    facility: string;
-    date: string;
-    eventType: string;
-};
 
 // Node and edge hues are CATEGORICAL, so they come from the `--re-cat-*` set
 // (SPEC §1.6.6) rather than the status palette: a "Location" node is a kind of
@@ -144,67 +114,7 @@ function useAnimFrame(cb: () => void, on: boolean) {
     useEffect(() => { if (!on) return; const tick = () => { cb(); raf.current = requestAnimationFrame(tick); }; raf.current = requestAnimationFrame(tick); return () => { if (raf.current) cancelAnimationFrame(raf.current); }; }, [cb, on]);
 }
 
-function getConfidenceDescriptor(confidence: number): { label: string; tone: "neutral" | "warning" | "danger" } {
-    if (confidence >= 0.85) {
-        return { label: "high", tone: "neutral" };
-    }
-    if (confidence >= 0.7) {
-        return { label: "medium", tone: "warning" };
-    }
-    return { label: "low", tone: "danger" };
-}
-
-function toRow(candidate: Record<string, unknown>, fallbackTlc = ""): TraceabilityTableRow {
-    const str = (v: unknown): string => (typeof v === "string" ? v : "");
-    const facilityValue = candidate.facility;
-    const facilityName =
-        (typeof facilityValue === "string" ? facilityValue : str((facilityValue as Record<string, unknown> | undefined)?.name)) ||
-        str(candidate.facility_name) ||
-        str(candidate.location_description) ||
-        str(candidate.location_gln) ||
-        "";
-    return {
-        tlc: str(candidate.tlc) || str(candidate.lot_id) || str(candidate.traceability_lot_code) || fallbackTlc || "",
-        product: str(candidate.product_description) || str(candidate.product) || str(candidate.description) || "",
-        facility: facilityName,
-        date: str(candidate.event_date) || str(candidate.last_event_date) || "",
-        eventType: str(candidate.type) || str(candidate.event_type) || str(candidate.last_event_type) || "",
-    };
-}
-
-function collectQueryRows(intent: string, results: Array<Record<string, unknown>>): TraceabilityTableRow[] {
-    const rows: TraceabilityTableRow[] = [];
-
-    for (const item of results) {
-        if (intent === "trace_forward" || intent === "trace_backward") {
-            const nestedEvents = Array.isArray(item.events) ? (item.events as Record<string, unknown>[]) : [];
-            if (nestedEvents.length > 0) {
-                const facilities = Array.isArray(item.facilities) ? item.facilities : [];
-                const lotId = typeof item.lot_id === "string" ? item.lot_id : "";
-                for (const event of nestedEvents) {
-                    rows.push(toRow({ ...event, facility: facilities[0] as unknown, lot_id: item.lot_id }, lotId));
-                }
-                continue;
-            }
-        }
-
-        if (Array.isArray(item.events)) {
-            for (const nested of item.events as Record<string, unknown>[]) {
-                rows.push(toRow(nested));
-            }
-            continue;
-        }
-
-        rows.push(toRow(item));
-    }
-
-    return rows.slice(0, 200);
-}
-
 export function SupplyChainKnowledgeGraphBuilder() {
-    const { apiKey } = useAuth();
-    const { tenantId } = useTenant();
-    const { toast } = useToast();
     const [seed] = useState(204);
     const scenario = useMemo(() => seededScenario(seed), [seed]);
     const [nodes, setNodes] = useState<GraphNode[]>(scenario.nodes);
@@ -224,9 +134,6 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const trDepth = 3;
     const filterType: NodeType | "All" = "All";
     const [search, setSearch] = useState("");
-    const [traceabilityQuery, setTraceabilityQuery] = useState("");
-    const [queryLoading, setQueryLoading] = useState(false);
-    const [queryResponse, setQueryResponse] = useState<TraceabilityQueryResponse | null>(null);
 
     const selNodeObj = useMemo(() => nodes.find(n => n.id === selNode) || null, [nodes, selNode]);
     const trace = useMemo(() => selNode ? traceNodes(selNode, edges, trMode, trDepth) : null, [selNode, edges, trMode, trDepth]);
@@ -234,16 +141,6 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const visNodes = useMemo(() => { const q = search.trim().toLowerCase(); return nodes.filter(n => { if (filterType !== "All" && n.type !== filterType) return false; if (!q) return true; return n.label.toLowerCase().includes(q) || n.id.includes(q); }); }, [nodes, filterType, search]);
     const visIds = useMemo(() => new Set(visNodes.map(n => n.id)), [visNodes]);
     const visEdges = useMemo(() => edges.filter(e => visIds.has(e.from) && visIds.has(e.to)), [edges, visIds]);
-    const queryRows = useMemo(
-        () => collectQueryRows(queryResponse?.intent || "", queryResponse?.results || []),
-        [queryResponse],
-    );
-    const confidenceInfo = queryResponse
-        ? getConfidenceDescriptor(queryResponse.confidence)
-        : null;
-    const showWarningBanner = Boolean(
-        queryResponse && (queryResponse.confidence < 0.7 || queryResponse.warnings.length > 0)
-    );
 
     const [relaxing, setRelaxing] = useState(false);
     useAnimFrame(() => {
@@ -351,69 +248,6 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const onDown = (e: React.MouseEvent) => { const w = toW(e.clientX, e.clientY); const h = hitNode(w.x, w.y); if (h) { setSelEdge(null); setSelNode(h); setDragId(h); const n = nodes.find(x => x.id === h); if (n) setDragOff({ x: w.x - n.x, y: w.y - n.y }); } else { setSelNode(null); setSelEdge(null); setPanning(true); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onMove = (e: React.MouseEvent) => { if (dragId && dragOff) { const w = toW(e.clientX, e.clientY); setNodes(p => p.map(n => n.id === dragId ? { ...n, x: w.x - dragOff.x, y: w.y - dragOff.y } : n)); } else if (panning && lastPan) { setVp(v => ({ ...v, panX: v.panX + e.clientX - lastPan.x, panY: v.panY + e.clientY - lastPan.y })); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onUp = () => { setDragId(null); setDragOff(null); setPanning(false); setLastPan(null); };
-    const runTraceabilityQuery = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const rawQuery = traceabilityQuery.trim();
-        if (!rawQuery || queryLoading) return;
-
-        if (!apiKey) {
-            toast({
-                title: "Missing API key",
-                description: "Please sign in to run traceability queries.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        setQueryLoading(true);
-
-        try {
-            const response = await fetchWithCsrf(`${getServiceURL("nlp")}/api/v1/query/traceability`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-RegEngine-API-Key": apiKey,
-                    "X-Tenant-ID": tenantId,
-                },
-                body: JSON.stringify({
-                    query: rawQuery,
-                    limit: 50,
-                }),
-            });
-
-            let payload: TraceabilityQueryResponse | null = null;
-            try {
-                payload = await response.json() as TraceabilityQueryResponse;
-            } catch {
-                payload = null;
-            }
-
-            if (!response.ok) {
-                const detail = (payload as Record<string, unknown> | null)?.detail as string | undefined || `Request failed with status ${response.status}`;
-                throw new Error(detail);
-            }
-
-            setQueryResponse(payload as TraceabilityQueryResponse);
-        } catch (error) {
-            const message = error instanceof Error ? error.message : "Unknown query error";
-            toast({
-                title: "Traceability query failed",
-                description: message,
-                variant: "destructive",
-            });
-        } finally {
-            setQueryLoading(false);
-        }
-    };
-
-    const queryColumns: DataTableColumn<TraceabilityTableRow>[] = [
-        { key: "tlc", header: "TLC", mono: true, cell: (row) => row.tlc || "—" },
-        { key: "product", header: "Product", cell: (row) => row.product || "—" },
-        { key: "facility", header: "Facility", cell: (row) => row.facility || "—" },
-        { key: "date", header: "Date", mono: true, cell: (row) => row.date || "—" },
-        { key: "eventType", header: "Event Type", cell: (row) => row.eventType || "—" },
-    ];
-
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -432,90 +266,6 @@ export function SupplyChainKnowledgeGraphBuilder() {
                     </Button>
                 </div>
             </div>
-
-            <form className="rounded-md border border-re-border bg-re-surface-card p-4" onSubmit={runTraceabilityQuery}>
-                <div className="flex flex-col gap-2 md:flex-row">
-                    <label htmlFor="kg-traceability-query" className="sr-only">
-                        Ask your traceability data
-                    </label>
-                    <Input
-                        id="kg-traceability-query"
-                        placeholder="Ask your traceability data… (e.g. Where did lot ABC-2025-001 come from?)"
-                        value={traceabilityQuery}
-                        onChange={(e) => setTraceabilityQuery(e.target.value)}
-                    />
-                    <Button
-                        type="submit"
-                        loading={queryLoading}
-                        disabled={queryLoading || !traceabilityQuery.trim()}
-                    >
-                        {queryLoading ? "Querying" : "Ask"}
-                    </Button>
-                </div>
-                <p className="mt-2 text-small text-re-text-tertiary">
-                    Try: “Where did lot ABC-2025-001 come from?” or “Show lettuce events from last 30 days”.
-                </p>
-            </form>
-
-            {queryResponse && (
-                <div className="space-y-4">
-                    <Card>
-                        <CardContent className="p-4">
-                            <div className="mb-1 flex flex-wrap items-center gap-2">
-                                <div className="text-subheading text-re-text-primary">Answer</div>
-                                {confidenceInfo && (
-                                    <Badge tone={confidenceInfo.tone}>
-                                        Confidence {confidenceInfo.label} ({Math.round(queryResponse.confidence * 100)}%)
-                                    </Badge>
-                                )}
-                            </div>
-                            <p className="text-ui text-re-text-secondary">{queryResponse.answer}</p>
-                        </CardContent>
-                    </Card>
-
-                    {showWarningBanner && (
-                        <Callout tone="warning" role="status" title="Query warnings" icon={AlertTriangle}>
-                            {queryResponse.warnings.length > 0
-                                ? queryResponse.warnings.join(" ")
-                                : "Interpretation confidence is below 70%; verify filters before acting."}
-                        </Callout>
-                    )}
-
-                    <div>
-                        <div className="mb-2 text-label text-re-text-muted">Results ({queryRows.length})</div>
-                        <DataTable
-                            caption={`Traceability query results (${queryRows.length})`}
-                            columns={queryColumns}
-                            data={queryRows}
-                            rowKey={(row, idx) => `${row.tlc}-${row.eventType}-${row.date}-${idx}`}
-                            status={queryRows.length === 0 ? "empty" : "idle"}
-                            empty={{ title: "No rows returned for this query.", size: "sm" }}
-                        />
-                    </div>
-
-                    <details className="rounded-md border border-re-border bg-re-surface-card p-4">
-                        <summary className="cursor-pointer text-ui font-medium text-re-text-primary">
-                            Evidence ({queryResponse.evidence?.length || 0})
-                        </summary>
-                        <div className="mt-3 space-y-2">
-                            {(queryResponse.evidence || []).map((item, idx) => (
-                                <div key={`${item.endpoint}-${idx}`} className="rounded-md border border-re-border-subtle p-3 text-small text-re-text-secondary">
-                                    <div><span className="font-medium text-re-text-primary">Endpoint:</span> <span className="font-mono text-[0.8125rem]">{item.endpoint}</span></div>
-                                    <div><span className="font-medium text-re-text-primary">Result count:</span> <span className="tabular-nums">{item.result_count ?? 0}</span></div>
-                                    {item.next_cursor ? (
-                                        <div><span className="font-medium text-re-text-primary">Next cursor:</span> <span className="font-mono text-[0.8125rem] break-all">{item.next_cursor}</span></div>
-                                    ) : null}
-                                    {item.params ? (
-                                        <pre className="mt-2 overflow-auto rounded-md bg-re-surface-inset p-2 font-mono text-[0.8125rem] text-re-text-secondary">
-                                            {JSON.stringify(item.params, null, 2)}
-                                        </pre>
-                                    ) : null}
-                                </div>
-                            ))}
-                        </div>
-                    </details>
-                </div>
-            )}
 
             <div className="flex flex-wrap items-center gap-2">
                 <div className="w-full sm:w-60">

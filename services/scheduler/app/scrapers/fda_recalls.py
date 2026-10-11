@@ -11,7 +11,6 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-import httpx
 import structlog
 from shared.safe_http import PinnedHTTPSession
 
@@ -74,7 +73,13 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as e:
+        # QA5: broad catch is intentional. The scraper contract is to always
+        # return a ScrapeResult, never raise: the scheduler records a failure
+        # result with an error message, while a raised error skips that
+        # bookkeeping. This previously let non-HTTP faults (for example an
+        # AttributeError when openFDA returns a JSON list instead of a dict)
+        # escape as exceptions.
+        except Exception as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_failed",
@@ -242,8 +247,19 @@ class FDARecallsScraper(BaseScraper):
             response.raise_for_status()
             data = response.json()
 
+            # QA5: per-row guard matches _fetch_recalls. One malformed row
+            # used to fail the whole classification query (success=False,
+            # zero items); now it is skipped with a log trace.
             for result in data.get("results", []):
-                item = self._parse_recall(result)
+                try:
+                    item = self._parse_recall(result)
+                except (ValueError, TypeError, KeyError, AttributeError) as e:
+                    logger.warning(
+                        "recall_parse_error",
+                        error=str(e),
+                        recall_number=result.get("recall_number", "unknown") if isinstance(result, dict) else "unknown",
+                    )
+                    continue
                 if item:
                     items.append(item)
 
@@ -253,7 +269,8 @@ class FDARecallsScraper(BaseScraper):
                 count=len(items),
             )
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as e:
+        # QA5: broad catch is intentional, same contract as scrape().
+        except Exception as e:
             error_message = str(e)
             logger.error(
                 "fda_recalls_by_class_failed",

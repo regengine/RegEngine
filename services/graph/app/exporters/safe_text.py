@@ -76,15 +76,50 @@ def csv_safe(value: Any) -> str:
 
 # urllib.parse.quote will percent-encode anything outside ``safe``. Newlines,
 # CR, and ``"`` are stripped explicitly first as defense-in-depth even though
-# Starlette/h11 reject CR/LF in headers.
-_FILENAME_STRIP = ("\r", "\n", "\x00", '"', "\\")
+# Starlette/h11 reject CR/LF in headers. Backslash is a path separator, so
+# it is split out below rather than deleted (deleting it glues ``..\\..\\x``
+# into ``....x`` before the directory parts can be dropped).
+_FILENAME_STRIP = ("\r", "\n", "\x00", '"')
+# ASCII slash, backslash, and the Unicode slashes that survive a non-ASCII
+# filename: division slash, fraction slash, fullwidth solidus, big solidus.
+_PATH_SEPARATORS = ("/", "\\", "\u2215", "\u2044", "\uff0f", "\u29f8")
+_DECODE_ROUNDS = 3
+
+
+def _strip_filename_controls(value: str) -> str:
+    for ch in _FILENAME_STRIP:
+        value = value.replace(ch, "")
+    return "".join(ch for ch in value if ord(ch) >= 0x20 and ord(ch) != 0x7F)
+
+
+def _download_basename(name: str) -> str:
+    """Last path segment of a download name, after percent-decoding.
+
+    Decoding runs a few times so a value like ``%252e%252e%252f`` cannot
+    hide a parent directory. ``.`` and ``..`` are dropped. The caller
+    still percent-encodes the result for the header.
+    """
+    text = _strip_filename_controls(str(name))
+    for _round in range(_DECODE_ROUNDS):
+        decoded = urllib.parse.unquote(text)
+        if decoded == text:
+            break
+        text = _strip_filename_controls(decoded)
+    for sep in _PATH_SEPARATORS:
+        if sep in text:
+            text = text.rsplit(sep, 1)[-1]
+    text = _strip_filename_controls(text)
+    if text in ("", ".", ".."):
+        return ""
+    return text
 
 
 def header_filename(name: str, max_len: int = 200) -> str:
     """Encode a filename for use in a ``Content-Disposition`` header.
 
-    Strips control chars, restricts to a safe ASCII charset via percent
-    encoding, and truncates to ``max_len``. Suitable for use as::
+    Reduces the name to its last path segment, strips control chars,
+    restricts to a safe ASCII charset via percent encoding, and truncates
+    to ``max_len``. Suitable for use as::
 
         f'attachment; filename={header_filename(name)}'
 
@@ -92,14 +127,11 @@ def header_filename(name: str, max_len: int = 200) -> str:
     """
     if not name:
         return "download"
-    s = str(name)
-    for ch in _FILENAME_STRIP:
-        s = s.replace(ch, "")
-    # Strip any remaining control bytes (0x00-0x1f, 0x7f).
-    s = "".join(c for c in s if 0x20 <= ord(c) < 0x7F)
-    if not s:
+    segment = _download_basename(name)
+    segment = "".join(ch for ch in segment if ord(ch) < 0x7F)
+    if not segment:
         return "download"
-    encoded = urllib.parse.quote(s, safe="._-")
+    encoded = urllib.parse.quote(segment, safe="._-")
     return encoded[:max_len] or "download"
 
 
@@ -109,14 +141,16 @@ def rfc5987_filename(name: str) -> str:
     Use as::
 
         f"attachment; filename*=UTF-8''{rfc5987_filename(name)}"
+
+    The value is the last path segment, so a decoded name cannot walk
+    out of a directory.
     """
     if not name:
         return ""
-    s = str(name)
-    for ch in _FILENAME_STRIP:
-        s = s.replace(ch, "")
-    s = "".join(c for c in s if ord(c) >= 0x20 and ord(c) != 0x7F)
-    return urllib.parse.quote(s.encode("utf-8"), safe="")
+    segment = _download_basename(name)
+    if not segment:
+        return ""
+    return urllib.parse.quote(segment.encode("utf-8"), safe="")
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,11 @@ from urllib.parse import urlencode
 
 import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import (
+    DOCUMENT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_sync,
+)
 from shared.url_validation import validate_url
 
 from ...config import get_settings
@@ -37,9 +41,11 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
 
         logger.info("google_discovery_started", query=query)
 
+        # Collect page by page so a late-page failure keeps the healthy
+        # results from earlier pages instead of discarding everything.
+        results = []
         try:
             # Fetch up to 20 results (2 pages)
-            results = []
             for start_index in [1, 11]:
                 params = {"key": self.api_key, "cx": self.cx, "q": query, "fileType": "pdf", "start": start_index}
 
@@ -55,42 +61,47 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                 else:
                     break
 
-            sources = []
-            for item in results:
-                url = item.get("link")
-                title = item.get("title")
-                snippet = item.get("snippet")
-
-                if not url:
-                    continue
-
-                # Determine jurisdiction from domain (simple heuristic)
-                jurisdiction = "US"
-                if ".ny.gov" in url:
-                    jurisdiction = "US-NY"
-                elif ".ca.gov" in url:
-                    jurisdiction = "US-CA"
-                elif ".tx.gov" in url:
-                    jurisdiction = "US-TX"
-
-                sources.append(
-                    Source(
-                        url=url,
-                        title=title,
-                        jurisdiction_code=jurisdiction,
-                        metadata={
-                            "discovery_snippet": snippet,
-                            "discovery_date": datetime.now(timezone.utc).isoformat(),
-                        },
-                    )
-                )
-
-            logger.info("google_discovery_complete", found=len(sources))
-            return sources
-
         except Exception as e:
             logger.error("google_discovery_failed", error=str(e))
-            return []
+
+        sources = []
+        for item in results:
+            url = item.get("link")
+            title = item.get("title")
+            snippet = item.get("snippet")
+
+            if not url:
+                continue
+
+            try:
+                url = validate_url(url)
+            except SSRFError as e:
+                logger.debug("ssrf_validation_failed_google_discovery", url=item.get("link"), error=str(e))
+                continue
+
+            # Determine jurisdiction from domain (simple heuristic)
+            jurisdiction = "US"
+            if ".ny.gov" in url:
+                jurisdiction = "US-NY"
+            elif ".ca.gov" in url:
+                jurisdiction = "US-CA"
+            elif ".tx.gov" in url:
+                jurisdiction = "US-TX"
+
+            sources.append(
+                Source(
+                    url=url,
+                    title=title,
+                    jurisdiction_code=jurisdiction,
+                    metadata={
+                        "discovery_snippet": snippet,
+                        "discovery_date": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+            )
+
+        logger.info("google_discovery_complete", found=len(sources))
+        return sources
 
     def fetch(self, source: Source) -> FetchedItem:
         """
@@ -98,11 +109,22 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         """
         try:
             # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
-            resp = safe_httpx_get_sync(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            # Discovered targets are whole documents (usually PDFs), so they
+            # get the document budget, not the 5 MiB page default.
+            resp = safe_httpx_get_sync(
+                source.url,
+                timeout=30,
+                headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=DOCUMENT_MAX_RESPONSE_BYTES,
+            )
             resp.raise_for_status()
 
             content_type = resp.headers.get("Content-Type", "application/pdf")
             return FetchedItem(source=source, content_bytes=resp.content, content_type=content_type)
+        except ResponseTooLargeError as e:
+            logger.error("google_fetch_too_large", url=source.url, error=str(e))
+            # Return empty item on failure
+            return FetchedItem(source=source, content_bytes=b"", content_type=None)
         except Exception as e:
             logger.error("google_fetch_failed", url=source.url, error=str(e))
             # Return empty item on failure

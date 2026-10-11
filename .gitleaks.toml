@@ -58,7 +58,6 @@ paths = [
   '''db_test\.py$''',
   '''diag_db\.py$''',
   '''verify_phi\.py$''',
-  '''fix_password\.sql$''',
   '''login_resp\.json$''',
   '''frontend_logs\.txt$''',
   '''ingest_logs.*\.txt$''',
@@ -67,17 +66,32 @@ paths = [
   '''AGENTS\.md$''',
   '''\.github/copilot-instructions\.md$''',
 
-  # Issue #3085: Test files, scripts, and documentation contain synthetic
-  # test fixtures. All use non-production API keys, internal secrets, and
-  # JWT tokens for local/CI testing. Real credentials are environment
-  # variables, not hardcoded.
+  # Issue #3085: Test files contain synthetic fixtures. All use
+  # non-production API keys, internal secrets, and JWT tokens for local/CI
+  # testing. Real credentials are environment variables, not hardcoded.
   '''/tests/''',
   '''/test_''',
   '''__tests__/''',
   '''\.test\.ts$''',
   '''\.test\.py$''',
-  '''^docs/''',
-  '''^scripts/''',
+
+  # Issue #3085 also added '''^docs/''' and '''^scripts/''' here. Both are
+  # removed again, because they are the blanket directory ignores #1161
+  # deleted for the reason stated at the top of this file -- and both
+  # directories hold exactly the content that reason is about.
+  # security.yml's own header says it: "Scanning docs is also correct on its
+  # own merits -- secrets get pasted into markdown runbooks, and gitleaks /
+  # detect-secrets are exactly the gates that catch it." scripts/ is 113
+  # files of operational tooling (backup_postgres.sh,
+  # apply_runtime_role_cutover.py, audit_api_key_scopes.py), not fixtures.
+  # Measured with gitleaks v8.30.0 on main @ 4eb1006b: a random AWS secret
+  # key pasted into a docs runbook and a random key in this repository's own
+  # rge_<id>.<secret> format pasted into a script were detected 0 of 3 times
+  # with these two lines present and 3 of 3 times without them. Of the 6
+  # historical findings they were masking, 5 are reviewed and pinned by
+  # fingerprint in .gitleaksignore; the 6th (an unverified admin credential in
+  # scripts/stress_test.py) is deliberately left unpinned there, so a new
+  # secret in either directory now fails the gate and that one stays visible.
   '''/app/docs/''',
   '''/app/developer''',
   '''ONBOARDING_GUIDE\.md$''',

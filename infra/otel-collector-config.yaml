@@ -23,9 +23,21 @@ processors:
 
 exporters:
   otlp/jaeger:
-    endpoint: jaeger:4317
+    # Endpoint and TLS mode come from the environment so production can
+    # point at a TLS Jaeger without editing this file. The two defaults
+    # must stay consistent with each other: the default endpoint is the
+    # plaintext Jaeger all-in-one (no TLS listener), so the default TLS
+    # mode is off to match. A production deploy must set BOTH knobs
+    # together: JAEGER_OTLP_ENDPOINT to a TLS address and
+    # JAEGER_OTLP_INSECURE=false. Setting only the endpoint aims
+    # plaintext export at a TLS port and the export fails.
+    endpoint: ${env:JAEGER_OTLP_ENDPOINT:-jaeger:4317}
     tls:
-      insecure: true
+      insecure: ${env:JAEGER_OTLP_INSECURE:-true}
+      # Optional: verify a private-CA Jaeger backend against a custom CA
+      # bundle instead of the host root store. Uncomment and set
+      # JAEGER_OTLP_CA_FILE when the backend presents a private CA cert.
+      # ca_file: ${env:JAEGER_OTLP_CA_FILE}
   prometheus:
     endpoint: 0.0.0.0:8889
   debug:

@@ -208,6 +208,9 @@ def exchange_for_session(db, token_row: Dict[str, Any]) -> Dict[str, Any]:
         _deny(db, token_row, "already_exchanged", TOKEN_NOT_USABLE)
     raw_session = secrets.token_urlsafe(32)
     session_expires = _now() + timedelta(minutes=SESSION_TTL_MINUTES)
+    # The count guard makes the single-use claim atomic: two requests that
+    # both read exchange_count = 0 race in the UPDATE itself, and only one
+    # row matches. A zero rowcount below means the other request won.
     result = db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
         text(

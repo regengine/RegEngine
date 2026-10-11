@@ -233,28 +233,8 @@ async def create_link(
             {"allowed": json.dumps(allowed), "case_id": case_id, "tenant_id": tid},
         )
 
-    # Reissue semantics: revoke any live token first.
-    revoked = tokens.revoke_tokens_for_case(
-        db,
-        tenant_id=tid,
-        case_id=case_id,
-        actor=str(principal.principal_id if hasattr(principal, "principal_id") else "buyer"),
-    )
-    minted = tokens.issue_token(
-        db,
-        tenant_id=tid,
-        case_id=case_id,
-        supplier_email=request.supplier_email,
-        created_by=str(getattr(principal, "principal_id", None) or "buyer"),
-        expires_hours=request.expires_hours,
-        superseded_token_id=revoked[0] if revoked else None,
-    )
-    # Token rides in the URL FRAGMENT: browsers never send fragments to the
-    # server, so the raw token cannot land in access logs anywhere. The URL
-    # shape is shared with the outbox drainer, which re-mints and emails a
-    # fresh link for this entry.
-    correction_url = delivery.correction_url(minted["token"])
-
+    # Status gate runs before any token side effect: a disallowed status
+    # must not revoke live tokens or mint a fresh one on its way to 409.
     if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
         transition(
             db,
@@ -276,6 +256,28 @@ async def create_link(
         pass  # reissue while already awaiting supplier
     else:
         raise HTTPException(status_code=409, detail=f"Case status '{case['status']}' does not allow issuing a link")
+
+    # Reissue semantics: revoke any live token first.
+    revoked = tokens.revoke_tokens_for_case(
+        db,
+        tenant_id=tid,
+        case_id=case_id,
+        actor=str(principal.principal_id if hasattr(principal, "principal_id") else "buyer"),
+    )
+    minted = tokens.issue_token(
+        db,
+        tenant_id=tid,
+        case_id=case_id,
+        supplier_email=request.supplier_email,
+        created_by=str(getattr(principal, "principal_id", None) or "buyer"),
+        expires_hours=request.expires_hours,
+        superseded_token_id=revoked[0] if revoked else None,
+    )
+    # Token rides in the URL FRAGMENT: browsers never send fragments to the
+    # server, so the raw token cannot land in access logs anywhere. The URL
+    # shape is shared with the outbox drainer, which re-mints and emails a
+    # fresh link for this entry.
+    correction_url = delivery.correction_url(minted["token"])
 
     outbox.enqueue_preview(
         db,

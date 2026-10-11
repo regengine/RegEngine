@@ -232,7 +232,10 @@ def _install_httpx_stub(
                 self.request = request
                 self.response = response
 
-    monkeypatch.setattr(mod, "httpx", _HttpxStub)
+    # The module no longer keeps an ``httpx`` attribute (all outbound HTTP
+    # goes through ``safe_httpx_get_sync``); keep this patch best-effort so
+    # older revisions still get the spy.
+    monkeypatch.setattr(mod, "httpx", _HttpxStub, raising=False)
 
     # After RE-SEC-INGEST-003 migration, scraper routes via safe_httpx_get_sync.
     def _safe_get(url, *, timeout=None, headers=None):
@@ -371,7 +374,8 @@ class TestFetchDocumentErrors:
             def get(url, timeout=None):
                 return resp
 
-        monkeypatch.setattr(mod, "httpx", _HttpxStub)
+        # Best-effort: the module no longer keeps an ``httpx`` attribute.
+        monkeypatch.setattr(mod, "httpx", _HttpxStub, raising=False)
         monkeypatch.setattr(mod, "validate_url", lambda u, **_: u)
 
         # Swap the response's raise_for_status to use the stub's

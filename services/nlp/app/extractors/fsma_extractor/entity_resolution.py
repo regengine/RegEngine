@@ -259,8 +259,15 @@ class EntityResolutionMixin:
 
         return kde
 
-    def _normalize_date(self, date_str: str) -> str:
-        """Normalize date string to ISO format."""
+    def _normalize_date(self, date_str: str) -> Optional[str]:
+        """Normalize date string to ISO format.
+
+        Returns ``None`` when no known format parses. Callers store that
+        directly on the KDE, so an unparseable date reads as a missing
+        event date and the KDE-minimum gate routes the CTE to human
+        review instead of auto-approving a malformed value into the
+        graph.
+        """
         # Try common formats
         formats = [
             "%m/%d/%Y",
@@ -279,7 +286,7 @@ class EntityResolutionMixin:
             except ValueError:
                 continue
 
-        return date_str  # Return as-is if no format matches
+        return None  # Unparseable: surface as missing, never as a date
 
     def _extract_sku_fallback(self, text: str) -> Optional[str]:
         """
