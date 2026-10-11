@@ -312,7 +312,10 @@ async def refresh_session(
         .where(
             MembershipModel.user_id == user.id,
             MembershipModel.is_active == True,  # noqa: E712
-            TenantModel.status == "active",
+            # Must match the session gate in dependencies.get_current_user,
+            # which admits "active" and "trial" tenants. Filtering to
+            # "active" here locked trial tenants out at first refresh.
+            TenantModel.status.in_(["active", "trial"]),
         )
     )
     # Membership discovery occurs before a tenant can be selected.  Arm only
