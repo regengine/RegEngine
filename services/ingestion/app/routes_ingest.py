@@ -634,6 +634,8 @@ async def ingest_direct(
 
     try:
         content = payload.text.encode("utf-8") if payload.text else b""
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty text provided")
 
         event = _process_and_emit(
             raw_bytes=content,
@@ -657,6 +659,8 @@ async def ingest_direct(
         REQUEST_COUNTER.labels(endpoint=endpoint, status="200").inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         return event
+    except HTTPException:
+        raise
     except Exception as exc:  # Catch-all: route must return HTTP response
         logger.exception("ingest_direct_failed", job_id=job_id, error=str(exc))
         if db_manager:
@@ -664,9 +668,6 @@ async def ingest_direct(
             job.error_message = str(exc)
             job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
-        logger.exception("ingestion_error", error=str(exc))
-        if isinstance(exc, HTTPException):
-            raise
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if db_manager:
@@ -721,7 +722,10 @@ async def ingest_file(
 
         event = _process_and_emit(
             raw_bytes=content,
-            url_str=f"http://upload.internal/{safe_filename}",
+            # Opaque provenance ref, never fetched: NormalizedDocument only
+            # SSRF-screens http(s) values, and an http(s) URL here would
+            # fail its DNS check (upload.internal does not resolve).
+            url_str=f"upload://file/{safe_filename}",
             source_system=source_system,
             tenant_id=tenant_id,
             content_type=content_type,

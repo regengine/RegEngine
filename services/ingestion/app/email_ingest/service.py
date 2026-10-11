@@ -339,7 +339,9 @@ async def _process_one_attachment(tenant_id: str, attachment: PostmarkAttachment
     """Apply the size/type/base64 checks from the design's §6 before reuse."""
     safe_name = sanitize_upload_filename(attachment.Name, fallback="attachment.csv")
 
-    content_type = (attachment.ContentType or "").strip().lower()
+    # MIME parameters (e.g. "; charset=utf-8") describe the payload, they do
+    # not change its type -- compare the bare media type only (RFC 2045 5.1).
+    content_type = (attachment.ContentType or "").split(";")[0].strip().lower()
     is_csv_extension = Path(safe_name).suffix.lower() == ".csv"
     is_csv_content_type = content_type in _ALLOWED_ATTACHMENT_CONTENT_TYPES
     if not is_csv_extension and not is_csv_content_type:
@@ -350,7 +352,13 @@ async def _process_one_attachment(tenant_id: str, attachment: PostmarkAttachment
         )
 
     try:
-        raw = base64.b64decode(attachment.Content, validate=True)
+        content = attachment.Content
+        if isinstance(content, str):
+            # RFC 2045 encoders wrap base64 at 76 columns and forwarders may
+            # preserve those line breaks; whitespace is never significant in
+            # base64, so strip it before validating.
+            content = "".join(content.split())
+        raw = base64.b64decode(content, validate=True)
     except (binascii.Error, ValueError):
         logger.warning("inbound_email_attachment_invalid_base64 name=%s", safe_name)
         return AttachmentResult(name=safe_name, status="rejected", reason="invalid_base64_content")

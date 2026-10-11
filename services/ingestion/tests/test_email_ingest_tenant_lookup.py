@@ -49,6 +49,13 @@ class TestLookupTenantByInboundAddress:
         _, params = session.execute.call_args[0]
         assert params["sender"] == ""
 
+    def test_empty_address_returns_none_without_crashing(self):
+        # An empty recipient address must fail closed (no tenant) rather
+        # than raising inside the lookup.
+        session = _session_returning(None)
+        assert lookup_tenant_by_inbound_address(session, "", "someone@example.com") is None
+        session.commit.assert_called_once()
+
     def test_returns_none_when_no_row(self):
         session = _session_returning(None)
         assert lookup_tenant_by_inbound_address(session, "nobody@example.com", "someone@example.com") is None

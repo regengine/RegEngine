@@ -59,6 +59,18 @@ def _require_uuid_tenant(tenant_id: str) -> str:
         )
 
 
+def _decode_manifest_bytes(raw_bytes: bytes) -> str:
+    # utf-8-sig strips a byte-order mark when present and behaves as plain
+    # UTF-8 otherwise. Spreadsheet tools (Excel, Sheets exports) commonly
+    # prepend a BOM; without this the mark fuses with the first header name
+    # and that column silently stops matching, failing the whole manifest.
+    # Hashing and byte preservation still use the untouched raw_bytes.
+    try:
+        return raw_bytes.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Manifest must be UTF-8 encoded CSV")
+
+
 def ingest_manifest(
     db,
     *,
@@ -73,10 +85,7 @@ def ingest_manifest(
     set_tenant_guc(db, tenant_id)
 
     sha256 = hashlib.sha256(raw_bytes).hexdigest()
-    try:
-        text_content = raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="Manifest must be UTF-8 encoded CSV")
+    text_content = _decode_manifest_bytes(raw_bytes)
 
     reader = csv.DictReader(io.StringIO(text_content))
     raw_rows = list(reader)

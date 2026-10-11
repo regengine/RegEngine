@@ -231,6 +231,21 @@ def test_obligation_shared_catalog_edges_anchored_on_tenant_scoped_cte():
     ), "CTEEvent must be created with tenant_id so downstream SATISFIES traversals can filter by tenant."
 
 
+def test_cte_event_query_marks_merged_obligation_as_catalog_on_create():
+    """CTE_EVENT_QUERY must stamp merged Obligation rows ``catalog = true``.
+
+    Decision 3 quarantines null-tenant Obligation rows: linker readers only
+    share rows explicitly marked as catalog, so the sync must mark the
+    catalog rows it MERGEs. The marker must be anchored to ON CREATE so a
+    MERGE that matches a tenant-private row with the same obligation_id
+    can never promote it to the shared catalog.
+    """
+    assert re.search(
+        r"MERGE\s*\(\s*obligation\s*:\s*Obligation\b[^)]*\)\s*ON CREATE SET\s+obligation\.catalog\s*=\s*true",
+        CTE_EVENT_QUERY,
+    ), "Obligation MERGE must ON CREATE SET obligation.catalog = true so readers share it."
+
+
 def test_every_query_with_satisfies_edge_has_tenant_scoped_cte():
     """CI-style guard for #1395: if any module-level query constant in this
     file uses the SATISFIES edge, the query MUST also carry a ``tenant_id``

@@ -295,9 +295,17 @@ class TestCheckRedis:
         assert len(fake.zadd_calls) == 1
         key, mapping = fake.zadd_calls[0]
         assert key == "sandbox:rate:2.2.2.2"
-        assert "1000.0" in mapping
+        # The member carries the timestamp plus a unique suffix so two
+        # requests in the same instant cannot collapse into one member.
+        assert len(mapping) == 1
+        member = list(mapping.keys())[0]
+        assert member.startswith("1000.0")
+        assert _check_redis("2.2.2.2", now=1000.0) == 0
+        assert len(fake.zadd_calls) == 2
+        members = [list(m.keys())[0] for _, m in fake.zadd_calls]
+        assert members[0] != members[1]
         # Expiry set to window + 1
-        assert fake.expire_calls == [("sandbox:rate:2.2.2.2", _SANDBOX_WINDOW + 1)]
+        assert fake.expire_calls == [("sandbox:rate:2.2.2.2", _SANDBOX_WINDOW + 1)] * 2
 
     def test_pipeline_prunes_stale_entries_before_count(self, monkeypatch):
         fake = _FakeRedis(zcard_value=0)

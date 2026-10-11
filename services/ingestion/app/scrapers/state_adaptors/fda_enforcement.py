@@ -6,7 +6,11 @@ from urllib.parse import urljoin
 import defusedxml.ElementTree as ET
 import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import (
+    DOCUMENT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_sync,
+)
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper
@@ -52,8 +56,16 @@ class FDAEnforcementScraper(StateRegistryScraper):
                         # Skip this URL, continue to next
                         continue
 
-                    title_text = title.text.strip() if title is not None else "Unknown Warning Letter"
-                    date_text = pub_date.text.strip() if pub_date is not None else None
+                    title_text = (
+                        title.text.strip()
+                        if title is not None and title.text
+                        else "Unknown Warning Letter"
+                    )
+                    date_text = (
+                        pub_date.text.strip()
+                        if pub_date is not None and pub_date.text
+                        else None
+                    )
 
                     yield Source(
                         url=validated_url,
@@ -98,8 +110,8 @@ class FDAEnforcementScraper(StateRegistryScraper):
             content_type = resp.headers.get("Content-Type", "text/html; charset=utf-8")
 
             # 2. Check for PDF Link (Deep Fetch)
-            # Regex for <a href="...pdf">
-            pdf_match = re.search(r'href="([^"]+\.pdf)"', resp.text, re.IGNORECASE)
+            # Regex for <a href="...pdf"> (single- or double-quoted)
+            pdf_match = re.search(r"""href=["']([^"']+\.pdf)["']""", resp.text, re.IGNORECASE)
 
             if pdf_match:
                 pdf_rel_url = pdf_match.group(1)
@@ -115,12 +127,22 @@ class FDAEnforcementScraper(StateRegistryScraper):
                     return FetchedItem(source=source, content_bytes=content, content_type=content_type)
 
                 try:
+                    # Warning-letter PDFs are whole documents: they get the
+                    # document budget, not the 5 MiB page default.
                     pdf_resp = safe_httpx_get_sync(
-                        validated_pdf_url, timeout=45, headers={"User-Agent": "RegEngine/1.0"}
+                        validated_pdf_url,
+                        timeout=45,
+                        headers={"User-Agent": "RegEngine/1.0"},
+                        max_bytes=DOCUMENT_MAX_RESPONSE_BYTES,
                     )
                     pdf_resp.raise_for_status()
                     content = pdf_resp.content
                     content_type = "application/pdf"
+                except ResponseTooLargeError as pdf_err:
+                    # Log distinctly: an oversized PDF falling back to HTML
+                    # changes stored evidence and must be visible as such.
+                    logger.warning("fda_deep_fetch_pdf_too_large", url=pdf_url, error=str(pdf_err))
+                    # Fallback to original HTML content if PDF fetch fails
                 except Exception as pdf_err:
                     logger.warning("fda_deep_fetch_failed", error=str(pdf_err))
                     # Fallback to original HTML content if PDF fetch fails
