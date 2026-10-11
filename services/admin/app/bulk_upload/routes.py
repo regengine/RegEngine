@@ -92,6 +92,8 @@ class BulkUploadCommitSummary(BaseModel):
     last_merkle_hash: str | None = None
     sync_warning_count: int = 0
     sync_warnings: list[str] = Field(default_factory=list)
+    validation_warning_count: int = 0
+    validation_warnings: list[str] = Field(default_factory=list)
 
 
 class BulkUploadCommitResponse(BaseModel):
@@ -294,8 +296,21 @@ async def commit_bulk_upload(
             supported_cte_types=SUPPORTED_CTE_TYPES,
             valid_ftl_category_ids=set(FTL_CATEGORY_LOOKUP.keys()),
         )
-        if any(error.get("severity") != "warning" for error in errors):
-            raise ValueError("Upload contains invalid rows; correct the file and validate it again")
+        blocking = [error for error in errors if error.get("severity") != "warning"]
+        if blocking:
+            shown = "; ".join(
+                f"{error.get('section', '?')} row {error.get('row', '?')}: {error.get('message', 'invalid row')}"
+                for error in blocking[:5]
+            )
+            if len(blocking) > 5:
+                shown += f"; plus {len(blocking) - 5} more"
+            noun = "invalid row" if len(blocking) == 1 else "invalid rows"
+            raise ValueError(f"Upload contains {len(blocking)} {noun}; correct the file and validate it again: {shown}")
+        # Non-blocking warnings (e.g. autofilled defaults) travel with the
+        # commit summary so a "completed" response never hides them.
+        validation_warnings = [
+            str(error.get("message") or "invalid row") for error in errors if error.get("severity") == "warning"
+        ]
         summary = execute_bulk_commit(
             db,
             tenant_id=tenant_id,
@@ -309,7 +324,10 @@ async def commit_bulk_upload(
         await session_store.update_session(tenant_key, user_key, session_id, session_data)
         raise HTTPException(status_code=400, detail=f"Bulk commit failed: {exc}") from exc
 
-    summary_payload = _coerce_commit_summary(summary).model_dump()
+    summary_model = _coerce_commit_summary(summary)
+    summary_model.validation_warning_count = len(validation_warnings)
+    summary_model.validation_warnings = validation_warnings
+    summary_payload = summary_model.model_dump()
     session_data["status"] = "completed"
     session_data["commit_summary"] = summary_payload
     session_data["updated_at"] = _iso_utc_now()

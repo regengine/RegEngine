@@ -147,13 +147,53 @@ def test_v090_introduces_no_text_compare_in_create_policy(v090) -> None:
     assert "regengine.is_sysadmin" in sql
 
 
+def _assert_forward_only_downgrade(downgrade_fn) -> None:
+    """Assert a downgrade is a true no-op: docstring plus ``pass`` only.
+
+    A substring check for the word "pass" is not enough, since a body
+    that issues statements (for example ``op.execute(...)``) still
+    contains that word. Parsing the body rejects any real statement.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    src = textwrap.dedent(inspect.getsource(downgrade_fn))
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    stmts = list(fn.body)
+    if (
+        stmts
+        and isinstance(stmts[0], ast.Expr)
+        and isinstance(stmts[0].value, ast.Constant)
+        and isinstance(stmts[0].value.value, str)
+    ):
+        stmts = stmts[1:]
+    assert stmts, "downgrade must have an explicit no-op body"
+    for stmt in stmts:
+        assert isinstance(stmt, ast.Pass), (
+            f"downgrade must issue no statements, found {type(stmt).__name__}: {ast.dump(stmt)[:120]}"
+        )
+    assert not any(isinstance(n, ast.Call) for n in ast.walk(fn)), "downgrade must make no calls"
+
+
 def test_downgrade_is_forward_only(v090) -> None:
     """Downgrade must be a no-op — reverting would re-open the leak."""
     # Should not raise and should do nothing (pass body).
-    import inspect
+    _assert_forward_only_downgrade(v090.downgrade)
 
-    src = inspect.getsource(v090.downgrade)
-    assert "pass" in src
+
+def test_downgrade_check_rejects_destructive_body() -> None:
+    """The forward-only check must fail on a downgrade that issues
+    statements even when the word "pass" still appears in its source."""
+
+    def _destructive_downgrade():
+        """Forward-only downgrade, pass through."""
+        print("DROP POLICY tenant_isolation ON fsma.tenant_suppliers")
+        pass
+
+    with pytest.raises(AssertionError):
+        _assert_forward_only_downgrade(_destructive_downgrade)
 
 
 # ---------------------------------------------------------------------------

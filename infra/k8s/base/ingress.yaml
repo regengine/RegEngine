@@ -5,6 +5,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Frame-Options: DENY";
@@ -14,6 +15,21 @@ metadata:
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
       more_set_headers "Content-Security-Policy: default-src 'self'";
 spec:
+  # cert-manager provisions this certificate from the letsencrypt-prod
+  # cluster-issuer above. Without a tls block the annotation alone does
+  # nothing and the host serves plaintext.
+  #
+  # Apply order matters. No ClusterIssuer lives in this repo, so the
+  # cluster must already provide a ClusterIssuer named letsencrypt-prod
+  # (managed outside this repo). Apply this manifest, then wait until
+  # cert-manager issues the certificate (kubectl get certificate
+  # regengine-tls) BEFORE relying on the force-ssl-redirect annotation:
+  # while the secret is empty the redirect sends clients to HTTPS that
+  # never comes up.
+  tls:
+  - hosts:
+    - api.regengine.co
+    secretName: regengine-tls
   rules:
   - host: api.regengine.co
     http:

@@ -45,26 +45,37 @@ for required_var in DATABASE_URL ADMIN_DATABASE_URL MIGRATIONS_DATABASE_URL ENAB
   echo -e "${GREEN}✓${NC} ${required_var} set"
 done
 
-# ── Step 1: Push to GitHub ──────────────────────────────────
+# ── Step 1: Neo4j constraints (optional) ────────────────────
+# Runs BEFORE the push: a failed driver install must stop the deploy
+# before Railway starts one, never after it is already in flight.
 echo ""
-echo "── Step 1: Push to GitHub ──"
-git -C "$REPO_ROOT" push origin main
-echo -e "${GREEN}✓${NC} Pushed — Railway will auto-deploy"
-echo ""
-echo "  Monolith builds from root Dockerfile."
-echo "  Migrations run automatically on startup (Alembic + advisory lock)."
-
-# ── Step 2: Neo4j constraints (optional) ────────────────────
-echo ""
-echo "── Step 2: Neo4j constraints (optional) ──"
+echo "── Step 1: Neo4j constraints (optional) ──"
 if [ -z "${NEO4J_URI:-}" ]; then
   echo -e "${YELLOW}SKIP: NEO4J_URI not set — graph features disabled${NC}"
 else
   echo -e "${GREEN}✓${NC} NEO4J_URI set"
   cd "$REPO_ROOT"
-  pip install neo4j --quiet 2>/dev/null || pip install neo4j --quiet --break-system-packages 2>/dev/null
+  # Pinned to the version in requirements.lock. No --break-system-packages
+  # fallback: that flag bypasses system-package protection, so a failed
+  # install must stop the deploy instead of retrying unprotected.
+  # Prefer the repo venv so a PEP 668 system Python cannot refuse the
+  # install; fall back to the current python3, and keep the hard failure.
+  if [ -x "$REPO_ROOT/venv/bin/python" ]; then
+    "$REPO_ROOT/venv/bin/python" -m pip install "neo4j==6.3.1" --quiet
+  else
+    python3 -m pip install "neo4j==6.3.1" --quiet
+  fi
   python3 services/graph/scripts/init_db_constraints.py
 fi
+
+# ── Step 2: Push to GitHub ──────────────────────────────────
+echo ""
+echo "── Step 2: Push to GitHub ──"
+git -C "$REPO_ROOT" push origin main
+echo -e "${GREEN}✓${NC} Pushed — Railway will auto-deploy"
+echo ""
+echo "  Monolith builds from root Dockerfile."
+echo "  Migrations run automatically on startup (Alembic + advisory lock)."
 
 # ── Step 3: Verify monolith ────────────────────────────────
 echo ""

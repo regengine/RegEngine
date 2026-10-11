@@ -492,6 +492,7 @@ def log_recall_export(
     product: Optional[str] = None,
     location: Optional[str] = None,
     event_type: Optional[str] = None,
+    include_pii: bool = False,
 ) -> None:
     """Write the recall-export audit log entry.
 
@@ -525,9 +526,10 @@ def log_recall_export(
             text("""
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash,
-                 generated_by, query_tlc, query_start_date, query_end_date)
+                 generated_by, query_tlc, query_start_date, query_end_date,
+                 include_pii)
                 VALUES (:tid, :etype, :cnt, :hash, :generated_by,
-                        :tlc, :sd, :ed)
+                        :tlc, :sd, :ed, :pii)
             """),
             {
                 "tid": tenant_id,
@@ -538,6 +540,7 @@ def log_recall_export(
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
+                "pii": bool(include_pii),
             },
         )
         db_session.commit()
@@ -578,6 +581,7 @@ def log_recall_export(
             "export_hash": export_hash,
             "record_count": len(events),
             "filters_applied": filters_applied,
+            "pii_included": bool(include_pii),
             "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -765,6 +769,8 @@ def log_v2_export(
     request_id: Optional[str] = None,
     user_agent: Optional[str] = None,
     source_ip: Optional[str] = None,
+    include_pii: bool = False,
+    event_type: Optional[str] = None,
 ) -> None:
     """Write the v2 export audit log entry.
 
@@ -776,8 +782,10 @@ def log_v2_export(
             text("""
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash, generated_by,
-                 query_tlc, query_start_date, query_end_date)
-                VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed)
+                 query_tlc, query_start_date, query_end_date,
+                 include_pii, query_event_type)
+                VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed,
+                        :pii, :qetype)
             """),
             {
                 "tid": tenant_id,
@@ -788,6 +796,8 @@ def log_v2_export(
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
+                "pii": bool(include_pii),
+                "qetype": event_type,
             },
         )
         db_session.commit()
@@ -828,7 +838,9 @@ def log_v2_export(
                 "tlc": tlc,
                 "start_date": start_date,
                 "end_date": end_date,
+                "event_type": event_type,
             },
+            "pii_included": bool(include_pii),
             "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
         },
     )

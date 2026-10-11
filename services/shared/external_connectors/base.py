@@ -11,8 +11,6 @@ IntegrationConnector. This provides:
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -315,6 +313,27 @@ class IntegrationConnector(ABC):
         self._request_timestamps.append(now)
 
     # ── Webhook signature verification ───────────────────────────
+    # Fail-closed template: the shared ``shared.webhook_auth`` helper
+    # owns HMAC verification. A missing secret or signature is a
+    # rejection, never a skip. See ``services/shared/webhook_auth.py``.
+
+    def require_webhook_secret(self) -> str:
+        """Config-time gate: refuse to enable webhooks without a secret.
+
+        Call this when enabling webhook delivery for a connector.
+        Raises ``ValueError`` when no secret is configured.
+        """
+        from shared.webhook_auth import WebhookSecretMissingError, require_webhook_secret
+
+        try:
+            return require_webhook_secret(
+                self.config.webhook_secret,
+                connector_id=self.connector_id,
+            )
+        except WebhookSecretMissingError as exc:
+            raise ValueError(
+                "Webhooks cannot be enabled for connector '%s' without a signing secret." % self.connector_id
+            ) from exc
 
     def verify_webhook_signature(
         self,
@@ -322,29 +341,27 @@ class IntegrationConnector(ABC):
         signature: str,
         algorithm: str = "sha256",
     ) -> bool:
-        """Verify HMAC signature on inbound webhook payloads."""
-        if not self.config.webhook_secret:
-            logger.warning(
-                "webhook_no_secret connector=%s", self.connector_id
-            )  # nosemgrep: python-logger-credential-disclosure
-            return False
+        """Verify HMAC signature on inbound webhook payloads.
 
-        if algorithm == "sha256":
-            expected = hmac.new(
-                self.config.webhook_secret.encode(),
-                payload,
-                hashlib.sha256,
-            ).hexdigest()
-        elif algorithm == "sha1":
-            expected = hmac.new(
-                self.config.webhook_secret.encode(),
-                payload,
-                hashlib.sha1,
-            ).hexdigest()
-        else:
-            return False
+        Fail-closed: a missing secret or a missing signature returns
+        False. Unknown schemes return False. Comparison is constant
+        time inside ``shared.webhook_auth``.
+        """
+        from shared.webhook_auth import WebhookVerificationError, verify_webhook_signature
 
-        return hmac.compare_digest(expected, signature)
+        if algorithm not in ("sha256", "sha1"):
+            return False
+        try:
+            verify_webhook_signature(
+                payload,
+                signature,
+                self.config.webhook_secret,
+                connector_id=self.connector_id,
+                algorithm=algorithm,
+            )
+            return True
+        except WebhookVerificationError:
+            return False
 
     # ── Serialization ────────────────────────────────────────────
 
