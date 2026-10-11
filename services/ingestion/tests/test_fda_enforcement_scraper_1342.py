@@ -149,8 +149,8 @@ def capture_httpx_get(monkeypatch):
     calls: list[dict] = []
     responses: list[_FakeResponse] = []
 
-    def _get(url, *, timeout=None, headers=None):
-        calls.append({"url": url, "timeout": timeout, "headers": headers})
+    def _get(url, *, timeout=None, headers=None, max_bytes=None):
+        calls.append({"url": url, "timeout": timeout, "headers": headers, "max_bytes": max_bytes})
         if responses:
             return responses.pop(0)
         return _FakeResponse(content=b"", headers={"Content-Type": "text/html"})
@@ -359,6 +359,50 @@ class TestFetch:
         # the PDF failure.
         assert item.content_bytes == HTML_WITH_PDF
         assert item.content_type == "text/html"
+
+    def test_pdf_deep_fetch_uses_document_size_budget(
+        self, scraper, source, capture_httpx_get, passthrough_validate_url
+    ):
+        """Warning-letter PDFs get the document cap, not the page default."""
+        from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, DOCUMENT_MAX_RESPONSE_BYTES
+
+        assert DOCUMENT_MAX_RESPONSE_BYTES > DEFAULT_MAX_RESPONSE_BYTES
+        calls, responses = capture_httpx_get
+        responses.append(_FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"}))
+        responses.append(_FakeResponse(content=b"%PDF-1.4 fake pdf bytes", headers={"Content-Type": "application/pdf"}))
+
+        item = scraper.fetch(source)
+        assert item.content_type == "application/pdf"
+        pdf_call = calls[1]
+        assert pdf_call["url"].endswith("/warning.pdf")
+        assert pdf_call["max_bytes"] == DOCUMENT_MAX_RESPONSE_BYTES
+
+    def test_oversized_pdf_falls_back_to_html_with_distinct_log(
+        self, scraper, source, monkeypatch, passthrough_validate_url, _patch_logger
+    ):
+        """An over-budget PDF keeps the HTML but logs a distinct event.
+
+        Fails on the pre-fix code, which logs the generic
+        ``fda_deep_fetch_failed`` event, hiding the evidence change.
+        """
+        from shared.safe_http import ResponseTooLargeError
+
+        calls: list[dict] = []
+
+        def _get(url, *, timeout=None, headers=None, max_bytes=None):
+            calls.append({"url": url, "max_bytes": max_bytes})
+            if url.endswith(".pdf"):
+                raise ResponseTooLargeError("Response body exceeds 20971520 bytes")
+            return _FakeResponse(content=HTML_WITH_PDF, headers={"Content-Type": "text/html"})
+
+        monkeypatch.setattr(mod, "safe_httpx_get_sync", _get)
+
+        item = scraper.fetch(source)
+        assert item.content_bytes == HTML_WITH_PDF
+        assert item.content_type == "text/html"
+        events = [event for _, event, _ in _patch_logger.calls]
+        assert "fda_deep_fetch_pdf_too_large" in events
+        assert "fda_deep_fetch_failed" not in events
 
     def test_landing_page_ssrf_returns_empty_fetched_item(self, scraper, source, capture_httpx_get, monkeypatch):
         calls, responses = capture_httpx_get

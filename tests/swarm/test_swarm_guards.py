@@ -378,8 +378,13 @@ def test_merge_pr_blocked_when_check_runs_failing_despite_success_statuses() -> 
         assert pr.merge_called is False
 
 
-def test_merge_pr_blocked_when_check_runs_neutral_or_skipped() -> None:
-    """Conservative: only an explicit success conclusion counts as green."""
+def test_merge_pr_treats_neutral_and_skipped_as_green() -> None:
+    """GitHub counts skipped and neutral conclusions as green for merging.
+
+    This repo skips workflow jobs on pull requests via conditionals, so a
+    normal green PR carries skipped check runs. Treating them as failure
+    blocked every janitor auto-merge even with approval and green checks.
+    """
     for conclusion in ("neutral", "skipped"):
         pr_status = _FakePR()
         commit_status = _FakeCommit(
@@ -387,7 +392,7 @@ def test_merge_pr_blocked_when_check_runs_neutral_or_skipped() -> None:
             statuses=[SimpleNamespace(state="success")],
             check_runs=[_FakeCheckRun(status="completed", conclusion=conclusion)],
         )
-        assert _client(pr_status, commit_status).get_pr_checks_status(1) == "failure"
+        assert _client(pr_status, commit_status).get_pr_checks_status(1) == "success"
 
         pr = _FakePR(mergeable=True)
         commit = _FakeCommit(
@@ -397,8 +402,8 @@ def test_merge_pr_blocked_when_check_runs_neutral_or_skipped() -> None:
         )
         client = _client(pr, commit)
 
-        assert client.merge_pr(1, human_approved=True) is False
-        assert pr.merge_called is False
+        assert client.merge_pr(1, human_approved=True) is True
+        assert pr.merge_called is True
 
 
 def test_merge_pr_blocked_when_no_checks() -> None:
@@ -552,10 +557,108 @@ def test_auto_fix_pr_runs_with_explicit_approval(tmp_path: Path, monkeypatch: py
     monkeypatch.setattr(gh_mod, "GitHubClient", lambda *a, **k: _FakeGH())
 
     swarm = _swarm()
-    asyncio.run(swarm._create_auto_fix_pr("task", {"files_written": []}, human_approved=True))
+    asyncio.run(
+        swarm._create_auto_fix_pr(
+            "task",
+            {"files_written": [{"path": "app.py", "action": "modify"}]},
+            human_approved=True,
+        )
+    )
 
     assert any("push" in cmd for cmd in git_calls)
     assert len(pr_calls) == 1
+    add_cmds = [cmd for cmd in git_calls if "add" in cmd]
+    assert len(add_cmds) == 1
+    assert "app.py" in add_cmds[0]
+    assert "." not in add_cmds[0]
+    for cmd in git_calls:
+        assert "core.hooksPath=/dev/null" in cmd
+
+
+def test_auto_fix_pr_blocked_when_no_stageable_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Even with approval, nothing is pushed when the coder produced no safe files."""
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    monkeypatch.delenv("REGENGINE_SWARM_AUTO_PR_APPROVED", raising=False)
+    monkeypatch.chdir(tmp_path)
+    calls: list = []
+    monkeypatch.setattr("subprocess.run", lambda *a, **k: calls.append(a) or SimpleNamespace(returncode=0))
+    import regengine.swarm.github_integration as gh_mod
+
+    monkeypatch.setattr(gh_mod, "GitHubClient", lambda *a, **k: calls.append("github") or None)
+
+    swarm = _swarm()
+    result = asyncio.run(swarm._create_auto_fix_pr("task", {"files_written": []}, human_approved=True))
+
+    assert result is None
+    assert calls == []
+
+
+def test_auto_fix_pr_runs_on_approval_env_var(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The approval env var alone authorizes the push path without the flag."""
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    monkeypatch.setenv("REGENGINE_SWARM_AUTO_PR_APPROVED", "true")
+    monkeypatch.chdir(tmp_path)
+    git_calls: list = []
+    pr_calls: list = []
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: git_calls.append(a[0]) or SimpleNamespace(returncode=0),
+    )
+
+    class _FakeGH:
+        def create_pr(self, **kwargs):
+            pr_calls.append(kwargs)
+            return {"number": 1}
+
+    import regengine.swarm.github_integration as gh_mod
+
+    monkeypatch.setattr(gh_mod, "GitHubClient", lambda *a, **k: _FakeGH())
+
+    swarm = _swarm()
+    asyncio.run(swarm._create_auto_fix_pr("task", {"files_written": [{"path": "app.py", "action": "modify"}]}))
+
+    assert any("push" in cmd for cmd in git_calls)
+    assert len(pr_calls) == 1
+
+
+def test_auto_fix_pr_skips_sensitive_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Model output naming .git or workflow files stages only the safe remainder."""
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    monkeypatch.delenv("REGENGINE_SWARM_AUTO_PR_APPROVED", raising=False)
+    monkeypatch.chdir(tmp_path)
+    git_calls: list = []
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: git_calls.append(a[0]) or SimpleNamespace(returncode=0),
+    )
+
+    class _FakeGH:
+        def create_pr(self, **kwargs):
+            return {"number": 1}
+
+    import regengine.swarm.github_integration as gh_mod
+
+    monkeypatch.setattr(gh_mod, "GitHubClient", lambda *a, **k: _FakeGH())
+
+    swarm = _swarm()
+    asyncio.run(
+        swarm._create_auto_fix_pr(
+            "task",
+            {
+                "files_written": [
+                    {"path": ".git/hooks/pre-commit", "action": "create"},
+                    {"path": ".github/workflows/evil.yml", "action": "create"},
+                    {"path": "app.py", "action": "modify"},
+                ]
+            },
+            human_approved=True,
+        )
+    )
+
+    add_cmds = [cmd for cmd in git_calls if "add" in cmd]
+    assert len(add_cmds) == 1
+    staged = add_cmds[0][add_cmds[0].index("--") + 1 :]
+    assert staged == ["app.py"]
 
 
 def test_solve_does_not_push_or_open_pr_without_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -590,5 +693,265 @@ def test_solve_does_not_push_or_open_pr_without_approval(tmp_path: Path, monkeyp
     swarm = AgentSwarm(llm_client=MockLLMClient(responses=responses))
     result = asyncio.run(swarm.solve("Add a trivial thing"))
 
-    assert result.status == "completed"
+    assert result.status == "completed_with_warnings"
+    assert any("missing human approval" in err for err in result.errors)
     assert calls == []
+
+
+# ── Write guard: sensitive paths and unresolved traversal ────
+
+
+def test_is_path_within_base_rejects_unresolved_traversal() -> None:
+    from regengine.swarm.agents import is_path_within_base as check
+
+    assert not check(Path("/repo"), Path("/repo/foo/../../etc/passwd"))
+    assert check(Path("/repo"), Path("/repo/sub/../ok.py"))
+
+
+def test_coder_act_blocks_git_and_workflow_writes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Model output naming .git config or workflow files must not be written."""
+    workdir = tmp_path / "repo"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
+
+    agent = _coder(tmp_path)
+    result = asyncio.run(
+        agent.act(
+            {
+                "files": [
+                    {"path": ".git/config", "action": "create", "content": "[core]\n"},
+                    {
+                        "path": ".github/workflows/nightly.yml",
+                        "action": "create",
+                        "content": "run: evil\n",
+                    },
+                    {"path": "pkg/ok.py", "action": "create", "content": "x = 1\n"},
+                ]
+            }
+        )
+    )
+
+    assert result["file_count"] == 1
+    assert not (workdir / ".git" / "config").exists()
+    assert not (workdir / ".github" / "workflows" / "nightly.yml").exists()
+    assert (workdir / "pkg" / "ok.py").read_text() == "x = 1\n"
+
+
+# ── PR body redaction ─────────────────────────────────────────
+
+
+def test_redact_for_pr_body_strips_secrets() -> None:
+    from regengine.swarm.coordinator import redact_for_pr_body
+
+    body = redact_for_pr_body("deploy with api_key: hunter2 and password= s3cret")
+    assert "hunter2" not in body
+    assert "s3cret" not in body
+    assert "plain task text stays" in redact_for_pr_body("plain task text stays")
+
+
+# ── Approval forwarding ───────────────────────────────────────
+
+
+def test_sweep_forwards_human_approved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    swarm = _swarm()
+    seen: list = []
+
+    async def fake_solve(task_item, context=None, human_approved=False):
+        seen.append((task_item, human_approved))
+        return SimpleNamespace(status="completed", errors=[])
+
+    monkeypatch.setattr(swarm, "solve", fake_solve)
+    asyncio.run(swarm.sweep(["a", "b"], human_approved=True))
+
+    assert [flag for _, flag in seen] == [True, True]
+
+
+def test_troubleshoot_forwards_human_approved(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    swarm = _swarm()
+    seen: dict = {}
+
+    async def fake_sre_run(task, context=None):
+        return {
+            "result": {
+                "analysis": {"root_cause": "boom"},
+                "remediation": {"immediate_fix": "fix it"},
+            }
+        }
+
+    async def fake_solve(task, context=None, human_approved=False):
+        seen["task"] = task
+        seen["human_approved"] = human_approved
+        return swarm._build_result(task, "completed", ["SRE"], 0, 0.0)
+
+    monkeypatch.setattr(swarm.sre, "run", fake_sre_run)
+    monkeypatch.setattr(swarm, "solve", fake_solve)
+    asyncio.run(swarm.troubleshoot("some logs", human_approved=True))
+
+    assert seen["human_approved"] is True
+    assert "boom" in seen["task"]
+
+
+# ── Janitor CLI approval gate ─────────────────────────────────
+
+
+class _FakeJanitorAgent:
+    def __init__(self, decision: str = "merge") -> None:
+        self.decision = decision
+        self.evaluated: list = []
+
+    async def run(self, task: str, context=None):
+        self.evaluated.append(task)
+        return {"result": {"decision": self.decision, "reasoning": "tests green"}}
+
+
+class _FakeJanitorPR:
+    def __init__(self, number: int, fail_scan: bool = False) -> None:
+        self.number = number
+        self.title = f"PR {number}"
+        self._fail_scan = fail_scan
+
+    def get_issue_comments(self):
+        if self._fail_scan:
+            raise RuntimeError("comments unavailable")
+        return [SimpleNamespace(body="Security Audit: pass")]
+
+
+class _FakeJanitorGH:
+    instances: list = []
+
+    def __init__(self, prs, fail_status_for=()) -> None:
+        self._prs = prs
+        self._fail_status_for = set(fail_status_for)
+        self.status_calls: list = []
+        self.merge_calls: list = []
+        _FakeJanitorGH.instances.append(self)
+
+    @property
+    def repo(self):
+        outer = self
+
+        class _Pulls:
+            totalCount = len(outer._prs)
+
+            def __iter__(self):
+                return iter(outer._prs)
+
+        return SimpleNamespace(get_pulls=lambda state="open": _Pulls())
+
+    def get_pr_checks_status(self, number: int) -> str:
+        self.status_calls.append(number)
+        if number in self._fail_status_for:
+            raise RuntimeError("checks unavailable")
+        return "success"
+
+    def merge_pr(self, number: int, human_approved: bool = False) -> bool:
+        self.merge_calls.append((number, human_approved))
+        return True
+
+
+def _janitor_args(**overrides):
+    args = {
+        "task": "janitor sweep",
+        "dry_run": True,
+        "agent": "janitor",
+        "approve_merges": False,
+        "prs": None,
+        "approve_pr": False,
+        "max_iterations": 3,
+        "output_file": None,
+    }
+    args.update(overrides)
+    return SimpleNamespace(**args)
+
+
+def _run_janitor(monkeypatch: pytest.MonkeyPatch, pr_list, decision="merge", fail_status_for=(), **arg_overrides):
+    from regengine.swarm import cli as cli_mod
+
+    janitor = _FakeJanitorAgent(decision=decision)
+
+    class _FakeSwarm:
+        def __init__(self, *a, **k) -> None:
+            self.agents = {"janitor": janitor}
+
+    _FakeJanitorGH.instances.clear()
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    monkeypatch.setattr("regengine.swarm.coordinator.AgentSwarm", _FakeSwarm)
+    monkeypatch.setattr(
+        "regengine.swarm.github_integration.GitHubClient",
+        lambda *a, **k: _FakeJanitorGH(pr_list, fail_status_for=fail_status_for),
+    )
+    cli_mod.cmd_run(_janitor_args(**arg_overrides))
+    gh = _FakeJanitorGH.instances[-1]
+    return janitor, gh
+
+
+def test_janitor_skips_merge_without_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    janitor, gh = _run_janitor(monkeypatch, [_FakeJanitorPR(7)], approve_merges=False)
+
+    assert janitor.evaluated != []
+    assert gh.merge_calls == []
+
+
+def test_janitor_merges_only_with_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    janitor, gh = _run_janitor(monkeypatch, [_FakeJanitorPR(7)], approve_merges=True)
+
+    assert gh.merge_calls == [(7, True)]
+
+
+def test_janitor_continues_after_single_pr_scan_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    _, gh = _run_janitor(
+        monkeypatch,
+        [_FakeJanitorPR(1, fail_scan=True), _FakeJanitorPR(2)],
+        approve_merges=True,
+        fail_status_for=(),
+    )
+
+    assert gh.merge_calls == [(2, True)]
+
+
+def test_janitor_prs_filter_limits_scope(monkeypatch: pytest.MonkeyPatch) -> None:
+    janitor, gh = _run_janitor(
+        monkeypatch,
+        [_FakeJanitorPR(1), _FakeJanitorPR(2), _FakeJanitorPR(3)],
+        approve_merges=True,
+        prs="2",
+    )
+
+    assert gh.merge_calls == [(2, True)]
+    assert janitor.evaluated == ["Evaluate PR #2"]
+
+
+# ── Compliance sweep forwarding ───────────────────────────────
+
+
+def test_compliance_sweep_forwards_env_approval(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    import importlib.util
+
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "compliance_sweep.py"
+    spec = importlib.util.spec_from_file_location("compliance_sweep_under_test", script_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setenv("REGENGINE_ENABLE_LEGACY_SWARM", "1")
+    monkeypatch.setenv("REGENGINE_SWARM_AUTO_PR_APPROVED", "true")
+    monkeypatch.delenv("REGENGINE_CI_AUTO_FIX", raising=False)
+
+    seen: dict = {}
+
+    class _FakeSweepSwarm:
+        def __init__(self, *a, **k) -> None:
+            pass
+
+        async def sweep(self, tasks, concurrency=5, human_approved=False):
+            seen["count"] = len(tasks)
+            seen["human_approved"] = human_approved
+            return [SimpleNamespace(status="completed_with_warnings", errors=["blocked"]) for _ in tasks]
+
+    spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "AgentSwarm", _FakeSweepSwarm)
+    asyncio.run(module.roll_out_compliance("FSMA-204"))
+    os.environ.pop("REGENGINE_CI_AUTO_FIX", None)
+
+    assert seen["count"] == len(module.SERVICES)
+    assert seen["human_approved"] is True

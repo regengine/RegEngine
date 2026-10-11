@@ -13,6 +13,13 @@ on:
   push:
     branches: [main, develop]
     paths:
+      # frontend/src/lib/public-openapi.ts and frontend/package-lock.json are
+      # included because repo-root-suite runs the published OpenAPI surface
+      # contract, which shells out to node and reads that spec (#3248). A
+      # spec-only change must trigger the gate that compares it. The rest of
+      # frontend/** stays out so frontend-only merges do not wait on this job.
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/package-lock.json'
       - 'alembic/**'
       - 'server/**'
       - 'services/**'
@@ -34,6 +41,9 @@ on:
   pull_request:
     branches: [main]
     paths:
+      # Same frontend spec inclusion as push above (#3248 OpenAPI contract).
+      - 'frontend/src/lib/public-openapi.ts'
+      - 'frontend/package-lock.json'
       - 'alembic/**'
       - 'server/**'
       - 'services/**'
@@ -783,7 +793,11 @@ jobs:
   repo-root-suite:
     name: Repo-root security/RLS/isolation suite
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Raised from 15 for #3248: this job now runs `npm ci` plus a production
+    # app import child with its own 300s timeout, on top of ten new test
+    # directories. A timeout fails the status gate and blocks deploy, so the
+    # cap must leave headroom for a slow registry or a slow import.
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16
@@ -887,11 +901,20 @@ jobs:
           # them ignored in test-suite-check's fast shard: pure-offline
           # regression tests with no gate. They run here, where a failure
           # blocks the merge.
+          # The four shared-auth-kernel qa4 files (#3252) are pure-offline
+          # (in-memory stores, fakes, in-process TestClient) and likewise
+          # ran only in test-suite-check, which is not a required check.
+          # They run here, where a failure blocks the merge.
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
             tests/test_guard_text_bind_casts.py \
+            tests/test_ci_qa_gates_3248.py \
             tests/shared/test_visibility_timeout_2918.py \
             tests/shared/test_secret_validation.py \
+            tests/shared/test_shared_auth_contract_qa4.py \
+            tests/shared/test_secrets_manager_qa4.py \
+            tests/shared/test_brute_force_limiter_qa4.py \
+            tests/shared/test_tenant_context_qa4.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
@@ -909,8 +932,12 @@ jobs:
           # fail rather than skip if Docker is unavailable.
           # test_v126_operator_guidance pins the v126 refusal message and the
           # read-only, search_path-pinned verify and pre-deploy runbooks.
+          # test_check_supply_chain guards the supply-chain pinning gate:
+          # a checker-only weakening under scripts/** must fail here,
+          # because test-suite-check.yml does not trigger on that path.
           pytest tests/scripts/test_bootstrap_staging_database.py \
             tests/scripts/test_v126_operator_guidance.py \
+            tests/scripts/test_check_supply_chain.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Setup Node.js (published-spec contract needs the TS export)
@@ -949,17 +976,34 @@ jobs:
           # produces — it would only skip), and
           # tests/contract/test_error_envelope_contract_2863.py (fails on the
           # documented flat 409 idempotency shape; needs a product decision).
+          # tests/audit is NOT listed: it holds only manual helper scripts
+          # (audit_trace_back.py, verify_chain.py), which do not match
+          # python_files = "test_*.py", so pytest collects nothing there and
+          # the gate comment must not claim they are asserted. Hash-chain
+          # audit integrity is gated by
+          # tests/security/test_audit_integrity.py in the offline step above.
+          # tests/qa_sweep_20261002/test_portal_export_disclosure.py is
+          # excluded below: BE-011 is still a strict xfail (the redacted FDA
+          # CSV still embeds the portal link token via leftover KDEs), so an
+          # expected failure there exits 0 and proves nothing. Keep it out
+          # of the blocking argv until the export stops embedding portal_id;
+          # when that is fixed, delete the xfail and drop this --ignore so a
+          # regression fails the job.
           pytest tests/test_router_policy.py \
             tests/test_server_import_smoke.py \
+            tests/test_request_workflow_unit.py \
+            tests/test_compliance_control_plane_e2e.py \
+            tests/test_rls_probe_helper.py \
+            tests/contract/test_ingest_nlp_schema_contract.py \
             tests/security/test_account_erasure_live_db_guard.py \
             tests/security/test_global_admin_context_allowlist.py \
             tests/security/test_security_audit_fixes.py \
             tests/security/test_auth_coverage.py \
+            tests/security/test_tenant_route_isolation_matrix.py \
             tests/security/test_route_security_manifest.py \
             tests/security/test_staging_release_gate_runner.py \
             tests/data_integrity/test_fsma_204_verification_phase2b.py \
             tests/admin \
-            tests/audit \
             tests/billing \
             tests/compliance \
             tests/docs \
@@ -969,6 +1013,7 @@ jobs:
             tests/recall_reconstruction \
             tests/qa_sweep_20261002 \
             tests/contract/test_openapi_production_surface_2861.py \
+            --ignore=tests/qa_sweep_20261002/test_portal_export_disclosure.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: RLS coverage + tenant-isolation e2e (alembic head)
@@ -1047,16 +1092,21 @@ jobs:
           # ORM-drift, or schema-parity gates that share this job.
           psql -h localhost -U postgres \
             -c "CREATE DATABASE request_workflow_e2e TEMPLATE rls_migrated;"
-          # All four suites, one invocation, one fresh DB. fda_request /
+          # All five suites, one invocation, one fresh DB. fda_request /
           # identity_ambiguity / stale_evaluations previously failed on any
           # fresh alembic-head DB (unseeded rule_definitions fixtures, the
           # matching.py aborted-transaction bug, uuid=ANY(text[]) in bulk
           # merge) — fixed in #2628; rehearsed combined against a fresh
-          # template clone: 44/44.
+          # template clone: 44/44. test_e2e_package_manifest.py is the
+          # #3245 blocking-defect proof (it calls the real submit_package
+          # gate); it ran in no blocking job until #3245 review found it
+          # ignored, so a gutted gate stayed green. Rehearsed 12/12 with
+          # zero skips against a fresh alembic-head DB.
           pytest tests/test_e2e_deadline_breach.py \
             tests/test_e2e_fda_request.py \
             tests/test_e2e_identity_ambiguity.py \
             tests/test_e2e_stale_evaluations.py \
+            tests/test_e2e_package_manifest.py \
             -v --no-cov -o "testpaths=tests" | tee /tmp/rw_e2e.log
           # Same skip-hardening as the RLS live step: a skipped suite is
           # invisible in the checks UI, and invisible is how this gap lived
@@ -1077,13 +1127,25 @@ jobs:
           # the previous step). `alembic check` compares EVERY registered ORM
           # Base (admin, agent-operator, api-key store, scheduler state — see
           # alembic/env.py target_metadata) against that schema and fails on
-          # structural drift: an ORM model whose table/column/index no
-          # migration created. This is the gate that would have caught
+          # structural drift: an ORM model whose table/column/index/FK no
+          # migration created, or whose FK options (ondelete, deferrability)
+          # disagree with the migrated schema. FK comparison used to be off
+          # (include_object excluded every foreign_key_constraint); turning
+          # it on caught 20 ORM FKs missing their ondelete plus 5 FKs missing
+          # from the receipts model. This is the gate that would have caught
           # scheduler_seen_items existing only via runtime create_all (v093).
           # Raw-SQL-managed tables without ORM models are exempt by design
           # (include_object in alembic/env.py); type-level alignment is
           # enforced separately by verify_orm_db_type_alignment.
           alembic check
+          # Behavioral proof the gate is not vacuous: on a throwaway scratch
+          # database (created and dropped by the test, never the shared
+          # rls_migrated) assert autogenerate produces no diff at head, then
+          # drift one FK option and assert the gate fails. With
+          # REGENGINE_REQUIRE_DB=1 (job env) this fails instead of skipping
+          # when Postgres is unreachable.
+          pytest tests/migrations/test_alembic_fk_autogenerate_no_diff.py \
+            -v --no-cov -o "testpaths=tests"
 
       - name: Schema parity audit (WS-2c)
         env:

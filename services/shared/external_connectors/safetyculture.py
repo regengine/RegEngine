@@ -86,9 +86,10 @@ class SafetyCultureConnector(IntegrationConnector):
         self._template_cte_map: Dict[str, str] = config.extra.get("template_cte_map", {})
 
     def _auth_headers(self) -> Dict[str, str]:
+        # GET-only headers: no Content-Type (there is no request body), so a
+        # cross-origin redirect is not refused merely for carrying it.
         return {
             "Authorization": f"Bearer {self.config.api_key}",
-            "Content-Type": "application/json",
             "User-Agent": "RegEngine/1.0 (FSMA 204 Compliance)",
         }
 

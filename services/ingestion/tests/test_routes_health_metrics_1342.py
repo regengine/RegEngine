@@ -315,6 +315,50 @@ class TestHealthKafkaUnavailable:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# /health — webhook HMAC posture (#3229)
+# ---------------------------------------------------------------------------
+
+
+class TestHealthHmacPosture:
+    def _clear_strict_triggers(self, monkeypatch):
+        import shared.env as env_mod
+
+        for var in env_mod.CLOUD_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv("REGENGINE_AUTH_STRICT", raising=False)
+        monkeypatch.delenv("ENV", raising=False)
+
+    def test_missing_secret_degrades_in_production(self, monkeypatch):
+        # Closed gate + no secret: ingest is fully 401, so /health must
+        # not stay green. Without this, a deploy missing the secret
+        # looks healthy while rejecting every webhook ingest.
+        self._clear_strict_triggers(monkeypatch)
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        result = health()
+        assert result["status"] == "degraded"
+        assert result["webhook_hmac_configured"] is False
+
+    def test_missing_secret_stays_healthy_outside_closed_gate(
+        self, monkeypatch
+    ):
+        self._clear_strict_triggers(monkeypatch)
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        result = health()
+        assert result["status"] == "healthy"
+        assert result["webhook_hmac_configured"] is False
+
+    def test_configured_secret_stays_healthy_in_production(self, monkeypatch):
+        self._clear_strict_triggers(monkeypatch)
+        monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "test-secret-for-health")
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        result = health()
+        assert result["status"] == "healthy"
+        assert result["webhook_hmac_configured"] is True
+
+
 class TestRouterSurface:
     def test_router_exposes_single_health_route(self):
         paths = {r.path for r in router.routes}
