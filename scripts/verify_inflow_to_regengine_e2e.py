@@ -86,12 +86,46 @@ def _database_host(database_url: str) -> str:
         return ""
 
 
+def _effective_db_hosts(database_url: str) -> list[str]:
+    """Every host a Postgres driver may connect to for this URL.
+
+    The authority host plus any libpq ``host`` / ``hostaddr`` query values,
+    which SQLAlchemy passes through to the driver and which override the
+    authority host. A URL that looks like localhost but carries a remote
+    query host is not local.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    hosts: list[str] = []
+    try:
+        parts = urlsplit(database_url)
+    except ValueError:
+        return [""]
+    if parts.hostname:
+        hosts.append(parts.hostname.lower())
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return hosts or [""]
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            # Multi-host values are comma-separated; each names a target.
+            hosts.extend(h.strip().lower() for h in value.split(",") if h.strip())
+    return hosts or [""]
+
+
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Compose service names from .env.example (local dev stack only).
+DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}
+LOCAL_HOSTS = LOOPBACK_HOSTS | DEV_COMPOSE_HOSTS
+
+
 def ensure_local_database(database_url: str, allow_production: bool) -> None:
     """Refuse hosted or non-localhost databases without explicit opt-in."""
     lowered = database_url.lower()
-    host = _database_host(database_url)
+    hosts = _effective_db_hosts(database_url)
     env = os.getenv("REGENGINE_ENV", "").strip().lower()
-    is_local = host in {"localhost", "127.0.0.1", "::1"}
+    is_local = bool(hosts) and all(h in LOCAL_HOSTS for h in hosts)
     looks_hosted = any(hint in lowered for hint in PRODUCTION_DB_HINTS)
     if (not is_local or looks_hosted or env == "production") and not allow_production:
         raise VerificationError(

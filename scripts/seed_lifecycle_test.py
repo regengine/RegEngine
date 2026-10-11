@@ -98,11 +98,31 @@ def _parse_args(argv=None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow redirects so the API key never leaves the target host.
+
+    urllib follows 301/302/303 by default and re-sends request headers
+    (including X-RegEngine-API-Key) to the redirect target. Exiting here
+    stops the follow before the key is sent anywhere else.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        print(
+            f"  Refusing redirect ({code}) to {newurl}: "
+            "not resending the API key to another host.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+_NO_REDIRECT_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def api_post(url, payload):
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers=HEADERS, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with _NO_REDIRECT_OPENER.open(req, timeout=30) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode()
@@ -113,7 +133,7 @@ def api_post(url, payload):
 def api_get(url):
     req = urllib.request.Request(url, headers=HEADERS, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with _NO_REDIRECT_OPENER.open(req, timeout=30) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         body = e.read().decode()

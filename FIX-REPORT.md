@@ -1,42 +1,187 @@
-# FIX-REPORT: PR #3230 follow-up fixes
+# FIX-REPORT: About page copy
 
-Merge commit 5aef33529e3e65c714cec0c44fb2efe92c69fd9c, worktree off origin/main e854dadc.
-Sources read: all six re-rv-3230-<angle> SUMMARY.md files, plus the lead blast, ops,
-security, tenant and tests summaries and the infra area and env-docs and secret-scan
-integration notes that mention #3230.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings
+## Before and after
 
-| # | Source report | Severity | Finding | Status | Reason |
-|---|---|---|---|---|---|
-| 1 | re-rv-3230-blast High, re-rv-3230-ops 3230a, re-rv-lead-ops 4 | High | Production audit export raises RuntimeError (HTTP 500) when AUDIT_PII_HASH_SALT is unset; var absent from validate_env and .env.example | FIXED AND TESTED | Export now answers 503 with the same message; var added to _PRODUCTION_REQUIRED and .env.example; new 503 regression test passes, fails with guard backed out |
-| 2 | re-rv-3230-ops 3230b, re-rv-lead-ops 5 | High | WEBAUTHN_EXPECTED_ORIGIN unset 503s passkey verify but nothing checks it at deploy time | FIXED AND TESTED | Var added to _PRODUCTION_REQUIRED and .env.example; new route test pins 503 passthrough, fails with 401 when passthrough removed |
-| 3 | re-rv-3230-blast Medium, re-rv-3230-ops 3230c, re-rv-lead-blast 3230 Medium | Medium | Non-production salt is per-process random, so staging workers disagree on masked values | FIXED AND TESTED | validate_env now errors on missing AUDIT_PII_HASH_SALT when REGENGINE_ENV is staging; new staging tests pass; old HEAD module returns ok without the salt |
-| 4 | re-rv-3230-security Medium, re-rv-3230-tests notes | Medium | tests/scripts/test_security_lows_scripts.py exec_module runs the e2e .env loader at import, leaking secrets into the pytest process | FIXED AND TESTED | .env loading moved into _load_dotenv called only from run(); test uses lazy import plus an AST test pinning no top-level os.environ write; AST check fails on HEAD script |
-| 5 | re-rv-3230-tests Medium | Medium | Hardening tests do not prove the salt is inside the hash | FIXED AND TESTED | Added digest-changes-with-salt test and retired-default-salt test; both fail against the pre-3230 constant-salt behavior confirmed in 5aef3352^ |
-| 6 | re-rv-3230-tests High | High | tests/scripts/test_security_lows_scripts.py not in required backend-ci gate | FIXED AND TESTED | Added to the operator tooling pytest list in backend-ci.yml; the file itself passes standalone (see commands); the workflow cannot run headless |
-| 7 | re-rv-3230-tests Low | Low | webauthn tests never call the verify routes, so the HTTPException passthrough is unpinned | FIXED AND TESTED | Added registration verify 503 test; trivial, fails with 401 without the passthrough |
-| 8 | re-rv-3230-security Low | Low | .gitleaks.toml still allowlists deleted fix_password.sql | FIXED AND TESTED | Removed the dead path entry; verified the file is absent and nothing references it; gitleaks binary not run here |
-| 9 | re-rv-3230-ops 3230 finding 4, re-rv-3230-blast Low | Low | docs/GOLDEN_PATH.md runs the brutal scenario with no env setup | FIXED AND TESTED | Doc now exports REGENGINE_INTERNAL_SECRET first; docs only, no behavior change |
-| 10 | re-rv-3230 correct/ops notes | Low | .env.example documents neither new variable | FIXED AND TESTED | Added both with generate commands and write-once note; covered by finding 1 and 2 tests |
-| 11 | re-rv-3230-correct Low, re-rv-lead-blast 3230 low | Low | Passkey verify on unset deploys changes from 401 to 503; local request-URL fallback now fails closed | Listed, not fixed | Intended fail-closed behavior of PR #3230, confirmed by code reading; no change needed |
-| 12 | re-rv-3230-security Low | Low | Deleted argon2id hash still in git history; ^scripts/ gitleaks allowlist still broad | Listed, partly fixed | Dead path entry removed (finding 8). History purge and narrowing ^scripts/ need Chris decision below |
-| 13 | re-rv-3230-ops finding 5 | Low | New salt will not match older masked exports | Listed, not fixed | Operational guidance, addressed with the write-once comment in .env.example; rotating to chase old hashes would restore a public salt |
-| 14 | Task brief | Out of scope | Suspended-tenant deny on live auth, tenant-scope gate failure, 7 xfail cross-tenant leaks | Noted only | Owned by other tasks; untouched here |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Test commands and results
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. `~/metacode/fleet/heavy .venv/bin/python -m pytest services/admin/tests/test_admin_service_hardening.py services/admin/tests/test_webauthn_router.py services/admin/tests/test_audit_export_self_log_2522.py tests/shared/test_secret_validation.py tests/scripts/test_security_lows_scripts.py --no-cov -p no:cacheprovider`
-   Result: `66 passed, 1 skipped, 2 warnings in 3.22s`. The skip is pre-existing (SQLite no-op listener in test_admin_service_hardening.py:82).
-2. Fail-without-fix, export guard: guard edited away by hand, ran `TestExportMissingSaltFailsClosed503`, result `1 failed ... Failed: DID NOT RAISE HTTPException`. Guard restored, test passes.
-3. Fail-without-fix, webauthn passthrough: inner `except HTTPException: raise` removed by hand, ran the new 503 test, result `1 failed ... AssertionError: assert 401 == 503`. Lines restored, test passes.
-4. Fail-without-fix, old-code probes (`/tmp/probe_3230_oldcode.py`, uses read-only `git show` of HEAD files): old validate_env returns ok with salt missing, HEAD e2e script has a top-level os.environ write, old constant-salt mask equals the retired digest. All three probes confirm the new tests fail on pre-fix code.
-5. `ruff check` on all nine changed Python files: `All checks passed!`. `ruff format --check` clean on every file I touched (two pre-existing deviations in test_admin_service_hardening.py:622 and test_webauthn_router.py:180 left alone).
-6. `scripts/security/scan_tenant_scope.py`: not run. I changed no queries (the export diff adds only a salt check before the existing query), so the scanner gate is unaffected.
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Needs Chris decision
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-1. Set AUDIT_PII_HASH_SALT to a new long random value (write-once, keep it) on Railway production and staging, and WEBAUTHN_EXPECTED_ORIGIN to the public app origin on production, before the next deploy. Neither value is in the repo and I cannot set them.
-2. Require WEBAUTHN_EXPECTED_ORIGIN for staging too? I required only the salt for staging; passkey verify on staging without the origin still 503s at ceremony time.
-3. Narrow or remove the `^scripts/` gitleaks allowlist, and decide whether to purge the deleted argon2id hash from git history. Also confirm whether that admin@example.com password was ever applied to a real database; if so rotate it.
-4. Confirm no out-of-repo client joins two audit exports on masked emails across the salt change; old and new masked values will not match.
+2. Faster iteration card
+
+Before:
+`Design-partner feedback is scoped to`
+
+After:
+`Early tester feedback is scoped to`
+
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
+
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

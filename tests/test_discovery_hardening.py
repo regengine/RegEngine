@@ -85,8 +85,8 @@ async def test_discovery_uses_safe_tempfile_without_changing_parser_loader_flow(
 ):
     scraper = discovery_mod.EthicalScraper(redis_url="redis://unused")
     scraper.redis = FakeRedis()
-    scraper.session = MagicMock()
-    scraper.session.get.return_value = FakeResponse()
+    # Outbound HTTP goes through the SSRF-safe helper, not a session object.
+    monkeypatch.setattr(discovery_mod, "safe_httpx_get_sync", lambda *args, **kwargs: FakeResponse())
     monkeypatch.setattr(scraper, "can_fetch", lambda url: True)
     monkeypatch.setattr(discovery_mod.asyncio, "sleep", AsyncMock())
 
@@ -146,8 +146,8 @@ async def test_discovery_removes_tempfile_and_closes_loader_on_load_failure(
 ):
     scraper = discovery_mod.EthicalScraper(redis_url="redis://unused")
     scraper.redis = FakeRedis()
-    scraper.session = MagicMock()
-    scraper.session.get.return_value = FakeResponse()
+    # Outbound HTTP goes through the SSRF-safe helper, not a session object.
+    monkeypatch.setattr(discovery_mod, "safe_httpx_get_sync", lambda *args, **kwargs: FakeResponse())
     monkeypatch.setattr(scraper, "can_fetch", lambda url: True)
     monkeypatch.setattr(discovery_mod.asyncio, "sleep", AsyncMock())
 

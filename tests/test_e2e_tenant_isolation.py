@@ -69,7 +69,11 @@ def _rls_unfiltered_rows(db_session, table, guc_tenant):
     on. Whatever comes back passed real row-level security. Role and GUC
     are reset before returning so later steps run exactly as before.
 
-    Skips visibly when the connection cannot assume the app role.
+    Fails loudly when the connection cannot assume the app role: a
+    skipped probe would leave the RLS proof unexecuted while the job
+    stays green, which is exactly how an isolation regression hides.
+    The caller's transaction is left alone (no rollback), so earlier
+    uncommitted scenario rows survive for the failure output.
     """
     from sqlalchemy import text
 
@@ -79,8 +83,14 @@ def _rls_unfiltered_rows(db_session, table, guc_tenant):
     try:
         db_session.execute(text("SET ROLE regengine"))
     except Exception as exc:
-        db_session.rollback()
-        pytest.skip(f"cannot SET ROLE regengine for RLS probe: {exc}")
+        try:
+            db_session.execute(text("RESET ROLE"))
+        except Exception:
+            pass
+        pytest.fail(
+            f"cannot SET ROLE regengine for RLS probe: {exc}. "
+            "The RLS proof cannot run without the app role; fix the grant, do not skip."
+        )
     try:
         db_session.execute(
             text("SELECT set_config('app.tenant_id', :tid, false)"),
