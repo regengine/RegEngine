@@ -39,6 +39,10 @@ vi.mock('@/lib/db', () => ({
     markPhotoSyncFailed: (...args: any[]) => dbMocks.markPhotoSyncFailed(...args),
     getPendingUploads: (...args: any[]) => dbMocks.getPendingUploads(...args),
     cleanupOfflineRecords: (...args: any[]) => dbMocks.cleanupOfflineRecords(...args),
+    // Mirror of the real scanIdempotencyKey contract: stored key wins,
+    // otherwise a stable key derived from the record identity.
+    scanIdempotencyKey: (scan: { id?: number; timestamp: number; idempotencyKey?: string }) =>
+        scan.idempotencyKey ?? `offline-scan-${scan.id ?? 'local'}-${scan.timestamp}`,
 }));
 
 vi.mock('@/lib/api-config', () => ({
@@ -78,6 +82,7 @@ describe('useSync', () => {
     });
 
     it('replays pending scans through the cookie-backed ingest proxy without browser auth headers', async () => {
+        const timestamp = 1_700_000_000_000;
         dbMocks.getPendingUploads.mockResolvedValue({
             scans: [
                 {
@@ -87,7 +92,7 @@ describe('useSync', () => {
                         tenant_id: 'tenant-123',
                         events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-123' }],
                     }),
-                    timestamp: Date.now(),
+                    timestamp,
                     cteType: 'receiving',
                     content: 'LOT-123',
                 },
@@ -112,6 +117,72 @@ describe('useSync', () => {
         expect(headers.get('Content-Type')).toBe('application/json');
         expect(headers.get('X-RegEngine-API-Key')).toBeNull();
         expect(headers.get('X-Tenant-ID')).toBeNull();
+        // Legacy record with no stored key gets a stable derived key.
+        expect(headers.get('Idempotency-Key')).toBe(`offline-scan-1-${timestamp}`);
+    });
+
+    it('reuses the stored idempotency key so replays deduplicate against the live attempt', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 2,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-123',
+                        events: [{ cte_type: 'shipping', traceability_lot_code: 'LOT-999' }],
+                    }),
+                    timestamp: 1_700_000_000_001,
+                    cteType: 'shipping',
+                    content: 'LOT-999',
+                    idempotencyKey: 'scan-key-from-capture',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+
+        const [, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+        expect(new Headers(init?.headers).get('Idempotency-Key')).toBe('scan-key-from-capture');
+        expect(dbMocks.markScanSynced).toHaveBeenCalledWith(2);
+    });
+
+    it('attaches a stable idempotency key to legacy raw-only scans', async () => {
+        const timestamp = 1_700_000_000_002;
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 3,
+                    timestamp,
+                    cteType: 'receiving',
+                    content: 'RAW-123',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+
+        const [, init] = fetchWithCsrfMock.mock.calls[0] as [string, RequestInit];
+        expect(new Headers(init?.headers).get('Idempotency-Key')).toBe(`offline-scan-3-${timestamp}`);
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+            source: 'mobile_scanner_pwa_offline',
+            tenant_id: 'tenant-123',
+        });
     });
 
     it('uploads pending photos without requiring an apiKey argument', async () => {
@@ -143,6 +214,67 @@ describe('useSync', () => {
         expect(uploadArgs.file).toBeInstanceOf(File);
         expect(uploadArgs.sourceSystem).toBe('mobile_capture_pwa_offline');
         expect('apiKey' in uploadArgs).toBe(false);
+    });
+
+    it('quarantines a previous tenant scan instead of replaying it under the new session', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 3,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-a',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-A' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-A',
+                },
+            ],
+            photos: [],
+        });
+        mockUseAuth.mockReturnValue({ isAuthenticated: true, tenantId: 'tenant-b' });
+
+        const { result } = renderHook(() => useSync());
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        expect(fetchWithCsrfMock).not.toHaveBeenCalled();
+        expect(dbMocks.markScanSyncFailed).toHaveBeenCalledWith(
+            3,
+            expect.objectContaining({ message: expect.stringContaining('different tenant') }),
+        );
+        expect(dbMocks.markScanSynced).not.toHaveBeenCalled();
+    });
+
+    it('replays a scan whose stored tenant still matches the session', async () => {
+        dbMocks.getPendingUploads.mockResolvedValue({
+            scans: [
+                {
+                    id: 4,
+                    payload: JSON.stringify({
+                        source: 'mobile_scanner_pwa',
+                        tenant_id: 'tenant-123',
+                        events: [{ cte_type: 'receiving', traceability_lot_code: 'LOT-1' }],
+                    }),
+                    timestamp: Date.now(),
+                    cteType: 'receiving',
+                    content: 'LOT-1',
+                },
+            ],
+            photos: [],
+        });
+
+        const { result } = renderHook(() => useSync());
+        setOnlineState(true);
+        await act(async () => {
+            await result.current.manualSync();
+        });
+
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1));
+        expect(dbMocks.markScanSynced).toHaveBeenCalledWith(4);
     });
 
     it('does not sync when the user is signed out', async () => {

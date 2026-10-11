@@ -120,8 +120,19 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
     model but absent from the database is ``reflected is False``, so it is
     still compared and still fails the gate — which is what caught the three
     name mismatches fixed alongside this change.
+
+    ``foreign_key_constraint`` joined the same set when FK comparison was
+    turned on: four v079 FKs on fsma.ingestion_run_receipts (event,
+    evidence, rule-eval, export) exist only in the database because their
+    referenced tables are raw-SQL-managed with no ORM model — declaring
+    them on AdvisoryReceiptModel raises NoReferencedTableError during
+    comparison. They are baselined here, verified by hand against the v079
+    DDL (all ON DELETE RESTRICT). The reverse direction stays compared: an
+    FK declared on an ORM model but missing or re-optioned in the database
+    fails the gate, which is what caught the 20 missing ondelete options
+    fixed alongside this change.
     """
-    if type_ in {"table", "index", "check_constraint"} and reflected and compare_to is None:
+    if type_ in {"table", "index", "check_constraint", "foreign_key_constraint"} and reflected and compare_to is None:
         return False
     # Known-equivalent representations that autogenerate cannot compare
     # faithfully (verified manually against the migrated schema):
@@ -133,12 +144,11 @@ def include_object(object_, name, type_, reflected, compare_to):  # noqa: ANN001
         return False
     if type_ == "unique_constraint" and getattr(object_, "table", None) is not None and object_.table.name == "api_keys":
         return False
-    # FK *option* churn (ondelete/match representation) produces noisy
-    # remove/add pairs on tables that are structurally in sync. Constraint
-    # alignment is tracked by the WS-2c type/constraint audit, not this
-    # structural gate.
-    if type_ == "foreign_key_constraint":
-        return False
+    # Foreign-key constraints are compared for real: a missing, extra, or
+    # option-mismatched FK (ondelete, deferrability) is structural drift,
+    # not representation noise. Tables with no ORM counterpart stay
+    # excluded by the one-directional rule above, so raw-SQL-managed
+    # tables never surface here through their own constraints.
     return True
 
 

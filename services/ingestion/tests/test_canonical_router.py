@@ -489,9 +489,11 @@ class TestGetRecord:
 
 class TestGetRecordHistory:
     def test_empty_amendment_chain(self, principal: IngestionPrincipal) -> None:
-        # Walk backward returns None (no supersedes), walk forward returns None
+        # Existence check finds the event, walk backward returns None
+        # (no supersedes), walk forward returns None
         session = _FakeSession(
             [
+                _Result(row=_Row((EVENT_ID,))),
                 _Result(row=_Row((EVENT_ID, None, "shipping", "active", NOW, None))),
                 _Result(row=None),  # no forward link
             ]
@@ -508,6 +510,8 @@ class TestGetRecordHistory:
         # Walk forward: no successor
         session = _FakeSession(
             [
+                # existence check: event belongs to the resolved tenant
+                _Result(row=_Row((EVENT_ID,))),
                 # backward step 1: event has supersedes_event_id
                 _Result(row=_Row((EVENT_ID, "evt-old", "shipping", "active", NOW, None))),
                 # backward step 2: predecessor has no further link

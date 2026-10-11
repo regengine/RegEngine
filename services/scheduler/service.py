@@ -29,7 +29,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import structlog
 from apscheduler.events import (
@@ -353,6 +353,29 @@ class SchedulerService:
                 # Stop marking; remaining items will be re-attempted next run.
                 return
 
+    def _unpersisted_webhook_count(self) -> Optional[int]:
+        """Best-effort read of the notifier's unpersisted dead-letter count.
+
+        Returns None when the notifier does not expose a real integer
+        counter (stubbed notifiers in tests, future replacements), in
+        which case the webhook ack gate stays out of the way.
+        """
+        getter = getattr(getattr(self, "notifier", None), "unpersisted_dead_letter_count", None)
+        if not callable(getter):
+            return None
+        try:
+            value = getter()
+        except Exception:  # pragma: no cover — observability must not break the tick
+            return None
+        return value if isinstance(value, int) else None
+
+    def _webhook_unpersisted_grew(self, before: Optional[int]) -> bool:
+        """True when notify() added an unpersisted dead letter this tick."""
+        if before is None:
+            return False
+        after = self._unpersisted_webhook_count()
+        return after is not None and after > before
+
     def _process_new_items(self, items: List[EnforcementItem], source_type: SourceType) -> None:
         """Process newly detected enforcement items.
 
@@ -460,17 +483,37 @@ class SchedulerService:
                     count=len(items),
                 )
 
-        # Send webhook notifications
+        # Send webhook notifications. A delivery that fails with no durable
+        # outbox behind it is lost on restart, so the batch must NOT be
+        # marked seen: the items stay un-marked and retry next tick
+        # (downstream is idempotent on source_id). Durable-outbox failures
+        # keep the old behavior — the outbox drain retries them.
+        webhook_unpersisted_before = self._unpersisted_webhook_count()
         try:
             results = self.notifier.notify(items)
             successful = sum(1 for r in results if r.success)
-            logger.info(
-                "webhooks_delivered",
-                total=len(results),
-                successful=successful,
-            )
+            if successful < len(results):
+                logger.warning(
+                    "webhooks_delivered",
+                    total=len(results),
+                    successful=successful,
+                )
+            else:
+                logger.info(
+                    "webhooks_delivered",
+                    total=len(results),
+                    successful=successful,
+                )
         except (ConnectionError, TimeoutError, OSError, RuntimeError) as e:
             logger.error("webhook_notification_failed", error=str(e))
+        webhook_ack_withheld = self._webhook_unpersisted_grew(webhook_unpersisted_before)
+        if webhook_ack_withheld:
+            logger.warning(
+                "webhook_ack_withheld",
+                source_type=source_type.value,
+                count=len(items),
+                reason="webhook_delivery_unpersisted",
+            )
 
         # Tenant recall matching — activate ComplianceIntegration for FDA recalls.
         # #2689 follow-up: source_ids whose tenant alerting failed are excluded
@@ -549,7 +592,13 @@ class SchedulerService:
         # re-runs the full pipeline for withheld items — downstream is
         # idempotent on source_id (documented at-least-once contract).
         if primary_emit_succeeded:
-            if failed_alert_source_ids:
+            if webhook_ack_withheld:
+                # Unpersisted webhook failure (logged above as
+                # webhook_ack_withheld): the dead letter dies with the
+                # process, so nothing is marked seen and the whole batch
+                # is re-discovered next tick.
+                pass
+            elif failed_alert_source_ids:
                 to_ack = [i for i in items if i.source_id not in failed_alert_source_ids]
                 logger.warning(
                     "recall_alert_ack_withheld",
@@ -1305,11 +1354,27 @@ class SchedulerService:
         except (ImportError, RuntimeError, ConnectionError, ValueError) as e:
             logger.error("data_archival_failed", error=str(e))
 
+    def _holds_leadership(self) -> bool:
+        """True while this process still owns the scheduler advisory lock."""
+        ctx = getattr(self, "distributed_context", None)
+        if ctx is None:
+            return False
+        return bool(getattr(ctx, "_is_leader", False))
+
     def run_initial_scrape(self) -> None:
         """Run all scrapers immediately on startup."""
         logger.info("running_initial_scrape")
 
         for source_type in self.scrapers.keys():
+            # The heartbeat can drop leadership during a long FDA fetch,
+            # before scheduler.start() exists to shut down. Stop the rest
+            # of the startup scrapes instead of continuing as a zombie.
+            if not self._holds_leadership():
+                logger.error(
+                    "leadership_lost_aborting_initial_scrape",
+                    source_type=source_type.value,
+                )
+                return
             try:
                 self.run_scraper(source_type)
             except Exception as e:
@@ -1380,8 +1445,19 @@ class SchedulerService:
         # We only schedule/update jobs if we are the leader
         self.schedule_jobs()
 
+        # Heartbeat may already have cleared leadership during scheduling.
+        # shutdown() cannot stop a scheduler that has not started, so do
+        # not enter the scrape or the blocking start() after that.
+        if not self._holds_leadership():
+            logger.error("leadership_lost_before_initial_scrape")
+            return
+
         # Run initial scrape (on promotion to leader)
         self.run_initial_scrape()
+
+        if not self._holds_leadership():
+            logger.error("leadership_lost_before_scheduler_start")
+            return
 
         logger.info("scheduler_starting_mainloop")
         try:
