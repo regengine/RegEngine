@@ -441,18 +441,18 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     if row.get("category_id"):
         parsed["ftl_scopes"].append(
             {
-                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
-                "category_id": str(row.get("category_id") or "").strip(),
-            }
-        )
-        return
-    if row.get("tlc_code"):
-        parsed["tlcs"].append(
-            {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
                 "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
                 "product_description": str(row.get("product_description") or "").strip() or None,
                 "status": str(row.get("status") or "active").strip().lower(),
+            }
+        )
+        return
+    if row.get("category_id"):
+        parsed["ftl_scopes"].append(
+            {
+                "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),
+                "category_id": str(row.get("category_id") or "").strip(),
             }
         )
         return
