@@ -259,6 +259,7 @@ function ScanPageContent() {
                                     <Link
                                         href={capturePath}
                                         target="_blank"
+                                        rel="noopener noreferrer"
                                         className="inline-flex items-center gap-1.5 text-ui text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
                                     >
                                         Open scanner in new tab <ExternalLink className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
