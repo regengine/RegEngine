@@ -9,6 +9,7 @@
 
 import { getServiceURL } from './api-config';
 import { fetchWithCsrf } from './fetch-with-csrf';
+import { apiError } from './api-error';
 
 const BASE = () => getServiceURL('ingestion');
 const API_FETCH_TIMEOUT_MS = 8000;
@@ -46,10 +47,15 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
                 },
             });
         } catch (err) {
+            // Network failure only: retry unless the request was aborted.
             lastError = err instanceof Error ? err : new Error('Network request failed');
             if (isAbortError(err)) {
                 throw lastError;
             }
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
         }
 
         if (res === undefined) {
@@ -77,6 +83,19 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
         if (attempt < MAX_RETRIES) {
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
         }
+
+        // 429 and 5xx are transient: retry. Every other 4xx is final, in
+        // particular 401/403 which need immediate session handling, not
+        // two more doomed requests and seconds of added latency.
+        if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
+            lastError = apiError(res.status, res.statusText);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            }
+            continue;
+        }
+
+        throw apiError(res.status, res.statusText);
     }
 
     throw lastError!;

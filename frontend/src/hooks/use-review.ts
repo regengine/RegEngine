@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { apiError } from '@/lib/api-error';
 import type { ReviewItem } from '@/types/review';
 
 async function reviewFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -16,11 +17,15 @@ async function reviewFetch<T>(path: string, options: RequestInit = {}): Promise<
 
     if (!response.ok) {
         const errorBody = await response.json().catch(() => null);
-        const message =
+        const serverMessage =
             errorBody && typeof errorBody.error === 'string'
                 ? errorBody.error
-                : `Review request failed: ${response.status} ${response.statusText}`;
-        throw new Error(message);
+                : null;
+        // Keep the status machine-readable alongside the server message so a
+        // 401 on the review queue can trigger re-login instead of a dead list.
+        const error = apiError(response.status, response.statusText);
+        if (serverMessage) error.message = serverMessage;
+        throw error;
     }
 
     const contentType = response.headers.get('content-type') ?? '';
