@@ -15,7 +15,7 @@ These tests pin the fix:
   * ``reconcile_tenant_scope`` returns the authenticated tenant when the
     two sources agree, 409s (``E_TENANT_MISMATCH``) when they diverge, and
     403s when the key has no tenant.
-  * Each of the four export/gap endpoints returns 409 and performs **no**
+  * Each export/gap endpoint returns 409 and performs **no**
     Neo4j read when the middleware tenant and the API-key tenant disagree.
 """
 
@@ -83,7 +83,7 @@ def test_reconcile_uses_authenticated_not_middleware_tenant():
 
 
 # ─────────────────────────────────────────────────────────────────────
-# End-to-end: the four graph FSMA handlers fail closed on divergence
+# End-to-end: the graph FSMA export/gap handlers fail closed on divergence
 # ─────────────────────────────────────────────────────────────────────
 
 
@@ -102,6 +102,12 @@ DIVERGENT_ENDPOINTS = [
     "/v1/fsma/compliance/gaps",
     "/v1/fsma/compliance/gaps/orphans",
     "/v1/fsma/compliance/export/gaps",
+    # The remaining export handlers serve the exporters/ builders (trace CSV,
+    # recall contacts) and the inline EPCIS builder: they must fail closed
+    # the same way rather than scoping Neo4j from the middleware tenant.
+    "/v1/fsma/compliance/export/epcis?start_date=2026-01-01&end_date=2026-12-31",
+    "/v1/fsma/compliance/export/trace/LOT-A?direction=forward",
+    "/v1/fsma/compliance/export/recall-contacts/LOT-A",
 ]
 
 

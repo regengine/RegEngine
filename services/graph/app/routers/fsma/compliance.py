@@ -220,7 +220,11 @@ async def export_epcis(
     """
     logger.info("epcis_export_initiated", start=start_date, end=end_date, format=format)
 
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         from ...fsma_utils import query_events_by_range
@@ -231,7 +235,7 @@ async def export_epcis(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
+            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
 
         # Map CTE types to EPCIS bizStep
         BIZ_STEP_MAP = {
@@ -454,7 +458,11 @@ async def export_trace_csv(
     - Facility GLN
     - Facility Address
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         # #2833: `async with` closes the driver — and its connection
@@ -464,9 +472,9 @@ async def export_trace_csv(
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             if direction == "forward":
-                result = await trace_forward(client, tlc, max_depth, str(tenant_id))
+                result = await trace_forward(client, tlc, max_depth, scoped_tenant_id)
             else:
-                result = await trace_backward(client, tlc, max_depth, str(tenant_id))
+                result = await trace_backward(client, tlc, max_depth, scoped_tenant_id)
 
         # Generate CSV content. #2945: rows come from the shared builder,
         # which emits one row per observed lot<->event<->facility association
@@ -527,7 +535,11 @@ async def export_recall_contacts(
     system records no notification outcomes, so the column is the recall
     coordinator's to fill in. See ``exporters.recall_contacts_csv``.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         # #2833: `async with` closes the driver — and its connection
@@ -536,7 +548,7 @@ async def export_recall_contacts(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            result = await trace_forward(client, tlc, 10, str(tenant_id))
+            result = await trace_forward(client, tlc, 10, scoped_tenant_id)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
