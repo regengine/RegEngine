@@ -20,6 +20,7 @@ from typing import Any, Dict
 import structlog
 from shared.safe_http import (
     STANDARD_BROWSER_HEADERS,
+    ResponseTooLargeError,
     safe_fetch_content,
     safe_httpx_get_sync,
 )
@@ -48,6 +49,9 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
     """
     try:
         return safe_fetch_content(url, timeout=timeout, headers=STANDARD_HEADERS)
+    except ResponseTooLargeError:
+        # A browser retry must not bypass the response size boundary.
+        raise
     except ValueError as e:
         # ``safe_fetch_content`` wraps SSRF as ValueError("URL validation
         # failed: ..."). That wrapper is fatal; do not fall back.

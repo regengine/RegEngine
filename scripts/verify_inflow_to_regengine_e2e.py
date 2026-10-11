@@ -66,6 +66,40 @@ def _configure_paths() -> None:
             sys.path.insert(0, root_text)
 
 
+PRODUCTION_DB_HINTS = (
+    "supabase.co",
+    "supabase.com",
+    "neon.tech",
+    "railway.app",
+    "amazonaws.com",
+    "ondigitalocean.com",
+    "render.com",
+)
+
+
+def _database_host(database_url: str) -> str:
+    try:
+        from sqlalchemy.engine import make_url
+
+        return (make_url(database_url).host or "").lower()
+    except Exception:  # noqa: BLE001 - unparseable URL, treat as non-local
+        return ""
+
+
+def ensure_local_database(database_url: str, allow_production: bool) -> None:
+    """Refuse hosted or non-localhost databases without explicit opt-in."""
+    lowered = database_url.lower()
+    host = _database_host(database_url)
+    env = os.getenv("REGENGINE_ENV", "").strip().lower()
+    is_local = host in {"localhost", "127.0.0.1", "::1"}
+    looks_hosted = any(hint in lowered for hint in PRODUCTION_DB_HINTS)
+    if (not is_local or looks_hosted or env == "production") and not allow_production:
+        raise VerificationError(
+            "Refusing to run against a non-localhost database. "
+            "Use a localhost DATABASE_URL or pass --allow-production only if you are certain."
+        )
+
+
 def _configure_environment(args: argparse.Namespace) -> None:
     database_url = args.database_url or os.getenv("DATABASE_URL")
     if not database_url:
@@ -76,6 +110,7 @@ def _configure_environment(args: argparse.Namespace) -> None:
         raise VerificationError(
             "This proof requires a real Postgres DATABASE_URL; sqlite/dev mocks are not accepted."
         )
+    ensure_local_database(database_url, getattr(args, "allow_production", False))
 
     os.environ["DATABASE_URL"] = database_url
     os.environ.setdefault("REGENGINE_ENV", "development")
@@ -109,6 +144,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--api-key",
         default="regengine-inflow-e2e-local-key",
         help="Process-local preshared API key used for TestClient calls.",
+    )
+    parser.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow a non-localhost DATABASE_URL. Almost never what you want.",
     )
     return parser.parse_args(argv)
 

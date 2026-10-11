@@ -99,15 +99,47 @@ def test_reset_tenant_guc_issues_clearing_statements_on_postgres():
 # =========================================================================
 
 
-def test_mask_email_produces_deterministic_salted_hash():
+def test_mask_email_produces_deterministic_salted_hash(monkeypatch):
     from services.admin.app.audit_routes import _mask_email
 
+    monkeypatch.delenv("AUDIT_PII_HASH_SALT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "test")
     a = _mask_email("jane.doe@example.com")
     b = _mask_email("jane.doe@example.com")
     c = _mask_email("other@example.com")
     assert a == b
     assert a != c
     assert a.startswith("masked:")
+
+
+def test_pii_masking_uses_configured_salt_when_set(monkeypatch):
+    from services.admin.app.audit_routes import _mask_email, _pii_hash_salt
+
+    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "unit-test-salt-value")
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    assert _pii_hash_salt() == "unit-test-salt-value"
+    assert _mask_email("jane.doe@example.com") == _mask_email("jane.doe@example.com")
+
+
+def test_pii_masking_fails_in_production_without_configured_salt(monkeypatch):
+    """A shared constant default would let anyone with the source reverse
+    masked values, so production refuses to mask without an explicit salt."""
+    from services.admin.app.audit_routes import _mask_email, _pii_hash_salt
+
+    monkeypatch.delenv("AUDIT_PII_HASH_SALT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    with pytest.raises(RuntimeError, match="AUDIT_PII_HASH_SALT"):
+        _pii_hash_salt()
+    with pytest.raises(RuntimeError, match="AUDIT_PII_HASH_SALT"):
+        _mask_email("jane.doe@example.com")
+
+
+def test_pii_masking_uses_process_salt_outside_production(monkeypatch):
+    from services.admin.app.audit_routes import _mask_email
+
+    monkeypatch.delenv("AUDIT_PII_HASH_SALT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "development")
+    assert _mask_email("jane.doe@example.com") == _mask_email("jane.doe@example.com")
 
 
 def test_audit_export_allowed_purposes_are_constrained():

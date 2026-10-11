@@ -64,11 +64,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--scopes",
-        default="*",
-        help="Comma-separated scope list. Defaults to '*' so the key passes "
-        "require_permission() routes (permission matching is exact or "
-        "namespace-wildcard — 'read,write' would 403 on e.g. 'fda.export'). "
-        "Narrow it (e.g. epcis.ingest,fda.export) when testing scope enforcement.",
+        default="epcis.ingest,csv.ingest",
+        help="Comma-separated scope list. Defaults to 'epcis.ingest,csv.ingest'. "
+        "Pass --scopes '*' explicitly only when a test needs a wildcard key.",
     )
     parser.add_argument(
         "--billing-tier",

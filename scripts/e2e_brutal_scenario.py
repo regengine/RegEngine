@@ -108,14 +108,28 @@ TENANT_ID = str(uuid4())
 # Use a deterministic test key injected into the subprocess env so the
 # preshared-key path in shared/auth.py accepts it without a DB lookup.
 E2E_API_KEY = "e2e-brutal-test-key-2026"
-INTERNAL_SECRET = os.environ.get("REGENGINE_INTERNAL_SECRET", "trusted-internal-v1")
+
+
+def _internal_secret() -> str:
+    """Return the internal secret, which must come from the environment.
+
+    There is no fallback default: a committed secret would authenticate
+    anyone holding a copy of this script.
+    """
+    secret = os.environ.get("REGENGINE_INTERNAL_SECRET", "")
+    if not secret:
+        raise RuntimeError(
+            "REGENGINE_INTERNAL_SECRET is not set. Export it before running "
+            "this scenario (it must match the service under test)."
+        )
+    return secret
 
 
 def build_headers():
     return {
         "X-RegEngine-API-Key": E2E_API_KEY,
         "X-Tenant-ID": TENANT_ID,
-        "X-RegEngine-Internal-Secret": INTERNAL_SECRET,
+        "X-RegEngine-Internal-Secret": _internal_secret(),
     }
 
 

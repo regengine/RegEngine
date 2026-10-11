@@ -9,7 +9,7 @@ from typing import Any, Optional
 import stripe
 import structlog
 from fastapi import HTTPException, Request
-from shared import funnel_events as _funnel_mod
+from shared import funnel_events as _funnel_mod, webhook_auth as _webhook_auth_mod
 
 from . import (
     customers as _customers_mod,
@@ -701,9 +701,16 @@ async def _process_stripe_webhook(
 ) -> dict[str, Any]:
     _helpers_mod._configure_stripe()
 
-    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
-    if not webhook_secret:
-        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured")
+    # Fail-closed secret gate owned by the shared webhook template
+    # (``shared.webhook_auth``). Behavior unchanged: a missing secret is
+    # a 500 with the same message the billing tests pin.
+    try:
+        webhook_secret = _webhook_auth_mod.require_webhook_secret(
+            os.getenv("STRIPE_WEBHOOK_SECRET"),
+            connector_id="stripe",
+        )
+    except _webhook_auth_mod.WebhookSecretMissingError as exc:
+        raise HTTPException(status_code=500, detail="STRIPE_WEBHOOK_SECRET is not configured") from exc
 
     # #2929: the rate limiter used to run in the route, BEFORE this point, on
     # a bucket keyed by client IP — which behind a shared reverse proxy is one

@@ -14,6 +14,7 @@ preserves the audit trail's integrity while removing PII.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import uuid
 from contextlib import contextmanager
@@ -67,37 +68,79 @@ def get_db():
         db.rollback()
         db.close()
 
-# Cypher to detach-delete only graph nodes that represent the erased user.
-# tenant_id and user_id are always passed as parameters, never interpolated.
-_CYPHER_DELETE_USER_GRAPH_DATA = """
-MATCH (n {tenant_id: $tenant_id})
-WHERE n.user_id = $user_id
-   OR n.actor_id = $user_id
-   OR (
-        n.id = $user_id
-        AND any(label IN labels(n) WHERE label IN [
-            'User',
-            'Account',
-            'TeamMember',
-            'SupplierContact'
-        ])
-   )
+# Graph node labels that represent a user identity. Only nodes carrying one
+# of these labels are ever deleted by erasure. Every other node (trace
+# events, CTEs, facilities, lots, audit entries) is somebody's compliance
+# evidence, so erasure anonymizes its actor reference instead of deleting
+# the record. SupplierContact is the only identity label the codebase
+# currently writes to the graph (see supplier_graph_sync.py); User,
+# Account and TeamMember are kept as defensive matches for identity nodes
+# written by other paths. tenant_id, user_id and erased_actor_id are
+# always passed as parameters, never interpolated.
+_ERASURE_IDENTITY_LABELS: tuple[str, ...] = (
+    "User",
+    "Account",
+    "TeamMember",
+    "SupplierContact",
+)
+
+_IDENTITY_LABEL_LIST = "[" + ", ".join(f"'{label}'" for label in _ERASURE_IDENTITY_LABELS) + "]"
+
+# Delete only the erased user's own identity nodes for this tenant.
+_CYPHER_DELETE_IDENTITY_NODES = f"""
+MATCH (n {{tenant_id: $tenant_id}})
+WHERE any(label IN labels(n) WHERE label IN {_IDENTITY_LABEL_LIST})
+  AND (n.user_id = $user_id OR n.id = $user_id)
 DETACH DELETE n
 """
 
+# Anonymize the actor reference on shared records for this tenant. The
+# record itself (and its relationships) is preserved because it is other
+# parties' FSMA 204 compliance evidence. Identity nodes are excluded here
+# because the delete query above already removed them.
+_CYPHER_ANONYMIZE_SHARED_ACTOR_REFS = f"""
+MATCH (m {{tenant_id: $tenant_id}})
+WHERE (m.actor_id = $user_id OR m.user_id = $user_id)
+  AND NOT any(label IN labels(m) WHERE label IN {_IDENTITY_LABEL_LIST})
+SET m.actor_id = CASE WHEN m.actor_id = $user_id THEN $erased_actor_id ELSE m.actor_id END,
+    m.user_id = CASE WHEN m.user_id = $user_id THEN $erased_actor_id ELSE m.user_id END
+"""
 
-async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
-    """Delete Neo4j nodes for *user_id* as part of GDPR erasure.
+
+def _erased_actor_token(user_id: str) -> str:
+    """Return a stable pseudonymous actor id for an erased user.
+
+    Deterministic sha256 of the user id, so every shared record that
+    referenced the user converges on the same token and repeated erasure
+    replays stay idempotent. The raw user id cannot be recovered from it.
+    """
+    digest = hashlib.sha256(f"gdpr-erasure:{user_id}".encode("utf-8")).hexdigest()
+    return f"erased-user-{digest[:16]}"
+
+
+async def _delete_neo4j_user_graph_data(
+    tenant_id: str,
+    user_id: str,
+    erased_actor_id: Optional[str] = None,
+) -> None:
+    """Remove a user's graph identity and anonymize their shared references.
+
+    Identity nodes (User, Account, TeamMember, SupplierContact) for
+    *user_id* are deleted; shared records that reference the user via
+    ``actor_id``/``user_id`` are kept with the reference replaced by a
+    stable ``erased-user-<hash>`` token, preserving other parties'
+    traceability evidence.
 
     This is best-effort: if Neo4j is not configured (``NEO4J_URI`` /
     ``NEO4J_URL`` absent) the call is skipped silently.  If the driver is
-    configured but the query fails, a warning is logged and the function
+    configured but a query fails, a warning is logged and the function
     returns without raising so that the already-committed Postgres erasure
     is not affected.
 
-    ``tenant_id`` and ``user_id`` are passed as Cypher parameters to prevent
-    injection.  The query must stay user-scoped: account erasure is not tenant
-    offboarding and must not delete the tenant's traceability graph.
+    ``tenant_id``, ``user_id`` and ``erased_actor_id`` are passed as Cypher
+    parameters to prevent injection. Both queries stay tenant-scoped:
+    account erasure is not tenant offboarding and must not touch another
+    tenant's graph.
     """
     if not tenant_id or not user_id:
         logger.debug(
@@ -118,6 +161,7 @@ async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
         )
         return
 
+    token = erased_actor_id or _erased_actor_token(str(user_id))
     try:
         from neo4j import AsyncGraphDatabase
 
@@ -126,9 +170,15 @@ async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
         async with AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as neo4j_driver:
             async with neo4j_driver.session() as session:
                 await session.run(
-                    _CYPHER_DELETE_USER_GRAPH_DATA,
+                    _CYPHER_DELETE_IDENTITY_NODES,
                     tenant_id=tenant_id,
                     user_id=user_id,
+                )
+                await session.run(
+                    _CYPHER_ANONYMIZE_SHARED_ACTOR_REFS,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    erased_actor_id=token,
                 )
         logger.info(
             "erasure_neo4j_user_graph_data_deleted",
@@ -327,13 +377,26 @@ def _apply_account_erasure(
         if audit_entry_id is None:
             raise SQLAlchemyError("account erasure audit marker could not be persisted")
 
+        # Graph cleanup is two durable steps: delete the user's identity
+        # nodes, then anonymize their actor reference on shared records.
+        # Shared trace/CTE nodes are never deleted; they are other
+        # parties' compliance evidence.
+        erased_actor_id = _erased_actor_token(str(user_id))
         enqueue_graph_write(
             db,
             tenant_id=str(marker_tenant_id),
             operation="user_erasure",
-            cypher=_CYPHER_DELETE_USER_GRAPH_DATA,
+            cypher=_CYPHER_DELETE_IDENTITY_NODES,
             params={"user_id": str(user_id)},
             dedupe_key=f"user_erasure:{marker_tenant_id}:{user_id}",
+        )
+        enqueue_graph_write(
+            db,
+            tenant_id=str(marker_tenant_id),
+            operation="user_erasure",
+            cypher=_CYPHER_ANONYMIZE_SHARED_ACTOR_REFS,
+            params={"user_id": str(user_id), "erased_actor_id": erased_actor_id},
+            dedupe_key=f"user_erasure_anonymize:{marker_tenant_id}:{user_id}",
         )
     return historical_audit_rows
 
