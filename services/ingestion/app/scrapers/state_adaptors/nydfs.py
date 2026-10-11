@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from html.parser import HTMLParser
 from typing import Iterable
@@ -110,7 +111,13 @@ def _retry_delay(value: str | None, fallback: float) -> float:
     try:
         if value is None:
             return fallback
-        return max(float(value), 0.0)
+        delay = float(value)
+        if not math.isfinite(delay):
+            # A hostile or buggy Retry-After ("inf", "nan", "1e999")
+            # must not hang the worker in time.sleep or raise; degrade
+            # to the configured fallback instead.
+            return fallback
+        return max(delay, 0.0)
     except ValueError:
         return fallback
 

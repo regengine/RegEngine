@@ -186,13 +186,25 @@ async def test_map_requirement_queries_scope_obligations_and_bind_tenant():
 
     source_cypher = _flatten(session.run.call_args_list[0].args[0])
     assert "o.tenant_id = $tenant_id" in source_cypher, f"source query must scope Obligation. Cypher:\n{source_cypher}"
-    assert "IS NULL" not in source_cypher
+    # The joined Section is mixed shared-or-own catalog (the loader writes
+    # sections with no tenant_id), so it carries null-or-own on the
+    # property. The banned shape is the fail-open parameter shim, which
+    # would expose every tenant's rows to a null-tenant caller.
+    assert "$tenant_id IS NULL" not in source_cypher, f"fail-open shim in source query. Cypher:\n{source_cypher}"
+    assert "(s.tenant_id IS NULL OR s.tenant_id = $tenant_id)" in source_cypher, (
+        f"source query must scope Section. Cypher:\n{source_cypher}"
+    )
 
     candidates_cypher = _flatten(session.run.call_args_list[1].args[0])
     assert "o.tenant_id = $tenant_id" in candidates_cypher, (
         f"candidate query must scope Obligation. Cypher:\n{candidates_cypher}"
     )
-    assert "IS NULL" not in candidates_cypher
+    assert "$tenant_id IS NULL" not in candidates_cypher, (
+        f"fail-open shim in candidate query. Cypher:\n{candidates_cypher}"
+    )
+    assert "(s.tenant_id IS NULL OR s.tenant_id = $tenant_id)" in candidates_cypher, (
+        f"candidate query must scope Section. Cypher:\n{candidates_cypher}"
+    )
 
     persist_cypher = _flatten(session.run.call_args_list[2].args[0])
     assert persist_cypher.count("tenant_id: $tenant_id") >= 2, (

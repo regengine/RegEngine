@@ -108,8 +108,38 @@ def _check_db_connectivity() -> DRCheck:
         db.close()
 
 
+def _chain_row_is_broken(index: int, row, rows) -> bool:
+    """True when this chain row is not a valid link in position ``index``.
+
+    The old readiness query only counted rows whose previous hash was null
+    and whose sequence was above 1. A flipped chain hash, a sequence hole
+    left by a truncate, or a previous hash that points at the wrong row all
+    passed that query.
+    """
+    from shared.cte_persistence import compute_chain_hash
+
+    seq, event_hash, stored_prev, stored_chain = row[0], row[1], row[2], row[3]
+    try:
+        seq_num = int(seq)
+    except (TypeError, ValueError):
+        return True
+    if seq_num != index + 1:
+        return True
+    if not isinstance(event_hash, str) or not event_hash:
+        return True
+    if not isinstance(stored_chain, str) or not stored_chain:
+        return True
+    if index == 0:
+        if stored_prev is not None:
+            return True
+    elif stored_prev != rows[index - 1][3]:
+        return True
+    previous = stored_prev if isinstance(stored_prev, str) or stored_prev is None else str(stored_prev)
+    return compute_chain_hash(event_hash, previous) != stored_chain
+
+
 def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
-    """Verify that the SHA-256 hash chain has no gaps."""
+    """Verify that the SHA-256 hash chain has no gaps and each hash recomputes."""
     now = datetime.now(timezone.utc).isoformat()
     db = get_db_safe()
     if not db:
@@ -120,16 +150,31 @@ def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
             checked_at=now,
         )
     try:
-        row = db.execute(
-            text(
-                "SELECT COUNT(*) AS total, "
-                "SUM(CASE WHEN previous_chain_hash IS NULL AND sequence_num > 1 THEN 1 ELSE 0 END) AS gaps "
-                "FROM fsma.hash_chain WHERE tenant_id = :tid"
-            ),
-            {"tid": tenant_id},
-        ).fetchone()
+        rows = (
+            db.execute(
+                text(
+                    "SELECT sequence_num, event_hash, previous_chain_hash, chain_hash "
+                    "FROM fsma.hash_chain WHERE tenant_id = :tid "
+                    "ORDER BY sequence_num ASC"
+                ),
+                {"tid": tenant_id},
+            ).fetchall()
+            or []
+        )
 
-        if not row or row[0] == 0:
+        if not rows:
+            count_row = db.execute(
+                text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid AND status != 'rejected'"),
+                {"tid": tenant_id},
+            ).fetchone()
+            event_count = int(count_row[0]) if count_row and count_row[0] else 0
+            if event_count:
+                return DRCheck(
+                    name="hash_chain_integrity",
+                    status="fail",
+                    details=f"Hash chain is missing while {event_count} event(s) exist",
+                    checked_at=now,
+                )
             return DRCheck(
                 name="hash_chain_integrity",
                 status="warn",
@@ -137,18 +182,18 @@ def _check_hash_chain_integrity(tenant_id: str) -> DRCheck:
                 checked_at=now,
             )
 
-        total, gaps = int(row[0]), int(row[1]) if row[1] else 0
+        gaps = sum(1 for index, row in enumerate(rows) if _chain_row_is_broken(index, row, rows))
         if gaps == 0:
             return DRCheck(
                 name="hash_chain_integrity",
                 status="pass",
-                details=f"Hash chain intact — {total} entries, 0 gaps",
+                details=f"Hash chain intact — {len(rows)} entries, 0 gaps",
                 checked_at=now,
             )
         return DRCheck(
             name="hash_chain_integrity",
             status="fail",
-            details=f"Hash chain has {gaps} gap(s) in {total} entries",
+            details=f"Hash chain has {gaps} gap(s) in {len(rows)} entries",
             checked_at=now,
         )
     except SQLAlchemyError as exc:
@@ -479,19 +524,29 @@ async def test_recovery(
         )
     )
 
-    # 2. Check if hash chain can be rebuilt from events
+    # 2. Check if hash chain can be rebuilt from events.
+    # A warning that the chain could not be read is not evidence that a
+    # rebuild will succeed. An empty chain while events remain is a failed
+    # integrity check, and those events are what a rebuild would use.
     chain_check = _check_hash_chain_integrity(tenant_id)
     checks.append(chain_check)
-    chain_rebuildable = chain_check.status in ("pass", "warn")
+    if chain_check.status == "fail" and "missing while" in chain_check.details:
+        rebuild_status = "pass"
+        rebuild_details = "Hash chain can be rebuilt from event data"
+    elif chain_check.status == "fail":
+        rebuild_status = "fail"
+        rebuild_details = "Hash chain rebuild may not be possible — gaps detected"
+    elif chain_check.status == "warn" and not chain_check.details.startswith("No hash chain records"):
+        rebuild_status = "warn"
+        rebuild_details = "Hash chain could not be read, so rebuild feasibility is unknown"
+    else:
+        rebuild_status = "pass"
+        rebuild_details = "Hash chain can be rebuilt from event data"
     checks.append(
         DRCheck(
             name="chain_rebuild_feasibility",
-            status="pass" if chain_rebuildable else "fail",
-            details=(
-                "Hash chain can be rebuilt from event data"
-                if chain_rebuildable
-                else "Hash chain rebuild may not be possible — gaps detected"
-            ),
+            status=rebuild_status,
+            details=rebuild_details,
             checked_at=now_str,
         )
     )

@@ -117,7 +117,9 @@ def set_api_key_lookup_context(session: Any, raw_key: str) -> tuple[str, tuple[s
     Callers receive the digest tuple for their parameterized lookup; raw key
     material is never placed in a GUC.
     """
-    if not raw_key or not raw_key.startswith("rge_"):
+    # Fail closed on helper misuse: a non-string credential is not a key,
+    # never a 500 from str methods on the wrong type.
+    if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
         return None
     try:
         key_id, secret = raw_key.split(".", 1)
@@ -745,7 +747,9 @@ class DatabaseAPIKeyStore:
         Returns:
             APIKeyResponse if valid, None otherwise
         """
-        if not raw_key or not raw_key.startswith("rge_"):
+        # Fail closed on helper misuse: a non-string credential is an
+        # invalid key, never a 500 from str methods on the wrong type.
+        if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
         # Extract key_id
@@ -781,10 +785,18 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_disabled", key_id=key_id)
                 return None
 
-            # Check if expired
-            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-                logger.warning("api_key_expired", key_id=key_id)
-                return None
+            # Check if expired. Naive datetimes (no tzinfo) can arrive
+            # from hand-built rows or drivers that drop the offset; assume
+            # UTC so the comparison never raises TypeError (which would
+            # surface as a 500 instead of an auth decision). This matches
+            # the in-memory APIKeyStore.validate_key guard.
+            if api_key.expires_at:
+                expires_at = api_key.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at < datetime.now(timezone.utc):
+                    logger.warning("api_key_expired", key_id=key_id)
+                    return None
 
             # Check if revoked
             if api_key.revoked_at:
@@ -808,6 +820,32 @@ class DatabaseAPIKeyStore:
             response = APIKeyResponse.model_validate(api_key)
             await self._record_key_usage(key_id, session)
             return response
+
+    async def get_tenant_status(self, tenant_id: Optional[str]) -> Optional[str]:
+        """Return the live ``tenants.status`` for one key-bound tenant.
+
+        The caller passes only the cryptographically validated API key's
+        ``tenant_id``; request-supplied tenant values are never accepted
+        here. ``tenants`` is FORCE RLS, so the key's tenant is bound first
+        (same primitive as the admin API-key path). One indexed primary-key
+        read, no writes, so the per-request cost stays small.
+
+        Returns the status string, or None when the tenant row is missing.
+        Raises on lookup failure so the caller can fail closed (503): a
+        status that cannot be read must never authenticate.
+        """
+        if not tenant_id:
+            return None
+        async with self._session() as session:
+            await self._set_context(session, str(tenant_id))
+            result = await session.execute(
+                text("SELECT status FROM tenants WHERE id = CAST(:tid AS uuid)"),
+                {"tid": str(tenant_id)},
+            )
+            row = result.fetchone()
+            if row is None:
+                return None
+            return row[0]
 
     async def check_rate_limit(
         self,

@@ -96,6 +96,7 @@ class _KeyState:
         self.expires_at: Optional[datetime] = None
         self.scopes = list(_LIVE_SCOPES)
         self.jurisdictions = list(_LIVE_JURISDICTIONS)
+        self.tenant_status: Optional[str] = "active"
 
     def row(self):
         return (
@@ -110,12 +111,22 @@ class _KeyState:
 
 
 def _patch_key_row(monkeypatch: pytest.MonkeyPatch, state: _KeyState) -> MagicMock:
-    """Route the middleware's pre-auth lookup at a stubbed DB row."""
+    """Route the middleware's pre-auth lookup at a stubbed DB row.
+
+    The lookup issues a second query for the key tenant's status; the
+    stub answers it from ``state.tenant_status`` so suspension can be
+    flipped mid-test exactly like revocation.
+    """
     db = MagicMock()
 
     def execute(statement, parameters):
         result = MagicMock()
-        result.fetchone.return_value = state.row()
+        if "FROM tenants" in str(statement):
+            result.fetchone.return_value = (
+                (state.tenant_status,) if state.tenant_status is not None else None
+            )
+        else:
+            result.fetchone.return_value = state.row()
         return result
 
     db.execute.side_effect = execute
@@ -243,3 +254,78 @@ def test_lookup_rejects_unparseable_keys_without_touching_db(monkeypatch):
     assert idemp_mod._lookup_api_key_context("not-a-key") is None
     assert idemp_mod._lookup_api_key_context("") is None
     assert db.execute.call_count == 0
+
+
+def test_lookup_rejects_suspended_archived_and_missing_tenants(monkeypatch):
+    """A valid key for a non-active tenant resolves nothing to replay."""
+    state = _KeyState()
+    _patch_key_row(monkeypatch, state)
+
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is not None
+
+    state.tenant_status = "suspended"
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is None
+
+    state.tenant_status = "archived"
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is None
+
+    state.tenant_status = None
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is None
+
+    state.tenant_status = "trial"
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is not None
+
+
+def test_lookup_fails_closed_when_status_read_errors(monkeypatch):
+    """A tenant-status lookup error resolves nothing, never a replay."""
+    state = _KeyState()
+    db = _patch_key_row(monkeypatch, state)
+
+    real_side_effect = db.execute.side_effect
+
+    def execute(statement, parameters):
+        if "FROM tenants" in str(statement):
+            raise RuntimeError("db down")
+        return real_side_effect(statement, parameters)
+
+    db.execute.side_effect = execute
+    assert idemp_mod._lookup_api_key_context("rge_live.stable-secret") is None
+
+
+def test_suspended_tenant_retry_gets_route_verdict_not_cached_body(monkeypatch):
+    """Core regression: suspension between first use and retry.
+
+    First request (active tenant) returns 200 and populates the cache.
+    After the tenant is suspended, retrying the identical request must
+    reach the route (which now answers 403 like the real auth
+    dependency) instead of replaying the cached 200 body. On the old
+    code the lookup never read tenant status, so the retry replayed the
+    cached body with the handler invoked only once.
+    """
+    fake = _patch_redis(monkeypatch)
+    state = _KeyState()
+    _patch_key_row(monkeypatch, state)
+    suspended = {"flag": False}
+
+    app = FastAPI()
+
+    @app.post("/echo")
+    async def echo():
+        if suspended["flag"]:
+            return JSONResponse({"detail": "Invalid API key"}, status_code=403)
+        return {"receipt": "original-authorized-body"}
+
+    app.add_middleware(IdempotencyMiddleware)
+    client = TestClient(app)
+
+    first = client.post("/echo", headers=_api_key_headers(), content=b"same-bytes")
+    assert first.status_code == 200
+    assert first.json() == {"receipt": "original-authorized-body"}
+    assert len(fake.store) == 1
+
+    state.tenant_status = "suspended"
+    suspended["flag"] = True
+
+    retry = client.post("/echo", headers=_api_key_headers(), content=b"same-bytes")
+    assert retry.status_code == 403
+    assert "original-authorized-body" not in retry.text
