@@ -134,7 +134,8 @@ async def _execute_query_plan(
     if plan.intent == "trace_forward":
         if not plan.tlc:
             return [], [], "No lot code was detected for downstream tracing."
-        endpoint = f"/api/v1/fsma/traceability/trace/forward/{quote(plan.tlc)}"
+        # safe="" so lot codes containing "/" or ":" stay one path segment.
+        endpoint = f"/api/v1/fsma/traceability/trace/forward/{quote(plan.tlc, safe='')}"
         payload = await _graph_get(request, tenant_id, endpoint, params={})
         facilities = payload.get("facilities", [])
         downstream_lots = payload.get("downstream_lots", [])
@@ -146,7 +147,7 @@ async def _execute_query_plan(
     if plan.intent == "trace_backward":
         if not plan.tlc:
             return [], [], "No lot code was detected for source tracing."
-        endpoint = f"/api/v1/fsma/traceability/trace/backward/{quote(plan.tlc)}"
+        endpoint = f"/api/v1/fsma/traceability/trace/backward/{quote(plan.tlc, safe='')}"
         payload = await _graph_get(request, tenant_id, endpoint, params={})
         facilities = payload.get("facilities", [])
         source_lots = payload.get("source_lots", [])
@@ -156,7 +157,7 @@ async def _execute_query_plan(
     if plan.intent == "lot_timeline":
         if not plan.tlc:
             return [], [], "No lot code was detected for timeline lookup."
-        endpoint = f"/api/v1/fsma/traceability/timeline/{quote(plan.tlc)}"
+        endpoint = f"/api/v1/fsma/traceability/timeline/{quote(plan.tlc, safe='')}"
         payload = await _graph_get(request, tenant_id, endpoint, params={})
         events = payload.get("events", [])
         answer = f"Found {len(events)} events in the timeline for {plan.tlc}."

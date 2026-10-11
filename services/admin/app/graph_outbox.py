@@ -395,6 +395,16 @@ class GraphOutboxDrainer:
             """),
             {"id": row.id, "drained_at": datetime.now(timezone.utc).isoformat()},
         )
+        if row.operation == "user_erasure":
+            # The erasure rows store the raw user id next to the
+            # pseudonymous token. Once drained, the matcher no longer needs
+            # the params, so drop them to close the rejoin path for anyone
+            # who can read this tenant's outbox rows. Failed rows keep
+            # their params for retry.
+            self._session.execute(
+                text("UPDATE graph_outbox SET params = :redacted WHERE id = :id"),
+                {"id": row.id, "redacted": "{}"},
+            )
         self._session.commit()
         logger.info(
             "graph_outbox_drained",

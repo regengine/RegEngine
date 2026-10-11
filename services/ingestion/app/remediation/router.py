@@ -38,6 +38,19 @@ def _db(db_session):
     return db_session
 
 
+def _safe_filename(name: Optional[str], default: str = "manifest.csv") -> str:
+    """Make a stored filename safe for a Content-Disposition header.
+
+    The original filename is uploader-controlled. Quoting it verbatim lets
+    embedded quotes or CR/LF characters split the header. Strip path
+    components and drop the header-breaking characters; fall back to a
+    fixed name when nothing usable remains.
+    """
+    base = (name or "").replace("\\", "/").split("/")[-1]
+    cleaned = "".join(ch for ch in base if ch not in '"\r\n' and ord(ch) >= 32).strip()
+    return cleaned[:180] or default
+
+
 @router.post("/manifests", response_model=ManifestUploadResponse, summary="Upload a supplier CSV manifest")
 async def upload_manifest(
     file: UploadFile = File(...),
@@ -133,7 +146,7 @@ async def get_original(
         media_type="text/csv",
         headers={
             "X-Source-SHA256": meta["sha256"],
-            "Content-Disposition": f'attachment; filename="{meta["filename"]}"',
+            "Content-Disposition": f'attachment; filename="{_safe_filename(meta["filename"])}"',
         },
     )
 
@@ -153,6 +166,15 @@ async def release_manifest(
     meta = service.get_run_meta(db, tenant_id=tid, run_id=run_id)
     records = service.list_run_records(db, tenant_id=tid, run_id=run_id)
     wanted = set(request.record_ids or [])
+    known_ids = {record["id"] for record in records}
+    unknown = sorted(wanted - known_ids)
+    if unknown:
+        # Fail closed on identifiers outside this manifest: silently
+        # ignoring them turns a buyer typo into a no-op success response.
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown record ids for this manifest: {', '.join(unknown[:10])}",
+        )
     released, skipped = [], []
     for record in records:
         if wanted and record["id"] not in wanted:
@@ -193,7 +215,9 @@ async def create_link(
         )
 
     allowed = case["allowed_fields"]
-    if request.authorized_fields:
+    if request.authorized_fields is not None:
+        # An explicit list (including an explicit empty list) always filters:
+        # treating [] as "no restriction" would grant more than requested.
         allowed = [f for f in allowed if f["field_path"] in set(request.authorized_fields)]
         if not allowed:
             raise HTTPException(status_code=422, detail="authorized_fields does not match any correctable field")
@@ -208,6 +232,30 @@ async def create_link(
             ),
             {"allowed": json.dumps(allowed), "case_id": case_id, "tenant_id": tid},
         )
+
+    # Status gate runs before any token side effect: a disallowed status
+    # must not revoke live tokens or mint a fresh one on its way to 409.
+    if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
+        transition(
+            db,
+            tenant_id=tid,
+            case_id=case_id,
+            to_status="notification_ready",
+            expected_from=case["status"],
+            actor="buyer",
+        )
+        transition(
+            db,
+            tenant_id=tid,
+            case_id=case_id,
+            to_status="awaiting_supplier",
+            expected_from="notification_ready",
+            actor="buyer",
+        )
+    elif case["status"] == "awaiting_supplier":
+        pass  # reissue while already awaiting supplier
+    else:
+        raise HTTPException(status_code=409, detail=f"Case status '{case['status']}' does not allow issuing a link")
 
     # Reissue semantics: revoke any live token first.
     revoked = tokens.revoke_tokens_for_case(
@@ -230,28 +278,6 @@ async def create_link(
     # shape is shared with the outbox drainer, which re-mints and emails a
     # fresh link for this entry.
     correction_url = delivery.correction_url(minted["token"])
-
-    if case["status"] in ("supplier_action_required", "buyer_review", "escalated"):
-        transition(
-            db,
-            tenant_id=tid,
-            case_id=case_id,
-            to_status="notification_ready",
-            expected_from=case["status"],
-            actor="buyer",
-        )
-        transition(
-            db,
-            tenant_id=tid,
-            case_id=case_id,
-            to_status="awaiting_supplier",
-            expected_from="notification_ready",
-            actor="buyer",
-        )
-    elif case["status"] == "awaiting_supplier":
-        pass  # reissue while already awaiting supplier
-    else:
-        raise HTTPException(status_code=409, detail=f"Case status '{case['status']}' does not allow issuing a link")
 
     outbox.enqueue_preview(
         db,
@@ -328,7 +354,7 @@ async def get_evidence(
     return Response(
         content=bundle,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="evidence_{run_id}.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="evidence_{_safe_filename(run_id, default="run")}.zip"'},
     )
 
 

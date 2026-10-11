@@ -174,6 +174,11 @@ class WebhookNotifier:
         # #1150: persistence
         self._outbox_path: Optional[Path] = Path(outbox_path) if outbox_path else None
         self._outbox_lock = Lock()
+        # Deliveries that failed with nowhere durable to wait for retry.
+        # Without an outbox file the dead letter lives only in process
+        # memory and is lost on restart, so every such delivery is nacked
+        # loudly (error log + counter) instead of being silently kept.
+        self._unpersisted_count: int = 0
         # #2697: corrupt outbox lines that could not be written to the
         # quarantine file — preserved verbatim across the next rewrite so
         # they are never destroyed.
@@ -379,20 +384,32 @@ class WebhookNotifier:
         }
         self._dead_letter.append(entry_dict)
 
-        # Also persist to disk for crash safety.
-        if self._outbox_path is not None:
-            now = time.time()
-            entry = OutboxEntry(
+        if self._outbox_path is None:
+            # No durable outbox: this dead letter dies with the process.
+            # Nack loudly so operators know the retry is not crash-safe.
+            self._unpersisted_count += 1
+            logger.error(
+                "webhook_dead_letter_unpersisted",
                 url=url,
-                payload=payload.to_dict(),
-                attempt_count=0,
-                first_attempted_at=now,
-                last_attempted_at=now,
-                next_retry_at=now + _OUTBOX_BACKOFF_SCHEDULE_SECONDS[0],
-                last_error=result.error,
-                last_status_code=result.status_code,
+                error=result.error,
+                unpersisted_count=self._unpersisted_count,
             )
-            self._append_outbox_entry(entry)
+            return
+
+        # Persist to disk for crash safety (outbox path is set here;
+        # the None case returned above).
+        now = time.time()
+        entry = OutboxEntry(
+            url=url,
+            payload=payload.to_dict(),
+            attempt_count=0,
+            first_attempted_at=now,
+            last_attempted_at=now,
+            next_retry_at=now + _OUTBOX_BACKOFF_SCHEDULE_SECONDS[0],
+            last_error=result.error,
+            last_status_code=result.status_code,
+        )
+        self._append_outbox_entry(entry)
 
     def _append_outbox_entry(self, entry: OutboxEntry) -> None:
         """Append one JSONL record. Fail-open: a disk error must not
@@ -405,10 +422,14 @@ class WebhookNotifier:
                     fp.write(json.dumps(entry.to_dict(), default=str))
                     fp.write("\n")
         except OSError as disk_err:
+            # Fail-open for the scrape cycle, but nack the durability loss:
+            # the entry stays in memory only and will not survive restart.
+            self._unpersisted_count += 1
             logger.error(
                 "webhook_outbox_append_failed",
                 path=str(self._outbox_path),
                 error=str(disk_err),
+                unpersisted_count=self._unpersisted_count,
             )
 
     def _read_outbox(self) -> List[OutboxEntry]:
@@ -426,12 +447,19 @@ class WebhookNotifier:
                             continue
                         try:
                             entries.append(OutboxEntry.from_dict(json.loads(raw)))
-                        except (json.JSONDecodeError, KeyError, ValueError) as parse_err:
+                        except (json.JSONDecodeError, KeyError, ValueError, TypeError) as parse_err:
                             # #2697: quarantine instead of skip — the
                             # retry pass REWRITES the outbox from parsed
                             # entries, which used to permanently destroy
                             # the corrupt entry (a HIGH/CRITICAL alert
                             # delivery).
+                            #
+                            # TypeError covers well-formed lines with
+                            # explicit-null fields (float(None) in
+                            # from_dict). Without it one such line raised
+                            # out of _read_outbox and poisoned every
+                            # drain pass until an operator hand-edited
+                            # the file.
                             self._quarantine_corrupt_line(raw, line_no, parse_err)
             except OSError as disk_err:
                 logger.error(
@@ -632,6 +660,20 @@ class WebhookNotifier:
     # ------------------------------------------------------------------
     # Legacy in-memory dead-letter API (retained)
     # ------------------------------------------------------------------
+
+    @property
+    def outbox_durable(self) -> bool:
+        """True when failed deliveries persist to an on-disk outbox."""
+        return self._outbox_path is not None
+
+    def unpersisted_dead_letter_count(self) -> int:
+        """Failed deliveries with no durable retry behind them.
+
+        Each one is lost on process restart. Operators should alert on
+        this being nonzero; the durable fix is setting ``outbox_path``
+        (``webhook_outbox_path``) to a mounted volume.
+        """
+        return self._unpersisted_count
 
     def get_dead_letters(self) -> List[Dict]:
         """Get failed deliveries from dead-letter queue."""

@@ -95,6 +95,21 @@ _PRODUCTION_REQUIRED: list[str] = [
     # delivers and every Stripe webhook 500s. Caught here instead.
     "RESEND_API_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    # #3230 — absence of either of these does NOT fail the boot, but the
+    # first production use does: audit export raises RuntimeError (now a
+    # 503) and passkey verify answers 503. Caught here instead.
+    "AUDIT_PII_HASH_SALT",
+    "WEBAUTHN_EXPECTED_ORIGIN",
+]
+
+# ---------------------------------------------------------------------------
+# Variables required in staging as well as production
+# ---------------------------------------------------------------------------
+# #3230 — staging runs the same multi-worker image as production. A missing
+# PII salt falls back to one random value per gunicorn worker, so the same
+# email masks to different values depending on which worker answers.
+_STAGING_REQUIRED: list[str] = [
+    "AUDIT_PII_HASH_SALT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -166,6 +181,14 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
             if not env.get(var):
                 result.errors.append(f"[production] Required variable not set: {var}")
 
+    # ── 2b. Staging-required variables ──────────────────────────────────────
+    # #3230: staging shares the production image and worker count, so the
+    # audit PII salt must be explicit there too.
+    if env.get("REGENGINE_ENV", "").lower() == "staging":
+        for var in _STAGING_REQUIRED:
+            if not env.get(var):
+                result.errors.append(f"[staging] Required variable not set: {var}")
+
     # ── 3. Check for known weak defaults in credential variables ────────────
     for var in _CREDENTIAL_VARS:
         value = env.get(var, "")
@@ -176,8 +199,10 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
             # (NEO4J_PASSWORD, GRAFANA_PASSWORD, …) are optional by design.
             continue
         if value.lower() in _KNOWN_WEAK_VALUES:
+            # The credential value itself is never echoed: these messages
+            # land in CI logs and terminal scrollback.
             msg = (
-                f"Insecure default value detected for {var}: '{value}'. "
+                f"Insecure default value detected for {var}. "
                 f"Generate a strong secret with: "
                 f'python -c "import secrets; print(secrets.token_urlsafe(64))"'
             )

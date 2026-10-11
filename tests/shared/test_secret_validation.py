@@ -32,6 +32,8 @@ def base_env(**overrides):
         "AUTH_OTP_HMAC_SECRET": "auth-otp-hmac-secret-with-enough-entropy",  # pragma: allowlist secret
         "RESEND_API_KEY": "resend-api-key-with-enough-entropy",  # pragma: allowlist secret
         "STRIPE_WEBHOOK_SECRET": "stripe-webhook-secret-with-enough-entropy",  # pragma: allowlist secret
+        "AUDIT_PII_HASH_SALT": "audit-pii-salt-with-enough-entropy",  # pragma: allowlist secret
+        "WEBAUTHN_EXPECTED_ORIGIN": "https://app.example.com",
     }
     env.update(overrides)
     return env
@@ -47,6 +49,35 @@ class TestEnvValidation:
 
     def test_passes_with_valid_production_secrets(self):
         result = validate_env(env=base_env())
+
+        assert result.ok
+
+    def test_production_requires_audit_pii_salt(self):
+        env = base_env()
+        del env["AUDIT_PII_HASH_SALT"]
+        result = validate_env(env=env)
+
+        assert not result.ok
+        assert any("AUDIT_PII_HASH_SALT" in error for error in result.errors)
+
+    def test_production_requires_webauthn_expected_origin(self):
+        env = base_env()
+        del env["WEBAUTHN_EXPECTED_ORIGIN"]
+        result = validate_env(env=env)
+
+        assert not result.ok
+        assert any("WEBAUTHN_EXPECTED_ORIGIN" in error for error in result.errors)
+
+    def test_staging_requires_audit_pii_salt(self):
+        env = base_env(REGENGINE_ENV="staging")
+        del env["AUDIT_PII_HASH_SALT"]
+        result = validate_env(env=env)
+
+        assert not result.ok
+        assert any("AUDIT_PII_HASH_SALT" in error for error in result.errors)
+
+    def test_staging_passes_with_salt_set(self):
+        result = validate_env(env=base_env(REGENGINE_ENV="staging"))
 
         assert result.ok
 
@@ -87,6 +118,19 @@ class TestEnvValidation:
 
         assert result.ok
         assert result.warnings
+
+    def test_weak_value_messages_never_echo_the_credential(self):
+        weak_value = "change-me-in-production"
+        dev_result = validate_env(env=base_env(REGENGINE_ENV="development", POSTGRES_PASSWORD=weak_value))
+        assert dev_result.ok
+        assert dev_result.warnings
+        assert any("POSTGRES_PASSWORD" in w for w in dev_result.warnings)
+        assert all(weak_value not in w for w in dev_result.warnings)
+
+        prod_result = validate_env(env=base_env(POSTGRES_PASSWORD=weak_value))
+        assert not prod_result.ok
+        assert any("POSTGRES_PASSWORD" in e for e in prod_result.errors)
+        assert all(weak_value not in e for e in prod_result.errors)
 
 
 class TestDevCompose:

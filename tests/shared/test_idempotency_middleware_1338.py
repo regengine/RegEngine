@@ -1130,14 +1130,19 @@ def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch
     def execute(statement, parameters):
         queries.append(str(statement))
         result = MagicMock()
-        result.fetchone.return_value = (
-            "tenant",
-            True,
-            None,
-            "stable-key-id",
-            authorization["scopes"],
-            authorization["jurisdictions"],
-        )
+        if "FROM tenants" in str(statement):
+            # Tenant-status re-check: this tenant stays active throughout.
+            result.fetchone.return_value = ("active",)
+        else:
+            result.fetchone.return_value = (
+                "tenant",
+                True,
+                None,
+                "stable-key-id",
+                authorization["scopes"],
+                authorization["jurisdictions"],
+                None,  # revoked_at: key is live
+            )
         return result
 
     db.execute.side_effect = execute
@@ -1153,8 +1158,9 @@ def test_authoritative_key_permission_narrowing_blocks_cached_replay(monkeypatch
     replay = client.post("/echo", headers=headers, content=b"same")
     assert replay.status_code == 409
     assert replay.json() == {"error": "idempotency_key_conflict"}
-    assert len(queries) == 3
-    assert all("scopes, allowed_jurisdictions" in query for query in queries)
+    key_queries = [query for query in queries if "scopes, allowed_jurisdictions" in query]
+    assert len(key_queries) == 3
+    assert all("scopes, allowed_jurisdictions" in query for query in key_queries)
 
 
 @pytest.mark.parametrize("signature_change", ["missing", "wrong", "rotated"])

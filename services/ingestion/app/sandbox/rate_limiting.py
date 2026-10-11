@@ -9,6 +9,7 @@ unavailable.
 from __future__ import annotations
 
 import logging
+import secrets
 import time
 from datetime import datetime, timezone
 from typing import Dict
@@ -31,6 +32,21 @@ _SANDBOX_WINDOW = 60  # seconds
 
 _rate_buckets: Dict[str, list] = {}
 
+# Cap unbounded key growth the same way the share limiter does (#2711):
+# every distinct client IP keeps a bucket, so without eviction the dict
+# grows forever. Once over the cap, drop buckets whose newest entry has
+# aged out of the window.
+_RATE_BUCKET_CAP = 10000
+
+
+def _evict_stale_rate_buckets(now: float) -> None:
+    """Drop empty/aged-out rate buckets once the dict exceeds the cap."""
+    if len(_rate_buckets) <= _RATE_BUCKET_CAP:
+        return
+    cutoff = now - _SANDBOX_WINDOW
+    for stale_key in [k for k, v in _rate_buckets.items() if not v or v[-1] < cutoff]:
+        _rate_buckets.pop(stale_key, None)
+
 
 def _check_in_memory(client_ip: str, now: float) -> int:
     """In-memory sliding window. Returns remaining seconds if limited, else 0."""
@@ -38,8 +54,10 @@ def _check_in_memory(client_ip: str, now: float) -> int:
     bucket[:] = [t for t in bucket if now - t < _SANDBOX_WINDOW]
     if len(bucket) >= _SANDBOX_RATE_LIMIT:
         oldest = bucket[0]
+        _evict_stale_rate_buckets(now)
         return int(_SANDBOX_WINDOW - (now - oldest)) or 1
     bucket.append(now)
+    _evict_stale_rate_buckets(now)
     return 0
 
 
@@ -113,7 +131,10 @@ def _check_redis(client_ip: str, now: float) -> int:
                 return max(remaining, 1)
             return 1
 
-        r.zadd(key, {f"{now}": now})
+        # The member must be unique per request: two requests landing in
+        # the same instant would otherwise collapse into one zset member
+        # and undercount the window.
+        r.zadd(key, {f"{now}:{secrets.token_hex(4)}": now})
         r.expire(key, _SANDBOX_WINDOW + 1)
         return 0
     except Exception:
