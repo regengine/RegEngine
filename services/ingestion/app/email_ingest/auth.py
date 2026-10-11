@@ -14,10 +14,12 @@ and a small ``email_inbound_auth_configured()`` health helper mirroring
 ``webhook_hmac_configured()``.
 
 One deliberate divergence from the ``WEBHOOK_HMAC_SECRET`` precedent: that
-gate fails OPEN (skips verification) when the secret is unset, to support a
-migration ramp. This gate fails CLOSED (401s every request) when unset,
-because there is no safe unauthenticated mode for an endpoint that writes
-directly into compliance ingestion.
+gate fails OPEN (skips verification) when the secret is unset, but only in
+local development and test as a migration ramp; on a closed gate
+(production or any strict/cloud runtime) it fails CLOSED. This gate fails
+CLOSED (401s every request) when unset, because there is no safe
+unauthenticated mode for an endpoint that writes directly into
+compliance ingestion.
 """
 
 from __future__ import annotations
