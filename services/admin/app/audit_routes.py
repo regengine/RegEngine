@@ -31,6 +31,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -89,6 +90,32 @@ _EMAIL_PATTERN = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE_PATTERN = re.compile(r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)")
 
 
+# Per-process fallback salt for non-production use only. Generated once at
+# import so hashes stay consistent within a single process. Production must
+# set AUDIT_PII_HASH_SALT explicitly (see _pii_hash_salt).
+_FALLBACK_PII_SALT = secrets.token_hex(16)
+
+
+def _pii_hash_salt() -> str:
+    """Return the salt used for PII masking hashes.
+
+    Raises:
+        RuntimeError: If no salt is configured in production. A shared
+            constant default would make masked values reversible by anyone
+            who reads the source, so production refuses to start masking
+            without an explicit secret.
+    """
+    salt = os.getenv("AUDIT_PII_HASH_SALT", "").strip()
+    if salt:
+        return salt
+    if os.getenv("REGENGINE_ENV", "").lower() == "production":
+        raise RuntimeError(
+            "AUDIT_PII_HASH_SALT is not configured. Set it to a long random "
+            "value before running audit exports in production."
+        )
+    return _FALLBACK_PII_SALT
+
+
 def _mask_identifier(value: Any) -> Optional[str]:
     """Salted-hash a stable identifier for PII-redacted export."""
     if value is None:
@@ -96,17 +123,16 @@ def _mask_identifier(value: Any) -> Optional[str]:
     text = str(value)
     if not text:
         return text
-    salt = os.getenv("AUDIT_PII_HASH_SALT", "regengine-audit-default-salt-v1")
-    digest = hashlib.sha256(f"{salt}:{text}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{_pii_hash_salt()}:{text}".encode("utf-8")).hexdigest()
     return f"masked:{digest[:24]}"
 
 
 def _mask_email(email: Optional[str]) -> Optional[str]:
     """Salted-hash an email for PII-redacted export.
 
-    The salt comes from the AUDIT_PII_HASH_SALT env var if set;
-    otherwise a per-process salt is generated at module import so
-    hashes are at least consistent within a single deploy.
+    The salt comes from the AUDIT_PII_HASH_SALT env var if set; otherwise
+    a per-process random salt is used outside production, and production
+    raises instead of masking with a guessable default.
     """
     return _mask_identifier(email)
 

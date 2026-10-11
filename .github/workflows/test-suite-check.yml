@@ -188,8 +188,6 @@ jobs:
             --ignore=tests/security/test_remediation_disabled_contract_pg.py \
             --ignore=tests/security/test_security_audit_fixes.py \
             --ignore=tests/security/test_auth_coverage.py \
-            --ignore=tests/shared/test_visibility_timeout_2918.py \
-            --ignore=tests/shared/test_secret_validation.py \
             -q --no-cov
 
   # ── Per-service collection checks ───────────────────────
