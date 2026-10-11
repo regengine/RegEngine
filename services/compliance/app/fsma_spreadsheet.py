@@ -134,6 +134,32 @@ class FSMATimestampError(ValueError):
     """
 
 
+class FSMAEventError(ValueError):
+    """Raised when an event record has a shape the exporter cannot use.
+
+    A single malformed record (a non-object event, or non-object
+    ``kdes`` such as a stored string, number or list) must abort the
+    export with a structured 400, never slip into an ``AttributeError``
+    500 and never silently drop the record from an FDA submission.
+    """
+
+
+def _pick(*values: Any) -> str:
+    """Return the first present value, coerced to ``str``.
+
+    Only ``None`` and ``""`` count as missing. Falsy-but-real values
+    such as ``0`` or ``False`` are kept: a zero quantity is a fact
+    about the shipment, and exporting it as a blank cell rewrites that
+    fact. Plain ``or``-chains cannot tell the two apart, which is why
+    this helper exists.
+    """
+    for value in values:
+        if value is None or value == "":
+            continue
+        return str(value)
+    return ""
+
+
 def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
     """Split an ISO timestamp into ``(date, time)``.
 
@@ -164,6 +190,24 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
         return (str(raw)[:10], "")
 
 
+def _is_recorded(value: Any) -> bool:
+    """A KDE counts as recorded unless it is missing (None) or blank.
+
+    A bare truthiness check drops legitimate zero measurements: a
+    ``quantity`` of 0 and a ``temperature`` of 0 are routine real-world
+    readings that must not render as blank on a regulator-facing export.
+    """
+    return value is not None and value != ""
+
+
+def _first_recorded(*values: Any, default: str = "") -> Any:
+    """Return the first recorded value, falling back to ``default``."""
+    for value in values:
+        if _is_recorded(value):
+            return value
+    return default
+
+
 def _normalise_event(
     event: dict[str, Any],
     *,
@@ -179,48 +223,62 @@ def _normalise_event(
     When ``strict_dates`` is True, a malformed ``event_date`` raises
     :class:`FSMATimestampError` rather than silently truncating into
     the CSV (issue #1108). FDA-export call paths must pass ``True``.
+
+    A non-object ``event`` or non-object ``kdes`` raises
+    :class:`FSMAEventError` so the export aborts loudly instead of
+    crashing on ``AttributeError`` or dropping the record.
     """
 
+    if not isinstance(event, dict):
+        raise FSMAEventError(
+            f"event record must be an object, got {type(event).__name__}; refusing to render it into an FDA submission"
+        )
     kdes = event.get("kdes") or {}
-    event_date_raw = (
-        kdes.get("event_date") or event.get("event_date") or event.get("event_timestamp") or ""
-    )
+    if not isinstance(kdes, dict):
+        raise FSMAEventError(
+            f"kdes must be an object, got {type(kdes).__name__}; refusing to render it into an FDA submission"
+        )
+    event_date_raw = _pick(kdes.get("event_date"), event.get("event_date"), event.get("event_timestamp"))
     event_date, event_time = _parse_timestamp(event_date_raw, strict=strict_dates)
-    if kdes.get("event_time"):
+    if _is_recorded(kdes.get("event_time")):
         event_time = str(kdes["event_time"])
 
-    # Collect named KDE values
-    kde_vals = {k: str(kdes.get(k, "")) for k in _NAMED_KDE_KEYS if kdes.get(k)}
+    # Collect named KDE values. A present-but-falsy value (``0``,
+    # ``False``) is still data, so presence means "not None and not
+    # empty string", matching :func:`_pick`.
+    kde_vals = {k: str(kdes.get(k, "")) for k in _NAMED_KDE_KEYS if kdes.get(k) is not None and kdes.get(k) != ""}
 
     # Extra KDEs -> JSON. Even a JSON-encoded string can begin with ``=``
     # once a spreadsheet renders it, so sanitize the serialized blob too.
-    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v}
+    extra = {k: v for k, v in kdes.items() if k not in _SKIP_KDE_KEYS and v is not None and v != ""}
     extra_json = json.dumps(extra, default=str) if extra else ""
 
     row = {
-        "event_type": (event.get("type") or event.get("event_type") or "").upper(),
+        "event_type": _pick(event.get("type"), event.get("event_type")).upper(),
         "event_date": event_date,
         "event_time": event_time,
-        "traceability_lot_code": event.get("tlc") or event.get("traceability_lot_code") or "",
-        "product_description": event.get("product_description") or kdes.get("product_description") or "",
-        "quantity": str(event.get("quantity") or kdes.get("quantity") or ""),
-        "unit_of_measure": event.get("uom") or event.get("unit_of_measure") or kdes.get("unit_of_measure") or "",
-        "origin_gln": event.get("facility_gln")
-        or event.get("location_gln")
-        or kdes.get("ship_from_gln")
-        or "",
-        "origin_name": event.get("facility_name")
-        or event.get("location_name")
-        or kdes.get("ship_from_location")
-        or "",
-        "origin_address": event.get("facility_address") or event.get("ship_from_address") or "",
-        "destination_gln": event.get("dest_gln") or kdes.get("ship_to_gln") or "",
-        "destination_name": event.get("dest_name") or kdes.get("ship_to_location") or "",
-        "destination_address": event.get("dest_address") or event.get("ship_to_address") or "",
-        "tlc_source_gln": kdes.get("tlc_source_gln") or "",
-        "tlc_source_fda_reg": kdes.get("tlc_source_fda_reg") or "",
-        "reference_document_type": kdes.get("reference_document_type") or event.get("document_type") or "",
-        "reference_document_number": kdes.get("reference_document_number") or event.get("ref_doc") or "",
+        "traceability_lot_code": _pick(event.get("tlc"), event.get("traceability_lot_code")),
+        "product_description": _pick(event.get("product_description"), kdes.get("product_description")),
+        "quantity": _pick(event.get("quantity"), kdes.get("quantity")),
+        "unit_of_measure": _pick(event.get("uom"), event.get("unit_of_measure"), kdes.get("unit_of_measure")),
+        "origin_gln": _pick(
+            event.get("facility_gln"),
+            event.get("location_gln"),
+            kdes.get("ship_from_gln"),
+        ),
+        "origin_name": _pick(
+            event.get("facility_name"),
+            event.get("location_name"),
+            kdes.get("ship_from_location"),
+        ),
+        "origin_address": _pick(event.get("facility_address"), event.get("ship_from_address")),
+        "destination_gln": _pick(event.get("dest_gln"), kdes.get("ship_to_gln")),
+        "destination_name": _pick(event.get("dest_name"), kdes.get("ship_to_location")),
+        "destination_address": _pick(event.get("dest_address"), event.get("ship_to_address")),
+        "tlc_source_gln": _pick(kdes.get("tlc_source_gln")),
+        "tlc_source_fda_reg": _pick(kdes.get("tlc_source_fda_reg")),
+        "reference_document_type": _pick(kdes.get("reference_document_type"), event.get("document_type")),
+        "reference_document_number": _pick(kdes.get("reference_document_number"), event.get("ref_doc")),
         "harvest_date": kde_vals.get("harvest_date", ""),
         "cooling_date": kde_vals.get("cooling_date", ""),
         "pack_date": kde_vals.get("pack_date", ""),
@@ -232,7 +290,7 @@ def _normalise_event(
         "carrier": kde_vals.get("carrier", ""),
         "immediate_previous_source": kde_vals.get("immediate_previous_source", ""),
         "additional_kdes_json": extra_json,
-        "risk_flag": event.get("risk_flag") or "",
+        "risk_flag": _pick(event.get("risk_flag")),
     }
     # Apply CSV-injection sanitization across the board.
     return {k: sanitize_cell(v) for k, v in row.items()}

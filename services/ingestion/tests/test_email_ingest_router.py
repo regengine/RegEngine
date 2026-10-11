@@ -15,7 +15,7 @@ import app.email_ingest.router as router_mod
 import pytest
 from app.email_ingest.router import router
 from app.email_ingest.schemas import InboundEmailResult
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from shared.database import get_db_session
 
@@ -154,3 +154,20 @@ class TestHappyPath:
         resp = client.post("/webhooks/email/inbound", json=MINIMAL_PAYLOAD, headers=_auth_header())
         assert resp.status_code == 200
         assert resp.json()["status"] == "rejected"
+
+
+class TestConcurrentDelivery:
+    def test_processing_conflict_propagates_as_409_not_200(self, client, monkeypatch):
+        # A concurrent delivery of the same MessageID still being processed
+        # elsewhere must surface Postmark's retry contract (non-2xx), never
+        # a fabricated 200.
+        async def conflict(db_session, payload):
+            raise HTTPException(
+                status_code=409,
+                detail={"message": "inbound_email_processing_in_progress", "message_id": payload.MessageID},
+            )
+
+        monkeypatch.setattr(router_mod, "process_inbound_email", conflict)
+
+        resp = client.post("/webhooks/email/inbound", json=MINIMAL_PAYLOAD, headers=_auth_header())
+        assert resp.status_code == 409

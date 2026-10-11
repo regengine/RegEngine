@@ -107,7 +107,7 @@ class TestInitializeLabelBatchNoRecord:
         mock_neo4j.close = AsyncMock()
 
         request = LabelBatchInitRequest(
-            packer_gln="0614141000001",
+            packer_gln="0614141000012",
             product=ProductInfo(
                 gtin="00000012345678",
                 description="Test Product",

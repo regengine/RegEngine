@@ -501,11 +501,11 @@ def execute_bulk_commit(
 
         db.commit()
 
-    except Exception:
-        # Roll back on any failure, not just DB errors: a ValueError raised
-        # mid-commit (unknown facility, bad category) would otherwise leave
-        # already-flushed rows visible in this session. The route marks the
-        # upload failed; the database must show nothing from it.
+    except (SQLAlchemyError, ValueError):
+        # ValueError covers commit-time validation failures (unknown
+        # facility reference, unknown FTL category, missing TLC code).
+        # The rows flushed before the failure must be rolled back too;
+        # otherwise the session keeps a half-flushed bulk import.
         db.rollback()
         raise
 

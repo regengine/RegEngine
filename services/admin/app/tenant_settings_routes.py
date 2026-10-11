@@ -26,7 +26,7 @@ _ADMIN_ROLE_NAMES = frozenset({"Owner", "Admin", "owner", "admin"})
 
 
 def _get_tenant_for_user(tenant_id: UUID, user: UserModel, db: Session) -> TenantModel:
-    """Load tenant after verifying user has membership."""
+    """Load tenant after verifying user has an active membership."""
     membership = db.execute(
         select(MembershipModel).where(
             MembershipModel.user_id == user.id,
@@ -34,6 +34,8 @@ def _get_tenant_for_user(tenant_id: UUID, user: UserModel, db: Session) -> Tenan
         )
     ).scalar_one_or_none()
     if not membership:
+        raise HTTPException(status_code=403, detail="Not a member of this tenant")
+    if not membership.is_active:
         raise HTTPException(status_code=403, detail="Not a member of this tenant")
 
     tenant = db.get(TenantModel, tenant_id)

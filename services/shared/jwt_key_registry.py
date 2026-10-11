@@ -164,8 +164,10 @@ class JWTKeyRegistry:
         """Load one consistent signing/verification snapshot from storage."""
 
         keys = await self._load_keys()
-        active = [k for k in keys if k.is_active and k.is_valid]
-        valid = [k for k in keys if k.is_valid]
+        now = time.time()
+        live = [k for k in keys if k.is_valid and not (k.expires_at and k.expires_at < now)]
+        active = [k for k in live if k.is_active]
+        valid = live
 
         if not active:
             if self._strict:
@@ -218,7 +220,12 @@ class JWTKeyRegistry:
         return new_key
 
     async def get_all_keys(self) -> list[SigningKey]:
-        """Get all keys (for admin listing). Secrets are NOT included."""
+        """Get all keys (for admin listing).
+
+        Secrets ARE included for rotation and verification internals:
+        never serialize these objects blindly. The sysadmin listing
+        route cherry-picks non-secret fields for exactly this reason.
+        """
         return await self._load_keys()
 
     async def get_key_by_kid(self, kid: str) -> Optional[SigningKey]:

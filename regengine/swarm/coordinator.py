@@ -34,7 +34,86 @@ from regengine.swarm.llm import BaseLLMClient, LLMClientFactory
 logger = structlog.get_logger("swarm.coordinator")
 
 LEGACY_SWARM_ENV = "REGENGINE_ENABLE_LEGACY_SWARM"
+CI_AUTO_FIX_ENV = "REGENGINE_CI_AUTO_FIX"
+AUTO_PR_APPROVAL_ENV = "REGENGINE_SWARM_AUTO_PR_APPROVED"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
+
+# Never stage or describe these from model output: repo config can run
+# commands during git, and workflows run in CI once pushed.
+_SENSITIVE_PATH_PREFIXES = (".git/", ".github/workflows/")
+
+# Secret-looking assignments are stripped from text placed in a PR body, so
+# log text the model copies into the task cannot leak a credential there.
+_SECRET_LINE_RE = None
+
+
+def _secret_line_pattern():
+    global _SECRET_LINE_RE
+    if _SECRET_LINE_RE is None:
+        import re
+
+        _SECRET_LINE_RE = re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*\S+")
+    return _SECRET_LINE_RE
+
+
+def redact_for_pr_body(text: str) -> str:
+    """Replace secret-looking assignments before text lands in a PR body."""
+    return _secret_line_pattern().sub("[redacted]", text or "")
+
+
+def _stageable_paths(files_written: Any) -> List[str]:
+    """Return the explicit in-workdir file list safe to stage for auto-fix."""
+    if not isinstance(files_written, list):
+        return []
+    staged = []
+    for entry in files_written:
+        if not isinstance(entry, dict):
+            continue
+        path = entry.get("path", "")
+        if not isinstance(path, str) or not path:
+            continue
+        normalized = path.replace("\\", "/")
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
+        if (
+            ".." in normalized
+            or normalized.startswith("/")
+            or "\x00" in normalized
+            or normalized == ".git"
+            or normalized.startswith(_SENSITIVE_PATH_PREFIXES)
+        ):
+            continue
+        staged.append(path)
+    return staged
+
+
+def _git(args: List[str]) -> List[str]:
+    """Prefix a git invocation with command-scoped config neutralizations.
+
+    The repo under repair is model-touched, so git must not execute repo
+    config: no fsmonitor command, no repo hooks, no configured sshCommand.
+    """
+    return [
+        "git",
+        "-c",
+        "core.fsmonitor=",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "core.sshCommand=ssh -oBatchMode=yes",
+        *args,
+    ]
+
+
+def swarm_auto_pr_approved(explicit: bool = False) -> bool:
+    """Check whether autonomous PR creation has explicit human approval.
+
+    Approval is either the explicit flag passed by the caller or the
+    human-set environment variable. Defaults to not approved.
+    """
+    if explicit:
+        return True
+    return os.getenv(AUTO_PR_APPROVAL_ENV, "").strip().lower() in _TRUE_VALUES
 
 
 class LegacySwarmDisabledError(RuntimeError):
@@ -143,8 +222,21 @@ class AgentSwarm:
         """Get all messages addressed to a specific agent."""
         return [m for m in self.message_bus if m.receiver == agent_name]
 
-    async def _create_auto_fix_pr(self, task: str, coder_output: Dict[str, Any]):
-        """Helper to create a GitHub PR for autonomous CI fixes."""
+    async def _create_auto_fix_pr(self, task: str, coder_output: Dict[str, Any], human_approved: bool = False):
+        """Helper to create a GitHub PR for autonomous CI fixes.
+
+        Pushing a branch and opening a PR requires explicit human approval
+        (human_approved=True or the approval env var). Returns None without
+        touching git or GitHub when approval is missing.
+        """
+        if not swarm_auto_pr_approved(human_approved):
+            self.log.warning("ci_auto_fix_blocked", reason="missing_human_approval")
+            return None
+        files_written = coder_output.get("files_written", []) if isinstance(coder_output, dict) else []
+        staged = _stageable_paths(files_written)
+        if not staged:
+            self.log.warning("ci_auto_fix_blocked", reason="no_stageable_files")
+            return None
         try:
             import subprocess
 
@@ -153,25 +245,24 @@ class AgentSwarm:
             gh = GitHubClient()
             branch_name = f"auto-fix/{int(time.time())}"
 
-            # Use git CLI for local operations (CI environment has git)
-            subprocess.run(["git", "config", "user.name", "RegEngine Bot"], check=True)
-            subprocess.run(["git", "config", "user.email", "bot@regengine.co"], check=True)
-            subprocess.run(["git", "checkout", "-b", branch_name], check=True)
-
-            # Assuming coder_output contains file changes that need to be staged
-            # This part might need more specific logic based on coder_output structure
-            # For now, a simple 'git add .'
-            subprocess.run(["git", "add", "."], check=True)
-            subprocess.run(["git", "commit", "-m", f"🤖 Autonomous Fix: {task[:50]}"], check=True)
-            subprocess.run(["git", "push", "origin", branch_name], check=True)
+            # Use git CLI for local operations (CI environment has git).
+            # Every invocation carries command-scoped config so repo config
+            # cannot execute code during this model-touched run, and only
+            # the explicit coder file list is staged, never `git add .`.
+            subprocess.run(_git(["config", "user.name", "RegEngine Bot"]), check=True)
+            subprocess.run(_git(["config", "user.email", "bot@regengine.co"]), check=True)
+            subprocess.run(_git(["checkout", "-b", branch_name]), check=True)
+            subprocess.run(_git(["add", "--", *staged]), check=True)
+            subprocess.run(_git(["commit", "-m", f"Autonomous Fix: {task[:50]}"]), check=True)
+            subprocess.run(_git(["push", "origin", branch_name]), check=True)
 
             pr_body = (
-                f"## 🤖 Autonomous CI Self-Healing\n\n"
-                f"**Task:** {task}\n"
-                f"**Status:** completed\n"  # Always completed if this is called
-                f"**Agents Used:** PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent\n\n"  # Simplified for now
-                f"### Code Changes\n"
-                f"```json\n{json.dumps(coder_output.get('files_written', []), indent=2)}\n```\n"
+                "## Autonomous CI Self-Healing\n\n"
+                f"**Task:** {redact_for_pr_body(task)}\n"
+                "**Status:** completed\n"  # Always completed if this is called
+                "**Agents Used:** PlannerAgent, CoderAgent, ReviewerAgent, TesterAgent\n\n"  # Simplified for now
+                "### Code Changes\n"
+                f"```json\n{redact_for_pr_body(json.dumps(files_written, indent=2))}\n```\n"
             )
 
             gh.create_pr(title=f"🤖 Fix: {task[:50]}", body=pr_body, head=branch_name, labels=["agent:self-healing"])
@@ -180,7 +271,12 @@ class AgentSwarm:
             self.log.error("ci_auto_fix_failed", error=str(e))
             raise  # Re-raise to be caught by the solve method's error handling
 
-    async def troubleshoot(self, log_snippet: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
+    async def troubleshoot(
+        self,
+        log_snippet: str,
+        context: Optional[Dict[str, Any]] = None,
+        human_approved: bool = False,
+    ) -> SwarmResult:
         """Execute the self-healing chain to fix CI failures.
 
         Chain: SRE (Analysis) → Planner → Coder → Reviewer
@@ -204,7 +300,7 @@ class AgentSwarm:
             task = f"Fix CI failure: {analysis.get('root_cause')}. Remediation: {remediation.get('immediate_fix')}"
 
             # Now call standard solve chain with this new specific task
-            return await self.solve(task, context)
+            return await self.solve(task, context, human_approved=human_approved)
 
         except Exception as e:
             self.log.error("troubleshooting_failed", error=str(e))
@@ -219,7 +315,11 @@ class AgentSwarm:
             )
 
     async def sweep(
-        self, tasks: List[str], context: Optional[Dict[str, Any]] = None, concurrency: int = 5
+        self,
+        tasks: List[str],
+        context: Optional[Dict[str, Any]] = None,
+        concurrency: int = 5,
+        human_approved: bool = False,
     ) -> List[SwarmResult]:
         """Execute a batch sweep of multiple similar tasks in parallel.
 
@@ -232,12 +332,17 @@ class AgentSwarm:
 
         async def wrapped_solve(task_item):
             async with semaphore:
-                return await self.solve(task_item, context)
+                return await self.solve(task_item, context, human_approved=human_approved)
 
         results = await asyncio.gather(*[wrapped_solve(t) for t in tasks])
         return results
 
-    async def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
+    async def solve(
+        self,
+        task: str,
+        context: Optional[Dict[str, Any]] = None,
+        human_approved: bool = False,
+    ) -> SwarmResult:
         """Execute the full agent chain to solve a task.
 
         Chain: Planner → Coder → Reviewer → (feedback loop) → Tester
@@ -245,6 +350,8 @@ class AgentSwarm:
         Args:
             task: Natural language task description
             context: Optional additional context (file contents, constraints)
+            human_approved: Explicit human approval for autonomous PR creation.
+                Off by default; without it no branch is pushed and no PR is opened.
 
         Returns:
             SwarmResult with the aggregated output from all agents
@@ -403,13 +510,21 @@ class AgentSwarm:
         )
 
         # ── Autonomous CI Auto-Fix ───────────────────────
-        if os.getenv("REGENGINE_CI_AUTO_FIX") == "true" and status == "completed":
-            self.log.info("ci_auto_fix_triggered")
-            try:
-                await self._create_auto_fix_pr(task, code_result)
-            except Exception as e:
-                self.log.error("ci_auto_fix_failed_final", error=str(e))
-                result.errors.append(f"CI Auto-Fix failed: {e}")
+        if os.getenv(CI_AUTO_FIX_ENV) == "true" and status == "completed":
+            if not swarm_auto_pr_approved(human_approved):
+                self.log.warning("ci_auto_fix_blocked", reason="missing_human_approval")
+                result.errors.append("CI auto-fix blocked: missing human approval, no branch pushed and no PR opened")
+                result.status = "completed_with_warnings"
+            else:
+                self.log.info("ci_auto_fix_triggered")
+                try:
+                    pr_result = await self._create_auto_fix_pr(task, code_result, human_approved=human_approved)
+                    if pr_result is None:
+                        result.errors.append("CI auto-fix blocked: no stageable files, no PR opened")
+                        result.status = "completed_with_warnings"
+                except Exception as e:
+                    self.log.error("ci_auto_fix_failed_final", error=str(e))
+                    result.errors.append(f"CI Auto-Fix failed: {e}")
 
         return result
 

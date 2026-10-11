@@ -1,7 +1,9 @@
 """QA sweep: real ingestion routes, schema boundaries and CSV evidence integrity.
 
-All persistence/auth/provider boundaries use local fakes. Known defects are strict
-expected failures: an unexpected pass requires removing the corresponding finding.
+All persistence/auth/provider boundaries use local fakes. The only remaining
+strict expected failure is BE-001 (naive timestamps); every other case in this
+file is a live assertion, so an unexpected pass or fail needs a code fix, not a
+marker change.
 """
 
 from __future__ import annotations
@@ -129,9 +131,6 @@ def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timest
     assert response.status_code == 422, response.text
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
-)
 @pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
 def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -142,9 +141,6 @@ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
-)
 @pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
 def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     upload, captured = csv_upload
@@ -155,9 +151,6 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
-)
 @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
 def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
     upload, captured = csv_upload
@@ -178,11 +171,6 @@ def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quan
     assert not captured
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
-)
 @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
 def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
     upload, captured = csv_upload
