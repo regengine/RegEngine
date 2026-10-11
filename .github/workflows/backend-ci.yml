@@ -991,6 +991,10 @@ jobs:
           # regression fails the job.
           pytest tests/test_router_policy.py \
             tests/test_server_import_smoke.py \
+            tests/test_request_workflow_unit.py \
+            tests/test_compliance_control_plane_e2e.py \
+            tests/test_rls_probe_helper.py \
+            tests/contract/test_ingest_nlp_schema_contract.py \
             tests/security/test_account_erasure_live_db_guard.py \
             tests/security/test_global_admin_context_allowlist.py \
             tests/security/test_security_audit_fixes.py \
@@ -1087,16 +1091,21 @@ jobs:
           # ORM-drift, or schema-parity gates that share this job.
           psql -h localhost -U postgres \
             -c "CREATE DATABASE request_workflow_e2e TEMPLATE rls_migrated;"
-          # All four suites, one invocation, one fresh DB. fda_request /
+          # All five suites, one invocation, one fresh DB. fda_request /
           # identity_ambiguity / stale_evaluations previously failed on any
           # fresh alembic-head DB (unseeded rule_definitions fixtures, the
           # matching.py aborted-transaction bug, uuid=ANY(text[]) in bulk
           # merge) — fixed in #2628; rehearsed combined against a fresh
-          # template clone: 44/44.
+          # template clone: 44/44. test_e2e_package_manifest.py is the
+          # #3245 blocking-defect proof (it calls the real submit_package
+          # gate); it ran in no blocking job until #3245 review found it
+          # ignored, so a gutted gate stayed green. Rehearsed 12/12 with
+          # zero skips against a fresh alembic-head DB.
           pytest tests/test_e2e_deadline_breach.py \
             tests/test_e2e_fda_request.py \
             tests/test_e2e_identity_ambiguity.py \
             tests/test_e2e_stale_evaluations.py \
+            tests/test_e2e_package_manifest.py \
             -v --no-cov -o "testpaths=tests" | tee /tmp/rw_e2e.log
           # Same skip-hardening as the RLS live step: a skipped suite is
           # invisible in the checks UI, and invisible is how this gap lived
