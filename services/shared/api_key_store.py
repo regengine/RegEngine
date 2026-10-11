@@ -591,7 +591,7 @@ class DatabaseAPIKeyStore:
 
         try:
             uuid.UUID(uuid_str)
-        except ValueError:
+        except (ValueError, AttributeError, TypeError):
             raise ValueError(f"Invalid UUID: {uuid_str}")
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
@@ -818,7 +818,12 @@ class DatabaseAPIKeyStore:
             # _record_key_usage). Build the response from the row as loaded;
             # the buffered counter flush does not need to round-trip back here.
             response = APIKeyResponse.model_validate(api_key)
-            await self._record_key_usage(key_id, session)
+            # Usage accounting must never break authentication: a failed
+            # usage UPDATE turns a valid key into a 500 otherwise.
+            try:
+                await self._record_key_usage(key_id, session)
+            except Exception as exc:
+                logger.warning("api_key_usage_record_failed", key_id=key_id, error=str(exc))
             return response
 
     async def get_tenant_status(self, tenant_id: Optional[str]) -> Optional[str]:

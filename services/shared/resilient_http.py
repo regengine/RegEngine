@@ -64,7 +64,9 @@ class RetryTransport(httpx.AsyncBaseTransport):
         backoff_max: float = _DEFAULT_BACKOFF_MAX,
     ):
         self._wrapped = wrapped
-        self._retries = retries
+        # A negative retry count would make range() empty and fail every
+        # request without attempting; clamp so at least one attempt runs.
+        self._retries = max(0, retries)
         self._backoff_base = backoff_base
         self._backoff_max = backoff_max
 

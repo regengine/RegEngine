@@ -180,8 +180,14 @@ class InjectionRule:
         self.check_command = check_command
         self.check_header = check_header
 
+    # SQL comment sequences used to glue keywords past whitespace checks.
+    _SQL_COMMENT_RE = re.compile(r"/\*.*?\*/")
+
     def validate(self, value: str, field: str) -> str:
         normalized = InputSanitizer.normalize_unicode(str(value))
+        # Unmask comment-obfuscated keywords (e.g. UNION/**/SELECT) for the
+        # SQL checks only; the returned value is untouched.
+        sql_probe = self._SQL_COMMENT_RE.sub(" ", normalized)
         checks: list[tuple[str, bool, Iterable[re.Pattern[str]]]] = [
             ("SQL", self.check_sql, InjectionPatterns.SQL_INJECTION),
             ("NoSQL", self.check_nosql, InjectionPatterns.NOSQL_INJECTION),
@@ -191,8 +197,9 @@ class InjectionRule:
         for injection_type, enabled, patterns in checks:
             if not enabled:
                 continue
+            probe = sql_probe if injection_type == "SQL" else normalized
             for pattern in patterns:
-                if pattern.search(normalized):
+                if pattern.search(probe):
                     raise InjectionAttemptError(
                         f"{injection_type} injection detected",
                         injection_type=injection_type,
@@ -369,6 +376,8 @@ class IntegerField:
     def validate(self, value: Any, field: str) -> int:
         try:
             if isinstance(value, bool):
+                raise ValueError
+            if isinstance(value, float) and not value.is_integer():
                 raise ValueError
             parsed = int(value)
         except (TypeError, ValueError) as exc:
