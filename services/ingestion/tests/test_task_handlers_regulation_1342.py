@@ -240,6 +240,17 @@ def fake_httpx(monkeypatch):
     return bag
 
 
+@pytest.fixture(autouse=True)
+def _staging_dir_points_at_tmp_path(tmp_path, monkeypatch):
+    """Point the handler's staging dir at this test's ``tmp_path``.
+
+    The handler now confines queue payload paths to the staging directory
+    (resolving ``..`` and symlinks), so staged fixtures must live inside
+    it. ``TestGetStagingPath`` tests override this per test.
+    """
+    monkeypatch.setattr(thr, "INGEST_STAGING_DIR", str(tmp_path))
+
+
 @pytest.fixture
 def staged_pdf(tmp_path):
     path = tmp_path / "abc-job.pdf"

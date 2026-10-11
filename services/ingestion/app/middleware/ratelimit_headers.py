@@ -59,7 +59,10 @@ _HEADERS: tuple[tuple[str, str], ...] = (
 
 
 def _path_matches(path: str, prefixes: Iterable[str]) -> bool:
-    return any(path == p or path.startswith(p + "/") or path.startswith(p) for p in prefixes)
+    # Exact match or slash boundary only: a plain ``startswith`` would also
+    # match ``/api/v1/ingestion`` against ``/api/v1/ingest`` and leak budget
+    # headers onto routes that are not rate-limited.
+    return any(path == p or path.startswith(p + "/") for p in prefixes)
 
 
 class RateLimitHeadersMiddleware(BaseHTTPMiddleware):

@@ -30,7 +30,7 @@ describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
 
     // FE-001: a variable-length lot ends only at its explicit delimiter/end.
     // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
-    it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+    it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
         const input = `010950600013435210${lot}\x1d17260930`;
         const parsed = parseGS1(input);
         expect(parsed.tlc).toBe(lot);
@@ -39,7 +39,7 @@ describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
 
     // FE-002: invalid percent encodings must become a rejected scan, not an
     // uncaught URIError in receiving, field capture, or the public scanner.
-    it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+    it.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
         expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
     });
 });

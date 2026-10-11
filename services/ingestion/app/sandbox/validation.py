@@ -7,9 +7,11 @@ Moved from sandbox_router.py.
 
 from __future__ import annotations
 
+import math
 import re
 import string
 from collections import defaultdict
+from datetime import datetime
 from typing import Any, Dict, List
 
 from ..webhook_models import (
@@ -50,6 +52,30 @@ def _validate_kdes(event: Dict[str, Any]) -> List[str]:
         val = available.get(kde_name)
         if val is None or (isinstance(val, str) and val.strip() == ""):
             errors.append(f"Missing required KDE '{kde_name}' for {cte_type_str} CTE")
+
+    # A present-but-garbage quantity would otherwise be skipped silently by
+    # mass balance and score a false pass. Flag it so the event cannot
+    # come back compliant.
+    qty = available.get("quantity")
+    if qty is not None and not (isinstance(qty, str) and qty.strip() == ""):
+        if isinstance(qty, bool):
+            errors.append(f"Quantity '{qty}' is not a number, mass balance cannot be evaluated")
+        else:
+            try:
+                qty_num = float(qty)
+            except (TypeError, ValueError):
+                qty_num = None
+            if qty_num is None or not math.isfinite(qty_num):
+                errors.append(f"Quantity '{qty}' is not a number, mass balance cannot be evaluated")
+
+    # Same for timestamps: an unparseable value would be skipped silently
+    # by the chronology check. Flag it instead of guessing an order.
+    ts = event.get("timestamp")
+    if isinstance(ts, str) and ts.strip():
+        try:
+            datetime.fromisoformat(ts.strip().replace("Z", "+00:00"))
+        except ValueError:
+            errors.append(f"Invalid ISO 8601 timestamp '{ts}', chronology cannot be evaluated")
 
     return errors
 
@@ -144,6 +170,11 @@ _ENTITY_FIELDS_EXPLICIT = {
 # Substrings that mark a field as entity-like
 _ENTITY_FIELD_MARKERS = {"location", "entity", "source", "facility"}
 
+# Maximum pairwise mismatch warnings per evaluation. Pair counts grow
+# quadratically with near-identical names, so the remainder is reported
+# as a single overflow note.
+_ENTITY_WARNING_CAP = 100
+
 
 def _is_entity_field(field_name: str) -> bool:
     """Return True if *field_name* is an entity-like field."""
@@ -187,16 +218,31 @@ def _detect_entity_mismatches(events: List[Dict[str, Any]]) -> List[str]:
                 if _is_entity_field(field) and isinstance(value, str) and value.strip():
                     groups[_normalize_entity_name(value)].add(value.strip())
 
+    # Cap the output: near-identical names across hundreds of events would
+    # otherwise produce a quadratic number of warnings and a megabyte-scale
+    # response from a public endpoint. Report the first batch, then an
+    # overflow note with the omitted count.
+    match_groups = [(norm, sorted(originals)) for norm, originals in sorted(groups.items()) if len(originals) >= 2]
+    total_pairs = sum(len(originals) * (len(originals) - 1) // 2 for _, originals in match_groups)
+
     warnings: List[str] = []
-    for _norm, originals in sorted(groups.items()):
-        if len(originals) < 2:
-            continue
-        sorted_originals = sorted(originals)
+    for _norm, sorted_originals in match_groups:
         for i in range(len(sorted_originals)):
             for j in range(i + 1, len(sorted_originals)):
+                if len(warnings) >= _ENTITY_WARNING_CAP:
+                    break
                 warnings.append(
                     f"Possible entity mismatch: '{sorted_originals[i]}' and "
                     f"'{sorted_originals[j]}' may refer to the same entity "
                     f"\u2014 consider standardizing"
                 )
+            if len(warnings) >= _ENTITY_WARNING_CAP:
+                break
+        if len(warnings) >= _ENTITY_WARNING_CAP:
+            break
+    if total_pairs > len(warnings):
+        warnings.append(
+            f"{total_pairs - len(warnings)} more possible entity matches omitted, "
+            f"standardize entity names to review them all"
+        )
     return warnings

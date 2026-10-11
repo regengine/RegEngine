@@ -651,6 +651,12 @@ class LLMGenerativeExtractor:
         if text is None:
             raise TypeError("extract received None; caller must pass a str")
 
+        if not text.strip():
+            # Blank input holds no obligations; skip the LLM call rather
+            # than spending retries on content that can only hallucinate.
+            log.info("empty_input_no_extraction")
+            return []
+
         original_text = text
         safe_jurisdiction = self._safe_jurisdiction(jurisdiction)
 
