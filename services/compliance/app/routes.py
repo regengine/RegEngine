@@ -23,7 +23,7 @@ from shared.rules.engine import RulesEngine
 from shared.rules.ftl import FTL_CATEGORIES
 from shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
+from .fsma_spreadsheet import FSMAEventError, FSMATimestampError, generate_fda_csv
 
 # ---------------------------------------------------------------------------
 # FDA spreadsheet hardening helpers
@@ -57,8 +57,24 @@ def _canonicalize_ftl_commodity(value: str) -> str:
     return re.sub(r"\s+", " ", value.replace("_", " ").replace("-", " ").strip().lower())
 
 
+# The catalog stores hyphenated entries ("fresh-cut fruits") while
+# _canonicalize_ftl_commodity folds hyphens to spaces, so a direct
+# membership test against FTL_CATEGORIES rejects every spelling of
+# those commodities. This lookup resolves any accepted spelling back
+# to the engine-canonical catalog form (the lower-case catalog entry),
+# which is what the rules engine matches in get_ftl_category (it only
+# lower-cases and strips, so a space-folded stamp would classify an
+# in-scope food as not-FTL scoped).
+_FTL_LOOKUP: dict[str, str] = {_canonicalize_ftl_commodity(entry): entry.strip().lower() for entry in FTL_CATEGORIES}
+
+
 def _is_ftl_commodity(value: str) -> bool:
-    return _canonicalize_ftl_commodity(value) in FTL_CATEGORIES
+    return _canonicalize_ftl_commodity(value) in _FTL_LOOKUP
+
+
+def _resolve_ftl_commodity(value: str) -> str | None:
+    """Return the engine-canonical catalog form of a commodity, or None."""
+    return _FTL_LOOKUP.get(_canonicalize_ftl_commodity(value))
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +178,7 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # literal comparison and yields an empty list, so the documented
 # unknown-industry behaviour is unchanged.
 _INDUSTRY_FILTER_ALIASES: dict[str, str] = {
-    alias.lower(): _i["name"].lower()
-    for _i in _rules["industries"]
-    for alias in (_i["id"], _i["name"])
+    alias.lower(): _i["name"].lower() for _i in _rules["industries"] for alias in (_i["id"], _i["name"])
 }
 
 
@@ -192,7 +206,8 @@ async def list_industries() -> IndustriesResponse:
 async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
     results = _CHECKLISTS
     if industry:
-        wanted = _INDUSTRY_FILTER_ALIASES.get(industry.lower(), industry.lower())
+        key = industry.strip().lower()
+        wanted = _INDUSTRY_FILTER_ALIASES.get(key, key)
         results = [c for c in results if c.industry.lower() == wanted]
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 
@@ -281,6 +296,7 @@ _ALLOWED_VALIDATE_CTE_TYPES = {
     "RECEIVING",
     "TRANSFORMATION",
 }
+
 
 def _validation_issue(
     path: str,
@@ -483,10 +499,14 @@ async def validate_compliance(
     ``traceability_lot_code`` / ``product_reference``.
     """
     # --- Step 1 / 2 — catalog-level FTL gate ------------------------------
-    if not _is_ftl_commodity(request.ftl_commodity):
-        raise HTTPException(status_code=400, detail="E_NON_FTL_FOOD")
-
+    # Resolve to the engine-canonical catalog form (None when not FTL).
+    # The space-folded canonical form is kept for the scope comparison
+    # and the response echo; the catalog form is what the engine event
+    # is stamped with so get_ftl_category recognizes it.
     canonical_commodity = _canonicalize_ftl_commodity(request.ftl_commodity)
+    engine_commodity = _FTL_LOOKUP.get(canonical_commodity)
+    if engine_commodity is None:
+        raise HTTPException(status_code=400, detail="E_NON_FTL_FOOD")
 
     # --- Step 3 — per-checklist scope (future-proofed, not yet enforced) --
     if request.checklist_id is not None:
@@ -520,7 +540,9 @@ async def validate_compliance(
         )
 
     cte_value = request.config.get("cte_type")
-    cte_type = cte_value.upper() if isinstance(cte_value, str) else None
+    # Strip to match _config_to_engine_event, which strips before lowercasing:
+    # padded input must reach the engine, not die here as INVALID_CTE_TYPE.
+    cte_type = cte_value.strip().upper() if isinstance(cte_value, str) else None
     if cte_type not in _ALLOWED_VALIDATE_CTE_TYPES:
         # Fail fast with a structured error rather than handing the engine
         # an event_type no rule targets (which would surface as a less
@@ -542,7 +564,7 @@ async def validate_compliance(
         # fabricate a verdict from nothing (fail-closed, #1347).
         raise HTTPException(status_code=503, detail="Database unavailable")
 
-    event_data = _config_to_engine_event(request.config, canonical_commodity)
+    event_data = _config_to_engine_event(request.config, engine_commodity)
     engine = RulesEngine(db)
     summary = engine.evaluate_event(
         event_data,
@@ -782,20 +804,22 @@ async def fsma_audit_spreadsheet(
             end_date=end.isoformat(),
             requesting_entity=requesting_entity or "",
         )
-    except FSMATimestampError as exc:
-        # A malformed event_date in the graph response is not a 5xx —
-        # it's a data-quality problem the caller needs to resolve
-        # before a submission is valid (issue #1108).
+    except (FSMATimestampError, FSMAEventError) as exc:
+        # A malformed event_date or malformed event shape in the loaded
+        # events is not a 5xx — it's a data-quality problem the caller
+        # needs to resolve before a submission is valid (issue #1108).
+        # Failing loudly here also keeps one bad record from taking the
+        # whole export down as an unhandled 500.
         _logger.warning(
-            "fda_export_malformed_event_date",
+            "fda_export_malformed_event",
             extra={"error": str(exc), "tenant_id": tenant_id},
         )
         raise HTTPException(
             status_code=400,
             detail=(
-                "FDA export aborted: at least one event carried a "
-                "malformed event_date that cannot be truncated into an "
-                f"FSMA-204 submission. {exc}"
+                "FDA export aborted: at least one event carried malformed "
+                "data that cannot be rendered into an FSMA-204 submission. "
+                f"{exc}"
             ),
         ) from exc
 

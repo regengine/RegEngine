@@ -37,6 +37,17 @@ from ..sqlalchemy_models import (
 DEFAULT_ORGANIZATION_ROLE = "member"
 
 
+class EmailOwnershipConflictError(ValueError):
+    """An email row belongs to a different user, verified or not.
+
+    Raised instead of reassigning the row, so accepting an invite whose
+    address differs only by case from another user's address can never move
+    that user's email row to the invitee. Unverified rows block too: only
+    the owning user may claim them, never an invitee holding a token for
+    a case variant of the address.
+    """
+
+
 def ensure_passwordless_identity(
     db: Session,
     *,
@@ -74,7 +85,9 @@ def ensure_passwordless_identity(
             )
         )
     else:
-        user_email.user_id = user.id
+        if user_email.user_id != user.id:
+            raise EmailOwnershipConflictError("email address is already registered for a different user")
+        user_email.email = normalized_email
         user_email.email_fingerprint = fingerprint
         user_email.is_verified = True
 

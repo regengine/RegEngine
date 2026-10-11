@@ -9,14 +9,15 @@ from __future__ import annotations
 from typing import Iterable, Optional
 
 import feedparser
-import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_sync
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper
 
 logger = structlog.get_logger("ingestion.scraper.generic")
+
+FEED_MAX_BYTES = DEFAULT_MAX_RESPONSE_BYTES
 
 
 class GenericRSSScraper(StateRegistryScraper):
@@ -39,8 +40,34 @@ class GenericRSSScraper(StateRegistryScraper):
         self.title_prefix = title_prefix or getattr(self, "title_prefix", "Generic RSS")
 
     def list_sources(self) -> Iterable[Source]:
-        """Parse RSS feed and yield sources for each entry."""
-        feed = feedparser.parse(self.feed_url)
+        """Parse RSS feed and yield sources for each entry.
+
+        The feed bytes are downloaded through ``safe_httpx_get_sync`` (SSRF
+        validation on every hop plus a size cap) and only then handed to
+        feedparser, so feedparser never fetches a URL itself.
+        """
+        try:
+            resp = safe_httpx_get_sync(
+                self.feed_url,
+                timeout=30,
+                headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
+            )
+            resp.raise_for_status()
+            # feedparser resolves relative item links only when it knows the
+            # feed URL. The safe helper pins the transport IP, so resp.url
+            # carries the IP literal; the logical final-hop URL rides in
+            # extensions (falling back to the request URL when a stubbed
+            # response in tests does not carry it).
+            extensions = getattr(resp, "extensions", None) or {}
+            base_url = extensions.get("safe_final_url", self.feed_url)
+            feed = feedparser.parse(
+                resp.content,
+                response_headers={"content-location": base_url},
+            )
+        except Exception as e:
+            logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
+            return
         for entry in feed.entries:
             yield Source(
                 url=entry.link,
@@ -51,6 +78,34 @@ class GenericRSSScraper(StateRegistryScraper):
                     "summary": entry.get("summary"),
                 },
             )
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
+        except Exception as e:
+            logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
+            return
+        for entry in feed.entries:
+            try:
+                link = entry.get("link")
+                if not link:
+                    continue
+                try:
+                    url = validate_url(link)
+                except SSRFError as e:
+                    logger.debug("ssrf_validation_failed_generic_rss", url=link, error=str(e))
+                    continue
+                title = entry.get("title") or link
+                yield Source(
+                    url=url,
+                    title=f"{self.title_prefix}: {title}",
+                    jurisdiction_code=self.jurisdiction,
+                    metadata={
+                        "published": entry.get("published"),
+                        "summary": entry.get("summary"),
+                    },
+                )
+            except Exception as e:
+                logger.warning("generic_rss_entry_skipped", error=str(e))
+                continue
 
     def fetch(self, source: Source) -> FetchedItem:
         """Fetch content from the source URL.
@@ -62,6 +117,7 @@ class GenericRSSScraper(StateRegistryScraper):
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             return FetchedItem(
@@ -74,7 +130,7 @@ class GenericRSSScraper(StateRegistryScraper):
             return FetchedItem(
                 source=source,
                 content_bytes=b"",
-                content_type="error",
+                content_type=None,
             )
 
 
@@ -120,6 +176,7 @@ class GenericListScraper(StateRegistryScraper):
                 self.list_url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             soup = BeautifulSoup(resp.content, "html.parser")
@@ -129,7 +186,11 @@ class GenericListScraper(StateRegistryScraper):
                 href = link.get("href")
                 if not href:
                     continue
-                url = urljoin(base, href)
+                try:
+                    url = validate_url(urljoin(base, href))
+                except SSRFError as e:
+                    logger.debug("ssrf_validation_failed_generic_list", url=href, error=str(e))
+                    continue
                 title = link.get_text(strip=True) or href
                 yield Source(
                     url=url,
@@ -151,6 +212,7 @@ class GenericListScraper(StateRegistryScraper):
                 source.url,
                 timeout=30,
                 headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
             return FetchedItem(
@@ -163,5 +225,5 @@ class GenericListScraper(StateRegistryScraper):
             return FetchedItem(
                 source=source,
                 content_bytes=b"",
-                content_type="error",
+                content_type=None,
             )

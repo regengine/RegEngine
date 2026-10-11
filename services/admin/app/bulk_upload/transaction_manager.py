@@ -7,7 +7,6 @@ from typing import Any
 
 import structlog
 from sqlalchemy import func, select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..graph_outbox import enqueue_graph_write
@@ -139,11 +138,18 @@ def build_validation_preview(
 
     tlcs_to_create = 0
     tlcs_to_update = 0
+    seen_tlc_codes: set[str] = set()
     for row in tlcs:
-        if _normalize_text(row.get("tlc_code")) in existing_tlc_codes:
+        code = _normalize_text(row.get("tlc_code"))
+        # A repeat of a code already in the DB, or earlier in this same
+        # upload, is an update, not a second create. The commit path folds
+        # same-upload repeats into one lot row.
+        if code in existing_tlc_codes or (code and code in seen_tlc_codes):
             tlcs_to_update += 1
         else:
             tlcs_to_create += 1
+        if code:
+            seen_tlc_codes.add(code)
 
     unique_scopes = {
         (
@@ -152,6 +158,16 @@ def build_validation_preview(
         )
         for row in ftl_scopes
     }
+
+    if not (facilities or ftl_scopes or tlcs or events):
+        preview_errors.append(
+            {
+                "section": "upload",
+                "row": 0,
+                "message": "Upload contains no rows; nothing to commit",
+                "severity": "error",
+            }
+        )
 
     return {
         "facilities_to_create": facilities_to_create,
@@ -261,12 +277,22 @@ def execute_bulk_commit(
                 facilities_by_name[existing.name.strip().lower()] = existing
                 facilities_updated += 1
 
+        seen_scope_keys: set[tuple[Any, str]] = set()
         for row in ftl_scopes_payload:
             facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
             category_id = _normalize_text(row.get("category_id"))
             category = FTL_CATEGORY_LOOKUP.get(category_id)
             if category is None:
                 raise ValueError(f"Unknown FTL category_id: {category_id}")
+
+            scope_key = (facility.id, category_id)
+            if scope_key in seen_scope_keys:
+                # Repeat of a scope already handled in this upload: the
+                # upsert below is idempotent, so skip the repeat to keep
+                # counts and outbox params aligned with the preview, which
+                # counts unique scopes.
+                continue
+            seen_scope_keys.add(scope_key)
 
             scoped = db.execute(
                 select(SupplierFacilityFTLCategoryModel).where(
@@ -296,39 +322,50 @@ def execute_bulk_commit(
                 }
             )
 
+        # Lots already touched by this upload, keyed by tlc_code. The
+        # session runs with autoflush off and flushes once after this loop,
+        # so a plain re-SELECT would miss a lot added earlier in the same
+        # loop and the second insert would violate the per-tenant unique
+        # constraint. Folding repeats into the same row also matches the
+        # preview, which counts them as updates.
+        lots_by_code: dict[str, SupplierTraceabilityLotModel] = {}
         for row in tlcs_payload:
             facility = resolve_facility_by_name(str(row.get("facility_name") or ""))
             tlc_code = _normalize_text(row.get("tlc_code"))
             if not tlc_code:
                 raise ValueError("tlc_code is required for TLC rows")
 
-            existing_lot = db.execute(
-                select(SupplierTraceabilityLotModel).where(
-                    SupplierTraceabilityLotModel.tenant_id == tenant_id,
-                    SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
-                    SupplierTraceabilityLotModel.tlc_code == tlc_code,
-                )
-            ).scalar_one_or_none()
-            if existing_lot is None:
-                lot = SupplierTraceabilityLotModel(
-                    tenant_id=tenant_id,
-                    supplier_user_id=current_user.id,
-                    facility_id=facility.id,
-                    tlc_code=tlc_code,
-                    product_description=(_normalize_text(row.get("product_description")) or None),
-                    status=_normalize_text(row.get("status")) or "active",
-                )
-                db.add(lot)
-                tlcs_created += 1
-            else:
-                existing_lot.facility_id = facility.id
-                incoming_description = _normalize_text(row.get("product_description"))
-                if incoming_description:
-                    existing_lot.product_description = incoming_description
-                incoming_status = _normalize_text(row.get("status"))
-                if incoming_status:
-                    existing_lot.status = incoming_status
-                tlcs_updated += 1
+            lot = lots_by_code.get(tlc_code)
+            if lot is None:
+                lot = db.execute(
+                    select(SupplierTraceabilityLotModel).where(
+                        SupplierTraceabilityLotModel.tenant_id == tenant_id,
+                        SupplierTraceabilityLotModel.supplier_user_id == current_user.id,
+                        SupplierTraceabilityLotModel.tlc_code == tlc_code,
+                    )
+                ).scalar_one_or_none()
+                if lot is None:
+                    lot = SupplierTraceabilityLotModel(
+                        tenant_id=tenant_id,
+                        supplier_user_id=current_user.id,
+                        facility_id=facility.id,
+                        tlc_code=tlc_code,
+                        product_description=(_normalize_text(row.get("product_description")) or None),
+                        status=_normalize_text(row.get("status")) or "active",
+                    )
+                    db.add(lot)
+                    tlcs_created += 1
+                    lots_by_code[tlc_code] = lot
+                    continue
+                lots_by_code[tlc_code] = lot
+            lot.facility_id = facility.id
+            incoming_description = _normalize_text(row.get("product_description"))
+            if incoming_description:
+                lot.product_description = incoming_description
+            incoming_status = _normalize_text(row.get("status"))
+            if incoming_status:
+                lot.status = incoming_status
+            tlcs_updated += 1
 
         # Session autoflush is disabled in production settings/tests, so flush TLC
         # upserts before event queries to avoid duplicate same-TLC inserts.
@@ -464,7 +501,11 @@ def execute_bulk_commit(
 
         db.commit()
 
-    except SQLAlchemyError:
+    except (SQLAlchemyError, ValueError):
+        # ValueError covers commit-time validation failures (unknown
+        # facility reference, unknown FTL category, missing TLC code).
+        # The rows flushed before the failure must be rolled back too;
+        # otherwise the session keeps a half-flushed bulk import.
         db.rollback()
         raise
 

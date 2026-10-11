@@ -6,6 +6,7 @@ checks, and audit logging for validation failures.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -39,12 +40,28 @@ _TRANSFORMATION_IDENTITY_FIELDS: tuple[str, ...] = (
 )
 
 
+def _audit_task_done(task: asyncio.Task) -> None:
+    """Fail loud, not silent: a detached audit write that raised must page the logs."""
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.error("fsma_validation_audit_write_failed error=%s", exc)
+
+
 def _audit_log_validation_failure(
     errors: list[dict],
     tenant_id: str | None,
     normalized: dict,
 ) -> None:
-    """Fire-and-forget audit log for FSMA validation failures."""
+    """Fire-and-forget audit log for FSMA validation failures.
+
+    Best-effort by design: validation rejection never blocks ingestion,
+    so the write is scheduled on the running loop instead of awaited.
+    A failed write is logged at error level via a done callback; it is
+    never silent and it never raises into the request path.
+    """
     try:
         import asyncio
 
@@ -86,7 +103,7 @@ def _audit_log_validation_failure(
         # Best-effort: schedule on running loop or skip
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(coro)
+            loop.create_task(coro).add_done_callback(_audit_task_done)
         except RuntimeError:
             pass  # No running loop — skip async audit (logged via stdlib above)
     except Exception:
