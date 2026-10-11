@@ -81,19 +81,22 @@ class _FakeTracker:
         self._items = items
         self.calls: List[Dict[str, Any]] = []
 
-    def list_hallucinations(self, *, status, tenant_id, limit, cursor):
+    def list_hallucinations(self, *, status, tenant_id, limit, cursor, offset=0):
         self.calls.append(
             {
                 "status": status,
                 "tenant_id": tenant_id,
                 "limit": limit,
                 "cursor": cursor,
+                "offset": offset,
             }
         )
+        page = self._items[offset : offset + limit]
         return {
-            "items": self._items[:limit],
+            "items": page,
             "next_cursor": None,
-            "has_more": False,
+            "has_more": offset + limit < len(self._items),
+            "total": len(self._items),
         }
 
 

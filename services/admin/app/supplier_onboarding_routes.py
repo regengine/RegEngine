@@ -303,7 +303,26 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.astimezone(timezone.utc)
 
 
-def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
+def _merkle_integrity_ratio(
+    events: list[SupplierCTEEventModel],
+    *,
+    prev_hash_by_sequence: dict[int, str | None] | None = None,
+) -> float:
+    """Fraction of events whose chain link is intact.
+
+    Sequence numbers and ``merkle_prev_hash`` links are assigned per
+    tenant across all suppliers (see supplier_cte_service), so a
+    supplier-scoped event list is NOT contiguous: supplier A's events
+    may carry sequences 1, 3, 5. Checking list adjacency would fail
+    every link and collapse the ratio toward 0 for perfectly intact
+    chains in any multi-supplier tenant.
+
+    When ``prev_hash_by_sequence`` (tenant-wide sequence -> merkle_hash
+    map) is given, each event is checked against its TRUE predecessor
+    instead of its list neighbor. Without the map we fall back to the
+    legacy adjacency check, which is only meaningful for tenant-wide
+    (contiguous) event lists.
+    """
     if not events:
         return 1.0
 
@@ -313,12 +332,19 @@ def _merkle_integrity_ratio(events: list[SupplierCTEEventModel]) -> float:
 
     for event in events:
         checks += 1
-        if previous is None:
-            if int(event.sequence_number) == 1 and event.merkle_prev_hash is None:
+        seq = int(event.sequence_number)
+        if prev_hash_by_sequence is not None:
+            if seq == 1:
+                if event.merkle_prev_hash is None:
+                    valid += 1
+            elif seq - 1 in prev_hash_by_sequence and event.merkle_prev_hash == prev_hash_by_sequence[seq - 1]:
+                valid += 1
+        elif previous is None:
+            if seq == 1 and event.merkle_prev_hash is None:
                 valid += 1
         else:
             expected_sequence = int(previous.sequence_number) + 1
-            if int(event.sequence_number) == expected_sequence and event.merkle_prev_hash == previous.merkle_hash:
+            if seq == expected_sequence and event.merkle_prev_hash == previous.merkle_hash:
                 valid += 1
         previous = event
 
@@ -487,7 +513,19 @@ def _compute_supplier_compliance(
                     }
                 )
 
-    integrity_ratio = _merkle_integrity_ratio(all_supplier_events)
+    # Tenant-wide sequence -> hash map: chain links span suppliers, so
+    # each event must be checked against its true predecessor, not its
+    # list neighbor in this supplier-scoped list.
+    tenant_chain_rows = (
+        db.execute(
+            select(
+                SupplierCTEEventModel.sequence_number,
+                SupplierCTEEventModel.merkle_hash,
+            ).where(SupplierCTEEventModel.tenant_id == tenant_id)
+        ).all()
+    )
+    prev_hash_by_sequence = {int(seq): merkle_hash for seq, merkle_hash in tenant_chain_rows}
+    integrity_ratio = _merkle_integrity_ratio(all_supplier_events, prev_hash_by_sequence=prev_hash_by_sequence)
 
     if required_total == 0:
         coverage_ratio = 0.0

@@ -243,13 +243,18 @@ def get_consumer_health() -> Dict[str, Any]:
         seconds_since_poll = (now - _last_poll_time).total_seconds()
         poll_stale = seconds_since_poll > CONSUMER_STALE_THRESHOLD_SECONDS
 
+    # A consumer that never started (crashed or skipped at boot) must
+    # not report healthy: is_alive only means "stop was never
+    # requested", which is trivially true before the first run.
+    ever_started = _consumer_started_at is not None
+
     return {
         "alive": is_alive,
         "started_at": started_at,
         "last_poll_at": last_poll,
         "seconds_since_poll": seconds_since_poll,
         "poll_stale": poll_stale,
-        "healthy": is_alive and not poll_stale,
+        "healthy": is_alive and ever_started and not poll_stale,
     }
 
 

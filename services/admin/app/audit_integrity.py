@@ -180,10 +180,17 @@ def verify_chain(
             "resource_id": resource.get("id"),
             "metadata": metadata,
         }
+        # Severity lives at the top level in writer-shaped entries but
+        # under ``event.severity`` in export-shaped entries
+        # (audit_routes builds ``"event": {..., "severity": ...}``).
+        # Without the fallback every export-shaped row recomputes with
+        # ``severity=None`` and can never match its stored hash.
+        event_block = entry.get("event", {}) if isinstance(entry.get("event"), dict) else {}
+        severity = entry.get("severity", event_block.get("severity"))
         actor_fields = {
             "actor_id": actor.get("id"),
             "actor_email": actor.get("email"),
-            "severity": entry.get("severity"),
+            "severity": severity,
             "endpoint": entry.get("endpoint"),
         }
 
