@@ -128,6 +128,7 @@ class TraceabilityLinker:
                 WHERE {_OBLIGATION_TENANT_PREDICATE}
                 MATCH (l:Lot)-[:UNDERWENT]->(e)
                 WHERE l.tenant_id = $tenant_id
+                AND e.tenant_id = $tenant_id
                 RETURN DISTINCT l.tlc as tlc, l.product_description as description
             """
             result = await session.run(query, id=obligation_id, tenant_id=tenant_id)
