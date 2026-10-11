@@ -94,6 +94,7 @@ class MappingEngine:
                 """
                 MATCH (o:Obligation {text: $id})<-[:REQUIRES]-(s:Section)
                 WHERE o.tenant_id = $tenant_id
+                AND (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 1
             """,
@@ -109,6 +110,7 @@ class MappingEngine:
                 """
                 MATCH (o:Obligation)<-[:REQUIRES]-(s:Section)
                 WHERE s.regulation <> $reg AND o.tenant_id = $tenant_id
+                AND (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 20
             """,

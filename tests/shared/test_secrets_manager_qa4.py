@@ -140,6 +140,28 @@ class TestCredentialGetters:
         monkeypatch.delenv("POSTGRES_HOST", raising=False)
         assert _mgr().get_database_credentials()["host"] == "localhost"
 
+    def test_database_missing_host_raises_in_production(self, monkeypatch):
+        # Deleting the production raise and always falling back to
+        # localhost must fail here, not stay green.
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.delenv("POSTGRES_HOST", raising=False)
+        monkeypatch.setenv("POSTGRES_PASSWORD", "pw")  # pragma: allowlist secret -- synthetic fixture value
+        with pytest.raises(RuntimeError, match="POSTGRES_HOST"):
+            _mgr().get_database_credentials()
+
+    def test_database_missing_password_raises_in_production(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.setenv("POSTGRES_HOST", "db.internal")
+        monkeypatch.delenv("POSTGRES_PASSWORD", raising=False)
+        with pytest.raises(RuntimeError, match="POSTGRES_PASSWORD"):
+            _mgr().get_database_credentials()
+
+    def test_database_set_credentials_never_localhost_in_production(self, monkeypatch):
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        monkeypatch.setenv("POSTGRES_HOST", "db.internal")
+        monkeypatch.setenv("POSTGRES_PASSWORD", "pw")  # pragma: allowlist secret -- synthetic fixture value
+        assert _mgr().get_database_credentials()["host"] == "db.internal"
+
     def test_neo4j_uri_and_url_fallbacks(self, monkeypatch):
         monkeypatch.setenv("NEO4J_URI", "bolt://neo:7687")
         assert _mgr().get_neo4j_credentials()["uri"] == "bolt://neo:7687"

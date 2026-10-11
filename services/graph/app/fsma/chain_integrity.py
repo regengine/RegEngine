@@ -50,7 +50,7 @@ async def find_gaps(
     AND (
         e.event_date IS NULL OR
         e.event_date = '' OR
-        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } OR
+        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } OR
         e.responsible_party_contact IS NULL OR
         e.responsible_party_contact = ''
     )
@@ -60,7 +60,7 @@ async def find_gaps(
         e.event_date as event_date,
         e.document_id as document_id,
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
-        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN ',missing_lot' ELSE '' END +
+        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
     LIMIT 2000
     """

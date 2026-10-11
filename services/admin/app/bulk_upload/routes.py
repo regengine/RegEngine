@@ -296,8 +296,16 @@ async def commit_bulk_upload(
             supported_cte_types=SUPPORTED_CTE_TYPES,
             valid_ftl_category_ids=set(FTL_CATEGORY_LOOKUP.keys()),
         )
-        if any(error.get("severity") != "warning" for error in errors):
-            raise ValueError("Upload contains invalid rows; correct the file and validate it again")
+        blocking = [error for error in errors if error.get("severity") != "warning"]
+        if blocking:
+            shown = "; ".join(
+                f"{error.get('section', '?')} row {error.get('row', '?')}: {error.get('message', 'invalid row')}"
+                for error in blocking[:5]
+            )
+            if len(blocking) > 5:
+                shown += f"; plus {len(blocking) - 5} more"
+            noun = "invalid row" if len(blocking) == 1 else "invalid rows"
+            raise ValueError(f"Upload contains {len(blocking)} {noun}; correct the file and validate it again: {shown}")
         # Non-blocking warnings (e.g. autofilled defaults) travel with the
         # commit summary so a "completed" response never hides them.
         validation_warnings = [

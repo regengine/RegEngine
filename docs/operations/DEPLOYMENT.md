@@ -267,12 +267,19 @@ For Stripe onboarding, mint a tenantless workload credential with exactly
 most 10 requests per minute. Store it only as
 `REGENGINE_TENANT_PROVISIONER_KEY` in the ingestion runtime.
 
-Set `REGENGINE_AUTH_STRICT=1` and `REDIS_URL` in staging and production. The
-backend also treats any recognized cloud staging/preview environment as strict
+Set `REGENGINE_AUTH_STRICT=1`, `REDIS_URL`, and `MFA_ENCRYPTION_KEY` in
+staging and production. The backend also treats any recognized cloud
+staging/preview environment as strict
 when the flag is omitted: access-token lifetime is limited to 1–15 minutes,
 legacy JTI-free tokens and process-local sessions/API-key stores are rejected,
 and Redis/key-registry uncertainty aborts startup or returns 503. The flag is
 explicit evidence of operator intent; it cannot weaken a strict runtime.
+`MFA_ENCRYPTION_KEY` must be a Fernet key; a missing or malformed value
+aborts startup before the API serves traffic, so `/readiness` never goes
+green. Generate one with
+`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+Do not mint a new key if MFA ciphertext already exists under another key;
+a key mismatch breaks TOTP decrypt for those rows.
 
 If the system-metrics page calls the score and chain endpoints, provision a
 separate tenant key limited to those reads and configure the pair
