@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
     saveScan: vi.fn(),
     toast: vi.fn(),
     useAuth: vi.fn(),
+    online: true,
     ingestFileMutation: {
         mutateAsync: vi.fn(),
     },
@@ -50,7 +51,7 @@ vi.mock('@/hooks/use-api', () => ({
 
 vi.mock('@/hooks/use-sync', () => ({
     useSync: () => ({
-        isOnline: true,
+        isOnline: mocks.online,
         isSyncing: false,
     }),
 }));
@@ -66,6 +67,7 @@ vi.mock('@/lib/api-config', () => ({
 vi.mock('@/lib/db', () => ({
     savePhoto: (...args: any[]) => mocks.savePhoto(...args),
     saveScan: (...args: any[]) => mocks.saveScan(...args),
+    newScanIdempotencyKey: () => 'test-idempotency-key',
 }));
 
 vi.mock('@/lib/fetch-with-csrf', () => ({
@@ -88,9 +90,10 @@ function setCaptureUrl(search: string) {
     window.history.replaceState({}, '', `/mobile/capture${search}`);
 }
 
-describe('FieldCaptureClient tenant hinting', () => {
+describe('FieldCaptureClient tenant handling', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mocks.online = true;
         mocks.useAuth.mockReturnValue({
             apiKey: null,
             isAuthenticated: true,
@@ -106,51 +109,53 @@ describe('FieldCaptureClient tenant hinting', () => {
         });
     });
 
-    it('uses the URL tenant hint for catalog and ingest requests when auth has no tenant yet', async () => {
+    it('refuses scans and ignores the URL tenant hint when the session has no tenant', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
-        mocks.fetchWithCsrf
-            .mockResolvedValueOnce(jsonResponse({ products: [] }))
-            .mockResolvedValueOnce(new Response(null, { status: 202 }));
 
         const user = userEvent.setup();
         render(<FieldCaptureClient />);
 
-        await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenCalled();
-        });
-        const [catalogUrl, catalogInit] = mocks.fetchWithCsrf.mock.calls[0] as [string, RequestInit];
-        const catalogHeaders = new Headers(catalogInit?.headers);
-        expect(catalogUrl).toBe('https://ingestion.test/api/v1/products/hinted-tenant');
-        expect(catalogInit?.credentials).toBe('include');
-        expect(catalogHeaders.get('Content-Type')).toBe('application/json');
-        expect(catalogHeaders.get('X-RegEngine-API-Key')).toBeNull();
-        expect(catalogHeaders.get('X-Tenant-ID')).toBeNull();
+        // The refusal is visible without triggering a scan.
+        expect(await screen.findByRole('alert')).toHaveTextContent(/tenant required/i);
+
+        // No catalog fetch happens without a session tenant.
+        expect(mocks.fetchWithCsrf).not.toHaveBeenCalled();
 
         await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
 
-        await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenCalledTimes(2);
-        });
-
-        const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
-        const ingestHeaders = new Headers(ingestInit.headers);
-        expect(mocks.fetchWithCsrf.mock.calls[1]?.[0]).toBe('https://ingestion.test/api/v1/webhooks/ingest');
-        expect(ingestInit.credentials).toBe('include');
-        expect(ingestHeaders.get('Content-Type')).toBe('application/json');
-        expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
-        expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
-        expect(JSON.parse(String(ingestInit.body))).toMatchObject({
-            tenant_id: 'hinted-tenant',
-            events: [
-                expect.objectContaining({
-                    cte_type: 'shipping',
-                    traceability_lot_code: 'LOT-123',
-                }),
-            ],
-        });
+        // The scan is refused: nothing is ingested and nothing is queued.
+        expect(mocks.fetchWithCsrf).not.toHaveBeenCalled();
+        expect(mocks.saveScan).not.toHaveBeenCalled();
+        expect(mocks.toast).toHaveBeenCalledWith(
+            expect.objectContaining({ title: 'Tenant required' }),
+        );
     });
 
-    it('prefers the authenticated tenant over the URL hint once auth is established', async () => {
+    it('does not ingest photo captures without a session tenant', async () => {
+        setCaptureUrl('?tenant_id=hinted-tenant');
+        mocks.fetchWithCsrf.mockResolvedValue(
+            new Response('fake-image', {
+                status: 200,
+                headers: { 'content-type': 'image/jpeg' },
+            }),
+        );
+
+        const user = userEvent.setup();
+        render(<FieldCaptureClient />);
+
+        await user.click(screen.getByRole('tab', { name: /photo/i }));
+        await user.click(screen.getByRole('button', { name: 'Trigger mock capture' }));
+
+        await waitFor(() => {
+            expect(mocks.savePhoto).toHaveBeenCalledTimes(1);
+        });
+        expect(mocks.ingestFileMutation.mutateAsync).not.toHaveBeenCalled();
+        expect(mocks.toast).toHaveBeenCalledWith(
+            expect.objectContaining({ title: 'Tenant required' }),
+        );
+    });
+
+    it('ingests with the session tenant and a stable idempotency key', async () => {
         setCaptureUrl('?tenant_id=hinted-tenant');
         mocks.useAuth.mockReturnValue({
             apiKey: null,
@@ -165,12 +170,10 @@ describe('FieldCaptureClient tenant hinting', () => {
         render(<FieldCaptureClient />);
 
         await waitFor(() => {
-            expect(mocks.fetchWithCsrf).toHaveBeenNthCalledWith(
-                1,
-                'https://ingestion.test/api/v1/products/auth-tenant',
-                expect.any(Object),
-            );
+            expect(mocks.fetchWithCsrf).toHaveBeenCalled();
         });
+        const [catalogUrl] = mocks.fetchWithCsrf.mock.calls[0] as [string, RequestInit];
+        expect(catalogUrl).toBe('https://ingestion.test/api/v1/products/auth-tenant');
 
         await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
 
@@ -180,16 +183,64 @@ describe('FieldCaptureClient tenant hinting', () => {
 
         const ingestInit = mocks.fetchWithCsrf.mock.calls[1]?.[1] as RequestInit;
         const ingestHeaders = new Headers(ingestInit.headers);
+        expect(mocks.fetchWithCsrf.mock.calls[1]?.[0]).toBe('https://ingestion.test/api/v1/webhooks/ingest');
         expect(ingestInit.credentials).toBe('include');
+        expect(ingestHeaders.get('Content-Type')).toBe('application/json');
+        expect(ingestHeaders.get('Idempotency-Key')).toBe('test-idempotency-key');
         expect(ingestHeaders.get('X-RegEngine-API-Key')).toBeNull();
         expect(ingestHeaders.get('X-Tenant-ID')).toBeNull();
         expect(JSON.parse(String(ingestInit.body))).toMatchObject({
             tenant_id: 'auth-tenant',
+            events: [
+                expect.objectContaining({
+                    cte_type: 'shipping',
+                    traceability_lot_code: 'LOT-123',
+                }),
+            ],
         });
+        expect(mocks.saveScan).not.toHaveBeenCalled();
+    });
+
+    it('queues offline scans with the same tenant and idempotency key', async () => {
+        setCaptureUrl('');
+        mocks.online = false;
+        mocks.useAuth.mockReturnValue({
+            apiKey: null,
+            isAuthenticated: true,
+            tenantId: 'auth-tenant',
+        });
+        mocks.fetchWithCsrf.mockResolvedValueOnce(jsonResponse({ products: [] }));
+
+        const user = userEvent.setup();
+        render(<FieldCaptureClient />);
+
+        await user.click(screen.getByRole('button', { name: 'Trigger mock scan' }));
+
+        await waitFor(() => {
+            expect(mocks.saveScan).toHaveBeenCalledTimes(1);
+        });
+        const [content, payload, cteType, idempotencyKey] = mocks.saveScan.mock.calls[0] as [
+            string,
+            Record<string, unknown>,
+            string,
+            string,
+        ];
+        expect(content).toBe('raw-scan');
+        expect(cteType).toBe('shipping');
+        expect(idempotencyKey).toBe('test-idempotency-key');
+        expect(payload).toMatchObject({ tenant_id: 'auth-tenant' });
+        expect(mocks.toast).toHaveBeenCalledWith(
+            expect.objectContaining({ title: 'Saved Offline' }),
+        );
     });
 
     it('falls back to cookie-backed file upload when label vision is unavailable', async () => {
-        setCaptureUrl('?tenant_id=hinted-tenant');
+        setCaptureUrl('');
+        mocks.useAuth.mockReturnValue({
+            apiKey: null,
+            isAuthenticated: true,
+            tenantId: 'auth-tenant',
+        });
         mocks.fetchWithCsrf
             .mockResolvedValueOnce(jsonResponse({ products: [] }))
             .mockResolvedValueOnce(new Response('fake-image', {
