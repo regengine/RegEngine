@@ -37,7 +37,8 @@ async def list_regulations(
             query = f"""
                 MATCH (r:Regulation)
                 {where_clause}
-                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s)
+                OPTIONAL MATCH (r)-[:HAS_SECTION]->(s:Section)
+                WHERE (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN r.name as name, count(s) as section_count, r.version as version
                 ORDER BY r.name
                 SKIP $skip LIMIT $limit
@@ -99,8 +100,9 @@ async def get_regulation_citations(
             try:
                 result = await session.run(
                     """
-                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s)-[:CITES]->(c:Citation)
+                    MATCH (r:Regulation {name: $name, tenant_id: $tenant_id})-[:HAS_SECTION]->(s:Section)-[:CITES]->(c:Citation)
                     WHERE s.tenant_id = $tenant_id
+                    AND (c.tenant_id IS NULL OR c.tenant_id = $tenant_id)
                     RETURN DISTINCT c.text as citation, count(s) as mention_count
                     ORDER BY mention_count DESC
                     SKIP $skip LIMIT $limit
@@ -168,6 +170,15 @@ async def get_requirement_mappings(
             where_clauses = [
                 "o1.tenant_id = $tenant_id",
                 "o2.tenant_id = $tenant_id",
+                # Joined Sections use the same strict tenant filter as the
+                # sibling section reads (get_regulation_sections,
+                # get_regulation_citations), so a cross-tenant REQUIRES edge
+                # cannot leak another tenant's regulation name. Note: the
+                # ingestion loader writes Sections with no tenant_id, so
+                # loader rows do not match until the catalog model is
+                # settled globally (see FIX-REPORT.md, needs decision).
+                "s1.tenant_id = $tenant_id",
+                "s2.tenant_id = $tenant_id",
             ]
             params: Dict[str, Any] = {"skip": skip, "limit": limit, "tenant_id": str(tenant_id)}
 
@@ -212,14 +223,17 @@ async def harmonize_requirement(
     from ..mapping_engine import MappingEngine
 
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    engine = MappingEngine(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password,
-    )
     try:
-        mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
-        await engine.close()
+        engine = MappingEngine(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+        )
+        try:
+            mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
+        finally:
+            # Always release the driver, even when the mapping fails.
+            await engine.close()
         return {
             "status": "completed",
             "obligation_id": obligation_id,

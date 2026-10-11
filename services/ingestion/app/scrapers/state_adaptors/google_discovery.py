@@ -4,7 +4,11 @@ from urllib.parse import urlencode
 
 import httpx
 import structlog
-from shared.safe_http import safe_httpx_get_sync
+from shared.safe_http import (
+    DOCUMENT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_sync,
+)
 from shared.url_validation import validate_url
 
 from ...config import get_settings
@@ -98,11 +102,22 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
         """
         try:
             # SSRF defense (RE-SEC-INGEST-003): per-hop validation + IP pinning.
-            resp = safe_httpx_get_sync(source.url, timeout=30, headers={"User-Agent": "RegEngine/1.0"})
+            # Discovered targets are whole documents (usually PDFs), so they
+            # get the document budget, not the 5 MiB page default.
+            resp = safe_httpx_get_sync(
+                source.url,
+                timeout=30,
+                headers={"User-Agent": "RegEngine/1.0"},
+                max_bytes=DOCUMENT_MAX_RESPONSE_BYTES,
+            )
             resp.raise_for_status()
 
             content_type = resp.headers.get("Content-Type", "application/pdf")
             return FetchedItem(source=source, content_bytes=resp.content, content_type=content_type)
+        except ResponseTooLargeError as e:
+            logger.error("google_fetch_too_large", url=source.url, error=str(e))
+            # Return empty item on failure
+            return FetchedItem(source=source, content_bytes=b"", content_type=None)
         except Exception as e:
             logger.error("google_fetch_failed", url=source.url, error=str(e))
             # Return empty item on failure

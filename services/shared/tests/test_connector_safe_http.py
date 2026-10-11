@@ -92,7 +92,14 @@ async def test_safetyculture_oversized_response_is_refused(monkeypatch):
         (TiveConnector, "/shipments"),
     ],
 )
-async def test_food_safety_fetch_refuses_ssrf_gracefully(monkeypatch, cls, path):
+async def test_food_safety_fetch_propagates_ssrf_refusal(monkeypatch, cls, path):
+    """An SSRF refusal must surface, never masquerade as an empty sync.
+
+    ``IntegrationConnector.sync`` treats ``([], None)`` as a finished sync
+    with no error, so swallowing the refusal hides a blocked fetch from the
+    operator. Fails on the pre-fix code, which catches ``Exception`` and
+    returns ``([], None)``.
+    """
     from shared.url_validation import SSRFError
 
     import services.shared.external_connectors.food_safety as fs_module
@@ -107,10 +114,34 @@ async def test_food_safety_fetch_refuses_ssrf_gracefully(monkeypatch, cls, path)
     monkeypatch.setattr(fs_module, "safe_httpx_get_async", fake_get)
 
     connector = cls(_config(base_url="http://127.0.0.1:9"))
-    events, cursor = await connector.fetch_events(limit=10)
-    assert events == [] and cursor is None
+    with pytest.raises(SSRFError):
+        await connector.fetch_events(limit=10)
     assert len(calls) == 1
     assert calls[0][0].endswith(path)
+
+
+@pytest.mark.parametrize(
+    "cls",
+    [
+        FoodReadyConnector,
+        FoodDocsConnector,
+        TiveConnector,
+    ],
+)
+async def test_food_safety_fetch_propagates_size_refusal(monkeypatch, cls):
+    """An oversized vendor body must surface, never read as no events."""
+    from shared.safe_http import ResponseTooLargeError
+
+    import services.shared.external_connectors.food_safety as fs_module
+
+    async def too_big(url, **kwargs):
+        raise ResponseTooLargeError("Response body exceeds 5242880 bytes")
+
+    monkeypatch.setattr(fs_module, "safe_httpx_get_async", too_big)
+
+    connector = cls(_config())
+    with pytest.raises(ResponseTooLargeError):
+        await connector.fetch_events(limit=10)
 
 
 @pytest.mark.parametrize("cls", [FoodReadyConnector, TiveConnector])
@@ -129,7 +160,28 @@ async def test_food_safety_test_connection_refuses_private_base(monkeypatch, cls
 
 
 async def test_foodready_private_base_url_needs_no_network():
+    from shared.url_validation import SSRFError
+
     connector = FoodReadyConnector(_config(base_url="http://127.0.0.1:9"))
     assert await connector.test_connection() is False
-    events, cursor = await connector.fetch_events(limit=10)
-    assert events == [] and cursor is None
+    with pytest.raises(SSRFError):
+        await connector.fetch_events(limit=10)
+
+
+async def test_fooddocs_private_base_url_fetch_raises_without_connecting():
+    """Unmocked twin of the FoodReady refusal test for FoodDocs."""
+    from shared.url_validation import SSRFError
+
+    connector = FoodDocsConnector(_config(base_url="http://127.0.0.1:9"))
+    with pytest.raises(SSRFError):
+        await connector.fetch_events(limit=10)
+
+
+async def test_tive_private_base_url_needs_no_network():
+    """Unmocked twin of the FoodReady refusal test for Tive."""
+    from shared.url_validation import SSRFError
+
+    connector = TiveConnector(_config(base_url="http://127.0.0.1:9"))
+    assert await connector.test_connection() is False
+    with pytest.raises(SSRFError):
+        await connector.fetch_events(limit=10)

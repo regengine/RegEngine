@@ -375,7 +375,7 @@ function ExportAndCompleteButton({ request }: { request: FDARequestData }) {
   const handleExportAndComplete = useCallback(() => {
     // Open export in new tab, then mark complete
     const exportUrl = `/api/ingestion/api/v1/fsma/audit/spreadsheet?start_date=2020-01-01&end_date=2099-12-31`;
-    window.open(exportUrl, '_blank');
+    window.open(exportUrl, '_blank', 'noopener,noreferrer');
     complete.mutate({});
   }, [complete]);
 
