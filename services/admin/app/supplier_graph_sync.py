@@ -255,10 +255,17 @@ class SupplierGraphSync:
 
         try:
             creds = get_secrets_manager().get_neo4j_credentials()
-        except RuntimeError:
-            # Production fail-closed: credentials are validated at startup,
-            # so a raise here means they disappeared mid-flight. Drop the
-            # stale driver and no-op, same as the empty case below.
+        except RuntimeError as exc:
+            # Production fail-closed: the getter raises when the Neo4j uri
+            # or password is missing (startup only requires DATABASE_URL,
+            # so this happens whenever Neo4j was never wired). Log it so a
+            # silently skipped graph mirror stays visible, then drop the
+            # stale driver and no-op, same as the empty case below. The
+            # error names variables, never values.
+            logger.error(
+                "supplier_graph_sync_missing_neo4j_credentials",
+                error=str(exc),
+            )
             self._close_driver()
             return None
         uri = (creds.get("uri") or "").strip()
