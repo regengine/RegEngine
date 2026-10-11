@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
+import http.server
 import importlib.util
+import os
 import ssl
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -126,12 +130,12 @@ def _wrapped_cert_error():
     return urllib.error.URLError(ssl.SSLCertVerificationError("certificate verify failed: self-signed certificate"))
 
 
-def _install_urlopen_failure(monkeypatch, exc, seen):
+def _install_urlopen_failure(monkeypatch, mod, exc, seen):
     def fake_urlopen(req, *args, **kwargs):
         seen["context"] = kwargs.get("context")
         raise exc
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(mod, "urlopen_no_redirect", fake_urlopen)
 
 
 def _assert_verifying_context(seen):
@@ -146,7 +150,7 @@ def test_demo_main_wrapped_cert_error_aborts_with_1(monkeypatch, capsys):
     monkeypatch.delenv("SEED_BASE_URL", raising=False)
     monkeypatch.setenv("REGENGINE_TENANT_API_KEY", "secret-from-env")
     seen = {}
-    _install_urlopen_failure(monkeypatch, _wrapped_cert_error(), seen)
+    _install_urlopen_failure(monkeypatch, mod, _wrapped_cert_error(), seen)
     rc = mod.main([])
     assert rc == 1
     assert "tls" in capsys.readouterr().out.lower()
@@ -160,6 +164,7 @@ def test_demo_main_direct_cert_error_aborts_with_1(monkeypatch, capsys):
     seen = {}
     _install_urlopen_failure(
         monkeypatch,
+        mod,
         ssl.SSLCertVerificationError("certificate verify failed"),
         seen,
     )
@@ -173,7 +178,7 @@ def test_demo_main_non_cert_urlerror_still_propagates(monkeypatch):
     mod = _load("seed_demo_ctes")
     monkeypatch.delenv("SEED_BASE_URL", raising=False)
     monkeypatch.setenv("REGENGINE_TENANT_API_KEY", "secret-from-env")
-    _install_urlopen_failure(monkeypatch, urllib.error.URLError(ConnectionRefusedError("refused")), {})
+    _install_urlopen_failure(monkeypatch, mod, urllib.error.URLError(ConnectionRefusedError("refused")), {})
     with pytest.raises(urllib.error.URLError):
         mod.main([])
 
@@ -184,7 +189,7 @@ def test_founder_main_wrapped_cert_error_aborts_with_1(monkeypatch, capsys):
     monkeypatch.setenv("REGENGINE_TENANT_API_KEY", "secret-from-env")
     monkeypatch.setenv("WEBHOOK_HMAC_SECRET", "hmac-secret")
     seen = {}
-    _install_urlopen_failure(monkeypatch, _wrapped_cert_error(), seen)
+    _install_urlopen_failure(monkeypatch, mod, _wrapped_cert_error(), seen)
     rc = mod.main([])
     assert rc == 1
     assert "tls" in capsys.readouterr().out.lower()
@@ -196,7 +201,7 @@ def test_founder_status_wrapped_cert_error_unsuccessful(monkeypatch, capsys):
     monkeypatch.delenv("SEED_BASE_URL", raising=False)
     monkeypatch.setenv("REGENGINE_TENANT_API_KEY", "secret-from-env")
     seen = {}
-    _install_urlopen_failure(monkeypatch, _wrapped_cert_error(), seen)
+    _install_urlopen_failure(monkeypatch, mod, _wrapped_cert_error(), seen)
     rc = mod.main(["--status"])
     assert rc == 1
     assert "tls" in capsys.readouterr().out.lower()
