@@ -32,13 +32,14 @@ async def find_gaps(
         List of events with gap details
 
     Raises:
-        ValueError: if `tenant_id` is None or empty. The previous
-            `$tenant_id IS NULL OR ...` shim let null-tenant callers see
-            every tenant's gap data. Callers must pass a tenant (#2540).
+        ValueError: if `tenant_id` is None, empty, or whitespace-only. The
+            previous `$tenant_id IS NULL OR ...` shim let null-tenant
+            callers read every tenant's events, so callers must pass a tenant.
     """
-    # Fail closed on a missing tenant rather than degrading to "all tenants".
-    if not tenant_id:
-        raise ValueError("find_gaps requires a non-empty tenant_id; null-tenant queries are not supported (#2540)")
+    if not tenant_id or not str(tenant_id).strip():
+        raise ValueError(
+            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
 
     start_time = time.time()
 
@@ -62,7 +63,7 @@ async def find_gaps(
         e.event_date as event_date,
         e.document_id as document_id,
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
-        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN ',missing_lot' ELSE '' END +
+        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
     LIMIT 2000
     """
@@ -129,7 +130,7 @@ async def find_broken_chains(
     # `$tenant_id IS NULL OR l.tenant_id = $tenant_id` idiom was a
     # test-time shim that turned into a production info-disclosure the
     # moment a caller forgot to pass tenant_id. Prefer a loud error.
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
             "find_broken_chains requires a non-empty tenant_id; null-tenant queries are no longer supported (#1301)"
         )
@@ -387,11 +388,13 @@ async def find_all_gaps(
         Combined list of all gaps and violations
 
     Raises:
-        ValueError: if `tenant_id` is None or empty. Fails fast before
-            running any query so a null tenant never reaches Neo4j.
+        ValueError: if `tenant_id` is None or empty (propagated from
+            the underlying gap queries, which require a tenant).
     """
-    if not tenant_id:
-        raise ValueError("find_all_gaps requires a non-empty tenant_id; null-tenant queries are not supported (#2540)")
+    if not tenant_id or not str(tenant_id).strip():
+        raise ValueError(
+            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
 
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)

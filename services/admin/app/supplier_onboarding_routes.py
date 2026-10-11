@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from shared.fda_export.csv_safety import safe_cell
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -752,8 +753,16 @@ def _render_fda_export_csv(rows: list[dict[str, Any]]) -> bytes:
     writer.writeheader()
 
     for row in rows:
+        # Neutralize spreadsheet-formula prefixes in supplier controlled
+        # cells (product description, facility name, reference document).
+        # safe_cell prepends a single quote when a value starts with
+        # =, +, -, @, tab, or carriage return, so Excel and Sheets render
+        # it as text instead of executing it as a formula.
         writer.writerow(
-            {FDA_EXPORT_HEADERS[column]: _string_value(row.get(column, "")) for column in FDA_EXPORT_COLUMN_ORDER}
+            {
+                FDA_EXPORT_HEADERS[column]: safe_cell(_string_value(row.get(column, "")))
+                for column in FDA_EXPORT_COLUMN_ORDER
+            }
         )
 
     return output.getvalue().encode("utf-8")

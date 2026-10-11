@@ -8,9 +8,10 @@ so they live in the same module.
 
 from __future__ import annotations
 
+import math
 from collections import defaultdict
-from datetime import datetime
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from shared.rules.uom import is_mass_uom, normalize_to_mass
@@ -115,6 +116,45 @@ def _evaluate_event_stateless(
 # ---------------------------------------------------------------------------
 
 
+def _safe_float(value: Any) -> Optional[float]:
+    """Coerce a quantity to float, returning None when it is not a number.
+
+    CSV quantities arrive as raw strings, so values like "abc", "inf" or
+    True must not reach the mass-balance arithmetic: float() would raise
+    (whole-batch 500) or silently poison the totals. Non-finite values
+    are treated as missing too. The KDE layer flags the bad value so the
+    event cannot score a false pass.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(result):
+        return None
+    return result
+
+
+def _safe_parse_ts(value: Any) -> Optional[datetime]:
+    """Parse an event timestamp, returning None when it is unusable.
+
+    Unparseable strings are skipped by the chronology check (the KDE
+    layer flags them) instead of raising. Naive datetimes are read as
+    UTC so mixed naive/aware batches compare instead of raising
+    TypeError on offset-naive vs offset-aware comparison.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 def _get_relational_rules() -> Dict[str, RuleDefinition]:
     """Get the 3 relational rules from sandbox rules by evaluation type."""
     relational = {}
@@ -167,9 +207,12 @@ def _evaluate_relational_in_memory(
                 if current_stage is None:
                     continue
 
-                current_ts = evt.get("event_timestamp", "")
-                if isinstance(current_ts, str) and current_ts:
-                    current_ts = datetime.fromisoformat(current_ts.replace("Z", "+00:00"))
+                # Unparseable timestamps cannot be ordered; the KDE layer
+                # flags the bad value, so skip the check instead of
+                # raising and failing the whole batch.
+                current_ts = _safe_parse_ts(evt.get("event_timestamp", ""))
+                if current_ts is None:
+                    continue
 
                 violations = []
                 for other in events:
@@ -180,9 +223,9 @@ def _evaluate_relational_in_memory(
                     if other_stage is None:
                         continue
 
-                    other_ts = other.get("event_timestamp", "")
-                    if isinstance(other_ts, str) and other_ts:
-                        other_ts = datetime.fromisoformat(other_ts.replace("Z", "+00:00"))
+                    other_ts = _safe_parse_ts(other.get("event_timestamp", ""))
+                    if other_ts is None:
+                        continue
 
                     if other_stage < current_stage and other_ts > current_ts:
                         violations.append(
@@ -315,16 +358,17 @@ def _evaluate_relational_in_memory(
             units_seen: set = set()
             use_converted = False
 
-            # Collect all entries
+            # Collect all entries (non-numeric quantities are skipped
+            # like missing ones; the KDE layer flags them).
             all_entries = []
             for evt in events:
-                qty = evt.get("quantity")
+                qty = _safe_float(evt.get("quantity"))
                 uom = evt.get("unit_of_measure", "")
                 if qty is None:
                     continue
                 if uom:
                     units_seen.add(uom.lower().strip())
-                all_entries.append((float(qty), uom, evt.get("event_type", "")))
+                all_entries.append((qty, uom, evt.get("event_type", "")))
 
             # Mixed UOMs: only render a verdict if every quantity converts to a
             # true mass. Container/count units convert only with an authoritative
@@ -457,21 +501,20 @@ def _evaluate_relational_in_memory(
             if not input_tlcs:
                 continue
 
-            output_qty = evt.get("quantity")
+            output_qty = _safe_float(evt.get("quantity"))
             output_uom = evt.get("unit_of_measure", "")
             if output_qty is None:
                 continue
-            output_qty = float(output_qty)
 
             # Sum input quantities from events matching input TLCs
             total_input = 0.0
             input_units: set = set()
             for input_tlc in input_tlcs:
                 for other in tlc_groups.get(input_tlc, []):
-                    oq = other.get("quantity")
+                    oq = _safe_float(other.get("quantity"))
                     ou = other.get("unit_of_measure", "")
                     if oq is not None:
-                        total_input += float(oq)
+                        total_input += oq
                         if ou:
                             input_units.add(ou.lower().strip())
 
@@ -493,10 +536,10 @@ def _evaluate_relational_in_memory(
                 all_ok = True
                 for input_tlc in input_tlcs:
                     for other in tlc_groups.get(input_tlc, []):
-                        oq = other.get("quantity")
+                        oq = _safe_float(other.get("quantity"))
                         ou = other.get("unit_of_measure", "")
                         if oq is not None and ou:
-                            mass = normalize_to_mass(float(oq), ou, weights=container_weights)
+                            mass = normalize_to_mass(oq, ou, weights=container_weights)
                             if mass is None:
                                 all_ok = False
                                 break
