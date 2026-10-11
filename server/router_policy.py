@@ -239,7 +239,7 @@ class RouterPolicy:
 
     def enable(self, name: str) -> bool:
         """Return whether a router is enabled and record an actual mount."""
-        router_name = name.lower()
+        router_name = name.strip().lower()
         enabled = router_name in self.enabled_routers
         if enabled and router_name not in self.mounted_routers:
             self.mounted_routers.append(router_name)
@@ -247,4 +247,4 @@ class RouterPolicy:
 
     def is_enabled(self, name: str) -> bool:
         """Pure predicate used by readiness checks after app construction."""
-        return name.lower() in self.enabled_routers
+        return name.strip().lower() in self.enabled_routers
