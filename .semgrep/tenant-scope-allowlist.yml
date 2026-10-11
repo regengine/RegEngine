@@ -23,7 +23,7 @@ version: 1
 
 global_catalog_labels:
   # Core FSMA regulation text shared by every tenant (DB_GLOBAL).
-  Obligation: "Global regulatory obligation catalog in the shared Neo4j database; readable across tenants by design."
+  Obligation: "Global regulatory obligation catalog in the shared Neo4j database; readable across tenants by design when marked catalog = true by a catalog writer (Decision 3 quarantine)."
   Section: "Global regulation section catalog in the shared Neo4j database; readable across tenants by design."
   Regulation: "Global regulation catalog in the shared Neo4j database; readable across tenants by design."
   Citation: "Global citation catalog in the shared Neo4j database; readable across tenants by design."
