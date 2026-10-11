@@ -148,13 +148,19 @@ WITH cte
 UNWIND $obligation_ids AS obligation_id
 // Obligation is a SHARED regulatory catalog (obligation_ids like
 // '21cfr_subpart_s_123' are global, not tenant-specific), so MERGEing on
-// obligation_id alone is intentional. The SATISFIES edges that land on this
+// obligation_id alone is intentional. Decision 3 quarantine: the node is
+// shared across tenants only because the ON CREATE SET below stamps
+// catalog = true, which is what linker readers match on. The stamp is
+// create-only so matching a tenant-private row with the same
+// obligation_id never promotes it to the shared catalog.
+// The SATISFIES edges that land on this
 // node DO cross tenant boundaries (tenant A's CTEs and tenant B's CTEs can
 // both point to the same Obligation node). Defense-in-depth: every read that
 // traverses SATISFIES MUST filter by ``cte.tenant_id`` — the CREATE above
 // stamps tenant_id onto every CTEEvent so this predicate is always available.
 // See issue #1395.
 MERGE (obligation:Obligation {obligation_id: obligation_id})
+ON CREATE SET obligation.catalog = true
 MERGE (cte)-[:SATISFIES]->(obligation)
 """
 
@@ -249,10 +255,17 @@ class SupplierGraphSync:
 
         try:
             creds = get_secrets_manager().get_neo4j_credentials()
-        except RuntimeError:
-            # Production fail-closed: credentials are validated at startup,
-            # so a raise here means they disappeared mid-flight. Drop the
-            # stale driver and no-op, same as the empty case below.
+        except RuntimeError as exc:
+            # Production fail-closed: the getter raises when the Neo4j uri
+            # or password is missing (startup only requires DATABASE_URL,
+            # so this happens whenever Neo4j was never wired). Log it so a
+            # silently skipped graph mirror stays visible, then drop the
+            # stale driver and no-op, same as the empty case below. The
+            # error names variables, never values.
+            logger.error(
+                "supplier_graph_sync_missing_neo4j_credentials",
+                error=str(exc),
+            )
             self._close_driver()
             return None
         uri = (creds.get("uri") or "").strip()
