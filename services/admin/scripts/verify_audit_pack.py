@@ -9,7 +9,10 @@ The verifier recomputes every hash the pack records (CSV content hash,
 per-file manifest hashes, and the manifest Merkle root) and compares each
 one against its declared value. Any mismatch, missing field, or missing
 file fails closed with a non-zero exit status. The pack's self-declared
-``verification_status`` is never trusted on its own.
+``verification_status`` is never trusted on its own. The persisted row
+hash chain is not replayed and the pack carries no signature, so a
+rebuilt but internally consistent pack still passes. A success result
+means bundle consistency only, never that the chain was rechecked.
 
 Stdlib only, so the script runs without the RegEngine codebase.
 
@@ -22,13 +25,26 @@ import json
 import os
 import sys
 import zipfile
+import zlib
 
 ACCEPTABLE_STATUSES = ("VERIFIED", "PARTIAL")
 
 
 def _fail(message):
-    print(f"FAILED: {message}")
+    clean = str(message).replace("\r", " ").replace("\n", " ")
+    print(f"FAILED: {clean}")
     return False
+
+
+def _display(value):
+    """Render a pack-controlled string on a single log line.
+
+    Pack strings are attacker controlled. Newlines could otherwise plant a
+    fake success line in stdout while the pack still fails.
+    """
+    if not isinstance(value, str):
+        return repr(value)
+    return value.replace("\r", " ").replace("\n", " ")
 
 
 def _is_sha256_hex(value):
@@ -72,7 +88,16 @@ def _is_safe_member(name):
         return False
     if "\\" in name:
         return False
-    if ".." in name.split("/"):
+    if ":" in name:
+        # Windows drive letters (C:/...) are absolute paths on extraction.
+        return False
+    if name.endswith("/"):
+        return False
+    segments = name.split("/")
+    if any(seg in ("", ".", "..") for seg in segments):
+        # Empty and "." segments are dropped by ZipFile extraction, so two
+        # distinct member names could collapse onto one path on disk while
+        # the verifier reads them as separate entries.
         return False
     return True
 
@@ -99,6 +124,10 @@ def verify_pack(zip_path):
             if len(set(file_list)) != len(file_list):
                 dupes = sorted({n for n in file_list if file_list.count(n) > 1})
                 return _fail(f"duplicate zip entries rejected: {dupes}")
+            lowered = [n.lower() for n in file_list]
+            if len(set(lowered)) != len(lowered):
+                dupes = sorted({n for n in file_list if lowered.count(n.lower()) > 1})
+                return _fail(f"case-colliding zip entries rejected: {dupes!r}")
 
             for name in file_list:
                 if not _is_safe_member(name):
@@ -143,6 +172,12 @@ def verify_pack(zip_path):
             if len(set(declared_paths)) != len(declared_paths):
                 dupes = sorted({p for p in declared_paths if declared_paths.count(p) > 1})
                 return _fail(f"manifest declares duplicate paths: {dupes}")
+            lowered_declared = [p.lower() for p in declared_paths]
+            if len(set(lowered_declared)) != len(lowered_declared):
+                dupes = sorted(
+                    {p for p in declared_paths if lowered_declared.count(p.lower()) > 1}
+                )
+                return _fail(f"manifest declares case-colliding paths: {dupes!r}")
             payload_members = {name for name in file_list if name != "manifest.json"}
             declared_set = set(declared_paths)
             missing = sorted(declared_set - payload_members)
@@ -200,10 +235,10 @@ def verify_pack(zip_path):
             if not isinstance(v_data, dict):
                 return _fail("chain verification artifact must contain a JSON object")
 
-            print(f"Snapshot ID: {v_data.get('snapshot_id')}")
-            print(f"Captured At: {v_data.get('captured_at')}")
-            print(f"Content Hash: {v_data.get('content_hash')}")
-            print(f"Algorithm: {v_data.get('hash_algorithm')}")
+            print(f"Snapshot ID: {_display(v_data.get('snapshot_id'))}")
+            print(f"Captured At: {_display(v_data.get('captured_at'))}")
+            print(f"Content Hash: {_display(v_data.get('content_hash'))}")
+            print(f"Algorithm: {_display(v_data.get('hash_algorithm'))}")
 
             required_fields = [
                 "version",
@@ -265,7 +300,11 @@ def verify_pack(zip_path):
                 isinstance(artifact_length, int) and not isinstance(artifact_length, bool) and artifact_length >= 0
             ):
                 return _fail("chain artifact chain_length must be a non-negative integer")
-            if manifest_chain_length is not None and manifest_chain_length != artifact_length:
+            if manifest_chain_length is not None and (
+                not isinstance(manifest_chain_length, int)
+                or isinstance(manifest_chain_length, bool)
+                or manifest_chain_length != artifact_length
+            ):
                 return _fail("manifest chain_length disagrees with the chain artifact")
             counts_ok = all(
                 isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (missing_record, missing_chain)
@@ -285,15 +324,23 @@ def verify_pack(zip_path):
                 )
 
             # 8. Result: all hashes match, so the status is now meaningful.
+            # The success line claims bundle consistency only. The persisted
+            # row chain was not recomputed and the pack carries no signature.
+            attestation = v_data.get("attestation")
+            if attestation is not None and not isinstance(attestation, dict):
+                return _fail("chain attestation must be an object when present")
             if status in ACCEPTABLE_STATUSES:
-                print(f"\n[SUCCESS] Cryptographic Integrity: {status}")
-                if v_data.get("attestation"):
-                    print(f"Attested By: {v_data['attestation'].get('attested_by')}")
+                print(
+                    f"\n[SUCCESS] Bundle Consistency: {status} "
+                    "(file hashes match; persisted chain was not recomputed)"
+                )
+                if isinstance(attestation, dict) and attestation.get("attested_by"):
+                    print(f"Attested By: {_display(attestation.get('attested_by'))}")
                 return True
-            print(f"\n[FAILED] Cryptographic Integrity: {status} (chain check did not pass)")
+            print(f"\n[FAILED] Bundle Consistency: {status} (chain check did not pass)")
             return False
 
-    except OSError as exc:
+    except (OSError, zipfile.BadZipFile, zlib.error, EOFError) as exc:
         return _fail(f"could not read archive contents: {exc}")
 
 

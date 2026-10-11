@@ -505,6 +505,7 @@ async def configure_connector(
     from shared.external_connectors.registry import (
         get_connector_class,
         get_or_create_connector,
+        remove_connector,
         resolve_connector_id,
     )
 
@@ -578,6 +579,10 @@ async def configure_connector(
         extra=config_req.extra,
     )
 
+    # Reconfigure replaces the cached instance instead of keeping the
+    # first one, so a rotated secret (for example the webhook secret)
+    # takes effect immediately for this tenant.
+    remove_connector(tenant_id, connector_id)
     connector = get_or_create_connector(tenant_id, connector_id, config)
     return {
         "configured": True,

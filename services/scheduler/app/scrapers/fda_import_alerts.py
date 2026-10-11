@@ -137,7 +137,7 @@ class FDAImportAlertsScraper(BaseScraper):
         """Close the underlying HTTP client to release connections."""
         self.session.close()
 
-    def _scrape_alerts_page(self) -> List[EnforcementItem]:
+    def _scrape_alerts_page(self) -> Tuple[List[EnforcementItem], List[str]]:
         """Parse FDA Import Alerts HTML page."""
         # #1138: retry on 5xx/transport errors.
         response = fetch_with_retry(

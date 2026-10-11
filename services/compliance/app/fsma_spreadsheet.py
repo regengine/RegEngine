@@ -190,6 +190,24 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
         return (str(raw)[:10], "")
 
 
+def _is_recorded(value: Any) -> bool:
+    """A KDE counts as recorded unless it is missing (None) or blank.
+
+    A bare truthiness check drops legitimate zero measurements: a
+    ``quantity`` of 0 and a ``temperature`` of 0 are routine real-world
+    readings that must not render as blank on a regulator-facing export.
+    """
+    return value is not None and value != ""
+
+
+def _first_recorded(*values: Any, default: str = "") -> Any:
+    """Return the first recorded value, falling back to ``default``."""
+    for value in values:
+        if _is_recorded(value):
+            return value
+    return default
+
+
 def _normalise_event(
     event: dict[str, Any],
     *,
@@ -222,7 +240,7 @@ def _normalise_event(
         )
     event_date_raw = _pick(kdes.get("event_date"), event.get("event_date"), event.get("event_timestamp"))
     event_date, event_time = _parse_timestamp(event_date_raw, strict=strict_dates)
-    if kdes.get("event_time"):
+    if _is_recorded(kdes.get("event_time")):
         event_time = str(kdes["event_time"])
 
     # Collect named KDE values. A present-but-falsy value (``0``,

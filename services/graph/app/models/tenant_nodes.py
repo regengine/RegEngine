@@ -78,6 +78,8 @@ class OverlayRelationships:
     """Cypher templates for Overlay relationships."""
 
     # Tenant HAS_OVERLAY -> RegulationOverride
+    # Both ends carry tenant_id so a tenant cannot link its overlay to
+    # another tenant's override node when override_id values collide.
     TENANT_HAS_OVERRIDE = """
     MATCH (t:TenantOverlay {tenant_id: $tenant_id})
     MATCH (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})

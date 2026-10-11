@@ -56,8 +56,16 @@ class FDAEnforcementScraper(StateRegistryScraper):
                         # Skip this URL, continue to next
                         continue
 
-                    title_text = title.text.strip() if title is not None else "Unknown Warning Letter"
-                    date_text = pub_date.text.strip() if pub_date is not None else None
+                    title_text = (
+                        title.text.strip()
+                        if title is not None and title.text
+                        else "Unknown Warning Letter"
+                    )
+                    date_text = (
+                        pub_date.text.strip()
+                        if pub_date is not None and pub_date.text
+                        else None
+                    )
 
                     yield Source(
                         url=validated_url,
@@ -102,8 +110,8 @@ class FDAEnforcementScraper(StateRegistryScraper):
             content_type = resp.headers.get("Content-Type", "text/html; charset=utf-8")
 
             # 2. Check for PDF Link (Deep Fetch)
-            # Regex for <a href="...pdf">
-            pdf_match = re.search(r'href="([^"]+\.pdf)"', resp.text, re.IGNORECASE)
+            # Regex for <a href="...pdf"> (single- or double-quoted)
+            pdf_match = re.search(r"""href=["']([^"']+\.pdf)["']""", resp.text, re.IGNORECASE)
 
             if pdf_match:
                 pdf_rel_url = pdf_match.group(1)

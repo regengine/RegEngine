@@ -6,14 +6,18 @@ import uuid
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ..database import arm_global_admin_context, get_session
-from ..privileged_auth import PrivilegedActor, require_sysadmin_high_assurance
-from ..sqlalchemy_models import OrganizationModel, UserModel
+from ..privileged_auth import (
+    PrivilegedActor,
+    audit_privileged_action,
+    require_sysadmin_high_assurance,
+)
+from ..sqlalchemy_models import OrganizationModel
 
 logger = structlog.get_logger("admin.organizations")
 router = APIRouter(prefix="/admin/organizations", tags=["admin-organizations"])
@@ -40,6 +44,13 @@ class OrganizationSsoPolicyUpdate(BaseModel):
             or "." not in normalized
         ):
             raise ValueError("domain_name must be a bare DNS domain")
+        if len(normalized) > 253:
+            raise ValueError("domain_name must be a bare DNS domain")
+        for label in normalized.split("."):
+            if not label or len(label) > 63:
+                raise ValueError("domain_name must be a bare DNS domain")
+            if label.startswith("-") or label.endswith("-"):
+                raise ValueError("domain_name must be a bare DNS domain")
         return normalized
 
 
@@ -52,7 +63,7 @@ class OrganizationSsoPolicyResponse(BaseModel):
 
 def require_super_admin(
     actor: PrivilegedActor = Depends(require_sysadmin_high_assurance),
-) -> UserModel:
+) -> PrivilegedActor:
     current_user = actor.user
     if current_user is None:
         raise HTTPException(
@@ -64,21 +75,37 @@ def require_super_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin access required.",
         )
-    return current_user
+    return actor
 
 
 @router.put("/{org_id}/sso-policy", response_model=OrganizationSsoPolicyResponse)
 async def update_organization_sso_policy(
     org_id: uuid.UUID,
     payload: OrganizationSsoPolicyUpdate,
-    _: UserModel = Depends(require_super_admin),
+    request: Request,
+    actor: PrivilegedActor = Depends(require_super_admin),
     db: Session = Depends(get_session),
 ) -> OrganizationSsoPolicyResponse:
     # ``require_super_admin`` has already completed high-assurance human
     # authentication.  Elevation is local to this database transaction.
+    audit_privileged_action(
+        request,
+        action="organization.sso_policy.update",
+        outcome="attempted",
+        actor=actor,
+        target=str(org_id),
+    )
     arm_global_admin_context(db)
     organization = db.get(OrganizationModel, org_id)
     if organization is None:
+        audit_privileged_action(
+            request,
+            action="organization.sso_policy.update",
+            outcome="failed",
+            actor=actor,
+            target=str(org_id),
+            reason="organization_not_found",
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
 
     organization.domain_name = payload.domain_name
@@ -86,25 +113,47 @@ async def update_organization_sso_policy(
     organization.enforced_auth_policy = payload.enforced_auth_policy
 
     try:
-        response = OrganizationSsoPolicyResponse(
-            id=organization.id,
-            domain_name=organization.domain_name,
-            domain_verified=bool(organization.domain_verified),
-            enforced_auth_policy=organization.enforced_auth_policy,
-        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
+        audit_privileged_action(
+            request,
+            action="organization.sso_policy.update",
+            outcome="failed",
+            actor=actor,
+            target=str(org_id),
+            reason="domain_already_claimed",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Organization domain is already claimed.",
         ) from exc
-    except Exception as exc:
+    except SQLAlchemyError as exc:
         db.rollback()
         logger.error("organization_sso_policy_update_failed", organization_id=str(org_id), error=str(exc))
+        audit_privileged_action(
+            request,
+            action="organization.sso_policy.update",
+            outcome="failed",
+            actor=actor,
+            target=str(org_id),
+            reason="database_unavailable",
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Organization policy update temporarily unavailable.",
         ) from exc
 
-    return response
+    audit_privileged_action(
+        request,
+        action="organization.sso_policy.update",
+        outcome="succeeded",
+        actor=actor,
+        target=str(org_id),
+    )
+    return OrganizationSsoPolicyResponse(
+        id=organization.id,
+        domain_name=organization.domain_name,
+        domain_verified=bool(organization.domain_verified),
+        enforced_auth_policy=organization.enforced_auth_policy,
+    )

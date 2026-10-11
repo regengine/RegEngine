@@ -317,6 +317,18 @@ class APIKeyCreateResponse(APIKeyResponse):
 # values far beyond it.
 _MAX_RATE_LIMIT_WINDOW_SECONDS = 86_400
 
+# Every per-key quota window, evaluated in order. Each entry pairs the window
+# length in seconds with the ``APIKeyResponse`` attribute holding that window's
+# recorded limit. Historically only the minute window was enforced at request
+# time while the hour and day caps were stored but never checked (Pattern 2:
+# limits recorded but not enforced). ``check_all_rate_limits`` enforces all of
+# them; add new windows here, not at individual call sites.
+_RATE_LIMIT_WINDOWS: tuple[tuple[int, str], ...] = (
+    (60, "rate_limit_per_minute"),
+    (3600, "rate_limit_per_hour"),
+    (86_400, "rate_limit_per_day"),
+)
+
 
 class RateLimitInfo(BaseModel):
     """Rate limit information for a request."""
@@ -591,7 +603,7 @@ class DatabaseAPIKeyStore:
 
         try:
             uuid.UUID(uuid_str)
-        except ValueError:
+        except (ValueError, AttributeError, TypeError):
             raise ValueError(f"Invalid UUID: {uuid_str}")
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
@@ -818,7 +830,12 @@ class DatabaseAPIKeyStore:
             # _record_key_usage). Build the response from the row as loaded;
             # the buffered counter flush does not need to round-trip back here.
             response = APIKeyResponse.model_validate(api_key)
-            await self._record_key_usage(key_id, session)
+            # Usage accounting must never break authentication: a failed
+            # usage UPDATE turns a valid key into a 500 otherwise.
+            try:
+                await self._record_key_usage(key_id, session)
+            except Exception as exc:
+                logger.warning("api_key_usage_record_failed", key_id=key_id, error=str(exc))
             return response
 
     async def get_tenant_status(self, tenant_id: Optional[str]) -> Optional[str]:
@@ -965,6 +982,47 @@ class DatabaseAPIKeyStore:
             reset_at=reset_at,
             retry_after=retry_after,
         )
+
+    async def check_all_rate_limits(self, api_key: APIKeyResponse) -> RateLimitInfo:
+        """Enforce every recorded per-key quota window (minute, hour, day).
+
+        Each window in ``_RATE_LIMIT_WINDOWS`` gets its own fixed-window
+        counter via :meth:`check_rate_limit`, so one shared helper owns all
+        quota enforcement and call sites never pick windows individually.
+
+        Deny by default: a missing limit cannot be evaluated, so it denies
+        rather than allowing unbounded traffic. The first denial wins, in
+        window order, so its ``retry_after`` stays the shortest applicable
+        wait. When every window allows, the minute window's info is returned.
+        """
+        key_id = api_key.key_id
+        minute_info: Optional[RateLimitInfo] = None
+        for window_seconds, attribute in _RATE_LIMIT_WINDOWS:
+            limit = getattr(api_key, attribute, None)
+            if limit is None:
+                logger.warning(
+                    "rate_limit_unknown",
+                    key_id=key_id,
+                    window_seconds=window_seconds,
+                    missing_attribute=attribute,
+                )
+                now = datetime.now(timezone.utc)
+                return RateLimitInfo(
+                    allowed=False,
+                    limit=0,
+                    remaining=0,
+                    reset_at=now,
+                    retry_after=window_seconds,
+                )
+            info = await self.check_rate_limit(key_id, limit, window_seconds=window_seconds)
+            if window_seconds == 60:
+                minute_info = info
+            if not info.allowed:
+                return info
+        # All windows allowed. ``minute_info`` is always set: the windows table
+        # starts with the 60-second window by construction.
+        assert minute_info is not None
+        return minute_info
 
     async def revoke_key(
         self,

@@ -239,11 +239,22 @@ def _webauthn_verify_authentication_response(
 
 
 def _fake_authentication_options() -> dict[str, Any]:
+    # Shape-matched to real authentication options: an empty
+    # ``allowCredentials`` list would let any caller distinguish enrolled
+    # from non-enrolled emails by response content alone, defeating the
+    # fake-options plus timing-floor anti-enumeration control above. The
+    # random descriptor can never verify: no challenge row is stored for
+    # it, so login verify still fails closed with 401.
     return {
         "challenge": secrets.token_urlsafe(32),
         "timeout": 60000,
         "rpId": _rp_id(),
-        "allowCredentials": [],
+        "allowCredentials": [
+            {
+                "type": "public-key",
+                "id": secrets.token_urlsafe(32),
+            }
+        ],
         "userVerification": "required",
     }
 

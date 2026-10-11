@@ -34,6 +34,11 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
 
+    // Retry safety: mint one key per logical call and reuse it on every
+    // attempt, so a retried POST replays instead of duplicating the write.
+    const incoming = new Headers(options.headers ?? {}).get('Idempotency-Key');
+    const idempotencyKey = incoming ?? (isMutatingMethod(options.method) ? newIdempotencyKey() : null);
+
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         let res: Response | undefined;
         try {
@@ -44,6 +49,7 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
                 headers: {
                     'Content-Type': 'application/json',
                     ...options.headers,
+                    ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
                 },
             });
         } catch (err) {

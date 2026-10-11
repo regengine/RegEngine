@@ -570,8 +570,11 @@ async def get_invoice_pdf(
             detail=f"Stripe invoice retrieval failed: {exc.user_message or str(exc)}",
         ) from exc
 
+    # Fail closed when Stripe returns no customer on the invoice: without
+    # it the tenant ownership check below cannot prove this invoice
+    # belongs to the caller, so it must 404 rather than serve the PDF.
     invoice_customer_id = str(_stripe_get(invoice, "customer", "") or "").strip()
-    if invoice_customer_id and invoice_customer_id != customer_id:
+    if not invoice_customer_id or invoice_customer_id != customer_id:
         raise HTTPException(status_code=404, detail="Invoice not found for tenant")
 
     pdf_url = str(_stripe_get(invoice, "invoice_pdf", "") or "").strip()
@@ -824,6 +827,23 @@ async def opt_in_metered_usage(
     except redis.RedisError as exc:
         logger.error("usage_opt_in_mapping_read_failed", tenant_id=resolved_tenant_id, error=str(exc))
         raise HTTPException(status_code=503, detail="Billing state store unavailable") from exc
+
+    # Idempotency guard: a repeat call must not attach a second metered
+    # subscription item. The first item is still live on Stripe, so
+    # creating another one and overwriting the stored id would orphan it
+    # (still metering, still billing) and double-bill the tenant.
+    existing_item_id = str(mapping.get("metered_subscription_item_id") or "").strip()
+    if mapping.get("metered_billing_enabled") == "true" and existing_item_id:
+        logger.info(
+            "usage_opt_in_already_enabled",
+            tenant_id=resolved_tenant_id,
+            subscription_item_id=existing_item_id,
+        )
+        return {
+            "tenant_id": resolved_tenant_id,
+            "metered_billing_enabled": True,
+            "subscription_item_id": existing_item_id,
+        }
 
     subscription_id = str(mapping.get("subscription_id") or "").strip()
     if not subscription_id:

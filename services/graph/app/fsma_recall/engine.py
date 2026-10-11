@@ -130,9 +130,9 @@ def _trace_field(trace_result: Any, name: str, default: Any, required: bool = Tr
     ``TraceResult.__dict__``, so a renamed field surfaces as a missing
     attribute instead of a silent zero. Mappings are still accepted for
     callers that pass a plain dict; with ``required=True`` an absent key
-    raises rather than defaulting, because a defaulted metric is exactly the
-    failure mode this issue is about — the drill would record 0 and look like
-    a clean trace.
+    or attribute raises rather than defaulting, because a defaulted metric
+    is exactly the failure mode this issue is about: the drill would
+    record 0 and look like a clean trace.
     """
     if hasattr(trace_result, name):
         return getattr(trace_result, name)
@@ -141,7 +141,107 @@ def _trace_field(trace_result: Any, name: str, default: Any, required: bool = Tr
             return trace_result[name]
         if required:
             raise KeyError(f"trace result is missing required field {name!r}; got keys {sorted(trace_result)}")
+        return default
+    if required:
+        raise AttributeError(
+            f"trace result {type(trace_result).__name__} has no field {name!r}; "
+            "a renamed tracer field must fail loudly, never default to zero"
+        )
     return default
+
+
+def _require_tenant(tenant_id: str) -> str:
+    """Reject missing tenant scope before any engine read or write.
+
+    Every drill, schedule and metric row is keyed by tenant. An empty
+    tenant would mix or leak rows across tenants, so fail loudly instead
+    of persisting unscoped data.
+    """
+    if not tenant_id or not str(tenant_id).strip():
+        raise ValueError("tenant_id is required; recall engine calls must be scoped to a tenant")
+    return tenant_id
+
+
+def _lots_by_facility(trace_rows: Any) -> Dict[Any, Dict[str, Dict[str, Any]]]:
+    """Index a trace's lot-event associations by facility.
+
+    Pure helper behind ``_extract_facilities`` so multi-direction drills
+    can merge the per-direction maps before building facility records.
+    """
+    lots_by_facility: Dict[Any, Dict[str, Dict[str, Any]]] = {}
+    for association in trace_rows or []:
+        facility = association.get("facility")
+        lot = association.get("lot") or {}
+        if not facility or not lot.get("tlc"):
+            continue
+        lots_by_facility.setdefault(_facility_key(facility), {})[str(lot["tlc"])] = lot
+    return lots_by_facility
+
+
+def _merge_lot_maps(maps: List[Dict[Any, Dict[str, Dict[str, Any]]]]) -> Dict[Any, Dict[str, Dict[str, Any]]]:
+    """Union per-direction lot maps; the first lot record seen for a TLC wins.
+
+    A FULL_TRACE reaches the starting lot (and its facility) from both
+    directions. Merging at the lot level keeps shared lots and their
+    quantities counted once instead of once per direction.
+    """
+    merged: Dict[Any, Dict[str, Dict[str, Any]]] = {}
+    for lot_map in maps:
+        for key, lots in lot_map.items():
+            target = merged.setdefault(key, {})
+            for tlc, lot in lots.items():
+                target.setdefault(tlc, lot)
+    return merged
+
+
+def _build_facilities(
+    raw_facilities: List[Dict[str, Any]],
+    lots_by_facility: Dict[Any, Dict[str, Dict[str, Any]]],
+) -> List[AffectedFacility]:
+    """Build one record per facility, keyed by GLN (or name/address fallback)."""
+    seen: set = set()
+    facilities: List[AffectedFacility] = []
+    for f in raw_facilities:
+        key = _facility_key(f)
+        if key in seen:
+            continue
+        seen.add(key)
+        lots = lots_by_facility.get(key, {})
+        quantity, unit = _sum_lot_quantities(list(lots.values()))
+        facilities.append(
+            AffectedFacility(
+                gln=str(f.get("gln") or ""),
+                name=str(f.get("name") or ""),
+                facility_type=str(f.get("facility_type") or f.get("type") or ""),
+                lots_affected=sorted(lots),
+                quantity_affected=quantity,
+                unit_of_measure=unit,
+                contact_info=f.get("contact"),
+            )
+        )
+    return facilities
+
+
+def _count_distinct_lots(lot_lists: List[Any]) -> int:
+    """Count distinct lots across trace directions by TLC.
+
+    Lots the tracer cannot identify (no TLC) each count once, since there
+    is no key to dedupe them on. Legacy string-shaped lots dedupe by value.
+    """
+    seen: set = set()
+    unidentified = 0
+    for lots in lot_lists:
+        for lot in lots or []:
+            if isinstance(lot, dict):
+                tlc = lot.get("tlc")
+                if tlc:
+                    seen.add(str(tlc))
+                    continue
+            elif isinstance(lot, str) and lot:
+                seen.add(lot)
+                continue
+            unidentified += 1
+    return len(seen) + unidentified
 
 
 class MockRecallEngine:
@@ -220,6 +320,7 @@ class MockRecallEngine:
         Returns:
             Created RecallDrill instance
         """
+        _require_tenant(tenant_id)
         drill = RecallDrill(
             drill_id=f"drill_{uuid.uuid4().hex[:12]}",
             tenant_id=tenant_id,
@@ -266,9 +367,14 @@ class MockRecallEngine:
         errors: List[str] = []
         warnings: List[str] = []
 
-        # Initialize result metrics
-        lots_traced = 0
-        facilities: List[AffectedFacility] = []
+        # Initialize result metrics. Per-direction trace outputs are collected
+        # first and merged below: a FULL_TRACE reaches the starting lot and
+        # its facility from both directions, and summing the two sides
+        # would count them (and their quantities) twice on the drill record.
+        forward_lots: List[Any] = []
+        backward_lots: List[Any] = []
+        raw_facilities_all: List[Dict[str, Any]] = []
+        lot_maps: List[Dict[Any, Dict[str, Dict[str, Any]]]] = []
         max_forward = 0
         max_backward = 0
         orphans: Optional[int] = None
@@ -292,11 +398,12 @@ class MockRecallEngine:
                         # #2943: read TraceResult's real fields (`lots`,
                         # `hop_count`), not the never-present `lots_count` /
                         # `max_depth` keys that silently yielded 0.
-                        lots_traced += len(_trace_field(result, "lots", []) or [])
+                        forward_lots = _trace_field(result, "lots", []) or []
                         max_forward = _trace_field(result, "hop_count", 0) or 0
-                        extracted, has_associations = self._extract_facilities(result, "downstream")
-                        facilities.extend(extracted)
-                        associations_missing |= not has_associations
+                        forward_rows = _trace_field(result, "trace_rows", None, required=False)
+                        raw_facilities_all.extend(_trace_field(result, "facilities", [], required=False) or [])
+                        lot_maps.append(_lots_by_facility(forward_rows))
+                        associations_missing |= forward_rows is None
                         orphans = _count_orphans(result)
                 else:
                     # Missing trace inputs/backends cannot create trace evidence.
@@ -311,14 +418,18 @@ class MockRecallEngine:
 
                     if result:
                         # #2943: see the forward branch above.
-                        lots_traced += len(_trace_field(result, "lots", []) or [])
+                        backward_lots = _trace_field(result, "lots", []) or []
                         max_backward = _trace_field(result, "hop_count", 0) or 0
-                        extracted, has_associations = self._extract_facilities(result, "upstream")
-                        facilities.extend(extracted)
-                        associations_missing |= not has_associations
+                        backward_rows = _trace_field(result, "trace_rows", None, required=False)
+                        raw_facilities_all.extend(_trace_field(result, "facilities", [], required=False) or [])
+                        lot_maps.append(_lots_by_facility(backward_rows))
+                        associations_missing |= backward_rows is None
                 else:
                     # Missing trace inputs/backends cannot create trace evidence.
                     simulated = True
+
+            lots_traced = _count_distinct_lots([forward_lots, backward_lots])
+            facilities = _build_facilities(raw_facilities_all, _merge_lot_maps(lot_maps))
 
             if drill.drill_type in (RecallType.MASS_BALANCE, RecallType.TARGETED):
                 # These workflows do not yet execute a measured graph trace.
@@ -445,31 +556,7 @@ class MockRecallEngine:
         """
         raw_facilities = _trace_field(trace_result, "facilities", [], required=False) or []
         trace_rows = _trace_field(trace_result, "trace_rows", None, required=False)
-
-        lots_by_facility: Dict[Any, Dict[str, Dict[str, Any]]] = {}
-        for association in trace_rows or []:
-            facility = association.get("facility")
-            lot = association.get("lot") or {}
-            if not facility or not lot.get("tlc"):
-                continue
-            lots_by_facility.setdefault(_facility_key(facility), {})[str(lot["tlc"])] = lot
-
-        facilities: List[AffectedFacility] = []
-        for f in raw_facilities:
-            lots = lots_by_facility.get(_facility_key(f), {})
-            quantity, unit = _sum_lot_quantities(list(lots.values()))
-            facilities.append(
-                AffectedFacility(
-                    gln=str(f.get("gln") or ""),
-                    name=str(f.get("name") or ""),
-                    facility_type=str(f.get("facility_type") or f.get("type") or ""),
-                    lots_affected=sorted(lots),
-                    quantity_affected=quantity,
-                    unit_of_measure=unit,
-                    contact_info=f.get("contact"),
-                )
-            )
-
+        facilities = _build_facilities(raw_facilities, _lots_by_facility(trace_rows))
         return facilities, trace_rows is not None
 
     def _update_sla_metrics(self, tenant_id: str, result: RecallResult) -> None:
@@ -526,6 +613,7 @@ class MockRecallEngine:
         Returns:
             List of RecallDrill instances
         """
+        _require_tenant(tenant_id)
         drills_by_id = {drill.drill_id: drill for drill in self._drills.get(tenant_id, [])}
 
         engine = self._get_engine()
@@ -556,6 +644,7 @@ class MockRecallEngine:
         this request), then falls back to PostgreSQL for drills from prior
         restarts.
         """
+        _require_tenant(tenant_id)
         # Fast path: check in-memory cache first (covers drills just created)
         drills = self._drills.get(tenant_id, [])
         for drill in drills:
@@ -584,6 +673,7 @@ class MockRecallEngine:
 
     def get_sla_metrics(self, tenant_id: str) -> Dict[str, Any]:
         """Get SLA compliance metrics for a tenant."""
+        _require_tenant(tenant_id)
         return self._sla_metrics.get(
             tenant_id,
             {
@@ -619,6 +709,7 @@ class MockRecallEngine:
         Returns:
             Created ScheduledDrill instance
         """
+        _require_tenant(tenant_id)
         schedule = ScheduledDrill(
             schedule_id=f"sched_{uuid.uuid4().hex[:12]}",
             tenant_id=tenant_id,
@@ -638,6 +729,7 @@ class MockRecallEngine:
 
     def get_schedules(self, tenant_id: str) -> List[ScheduledDrill]:
         """Get all scheduled drills for a tenant."""
+        _require_tenant(tenant_id)
         return self._schedules.get(tenant_id, [])
 
     def get_schedule(
@@ -646,6 +738,7 @@ class MockRecallEngine:
         schedule_id: str,
     ) -> Optional[ScheduledDrill]:
         """Get a specific schedule by ID."""
+        _require_tenant(tenant_id)
         schedules = self._schedules.get(tenant_id, [])
         for schedule in schedules:
             if schedule.schedule_id == schedule_id:
@@ -672,6 +765,7 @@ class MockRecallEngine:
 
     def delete_schedule(self, tenant_id: str, schedule_id: str) -> bool:
         """Delete a schedule."""
+        _require_tenant(tenant_id)
         schedules = self._schedules.get(tenant_id, [])
         for i, schedule in enumerate(schedules):
             if schedule.schedule_id == schedule_id:
@@ -681,6 +775,7 @@ class MockRecallEngine:
 
     def check_due_schedules(self, tenant_id: str) -> List[ScheduledDrill]:
         """Get schedules that are due for execution."""
+        _require_tenant(tenant_id)
         now = datetime.now(timezone.utc)
         schedules = self._schedules.get(tenant_id, [])
         return [s for s in schedules if s.enabled and s.next_run <= now]
@@ -713,13 +808,23 @@ class MockRecallEngine:
 
         Creates a new drill from the schedule and executes it.
         """
-        # Select target based on strategy
-        target_lot = None
-        if schedule.target_strategy == "specific" and schedule.specific_targets:
+        # Select target based on strategy. Fail loudly for anything that
+        # cannot pick a real lot: recording an untargeted simulated drill
+        # and marking the schedule run would fake the tenant's drill history.
+        if schedule.target_strategy == "specific":
+            if not schedule.specific_targets:
+                raise ValueError(
+                    "schedule uses target_strategy='specific' but defines no "
+                    "specific_targets; refusing to run an untargeted drill"
+                )
             # Use first target (could rotate in future)
             target_lot = schedule.specific_targets[0]
         elif schedule.target_strategy == "random":
             target_lot = self._select_random_target(schedule.tenant_id)
+        else:
+            raise ValueError(
+                f"unsupported target_strategy {schedule.target_strategy!r}; expected 'random' or 'specific'"
+            )
 
         # Create drill from schedule
         drill = self.create_drill(
@@ -748,6 +853,7 @@ class MockRecallEngine:
 
         Returns comprehensive metrics on recall drill performance.
         """
+        _require_tenant(tenant_id)
         drills = self._drills.get(tenant_id, [])
         schedules = self._schedules.get(tenant_id, [])
         sla_metrics = self.get_sla_metrics(tenant_id)
