@@ -79,8 +79,11 @@ TOOL_ACCESS_SECRET = _tool_access_secret_env
 # passes. ``decode_tool_access_token`` rejects expired tokens (PyJWT
 # verifies ``exp`` on every decode path, including the legacy fallback).
 # Configurable so tests and short-lived deployments can tighten it.
+# Values above the 24-hour maximum fall back to the default so an
+# operator cannot silently turn the expiry control off via env config.
 # ---------------------------------------------------------------------------
 TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT = 24.0
+TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS = 24.0
 
 
 def _tool_access_expire_hours() -> float:
@@ -90,7 +93,9 @@ def _tool_access_expire_hours() -> float:
     value can change without a restart. Missing, unparsable,
     non-positive, non-finite, or unrepresentable values fall back to the
     24-hour default, as do sub-second durations (they round to zero JWT
-    seconds and would mint an immediately-expired cookie).
+    seconds and would mint an immediately-expired cookie). Values above
+    the 24-hour maximum also fall back, so the expiry control cannot be
+    disabled through configuration.
     """
     raw = os.environ.get("TOOL_ACCESS_TOKEN_EXPIRE_HOURS", "").strip()
     if not raw:
@@ -101,6 +106,9 @@ def _tool_access_expire_hours() -> float:
         logger.warning("tool_access_expiry_misconfigured", value=raw)
         return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
     if not math.isfinite(hours) or hours <= 0:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if hours > TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS:
         logger.warning("tool_access_expiry_misconfigured", value=raw)
         return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
     try:
@@ -119,13 +127,15 @@ def _tool_access_expire_hours() -> float:
     return hours
 
 
-def _mint_tool_access_token(email: str, domain: str) -> str:
+def _mint_tool_access_token(email: str, domain: str, expire_hours: float | None = None) -> str:
     """Mint a short-lived tool-access JWT for a verified lead."""
     import jwt
 
     now = datetime.now(timezone.utc)
+    if expire_hours is None:
+        expire_hours = _tool_access_expire_hours()
     try:
-        expires_at = now + timedelta(hours=_tool_access_expire_hours())
+        expires_at = now + timedelta(hours=expire_hours)
     except OverflowError:
         # _tool_access_expire_hours already rejects unrepresentable values;
         # this is defense-in-depth so minting itself can never crash.
@@ -395,6 +405,11 @@ class VerifyEmailResponse(BaseModel):
 class ConfirmCodeResponse(BaseModel):
     status: str
     token: str = ""
+    expires_in_seconds: int = 86400
+
+
+class CheckAccessRequest(BaseModel):
+    token: str = ""
 
 
 # GDPR #1095 — public lead-erasure request bodies.
@@ -483,10 +498,35 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     # Sign a short-lived JWT for the cookie — aud/iss pin this to the
     # tool-access domain so it cannot be swapped in as a session token
     # (#1060), and exp bounds the damage if the cookie leaks (#medium-9).
-    token = _mint_tool_access_token(email, domain)
+    expire_hours = _tool_access_expire_hours()
+    token = _mint_tool_access_token(email, domain, expire_hours=expire_hours)
 
     logger.info("tool_lead_verified", email=mask_email(email), domain=domain, tool=payload.tool_name)
-    return ConfirmCodeResponse(status="verified", token=token)
+    return ConfirmCodeResponse(
+        status="verified",
+        token=token,
+        expires_in_seconds=int(timedelta(hours=expire_hours).total_seconds()),
+    )
+
+
+@router.post("/check-access")
+@limiter.limit("30/minute")
+async def check_access_tool_token(payload: CheckAccessRequest, request: Request):
+    """Verify a ``re_tool_access`` cookie value.
+
+    Used by the Next.js ``/api/tools/check-access`` proxy so the 24-hour
+    expiry is enforced where access is decided, not only inside tests.
+    Returns ``{"hasAccess": True}`` only when the token carries a valid
+    signature, audience, issuer, and unexpired ``exp`` within the
+    24-hour maximum lifetime. Every other input, including an empty or
+    missing ``exp``, returns ``hasAccess: False``. The token value itself
+    is never logged.
+    """
+    try:
+        decode_tool_access_token(payload.token)
+    except Exception:
+        return {"hasAccess": False}
+    return {"hasAccess": True}
 
 
 # ---------------------------------------------------------------------------
@@ -638,11 +678,15 @@ def decode_tool_access_token(token: str) -> dict:
     added) have no ``aud``/``iss`` claim; we accept those only when they
     carry a valid ``exp``. A token with the *wrong* aud — e.g. an
     attacker pasting a session token — raises ``InvalidAudienceError``.
+
+    Tokens whose lifetime exceeds the 24-hour maximum are rejected with
+    ``InvalidTokenError``, so a token minted under a looser configuration
+    cannot outlive the control.
     """
     import jwt as _jwt
 
     try:
-        return _jwt.decode(
+        payload = _jwt.decode(
             token,
             TOOL_ACCESS_SECRET,
             algorithms=["HS256"],
@@ -663,7 +707,7 @@ def decode_tool_access_token(token: str) -> dict:
             options={"verify_aud": False, "verify_iss": False, "require": ["exp"]},
         )
         # Retain PyJWT's audience/issuer validation, including audience lists.
-        return _jwt.decode(
+        payload = _jwt.decode(
             token,
             TOOL_ACCESS_SECRET,
             algorithms=["HS256"],
@@ -671,6 +715,31 @@ def decode_tool_access_token(token: str) -> dict:
             issuer=SESSION_ISSUER,
             options={"verify_aud": "aud" in legacy, "verify_iss": "iss" in legacy, "require": ["exp"]},
         )
+    _enforce_tool_access_max_lifetime(payload)
+    return payload
+
+
+def _enforce_tool_access_max_lifetime(payload: dict) -> None:
+    """Reject tool-access tokens that live longer than the 24-hour maximum.
+
+    Lifetime is ``exp - iat`` when the token carries ``iat`` (all tokens
+    minted by ``_mint_tool_access_token`` do), otherwise ``exp - now``.
+    Raises ``jwt.InvalidTokenError`` when the lifetime is over the cap.
+    A small tolerance covers JWT whole-second truncation of the two
+    timestamps.
+    """
+    import jwt as _jwt
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    exp_ts = float(payload["exp"])
+    iat_ts = payload.get("iat")
+    if iat_ts is None:
+        lifetime_seconds = exp_ts - now_ts
+    else:
+        lifetime_seconds = exp_ts - float(iat_ts)
+    max_seconds = TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS * 3600 + 5
+    if lifetime_seconds > max_seconds:
+        raise _jwt.exceptions.InvalidTokenError("tool-access token lifetime exceeds the 24-hour maximum")
 
 
 # ---------------------------------------------------------------------------

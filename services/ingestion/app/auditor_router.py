@@ -221,8 +221,8 @@ async def audit_events(
         None,
         description="Filter: compliant, non_compliant, error, no_verdict, unevaluated",
     ),
-    limit: int = Query(50, le=200),
-    offset: int = Query(0),
+    limit: int = Query(50, ge=0, le=200),
+    offset: int = Query(0, ge=0),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
     db_session=Depends(get_db_session),
 ):
@@ -544,7 +544,7 @@ async def audit_rules(
 )
 async def audit_exceptions(
     tenant_id: Optional[str] = Query(None),
-    limit: int = Query(100, le=500),
+    limit: int = Query(100, ge=0, le=500),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
     db_session=Depends(get_db_session),
 ):
@@ -677,7 +677,7 @@ async def audit_chain(
 )
 async def audit_export_log(
     tenant_id: Optional[str] = Query(None),
-    limit: int = Query(50, le=200),
+    limit: int = Query(50, ge=0, le=200),
     principal: IngestionPrincipal = Depends(require_permission("audit.read")),
     db_session=Depends(get_db_session),
 ):

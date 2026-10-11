@@ -205,10 +205,10 @@ export const FREE_TOOLS = [
     },
     {
         id: 'readiness-assessment',
-        title: 'FSMA 204 Readiness Self-Check',
-        description: 'Self-check your FSMA 204 readiness across products, CTEs, KDEs, and systems.',
+        title: 'Self Reported Checklist',
+        description: 'You answer. The page echoes what you reported. It does not score readiness.',
         icon: CheckCircle2,
-        href: '/tools/readiness-assessment'
+        href: '/tools/self-reported-checklist'
     },
     {
         id: 'roi-calculator',
@@ -226,8 +226,8 @@ export const FREE_TOOLS = [
     },
     {
         id: 'tlc-validator',
-        title: 'TLC Validator',
-        description: 'Stress-test your Traceability Lot Code format for GS1 compatibility and entropy risks.',
+        title: 'TLC Format Check',
+        description: 'Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format.',
         icon: FlaskConical,
         href: '/tools/tlc-validator'
     },
@@ -247,10 +247,10 @@ export const FREE_TOOLS = [
     },
     {
         id: 'recall-readiness',
-        title: 'FSMA 204 Readiness Self-Check',
-        description: 'Self-check your §1.1455(c) records-on-request workflow.',
+        title: 'Records Request Checklist',
+        description: 'A self reported checklist for an FDA records request. Not a readiness score.',
         icon: ShieldCheck,
-        href: '/tools/recall-readiness'
+        href: '/tools/records-request-checklist'
     },
     {
         id: 'scan',
