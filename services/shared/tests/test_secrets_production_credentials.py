@@ -257,7 +257,19 @@ class TestValidateProductionSecrets:
         """Every required credential is individually load-bearing."""
         for var, value in _SECURE_CREDS.items():
             production.setenv(var, value)
-        for alternatives in REQUIRED_PRODUCTION_CREDENTIALS:
+        required = list(REQUIRED_PRODUCTION_CREDENTIALS)
+        # The validator adds the Kafka credential only when the kafka
+        # backbone is enabled; cover that branch the same way so an empty
+        # always-on tuple cannot pass vacuously.
+        production.setenv("EVENT_BACKBONE", "kafka")
+        from shared.event_backbone import kafka_enabled
+
+        if kafka_enabled():
+            from shared.secrets_manager import KAFKA_PRODUCTION_CREDENTIALS
+
+            required.extend(KAFKA_PRODUCTION_CREDENTIALS)
+        assert required, "no required credentials to check"
+        for alternatives in required:
             for var in alternatives:
                 production.delenv(var, raising=False)
             with pytest.raises(RuntimeError):
@@ -281,6 +293,46 @@ class TestValidateProductionSecrets:
         with pytest.raises(RuntimeError) as exc_info:
             validate_production_secrets()
         assert "OBJECT_STORAGE_ACCESS_KEY_ID is using an insecure default value" in str(exc_info.value)
+
+    def test_prefixed_but_real_values_pass(self, production):
+        """Exact matching only: real secrets that start with a placeholder
+        token must boot. The old startswith check rejected all of these."""
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("NEO4J_PASSWORD", "secret-9f2a-synthetic-suffix")  # pragma: allowlist secret
+        production.setenv("OBJECT_STORAGE_ACCESS_KEY_ID", "test-key-synthetic")
+        production.setenv("OBJECT_STORAGE_SECRET_ACCESS_KEY", "test-secret-synthetic")  # pragma: allowlist secret
+        validate_production_secrets()
+
+    @pytest.mark.parametrize(
+        ("var", "placeholder"),
+        [
+            ("NEO4J_PASSWORD", "NEO4J"),
+            ("NEO4J_PASSWORD", "Secret"),
+            ("NEO4J_PASSWORD", "CHANGE-ME"),
+            ("OBJECT_STORAGE_ACCESS_KEY_ID", "TEST"),
+        ],
+    )
+    def test_placeholder_case_variants_rejected(self, production, var, placeholder):
+        """Placeholder comparison is case-insensitive over the whole value."""
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv(var, placeholder)
+        with pytest.raises(RuntimeError) as exc_info:
+            validate_production_secrets()
+        assert f"{var} is using an insecure default value" in str(exc_info.value)
+
+    def test_neo4j_uri_without_password_fails(self, production):
+        """A half-wired Neo4j (URI set, password missing) refuses to boot."""
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("NEO4J_URI", "bolt://synthetic-neo4j:7687")
+        with pytest.raises(RuntimeError) as exc_info:
+            validate_production_secrets()
+        assert "NEO4J_PASSWORD is not set" in str(exc_info.value)
+
+    def test_neo4j_uri_with_password_passes(self, production):
+        production.setenv("DATABASE_URL", _SECURE_CREDS["DATABASE_URL"])
+        production.setenv("NEO4J_URI", "bolt://synthetic-neo4j:7687")
+        production.setenv("NEO4J_PASSWORD", "synthetic-neo4j-passphrase-9f2a")  # pragma: allowlist secret
+        validate_production_secrets()
 
 
 class TestStartupWiring:

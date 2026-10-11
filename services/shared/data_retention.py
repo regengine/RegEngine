@@ -25,6 +25,7 @@ from shared.audit_logging import (
     AuditLogger,
     AuditResource,
     AuditSeverity,
+    AuditStorageError,
 )
 from shared.database import engine, get_db
 from sqlalchemy import text
@@ -472,6 +473,18 @@ class DataRetentionManager:
 
             return True
 
+        except AuditStorageError:
+            # The UPDATE already committed above; the row IS deleted.
+            # Re-raise so the caller cannot read this as "row not found"
+            # (the False below), which would skip the hard-delete schedule
+            # and misreport the deletion status.
+            _rollback_quietly(db)
+            logger.error(
+                "soft_delete_record_audit_failed",
+                resource_type=resource_type,
+                record_id=record_id,
+            )
+            raise
         except Exception as e:
             # #2900: this used to swallow the exception and return False with
             # no rollback, so a phantom table read as "row not found" and the
@@ -560,6 +573,17 @@ class DataRetentionManager:
 
             return True
 
+        except AuditStorageError:
+            # The DELETE already committed above; the row IS gone.
+            # Re-raise so the caller (and the cleanup job's error count)
+            # cannot read this as a delete that never happened.
+            _rollback_quietly(db)
+            logger.error(
+                "hard_delete_record_audit_failed",
+                resource_type=resource_type,
+                record_id=record_id,
+            )
+            raise
         except Exception as e:
             # Same contract as soft_delete_record (#2900): never leave the
             # caller's transaction poisoned, and never let a missing relation
@@ -852,16 +876,24 @@ class DataRetentionManager:
 
         try:
             # Soft-delete the record
-            soft_delete_ok = await self.soft_delete_record(
-                db=db,
-                resource_type=resource_type,
-                record_id=record_id,
-                policy=policy,
-                deletion_request=deletion_request,
-                actor=actor,
-                tenant_id=tenant_id,
-                reason=reason,
-            )
+            try:
+                soft_delete_ok = await self.soft_delete_record(
+                    db=db,
+                    resource_type=resource_type,
+                    record_id=record_id,
+                    policy=policy,
+                    deletion_request=deletion_request,
+                    actor=actor,
+                    tenant_id=tenant_id,
+                    reason=reason,
+                )
+            except AuditStorageError as e:
+                # soft_delete_record only raises this after the UPDATE
+                # committed, so the row IS deleted. Report that honestly
+                # instead of soft_deleted False with a null error.
+                result["soft_deleted"] = True
+                result["error"] = f"audit log failed after delete committed: {e}"
+                return result
 
             result["soft_deleted"] = soft_delete_ok
 
@@ -960,12 +992,25 @@ async def cleanup_deleted_records_job():
                     results = db.execute(query, {"threshold": threshold}).fetchall()
 
                     for (record_id,) in results:
-                        deleted_ok = await manager.hard_delete_record(
-                            db=db,
-                            resource_type=policy.value.replace("-", "_"),
-                            record_id=record_id,
-                            actor=system_actor,
-                        )
+                        try:
+                            deleted_ok = await manager.hard_delete_record(
+                                db=db,
+                                resource_type=policy.value.replace("-", "_"),
+                                record_id=record_id,
+                                actor=system_actor,
+                            )
+                        except AuditStorageError as e:
+                            # The row IS gone (delete committed before the
+                            # audit write). Count the loud audit failure and
+                            # keep sweeping the remaining records.
+                            logger.error(
+                                "cleanup_hard_delete_audit_failed",
+                                policy=policy.value,
+                                record_id=record_id,
+                                error=str(e),
+                            )
+                            stats["errors"] += 1
+                            continue
 
                         if deleted_ok:
                             stats["hard_deleted_total"] += 1

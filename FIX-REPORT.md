@@ -1,108 +1,187 @@
-# FIX-REPORT: PR #3228 tool-access token 24h expiry follow-up
+# FIX-REPORT: About page copy
 
-Worktree branch off origin/main e854dadc. Finding sources: all six
-re-rv-3228-<angle> SUMMARY.md reports, re-rv-area-auth (per-PR verdicts),
-re-rv-lead-* and re-rv-int-* mentions of #3228. Out of scope per the task
-(suspended-tenant deny on live auth, tenant-scope gate failure, 7 xfail
-cross-tenant leaks) were noted only and not touched.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings
+## Before and after
 
-| # | Source report | Severity | Finding | Status | Reason |
-|---|---|---|---|---|---|
-| 1 | re-rv-3228-blast (Medium), re-rv-3228-security (High), re-rv-3228-tenant (Medium), re-rv-3228-correct (Medium), re-rv-3228-tests (Medium) | High/Medium (same root cause) | 24h JWT expiry never runs on the only user-facing caller: `GET /api/tools/check-access` returns `hasAccess: !!token` and the verify route sets a 30-day cookie, so `decode_tool_access_token` (called only by tests) never enforces expiry in production | FIXED AND TESTED | New backend `POST /api/v1/tools/check-access` verifies signature, aud, iss, required unexpired exp, and 24h max lifetime; Next.js check-access proxies to it, fails closed, and clears stale cookies; verify route sets cookie maxAge from `expires_in_seconds` (default 86400) |
-| 2 | re-rv-3228-security (Low), re-rv-3228-tenant (Low), re-rv-area-auth (Medium) | Low/Medium | `TOOL_ACCESS_TOKEN_EXPIRE_HOURS` has no upper bound, so an operator value like 100000 hours mints an 11-year token and decode accepts any future exp | FIXED AND TESTED | `_tool_access_expire_hours` falls back to 24h for values above 24h; `decode_tool_access_token` rejects lifetimes over 24h (+5s truncation tolerance) via `_enforce_tool_access_max_lifetime` |
-| 3 | re-rv-3228-ops (Low) | Low | `TOOL_ACCESS_TOKEN_EXPIRE_HOURS` is an undocumented optional env var; operators get only a warning log on bad values | FIXED AND TESTED | Documented as optional, shorten-only, never required in README.md line 165; no behavior change, correctly not added to production-required env |
-| 4 | re-rv-3228-tests (Medium), re-rv-3228-correct (Medium) | Medium | Tests prove mint/decode helpers but not the PR claim that a cookie stops working after 24h | FIXED AND TESTED | Added gate-level tests: backend check-access endpoint cases plus frontend check-access and cookie-maxAge tests, all verified to fail on pre-fix code |
-| 5 | re-rv-int-deploy-readiness (Medium #4) | Medium | Existing long-lived cookies stop working once expiry is enforced; needs a comms note, no code fix | FIXED AND TESTED | Enforcement is now real: legacy no-exp cookies return `hasAccess: false` and are cleared; announcement wording is left to C.Lee (see decisions below) |
-| 6 | re-rv-int-rollback (Medium) | Medium | Solo revert of 3228 conflicts on one generated `.secrets.baseline` timestamp line | No fix needed | Informational only; this change adds no baseline entries (verified by scanning all changed files with detect-secrets 1.5.0, zero findings) |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-Skipped: none. Every confirmed critical, high, and medium finding above is
-fixed. No BLOCKED or FIXED BUT TESTS FAILING items.
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Changes
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-- `services/admin/app/tool_verification_routes.py`: added
-  `TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS` (24.0); capped
-  `_tool_access_expire_hours`; `_mint_tool_access_token` accepts an
-  optional `expire_hours`; `decode_tool_access_token` enforces the max
-  lifetime on both decode paths; new rate-limited (30/minute)
-  `POST /api/v1/tools/check-access` returning `{hasAccess}` without
-  logging the token; `ConfirmCodeResponse` gains `expires_in_seconds`.
-- `frontend/src/app/api/tools/check-access/route.ts`: verifies the
-  `re_tool_access` cookie through the admin service instead of checking
-  presence; fails closed on backend error or missing backend URL;
-  clears invalid cookies.
-- `frontend/src/app/api/tools/verify/route.ts`: cookie `maxAge` now
-  follows the backend `expires_in_seconds` (validated, capped at 24h,
-  default 86400) instead of a fixed 30 days.
-- `services/admin/tests/test_tool_access_check_endpoint.py` (new, 20
-  tests): env cap, mint cap, decode lifetime cap, check-access endpoint
-  accept/reject matrix, confirm `expires_in_seconds` reporting.
-- `frontend/src/__tests__/api/tools-check-access-route.test.ts` (new, 5
-  tests) and 3 new tests in
-  `frontend/src/__tests__/api/tools-verify-route.test.ts`: backend
-  verification wiring, fail-closed behavior, stale-cookie clearing,
-  cookie maxAge derivation and cap.
-- `README.md`: one sentence documenting the 24h expiry, the verified
-  gate, and the optional shorten-only env var.
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-No migrations, no production config changes, no new dependencies
-(`jose` was already present but is not used; the secret stays in the
-backend). No queries touched, so
-`scripts/security/scan_tenant_scope.py` was not run.
+2. Faster iteration card
 
-## Test commands and results
+Before:
+`Design-partner feedback is scoped to`
 
-Backend (through the slot queue):
+After:
+`Early tester feedback is scoped to`
 
-- `~/metacode/fleet/heavy .venv/bin/python -m pytest services/admin/tests/test_tool_access_check_endpoint.py -q --no-cov -p no:cacheprovider`
-  Result: 20 passed.
-- Same runner on the three pre-existing tool files
-  (`test_tool_access_token_expiry.py`,
-  `test_tool_access_jwt_separation.py`,
-  `test_tool_verification_code_store.py`): 60 passed, no regressions.
-- After `ruff format`: combined run of all four files: 80 passed.
-- `ruff check` on both changed backend files: All checks passed.
-- Fail-without-fix: with the HEAD version of
-  `tool_verification_routes.py` swapped in by file copy (no git
-  commands), the new test file fails (cap tests, decode-cap tests,
-  check-access endpoint tests with AttributeError, and both
-  `expires_in_seconds` tests); restored afterward and re-verified
-  20 passed plus byte-identical restore via `diff -q`.
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-Frontend (deps installed with `npm ci`, run through the slot queue):
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-- `./node_modules/.bin/vitest run src/__tests__/api/tools-check-access-route.test.ts src/__tests__/api/tools-verify-route.test.ts`
-  Result: 2 files passed, 10 tests passed.
-- Fail-without-fix: with both HEAD route files swapped in, 7 of the 10
-  tests fail (all 7 new ones; the 3 pre-existing pass); restored
-  afterward and re-verified 10 passed plus identical restore.
-- `npm run lint` on the four changed frontend files: 0 errors
-  (41 warnings are pre-existing in surrounding files; the changed files
-  use only allowed `console.error`), design-lint clean.
-- CSRF regression: `vitest run
-  src/__tests__/lib/csrf-exempt-prefixes.test.ts
-  src/__tests__/proxy-csrf.test.ts`: 10 passed.
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-Secrets: installed detect-secrets 1.5.0 to /tmp (shared venv left
-untouched) and scanned all five changed/new code files: zero findings,
-so `.secrets.baseline` needs no update.
+## Diff
 
-Not run: full admin pytest suite (needs local Postgres/Redis per repo
-notes; targeted files cover the change), `npm run build` (lint plus
-type-checked tests cover this surface; build needs full env), and
-`scripts/security/scan_tenant_scope.py` (no queries changed).
+`git diff --stat` (tracked files only):
 
-## Needs C.Lee's decision
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
 
-1. Session-change announcement: previously verified visitors (including
-   30-day cookies and legacy no-exp cookies) will now see the email
-   gate again after at most 24 hours, and immediately if their cookie
-   has no valid exp. The deploy-readiness note asks for an announcement;
-   the wording and channel are yours.
-2. Backend availability tradeoff: if the admin service is unreachable,
-   the tool gate now fails closed (shows the email form) instead of
-   honoring the cookie. Tool content itself always renders, so this only
-   re-shows lead capture, but confirm if that tradeoff is acceptable
-   during outages.
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

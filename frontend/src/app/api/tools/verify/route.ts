@@ -45,8 +45,22 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const body = await request.json();
-        const { action, ...payload } = body;
+        let body: unknown;
+        try {
+            body = await request.json();
+        } catch {
+            return NextResponse.json(
+                { error: 'Invalid request body' },
+                { status: 400 },
+            );
+        }
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return NextResponse.json(
+                { error: 'Invalid request body' },
+                { status: 400 },
+            );
+        }
+        const { action, ...payload } = body as Record<string, unknown>;
 
         const endpoint =
             action === 'confirm'

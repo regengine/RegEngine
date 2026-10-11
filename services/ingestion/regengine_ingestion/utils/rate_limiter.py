@@ -89,9 +89,12 @@ class RateLimiter:
             seconds = int(retry_after)
             time.sleep(seconds)
         except ValueError:
-            # Try as HTTP date
+            # Try as HTTP date (GMT is UTC; keep it timezone-aware so the
+            # subtraction against an aware now() cannot raise TypeError)
             try:
-                retry_time = datetime.strptime(retry_after, "%a, %d %b %Y %H:%M:%S GMT")
+                retry_time = datetime.strptime(retry_after, "%a, %d %b %Y %H:%M:%S GMT").replace(
+                    tzinfo=timezone.utc
+                )
                 wait_seconds = (retry_time - datetime.now(timezone.utc)).total_seconds()
                 if wait_seconds > 0:
                     time.sleep(wait_seconds)

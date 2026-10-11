@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Loader2 } from 'lucide-react';
+import { isAllowedStripeCheckoutUrl } from '@/lib/safe-external-redirect';
 
 // Map frontend tier IDs to backend plan IDs
 const PLAN_ID_MAP: Record<string, string> = {
@@ -65,10 +66,15 @@ export function PricingCheckoutButton({
                 return;
             }
 
-            // Redirect to Stripe Checkout
-            if (data.checkout_url) {
+            // Redirect to Stripe Checkout only when the backend URL is on
+            // the Stripe allowlist. Anything else is treated as unavailable
+            // so a bad backend response cannot redirect off to a lookalike.
+            if (isAllowedStripeCheckoutUrl(data.checkout_url)) {
                 window.location.href = data.checkout_url;
             } else {
+                if (data.checkout_url && process.env.NODE_ENV !== 'production') {
+                    console.warn('Blocked non-Stripe checkout redirect:', data.checkout_url);
+                }
                 setError('Stripe checkout was unavailable. You can continue to signup; billing happens from inside the app.');
             }
         } catch {
