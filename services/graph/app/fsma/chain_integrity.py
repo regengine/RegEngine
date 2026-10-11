@@ -20,7 +20,7 @@ logger = structlog.get_logger("fsma-utils")
 
 async def find_gaps(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
 ) -> List[Dict[str, Any]]:
     """
     Find TraceEvents with missing required KDEs.
@@ -32,24 +32,21 @@ async def find_gaps(
         List of events with gap details
 
     Raises:
-        ValueError: if `tenant_id` is None or empty. The previous
-            `$tenant_id IS NULL OR ...` shim let null-tenant callers see
-            every tenant's gap events — the exact cross-tenant exposure
-            the sibling queries already closed (#2540, #1301).
+        ValueError: if `tenant_id` is None, empty, or whitespace-only. The
+            previous `$tenant_id IS NULL OR ...` shim let null-tenant
+            callers read every tenant's events, so callers must pass a tenant.
     """
-    # Fail-fast on null-tenant calls, matching find_broken_chains (#1301)
-    # and the other #2540-hardened queries in this package.
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
-            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported (#2540)"
+            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
         )
 
     start_time = time.time()
 
     # Find events missing key fields.
-    # The Lot inside the NOT EXISTS sub-query is tenant-scoped: a
-    # cross-tenant UNDERWENT edge (see #1284) must not satisfy the
-    # existence check and suppress a genuine missing_lot gap.
+    # The Lot inside the missing-lot EXISTS check is tenant-scoped: a
+    # cross-tenant UNDERWENT edge must not satisfy the existence check and
+    # suppress a genuine missing-lot gap.
     query = """
     MATCH (e:TraceEvent)
     WHERE e.tenant_id = $tenant_id
@@ -66,7 +63,7 @@ async def find_gaps(
         e.event_date as event_date,
         e.document_id as document_id,
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
-        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN ',missing_lot' ELSE '' END +
+        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
     LIMIT 2000
     """
@@ -133,7 +130,7 @@ async def find_broken_chains(
     # `$tenant_id IS NULL OR l.tenant_id = $tenant_id` idiom was a
     # test-time shim that turned into a production info-disclosure the
     # moment a caller forgot to pass tenant_id. Prefer a loud error.
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
             "find_broken_chains requires a non-empty tenant_id; null-tenant queries are no longer supported (#1301)"
         )
@@ -191,8 +188,11 @@ async def find_broken_chains(
     WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
       AND origin.tenant_id = $tenant_id
       AND origin.event_date IS NOT NULL
-    // Optimization: min() aggregate computes earliest origin date in a single
-    // pass, replacing ORDER BY + collect()[0] that sorted all origins per lot.
+    // Sort origins per lot before aggregating: collect() preserves the
+    // encounter order, so head(collect(...)) is the id of the earliest
+    // origin matching min(origin.event_date). Without this the reported
+    // origin_event_id can point at a different origin than origin_date.
+    WITH l, shipping, origin ORDER BY origin.event_date ASC
     WITH l, shipping,
          min(origin.event_date) AS earliest_origin_date,
          head(collect(origin.event_id)) AS earliest_origin_id
@@ -332,6 +332,7 @@ async def find_broken_chains(
             l.product_description      AS product_description,
             origins                    AS expected_predecessors
         ORDER BY shipping.event_date
+        LIMIT 2000
         """
 
         result = await session.run(crypto_gap_query, tenant_id=tenant_id)
@@ -374,7 +375,7 @@ async def find_broken_chains(
 
 async def find_all_gaps(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
 ) -> List[Dict[str, Any]]:
     """
     Find all gaps and violations including broken chains.
@@ -387,14 +388,14 @@ async def find_all_gaps(
         Combined list of all gaps and violations
 
     Raises:
-        ValueError: if `tenant_id` is None or empty. Fail closed before
-            either sub-query runs so a null tenant can neither leak gap
-            data (via find_gaps) nor half-raise (via find_broken_chains).
+        ValueError: if `tenant_id` is None or empty (propagated from
+            the underlying gap queries, which require a tenant).
     """
-    if not tenant_id:
+    if not tenant_id or not str(tenant_id).strip():
         raise ValueError(
-            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported (#2540)"
+            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
         )
+
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)
 

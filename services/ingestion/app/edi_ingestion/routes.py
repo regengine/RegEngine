@@ -492,7 +492,11 @@ async def ingest_edi_856(
     if not segments:
         raise HTTPException(status_code=400, detail="Unable to parse EDI segments")
 
-    transaction_set = (_first_segment(segments, "ST") or ["", ""])[1]
+    # A bare ``ST`` segment parses to ``["ST"]`` (truthy) with no ST01;
+    # indexing [1] raised IndexError -> HTTP 500. A missing ST01 is an
+    # unsupported transaction set, so fail with 400 like any other.
+    st_segment = _first_segment(segments, "ST") or []
+    transaction_set = st_segment[1] if len(st_segment) > 1 else ""
     if transaction_set != "856":
         raise HTTPException(status_code=400, detail="Only X12 856 is currently supported")
 

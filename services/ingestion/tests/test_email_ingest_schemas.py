@@ -91,6 +91,14 @@ class TestPostmarkInboundPayload:
         with pytest.raises(ValidationError):
             PostmarkInboundPayload(From="sender@example.com")
 
+    def test_empty_message_id_is_rejected(self):
+        # An empty MessageID would collide on the audit table's unique
+        # constraint: a second, unrelated email with an empty MessageID
+        # would replay the first email's recorded result while ingesting
+        # nothing of its own. Reject it at the boundary with a 422.
+        with pytest.raises(ValidationError):
+            PostmarkInboundPayload(MessageID="", From="sender@example.com")
+
 
 class TestResponseModels:
     def test_attachment_result_defaults(self):

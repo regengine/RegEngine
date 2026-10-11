@@ -20,6 +20,7 @@ from typing import Any, Dict, List
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy import text
 
 from .csv_parser import (
@@ -315,6 +316,14 @@ async def sandbox_share(payload: SandboxShareRequest, request: Request) -> Sandb
     bucket.append(now)
     _evict_stale_share_buckets(now)
 
+    # Same payload guard as /evaluate: shares store the CSV the user
+    # evaluated, which was already capped at 2MB there.
+    if len(payload.csv) > 2_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="CSV text too large for sandbox (max 2MB). Contact us for unlimited evaluation.",
+        )
+
     share_id = secrets.token_urlsafe(12)
     ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
     expires_at = datetime.now(timezone.utc) + timedelta(days=30)
@@ -381,4 +390,9 @@ async def sandbox_share_get(share_id: str) -> SandboxResponse:
     import json
 
     result_data = row[0] if isinstance(row[0], dict) else json.loads(row[0])
-    return SandboxResponse(**result_data)
+    try:
+        return SandboxResponse(**result_data)
+    except ValidationError:
+        # Stored result predates the current response shape. Report it as
+        # gone rather than turning a schema drift into a 500.
+        raise HTTPException(status_code=404, detail="Shared result not found or expired.")

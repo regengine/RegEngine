@@ -165,6 +165,12 @@ class FSMAEventTransformer:
 
     def _parse_quantity(self, quantity_str: str) -> Optional[float]:
         """Parse product quantity from FDA string format."""
+        if quantity_str is None:
+            return None
+        if not isinstance(quantity_str, str):
+            # openFDA JSON sometimes carries a bare number. Coerce so a
+            # numeric payload does not drop the whole recall event.
+            quantity_str = str(quantity_str)
         if not quantity_str:
             return None
 

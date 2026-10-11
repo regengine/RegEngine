@@ -193,13 +193,12 @@ export default function TLCGuidePage() {
             <Tag className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             <h3 className="text-heading text-re-text-primary">Validate Your TLCs</h3>
             <p className="mx-auto mt-2 max-w-[48ch] text-ui text-re-text-secondary">
-              Use RegEngine&apos;s free TLC Validator to check your lot codes against
-              FSMA 204 requirements.
+              Use the free TLC Format Check. FDA does not set one TLC format.
             </p>
             <div className="mt-5 flex justify-center">
               <Button asChild size="lg">
                 <Link href="/tools/tlc-validator">
-                  Open TLC Validator <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                  Open TLC Format Check <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>
               </Button>
             </div>
