@@ -1,106 +1,187 @@
-# SEO fix report: regengine.co public snippets
+# FIX-REPORT: About page copy
 
-Scope is the eight pages in section 4 of the Oct 8, 2026 audit, plus the sitewide JSON-LD price block and the two tool redirects that the sitemap was still listing. Visible pricing copy was left as it is. Other long titles outside these pages are listed under left open.
-
-Before counts are the live strings from that audit. After counts are the strings now in the page source, and the same strings were returned by a local production server (see Tests).
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
 ## Before and after
 
-| Page | Field | Before | After |
-| --- | --- | --- | --- |
-| Homepage | Title | 48. RegEngine, then an em dash, then FSMA 204 traceability evidence layer | 43. FSMA 204 Recordkeeping Software \| RegEngine |
-| Homepage | Meta | 222. Long ingest and export sentence ending in Early-stage, Design-partner, Pre-revenue | 142. Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice. |
-| Homepage | H1 | 37. FSMA 204 traceability evidence layer. | 54. FSMA 204 recordkeeping for the Food Traceability Rule. |
-| Tools index | Title | 17. Tools \| RegEngine | 31. Free FSMA 204 Tools \| RegEngine |
-| Tools index | Meta | 218 | 140. Free FTL List Checker, CTE Mapper, KDE checklist, and TLC format check. Self reported lists do not score readiness. FDA date: July 20, 2028. |
-| Tools index | H1 | 45. Small tools for list checks and field checks. | 53. Free tools for FSMA 204 list checks and field checks. |
-| FTL List Checker | Title | 28. FTL List Checker \| RegEngine | 41. FTL List Checker for FSMA 204 \| RegEngine |
-| FTL List Checker | Meta | 193 | 152. Check foods against the FDA Food Traceability List. This free page does not decide who must keep records. Verify every grouping on the current FDA list. |
-| FTL List Checker | H1 | 16. FTL List Checker | 16. FTL List Checker |
-| CTE Mapper | Title | 66. CTE Mapper \| FSMA 204 Critical Tracking Events by Role \| RegEngine | 39. FSMA 204 CTE Mapper by Role \| RegEngine |
-| CTE Mapper | Meta | 201 | 143. See which Critical Tracking Events usually apply to a role under 21 CFR Part 1 Subpart S. Educational only. Exemptions can change what applies. |
-| CTE Mapper | H1 | Two H1s, both CTE Coverage Mapper | 10. One H1: CTE Mapper |
-| KDE Field Checklist | Title | 63. KDE Checklist Builder \| FSMA 204 Starting Checklist \| RegEngine | 40. FSMA 204 KDE Field Checklist \| RegEngine |
-| KDE Field Checklist | Meta | 187 | 144. A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it. |
-| KDE Field Checklist | H1 | KDE Checklist Builder | 19. KDE Field Checklist |
-| TLC Format Check | Title | 70. TLC Validator \| Test Your GS1 Traceability Lot Code Format \| RegEngine | 41. TLC Format Check for FSMA 204 \| RegEngine |
-| TLC Format Check | Meta | 159. Claimed a test against GS1 standards and FDA uniqueness requirements | 152. Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format. This free check is not a compliance determination. |
-| TLC Format Check | H1 | TLC Validator | 16. TLC Format Check |
-| Self Reported Checklist | Title | 35. Self-Reported Checklist \| RegEngine | 46. Self Reported Checklist \| FSMA 204 \| RegEngine |
-| Self Reported Checklist | Meta | 142 | 146. You answer and the page echoes what you reported. It does not verify records, score readiness, or decide if you can meet the records request rule. |
-| Self Reported Checklist | H1 | Two H1s: Self-Reported Checklist, and RegEngine bullet Self-Reported Checklist | 23. One H1: Self Reported Checklist |
-| Records Request Checklist | Title | 37. Records-Request Checklist \| RegEngine | 46. FSMA 204 Records Request Checklist \| RegEngine |
-| Records Request Checklist | Meta | 258 | 138. A self reported checklist for an FDA records request under 21 CFR 1.1455. Not a 24 hour test, not a readiness score, and not legal advice. |
-| Records Request Checklist | H1 | Records-Request Checklist | 25. Records Request Checklist |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-Every after title is 60 characters or under. Every after meta description is 155 or under. The root layout default title and description match the homepage strings, so a page that does not set its own snippet no longer inherits the old long default.
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Item 2: TLC claim
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-The title, meta description, Open Graph text, JSON-LD name and description, breadcrumb, H1, social card, tools index card, and the related-tool blurb on the KDE page no longer say the checker tests an FDA format or GS1 standards. They say FDA does not set one TLC format. The same sentence is on the traceability lot code blog call to action. The page body already said FDA does not specify a format. That body was left in place.
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-## Item 3: matching names
+2. Faster iteration card
 
-The tools index cards, the index JSON-LD names, each page title, and each H1 now use the same name: FTL List Checker, CTE Mapper, KDE Field Checklist, TLC Format Check, Self Reported Checklist, Records Request Checklist.
+Before:
+`Design-partner feedback is scoped to`
 
-The CTE page and the self reported page no longer render a second H1 in the loading fallback. The self reported shell takes an optional heading so its H1 is Self Reported Checklist. Other free tools still use the existing "RegEngine" bullet plus title. That default was not changed, because an end to end test asserts it on Scan and Ingest.
+After:
+`Early tester feedback is scoped to`
 
-## Item 4: JSON-LD prices
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-The root layout no longer emits Product or AggregateOffer. It emits SoftwareApplication with no offers and no prices. The old block listed monthly prices and a highPrice of 1499. Tool pages that emitted an Offer with price 0 had that offer object removed. Visible prices on the pricing page were not edited.
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-## Item 5: readiness redirect, sitemap lastmod, and the 500
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-`/tools/readiness-assessment` still 308 redirects to `/tools/self-reported-checklist` in next.config.js. The page file now also redirects, sets the canonical URL to the checklist, and asks crawlers not to index the old URL. The old assessment is not rendered.
+## Diff
 
-`/tools/recall-readiness` is the same kind of mismatch. It 308 redirects to `/tools/records-request-checklist`, and the page file now redirects there too. Cards and the compliance checklist blog post that still linked to the old URL, and called it a readiness score or a 24 hour recall test, now link to the records checklist and use that name.
+`git diff --stat` (tracked files only):
 
-Both old URLs are gone from the sitemap. A sitemap URL has to answer 200. The test also fails if any next.config.js redirect source is listed.
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
 
-Blog lastmod stays the publication date as YYYY-MM-DD. `stableLastModified` returns that string only when it is a real calendar date. A bad value is omitted. Next prints a string as-is. An invalid Date would throw inside toISOString and can make `/sitemap.xml` return HTTP 500. That is the local explanation for the intermittent 500. It was not reproduced here.
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
 
-Local check, after `npm run build`, on http://127.0.0.1:4188 (not production):
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
 
-- `/sitemap.xml` returned 200 eight times. 64 URLs. 9 lastmod values, all YYYY-MM-DD. No readiness-assessment or recall-readiness URL.
-- `/tools/readiness-assessment` returned 308 to `/tools/self-reported-checklist` eight times.
-- `/tools/recall-readiness` returned 308 to `/tools/records-request-checklist` eight times.
-- The eight audited pages returned 200 with the titles, metas, and single H1s in the table. Homepage HTML had no AggregateOffer, priceCurrency, or highPrice.
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
 
-`next start` without CSRF_SECRET refuses to boot. That is the existing production startup check. It is not the sitemap 500. A throwaway local value was used only for this process and was not written to a file. The server was stopped.
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
 
-## Tests and build
+## Build, typecheck, and lint
 
-New test: `frontend/src/__tests__/seo/public-snippets.test.ts`.
+Install, from `frontend/`, lockfile `package-lock.json`:
 
-Before the production edits, that file was run against the old tree:
+`~/metacode/fleet/heavy npm ci`
 
-`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/seo/public-snippets.test.ts`
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
 
-Result: 9 failed, 1 passed (10). The pass was lastmod stability on the old date strings. The failures were the old titles and descriptions, the old tool names, the TLC FDA uniqueness sentence, Offer and AggregateOffer fields, and the sitemap still listing the two redirect URLs. Log: session terminal `call-1d6dd8e1-b3b6-480d-8d2f-4d83ed47b7aa-108.log`.
+Test before the page edit (source assertions only, 2 tests):
 
-One assertion was added after that run: an invalid date is dropped instead of being serialized. The old sitemap module did not export `stableLastModified`, so that import would fail on the old tree. It was not re-run against the old tree, because restoring files is not allowed in this checkout.
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
 
-After the fix, from `frontend/`:
+Result: exit 1.
 
-`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/seo/public-snippets.test.ts src/__tests__/pages/homepage.test.tsx src/__tests__/seo/crawl-surface.test.ts`
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
 
-Result: 3 files passed, 26 tests passed. Run twice, both exit 0. The second run was after the self reported lead-gate label was aligned to Self Reported Checklist.
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
 
-`~/metacode/fleet/heavy npm run lint`
+Test after the page edit, then again after a render assertion was added:
 
-Result: exit 0. eslint reported 0 errors and 41 warnings. The warnings are in eslint config, scripts, e2e tests, and older pages this change did not introduce. design-lint: clean (644 files).
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
 
 `~/metacode/fleet/heavy npm run build`
 
-Result: exit 0. Next.js 16.3.6. Compiled in 6.9s. TypeScript finished in 8.7s. 172 pages generated. `/sitemap.xml` is static. There is no separate typecheck script. The build is the typecheck. That build finished before the last two visible labels on the self reported page were changed from Self-Reported Checklist to Self Reported Checklist. Those are string literals only. The test file was run again after that change and passed. The build was not run a second time.
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
 
-`next build` also rewrote `frontend/next-env.d.ts` to point at `.next/types` instead of `.next/dev/types`. That file was put back. It is not part of the SEO fix.
+Ruff was not run. This change is TypeScript only.
 
-## Left open
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
 
-- Titles and metas outside these eight pages are still long. Examples: blog, docs, developers, the FSMA 204 guide, login, and the retailer readiness layout. They were not in the eight page set.
-- Homepage HTML still has no og:site_name. The root layout sets siteName, and the homepage openGraph block does not. The rendered tag was absent. The audit called this smaller than the five main gaps.
-- `/retailer-readiness` still redirects to `/buyer-programs`. A few pages still say Readiness Assessment and point there, or point at `/fsma/assessment`. Those are not `/tools/readiness-assessment`.
-- `ReadinessAssessmentClient.tsx` and `RecallReadinessClient.tsx` are still in the tree. The routes no longer render them. `FSMA204Assessment` is still used by the self reported checklist and by `/fsma/assessment`.
-- The intermittent production sitemap 500 was not reproduced. Production was not called.
-- The homepage eyebrow still says design-partner. Pricing page prices were not changed.
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
