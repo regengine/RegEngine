@@ -31,6 +31,7 @@ import hmac
 import json
 import os
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -42,7 +43,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
-from .audit_integrity import verify_chain
+from .audit_integrity import chain_timestamp, verify_chain
 from .database import get_session
 from .dependencies import get_current_user
 from .models import TenantContext
@@ -89,6 +90,56 @@ _EMAIL_PATTERN = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@[\w.-]+\.[A-Za-z]{2,}")
 _PHONE_PATTERN = re.compile(r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)")
 
 
+# Per-process fallback salt for non-production use only. Generated once at
+# import so hashes stay consistent within a single process. Production must
+# set AUDIT_PII_HASH_SALT explicitly (see _pii_hash_salt).
+_FALLBACK_PII_SALT = secrets.token_hex(16)
+_MIN_PRODUCTION_PII_SALT_LENGTH = 16
+_PRODUCTION_ENV_VARS = (
+    "REGENGINE_ENV",
+    "ENV",
+    "ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT",
+    "RAILWAY_ENVIRONMENT_NAME",
+    "VERCEL_ENV",
+)
+# Same prefixes as the FDA spreadsheet sanitizer. A JSON export is often
+# opened or converted in Excel, and these characters start a formula.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _runtime_is_production() -> bool:
+    """Return True when any deployment signal says production.
+
+    ``REGENGINE_ENV`` alone misses Railway, Vercel, ``ENV``, and
+    ``ENVIRONMENT``, and a surrounding space used to skip the check.
+    """
+    for name in _PRODUCTION_ENV_VARS:
+        if os.getenv(name, "").strip().lower() == "production":
+            return True
+    return False
+
+
+def _pii_hash_salt() -> str:
+    """Return the salt used for PII masking hashes.
+
+    Raises:
+        RuntimeError: If production has no salt, or the salt is shorter
+            than 16 characters. A missing or tiny salt lets someone who
+            can guess it reverse masked emails, so production refuses to
+            mask until a long random value is set.
+    """
+    salt = os.getenv("AUDIT_PII_HASH_SALT", "").strip()
+    if _runtime_is_production() and len(salt) < _MIN_PRODUCTION_PII_SALT_LENGTH:
+        raise RuntimeError(
+            "AUDIT_PII_HASH_SALT is not configured. Set it to a long random "
+            "value before running audit exports in production."
+        )
+    if salt:
+        return salt
+    return _FALLBACK_PII_SALT
+
+
 def _mask_identifier(value: Any) -> Optional[str]:
     """Salted-hash a stable identifier for PII-redacted export."""
     if value is None:
@@ -96,17 +147,93 @@ def _mask_identifier(value: Any) -> Optional[str]:
     text = str(value)
     if not text:
         return text
-    salt = os.getenv("AUDIT_PII_HASH_SALT", "regengine-audit-default-salt-v1")
-    digest = hashlib.sha256(f"{salt}:{text}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{_pii_hash_salt()}:{text}".encode("utf-8")).hexdigest()
     return f"masked:{digest[:24]}"
+
+
+def _neutralize_formula(value: str) -> str:
+    """Prefix a spreadsheet formula so Excel treats it as text."""
+    if value and value[0] in _FORMULA_PREFIXES:
+        return "'" + value
+    return value
+
+
+def _neutralize_export_value(value: Any) -> Any:
+    """Neutralize formula text in an export value, including nested objects."""
+    if isinstance(value, str):
+        return _neutralize_formula(value)
+    if isinstance(value, dict):
+        neutralized: dict[str, Any] = {}
+        for key, nested in value.items():
+            safe_key = _neutralize_formula(str(key))
+            neutralized[safe_key] = _neutralize_export_value(nested)
+        return neutralized
+    if isinstance(value, list):
+        return [_neutralize_export_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_neutralize_export_value(item) for item in value]
+    return value
+
+
+def _neutralize_export_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Neutralize display fields. Leave the stored integrity block unchanged."""
+    integrity = entry.get("integrity")
+    neutralized = _neutralize_export_value({key: value for key, value in entry.items() if key != "integrity"})
+    neutralized["integrity"] = integrity
+    return neutralized
+
+
+def _canonical_verification_entry(row: Any) -> dict[str, Any]:
+    """Build the hash input for one stored row.
+
+    The public export redacts emails and neutralizes formulas. Those display
+    changes are not what was hashed, so verification has to use the stored
+    actor, severity, endpoint, metadata, and timestamp.
+    """
+    metadata = row.metadata_ if isinstance(row.metadata_, dict) else {}
+    actor_id = getattr(row, "actor_id", None)
+    resource_id = getattr(row, "resource_id", None)
+    return {
+        "id": row.id,
+        "tenant_id": str(row.tenant_id),
+        "timestamp": chain_timestamp(row.timestamp),
+        "event": {"type": row.event_type, "action": row.action},
+        "resource": {"id": str(resource_id) if resource_id else None},
+        "metadata": metadata,
+        "actor": {
+            "id": str(actor_id) if actor_id else None,
+            "email": row.actor_email,
+        },
+        "severity": row.severity,
+        "endpoint": row.endpoint,
+        "integrity": {
+            "prev_hash": row.prev_hash,
+            "hash": row.integrity_hash,
+            "sequence_num": row.sequence_num,
+        },
+    }
+
+
+def _predecessor_row(db: Session, tenant_id: UUID, sequence_num: int) -> Any:
+    """Return the stored row immediately before ``sequence_num``, if any."""
+    stmt = (
+        select(AuditLogModel)
+        .where(
+            AuditLogModel.tenant_id == tenant_id,
+            AuditLogModel.sequence_num < sequence_num,
+        )
+        .order_by(AuditLogModel.sequence_num.desc())
+        .limit(1)
+    )
+    return db.execute(stmt).scalars().first()
 
 
 def _mask_email(email: Optional[str]) -> Optional[str]:
     """Salted-hash an email for PII-redacted export.
 
-    The salt comes from the AUDIT_PII_HASH_SALT env var if set;
-    otherwise a per-process salt is generated at module import so
-    hashes are at least consistent within a single deploy.
+    The salt comes from the AUDIT_PII_HASH_SALT env var if set; otherwise
+    a per-process random salt is used outside production, and production
+    raises instead of masking with a guessable default.
     """
     return _mask_identifier(email)
 
@@ -331,6 +458,15 @@ def export_audit_logs(
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context active")
 
+    # Fail closed when PII masking has no salt (#3230). The masked path and
+    # the metadata redaction below always hash, so without this check a
+    # production export without AUDIT_PII_HASH_SALT would answer 500
+    # instead of a clear 503, and never raw PII.
+    try:
+        _pii_hash_salt()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     # Decide PII mode. include_pii=True + permission -> raw PII.
     # Anything else -> masked.
     caller_has_pii_perm = _caller_has_pii_export_permission(current_user, db, tenant_id)
@@ -393,7 +529,9 @@ def export_audit_logs(
     # Per-user anonymization is represented by append-only marker rows, so
     # export performs dynamic masking rather than mutating historical logs.
     entries = []
+    canonical_entries = []
     for row in rows:
+        canonical_entries.append(_canonical_verification_entry(row))
         # GDPR Art. 17: rows marked anonymized, or rows whose actor has a
         # per-user anonymization order, ALWAYS mask regardless of permissions.
         row_anonymized = _row_is_anonymized(row, anonymized_actor_ids)
@@ -408,47 +546,46 @@ def export_audit_logs(
             actor_ip = None
             actor_ua = None
 
-        entries.append(
-            {
-                "id": row.id,
-                "tenant_id": str(row.tenant_id),
-                "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                "actor": {
-                    "id": _export_actor_id(row, row_anonymized),
-                    "email": actor_email,
-                    "ip": actor_ip,
-                    "user_agent": actor_ua,
-                    "pii_masked": not show_raw_pii,
-                    "anonymized_at": (
-                        row.anonymized_at.isoformat() if row_anonymized and hasattr(row, "anonymized_at") else None
-                    ),
-                },
-                "event": {
-                    "type": row.event_type,
-                    "category": row.event_category,
-                    "action": row.action,
-                    "severity": row.severity,
-                },
-                "resource": {
-                    "type": row.resource_type,
-                    "id": _export_resource_id(row, anonymized_actor_ids),
-                },
-                "endpoint": row.endpoint,
-                "metadata": _redact_metadata_pii(
-                    row.metadata_,
-                    force=row_anonymized,
+        public_entry = {
+            "id": row.id,
+            "tenant_id": str(row.tenant_id),
+            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+            "actor": {
+                "id": _export_actor_id(row, row_anonymized),
+                "email": actor_email,
+                "ip": actor_ip,
+                "user_agent": actor_ua,
+                "pii_masked": not show_raw_pii,
+                "anonymized_at": (
+                    row.anonymized_at.isoformat() if row_anonymized and hasattr(row, "anonymized_at") else None
                 ),
-                "request_id": str(row.request_id) if row.request_id else None,
-                "integrity": {
-                    "prev_hash": row.prev_hash,
-                    "hash": row.integrity_hash,
-                    # #2513: sequence_num lets verify_chain check per-tenant
-                    # contiguity (gap == removed/deleted row) and recompute
-                    # the v3 hash.
-                    "sequence_num": row.sequence_num,
-                },
-            }
-        )
+            },
+            "event": {
+                "type": row.event_type,
+                "category": row.event_category,
+                "action": row.action,
+                "severity": row.severity,
+            },
+            "resource": {
+                "type": row.resource_type,
+                "id": _export_resource_id(row, anonymized_actor_ids),
+            },
+            "endpoint": row.endpoint,
+            "metadata": _redact_metadata_pii(
+                row.metadata_,
+                force=row_anonymized,
+            ),
+            "request_id": str(row.request_id) if row.request_id else None,
+            "integrity": {
+                "prev_hash": row.prev_hash,
+                "hash": row.integrity_hash,
+                # #2513: sequence_num lets verify_chain check per-tenant
+                # contiguity (gap == removed/deleted row) and recompute
+                # the v3 hash.
+                "sequence_num": row.sequence_num,
+            },
+        }
+        entries.append(_neutralize_export_entry(public_entry))
 
     # Sign the export bundle
     export_timestamp = datetime.now(timezone.utc).isoformat()
@@ -498,6 +635,7 @@ def export_audit_logs(
             status_code=500,
             detail="audit-export self-log failed; export aborted to preserve tamper-evidence",
         )
+    first_sequence = rows[0].sequence_num if rows else None
     db.commit()
 
     # Build response
@@ -523,16 +661,29 @@ def export_audit_logs(
             "chain_end": entries[-1]["integrity"]["hash"] if entries else None,
             "bundle_hash": bundle_hash,
             "verification": (
-                "Each entry's integrity.hash = SHA-256("
-                "integrity.prev_hash + tenant_id + timestamp + event_type + "
-                "action + resource_id + metadata). "
-                "Verify by recomputing sequentially."
+                "Chain verification recomputes each stored row from the "
+                "original fields, including the actor, severity, endpoint, "
+                "sequence, and metadata. Entries in this file are redacted "
+                "and formula-neutralized, so they are not the hash input."
             ),
         },
     }
 
-    # Optionally include chain verification
-    if include_verification and entries:
-        response["integrity"]["chain_verification"] = verify_chain(entries)
+    # Verify the stored rows, not the redacted view. A deleted prefix has
+    # no parent row even though the remaining slice still links to itself.
+    if include_verification and canonical_entries:
+        predecessor = None
+        missing_anchor = False
+        if first_sequence not in (None, 1):
+            predecessor_row = _predecessor_row(db, tenant_id, first_sequence)
+            if predecessor_row is None:
+                missing_anchor = True
+            else:
+                predecessor = _canonical_verification_entry(predecessor_row)
+        response["integrity"]["chain_verification"] = verify_chain(
+            canonical_entries,
+            predecessor=predecessor,
+            missing_anchor=missing_anchor,
+        )
 
     return response

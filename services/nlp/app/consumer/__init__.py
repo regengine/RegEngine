@@ -1030,7 +1030,16 @@ def _run_consumer_loop(consumer: KafkaConsumer, producer: KafkaProducer) -> None
                             logger.error("nlp_audit_logging_failed", document_id=doc_id, error=str(_audit_exc))
 
                         consumer.commit()
-                    except (ValidationError, KafkaTimeoutError, FSMARoutingError) as exc:
+                    # KafkaError (not just KafkaTimeoutError) retries here:
+                    # producer.send() raises the base KafkaError on
+                    # produce-time failures (buffer full, unknown topic)
+                    # while flush() raises KafkaTimeoutError. Catching only
+                    # the timeout sent transient send failures straight to
+                    # the DLQ with no retry, skipping the retry budget that
+                    # every sibling Kafka failure path uses. KafkaAuthError
+                    # deliberately stays out: a bad signature never verifies
+                    # no matter how often it is retried.
+                    except (ValidationError, KafkaError, FSMARoutingError) as exc:
                         # #1122 — tenant-scoped retry-count key. Prior code
                         # keyed only by doc_id which meant two tenants with
                         # the same doc_id shared a retry bucket (e.g.

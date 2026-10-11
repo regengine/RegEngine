@@ -516,3 +516,58 @@ async def test_login_verify_rejects_non_monotonic_sign_count_without_session(mon
 
     assert exc_info.value.status_code == 401
     assert not [obj for obj in db.added if isinstance(obj, SessionModel)]
+
+
+def test_expected_origin_uses_configured_value_not_request_host(monkeypatch):
+    """The request Host header is attacker-controlled and must not feed the
+    WebAuthn origin check, even when it disagrees with configuration."""
+    monkeypatch.setenv(wr.WEBAUTHN_EXPECTED_ORIGIN_ENV, "https://app.example.com/")
+    attacker_request = _request()
+    assert wr._expected_origin(attacker_request) == "https://app.example.com"
+    assert wr._expected_origin() == "https://app.example.com"
+
+
+def test_expected_origin_refuses_to_derive_from_host_when_unconfigured(monkeypatch):
+    """Without configuration there is no safe origin, so verification must
+    fail closed instead of trusting the request Host."""
+    monkeypatch.delenv(wr.WEBAUTHN_EXPECTED_ORIGIN_ENV, raising=False)
+    with pytest.raises(HTTPException) as exc_info:
+        wr._expected_origin(_request())
+    assert exc_info.value.status_code == 503
+    with pytest.raises(HTTPException) as exc_info:
+        wr._expected_origin()
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_registration_verify_returns_503_not_401_when_origin_unconfigured(monkeypatch):
+    """A missing origin must surface as 503 through the verify route.
+
+    Without the explicit ``except HTTPException: raise`` in the handler,
+    the inner ``except Exception`` would rewrite it as a generic 401.
+    """
+    user = _user()
+    challenge = _stored_challenge(
+        user_id=user.id,
+        challenge="registration-challenge",
+        purpose=wr.WEBAUTHN_REGISTRATION_PURPOSE,
+    )
+    db = FakeDb([FakeResult(scalar=challenge)])
+    monkeypatch.delenv(wr.WEBAUTHN_EXPECTED_ORIGIN_ENV, raising=False)
+
+    def fail_on_missing_origin(**kwargs):
+        raise wr._expected_origin(kwargs.get("request"))
+
+    monkeypatch.setattr(wr, "_webauthn_verify_registration_response", fail_on_missing_origin)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await wr.verify_webauthn_registration(
+            payload=_credential_payload("registration-challenge"),
+            request=_request("/auth/webauthn/register/verify"),
+            db=db,
+            current_user=user,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert not [obj for obj in db.added if isinstance(obj, WebAuthnCredentialModel)]
+    assert challenge.consumed_at is None

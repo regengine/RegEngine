@@ -22,7 +22,11 @@ from shared.audit_logging.schema import (
     AuditResource,
     AuditSeverity,
 )
-from shared.audit_logging.storage import AuditStorageBackend, InMemoryAuditStorage
+from shared.audit_logging.storage import (
+    AuditStorageBackend,
+    AuditStorageError,
+    InMemoryAuditStorage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +142,13 @@ class AuditLogger:
         details: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
     ) -> AuditEvent:
-        """Log an audit event."""
+        """Log an audit event.
+
+        Raises:
+            AuditStorageError: If the event could not be persisted.
+                A failed write never returns an event that reads as
+                success; compliance-critical callers must fail closed.
+        """
         event = self._create_event(
             event_type=event_type,
             category=category,
@@ -153,7 +163,17 @@ class AuditLogger:
             tags=tags,
         )
 
-        await self._storage.store(event)
+        stored = await self._storage.store(event)
+        if not stored:
+            logger.error(
+                "AUDIT WRITE FAILED: [%s] %s - %s by %s: %s",
+                event.severity.value.upper(),
+                event.event_type.value,
+                event.action,
+                event.actor.actor_id,
+                event.outcome,
+            )
+            raise AuditStorageError(f"audit event {event.event_id} was not persisted (storage backend returned False)")
 
         for hook in self._hooks:
             try:
@@ -410,34 +430,38 @@ def audit_action(
                 actor = AuditActor(actor_id="system", actor_type="system")
 
             start_time = time.time()
+            func_exc: Optional[BaseException] = None
+            result = None
             try:
                 result = await func(*args, **kwargs)
+            except Exception as e:
+                func_exc = e
+                outcome = "failure"
+                severity = AuditSeverity.ERROR
+                error_detail: Optional[str] = str(e)
+            else:
                 outcome = "success"
                 severity = AuditSeverity.INFO
                 error_detail = None
-            except Exception as e:
-                outcome = "failure"
-                severity = AuditSeverity.ERROR
-                error_detail = str(e)
-                raise
-            finally:
-                duration_ms = (time.time() - start_time) * 1000
 
-                resource = None
-                if resource_type:
-                    resource_id = kwargs.get("id") or kwargs.get(f"{resource_type}_id")
-                    if resource_id:
-                        resource = AuditResource(
-                            resource_type=resource_type,
-                            resource_id=str(resource_id),
-                        )
+            duration_ms = (time.time() - start_time) * 1000
 
-                context = AuditContext(duration_ms=duration_ms)
+            resource = None
+            if resource_type:
+                resource_id = kwargs.get("id") or kwargs.get(f"{resource_type}_id")
+                if resource_id:
+                    resource = AuditResource(
+                        resource_type=resource_type,
+                        resource_id=str(resource_id),
+                    )
 
-                details = {}
-                if error_detail:
-                    details["error"] = error_detail
+            context = AuditContext(duration_ms=duration_ms)
 
+            details = {}
+            if error_detail:
+                details["error"] = error_detail
+
+            try:
                 await audit_logger.log(
                     event_type=event_type,
                     category=category,
@@ -449,6 +473,19 @@ def audit_action(
                     context=context,
                     details=details,
                 )
+            except Exception as audit_exc:
+                # A failed audit write must not mask the wrapped
+                # function's own exception. When the function already
+                # failed, its error propagates and the audit failure is
+                # recorded at error level; when the function succeeded,
+                # the audit failure propagates so the action cannot read
+                # as fully complete without its audit trail.
+                logger.error("audit_action write failed: %s", audit_exc)
+                if func_exc is None:
+                    raise
+
+            if func_exc is not None:
+                raise func_exc
 
             return result
 

@@ -7,7 +7,9 @@ with Physics Engine time arrow enforcement.
 
 from __future__ import annotations
 
+import math
 import time
+from collections.abc import Mapping
 from typing import Any, Dict, List
 
 import structlog
@@ -109,6 +111,206 @@ async def _collect_trace_rows(
         return []
 
     return rows
+
+
+def _path_row(record: Any) -> tuple[list, Any, Any] | None:
+    """Read one path row, or None when the row is not usable.
+
+    A non-mapping row is skipped. Missing properties count as an empty
+    map so a null property bag cannot abort the trace.
+    """
+    if isinstance(record, (str, bytes, bytearray)):
+        return None
+    if getattr(record, "__getitem__", None) is None:
+        return None
+    try:
+        labels = record["labels"]
+        props = record["props"]
+        hop = record["hop_count"]
+    except (AttributeError, IndexError, KeyError, TypeError):
+        return None
+    if isinstance(labels, (list, tuple, set, frozenset)):
+        label_list = list(labels)
+    else:
+        label_list = []
+    if isinstance(props, Mapping) and not isinstance(props, (str, bytes, bytearray)):
+        prop_map: Any = props
+    else:
+        prop_map = {}
+    return label_list, prop_map, hop
+
+
+def _quantity_parts(raw: Any) -> tuple[float, Any]:
+    """Split a lot quantity into (amount added, value stored on the lot).
+
+    Numbers and numeric strings add their value. Booleans, blanks,
+    non-numeric text, NaN and infinities add nothing. Non-numeric text
+    is stored as written so a later CSV export can still show it.
+    """
+    if isinstance(raw, bool) or raw is None:
+        return 0.0, 0
+    if isinstance(raw, (int, float)):
+        if isinstance(raw, float) and not math.isfinite(raw):
+            return 0.0, 0
+        return float(raw), raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            return 0.0, 0
+        try:
+            amount = float(text)
+        except ValueError:
+            return 0.0, raw
+        if not math.isfinite(amount):
+            return 0.0, raw
+        return amount, raw
+    return 0.0, raw
+
+
+def _lot_identity(props: Mapping) -> tuple:
+    tlc = props.get("tlc")
+    if tlc:
+        return ("tlc", str(tlc))
+    return ("lot", id(props))
+
+
+def _event_identity(props: Mapping) -> tuple:
+    event_id = props.get("event_id")
+    if event_id:
+        return ("event", str(event_id))
+    return ("event", id(props))
+
+
+def _facility_identity(props: Mapping) -> tuple:
+    gln = props.get("gln")
+    if gln:
+        return ("gln", str(gln))
+    return ("place", props.get("name"), props.get("address"))
+
+
+def _raise_node_tenant(direction: str, tlc: str, tenant_id: str, node_tenant: Any, labels: list) -> None:
+    logger.error(
+        f"trace_{direction}_tenant_invariant_violation",
+        tlc=tlc,
+        expected_tenant=tenant_id,
+        node_tenant=node_tenant,
+        labels=labels,
+    )
+    raise ValueError(
+        f"trace_{direction} tenant invariant violation: returned node "
+        f"tenant={node_tenant!r} does not match caller tenant={tenant_id!r}"
+    )
+
+
+def _take_path_node(
+    record: Any,
+    *,
+    tenant_id: str,
+    tlc: str,
+    direction: str,
+    include_risk_flag: bool,
+    facilities: List[Dict[str, Any]],
+    events: List[Dict[str, Any]],
+    lots: List[Dict[str, Any]],
+    seen_facilities: set,
+    seen_events: set,
+    seen_lots: set,
+    running: Dict[str, Any],
+) -> None:
+    parsed = _path_row(record)
+    if parsed is None:
+        return
+    labels, props, hop = parsed
+    node_tenant = props.get("tenant_id")
+    if node_tenant not in (None, "", tenant_id):
+        _raise_node_tenant(direction, tlc, tenant_id, node_tenant, labels)
+    # Keep the longest hop even when this node was already recorded.
+    if isinstance(hop, (int, float)) and not isinstance(hop, bool):
+        running["max_hops"] = max(running["max_hops"], hop)
+    if "Facility" in labels:
+        key = _facility_identity(props)
+        if key in seen_facilities:
+            return
+        seen_facilities.add(key)
+        facilities.append(
+            {
+                "gln": props.get("gln"),
+                "name": props.get("name"),
+                "address": props.get("address"),
+                "facility_type": props.get("facility_type"),
+            }
+        )
+    elif "TraceEvent" in labels:
+        key = _event_identity(props)
+        if key in seen_events:
+            return
+        seen_events.add(key)
+        event = {
+            "event_id": props.get("event_id"),
+            "type": props.get("type"),
+            "event_date": props.get("event_date"),
+            "confidence": props.get("confidence"),
+        }
+        if include_risk_flag:
+            event["risk_flag"] = props.get("risk_flag")
+        events.append(event)
+    elif "Lot" in labels:
+        key = _lot_identity(props)
+        if key in seen_lots:
+            return
+        seen_lots.add(key)
+        amount, stored = _quantity_parts(props.get("quantity", 0))
+        running["total_quantity"] += amount
+        lots.append(
+            {
+                "tlc": props.get("tlc"),
+                "product_description": props.get("product_description"),
+                "quantity": stored,
+                "unit_of_measure": props.get("unit_of_measure"),
+            }
+        )
+
+
+def _take_follow_up_facility(
+    record: Any,
+    *,
+    tenant_id: str,
+    tlc: str,
+    direction: str,
+    facilities: List[Dict[str, Any]],
+    seen_facilities: set,
+) -> None:
+    if isinstance(record, (str, bytes, bytearray)) or getattr(record, "__getitem__", None) is None:
+        return
+    try:
+        fac = record["facility"]
+    except (AttributeError, IndexError, KeyError, TypeError):
+        return
+    if not isinstance(fac, Mapping) or isinstance(fac, (str, bytes, bytearray)) or not fac:
+        return
+    # Tenant check before the seen-set skip, so a later cross-tenant copy
+    # of a GLN we already stored still fails closed.
+    fac_tenant = fac.get("tenant_id")
+    if fac_tenant not in (None, "", tenant_id):
+        logger.error(
+            f"trace_{direction}_facility_invariant_violation",
+            tlc=tlc,
+            expected_tenant=tenant_id,
+            facility_tenant=fac_tenant,
+        )
+        raise ValueError(f"trace_{direction} facility invariant violation: tenant={fac_tenant!r}")
+    key = _facility_identity(fac)
+    if key in seen_facilities:
+        return
+    seen_facilities.add(key)
+    facilities.append(
+        {
+            "gln": fac.get("gln"),
+            "name": fac.get("name"),
+            "address": fac.get("address"),
+            "facility_type": fac.get("facility_type"),
+        }
+    )
 
 
 async def trace_forward(
@@ -240,8 +442,10 @@ async def trace_forward(
     facilities = []
     events = []
     lots = []
-    max_hops = 0
-    total_quantity = 0.0
+    seen_facilities = set()
+    seen_events = set()
+    seen_lots = set()
+    running = {"max_hops": 0, "total_quantity": 0.0}
 
     # Use time-filtered query if enforcing time arrow
     active_query = query if enforce_time_arrow else query_no_time_filter
@@ -250,61 +454,20 @@ async def trace_forward(
         result = await session.run(active_query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
-            labels = record["labels"]
-            props = record["props"]
-            hop = record["hop_count"]
-            max_hops = max(max_hops, hop)
-
-            # SECURITY (#1256): invariant check — every returned node must
-            # belong to the caller's tenant. If Cypher somehow returned a
-            # cross-tenant node, raise rather than leak data. This mirrors
-            # the predicate in the query and guards against future edits.
-            # #2540: tenant_id is guaranteed non-empty above, so the
-            # invariant always runs (no `is not None` gate).
-            node_tenant = props.get("tenant_id")
-            if node_tenant not in (None, "", tenant_id):
-                logger.error(
-                    "trace_forward_tenant_invariant_violation",
-                    tlc=tlc,
-                    expected_tenant=tenant_id,
-                    node_tenant=node_tenant,
-                    labels=labels,
-                )
-                raise ValueError(
-                    f"trace_forward tenant invariant violation: returned node "
-                    f"tenant={node_tenant!r} does not match caller tenant={tenant_id!r}"
-                )
-
-            if "Facility" in labels:
-                facilities.append(
-                    {
-                        "gln": props.get("gln"),
-                        "name": props.get("name"),
-                        "address": props.get("address"),
-                        "facility_type": props.get("facility_type"),
-                    }
-                )
-            elif "TraceEvent" in labels:
-                events.append(
-                    {
-                        "event_id": props.get("event_id"),
-                        "type": props.get("type"),
-                        "event_date": props.get("event_date"),
-                        "confidence": props.get("confidence"),
-                        "risk_flag": props.get("risk_flag"),
-                    }
-                )
-            elif "Lot" in labels:
-                lot_qty = props.get("quantity", 0) or 0
-                total_quantity += lot_qty
-                lots.append(
-                    {
-                        "tlc": props.get("tlc"),
-                        "product_description": props.get("product_description"),
-                        "quantity": lot_qty,
-                        "unit_of_measure": props.get("unit_of_measure"),
-                    }
-                )
+            _take_path_node(
+                record,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                direction="forward",
+                include_risk_flag=True,
+                facilities=facilities,
+                events=events,
+                lots=lots,
+                seen_facilities=seen_facilities,
+                seen_events=seen_events,
+                seen_lots=seen_lots,
+                running=running,
+            )
 
     # Also get directly connected facilities via SHIPPED_TO.
     # #1256: enforce tenant on BOTH the Lot and the Event to avoid
@@ -320,27 +483,17 @@ async def trace_forward(
     async with client.session() as session:
         result = await session.run(facility_query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
-            fac = record["facility"]
-            # SECURITY (#1256): invariant check for facility-only results.
-            # #2540: tenant_id is non-empty, so the invariant always runs.
-            fac_tenant = (fac or {}).get("tenant_id")
-            if fac and fac_tenant not in (None, "", tenant_id):
-                logger.error(
-                    "trace_forward_facility_invariant_violation",
-                    tlc=tlc,
-                    expected_tenant=tenant_id,
-                    facility_tenant=fac_tenant,
-                )
-                raise ValueError(f"trace_forward facility invariant violation: tenant={fac_tenant!r}")
-            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
-                facilities.append(
-                    {
-                        "gln": fac.get("gln"),
-                        "name": fac.get("name"),
-                        "address": fac.get("address"),
-                        "facility_type": fac.get("facility_type"),
-                    }
-                )
+            _take_follow_up_facility(
+                record,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                direction="forward",
+                facilities=facilities,
+                seen_facilities=seen_facilities,
+            )
+
+    max_hops = running["max_hops"]
+    total_quantity = running["total_quantity"]
 
     # ------------------------------------------------------------------
     # Strict Time Arrow enforcement via shared SSOT rule
@@ -548,66 +701,29 @@ async def trace_backward(
     facilities = []
     events = []
     lots = []
-    max_hops = 0
-    total_quantity = 0.0
+    seen_facilities = set()
+    seen_events = set()
+    seen_lots = set()
+    running = {"max_hops": 0, "total_quantity": 0.0}
 
     async with client.session() as session:
         result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
-            labels = record["labels"]
-            props = record["props"]
-            hop = record["hop_count"]
-            max_hops = max(max_hops, hop)
-
-            # SECURITY (#1256): invariant check — every returned node must
-            # belong to the caller's tenant. If the Cypher ALL(...) guard
-            # was bypassed, fail loud rather than silently leak data.
-            # #2540: tenant_id is guaranteed non-empty above, so the
-            # invariant always runs (no `is not None` gate).
-            node_tenant = props.get("tenant_id")
-            if node_tenant not in (None, "", tenant_id):
-                logger.error(
-                    "trace_backward_tenant_invariant_violation",
-                    tlc=tlc,
-                    expected_tenant=tenant_id,
-                    node_tenant=node_tenant,
-                    labels=labels,
-                )
-                raise ValueError(
-                    f"trace_backward tenant invariant violation: returned node "
-                    f"tenant={node_tenant!r} does not match caller tenant={tenant_id!r}"
-                )
-
-            if "Facility" in labels:
-                facilities.append(
-                    {
-                        "gln": props.get("gln"),
-                        "name": props.get("name"),
-                        "address": props.get("address"),
-                        "facility_type": props.get("facility_type"),
-                    }
-                )
-            elif "TraceEvent" in labels:
-                events.append(
-                    {
-                        "event_id": props.get("event_id"),
-                        "type": props.get("type"),
-                        "event_date": props.get("event_date"),
-                        "confidence": props.get("confidence"),
-                    }
-                )
-            elif "Lot" in labels:
-                lot_qty = props.get("quantity", 0) or 0
-                total_quantity += lot_qty
-                lots.append(
-                    {
-                        "tlc": props.get("tlc"),
-                        "product_description": props.get("product_description"),
-                        "quantity": lot_qty,
-                        "unit_of_measure": props.get("unit_of_measure"),
-                    }
-                )
+            _take_path_node(
+                record,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                direction="backward",
+                include_risk_flag=False,
+                facilities=facilities,
+                events=events,
+                lots=lots,
+                seen_facilities=seen_facilities,
+                seen_events=seen_events,
+                seen_lots=seen_lots,
+                running=running,
+            )
 
     # Also get source facilities via SHIPPED relationship.
     #
@@ -633,26 +749,17 @@ async def trace_backward(
     async with client.session() as session:
         result = await session.run(facility_query, tlc=tlc, tenant_id=tenant_id)
         async for record in result:
-            fac = record["facility"]
-            # #2540: tenant_id is non-empty, so the invariant always runs.
-            fac_tenant = (fac or {}).get("tenant_id")
-            if fac and fac_tenant not in (None, "", tenant_id):
-                logger.error(
-                    "trace_backward_facility_invariant_violation",
-                    tlc=tlc,
-                    expected_tenant=tenant_id,
-                    facility_tenant=fac_tenant,
-                )
-                raise ValueError(f"trace_backward facility invariant violation: tenant={fac_tenant!r}")
-            if fac and fac not in [f for f in facilities if f.get("gln") == fac.get("gln")]:
-                facilities.append(
-                    {
-                        "gln": fac.get("gln"),
-                        "name": fac.get("name"),
-                        "address": fac.get("address"),
-                        "facility_type": fac.get("facility_type"),
-                    }
-                )
+            _take_follow_up_facility(
+                record,
+                tenant_id=tenant_id,
+                tlc=tlc,
+                direction="backward",
+                facilities=facilities,
+                seen_facilities=seen_facilities,
+            )
+
+    max_hops = running["max_hops"]
+    total_quantity = running["total_quantity"]
 
     # #2945: preserve the lot<->event<->facility association for exporters.
     trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)

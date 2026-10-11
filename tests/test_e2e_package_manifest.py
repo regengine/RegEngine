@@ -17,7 +17,6 @@ Requires:
     - Set DATABASE_URL environment variable
 """
 
-import hashlib
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -396,14 +395,18 @@ class TestPackageManifest:
                 _State.package_contents[key], sort_keys=True, default=str
             ), f"Manifest field '{key}' differs between assemblies"
 
-        # Verify the embedded package_hash is self-consistent
-        # (remove package_hash, recompute, compare)
+        # Verify the embedded package_hash is self-consistent: it must be
+        # the assembler's own digest, not an inline reimplementation that
+        # could drift from the helper without failing.
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
         contents2_check = {k: v for k, v in contents2.items() if k != "package_hash"}
-        recomputed = hashlib.sha256(json.dumps(contents2_check, sort_keys=True, default=str).encode()).hexdigest()
-        assert recomputed == contents2["package_hash"], "Embedded package_hash must match recomputed hash of manifest"
+        assert compute_manifest_hash(contents2_check) == contents2["package_hash"], (
+            "Embedded package_hash must match compute_manifest_hash of the manifest"
+        )
 
     def test_07_submit_package(self, tenant_id, workflow):
-        """Add final_approval signoff and submit the package."""
+        """Prove the blocking-defect gate blocks, then submit with force."""
         workflow.add_signoff(
             tenant_id,
             _State.case_id,
@@ -412,7 +415,26 @@ class TestPackageManifest:
             notes="Approved for submission.",
         )
 
-        # Submit with force=True to bypass any rule-failure blockers
+        # This scenario ships known defects (the cooling event is missing
+        # required KDEs), so the gate must refuse a normal submission.
+        # Proving the refusal is the point: force=True must override a
+        # gate that demonstrably works, not paper over one that does not.
+        defect_check = workflow.check_blocking_defects(tenant_id, _State.case_id)
+        assert defect_check["blocker_count"] > 0, (
+            "expected blocking defects in the manifest scenario. "
+            "without blockers the force=True path below proves nothing"
+        )
+        assert defect_check["can_submit"] is False
+        with pytest.raises(ValueError, match="blocking defect"):
+            workflow.submit_package(
+                tenant_id,
+                _State.case_id,
+                package_id=_State.package_id,
+                submitted_by="vp_quality@test.com",
+                submitted_to="FDA",
+                submission_method="export",
+            )
+
         result = workflow.submit_package(
             tenant_id,
             _State.case_id,
@@ -620,9 +642,9 @@ class TestPackageManifest:
 
         embedded_hash = contents.pop("package_hash")
 
-        # Recompute from manifest without the hash field
-        recomputed = hashlib.sha256(json.dumps(contents, sort_keys=True, default=str).encode()).hexdigest()
+        # Recompute with the assembler's own helper, not an inline copy.
+        from services.shared.request_workflow.assembly import compute_manifest_hash
 
-        assert recomputed == embedded_hash, (
-            "Embedded package_hash must be verifiable by recomputing SHA-256 of manifest"
+        assert compute_manifest_hash(contents) == embedded_hash, (
+            "Embedded package_hash must be verifiable by recomputing the manifest digest"
         )

@@ -79,14 +79,23 @@ class ComplianceServiceSync:
         tenant_id: UUID,
         status_filter: Optional[str] = None,
         limit: int = 50,
+        offset: int = 0,
     ) -> List[ComplianceAlertModel]:
-        """Get alerts for a tenant."""
+        """Get alerts for a tenant with pagination.
+
+        Ordered by ``created_at`` descending with ``id`` as a tiebreaker
+        so ``limit``/``offset`` pagination is deterministic.
+        """
         query = select(ComplianceAlertModel).where(ComplianceAlertModel.tenant_id == tenant_id)
 
         if status_filter:
             query = query.where(ComplianceAlertModel.status == status_filter)
 
-        query = query.order_by(desc(ComplianceAlertModel.created_at)).limit(limit)
+        query = (
+            query.order_by(desc(ComplianceAlertModel.created_at), ComplianceAlertModel.id)
+            .offset(offset)
+            .limit(limit)
+        )
 
         result = self.session.execute(query)
         return result.scalars().all()
