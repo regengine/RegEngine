@@ -85,6 +85,47 @@ class BatchIngestRequest(BaseModel):
     events: list[dict] = Field(default_factory=list)
 
 
+def _parse_export_bound(value: str | None, name: str) -> datetime | None:
+    """Parse an export ``start_date``/``end_date`` query value.
+
+    Malformed input is a client error (400), not a crash: previously a
+    garbage value raised ``ValueError`` in the fallback filter (HTTP 500)
+    or a SQL error on the DB path (misreported as 503). A date without a
+    timezone is read as UTC so it compares cleanly against the
+    timezone-aware event times the store keeps.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid {name}: {value!r} is not an ISO-8601 timestamp",
+        ) from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _parse_stored_event_time(value: object) -> datetime | None:
+    """Lenient parse for event times already in the store.
+
+    Returns None for missing or unparseable values so one bad record
+    cannot fail the whole export; the record is then included
+    unfiltered, matching the previous behavior for missing event times.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 @router.post("/events", status_code=201, summary="Ingest EPCIS 2.0 event")
 async def ingest_epcis_event(
     event: dict,
@@ -225,6 +266,11 @@ async def export_epcis_events(
 ):
     resolved_tenant = ctx.tenant_id
 
+    # Validate date filters before any DB work so malformed values are a
+    # 400 on both the DB and the fallback paths.
+    start_dt = _parse_export_bound(start_date, "start_date")
+    end_dt = _parse_export_bound(end_date, "end_date")
+
     events: list[dict] = []
     try:
         events = _list_events_from_db(resolved_tenant, start_date, end_date, product_id)
@@ -237,26 +283,15 @@ async def export_epcis_events(
         logger.warning("epcis_export_db_failed_using_fallback error=%s", str(exc))
 
     if not events and _allow_in_memory_fallback():
-
-        def _parse_iso(value: str | None) -> datetime | None:
-            if not value:
-                return None
-            parsed = value.replace("Z", "+00:00")
-            return datetime.fromisoformat(parsed)
-
-        start_dt = _parse_iso(start_date)
-        end_dt = _parse_iso(end_date)
-
         filtered_records: list[dict] = []
         # #1148: iterate only this tenant's partition of the fallback store.
         for entry in _fallback_store_for(resolved_tenant).values():
             normalized = entry.get("normalized_cte", {})
-            event_time = normalized.get("event_time")
-            if event_time:
-                event_dt = _parse_iso(str(event_time))
-                if start_dt and event_dt and event_dt < start_dt:
+            event_dt = _parse_stored_event_time(normalized.get("event_time"))
+            if event_dt:
+                if start_dt and event_dt < start_dt:
                     continue
-                if end_dt and event_dt and event_dt >= end_dt:
+                if end_dt and event_dt >= end_dt:
                     continue
             if product_id and normalized.get("product_id") != product_id:
                 continue
@@ -287,7 +322,17 @@ async def validate_epcis_event(
     _ctx: TenantContext = Depends(require_tenant_context),
 ):
     errors = _validate_epcis(event)
-    normalized = _normalize_epcis_to_cte(event) if not errors else None
+    normalized = None
+    if not errors:
+        try:
+            normalized = _normalize_epcis_to_cte(event)
+        except HTTPException as exc:
+            # A structurally valid event whose bizStep has no CTE mapping
+            # is invalid input, reported as valid:false like every other
+            # validation failure rather than an HTTP error.
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            message = detail.get("message") or f"Unmapped bizStep: {event.get('bizStep')}"
+            errors = [message if isinstance(message, str) else str(message)]
     return {
         "valid": not errors,
         "errors": errors,
