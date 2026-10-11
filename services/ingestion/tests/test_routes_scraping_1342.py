@@ -208,10 +208,11 @@ class TestIngestAllRegulationsSummary:
 
     def _fake_source(self, idx: int = 0) -> dict:
         return {
-            "name": f"S{idx}",
-            "url": f"https://example.com/{idx}",
-            "type": "api",
-            "jurisdiction": "US",
+            "name": f"Source-{idx}",
+            "url": f"https://www.fda.gov/food/fsma-test-{idx}",
+            "type": "html",
+            "jurisdiction": "FDA",
+            "description": "Fixture source for summary counting",
         }
 
     def test_queued_manual_counted(self, monkeypatch: pytest.MonkeyPatch) -> None:

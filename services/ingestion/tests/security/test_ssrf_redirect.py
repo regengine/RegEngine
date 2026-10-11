@@ -122,3 +122,104 @@ def test_validate_url_blocks_metadata_directly():
 
     with pytest.raises(SSRFError):
         validate_url("http://169.254.169.254/latest/meta-data/")
+
+
+def _allow_local_hops(monkeypatch, source_url, *, pin_only=()):
+    """Let local test URLs connect for real, nothing else.
+
+    ``_validate_and_pin`` refuses 127.0.0.1 before connecting, so without
+    this wrapper the tests below would pass via first-hop refusal and never
+    exercise redirect-hop validation. ``source_url`` passes both the
+    validator and the pin check. ``pin_only`` URLs pass the pin check but
+    are still rejected by the real validator, which isolates the validator
+    hop re-check as the sole guard for those hops. Returns the recording
+    validator, which must be passed explicitly (the helpers capture the
+    default validator at def time).
+    """
+    import shared.safe_http as safe_http_mod
+    from shared import url_validation
+
+    real_validate = url_validation.validate_url
+    real_pin = safe_http_mod._validate_and_pin
+    validated_urls: list[str] = []
+    pinnable = {source_url, *pin_only}
+
+    def recording_validator(candidate, *args, **kwargs):
+        validated_urls.append(candidate)
+        if candidate == source_url:
+            return candidate
+        return real_validate(candidate, *args, **kwargs)
+
+    def pin_allow_listed(url):
+        if url in pinnable:
+            return ("127.0.0.1", "127.0.0.1")
+        return real_pin(url)
+
+    monkeypatch.setattr(safe_http_mod, "validate_url", recording_validator)
+    monkeypatch.setattr(safe_http_mod, "_validate_and_pin", pin_allow_listed)
+    return recording_validator, validated_urls
+
+
+async def test_async_redirect_to_metadata_ip_blocked(monkeypatch):
+    """Async twin: a 302 to 169.254.169.254 must raise SSRFError.
+
+    The vendor connectors use ``safe_httpx_get_async``, not the sync
+    helper. The async redirect tests elsewhere stub the HTTP client and
+    the validator, so this live test (real client constructor, real
+    validator on the second hop) is the only proof the async path
+    re-validates redirects.
+    """
+    from shared.safe_http import safe_httpx_get_async
+
+    with _running_server() as (host, port):
+        url = f"http://{host}:{port}/start"
+        validator, validated_urls = _allow_local_hops(monkeypatch, url)
+        with pytest.raises(SSRFError):
+            await safe_httpx_get_async(url, validator=validator, max_redirects=3)
+        # The link-local target went through validation (via the hop
+        # re-check or the pin layer) and was never connected to.
+        assert "http://169.254.169.254/latest/meta-data/" in validated_urls
+
+
+async def test_async_redirect_to_internal_canary_blocked_before_outbound_request(monkeypatch):
+    """Async twin: the internal target must receive zero requests.
+
+    Both the source and the canary are pin-allowed, so the validator hop
+    re-check is the only guard standing between the client and the
+    canary. Deleting that re-check connects to the canary (hits == 1,
+    no SSRFError) and fails this test.
+    """
+    from shared.safe_http import safe_httpx_get_async
+
+    original_target = _RedirectHandler.target
+    try:
+        with _running_canary() as (canary_host, canary_port):
+            canary_url = f"http://{canary_host}:{canary_port}/private-canary"
+            _RedirectHandler.target = canary_url
+            with _running_server() as (source_host, source_port):
+                source_url = f"http://{source_host}:{source_port}/start"
+                validator, validated_urls = _allow_local_hops(monkeypatch, source_url, pin_only=[canary_url])
+                with pytest.raises(SSRFError):
+                    await safe_httpx_get_async(source_url, validator=validator, max_redirects=3)
+                assert canary_url in validated_urls
+
+            assert _CanaryHandler.hits == 0
+    finally:
+        _RedirectHandler.target = original_target
+
+
+async def test_async_get_tags_logical_final_url(monkeypatch):
+    """The finalized response must carry the logical final-hop URL.
+
+    The pinned transport rewrites ``request.url`` to the validated IP
+    literal, so feed parsers cannot use ``response.url`` as a base for
+    relative links. They read ``extensions["safe_final_url"]`` instead.
+    """
+    from shared.safe_http import safe_httpx_get_async
+
+    with _running_canary() as (host, port):
+        url = f"http://{host}:{port}/feed.xml"
+        validator, _ = _allow_local_hops(monkeypatch, url)
+        resp = await safe_httpx_get_async(url, validator=validator)
+        assert resp.status_code == 204
+        assert resp.extensions["safe_final_url"] == url

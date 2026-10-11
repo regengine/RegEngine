@@ -59,12 +59,26 @@ from shared.route_introspection import route_keys
 print("ROUTE_KEYS_JSON=" + json.dumps(sorted(route_keys(module.app))))
 """
 
+
+def _synthetic_fernet_key() -> str:
+    """Fresh Fernet key per parent process for the strict-auth MFA gate.
+
+    Generated at runtime so no key material lives in the file. The
+    production-posture child boots strict, and strict runtimes refuse to
+    boot without a valid MFA_ENCRYPTION_KEY (#3238).
+    """
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key().decode()
+
+
 _COMMON_ENV = {
     "AUTH_SECRET_KEY": "route-contract-test-secret-with-enough-length",  # pragma: allowlist secret
     "DATABASE_URL": "postgresql://localhost:5432/regengine_test",
     "ADMIN_DATABASE_URL": "postgresql+psycopg://localhost:5432/regengine_admin_test",
     "REDIS_URL": "redis://localhost:6379/0",
     "TOOL_ACCESS_SECRET": "route-contract-test-tool-secret-distinct-value",  # pragma: allowlist secret
+    "MFA_ENCRYPTION_KEY": _synthetic_fernet_key(),
 }
 
 # Vars that would change (or reject) the posture under test if inherited.
@@ -93,6 +107,22 @@ def _server_route_keys(*, production: bool) -> set[tuple[str, str]]:
 
         env["REGENGINE_ENV"] = "production"
         env["ENABLED_ROUTERS"] = ",".join(sorted(PRODUCTION_ENABLED_ROUTERS))
+        # Sibling suites export placeholder Neo4j/storage values (test-key,
+        # test-secret, test-password-for-ci) that the production secrets
+        # gate rejects when they match a placeholder. The deployed monolith does not need
+        # them (graph is not in the production router set, storage is
+        # optional), so drop them here instead of inheriting the failure.
+        # Same scrub as tests/contract/test_openapi_production_surface_2861.py
+        # and services/ingestion/tests/test_fsma_readiness_compat_2893.py.
+        for _scrubbed in (
+            "NEO4J_URI",
+            "NEO4J_URL",
+            "NEO4J_PASSWORD",
+            "OBJECT_STORAGE_ACCESS_KEY_ID",
+            "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+        ):
+            env.pop(_scrubbed, None)
+        env["EVENT_BACKBONE"] = "pg"
     else:
         env["REGENGINE_ENV"] = "test"
         env["ENVIRONMENT"] = "test"

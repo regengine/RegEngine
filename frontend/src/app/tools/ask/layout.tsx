@@ -24,7 +24,6 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Natural language query tool for FSMA 204 supply chain traceability data with cryptographic evidence and confidence scores.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 

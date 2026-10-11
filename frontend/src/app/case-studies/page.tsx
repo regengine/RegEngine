@@ -580,7 +580,7 @@ export default function CaseStudy() {
                             <p>
                                 This is a product validation study, not a customer case study. Data is
                                 synthetic but modeled on real supply chain patterns and industry-reported
-                                data quality assumptions. RegEngine is in production with founding design partners; self-serve access is in staged rollout. Metrics reflect current system
+                                data quality assumptions. RegEngine is pre-revenue; self-serve access is in staged rollout. Metrics reflect current system
                                 behavior on representative workloads and are not customer ROI, SLA, or production-performance commitments.
                             </p>
                         </div>
