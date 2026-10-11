@@ -174,7 +174,7 @@ def _send_to_fsma_dlq(
             tenant_id=tenant_id,
             error=error,
         )
-    except (ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
+    except (KafkaTimeoutError, ConnectionError, TimeoutError, OSError, RuntimeError) as dlq_exc:
         logger.error(
             "dlq_routing_failed",
             topic=topic,

@@ -1,170 +1,187 @@
-# FIX-REPORT: PR #3245 vacuous QA tests
+# FIX-REPORT: About page copy
 
-Merge commit 063ebc8d. Sources read: all six re-rv-3245 angle reports
-(correct, security, tenant, tests, ops, blast), plus the lead-correct,
-lead-tests, lead-tenant, lead-security, lead-ops, lead-blast, and
-area-qa-ci summaries where they mention #3245. Production code is
-unchanged by this fix; only tests, one load script, and CI wiring were
-touched. No migrations added.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings table
+## Before and after
 
-| # | Source report | Severity | Finding | Status |
-|---|---|---|---|---|
-| 1 | correct, lead-correct | High | k6 rls_isolation check result discarded, no checks threshold, cross-tenant page exits 0 | FIXED AND TESTED |
-| 2 | tests (#10), area-qa-ci (#6) | High | tests/contract/test_service_contracts.py runs in no blocking job | FIXED AND TESTED |
-| 3 | tests (#10) | High | Schema tests construct NormalizedEvent in-test, never call the producer, so a hand-built-dict revert stays green | FIXED AND TESTED |
-| 4 | tests (#11), area-qa-ci (#6) | High | test_e2e_package_manifest, test_request_workflow_unit, test_compliance_control_plane_e2e run in no blocking job | FIXED AND TESTED |
-| 5 | correct | Medium | k6 mixed marked/unmarked page passes on the marked subset | FIXED AND TESTED |
-| 6 | correct, tests (medium) | Medium | RLS probe pytest.skips on SET ROLE failure after rolling back the caller transaction | FIXED AND TESTED |
-| 7 | tests (medium) | Medium | Unit hash tests only call compute_manifest_hash, never assemble_response_package | FIXED AND TESTED |
-| 8 | tests (medium), correct (low) | Medium | Compliance step2 ignores error/skip, ignores non-kde critical fails, deferred minority check passes with 13 of 14 deferred | FIXED AND TESTED |
-| 9 | security (low #2) | Low | Same RLS probe skip as #6 | FIXED AND TESTED (same fix) |
-| 10 | correct (low) | Low | Seeded preservation pass reported as skip on v089 leg | FIXED AND TESTED |
-| 11 | correct (low) | Low | k6 rls_enforced returns true for any array | FIXED AND TESTED |
-| 12 | tests (open question) | Low | Negative schema test docstring says neither S3 pointer while raw_s3_path remains | FIXED AND TESTED (wording) |
-| 13 | security (low #1), correct (low) | Low | k6 empty export page returns true | Not fixed, see notes |
-| 14 | tenant lead | OK | Manifest hash move keeps tenant in hash, no tenant effect | No change needed |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-Fail-without-fix proof per finding is under Tests below. Finding 13 was
-deliberately kept: an empty page shows no leak, and failing it would make
-the load script flaky. The behavior is now documented in the script
-comment.
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Out of scope (other tasks own these, noted only)
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. Suspended-tenant deny lives only in get_current_tenant, which no route
-calls; live auth in services/shared/auth.py never reads tenants.status
-(tenant lead H4, security lead critical). Not touched.
-2. Tenant-scope SAST gate red on the merged tree
-(scan_tenant_scope.py exit 1 on traceability_linker findings; scanner
-owned by PR #3246 work). scripts/security/scan_tenant_scope.py was not
-run because this fix touches no product queries.
-3. The 7 xfail cross-tenant leaks (cypher scope scan, route isolation
-matrix; PR #3237/#3240 work). Not touched.
-4. actions startup_failure run 37841634345 and the RegEngine-Prod
-deployment failure on 063ebc8d (ops open questions). No causal link to
-this PR was found; nothing here changes container boot.
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-## Changes
+2. Faster iteration card
 
-1. tests/load/k6-admin-test.js: isolation check result captured into
-errorRate, checks threshold rate==1 added, non-empty pages require every
-item marked with the VU tenant (mixed pages fail), status-phase check
-fails items carrying another tenant marker.
-2. tests/test_e2e_tenant_isolation.py: SET ROLE failure now does a
-defensive RESET ROLE, no rollback of the caller transaction, and
-pytest.fail instead of pytest.skip.
-3. tests/test_rls_probe_helper.py (new): 4 offline regression tests for
-the probe helper with a fake session.
-4. tests/test_request_workflow_unit.py: new TestAssembledPackageHashLinkage
-(3 tests) assembling through the real method with a fake DB and asserting
-the stored hash equals compute_manifest_hash of the stored contents.
-5. tests/test_e2e_package_manifest.py: both inline hashlib copies replaced
-with compute_manifest_hash; unused import removed.
-6. tests/test_compliance_control_plane_e2e.py: step2 now fails on
-error/skip results, fails any critical failure in any category, pins the
-deferred set exactly to the relational-typed rules, keeps the minority
-bound; docstring corrected.
-7. tests/contract/test_ingest_nlp_schema_contract.py (new): offline
-TestIngestionToNLPContract moved here plus TestProducerEmissionContract,
-which calls the real _process_and_emit with mocked storage/parser/
-settings/transport and validates the returned event and the published
-Kafka payload against the NLP schema.
-8. tests/contract/test_service_contracts.py: moved class replaced with a
-pointer comment; live tests untouched.
-9. tests/migrations/test_seeded_mid_chain_upgrade.py: preservation check
-split into test_seeded_users_preserved_to_head (verdict on every leg).
-10. .github/workflows/backend-ci.yml: 4 offline files added to the
-blocking in-process suite; test_e2e_package_manifest.py added to the
-request-workflow e2e step (covered by its skip hardening).
+Before:
+`Design-partner feedback is scoped to`
 
-## Tests
+After:
+`Early tester feedback is scoped to`
 
-All test commands were prefixed with ~/metacode/fleet/heavy. Local live
-DB work used throwaway databases fleet_fx3245 and fleet_fx3245_seed on
-localhost:5432 (superuser sellers), both dropped afterwards. No
-background processes left running.
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-1. New offline batch:
-~/metacode/fleet/heavy .venv/bin/python -m pytest
-tests/test_request_workflow_unit.py
-tests/test_compliance_control_plane_e2e.py
-tests/test_rls_probe_helper.py
-tests/contract/test_ingest_nlp_schema_contract.py -o "testpaths=tests"
--p no:cacheprovider --no-cov
-Result: 61 passed in 1.22s
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-2. RLS helper fail-without-fix: helper temporarily restored to
-rollback plus skip, new tests run.
-Result on old code: 2 FAILED
-(test_probe_fails_without_rolling_back_when_role_switch_fails,
-test_probe_failure_is_a_failure_not_a_skip), 2 passed.
-Result with fix: 4 passed. Fix restored (grep confirms pytest.fail
-present, no skip path).
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
 
-3. Assembler linkage mutation: call site temporarily set to "0" * 64.
-Result on mutated code: 2 FAILED
-(test_assembled_hash_matches_helper_digest,
-test_insert_receives_helper_digest); pre-existing isolated-hash tests
-stayed green, proving the reported hole. Restored; line 269 confirmed.
+## Diff
 
-4. Compliance error-result probe (scratch file in /tmp, since removed):
-first stateless evaluator patched to return result error.
-Result: step2 FAILED at the new pass/fail assertion. Old code ignored
-any result other than fail (only fail entered the critical branch) and
-the deferred count check still held, so the old test passed this probe
-by code reading.
+`git diff --stat` (tracked files only):
 
-5. Producer hand-built-dict mutation: Kafka send payload temporarily
-replaced with dict(event_id, document_id).
-Result on mutated code: 1 FAILED
-(test_producer_emission_validates_against_nlp_schema). Restored; grep
-confirms zero mutation markers.
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
 
-6. Manifest e2e on throwaway DB at alembic head
-(REGENGINE_MIGRATION_TEST_DB plus REGENGINE_REQUIRE_DB=1):
-Result: 12 passed in 0.59s, zero skipped.
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
 
-7. Full tenant isolation module on the same throwaway DB:
-Result: 11 passed in 0.61s, zero skipped, so the SET ROLE regengine
-probe executed rather than skipping.
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
 
-8. Seeded split on the v089 leg (fresh empty throwaway DB, full
-mid-chain rehearsal):
-Result: 1 passed, 1 skipped in 2.14s
-(test_seeded_users_preserved_to_head passed where the old shape
-reported a skip; the v079-only email test still skips on this leg by
-design).
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
 
-9. Lint and syntax:
-~/metacode/fleet/heavy .venv/bin/ruff check <8 changed test files>
-Result: All checks passed!
-~/metacode/fleet/heavy .venv/bin/ruff format (2 files reformatted,
-tests re-run green).
-node --check tests/load/k6-admin-test.js: k6 syntax OK.
-YAML safe_load of backend-ci.yml: YAML OK.
-Collect-only: test_service_contracts.py 22 tests, manifest 12 tests,
-seeded file 7 tests (includes the new split test).
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
 
-Not run: the full k6 load run (needs a live stack with 50 VUs), the
-seeded rehearsal v079 leg (matrix leg, same code path as the verified
-v089 leg), and the blocking CI jobs themselves (no push from this
-worktree).
+## Build, typecheck, and lint
 
-## Notes for Christopher
+Install, from `frontend/`, lockfile `package-lock.json`:
 
-1. The remaining live-service contract file
-(tests/contract/test_service_contracts.py, 22 tests) still runs in no
-blocking job; qa-health.yml runs it continue-on-error. Gating it needs a
-stack in CI, which is a bigger decision.
-2. The checks threshold rate==1 in the k6 script now fails the whole run
-on any failed check, including the pre-existing phase checks. That is
-stricter than before; if load runs go red on flaky phase checks, scope
-the threshold or mark the script non-gating.
-3. Empty k6 export pages still pass isolation. If product wants fail-closed
-on empty pages, say so and it is a one-line change.
-4. The compliance step2 still dispatches through the evaluator registries
-directly rather than RulesEngine._evaluate_single_rule. Wiring the engine
-needs a DB session for the relational rules, so it belongs in the
-live-DB rules-engine suite, not this offline test.
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
