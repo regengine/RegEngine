@@ -23,7 +23,7 @@ from shared.rules.engine import RulesEngine
 from shared.rules.ftl import FTL_CATEGORIES
 from shared.rules.types import EvaluationSummary, RuleEvaluationResult
 
-from .fsma_spreadsheet import FSMATimestampError, generate_fda_csv
+from .fsma_spreadsheet import FSMAEventError, FSMATimestampError, generate_fda_csv
 
 # ---------------------------------------------------------------------------
 # FDA spreadsheet hardening helpers
@@ -162,9 +162,7 @@ _CHECKLIST_INDEX: dict[str, ComplianceChecklist] = {c.id: c for c in _CHECKLISTS
 # literal comparison and yields an empty list, so the documented
 # unknown-industry behaviour is unchanged.
 _INDUSTRY_FILTER_ALIASES: dict[str, str] = {
-    alias.lower(): _i["name"].lower()
-    for _i in _rules["industries"]
-    for alias in (_i["id"], _i["name"])
+    alias.lower(): _i["name"].lower() for _i in _rules["industries"] for alias in (_i["id"], _i["name"])
 }
 
 
@@ -282,6 +280,7 @@ _ALLOWED_VALIDATE_CTE_TYPES = {
     "RECEIVING",
     "TRANSFORMATION",
 }
+
 
 def _validation_issue(
     path: str,
@@ -785,20 +784,22 @@ async def fsma_audit_spreadsheet(
             end_date=end.isoformat(),
             requesting_entity=requesting_entity or "",
         )
-    except FSMATimestampError as exc:
-        # A malformed event_date in the graph response is not a 5xx —
-        # it's a data-quality problem the caller needs to resolve
-        # before a submission is valid (issue #1108).
+    except (FSMATimestampError, FSMAEventError) as exc:
+        # A malformed event_date or malformed event shape in the loaded
+        # events is not a 5xx — it's a data-quality problem the caller
+        # needs to resolve before a submission is valid (issue #1108).
+        # Failing loudly here also keeps one bad record from taking the
+        # whole export down as an unhandled 500.
         _logger.warning(
-            "fda_export_malformed_event_date",
+            "fda_export_malformed_event",
             extra={"error": str(exc), "tenant_id": tenant_id},
         )
         raise HTTPException(
             status_code=400,
             detail=(
-                "FDA export aborted: at least one event carried a "
-                "malformed event_date that cannot be truncated into an "
-                f"FSMA-204 submission. {exc}"
+                "FDA export aborted: at least one event carried malformed "
+                "data that cannot be rendered into an FSMA-204 submission. "
+                f"{exc}"
             ),
         ) from exc
 

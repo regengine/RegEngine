@@ -225,6 +225,7 @@ Every Alembic revision has a `downgrade()` function. Here's what each drops:
 | Revision | Downgrade Action | Data Loss? |
 |----------|-----------------|------------|
 | `a43b0fb1edd0` → `c35358cae7d4` (v108) | **DELETEs every `result='error'` row from `fsma.rule_evaluations`**, then drops `fsma.traceability_events.evaluation_error` and `.evaluated_at` | **Loses FDA evidentiary data.** `rule_evaluations` is "the evidentiary record that a specific check was run" (`alembic/sql/V044__versioned_rules_engine.sql`); the error verdicts are the record that a check ran and failed to complete, and the dropped columns are *why* and *when*. **Guarded — see 4.2.1.** |
+| `f8a9b0c1d2e3` → `da5d93004161` (v085) | **Rewrites every `public.organizations` row with `enforced_auth_policy` `standard` or `sso_only` back to `passwordless_email_code`**, then drops the check constraint and the `domain_name` column | **Silently lifts SSO enforcement.** Rows that already carried `standard` or enforced `sso_only` before v085 ran are rewritten too, and re-upgrading cannot tell which rows used to enforce SSO. **Guarded — see 4.2.1.** |
 | `e5f6a7b8c9d0` → `d4e5f6a7b8c9` | Drops RLS policies from 8 tenant tables, drops sysadmin role/triggers/audit schema, drops reference table RLS | **No data loss** — only policy/role removal. **But tenant isolation is disabled.** |
 | `d4e5f6a7b8c9` → `c3d4e5f6a7b8` | Drops `fsma.task_queue` table, notify trigger, function | **Loses queued tasks** (pending/processing) |
 | `c3d4e5f6a7b8` → `b2c3d4e5f6a7` | Drops `fsma.fsma_audit_trail` table | **Loses persistent audit trail entries** |
@@ -236,14 +237,23 @@ Every Alembic revision has a `downgrade()` function. Here's what each drops:
 
 Most downgrades above drop what their own upgrade added. **`a43b0fb1edd0` (v108) is
 different: it deletes rows it did not create**, because the older, tighter CHECK
-constraint cannot be re-applied while `result='error'` rows exist.
+constraint cannot be re-applied while `result='error'` rows exist. **`f8a9b0c1d2e3`
+(v085) is different the same way: its UPDATE rewrites auth policy rows it did not
+create**, because the downgrade cannot tell which `standard` / `sso_only` rows the
+upgrade normalised from unrecognised values and which already carried those values.
 
-That revision therefore refuses to run unless *both* variables are set:
+Those revisions therefore refuse to run unless *both* variables are set:
 
 ```bash
 REGENGINE_ENV=development \
 REGENGINE_ALLOW_BASELINE_DOWNGRADE=1 \
 alembic downgrade a43b0fb1edd0
+```
+
+```bash
+REGENGINE_ENV=development \
+REGENGINE_ALLOW_BASELINE_DOWNGRADE=1 \
+alembic downgrade f8a9b0c1d2e3
 ```
 
 `REGENGINE_ENV` must name a non-production environment (`development`, `dev`,
@@ -259,7 +269,9 @@ destructive downgrade** — see [DISASTER_RECOVERY.md](../operations/DISASTER_RE
 
 If you set the two variables, understand that the deletion is **not reversible by
 re-upgrading**: `upgrade()` restores the constraint and the columns, but the rows
-and their error text are gone. Take a snapshot first.
+and their error text are gone. The same holds for v085: re-upgrading normalises
+unrecognised values to `standard` and cannot restore which rows enforced SSO.
+Take a snapshot first.
 
 ### 4.3 Verify After Alembic Rollback
 

@@ -92,15 +92,22 @@ async def test_neo4j_user_graph_deleted_with_tenant_and_user_id(monkeypatch):
     assert anonymize_kwargs.get("tenant_id") == TEST_TENANT_ID
     assert anonymize_kwargs.get("user_id") == TEST_USER_ID
 
-    # Identity delete must not match on actor_id: shared records that only
-    # reference the user must survive the delete step.
-    assert "actor_id" not in delete_cypher, "delete query must not match shared records via actor_id"
+    # The delete step may match actor_id only inside the identity-label
+    # filter: identity nodes keyed solely by actor_id are removed, while
+    # shared records that only reference the user survive this step.
+    assert "any(label IN labels(n) WHERE label IN" in delete_cypher
+    assert "n.actor_id = $user_id" in delete_cypher
+    assert "MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n" not in delete_cypher
     assert "DETACH DELETE" in delete_cypher
 
     # Anonymization must rewrite the actor reference to a stable token,
     # never delete the record.
     assert "DETACH DELETE" not in anonymize_cypher
     assert "$erased_actor_id" in anonymize_cypher
+    assert "SET" in anonymize_cypher
+    assert "m.actor_id" in anonymize_cypher
+    assert "m.user_id" in anonymize_cypher
+    assert "THEN $erased_actor_id" in anonymize_cypher
     assert anonymize_kwargs.get("erased_actor_id"), "anonymize query must carry the erased-actor token"
 
 
@@ -169,6 +176,39 @@ async def test_neo4j_skipped_when_uri_not_set(monkeypatch):
         await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
 
     mock_async_gdb.driver.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Test 3b: NEO4J_URI set but password missing — skip before driver, warn
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_neo4j_skipped_when_password_not_set(monkeypatch):
+    """With a URI but no NEO4J_PASSWORD the function must not open a driver
+    with an empty password. It returns early with a skip warning instead of
+    attempting an unauthenticated graph delete."""
+    monkeypatch.setenv("NEO4J_URI", "bolt://neo4j-test:7687")
+    monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+
+    mock_async_gdb = MagicMock()
+
+    with patch.dict("sys.modules", {"neo4j": MagicMock(AsyncGraphDatabase=mock_async_gdb)}):
+        import importlib
+
+        import structlog
+
+        import services.admin.app.erasure_routes as mod
+
+        importlib.reload(mod)
+
+        with structlog.testing.capture_logs() as cap_logs:
+            await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
+
+    mock_async_gdb.driver.assert_not_called()
+    assert any(
+        e.get("event") == "erasure_neo4j_skip" and e.get("reason") == "NEO4J_PASSWORD not configured" for e in cap_logs
+    ), f"Expected an erasure_neo4j_skip warning for the missing password; got: {cap_logs}"
 
 
 # ---------------------------------------------------------------------------

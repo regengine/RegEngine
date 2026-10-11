@@ -413,7 +413,12 @@ def _build_csv_export(simulation: dict, view: str) -> str:
     if not rows:
         return output.getvalue()
 
-    writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
+    # ``quoting=csv.QUOTE_ALL`` wraps every cell in double quotes, matching
+    # the FDA export (``fda_export_service._generate_csv``) and the contract
+    # documented in ``shared.fda_export.csv_safety``. It keeps a hostile
+    # value such as ``ok;=1+1`` inside one quoted field so a reader that
+    # splits on ``;`` cannot start a new cell on the ``=``.
+    writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()), quoting=csv.QUOTE_ALL)
     writer.writeheader()
     # Neutralize spreadsheet-formula prefixes in tenant-influenced cells
     # (scenario names, timeline text, facility names). ``sanitize_row``

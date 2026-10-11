@@ -75,6 +75,52 @@ describe('internal api hooks', () => {
         expect(new Headers(scoreInit.headers).get('X-RegEngine-API-Key')).toBeNull();
     });
 
+    it('throws client errors immediately without retrying them', async () => {
+        fetchWithCsrfMock.mockResolvedValue({
+            ok: false,
+            status: 403,
+            statusText: 'Forbidden',
+        });
+
+        const { fetchAlerts } = await import('@/lib/api-hooks');
+        await expect(fetchAlerts('tenant-123')).rejects.toThrow('API error: 403 Forbidden');
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries server errors with backoff and returns the recovered response', async () => {
+        vi.useFakeTimers();
+        try {
+            fetchWithCsrfMock
+                .mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
+                .mockResolvedValueOnce({ ok: true, json: async () => ({ alerts: [] }) });
+
+            const { fetchAlerts } = await import('@/lib/api-hooks');
+            const pending = fetchAlerts('tenant-123');
+            await vi.advanceTimersByTimeAsync(500);
+            await expect(pending).resolves.toEqual({ alerts: [] });
+            expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('gives up after retries when the server keeps failing', async () => {
+        vi.useFakeTimers();
+        try {
+            fetchWithCsrfMock.mockResolvedValue({ ok: false, status: 500, statusText: 'Error' });
+
+            const { fetchAlerts } = await import('@/lib/api-hooks');
+            const pending = fetchAlerts('tenant-123');
+            const assertion = expect(pending).rejects.toThrow('API error: 500 Error');
+            await vi.advanceTimersByTimeAsync(500);
+            await vi.advanceTimersByTimeAsync(1500);
+            await assertion;
+            expect(fetchWithCsrfMock).toHaveBeenCalledTimes(3);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('creates checkout sessions via the billing proxy without client tenant payload', async () => {
         fetchWithCsrfMock.mockResolvedValue({
             ok: true,

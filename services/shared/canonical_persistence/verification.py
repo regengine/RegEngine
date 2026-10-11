@@ -159,6 +159,32 @@ def _recompute_event_sha256(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _kdes_object(raw: Any) -> Dict[str, Any]:
+    """Return the KDE object, or raise ValueError when the blob cannot be read.
+
+    A truncated JSON blob, or a JSON value that is not an object, used to
+    raise out of ``verify_chain_canonical``. The job then stored a crash
+    instead of an invalid chain.
+    """
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, (bytes, bytearray)):
+        try:
+            raw = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ValueError("kdes blob is not valid text") from exc
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("kdes blob is not valid JSON") from exc
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("kdes blob is not an object")
+
+
 class CanonicalChainVerificationMixin:
     """Chain verification against ``fsma.traceability_events`` — mixed
     into :class:`writer.CanonicalEventStore`."""
@@ -308,6 +334,18 @@ class CanonicalChainVerificationMixin:
                     f"{str(canonical_sha)[:16]}..."
                 )
 
+            try:
+                kdes = _kdes_object(row[14])
+            except ValueError:
+                errors.append(f"Unreadable KDE blob at seq={seq}: event content cannot be recomputed")
+                try:
+                    seq_no = int(seq)
+                except (TypeError, ValueError):
+                    seq_no = None
+                if seq_no is not None and seq_no not in tamper_rows:
+                    tamper_rows.append(seq_no)
+                continue
+
             recomputed_event = _recompute_event_sha256(
                 event_id=cte_event_id,
                 event_type=row[6],
@@ -318,7 +356,7 @@ class CanonicalChainVerificationMixin:
                 from_facility_reference=row[11],
                 to_facility_reference=row[12],
                 event_timestamp=row[13],
-                kdes=row[14] if isinstance(row[14], dict) else json.loads(row[14] or "{}"),
+                kdes=kdes,
                 timestamp_hint=row[16] if len(row) > 16 else None,
             )
             if recomputed_event != canonical_sha:

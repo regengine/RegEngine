@@ -385,3 +385,32 @@ async def test_accept_invite_refuses_email_verified_for_different_user(db_sessio
     with pytest.raises(HTTPException) as exc_info:
         await _accept_invite(db_session, token, monkeypatch)
     assert exc_info.value.status_code == 400
+
+
+async def test_accept_invite_ambiguous_case_variant_users_returns_400(db_session, monkeypatch):
+    """Two users rows differing only by email case fail closed (audit #3225).
+
+    ``users.email`` is unique on the raw value only, so both rows are legal.
+    The old ``scalar_one_or_none`` lookup raised ``MultipleResultsFound``,
+    which escaped the handler as a 500. The fix rolls back and returns the
+    same uniform 400 as every other unusable invite state.
+    """
+    from fastapi import HTTPException
+
+    _add_user(db_session, "Ambiguous@Acme.test")
+    _add_user(db_session, "ambiguous@acme.test")
+    db_session.commit()
+
+    token = _seed_invite(db_session, "AMBIGUOUS@acme.test")
+    with pytest.raises(HTTPException) as exc_info:
+        await _accept_invite(db_session, token, monkeypatch)
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Invite is not usable"
+
+    # The invite must not be consumed and no membership may exist, so the
+    # address can still accept once the duplicate rows are cleaned up.
+    db_session.expire_all()
+    invite = db_session.execute(select(InviteModel).where(InviteModel.email == "AMBIGUOUS@acme.test")).scalar_one()
+    assert invite.accepted_at is None
+    memberships = db_session.execute(select(func.count()).select_from(MembershipModel)).scalar()
+    assert memberships == 0
