@@ -617,6 +617,9 @@ def _integrator_client(monkeypatch, store):
         created_at=datetime.now(timezone.utc) - timedelta(days=1),
     )
     store.validate_key = AsyncMock(return_value=principal)
+    # The harness bypasses the database for key validation, so it must
+    # bypass the live tenant-status read the same way.
+    store.get_tenant_status = AsyncMock(return_value="active")
     for var in ("AUTH_TEST_BYPASS_TOKEN", "AUTH_TEST_BYPASS_TENANT_ID"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("REGENGINE_ENV", "production")
