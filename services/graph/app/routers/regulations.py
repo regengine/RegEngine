@@ -168,6 +168,15 @@ async def get_requirement_mappings(
             where_clauses = [
                 "o1.tenant_id = $tenant_id",
                 "o2.tenant_id = $tenant_id",
+                # Joined Sections use the same strict tenant filter as the
+                # sibling section reads (get_regulation_sections,
+                # get_regulation_citations), so a cross-tenant REQUIRES edge
+                # cannot leak another tenant's regulation name. Note: the
+                # ingestion loader writes Sections with no tenant_id, so
+                # loader rows do not match until the catalog model is
+                # settled globally (see FIX-REPORT.md, needs decision).
+                "s1.tenant_id = $tenant_id",
+                "s2.tenant_id = $tenant_id",
             ]
             params: Dict[str, Any] = {"skip": skip, "limit": limit, "tenant_id": str(tenant_id)}
 
