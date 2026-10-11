@@ -219,6 +219,16 @@ class TestComplianceControlPlaneE2E:
             or not r.get("applicability_conditions", {}).get("cte_types", [])
         ]
 
+        # Dispatch through the same evaluator registries the product
+        # engine uses, so every seeded rule type is either evaluated here
+        # or fails loudly. Relational evaluators need a live DB session,
+        # which this DB-less suite does not have; those rules are tracked
+        # explicitly and covered by the live-DB rules-engine suite.
+        from shared.rules.evaluators.relational import RELATIONAL_EVALUATORS
+        from shared.rules.evaluators.stateless import EVALUATORS
+
+        relational_deferred = []
+
         # Check each rule manually
         for rule_data in receiving_rules:
             rule = RuleDefinition(
@@ -238,12 +248,15 @@ class TestComplianceControlPlaneE2E:
             )
 
             eval_type = rule.evaluation_logic.get("type", "field_presence")
-            if eval_type == "field_presence":
-                result = _evaluate_field_presence(event_data, rule.evaluation_logic, rule)
-            elif eval_type == "multi_field_presence":
-                result = _evaluate_multi_field_presence(event_data, rule.evaluation_logic, rule)
-            else:
+            evaluator = EVALUATORS.get(eval_type)
+            if evaluator is None:
+                assert eval_type in RELATIONAL_EVALUATORS, (
+                    f"Unknown rule evaluation type '{eval_type}' in rule "
+                    f"'{rule.title}' with no stateless or relational evaluator covering it"
+                )
+                relational_deferred.append(f"{rule.title} [{eval_type}]")
                 continue
+            result = evaluator(event_data, rule.evaluation_logic, rule)
 
             # Compliant event should pass all rules
             if result.result == "fail":
@@ -253,6 +266,14 @@ class TestComplianceControlPlaneE2E:
                     assert result.result == "pass", (
                         f"Critical KDE rule '{rule.title}' failed on compliant event: {result.why_failed}"
                     )
+
+        evaluated = len(receiving_rules) - len(relational_deferred)
+        assert evaluated > 0, "no receiving rules were evaluated at all"
+        # Relational deferrals must stay a strict minority of the rule set;
+        # if most rules need a DB session, this DB-less test proves little.
+        assert len(relational_deferred) < len(receiving_rules), (
+            f"most receiving rules were deferred to the live-DB suite: {relational_deferred}"
+        )
 
     def test_step3_evaluate_rules_non_compliant(self):
         """Step 3: Evaluate a non-compliant event — failures produce human-readable explanations."""

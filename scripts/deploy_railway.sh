@@ -62,7 +62,10 @@ if [ -z "${NEO4J_URI:-}" ]; then
 else
   echo -e "${GREEN}✓${NC} NEO4J_URI set"
   cd "$REPO_ROOT"
-  pip install neo4j --quiet 2>/dev/null || pip install neo4j --quiet --break-system-packages 2>/dev/null
+  # Pinned to the version in requirements.lock. No --break-system-packages
+  # fallback: that flag bypasses system-package protection, so a failed
+  # install must stop the deploy instead of retrying unprotected.
+  pip install "neo4j==6.3.1" --quiet
   python3 services/graph/scripts/init_db_constraints.py
 fi
 

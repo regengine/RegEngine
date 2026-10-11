@@ -247,7 +247,14 @@ class SupplierGraphSync:
         if GraphDatabase is None:
             return None
 
-        creds = get_secrets_manager().get_neo4j_credentials()
+        try:
+            creds = get_secrets_manager().get_neo4j_credentials()
+        except RuntimeError:
+            # Production fail-closed: credentials are validated at startup,
+            # so a raise here means they disappeared mid-flight. Drop the
+            # stale driver and no-op, same as the empty case below.
+            self._close_driver()
+            return None
         uri = (creds.get("uri") or "").strip()
         user = creds.get("username") or "neo4j"
         password = (creds.get("password") or "").strip()
