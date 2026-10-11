@@ -171,7 +171,7 @@ async def trace_forward_endpoint(
             "time_violations": result.time_violations,
             "risk_flags": result.risk_flags,
         }
-    except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
+    except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         duration = time.time() - start_time
         record_trace_query("forward", duration, "error", 0, 0)
         logger.exception("trace_forward_error", tlc=tlc, error=str(e))
@@ -294,7 +294,7 @@ async def trace_backward_endpoint(
             "query_time_ms": result.query_time_ms,
             "hop_count": result.hop_count,
         }
-    except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
+    except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         duration = time.time() - start_time
         record_trace_query("backward", duration, "error", 0, 0)
         logger.exception("trace_backward_error", tlc=tlc, error=str(e))
@@ -349,7 +349,7 @@ async def lot_timeline_endpoint(
             )
 
         return {"lot_id": tlc, "events": timeline}
-    except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
+    except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         logger.exception("timeline_error", tlc=tlc, error=str(e))
         logger.error("endpoint_error", error=str(e))
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -529,7 +529,7 @@ async def search_traceability_events(
                 "cte_type": normalized_cte,
             },
         }
-    except (neo4j.exceptions.Neo4jError, ConnectionError) as exc:
+    except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as exc:
         logger.exception(
             "traceability_search_error",
             error=str(exc),
@@ -801,6 +801,6 @@ async def log_traceability_event(
             "message": f"Successfully secured {payload.event_type} event on the immutable ledger.",
         }
 
-    except (neo4j.exceptions.Neo4jError, ConnectionError) as e:
+    except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         logger.error("mobile_event_logging_failed", error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to persist event: {str(e)}")

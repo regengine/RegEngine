@@ -221,14 +221,17 @@ async def harmonize_requirement(
     from ..mapping_engine import MappingEngine
 
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
-    engine = MappingEngine(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password,
-    )
     try:
-        mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
-        await engine.close()
+        engine = MappingEngine(
+            uri=settings.neo4j_uri,
+            user=settings.neo4j_user,
+            password=settings.neo4j_password,
+        )
+        try:
+            mappings = await engine.map_requirement(obligation_id, tenant_id=str(tenant_id))
+        finally:
+            # Always release the driver, even when the mapping fails.
+            await engine.close()
         return {
             "status": "completed",
             "obligation_id": obligation_id,

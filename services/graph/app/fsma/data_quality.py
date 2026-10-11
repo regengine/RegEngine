@@ -236,6 +236,19 @@ async def analyze_kde_completeness(
 
     start_time = time.time()
 
+    # The lot-linkage checks scope the joined Lot to the caller's tenant: an
+    # UNDERWENT edge pointing at another tenant's Lot (corrupt cross-tenant
+    # edge) must not mark this tenant's event as linked.
+    #
+    # ``complete_count`` is counted row by row. The previous code derived it
+    # in Python as ``total - max(missing_date, missing_lot, low_conf)``,
+    # which overstates completeness whenever different events miss different
+    # fields (e.g. 5 events missing dates and 5 other events missing lots
+    # reported 5 complete events instead of 0).
+    #
+    # ``avg(e.confidence)`` ignores NULL confidences. The previous
+    # ``avg(CASE ... ELSE 0 END)`` scored events with no confidence value
+    # as 0, dragging the average down for tenants that do not record it.
     query = """
     MATCH (e:TraceEvent)
     WHERE e.tenant_id = $tenant_id
@@ -245,7 +258,11 @@ async def analyze_kde_completeness(
          sum(CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 1 ELSE 0 END) as missing_date,
          sum(CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN 1 ELSE 0 END) as missing_lot,
          sum(CASE WHEN e.confidence IS NOT NULL AND e.confidence < $threshold THEN 1 ELSE 0 END) as low_confidence,
-         avg(CASE WHEN e.confidence IS NOT NULL THEN e.confidence ELSE 0 END) as avg_confidence
+         avg(e.confidence) as avg_confidence,
+         sum(CASE WHEN (e.event_date IS NOT NULL AND e.event_date <> '')
+                   AND EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id }
+                   AND (e.confidence IS NULL OR e.confidence >= $threshold)
+                  THEN 1 ELSE 0 END) as complete_count
 
     RETURN
         event_type,
@@ -253,7 +270,8 @@ async def analyze_kde_completeness(
         missing_date,
         missing_lot,
         low_confidence,
-        avg_confidence
+        avg_confidence,
+        complete_count
     ORDER BY total DESC
     """
 
@@ -292,9 +310,9 @@ async def analyze_kde_completeness(
             )
 
             total_events += total
-            # Event is "complete" if it has date, lot linkage, and good confidence
-            complete_count = total - max(missing_date, missing_lot, low_conf)
-            total_complete += max(0, complete_count)
+            # Complete events are counted row by row in Cypher (see query
+            # above), not derived from the per-category maxima.
+            total_complete += record["complete_count"] or 0
 
     # Calculate overall completeness
     overall_rate = total_complete / total_events if total_events > 0 else 1.0
