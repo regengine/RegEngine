@@ -26,6 +26,7 @@ from .base import (
     ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
+    _optional_float,
 )
 
 logger = logging.getLogger("connector-retailers")
@@ -135,7 +136,7 @@ class WalmartGDSNConnector(IntegrationConnector):
             cte_type="receiving",
             traceability_lot_code=raw_event.get("lotNumber", ""),
             product_description=raw_event.get("productDescription", ""),
-            quantity=float(raw_event.get("quantity", 1)),
+            quantity=_optional_float(raw_event.get("quantity", 1)),
             unit_of_measure=raw_event.get("unitOfMeasure", "cases"),
             timestamp=raw_event.get("receivedDate", datetime.now(timezone.utc).isoformat()),
             location_gln=raw_event.get("receivingGln"),
@@ -204,7 +205,7 @@ class KrogerConnector(IntegrationConnector):
             cte_type="receiving",
             traceability_lot_code=raw_event.get("lot_number", ""),
             product_description=raw_event.get("product", ""),
-            quantity=float(raw_event.get("quantity", 1)),
+            quantity=_optional_float(raw_event.get("quantity", 1)),
             unit_of_measure=raw_event.get("uom", "cases"),
             timestamp=raw_event.get("date", datetime.now(timezone.utc).isoformat()),
         )
@@ -255,7 +256,7 @@ class WholeFoodsConnector(IntegrationConnector):
             cte_type="receiving",
             traceability_lot_code=raw_event.get("lot", ""),
             product_description=raw_event.get("product", ""),
-            quantity=float(raw_event.get("qty", 1)),
+            quantity=_optional_float(raw_event.get("qty", 1)),
             unit_of_measure=raw_event.get("unit", "cases"),
             timestamp=raw_event.get("date", datetime.now(timezone.utc).isoformat()),
         )
@@ -306,7 +307,7 @@ class CostcoConnector(IntegrationConnector):
             cte_type="receiving",
             traceability_lot_code=raw_event.get("lot", ""),
             product_description=raw_event.get("product", ""),
-            quantity=float(raw_event.get("qty", 1)),
+            quantity=_optional_float(raw_event.get("qty", 1)),
             unit_of_measure=raw_event.get("unit", "cases"),
             timestamp=raw_event.get("date", datetime.now(timezone.utc).isoformat()),
         )

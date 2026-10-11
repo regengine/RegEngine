@@ -296,3 +296,70 @@ class TestPgBackboneGating:
         svc._process_new_items([item], SourceType.FDA_WARNING_LETTER)
 
         svc.state_manager.mark_seen.assert_called_once()
+
+
+class TestUnpersistedWebhookWithholdsAck:
+    """#3241 — a failed webhook with no durable outbox must not ack items.
+
+    Before the fix, ``_process_new_items`` marked items seen even when the
+    only copy of the failure lived in process memory, so a restart dropped
+    the HIGH/CRITICAL alert permanently with ``/v1/scheduler/status``
+    still reporting a durable queue.
+    """
+
+    def _svc_with_counting_notifier(self, monkeypatch):
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        counter = {"count": 0}
+        notifier = MagicMock()
+
+        def _fail_unpersisted(items):
+            counter["count"] += 1
+            result = MagicMock()
+            result.success = False
+            return [result]
+
+        notifier.notify.side_effect = _fail_unpersisted
+        notifier.unpersisted_dead_letter_count.side_effect = lambda: counter["count"]
+        svc.notifier = notifier
+        return svc
+
+    def test_unpersisted_webhook_failure_withholds_every_ack(self, monkeypatch):
+        svc = self._svc_with_counting_notifier(monkeypatch)
+        integration = MagicMock()
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=integration,
+        ):
+            svc._process_new_items([_make_item()], SourceType.FDA_RECALL)
+
+        integration.process_enforcement_item.assert_called_once()
+        assert svc.state_manager.mark_seen.call_count == 0
+
+    def test_durable_webhook_failure_still_acks(self, monkeypatch):
+        """A failure backed by the on-disk outbox retries via the drain job,
+        so the seen-ack keeps the old behavior (no re-storm next tick)."""
+        monkeypatch.delenv("EVENT_BACKBONE", raising=False)
+
+        svc = _build_scheduler_service_without_init()
+        svc.state_manager = MagicMock()
+        svc.kafka_producer = MagicMock()
+        notifier = MagicMock()
+        failure = MagicMock()
+        failure.success = False
+        notifier.notify.return_value = [failure]
+        # Durable outbox: no unpersisted growth across the notify call.
+        notifier.unpersisted_dead_letter_count.return_value = 0
+        svc.notifier = notifier
+
+        integration = MagicMock()
+        with patch(
+            "services.scheduler.app.compliance_integration.get_compliance_integration",
+            return_value=integration,
+        ):
+            svc._process_new_items([_make_item()], SourceType.FDA_RECALL)
+
+        svc.state_manager.mark_seen.assert_called_once()

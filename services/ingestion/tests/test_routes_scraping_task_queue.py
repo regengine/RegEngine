@@ -150,7 +150,15 @@ class TestIngestAllRegulations:
         monkeypatch.setattr(
             routes_scraping,
             "FSMA_SOURCES",
-            [{"name": "Test", "url": "https://example.com", "type": "api", "jurisdiction": "US"}],
+            [
+                {
+                    "name": "Test-Source",
+                    "url": "https://www.fda.gov/food/test-source",
+                    "type": "html",
+                    "jurisdiction": "FDA",
+                    "description": "Fixture source",
+                }
+            ],
         )
 
         client = _build_client(_make_api_key(jurisdictions=["US"]))

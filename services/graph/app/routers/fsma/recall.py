@@ -165,7 +165,7 @@ async def create_recall_drill(
             target_lot=payload.target_tlc,
             target_gtin=payload.target_gtin,
             reason=payload.reason,
-            initiated_by=initiated_by,
+            initiated_by=getattr(api_key, "key_id", None) or "api_user",
         )
 
         # Execute immediately (async background execution would be better in prod)

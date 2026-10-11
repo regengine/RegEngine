@@ -1,0 +1,115 @@
+# Semgrep rules enforcing Pattern 3 (missing tenant checks in queries).
+#
+# Every Cypher MATCH/MERGE that touches tenant data and every raw SQL
+# statement against a tenant table must carry a tenant predicate. Queries
+# over the global regulatory catalog (Obligation, Section, Regulation,
+# Citation and friends, see tenant-scope-allowlist.yml) need none.
+#
+# Rule severities start at WARNING while baselined sites are cleaned up;
+# tenant-failopen-shim is ERROR because a null tenant matching all tenants
+# is never acceptable in new code. The blocking CI gate for both old and
+# new code is scripts/security/scan_tenant_scope.py, which understands
+# whole-query scoping, dynamic WHERE builders and the allowlist file.
+# Promote these rules to the blocking gate (add this config to the
+# repo-local semgrep step in .github/workflows/security.yml) once the
+# baselined sites are fixed in product code and removed from the
+# allowlist. Run locally with:
+#   semgrep --config .semgrep/tenant-query-scope.yaml services/ server/ regengine/
+#
+# To grant a legitimate exception, add the site to
+# .semgrep/tenant-scope-allowlist.yml with a reason instead of editing
+# product code to carry a nosemgrep comment.
+
+rules:
+  - id: tenant-failopen-shim
+    message: >-
+      Tenant fail-open shim. Reject empty tenants instead of matching
+      all tenants. Resolve the tenant with resolve_tenant_context (or the
+      authenticated principal) and raise E_NO_TENANT when it is missing.
+      Historical comments describing a removed shim are excluded: the
+      match must sit on a query line (WHERE/SELECT/MATCH/AND nearby) with
+      no # comment marker. The pytest scanner in
+      scripts/security/scan_tenant_scope.py is the precise check.
+    severity: ERROR
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern-regex: '(?i)^[^#\n]*\b(WHERE|SELECT|MATCH|AND)\b[^#\n]*\$?tenant_id\s+IS\s+NULL\s+OR\b[^#\n]*$'
+          - pattern-regex: '(?i)^[^#\n]*\bOR\s+\$?tenant_id\s+IS\s+NULL[^#\n]*$'
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"
+        - "**/migrations/**"
+        - "**/alembic/**"
+        - "**/scripts/**"
+
+  # NOTE: the tenant-label list below mirrors TENANT_LABELS in
+  # scripts/security/scan_tenant_scope.py. Keep the two in sync when labels
+  # are added. The node pattern requires `(var:Label` with a real colon so
+  # Python identifiers and prose that merely mention a label word do not
+  # match.
+  - id: cypher-match-without-tenant
+    message: >-
+      Graph match without a tenant predicate. Add tenant scoping
+      (e.g. WHERE n.tenant_id = $tenant_id, or repeat the predicate on
+      every OPTIONAL MATCH). Pure global-catalog reads (Obligation,
+      Section, Regulation, Citation, see tenant-scope-allowlist.yml) are
+      exempt; the pytest scanner in scripts/security/scan_tenant_scope.py
+      is the precise check. Line-scoped heuristic: a predicate on a later
+      line still flags here but passes the scanner.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-regex: '(?i)^[^#\n]*\bMATCH\b[^#\n]*\(\s*\w*\s*:\s*(Lot|TLC|TraceEvent|Facility|TenantOverlay|RegulationOverride|TenantControl|ControlMapping|CustomerProduct|Control|Evidence|RegulatoryFact|FoodItem|Document|Provision|PendingSupplierInvite|SupplierFacility|SupplierContact|BuyerTenant|Tenant|CTEEvent)\b[^#\n]*$'
+      - pattern-not-regex: '(?i)tenant'
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"
+        - "**/migrations/**"
+        - "**/alembic/**"
+        - "**/scripts/**"
+
+  - id: cypher-merge-without-tenant
+    message: >-
+      Graph merge without a tenant predicate. A MERGE on bare ids (or with
+      an optional tenant) creates or links nodes across tenants. Scope the
+      MERGE key with tenant_id, e.g.
+      MERGE (l:Lot {tlc: $tlc, tenant_id: $tenant_id}).
+      Line-scoped heuristic; the pytest scanner is the precise check.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-regex: '(?i)^[^#\n]*\bMERGE\b[^#\n]*\(\s*\w*\s*:\s*(Lot|TLC|TraceEvent|Facility|TenantOverlay|RegulationOverride|TenantControl|ControlMapping|CustomerProduct|Control|Evidence|RegulatoryFact|FoodItem|Document|Provision|PendingSupplierInvite|SupplierFacility|SupplierContact|BuyerTenant|Tenant|CTEEvent)\b[^#\n]*$'
+      - pattern-not-regex: '(?i)tenant'
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"
+        - "**/migrations/**"
+        - "**/alembic/**"
+        - "**/scripts/**"
+
+  - id: sql-on-tenant-table-without-tenant-predicate
+    message: >-
+      Raw SQL touches an fsma tenant table. Confirm a tenant predicate
+      (tenant_id = :tid or the org_id equivalent) constrains the
+      statement; dynamic WHERE builders must seed it unconditionally.
+      Global catalog tables (rule_definitions, obligation_cte_rules,
+      obligations, food_traceability_list) are exempt. Line-scoped
+      heuristic; the pytest scanner in
+      scripts/security/scan_tenant_scope.py is the precise check.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-regex: '(?i)^[^#\n]*\b(SELECT|UPDATE|DELETE|INSERT)\b[^#\n]*\bfsma\.\w+[^#\n]*$'
+      - pattern-not-regex: '(?i)tenant|org_id'
+      - pattern-not-regex: '(?i)fsma\.(rule_definitions|obligation_cte_rules|obligations|food_traceability_list)\b'
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"
+        - "**/migrations/**"
+        - "**/alembic/**"
+        - "**/scripts/**"

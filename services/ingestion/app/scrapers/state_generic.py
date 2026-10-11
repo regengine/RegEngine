@@ -1,12 +1,16 @@
 import asyncio
 import datetime as dt
 import os
+import re
 import uuid
 from typing import Optional
 
-import httpx
 from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import SSRFError, validate_url
+
+# Jurisdiction codes are interpolated into S3 keys (raw/<jurisdiction>/...),
+# so they must be plain tokens: letters, digits and hyphens only.
+_JURISDICTION_RE = re.compile(r"[A-Za-z0-9-]{1,32}")
 
 
 # Stubs for S3 and Kafka integrations; replace with actual clients
@@ -46,6 +50,12 @@ class StateRegistryScraper:
             url = validate_url(url)
         except SSRFError as e:
             raise ValueError(f"URL validation failed: {str(e)}") from e
+
+        # The jurisdiction code becomes an S3 key segment; reject anything
+        # that is not a plain token so callers cannot inject path separators
+        # or ".." segments into bucket keys.
+        if not _JURISDICTION_RE.fullmatch(jurisdiction_code or ""):
+            raise ValueError(f"Invalid jurisdiction_code: {jurisdiction_code!r}")
 
         loop = asyncio.get_running_loop()
 

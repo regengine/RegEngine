@@ -961,6 +961,12 @@ async def get_compliance_score(
     generated_at = datetime.now(timezone.utc).isoformat()
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
+    # Scope to the tenant database like every other endpoint in this module.
+    # On Community Neo4j the client pins to the global database either way,
+    # so this is a no-op there; on Enterprise it keeps the score query on
+    # the same per-tenant database as the rest of the FSMA surface.
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+
     try:
         async with Neo4jClient(database=db_name) as client:
             async with client.session() as session:
@@ -985,13 +991,25 @@ async def get_compliance_score(
                         count(DISTINCT c)  AS controls_mapped,
                         count(DISTINCT e)  AS evidence_items,
                         avg(c.effectiveness_score) AS avg_effectiveness,
-                        sum(CASE WHEN e.timestamp > datetime() - duration('P90D') THEN 1 ELSE 0 END)
+                        // Obligations with at least one mapped control.
+                        // count(DISTINCT c) would score 200% when each
+                        // obligation has two controls; coverage is about
+                        // obligations, so count those distinctly.
+                        count(DISTINCT CASE WHEN c IS NOT NULL THEN o END)
+                            AS covered_obligations,
+                        // Distinct fresh evidence NODES, not join rows: one
+                        // evidence proving two controls is one row in
+                        // evidence_items but two rows here under SUM.
+                        count(DISTINCT CASE
+                            WHEN e.timestamp > datetime() - duration('P90D') THEN e
+                        END)
                             AS fresh_evidence
                     RETURN
                         total_obligations,
                         controls_mapped,
                         evidence_items,
                         avg_effectiveness,
+                        covered_obligations,
                         fresh_evidence
                     """,
                     tenant_id=str(tenant_id),
@@ -1002,6 +1020,7 @@ async def get_compliance_score(
         controls_mapped = row["controls_mapped"] if row else 0
         evidence_items = row["evidence_items"] if row else 0
         avg_eff = row["avg_effectiveness"] if row and row["avg_effectiveness"] else 0.0
+        covered_obligations = row["covered_obligations"] if row else 0
         fresh_evidence = row["fresh_evidence"] if row else 0
 
         if total_obligations == 0:
@@ -1018,7 +1037,7 @@ async def get_compliance_score(
                 generated_at=generated_at,
             )
 
-        obligation_coverage = (controls_mapped / total_obligations * 100) if total_obligations else 0.0
+        obligation_coverage = (covered_obligations / total_obligations * 100) if total_obligations else 0.0
         control_effectiveness = avg_eff * 100
         evidence_freshness = (fresh_evidence / evidence_items * 100) if evidence_items else 0.0
 

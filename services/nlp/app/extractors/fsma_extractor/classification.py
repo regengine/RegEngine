@@ -23,7 +23,13 @@ logger = structlog.get_logger("fsma-extractor")
 
 
 class _ClassificationResult(tuple):
-    """Tuple-compatible classification result that also compares to DocumentType."""
+    """Tuple-compatible classification result that also compares to DocumentType.
+
+    Whole-object use (no unpacking) behaves like the DocumentType it
+    wraps: equality, hashing, and ``.value`` / ``.name`` all delegate to
+    ``document_type`` so set membership and envelope logging cannot crash
+    on an unhashable tuple.
+    """
 
     def __new__(cls, document_type: DocumentType, warning: Optional[str]):
         return tuple.__new__(cls, (document_type, warning))
@@ -35,6 +41,17 @@ class _ClassificationResult(tuple):
     @property
     def warning(self) -> Optional[str]:
         return self[1]
+
+    @property
+    def value(self) -> str:
+        return self.document_type.value
+
+    @property
+    def name(self) -> str:
+        return self.document_type.name
+
+    def __hash__(self) -> int:
+        return hash(self.document_type)
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, DocumentType):
