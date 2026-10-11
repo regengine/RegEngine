@@ -17,10 +17,10 @@ from uuid import uuid4
 
 import pytest
 
-# Skip if dependencies not available
-pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
-
+# No importorskip here (#3248): this module runs in the blocking
+# repo-root-suite gate, where a skipped SSRF suite exits 0 and proves
+# nothing. fastapi and httpx are pinned in requirements.lock; the import
+# below fails collection loudly if either is missing.
 from fastapi.testclient import TestClient
 
 

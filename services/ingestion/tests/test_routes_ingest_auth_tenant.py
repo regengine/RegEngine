@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -70,10 +69,11 @@ def test_ingest_direct_without_tenant_returns_403(monkeypatch):
 
 
 def test_ingest_direct_with_tenant_passes_the_guard(monkeypatch):
-    """A tenant-bound key clears the guard and the event keeps its tenant."""
+    """A tenant-bound key clears the guard and the handler forwards that tenant."""
     from app.models import NormalizedEvent
 
     monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
+    seen = {}
     event = NormalizedEvent(
         event_id="evt-1",
         document_id="doc-1",
@@ -86,10 +86,16 @@ def test_ingest_direct_with_tenant_passes_the_guard(monkeypatch):
         timestamp=datetime.now(timezone.utc),
         content_sha256="c",
     )
-    monkeypatch.setattr(routes_ingest, "_process_and_emit", lambda **_kw: event)
+
+    def _capture(**kw):
+        seen.update(kw)
+        return event
+
+    monkeypatch.setattr(routes_ingest, "_process_and_emit", _capture)
     client = _build_client(_api_key(TENANT), monkeypatch)
     resp = client.post("/v1/ingest", json=_payload())
     assert resp.status_code == 200, resp.text
+    assert seen.get("tenant_id") == TENANT
     assert resp.json()["tenant_id"] == TENANT
 
 
@@ -115,29 +121,42 @@ def test_rate_limit_bucket_is_per_tenant(monkeypatch):
     assert seen == ["anonymous"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG routes_ingest default source_url: ingest_direct falls back to "
-    "'manual://direct' but NormalizedEvent.source_url is HttpUrl (http/https "
-    "only), so _process_and_emit cannot build the response for a default "
-    "direct ingest",
-)
-def test_ingest_direct_default_source_url_validates():
-    """Mirrors the NormalizedEvent construction in _process_and_emit using
-    the handler's own default ``url_str`` (``payload.source_url or
-    "manual://direct"``). Today this raises ValidationError, which the
-    handler's catch-all converts into a 500."""
+def test_ingest_direct_default_source_url_uses_handler_default(monkeypatch):
+    """Omitting source_url exercises the handler default through HTTP.
+
+    The request carries no source_url, so the handler default
+    (``payload.source_url or "manual://direct"``) must reach
+    ``_process_and_emit`` as ``url_str``. The stub then builds the
+    response through the real ``NormalizedEvent`` model, so the test
+    fails if the default ever stops matching the model: today the
+    ``manual://`` default fails HttpUrl validation and the handler
+    catch-all converts that into a 500. When the default is fixed to a
+    valid URL, update the expected status here instead of re-adding an
+    xfail.
+    """
     from app.models import NormalizedEvent
 
-    NormalizedEvent(
-        event_id="evt-1",
-        document_id="doc-1",
-        document_hash="h",
-        tenant_id=TENANT,
-        source_system="probe",
-        source_url="manual://direct",
-        raw_s3_path="s3://raw",
-        normalized_s3_path="s3://norm",
-        timestamp=datetime.now(timezone.utc),
-        content_sha256="c",
-    )
+    seen = {}
+
+    def _through_model(**kw):
+        seen["url_str"] = kw["url_str"]
+        return NormalizedEvent(
+            event_id="evt-1",
+            document_id="doc-1",
+            document_hash="h",
+            tenant_id=kw["tenant_id"],
+            source_system="probe",
+            source_url=kw["url_str"],
+            raw_s3_path="s3://raw",
+            normalized_s3_path="s3://norm",
+            timestamp=datetime.now(timezone.utc),
+            content_sha256="c",
+        )
+
+    monkeypatch.setattr(routes_ingest, "get_db_manager", lambda: None)
+    monkeypatch.setattr(routes_ingest, "_process_and_emit", _through_model)
+    client = _build_client(_api_key(TENANT), monkeypatch)
+    payload = {"text": "lot 7 shipped", "source_system": "probe"}
+    resp = client.post("/v1/ingest", json=payload)
+    assert seen.get("url_str") == "manual://direct"
+    assert resp.status_code == 500

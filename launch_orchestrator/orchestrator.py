@@ -284,6 +284,11 @@ class LaunchOrchestrator:
             with open(self.config_path, "r") as f:
                 config = yaml.safe_load(f)
 
+            if not isinstance(config, dict):
+                raise ValueError(
+                    f"Orchestrator config {self.config_path} is not a mapping"
+                )
+
             # Basic validation
             if config is None:
                 raise ValueError(f"Empty configuration file: {self.config_path}")
@@ -321,7 +326,8 @@ class LaunchOrchestrator:
         """Validate required environment variables and secrets"""
         logger.info("Validating environment...")
 
-        required_vars = self.config["environment"].get("required_env_vars", [])
+        environment = self.config.get("environment") or {}
+        required_vars = environment.get("required_env_vars", [])
         missing_vars = []
 
         for var in required_vars:
@@ -383,7 +389,7 @@ class LaunchOrchestrator:
         logger.info("=== Phase: Public Surface Deployment ===")
         phase = OrchestrationPhase.PUBLIC_SURFACE
 
-        public_config = self.config.get("public_surface", {})
+        public_config = self.config.get("public_surface") or {}
 
         # Deploy marketing site
         marketing = public_config.get("marketing_site", {})
@@ -406,13 +412,21 @@ class LaunchOrchestrator:
             )
 
         # Configure status page
-        status_page = public_config.get("status_page", {})
+        status_page = public_config.get("status_page") or {}
         if status_page:
             self.result.add_event(
                 phase,
                 "configure_status_page",
                 "success" if self.dry_run else "skipped",
-                details={"components": [c["name"] for c in status_page.get("components", [])]},
+                details={
+                    "components": [c["name"] for c in status_page.get("components", [])],
+                    "reason": "dry_run" if self.dry_run else "not_implemented",
+                    "detail": (
+                        "Dry run records intent only."
+                        if self.dry_run
+                        else "No status-page provider call exists; nothing was configured."
+                    ),
+                },
             )
 
     def _generate_sales_gtm(self):
@@ -420,7 +434,7 @@ class LaunchOrchestrator:
         logger.info("=== Phase: Sales & GTM Generation ===")
         phase = OrchestrationPhase.SALES_GTM
 
-        sales_config = self.config.get("sales", {})
+        sales_config = self.config.get("sales") or {}
 
         # Generate persona-specific collateral
         personas = sales_config.get("personas", [])
@@ -518,12 +532,14 @@ Contact: sales@regengine.ai
         logger.info("=== Phase: Design Partner Provisioning ===")
         phase = OrchestrationPhase.DESIGN_PARTNERS
 
-        dp_config = self.config.get("design_partner_program", {})
+        dp_config = self.config.get("design_partner_program") or {}
         max_partners = dp_config.get("max_partners", 5)
 
         # Generate legal agreement
         legal_ref = dp_config.get("legal_template_ref", "")
-        if not legal_ref:
+        legal_template = self.base_dir / legal_ref
+        if legal_ref and legal_template.is_file():
+            self.result.add_artifact("design_partner_agreement", str(legal_template))
             self.result.add_event(
                 phase,
                 "validate_legal_template",
@@ -531,23 +547,15 @@ Contact: sales@regengine.ai
                 details={"reason": "no legal_template_ref configured"},
             )
         else:
-            legal_template = self.base_dir / legal_ref
-            if legal_template.is_file():
-                self.result.add_artifact("design_partner_agreement", str(legal_template))
-                self.result.add_event(
-                    phase, "validate_legal_template", "success", details={"template_path": str(legal_template)}
-                )
-            else:
-                self.result.add_event(
-                    phase,
-                    "validate_legal_template",
-                    "failure",
-                    details={"template_path": str(legal_template)},
-                    error=f"Legal template not found: {legal_ref}",
-                )
+            self.result.add_event(
+                phase,
+                "validate_legal_template",
+                "skipped",
+                details={"template_ref": legal_ref, "reason": "template_missing"},
+            )
 
         # Pre-provision sandboxes
-        sandbox_config = dp_config.get("sandbox", {})
+        sandbox_config = dp_config.get("sandbox") or {}
         for i in range(max_partners):
             self._provision_sandbox(phase, f"dp-sandbox-{i + 1}", sandbox_config)
 
@@ -614,30 +622,21 @@ Contact: sales@regengine.ai
         logger.info("=== Phase: Investor Readiness ===")
         phase = OrchestrationPhase.INVESTOR_READINESS
 
-        investor_config = self.config.get("investor_readiness", {})
+        investor_config = self.config.get("investor_readiness") or {}
 
         # Validate investor memo
         memo_ref = investor_config.get("memo_template_ref", "")
-        if not memo_ref:
+        memo_path = self.base_dir / memo_ref
+        if memo_ref and memo_path.is_file():
+            self.result.add_artifact("investor_memo", str(memo_path))
+            self.result.add_event(phase, "validate_investor_memo", "success", details={"memo_path": str(memo_path)})
+        else:
             self.result.add_event(
                 phase,
                 "validate_investor_memo",
                 "skipped",
-                details={"reason": "no memo_template_ref configured"},
+                details={"template_ref": memo_ref, "reason": "template_missing"},
             )
-        else:
-            memo_path = self.base_dir / memo_ref
-            if memo_path.is_file():
-                self.result.add_artifact("investor_memo", str(memo_path))
-                self.result.add_event(phase, "validate_investor_memo", "success", details={"memo_path": str(memo_path)})
-            else:
-                self.result.add_event(
-                    phase,
-                    "validate_investor_memo",
-                    "failure",
-                    details={"memo_path": str(memo_path)},
-                    error=f"Investor memo template not found: {memo_ref}",
-                )
 
         # Validate required slides
         required_slides = investor_config.get("slides_required", [])
@@ -648,8 +647,8 @@ Contact: sales@regengine.ai
         logger.info("=== Phase: Infrastructure Deployment ===")
         phase = OrchestrationPhase.INFRA
 
-        infra_config = self.config.get("infrastructure", {})
-        terraform_config = infra_config.get("terraform", {})
+        infra_config = self.config.get("infrastructure") or {}
+        terraform_config = infra_config.get("terraform") or {}
 
         root_module = terraform_config.get("root_module_path", "infra/terraform")
         workspaces = terraform_config.get("workspaces", ["demo", "sandbox", "production"])

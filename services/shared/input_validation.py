@@ -448,7 +448,7 @@ def validate_input(**validators: Any) -> Callable[[Callable[..., Any]], Callable
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         signature = inspect.signature(func)
 
-        def _validate_args(*args: Any, **kwargs: Any) -> None:
+        def _validate_args(*args: Any, **kwargs: Any) -> tuple[tuple[Any, ...], dict[str, Any]]:
             bound = signature.bind_partial(*args, **kwargs)
             for field_name, validator in validators.items():
                 if field_name in bound.arguments:
@@ -456,20 +456,24 @@ def validate_input(**validators: Any) -> Callable[[Callable[..., Any]], Callable
                         bound.arguments[field_name],
                         field_name,
                     )
+            # Rebuild the call from the bound arguments so validated and
+            # sanitized values actually reach the wrapped function instead
+            # of being silently discarded.
+            return bound.args, bound.kwargs
 
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                _validate_args(*args, **kwargs)
-                return await func(*args, **kwargs)
+                validated_args, validated_kwargs = _validate_args(*args, **kwargs)
+                return await func(*validated_args, **validated_kwargs)
 
             return async_wrapper
 
         @wraps(func)
         def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            _validate_args(*args, **kwargs)
-            return func(*args, **kwargs)
+            validated_args, validated_kwargs = _validate_args(*args, **kwargs)
+            return func(*validated_args, **validated_kwargs)
 
         return sync_wrapper
 
