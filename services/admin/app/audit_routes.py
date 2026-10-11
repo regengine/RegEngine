@@ -458,6 +458,15 @@ def export_audit_logs(
     if not tenant_id:
         raise HTTPException(status_code=403, detail="No tenant context active")
 
+    # Fail closed when PII masking has no salt (#3230). The masked path and
+    # the metadata redaction below always hash, so without this check a
+    # production export without AUDIT_PII_HASH_SALT would answer 500
+    # instead of a clear 503, and never raw PII.
+    try:
+        _pii_hash_salt()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     # Decide PII mode. include_pii=True + permission -> raw PII.
     # Anything else -> masked.
     caller_has_pii_perm = _caller_has_pii_export_permission(current_user, db, tenant_id)

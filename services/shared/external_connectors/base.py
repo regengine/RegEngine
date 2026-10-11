@@ -323,14 +323,14 @@ class IntegrationConnector(ABC):
         Call this when enabling webhook delivery for a connector.
         Raises ``ValueError`` when no secret is configured.
         """
-        from shared.webhook_auth import require_webhook_secret
+        from shared.webhook_auth import WebhookSecretMissingError, require_webhook_secret
 
         try:
             return require_webhook_secret(
                 self.config.webhook_secret,
                 connector_id=self.connector_id,
             )
-        except Exception as exc:
+        except WebhookSecretMissingError as exc:
             raise ValueError(
                 "Webhooks cannot be enabled for connector '%s' without a signing secret." % self.connector_id
             ) from exc

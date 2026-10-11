@@ -13,11 +13,42 @@ export interface ScanRecord {
     /** Structured payload for offline replay — mirrors the webhook ingest body */
     payload?: string; // JSON-serialized ingest event
     cteType?: string;
+    /**
+     * Stable per-scan key sent as the Idempotency-Key header when the scan
+     * is ingested or replayed. One key per scan: the live attempt and every
+     * offline replay share it, so a retry replays the first response instead
+     * of recording the scan twice.
+     */
+    idempotencyKey?: string;
     timestamp: number;
     synced: number; // 0 = false, 1 = true
     syncAttempts?: number;
     lastSyncAttemptAt?: number;
     syncError?: string;
+}
+
+/**
+ * Mint a fresh idempotency key for a newly captured scan.
+ */
+export function newScanIdempotencyKey(): string {
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+    } catch {
+        // Fall through to the Math.random fallback below.
+    }
+    return `scan-${Date.now()}-${Math.floor(Math.random() * 1_000_000_000)}`;
+}
+
+/**
+ * Resolve the idempotency key for a stored scan record. Records saved before
+ * keys existed carry no key, so derive a stable one from the record identity
+ * (IndexedDB id plus capture timestamp). It never changes across retries.
+ */
+export function scanIdempotencyKey(scan: Pick<ScanRecord, 'id' | 'timestamp' | 'content'> & { idempotencyKey?: string }): string {
+    if (scan.idempotencyKey) return scan.idempotencyKey;
+    return `offline-scan-${scan.id ?? 'local'}-${scan.timestamp}`;
 }
 
 export interface PhotoRecord {
@@ -72,11 +103,12 @@ export class MobileDatabase extends Dexie {
 
 export const db = new MobileDatabase();
 
-export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string) {
+export async function saveScan(content: string, payload?: Record<string, unknown>, cteType?: string, idempotencyKey?: string) {
     await db.scans.add({
         content,
         payload: payload ? JSON.stringify(payload) : undefined,
         cteType,
+        idempotencyKey,
         timestamp: Date.now(),
         synced: 0,
         syncAttempts: 0,

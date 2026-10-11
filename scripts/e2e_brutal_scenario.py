@@ -34,10 +34,16 @@ from uuid import uuid4
 import httpx
 
 # ── Load .env ────────────────────────────────────────────────────────────────
+# Loaded inside run(), never at import: importing this module (for example
+# from a pytest process) must not copy .env secrets into os.environ (#3230).
 ROOT = Path(__file__).parent.parent
-env_path = ROOT / ".env"
 ENV_VARS: dict[str, str] = {}
-if env_path.exists():
+
+
+def _load_dotenv() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
     for line in env_path.read_text().splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
@@ -45,6 +51,7 @@ if env_path.exists():
             ENV_VARS[key] = val.strip()
             if key not in os.environ:
                 os.environ[key] = val.strip()
+
 
 # ── Colour helpers ───────────────────────────────────────────────────────────
 RESET = "\033[0m"
@@ -137,6 +144,7 @@ def build_headers():
 
 
 def run():
+    _load_dotenv()
     results = {"passed": 0, "failed": 0, "warnings": 0}
 
     def check(condition, pass_msg, fail_msg, warning=False):

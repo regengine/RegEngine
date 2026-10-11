@@ -111,9 +111,37 @@ def conn(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _seed_chain(conn, tenant_id: str, previous_hashes: list) -> None:
-    """One chain entry per element, numbered from 1, with that ``previous_chain_hash``."""
+def _seed_linked_chain(
+    conn,
+    tenant_id: str,
+    sequences: list,
+    *,
+    null_previous_at: int | None = None,
+    corrupt_hash_at: int | None = None,
+) -> None:
+    """Insert chain rows whose hashes recompute, unless a row is deliberately broken."""
+    from shared.cte_persistence import compute_chain_hash
     from sqlalchemy import text
+
+    previous = None
+    payload = []
+    for seq in sequences:
+        event_hash = f"event-{seq}"
+        chain_hash = compute_chain_hash(event_hash, previous)
+        if corrupt_hash_at == seq:
+            chain_hash = "0" * 64 if chain_hash.startswith("f") else "f" * 64
+        stored_prev = None if seq == sequences[0] or null_previous_at == seq else previous
+        payload.append(
+            {
+                "tid": tenant_id,
+                "event_id": str(uuid.uuid4()),
+                "seq": seq,
+                "event_hash": event_hash,
+                "prev": stored_prev,
+                "chain_hash": chain_hash,
+            }
+        )
+        previous = compute_chain_hash(event_hash, previous)
 
     conn.execute(
         text(
@@ -123,17 +151,7 @@ def _seed_chain(conn, tenant_id: str, previous_hashes: list) -> None:
             VALUES (:tid, :event_id, :seq, :event_hash, :prev, :chain_hash)
             """
         ),
-        [
-            {
-                "tid": tenant_id,
-                "event_id": str(uuid.uuid4()),
-                "seq": seq,
-                "event_hash": f"event-{seq}",
-                "prev": prev,
-                "chain_hash": f"chain-{seq}",
-            }
-            for seq, prev in enumerate(previous_hashes, start=1)
-        ],
+        payload,
     )
 
 
@@ -141,8 +159,8 @@ def _seed_chain(conn, tenant_id: str, previous_hashes: list) -> None:
 def chains(conn):
     """An intact three-entry chain for one tenant and a two-entry chain with a gap for another."""
     intact_tenant, broken_tenant = str(uuid.uuid4()), str(uuid.uuid4())
-    _seed_chain(conn, intact_tenant, [None, "chain-1", "chain-2"])  # NULL at sequence 1 is GENESIS
-    _seed_chain(conn, broken_tenant, [None, None])  # NULL at sequence 2 is a gap
+    _seed_linked_chain(conn, intact_tenant, [1, 2, 3])
+    _seed_linked_chain(conn, broken_tenant, [1, 2], null_previous_at=2)
     return intact_tenant, broken_tenant
 
 
@@ -178,6 +196,61 @@ def test_hash_chain_for_a_tenant_with_no_entries_is_empty_not_an_error(chains):
 
     assert check.status == "warn"
     assert check.details == "No hash chain records found for tenant"
+
+
+def test_recomputed_chain_hash_mismatch_fails(conn):
+    """A chain hash that does not recompute is corrupt even when the previous hash is filled in."""
+    from app import disaster_recovery as dr
+
+    tenant_id = str(uuid.uuid4())
+    _seed_linked_chain(conn, tenant_id, [1], corrupt_hash_at=1)
+
+    check = dr._check_hash_chain_integrity(tenant_id)
+
+    assert check.status == "fail", check.details
+    assert "1 gap" in check.details
+
+
+def test_sequence_hole_after_middle_row_fails(conn):
+    """Sequences 1 then 3, with the later previous hash still set, are a gap."""
+    from app import disaster_recovery as dr
+
+    tenant_id = str(uuid.uuid4())
+    _seed_linked_chain(conn, tenant_id, [1, 3])
+
+    check = dr._check_hash_chain_integrity(tenant_id)
+
+    assert check.status == "fail", check.details
+    assert check.details == "Hash chain has 1 gap(s) in 2 entries"
+
+
+def test_truncated_chain_with_remaining_events_fails(conn):
+    """No chain rows while this tenant still has an event is a failure.
+
+    Another tenant's event must not change the count.
+    """
+    from app import disaster_recovery as dr
+    from sqlalchemy import text
+
+    tenant_id, other_tenant_id = str(uuid.uuid4()), str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO fsma.traceability_events
+                (tenant_id, source_system, event_type, event_timestamp,
+                 traceability_lot_code, quantity, unit_of_measure)
+            VALUES
+                (:tid, 'pytest', 'receiving', NOW(), 'LOT-DR-1', 1, 'kg'),
+                (:other, 'pytest', 'receiving', NOW(), 'LOT-DR-2', 1, 'kg')
+            """
+        ),
+        {"tid": tenant_id, "other": other_tenant_id},
+    )
+
+    check = dr._check_hash_chain_integrity(tenant_id)
+
+    assert check.status == "fail", check.details
+    assert "1 event" in check.details
 
 
 # ---------------------------------------------------------------------------
