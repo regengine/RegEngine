@@ -246,6 +246,34 @@ describe('ingestion BFF credential boundary', () => {
             expect(calledUrls(fetchMock)).toEqual([`${ADMIN_URL}/auth/me`]);
         });
 
+        it('forwards x-webhook-signature so signed posts survive the proxy (#3229)', async () => {
+            fetchMock
+                .mockResolvedValueOnce(authMeResponse(TENANT_A))
+                .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                }));
+
+            const response = await POST!(
+                makeRequest({
+                    method: 'POST',
+                    path: ['api', 'v1', 'webhooks', 'ingest'],
+                    headers: {
+                        origin: 'https://regengine.co',
+                        'content-type': 'application/json',
+                        'x-webhook-signature': 'sha256=deadbeef',
+                    },
+                    cookies: { '__Host-regengine_session': 'valid-session' },
+                }),
+                { params: Promise.resolve({ path: ['api', 'v1', 'webhooks', 'ingest'] }) },
+            );
+
+            expect(response.status).toBe(200);
+            const [, init] = fetchMock.mock.calls[1];
+            const headers = new Headers(init.headers as HeadersInit);
+            expect(headers.get('x-webhook-signature')).toBe('sha256=deadbeef');
+        });
+
         it('leaves write authorization to the upstream with no server credential attached', async () => {
             fetchMock
                 .mockResolvedValueOnce(authMeResponse(TENANT_A))

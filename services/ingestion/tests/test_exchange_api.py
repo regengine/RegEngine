@@ -119,6 +119,96 @@ def test_receive_requires_receiver_tenant_context(client: TestClient) -> None:
     assert response.json()["detail"] == "Tenant context required"
 
 
+def test_send_fallback_lot_codes_only_carries_records(client: TestClient) -> None:
+    """Fallback sends keyed only by lot_codes must carry one record per lot.
+
+    Before the fix the fallback loop only read ``event_ids``, so a valid
+    lot_codes-only request queued a package whose summary claimed lots but
+    whose records list was empty.
+    """
+    sender_tenant_id = "00000000-0000-0000-0000-000000000111"
+    receiver_tenant_id = "00000000-0000-0000-0000-000000000222"
+
+    send_response = client.post(
+        "/api/v1/exchange/send",
+        params={"tenant_id": sender_tenant_id},
+        json={
+            "receiver_tenant_id": receiver_tenant_id,
+            "lot_codes": ["LOT-2026-002", "LOT-2026-001"],
+        },
+    )
+    assert send_response.status_code == 200
+    send_payload = send_response.json()
+    assert send_payload["event_count"] == 2
+    assert send_payload["traceability_lot_codes"] == ["LOT-2026-001", "LOT-2026-002"]
+
+    receive_response = client.get(
+        "/api/v1/exchange/receive",
+        params={"tenant_id": receiver_tenant_id, "package_id": send_payload["package_id"]},
+    )
+    assert receive_response.status_code == 200
+    package = receive_response.json()["packages"][0]
+    record_lots = sorted(record["traceability_lot_code"] for record in package["payload"]["records"])
+    assert record_lots == ["LOT-2026-001", "LOT-2026-002"]
+
+
+def test_send_fallback_without_filters_returns_400(client: TestClient) -> None:
+    """The fallback must enforce the same filter contract as the DB path."""
+    response = client.post(
+        "/api/v1/exchange/send",
+        params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+        json={"receiver_tenant_id": "00000000-0000-0000-0000-000000000222"},
+    )
+    assert response.status_code == 400
+    assert "traceability_lot_code" in response.json()["detail"]
+
+
+def test_send_sender_override_mismatch_returns_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A tenant-bound principal cannot send as another tenant via the body override."""
+    app = FastAPI()
+    app.include_router(exchange_router)
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="tenant-a-key",
+        tenant_id="00000000-0000-0000-0000-000000000111",
+        scopes=["exchange.write"],
+        auth_mode="test",
+    )
+    _exchange_store.clear()
+    monkeypatch.setenv("ALLOW_EXCHANGE_IN_MEMORY_FALLBACK", "true")
+
+    def _db_unavailable():
+        raise RuntimeError("db unavailable in unit test")
+
+    monkeypatch.setattr(exchange_api, "get_db_safe", _db_unavailable)
+
+    with TestClient(app) as test_client:
+        response = test_client.post(
+            "/api/v1/exchange/send",
+            json={
+                "receiver_tenant_id": "00000000-0000-0000-0000-000000000222",
+                "sender_tenant_id": "00000000-0000-0000-0000-000000000999",
+                "event_ids": ["evt-1"],
+            },
+        )
+
+    assert response.status_code == 403
+    assert "Tenant mismatch" in response.json()["detail"]
+
+
+def test_send_conflicting_tenant_query_and_header_returns_400(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/exchange/send",
+        params={"tenant_id": "00000000-0000-0000-0000-000000000111"},
+        headers={"X-Tenant-ID": "00000000-0000-0000-0000-000000000999"},
+        json={
+            "receiver_tenant_id": "00000000-0000-0000-0000-000000000222",
+            "event_ids": ["evt-1"],
+        },
+    )
+    assert response.status_code == 400
+    assert "Conflicting tenant context" in response.json()["detail"]
+
+
 def test_send_denied_without_exchange_write_scope(monkeypatch: pytest.MonkeyPatch) -> None:
     app = FastAPI()
     app.include_router(exchange_router)

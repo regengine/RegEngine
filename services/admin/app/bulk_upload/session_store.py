@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import os
 import time
@@ -74,7 +75,10 @@ class BulkUploadSessionStore:
             return session_id
 
         self._cleanup_memory()
-        self._memory_store[key] = (time.time() + self.ttl_seconds, payload)
+        # Deep-copy so later caller-side mutations of the input dict
+        # cannot rewrite the stored session (the Redis path already
+        # isolates via JSON serialization).
+        self._memory_store[key] = (time.time() + self.ttl_seconds, copy.deepcopy(payload))
         return session_id
 
     async def get_session(self, tenant_id: str, user_id: str, session_id: str) -> dict[str, Any] | None:
@@ -90,7 +94,9 @@ class BulkUploadSessionStore:
         value = self._memory_store.get(key)
         if value is None:
             return None
-        return value[1]
+        # Return a copy so caller-side mutations cannot rewrite the
+        # stored session, matching the Redis path's fresh json.loads.
+        return copy.deepcopy(value[1])
 
     async def update_session(
         self,
@@ -106,7 +112,7 @@ class BulkUploadSessionStore:
             return
 
         self._cleanup_memory()
-        self._memory_store[key] = (time.time() + self.ttl_seconds, payload)
+        self._memory_store[key] = (time.time() + self.ttl_seconds, copy.deepcopy(payload))
 
     async def try_claim_commit(
         self,
@@ -234,7 +240,7 @@ class BulkUploadSessionStore:
             if mutations:
                 payload.update(mutations)
             self._memory_store[key] = (expiry, payload)
-            return payload
+            return copy.deepcopy(payload)
 
 
 session_store = BulkUploadSessionStore()

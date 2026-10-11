@@ -419,6 +419,13 @@ class TraceabilityEvent(BaseModel):
             raise ValueError(f"schema_version must be int, got bool: {v!r}")
         if isinstance(v, int):
             return v
+        if isinstance(v, float):
+            # A producer emitting 1.0 (natural JSON for version 1) maps to
+            # v1; anything non-integral (1.5) is unknown and must fail
+            # loudly rather than silently floor.
+            if v.is_integer():
+                return int(v)
+            raise ValueError(f"schema_version float not recognised: {v!r}")
         if isinstance(v, str):
             stripped = v.strip()
             if stripped in _LEGACY_SCHEMA_VERSION_STRINGS:

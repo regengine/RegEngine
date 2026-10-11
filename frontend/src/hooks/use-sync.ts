@@ -8,19 +8,25 @@ import {
     markPhotoSyncFailed,
     getPendingUploads,
     cleanupOfflineRecords,
+    scanIdempotencyKey,
 } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
 
-/** Small stable string hash for id-less legacy records (not cryptographic). */
-export function simpleHash(input: string): string {
-    let h = 0;
-    for (let i = 0; i < input.length; i++) {
-        h = (Math.imul(h, 31) + input.charCodeAt(i)) | 0;
+/**
+ * Tenant named inside a stored offline scan payload, if any. Legacy records
+ * without a payload carry no owner and are handled by the caller.
+ */
+function storedScanTenantId(payload: string | undefined): string | undefined {
+    if (!payload) return undefined;
+    try {
+        const parsed = JSON.parse(payload) as { tenant_id?: unknown };
+        return typeof parsed?.tenant_id === 'string' ? parsed.tenant_id : undefined;
+    } catch {
+        return undefined;
     }
-    return (h >>> 0).toString(36);
 }
 
 export function useSync() {
@@ -32,16 +38,14 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
-    // Retry safety: each offline record replays under a key derived from
-    // its stable local id, so a failed sync retried later (or an
-    // at-least-once redelivery) replays instead of duplicating events.
-    // The webhook ingest endpoint requires this header.
     const syncEndpoint = useCallback(async (payload: string, idempotencyKey: string) => {
         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
             method: 'POST',
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
+                // Stable per-scan key: retries replay the first response
+                // instead of recording the scan twice.
                 'Idempotency-Key': idempotencyKey,
             },
             body: payload,
@@ -78,14 +82,10 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
-                    // Stable per-record key: the same queued scan retried
-                    // across sync runs replays under the same key.
-                    const recordKey = typeof scan.id === 'number'
-                        ? `offline-scan-${scan.id}`
-                        : `offline-scan-${simpleHash(scan.payload ?? scan.content ?? '')}`;
+                    const idempotencyKey = scanIdempotencyKey(scan);
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        await syncEndpoint(scan.payload, recordKey);
+                        await syncEndpoint(scan.payload, idempotencyKey);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -102,7 +102,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        await syncEndpoint(JSON.stringify(payload), recordKey);
+                        await syncEndpoint(JSON.stringify(payload), idempotencyKey);
                     }
                     if (typeof scan.id === 'number') {
                         await markScanSynced(scan.id);
