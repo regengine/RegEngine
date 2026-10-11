@@ -8,10 +8,39 @@ Can be used in CI, in the export endpoint, or as a standalone script.
 
 import hashlib
 import json
-from typing import List
+from datetime import datetime, timezone
+from typing import Any, List, Optional
 
 
-def verify_chain(entries: List[dict]) -> dict:
+def chain_timestamp(value: Any) -> Optional[str]:
+    """Return the timestamp string stored in an integrity hash.
+
+    Writers hash ``datetime.now(timezone.utc).isoformat()``, which always
+    carries a UTC offset. SQLite hands that column back as a naive datetime,
+    so a naive value is read as UTC. Aware values keep the offset they have.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.isoformat()
+    return str(value)
+
+
+def _as_dict(value: Any) -> Optional[dict]:
+    """Return ``value`` when it is a dict. Anything else is not a chain block."""
+    if isinstance(value, dict):
+        return value
+    return None
+
+
+def verify_chain(
+    entries: List[dict],
+    *,
+    predecessor: Optional[dict] = None,
+    missing_anchor: bool = False,
+) -> dict:
     """
     Verify the integrity hash chain of a list of audit entries.
 
@@ -59,33 +88,73 @@ def verify_chain(entries: List[dict]) -> dict:
 
     errors = []
     legacy_v1_rows: List = []
-    expected_prev_hash = None
+    # One row can fail the link, the sequence, and the hash. Count rows,
+    # not error objects, or ``verified`` goes negative.
+    broken_indexes: set[int] = set()
     # #2513: track the previous entry's per-tenant sequence so a gap
     # (a removed/deleted middle row) is flagged with a distinct
     # contiguity error rather than masquerading as a prev_hash_mismatch.
     prev_sequence_num = None
+    expected_prev_hash = None
+    anchored = False
+    if isinstance(predecessor, dict):
+        pred_integrity = _as_dict(predecessor.get("integrity")) or {}
+        expected_prev_hash = pred_integrity.get("hash")
+        prev_sequence_num = pred_integrity.get("sequence_num")
+        anchored = True
+
+    def fail(index: int, entry: Any, error: str, expected: Any = None, actual: Any = None) -> None:
+        broken_indexes.add(index)
+        entry_id = entry.get("id") if isinstance(entry, dict) else None
+        errors.append(
+            {
+                "id": entry_id,
+                "error": error,
+                "expected": expected,
+                "actual": actual,
+            }
+        )
+
+    if missing_anchor and entries:
+        fail(
+            0,
+            entries[0],
+            "chain_anchor_missing",
+            expected="predecessor row",
+            actual=None,
+        )
 
     for i, entry in enumerate(entries):
-        # Extract integrity block
-        integrity = entry.get("integrity", {})
+        if not isinstance(entry, dict):
+            fail(i, entry, "malformed_entry", expected="object", actual=type(entry).__name__)
+            continue
+
+        raw_integrity = entry.get("integrity", {})
+        raw_event = entry.get("event", {})
+        raw_resource = entry.get("resource", {})
+        raw_metadata = entry.get("metadata", {})
+        integrity = _as_dict(raw_integrity)
+        event = _as_dict(raw_event)
+        resource = _as_dict(raw_resource)
+        metadata = _as_dict(raw_metadata)
+        if integrity is None or event is None or resource is None or metadata is None:
+            fail(i, entry, "malformed_entry", expected="object", actual="invalid block")
+        integrity = integrity or {}
+        event = event or {}
+        resource = resource or {}
+        metadata = metadata or {}
+
         actual_prev = integrity.get("prev_hash")
         actual_hash = integrity.get("hash")
         sequence_num = integrity.get("sequence_num")
 
-        # Verify prev_hash linkage
-        if i == 0:
-            # First entry: prev_hash can be None (genesis)
+        # Verify prev_hash linkage. A caller that passes ``predecessor``
+        # is checking a window, so the first row must link to that parent.
+        # Without a predecessor the first row is the start of this slice.
+        if i == 0 and not anchored:
             expected_prev_hash = actual_prev
-        else:
-            if actual_prev != expected_prev_hash:
-                errors.append(
-                    {
-                        "id": entry.get("id"),
-                        "error": "prev_hash_mismatch",
-                        "expected": expected_prev_hash,
-                        "actual": actual_prev,
-                    }
-                )
+        elif actual_prev != expected_prev_hash:
+            fail(i, entry, "prev_hash_mismatch", expected_prev_hash, actual_prev)
 
         # #2513: per-tenant sequence contiguity. A gap of more than 1
         # between consecutive sequences means a row was removed; a
@@ -94,14 +163,7 @@ def verify_chain(entries: List[dict]) -> dict:
         # carry sequence_num=None and are exempt from the gap check).
         if sequence_num is not None and prev_sequence_num is not None:
             if sequence_num != prev_sequence_num + 1:
-                errors.append(
-                    {
-                        "id": entry.get("id"),
-                        "error": "sequence_gap",
-                        "expected": prev_sequence_num + 1,
-                        "actual": sequence_num,
-                    }
-                )
+                fail(i, entry, "sequence_gap", prev_sequence_num + 1, sequence_num)
         if sequence_num is not None:
             prev_sequence_num = sequence_num
 
@@ -113,10 +175,10 @@ def verify_chain(entries: List[dict]) -> dict:
             "prev_hash": actual_prev or "GENESIS",
             "tenant_id": entry.get("tenant_id"),
             "timestamp": entry.get("timestamp"),
-            "event_type": entry.get("event", {}).get("type"),
-            "action": entry.get("event", {}).get("action"),
-            "resource_id": entry.get("resource", {}).get("id"),
-            "metadata": entry.get("metadata", {}),
+            "event_type": event.get("type"),
+            "action": event.get("action"),
+            "resource_id": resource.get("id"),
+            "metadata": metadata,
         }
         actor_fields = {
             "actor_id": actor.get("id"),
@@ -150,14 +212,7 @@ def verify_chain(entries: List[dict]) -> dict:
             recomputed = recomputed_v3
 
         if recomputed != actual_hash:
-            errors.append(
-                {
-                    "id": entry.get("id"),
-                    "error": "integrity_hash_mismatch",
-                    "expected": recomputed,
-                    "actual": actual_hash,
-                }
-            )
+            fail(i, entry, "integrity_hash_mismatch", recomputed, actual_hash)
 
         # Next entry should reference this hash
         expected_prev_hash = actual_hash
@@ -165,7 +220,7 @@ def verify_chain(entries: List[dict]) -> dict:
     return {
         "valid": len(errors) == 0,
         "total_entries": len(entries),
-        "verified": len(entries) - len(errors),
+        "verified": len(entries) - len(broken_indexes),
         "first_break": errors[0]["id"] if errors else None,
         "errors": errors,
         "legacy_v1_rows": legacy_v1_rows,

@@ -17,9 +17,11 @@ SSRF guarantees (preserved from PR #2197):
 
 from typing import Any, Dict
 
+import httpx
 import structlog
 from shared.safe_http import (
     STANDARD_BROWSER_HEADERS,
+    ResponseTooLargeError,
     safe_fetch_content,
     safe_httpx_get_sync,
 )
@@ -44,10 +46,20 @@ def fetch_content(url: str, timeout: int = 30, use_browser_fallback: bool = True
     Thin wrapper over :func:`shared.safe_http.safe_fetch_content`. On
     non-SSRF failure (network error, HTTP error, etc.) and when
     ``use_browser_fallback`` is true, retries via the headless browser.
-    SSRF errors are fatal and never reach the browser path.
+    SSRF errors, size-cap refusals, and decode failures are fatal and never
+    reach the browser path (the browser follows redirects itself with no
+    byte cap, so promoting those failures would sidestep both guards).
     """
     try:
         return safe_fetch_content(url, timeout=timeout, headers=STANDARD_HEADERS)
+    except ResponseTooLargeError:
+        # A browser retry must not bypass the response size boundary.
+        raise
+    except httpx.DecodingError:
+        # A decode failure means the body bytes are hostile or malformed
+        # (for example a compressed bomb). The browser path has no byte cap
+        # and follows redirects itself, so re-fetching there must not happen.
+        raise
     except ValueError as e:
         # ``safe_fetch_content`` wraps SSRF as ValueError("URL validation
         # failed: ..."). That wrapper is fatal; do not fall back.

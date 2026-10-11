@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 import re
 import zipfile
@@ -94,6 +95,12 @@ async def stream_upload_to_file_with_limit(
 
     Returns the total bytes written and an initial byte prefix callers can
     validate without first buffering the full upload in memory.
+
+    When ``destination`` is a path opened by this helper, a failure partway
+    through (oversize upload, write error) removes the partial file so
+    aborted uploads cannot accumulate in the staging directory. When it is
+    a caller-provided file object, bytes written before the failure stay in
+    it and cleanup is the caller's job.
     """
     total = 0
     prefix = bytearray()
@@ -104,6 +111,7 @@ async def stream_upload_to_file_with_limit(
         out = open(destination, "wb")
         close_destination = True
 
+    failed = False
     try:
         while True:
             chunk = await file.read(UPLOAD_CHUNK_SIZE_BYTES)
@@ -118,9 +126,16 @@ async def stream_upload_to_file_with_limit(
             if len(prefix) < prefix_bytes:
                 prefix.extend(chunk[: prefix_bytes - len(prefix)])
             out.write(chunk)
+    except Exception:
+        failed = True
+        raise
     finally:
         if close_destination:
-            out.close()
+            with contextlib.suppress(OSError):
+                out.close()
+            if failed:
+                with contextlib.suppress(OSError):
+                    Path(destination).unlink(missing_ok=True)
     return total, bytes(prefix)
 
 
@@ -195,7 +210,11 @@ def validated_image_content_type(
     declared_content_type: str | None = None,
 ) -> str:
     """Validate raster image bytes with Pillow and return the actual MIME type."""
-    if not declared_content_type or not declared_content_type.startswith("image/"):
+    # Media types are case-insensitive (RFC 2045) and may carry parameters,
+    # so normalize before checking the declared type. The bytes are still
+    # verified with Pillow below; this gate only rejects obvious non-images.
+    normalized_declared = (declared_content_type or "").split(";")[0].strip().lower()
+    if not normalized_declared.startswith("image/"):
         raise HTTPException(status_code=400, detail="Upload must be an image")
     if not image_bytes:
         raise HTTPException(status_code=400, detail="Uploaded image is empty")

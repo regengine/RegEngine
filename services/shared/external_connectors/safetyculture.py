@@ -21,8 +21,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from urllib.parse import urljoin
 
-import httpx
+from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_async
 
 from .base import (
     AuthType,
@@ -64,6 +65,55 @@ def _infer_cte_type(template_name: str) -> str:
     return "receiving"  # default fallback
 
 
+# Webhook completion markers. SafetyCulture posts the completed
+# inspection shape with the trigger name under ``event.event_types``
+# (for example TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS) while older
+# payloads carry a top level ``event_type`` of INSPECTION_COMPLETED
+# or AUDIT_COMPLETED. Both shapes are accepted.
+_COMPLETION_EVENT_TYPES = frozenset(
+    {
+        "INSPECTION_COMPLETED",
+        "AUDIT_COMPLETED",
+        "TRIGGER_EVENT_INSPECTION_COMPLETED",
+        "TRIGGER_EVENT_INSPECTION_COMPLETED_STATUS",
+    }
+)
+
+
+def _is_completion_event(data: Dict[str, Any]) -> bool:
+    """Return True when the payload marks a completed inspection."""
+    top_level = data.get("event_type")
+    if isinstance(top_level, str) and top_level in _COMPLETION_EVENT_TYPES:
+        return True
+    event = data.get("event")
+    if isinstance(event, dict):
+        event_types = event.get("event_types")
+        if isinstance(event_types, str):
+            event_types = [event_types]
+        if isinstance(event_types, (list, tuple)):
+            for event_type in event_types:
+                if isinstance(event_type, str) and event_type in _COMPLETION_EVENT_TYPES:
+                    return True
+    return False
+
+
+def _nested_inspection_id(data: Dict[str, Any]) -> str:
+    """Return the inspection id from the nested webhook shape, if any."""
+    resource = data.get("resource")
+    if isinstance(resource, dict):
+        resource_id = resource.get("id")
+        if isinstance(resource_id, str) and resource_id:
+            return resource_id
+    details = data.get("data")
+    if isinstance(details, dict):
+        inner = details.get("details")
+        if isinstance(inner, dict):
+            inspection_id = inner.get("inspection_id")
+            if isinstance(inspection_id, str) and inspection_id:
+                return inspection_id
+    return ""
+
+
 class SafetyCultureConnector(IntegrationConnector):
     """Connector for SafetyCulture (iAuditor) food safety platform.
 
@@ -81,29 +131,40 @@ class SafetyCultureConnector(IntegrationConnector):
         super().__init__(config)
         if not config.base_url:
             config.base_url = self.API_BASE
-        self._client: Optional[httpx.AsyncClient] = None
         # Custom template → CTE type overrides from tenant config
         self._template_cte_map: Dict[str, str] = config.extra.get("template_cte_map", {})
 
-    def _get_client(self) -> httpx.AsyncClient:
-        if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=self.config.base_url,
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key}",
-                    "Content-Type": "application/json",
-                    "User-Agent": "RegEngine/1.0 (FSMA 204 Compliance)",
-                },
-                timeout=self.config.timeout_seconds,
-            )
-        return self._client
+    def _auth_headers(self) -> Dict[str, str]:
+        # GET-only headers: no Content-Type (there is no request body), so a
+        # cross-origin redirect is not refused merely for carrying it.
+        return {
+            "Authorization": f"Bearer {self.config.api_key}",
+            "User-Agent": "RegEngine/1.0 (FSMA 204 Compliance)",
+        }
+
+    def _full_url(self, path: str) -> str:
+        return urljoin(self.config.base_url.rstrip("/") + "/", path.lstrip("/"))
+
+    async def _safe_get(self, path: str, params: Optional[Dict[str, Any]] = None):
+        """GET relative to the configured base URL with SSRF + size-cap guards.
+
+        The base URL is tenant-configurable, so every request goes through
+        :func:`shared.safe_http.safe_httpx_get_async`, which validates each
+        hop and pins the connection IP.
+        """
+        return await safe_httpx_get_async(
+            self._full_url(path),
+            headers=self._auth_headers(),
+            params=params,
+            timeout=self.config.timeout_seconds,
+            max_bytes=DEFAULT_MAX_RESPONSE_BYTES,
+        )
 
     async def test_connection(self) -> bool:
         """Verify SafetyCulture API key by fetching user info."""
         try:
             self._check_rate_limit()
-            client = self._get_client()
-            resp = await client.get("/users/v1/users/me")
+            resp = await self._safe_get("/users/v1/users/me")
             if resp.status_code == 200:
                 self._status = ConnectionStatus.CONNECTED
                 data = resp.json()
@@ -133,7 +194,6 @@ class SafetyCultureConnector(IntegrationConnector):
         Uses the /audits/search endpoint with modified_after filter.
         """
         self._check_rate_limit()
-        client = self._get_client()
 
         params: Dict[str, Any] = {
             "field": [
@@ -155,7 +215,7 @@ class SafetyCultureConnector(IntegrationConnector):
         if cursor:
             params["cursor"] = cursor
 
-        resp = await client.get("/audits/search", params=params)
+        resp = await self._safe_get("/audits/search", params=params)
         resp.raise_for_status()
         data = resp.json()
 
@@ -183,8 +243,7 @@ class SafetyCultureConnector(IntegrationConnector):
     async def _fetch_audit_detail(self, audit_id: str) -> Dict[str, Any]:
         """Fetch full audit detail including responses."""
         self._check_rate_limit()
-        client = self._get_client()
-        resp = await client.get(f"/audits/{audit_id}")
+        resp = await self._safe_get(f"/audits/{audit_id}")
         resp.raise_for_status()
         return resp.json()
 
@@ -327,23 +386,44 @@ class SafetyCultureConnector(IntegrationConnector):
 
         SafetyCulture sends webhooks on audit completion.
         Webhook signature is verified via X-Sc-Signature header.
+
+        Fails closed: a missing webhook secret or a missing or
+        invalid signature raises ValueError (mapped to 401 by the
+        router), so an unauthenticated caller can never trigger a
+        fetch with the tenant's SafetyCulture key.
         """
-        # Verify signature
-        signature = headers.get("x-sc-signature", "")
-        if self.config.webhook_secret and signature:
-            if not self.verify_webhook_signature(payload, signature):
-                raise ValueError("Invalid SafetyCulture webhook signature")
+        if not (self.config.webhook_secret or "").strip():
+            raise ValueError("SafetyCulture webhook secret is not configured for this tenant")
+        lowered = {str(key).lower(): value for key, value in (headers or {}).items()}
+        signature = str(lowered.get("x-sc-signature") or lowered.get("x-safetyculture-signature") or "").strip()
+        if not signature:
+            raise ValueError("Missing SafetyCulture webhook signature")
+        candidate = signature
+        if candidate.lower().startswith("sha256="):
+            candidate = candidate[len("sha256=") :].strip()
+        # verify_webhook_signature uses a constant-time comparison.
+        if not self.verify_webhook_signature(payload, candidate):
+            raise ValueError("Invalid SafetyCulture webhook signature")
 
         import json
 
         data = json.loads(payload)
-        event_type = data.get("event_type", "")
+        if not isinstance(data, dict):
+            return []  # ignore unexpected shapes, never an error
 
-        if event_type not in ("INSPECTION_COMPLETED", "AUDIT_COMPLETED"):
+        if not _is_completion_event(data):
             return []  # ignore non-completion events
 
-        audit_id = data.get("audit_id") or data.get("inspection_id")
+        audit_id = (
+            data.get("audit_id")
+            or data.get("inspection_id")
+            or _nested_inspection_id(data)
+        )
         if not audit_id:
+            logger.warning(
+                "safetyculture_webhook_missing_id keys=%s",
+                sorted(data.keys()),
+            )
             return []
 
         # Fetch full audit detail and normalize
