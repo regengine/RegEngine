@@ -61,7 +61,9 @@ def validate_auth_config() -> None:
         logger.error("auth_config_validation_failed", issue=issue)
 
     # Only explicit local development/test may continue after a warning.
-    is_ci = os.getenv("GITHUB_ACTIONS") or os.getenv("CI")
+    # Any value counts except explicit falsy strings: a leftover
+    # CI=false or CI=0 must not silently disable the startup gate.
+    is_ci = _is_ci_environment()
     if issues and strict_auth and not is_ci:
         raise RuntimeError(f"Auth config validation failed ({len(issues)} issues): " + "; ".join(issues))
 
@@ -78,7 +80,7 @@ def validate_auth_config() -> None:
     # process JWT / TOOL_ACCESS signing keys mean non-portable, restart-forgeable
     # sessions and invisible cross-worker revocation. Refuse to boot.
     cloud_marker_present = any(os.getenv(var) for var in CLOUD_ENV_VARS)
-    if cloud_marker_present and not is_production() and not is_ci:
+    if cloud_marker_present and not is_production() and not _is_ci_environment():
         ephemeral_secrets: list[str] = []
         if not (os.getenv("AUTH_SECRET_KEY") or os.getenv("JWT_SECRET")):
             ephemeral_secrets.append("AUTH_SECRET_KEY")
@@ -92,6 +94,39 @@ def validate_auth_config() -> None:
                 "and provide these secrets before deploying — ephemeral keys produce "
                 "non-portable, restart-forgeable sessions."
             )
+
+
+# Values that explicitly mean "not CI" when found in CI marker variables.
+_CI_FALSY_VALUES = frozenset({"", "0", "false", "no", "off", "none"})
+
+
+def _is_ci_environment() -> bool:
+    """Return True when running under CI.
+
+    Any marker value counts except explicit falsy strings (``false``,
+    ``0``, ``no``, ``off``, ``none``), so a leftover ``CI=false`` in a
+    deployed environment cannot silently disable startup gates.
+    """
+    for var in ("GITHUB_ACTIONS", "CI"):
+        raw = os.getenv(var)
+        if raw is None:
+            continue
+        if raw.strip().lower() not in _CI_FALSY_VALUES:
+            return True
+    return False
+
+
+def _is_expired(expires_at: Optional[datetime]) -> bool:
+    """Return True when ``expires_at`` is in the past.
+
+    Naive datetimes (as returned by SQLite) are treated as UTC rather
+    than raising ``TypeError`` against the aware ``now()``.
+    """
+    if not expires_at:
+        return False
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return expires_at < datetime.now(timezone.utc)
 
 
 # API Key header scheme
@@ -176,7 +211,9 @@ class APIKeyStore:
 
     def validate_key(self, raw_key: str) -> Optional[APIKey]:
         """Validate an API key and return the associated metadata."""
-        if not raw_key or not raw_key.startswith("rge_"):
+        # Fail closed on helper misuse: a non-string credential (None from a
+        # missing header is already falsy) is an invalid key, never a 500.
+        if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
         # Extract key_id from the raw key (first part before hash)
@@ -201,10 +238,17 @@ class APIKeyStore:
             logger.warning("api_key_disabled", key_id=key_id)
             return None
 
-        # Check if key has expired
-        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-            logger.warning("api_key_expired", key_id=key_id)
-            return None
+        # Check if key has expired. Naive datetimes (no tzinfo) can arrive
+        # from DB rows or direct construction; assume UTC so the comparison
+        # never raises TypeError (which would surface as a 500 instead of
+        # an auth decision).
+        if api_key.expires_at:
+            expires_at = api_key.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at < datetime.now(timezone.utc):
+                logger.warning("api_key_expired", key_id=key_id)
+                return None
 
         # Track last usage timestamp
         api_key.last_used_at = datetime.now(timezone.utc)
@@ -383,9 +427,43 @@ async def require_api_key(
             detail="Workload credentials are not accepted by tenant APIs",
         )
 
+    # SECURITY: deny suspended tenants on the live API-key path. A
+    # cryptographically valid key for a suspended, archived, or missing
+    # tenant must not authenticate. Only the validated key's tenant_id is
+    # ever read here, never a request-supplied value. Fail closed: an
+    # unreadable status denies (503), it never allows. This runs before
+    # rate limiting so a suspended key can neither consume quota nor be
+    # distinguished by a 429, and before the principal is stored so no
+    # downstream consumer ever sees a suspended tenant as authenticated.
+    # The in-memory store has no tenants table (local dev and test only);
+    # production always uses DatabaseAPIKeyStore, which enforces this.
+    if isinstance(key_store, DatabaseAPIKeyStore):
+        try:
+            tenant_status = await key_store.get_tenant_status(api_key.tenant_id)
+        except Exception as exc:
+            logger.error(
+                "api_key_tenant_status_lookup_failed",
+                key_id=getattr(api_key, "key_id", None),
+                error=str(exc),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service temporarily unavailable",
+            ) from exc
+        if tenant_status not in ("active", "trial"):
+            logger.warning(
+                "suspended_tenant_api_key_rejected",
+                key_id=getattr(api_key, "key_id", None),
+                tenant_status=tenant_status,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid API key",
+            )
+
     # Check rate limit
     if isinstance(key_store, DatabaseAPIKeyStore):
-        rate_info = await key_store.check_rate_limit(api_key.key_id, api_key.rate_limit_per_minute)
+        rate_info = await key_store.check_all_rate_limits(api_key)
         if not rate_info.allowed:
             logger.warning("rate_limit_exceeded", key_id=api_key.key_id)
             raise HTTPException(
@@ -443,6 +521,10 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
     Raises HTTPException(403) if not permitted.
     """
     federal_roots = {"US", "EU", "UK"}
+    # Coerce defensively: a non-string request is never entitled, and
+    # non-string entitlement entries are skipped, so malformed input fails
+    # closed with 403 instead of raising AttributeError/TypeError (a 500).
+    requested_jurisdiction = str(requested_jurisdiction or "")
     # Allow if root is federal
     root = requested_jurisdiction.split("-")[0] if requested_jurisdiction else ""
     allowed = api_key.allowed_jurisdictions or []
@@ -450,6 +532,8 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
         return
     # State/municipal require explicit entitlement (prefix match allowed)
     for ent in allowed:
+        if not isinstance(ent, str):
+            continue
         if requested_jurisdiction == ent:
             return
         if "-" in ent and requested_jurisdiction.startswith(ent + "-"):
@@ -541,7 +625,12 @@ def reconcile_tenant_scope(
     # ``middleware_tenant_id`` is non-optional at the handler (the
     # get_current_tenant_id dependency 401s when absent), but guard anyway.
     middleware_tenant = str(middleware_tenant_id) if middleware_tenant_id is not None else None
-    if middleware_tenant and middleware_tenant != authenticated_tenant:
+    # Compare case-insensitively: the same UUID in upper- vs lower-case
+    # hex is identical, and a 409 on legitimate requests is an outage.
+    if (
+        middleware_tenant
+        and middleware_tenant.strip().lower() != authenticated_tenant.strip().lower()
+    ):
         logger.warning(
             "graph_tenant_scope_mismatch",
             authenticated_tenant=authenticated_tenant,
@@ -575,7 +664,7 @@ def get_tenant_id(
 
     try:
         _uuid.UUID(x_tenant_id)
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         raise HTTPException(
             status_code=400,
             detail="Invalid X-Tenant-ID: must be a valid UUID.",

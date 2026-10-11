@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import math
 import time
 from html.parser import HTMLParser
 from typing import Iterable
 
-import requests
+import httpx
 import structlog
+from shared.safe_http import safe_httpx_get_sync
 from shared.url_validation import SSRFError, validate_url
 
 from .base import FetchedItem, Source, StateRegistryScraper
@@ -25,8 +27,13 @@ class _VisibleTextParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
-        if self._ignored and self._ignored[-1] == tag:
-            self._ignored.pop()
+        if tag in self._ignored:
+            # Pop down to and including the matching open tag so one
+            # unclosed or mismatched tag cannot swallow the rest of the page.
+            while self._ignored and self._ignored[-1] != tag:
+                self._ignored.pop()
+            if self._ignored:
+                self._ignored.pop()
 
     def handle_data(self, data: str) -> None:
         if self._ignored:
@@ -68,10 +75,16 @@ class NYDFSScraper(StateRegistryScraper):
             logger.warning("nydfs_url_rejected", url=source.url, error=str(exc))
             raise ValueError(f"URL validation failed: {exc}") from exc
 
+        # SSRF defense (RE-SEC-INGEST-003): route through safe_httpx_get_sync
+        # so every redirect hop is re-validated and the connection is pinned
+        # to a validated IP (closes the DNS-rebinding TOCTOU window that raw
+        # requests.get left open). Failures surface as OSError (the same
+        # IOError family requests errors belonged to) so the scrape-job retry
+        # contract is unchanged; SSRF rejections stay ValueError.
         last_error: Exception | None = None
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
-                response = requests.get(
+                response = safe_httpx_get_sync(
                     validated_url,
                     headers={"User-Agent": "RegEngine/1.0 (Compliance Monitoring)"},
                     timeout=self.REQUEST_TIMEOUT,
@@ -80,29 +93,28 @@ class NYDFSScraper(StateRegistryScraper):
                     retry_after = _retry_delay(response.headers.get("Retry-After"), self.RETRY_DELAY)
                     time.sleep(retry_after)
                     continue
-                if response.status_code >= 400:
-                    raise requests.HTTPError(f"HTTP {response.status_code}", response=response)
+                response.raise_for_status()
 
                 content_type = response.headers.get("Content-Type", "application/octet-stream").split(";")[0]
                 content = response.content
                 if content_type == "text/html":
                     content = _extract_visible_text(content).encode("utf-8")
                 return FetchedItem(source=source, content_bytes=content, content_type=content_type)
-            except requests.Timeout as exc:
+            except SSRFError as exc:
+                raise ValueError(f"URL validation failed: {exc}") from exc
+            except httpx.TimeoutException as exc:
                 last_error = exc
                 if attempt < self.MAX_RETRIES:
                     time.sleep(self.RETRY_DELAY)
                     continue
-                raise
-            except requests.RequestException as exc:
+            except httpx.HTTPError as exc:
                 last_error = exc
                 if attempt < self.MAX_RETRIES:
                     time.sleep(self.RETRY_DELAY)
                     continue
-                raise
 
         if last_error is not None:
-            raise last_error
+            raise OSError(f"NYDFS fetch failed: {last_error}") from last_error
         raise RuntimeError("NYDFS fetch failed without an exception")
 
 
@@ -110,7 +122,13 @@ def _retry_delay(value: str | None, fallback: float) -> float:
     try:
         if value is None:
             return fallback
-        return max(float(value), 0.0)
+        delay = float(value)
+        if not math.isfinite(delay):
+            # A hostile or buggy Retry-After ("inf", "nan", "1e999")
+            # must not hang the worker in time.sleep or raise; degrade
+            # to the configured fallback instead.
+            return fallback
+        return max(delay, 0.0)
     except ValueError:
         return fallback
 

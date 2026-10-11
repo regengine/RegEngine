@@ -767,6 +767,14 @@ def refreeze_snapshot(
     """
     db = _require_db(db)
     row = _fetch_snapshot(db, ctx.tenant_id, snapshot_id)
+    if _seal_version(row) is None:
+        # Same rule as attest: re-freezing copies the stored name and reason
+        # into a new sealed row, so re-freezing a tampered row would launder
+        # attacker text under a fresh valid hash. Refuse, fail closed.
+        raise HTTPException(
+            status_code=409,
+            detail="Snapshot failed integrity verification; refusing to refreeze",
+        )
     if row["snapshot_state"] == _STATE_SUPERSEDED:
         raise HTTPException(
             status_code=409,

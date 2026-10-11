@@ -118,6 +118,7 @@ async def test_cypher_filters_control_by_tenant():
             "evidence_items": 0,
             "avg_effectiveness": None,
             "fresh_evidence": 0,
+            "covered_obligations": 0,
         },
     )
 
@@ -143,6 +144,7 @@ async def test_cypher_filters_evidence_by_tenant():
             "evidence_items": 0,
             "avg_effectiveness": None,
             "fresh_evidence": 0,
+            "covered_obligations": 0,
         },
     )
 
@@ -172,6 +174,7 @@ async def test_cypher_anchor_still_scoped_to_tenant():
             "evidence_items": 0,
             "avg_effectiveness": None,
             "fresh_evidence": 0,
+            "covered_obligations": 0,
         },
     )
 
@@ -204,6 +207,7 @@ async def test_endpoint_passes_caller_tenant_id_as_param():
             "evidence_items": 0,
             "avg_effectiveness": None,
             "fresh_evidence": 0,
+            "covered_obligations": 0,
         },
     )
 
@@ -218,7 +222,7 @@ async def test_endpoint_passes_caller_tenant_id_as_param():
 @pytest.mark.asyncio
 async def test_empty_graph_has_no_measured_score():
     ctx, _, _ = _make_mock_neo4j_client(
-        {"total_obligations": 0, "controls_mapped": 0, "evidence_items": 0, "avg_effectiveness": 0, "fresh_evidence": 0}
+        {"total_obligations": 0, "controls_mapped": 0, "evidence_items": 0, "avg_effectiveness": 0, "fresh_evidence": 0, "covered_obligations": 0}
     )
     result = await _call_endpoint(ctx)
     assert result.overall_score is None

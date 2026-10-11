@@ -39,6 +39,8 @@ class CPPAScraper(StateRegistryScraper):
             content_type = response.headers.get("Content-Type", "text/html").split(";")[0]
             return FetchedItem(source=source, content_bytes=response.content, content_type=content_type)
         except (httpx.HTTPError, SSRFError, ValueError) as e:
-            # Log error but return empty content to allow graceful degradation
+            # Log error but return empty content to allow graceful degradation.
+            # content_type stays None so empty payloads are never mistaken
+            # for real content downstream.
             logger.warning("fetch_failed", url=source.url, error=str(e))
-            return FetchedItem(source=source, content_bytes=b"", content_type="text/html")
+            return FetchedItem(source=source, content_bytes=b"", content_type=None)

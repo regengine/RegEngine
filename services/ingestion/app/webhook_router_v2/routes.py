@@ -19,7 +19,7 @@ import sys
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from shared.database import get_db_session
 from shared.idempotency import IdempotencyDependency
 from sqlalchemy.exc import SQLAlchemyError
@@ -108,9 +108,12 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     _auth: None = Depends(_verify_api_key),
-    # #1243: HMAC signature check runs in parallel with the API-key check.
-    # A leaked key alone is no longer sufficient to forge events when
-    # ``WEBHOOK_HMAC_SECRET`` is configured.
+    # #1243 / #3229: HMAC signature check runs in parallel with the
+    # API-key check. A leaked key alone is no longer sufficient to forge
+    # events: with ``WEBHOOK_HMAC_SECRET`` configured the body must be
+    # signed, and on a closed gate (production or any strict/cloud
+    # runtime) an unset secret rejects every ingest request instead of
+    # skipping verification.
     _signature: None = Depends(_verify_webhook_signature),
     _subscription: None = Depends(require_active_subscription),
     _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
@@ -627,7 +630,11 @@ async def get_recent_events(
             for r in rows
         ]
         return {"tenant_id": tenant_id, "events": events, "total": len(events)}
-    except (ImportError, ValueError, RuntimeError) as e:
+    except (ImportError, ValueError, RuntimeError, SQLAlchemyError, OSError, ConnectionError) as e:
+        # SQLAlchemyError/OSError: the session was created but the query
+        # itself failed (connection lost, statement error). Degrade to
+        # empty the same way as the other query failures above rather
+        # than surfacing an unhandled 500 from a dashboard read.
         _pkg.logger.warning("recent_events_query_failed: %s", str(e))
         return {"tenant_id": tenant_id, "events": [], "total": 0}
     finally:
@@ -702,7 +709,7 @@ def _enforce_webhooks_read_principal(
 async def recent_events_endpoint(
     request: Request,
     tenant_id: str,
-    limit: int = 10,
+    limit: int = Query(default=10, ge=1),
     principal: IngestionPrincipal = Depends(get_ingestion_principal),
     _auth: None = Depends(_verify_api_key_present),
 ):
@@ -757,7 +764,7 @@ async def verify_chain(
             "errors": result.errors,
             "checked_at": result.checked_at,
         }
-    except (ImportError, ValueError, RuntimeError) as e:
+    except (ImportError, ValueError, RuntimeError, SQLAlchemyError, OSError, ConnectionError) as e:
         diagnostics = _failure_diagnostics(request, e)
         _pkg.logger.exception(
             "chain_verification_failed",
