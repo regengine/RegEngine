@@ -20,6 +20,7 @@ import secrets
 import string
 import subprocess
 import sys
+import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -37,6 +38,122 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+# Upper bound for any single deployment subprocess. A deploy step that hangs
+# (wedged installer, interactive prompt on a non-tty) must fail loudly instead
+# of blocking the run forever.
+_DEPLOY_TIMEOUT_SECONDS = 600
+
+
+def _spec_error(path: str, detail: str) -> ValueError:
+    return ValueError(f"Invalid spec at '{path}': {detail}")
+
+
+def _require_mapping(value: Any, path: str) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        raise _spec_error(path, f"must be a mapping, got {type(value).__name__}")
+    return value
+
+
+def _require_string(value: Any, path: str) -> str:
+    if not isinstance(value, str):
+        raise _spec_error(path, f"must be a string, got {type(value).__name__}")
+    return value
+
+
+def _require_string_list(value: Any, path: str) -> List[str]:
+    if not isinstance(value, list) or any(not isinstance(v, str) for v in value):
+        raise _spec_error(path, "must be a list of strings")
+    return value
+
+
+def _validate_config_schema(config: Dict[str, Any]) -> None:
+    """Reject malformed specs with a clear field path.
+
+    Without this, a bad spec (a string where a mapping belongs, a missing
+    persona id, a mistyped step key) explodes mid-run as a bare KeyError,
+    TypeError or AttributeError that aborts every remaining phase.
+    """
+    env = _require_mapping(config["environment"], "environment")
+    required_vars = env.get("required_env_vars", [])
+    if required_vars is None:
+        env["required_env_vars"] = []
+    else:
+        _require_string_list(required_vars, "environment.required_env_vars")
+
+    public = config.get("public_surface", {})
+    if public:
+        _require_mapping(public, "public_surface")
+        for key in ("marketing_site", "api_docs", "status_page"):
+            if public.get(key) is not None:
+                _require_mapping(public[key], f"public_surface.{key}")
+        components = (public.get("status_page") or {}).get("components", [])
+        if components:
+            if not isinstance(components, list):
+                raise _spec_error("public_surface.status_page.components", "must be a list")
+            for i, component in enumerate(components):
+                _require_mapping(component, f"public_surface.status_page.components[{i}]")
+                _require_string(component.get("name"), f"public_surface.status_page.components[{i}].name")
+
+    sales = config.get("sales", {})
+    if sales:
+        _require_mapping(sales, "sales")
+        for i, persona in enumerate(sales.get("personas", [])):
+            base = f"sales.personas[{i}]"
+            _require_mapping(persona, base)
+            _require_string(persona.get("id"), f"{base}.id")
+            _require_string(persona.get("title"), f"{base}.title")
+            for key in ("pains", "desired_outcomes"):
+                if persona.get(key) is not None:
+                    _require_string_list(persona[key], f"{base}.{key}")
+        campaigns = sales.get("outbound_campaigns", {})
+        if campaigns:
+            _require_mapping(campaigns, "sales.outbound_campaigns")
+            sequences = campaigns.get("sequences", [])
+            if not isinstance(sequences, list):
+                raise _spec_error("sales.outbound_campaigns.sequences", "must be a list")
+            for i, campaign in enumerate(sequences):
+                base = f"sales.outbound_campaigns.sequences[{i}]"
+                _require_mapping(campaign, base)
+                _require_string(campaign.get("id"), f"{base}.id")
+                _require_string(campaign.get("persona"), f"{base}.persona")
+                steps = campaign.get("steps", [])
+                if not isinstance(steps, list):
+                    raise _spec_error(f"{base}.steps", "must be a list")
+                for j, step in enumerate(steps):
+                    step_base = f"{base}.steps[{j}]"
+                    _require_mapping(step, step_base)
+                    _require_string(step.get("channel"), f"{step_base}.channel")
+                    _require_string(step.get("template_ref"), f"{step_base}.template_ref")
+
+    design_partners = config.get("design_partner_program", {})
+    if design_partners:
+        _require_mapping(design_partners, "design_partner_program")
+        if design_partners.get("max_partners") is not None:
+            max_partners = design_partners["max_partners"]
+            if not isinstance(max_partners, int) or max_partners < 0:
+                raise _spec_error("design_partner_program.max_partners", "must be a non-negative integer")
+        if design_partners.get("legal_template_ref") is not None:
+            _require_string(design_partners["legal_template_ref"], "design_partner_program.legal_template_ref")
+        if design_partners.get("sandbox") is not None:
+            _require_mapping(design_partners["sandbox"], "design_partner_program.sandbox")
+
+    investor = config.get("investor_readiness", {})
+    if investor:
+        _require_mapping(investor, "investor_readiness")
+        if investor.get("memo_template_ref") is not None:
+            _require_string(investor["memo_template_ref"], "investor_readiness.memo_template_ref")
+
+    infra = config.get("infrastructure", {})
+    if infra:
+        _require_mapping(infra, "infrastructure")
+        terraform = infra.get("terraform", {})
+        if terraform:
+            _require_mapping(terraform, "infrastructure.terraform")
+            if terraform.get("root_module_path") is not None:
+                _require_string(terraform["root_module_path"], "infrastructure.terraform.root_module_path")
+            if terraform.get("workspaces") is not None:
+                _require_string_list(terraform["workspaces"], "infrastructure.terraform.workspaces")
 
 
 class OrchestrationMode(Enum):
@@ -173,10 +290,19 @@ class LaunchOrchestrator:
                 )
 
             # Basic validation
+            if config is None:
+                raise ValueError(f"Empty configuration file: {self.config_path}")
+            if not isinstance(config, dict):
+                raise ValueError(
+                    f"Invalid configuration file {self.config_path}: "
+                    f"top level must be a mapping, got {type(config).__name__}"
+                )
             required_keys = ["orchestrator", "environment"]
             for key in required_keys:
                 if key not in config:
                     raise ValueError(f"Missing required config key: {key}")
+
+            _validate_config_schema(config)
 
             logger.info("Configuration loaded successfully")
             return config
@@ -184,6 +310,17 @@ class LaunchOrchestrator:
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
             raise
+
+    def _assert_live(self) -> None:
+        """Re-check the production guard immediately before any side effect.
+
+        The __init__ check alone is not enough: dry_run is a plain attribute,
+        so flipping it after construction (or calling a phase method directly)
+        would otherwise run real deployments with no guard at all. Callers
+        only reach this on live paths (dry-run paths return before it).
+        """
+        if os.getenv("REGENGINE_ENV") != "production":
+            raise RuntimeError("Unsafe orchestrator execution: live actions require REGENGINE_ENV=production")
 
     def _validate_environment(self) -> bool:
         """Validate required environment variables and secrets"""
@@ -320,6 +457,7 @@ class LaunchOrchestrator:
         one_pager_content = self._create_one_pager(persona)
 
         if not self.dry_run:
+            self._assert_live()
             one_pager_path.parent.mkdir(parents=True, exist_ok=True)
             with open(one_pager_path, "w") as f:
                 f.write(one_pager_content)
@@ -356,6 +494,26 @@ Contact: sales@regengine.ai
         persona = campaign["persona"]
         steps = campaign.get("steps", [])
 
+        # A sequence whose template files do not exist cannot run. Claiming
+        # success here used to hide a broken campaign until send time.
+        missing_templates = [
+            step["template_ref"] for step in steps if not (self.base_dir / step["template_ref"]).is_file()
+        ]
+        if missing_templates:
+            self.result.add_event(
+                phase,
+                f"initialize_sequence_{sequence_id}",
+                "failure",
+                details={
+                    "sequence_id": sequence_id,
+                    "persona": persona,
+                    "num_steps": len(steps),
+                    "missing_templates": missing_templates,
+                },
+                error=f"Missing template files: {', '.join(missing_templates)}",
+            )
+            return
+
         # In production, this would integrate with SendGrid, Apollo, or similar
         self.result.add_event(
             phase,
@@ -383,7 +541,10 @@ Contact: sales@regengine.ai
         if legal_ref and legal_template.is_file():
             self.result.add_artifact("design_partner_agreement", str(legal_template))
             self.result.add_event(
-                phase, "validate_legal_template", "success", details={"template_path": str(legal_template)}
+                phase,
+                "validate_legal_template",
+                "skipped",
+                details={"reason": "no legal_template_ref configured"},
             )
         else:
             self.result.add_event(
@@ -436,6 +597,7 @@ Contact: sales@regengine.ai
 
         output_dir = self.base_dir / "generated" / "tenants"
         if not self.dry_run:
+            self._assert_live()
             output_dir.mkdir(parents=True, exist_ok=True)
             config_path = output_dir / f"{sandbox_id}.json"
             with open(config_path, "w") as f:
@@ -451,10 +613,7 @@ Contact: sales@regengine.ai
                 "api_key_prefix": api_key_prefix,
                 "config_path": str(output_dir / f"{sandbox_id}.json"),
                 "reason": "not_implemented",
-                "detail": (
-                    "No platform API call was made; the sandbox does not exist "
-                    "and the key is not registered."
-                ),
+                "detail": ("No platform API call was made; the sandbox does not exist and the key is not registered."),
             },
         )
 
@@ -556,11 +715,29 @@ Contact: sales@regengine.ai
             self.result.add_event(phase, action, "success", details={**details, "dry_run": True, "command": command})
             return
 
+        self._assert_live()
+
+        if not command or not command.strip():
+            self.result.add_event(
+                phase,
+                action,
+                "failure",
+                details={**details, "command": command},
+                error="Refusing to execute an empty deployment command",
+            )
+            return
+
         try:
             # Use shlex.split instead of shell=True to prevent command injection
             import shlex
 
-            result = subprocess.run(shlex.split(command), check=True, capture_output=True, text=True)
+            result = subprocess.run(
+                shlex.split(command),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=_DEPLOY_TIMEOUT_SECONDS,
+            )
             self.result.add_event(
                 phase,
                 action,
@@ -579,6 +756,18 @@ Contact: sales@regengine.ai
                 "failure",
                 details={**details, "command": command, "stdout": exc.stdout, "stderr": exc.stderr},
                 error=str(exc),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # OSError covers a missing binary or an unexecutable command;
+            # TimeoutExpired covers a hung deploy step. Either way the rest
+            # of the run must continue, so record the failure here instead of
+            # letting the exception abort every remaining phase.
+            self.result.add_event(
+                phase,
+                action,
+                "failure",
+                details={**details, "command": command},
+                error=f"{type(exc).__name__}: {exc}",
             )
 
     def _generate_summary(self):
@@ -615,10 +804,13 @@ Contact: sales@regengine.ai
         logger.info(f"Orchestration completed in {duration:.2f} seconds")
         logger.info(f"Success: {self.result.success}")
 
-        # Write result to file
+        # Write result to file atomically: a crash or a concurrent run must
+        # leave behind the previous complete file, never a truncated one.
         result_file = self.base_dir / "orchestration_result.json"
-        with open(result_file, "w") as f:
+        tmp_file = result_file.with_name(f".{result_file.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        with open(tmp_file, "w") as f:
             json.dump(self.result.to_dict(), f, indent=2)
+        os.replace(tmp_file, result_file)
 
         logger.info(f"Result written to: {result_file}")
 
