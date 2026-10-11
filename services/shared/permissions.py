@@ -15,6 +15,11 @@ from typing import Iterable, Optional
 
 
 def _normalize(permission: str) -> str:
+    # Fail closed on helper misuse: non-string grants (None, numbers, objects
+    # from untrusted rows) normalize to empty so permission_implies returns
+    # False instead of raising AttributeError (a 500 on an auth path).
+    if not isinstance(permission, str):
+        return ""
     return permission.strip().lower().replace(":", ".")
 
 

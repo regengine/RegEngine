@@ -176,7 +176,9 @@ class APIKeyStore:
 
     def validate_key(self, raw_key: str) -> Optional[APIKey]:
         """Validate an API key and return the associated metadata."""
-        if not raw_key or not raw_key.startswith("rge_"):
+        # Fail closed on helper misuse: a non-string credential (None from a
+        # missing header is already falsy) is an invalid key, never a 500.
+        if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
         # Extract key_id from the raw key (first part before hash)
@@ -484,6 +486,10 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
     Raises HTTPException(403) if not permitted.
     """
     federal_roots = {"US", "EU", "UK"}
+    # Coerce defensively: a non-string request is never entitled, and
+    # non-string entitlement entries are skipped, so malformed input fails
+    # closed with 403 instead of raising AttributeError/TypeError (a 500).
+    requested_jurisdiction = str(requested_jurisdiction or "")
     # Allow if root is federal
     root = requested_jurisdiction.split("-")[0] if requested_jurisdiction else ""
     allowed = api_key.allowed_jurisdictions or []
@@ -491,6 +497,8 @@ def verify_jurisdiction_access(api_key: Union[APIKey, APIKeyResponse], requested
         return
     # State/municipal require explicit entitlement (prefix match allowed)
     for ent in allowed:
+        if not isinstance(ent, str):
+            continue
         if requested_jurisdiction == ent:
             return
         if "-" in ent and requested_jurisdiction.startswith(ent + "-"):
