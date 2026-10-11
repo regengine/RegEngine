@@ -337,11 +337,20 @@ def _db_update_portal_link_status(portal_id: str, status: str, tenant_id: Option
     try:
         if tenant_id:
             _set_tenant_context(db, tenant_id)
-        db.execute(
-            # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-            text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
-            {"status": status, "link_token": portal_id},
-        )
+            db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text(
+                    "UPDATE fsma.tenant_portal_links SET status = :status "
+                    "WHERE link_token = :link_token AND tenant_id = CAST(:tenant_id AS uuid)"
+                ),
+                {"status": status, "link_token": portal_id, "tenant_id": tenant_id},
+            )
+        else:
+            db.execute(
+                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                text("UPDATE fsma.tenant_portal_links SET status = :status WHERE link_token = :link_token"),
+                {"status": status, "link_token": portal_id},
+            )
         db.commit()
         return True
     except Exception as exc:

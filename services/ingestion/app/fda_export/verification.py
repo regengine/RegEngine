@@ -14,15 +14,26 @@ from fastapi import Depends, HTTPException, Query
 
 from ..authz import require_permission
 from ..export_models import ExportVerifyResponse
-from ..fda_export_service import _generate_csv
+from ..fda_export_service import _generate_csv, _generate_csv_v2
 from ..subscription_gate import require_active_subscription
 from .queries import (
     FULL_EXPORT_TYPES,
     ExportOverflowError,
+    build_v2_where_clause,
+    fetch_v2_events,
     reconstruct_full_export_events,
+    v2_rows_to_event_dicts,
 )
 
 logger = logging.getLogger("fda-export")
+
+# ``fda_export_log.export_type`` values produced by ``GET /export/v2``.
+# V2 bytes carry four appended compliance columns, so regenerating them
+# with the v1 CSV builder can never reproduce the stored hash — the v2
+# canonical query plus ``_generate_csv_v2`` must be used instead (#2898
+# follow-up: without this branch every v2 export verified as
+# MISMATCH_DETECTED on untampered data).
+V2_EXPORT_TYPES = frozenset({"v2_spreadsheet", "v2_package"})
 
 
 async def verify_export_handler(
@@ -73,7 +84,9 @@ async def verify_export_handler(
         end = str(end_date) if end_date else None
 
         # Decide reproducibility BEFORE touching the event tables.
-        if original_tlc:
+        if export_type in V2_EXPORT_TYPES:
+            reconstruction = "v2"
+        elif original_tlc:
             reconstruction = "single_tlc"
         elif export_type in FULL_EXPORT_TYPES:
             reconstruction = "full"
@@ -106,7 +119,30 @@ async def verify_export_handler(
         include_pii = bool(include_pii)
 
         # Re-query and re-generate deterministically based on stored query scope.
-        if reconstruction == "single_tlc":
+        if reconstruction == "v2":
+            # Same query + row mapping + CSV builder the v2 exporter uses:
+            # canonical store, stored CTE-type filter, compliance columns.
+            where_clause, params = build_v2_where_clause(
+                tenant_id=tenant_id,
+                tlc=original_tlc,
+                event_type=query_event_type,
+                start_date=start,
+                end_date=end,
+            )
+            v2_rows = fetch_v2_events(db_session, where_clause, params)
+            if len(v2_rows) > 10000:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "The stored export's scope no longer fits the synchronous "
+                        "limit, so the bytes cannot be re-verified synchronously; "
+                        "this is a scope limit, not an integrity failure."
+                    ),
+                )
+            events = v2_rows_to_event_dicts(v2_rows)
+            csv_content = _generate_csv_v2(events, include_pii=include_pii)
+            regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        elif reconstruction == "single_tlc":
             events = persistence.query_events_by_tlc(
                 tenant_id=tenant_id,
                 tlc=original_tlc,
@@ -136,8 +172,9 @@ async def verify_export_handler(
                     ),
                 ) from exc
 
-        csv_content = _generate_csv(events, include_pii=include_pii)
-        regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
+        if reconstruction != "v2":
+            csv_content = _generate_csv(events, include_pii=include_pii)
+            regenerated_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
 
         match = regenerated_hash == original_hash
 
