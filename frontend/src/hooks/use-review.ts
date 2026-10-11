@@ -44,7 +44,7 @@ export function useApproveReviewItem() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (itemId: string) =>
-            reviewFetch<void>(`/api/review/${itemId}/approve`, {
+            reviewFetch<void>(`/api/review/${encodeURIComponent(itemId)}/approve`, {
                 method: 'POST',
                 body: JSON.stringify({}),
             }),
@@ -58,7 +58,7 @@ export function useRejectReviewItem() {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (itemId: string) =>
-            reviewFetch<void>(`/api/review/${itemId}/reject`, {
+            reviewFetch<void>(`/api/review/${encodeURIComponent(itemId)}/reject`, {
                 method: 'POST',
                 body: JSON.stringify({}),
             }),

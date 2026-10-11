@@ -23,9 +23,13 @@ processors:
 
 exporters:
   otlp/jaeger:
-    endpoint: jaeger:4317
+    # Endpoint and TLS mode come from the environment so production can
+    # point at a TLS Jaeger without editing this file. The default is
+    # secure (TLS verified). Local plaintext Jaeger setups must opt in
+    # explicitly with JAEGER_OTLP_INSECURE=true.
+    endpoint: ${env:JAEGER_OTLP_ENDPOINT:-jaeger:4317}
     tls:
-      insecure: true
+      insecure: ${env:JAEGER_OTLP_INSECURE:-false}
   prometheus:
     endpoint: 0.0.0.0:8889
   debug:

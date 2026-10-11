@@ -201,10 +201,17 @@ class APIKeyStore:
             logger.warning("api_key_disabled", key_id=key_id)
             return None
 
-        # Check if key has expired
-        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-            logger.warning("api_key_expired", key_id=key_id)
-            return None
+        # Check if key has expired. Naive datetimes (no tzinfo) can arrive
+        # from DB rows or direct construction; assume UTC so the comparison
+        # never raises TypeError (which would surface as a 500 instead of
+        # an auth decision).
+        if api_key.expires_at:
+            expires_at = api_key.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at < datetime.now(timezone.utc):
+                logger.warning("api_key_expired", key_id=key_id)
+                return None
 
         # Track last usage timestamp
         api_key.last_used_at = datetime.now(timezone.utc)
@@ -382,6 +389,40 @@ async def require_api_key(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Workload credentials are not accepted by tenant APIs",
         )
+
+    # SECURITY: deny suspended tenants on the live API-key path. A
+    # cryptographically valid key for a suspended, archived, or missing
+    # tenant must not authenticate. Only the validated key's tenant_id is
+    # ever read here, never a request-supplied value. Fail closed: an
+    # unreadable status denies (503), it never allows. This runs before
+    # rate limiting so a suspended key can neither consume quota nor be
+    # distinguished by a 429, and before the principal is stored so no
+    # downstream consumer ever sees a suspended tenant as authenticated.
+    # The in-memory store has no tenants table (local dev and test only);
+    # production always uses DatabaseAPIKeyStore, which enforces this.
+    if isinstance(key_store, DatabaseAPIKeyStore):
+        try:
+            tenant_status = await key_store.get_tenant_status(api_key.tenant_id)
+        except Exception as exc:
+            logger.error(
+                "api_key_tenant_status_lookup_failed",
+                key_id=getattr(api_key, "key_id", None),
+                error=str(exc),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication service temporarily unavailable",
+            ) from exc
+        if tenant_status not in ("active", "trial"):
+            logger.warning(
+                "suspended_tenant_api_key_rejected",
+                key_id=getattr(api_key, "key_id", None),
+                tenant_status=tenant_status,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid API key",
+            )
 
     # Check rate limit
     if isinstance(key_store, DatabaseAPIKeyStore):

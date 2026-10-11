@@ -30,17 +30,27 @@ async def find_gaps(
 
     Returns:
         List of events with gap details
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty. The previous
+            `$tenant_id IS NULL OR ...` shim let null-tenant callers
+            read every tenant's events, so callers must pass a tenant.
     """
+    if not tenant_id:
+        raise ValueError(
+            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
+
     start_time = time.time()
 
     # Find events missing key fields
     query = """
     MATCH (e:TraceEvent)
-    WHERE ($tenant_id IS NULL OR e.tenant_id = $tenant_id)
+    WHERE e.tenant_id = $tenant_id
     AND (
         e.event_date IS NULL OR
         e.event_date = '' OR
-        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } OR
+        NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } OR
         e.responsible_party_contact IS NULL OR
         e.responsible_party_contact = ''
     )
@@ -50,7 +60,7 @@ async def find_gaps(
         e.event_date as event_date,
         e.document_id as document_id,
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
-        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) } THEN ',missing_lot' ELSE '' END +
+        CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
     LIMIT 2000
     """
@@ -369,7 +379,16 @@ async def find_all_gaps(
 
     Returns:
         Combined list of all gaps and violations
+
+    Raises:
+        ValueError: if `tenant_id` is None or empty (propagated from
+            the underlying gap queries, which require a tenant).
     """
+    if not tenant_id:
+        raise ValueError(
+            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
+        )
+
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)
 
