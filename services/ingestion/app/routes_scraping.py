@@ -13,7 +13,7 @@ from shared.auth import APIKey, require_api_key, verify_jurisdiction_access
 from shared.database import SessionLocal
 from shared.task_queue import enqueue_task
 
-from plugins.fsma.sources import FSMA_SOURCES
+from plugins.fsma.sources import FSMA_SOURCES, load_fsma_sources
 
 from .discovery import discovery
 from .models import IngestAllRegulationsResponse, ScrapeRegistryResponse, ScrapeResponse
@@ -122,7 +122,7 @@ def scrape_registry(
     return {"adaptor": adaptor, "count": len(results), "sources": results}
 
 
-async def run_all_regulations_ingest() -> dict:
+async def run_all_regulations_ingest(tenant_id: str = "system") -> dict:
     """Run the FDA-scoped, idempotent regulatory ingestion sweep.
 
     Shared by the HTTP route below and the scheduler's nightly
@@ -130,14 +130,21 @@ async def run_all_regulations_ingest() -> dict:
     ``services/scheduler/service.py``) — the consolidated monolith has no
     internal credential that ``require_api_key`` accepts, so the old
     HTTP-to-self call could never authenticate.
+
+    ``tenant_id`` namespaces the manual-upload queue for robots-denied
+    sources. The HTTP route passes the caller's tenant; the scheduler's
+    nightly call keeps the shared ``system`` bucket.
     """
+    # Refuse a bad catalog before any fetch. A path-like name, an off-scope
+    # URL, or an extra scope field must not reach the scraper or the queue.
+    sources = load_fsma_sources(FSMA_SOURCES)
     job_id = str(uuid.uuid4())
     started_at = time.time()
 
     logger.info(
         "fsma_ingestion_triggered",
         job_id=job_id,
-        sources=len(FSMA_SOURCES),
+        sources=len(sources),
     )
 
     tasks = [
@@ -146,13 +153,14 @@ async def run_all_regulations_ingest() -> dict:
             source_url=source["url"],
             source_type=source["type"],
             jurisdiction=source["jurisdiction"],
+            tenant_id=tenant_id,
         )
-        for source in FSMA_SOURCES
+        for source in sources
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     summary: dict[str, int] = {
-        "sources_attempted": len(FSMA_SOURCES),
+        "sources_attempted": len(sources),
         "queued_manual": 0,
         "unchanged": 0,
         "ingested": 0,
@@ -190,4 +198,4 @@ async def ingest_all_regulations(
 ):
     """Trigger an FDA-scoped, idempotent regulatory ingestion run."""
     logger.info("fsma_ingestion_requested", tenant_id=api_key.tenant_id)
-    return await run_all_regulations_ingest()
+    return await run_all_regulations_ingest(tenant_id=api_key.tenant_id)

@@ -301,6 +301,56 @@ class TestConfigureConnector:
         # exercised, not the failure path.
         assert resp.status_code == 200
 
+    def test_private_base_url_rejected_at_configure_time(self, client, monkeypatch):
+        """A loopback base URL can never sync (every GET is SSRF-checked),
+        so configure must fail fast with 400 instead of deferring the
+        failure to sync time. Fails on the pre-fix code, which stores the
+        base and reports success."""
+
+        class _FakeClass:
+            def __init__(self, config):
+                self._config = config
+
+            def get_connector_info(self):
+                return {"id": CONNECTOR_ID, "category": "food_safety"}
+
+        created = {}
+
+        def _get_or_create(_tid, _cid, _cfg):
+            created["called"] = True
+            return _FakeConnector(status=ConnectionStatus.CONNECTED)
+
+        monkeypatch.setattr(registry_mod, "get_connector_class", lambda _id: _FakeClass)
+        monkeypatch.setattr(registry_mod, "get_or_create_connector", _get_or_create)
+
+        resp = client.post(
+            f"/api/v1/integrations/configure/{TENANT}",
+            json={"connector_id": CONNECTOR_ID, "base_url": "http://127.0.0.1:9"},
+        )
+        assert resp.status_code == 400
+        assert "base_url" in resp.json()["detail"]
+        assert "called" not in created
+
+    def test_link_local_base_url_rejected_at_configure_time(self, client, monkeypatch):
+        class _FakeClass:
+            def __init__(self, config):
+                self._config = config
+
+            def get_connector_info(self):
+                return {"id": CONNECTOR_ID, "category": "food_safety"}
+
+        def _get_or_create(_tid, _cid, _cfg):
+            raise AssertionError("must not store an unreachable base")
+
+        monkeypatch.setattr(registry_mod, "get_connector_class", lambda _id: _FakeClass)
+        monkeypatch.setattr(registry_mod, "get_or_create_connector", _get_or_create)
+
+        resp = client.post(
+            f"/api/v1/integrations/configure/{TENANT}",
+            json={"connector_id": CONNECTOR_ID, "base_url": "http://169.254.169.254/"},
+        )
+        assert resp.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # POST /test/{tenant_id}/{connector_id}

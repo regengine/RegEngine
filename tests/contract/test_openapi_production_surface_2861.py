@@ -16,8 +16,21 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
+
 # Import-only values for production route enumeration:
 # the child builds a route table and exits without serving anything.
+def _synthetic_fernet_key() -> str:
+    """Fresh Fernet key per parent process for the strict-auth MFA gate.
+
+    Generated at runtime so no key material lives in the file. The child
+    boots under production posture, which is always strict, and strict
+    runtimes refuse to boot without a valid MFA_ENCRYPTION_KEY (#3238).
+    """
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key().decode()
+
+
 _CHILD_ENV = {
     "REGENGINE_ENV": "production",
     "ENV": "production",
@@ -32,6 +45,7 @@ _CHILD_ENV = {
     "JWT_SECRET": "openapi-contract-test-import-only-not-a-real-jwt-secret-9c7e",
     "REGENGINE_API_KEY": "openapi-contract-test-import-only-not-a-real-key-1a3d",
     "TOOL_ACCESS_SECRET": "openapi-contract-test-import-only-not-a-real-tool-8e5c",
+    "MFA_ENCRYPTION_KEY": _synthetic_fernet_key(),
     # DATABASE_URL (above) is the only startup credential the production
     # secret gate requires: optional subsystems stay disabled in the child
     # (the production router set has no graph; EVENT_BACKBONE is pg),

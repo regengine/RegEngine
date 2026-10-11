@@ -179,6 +179,39 @@ async def test_neo4j_skipped_when_uri_not_set(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Test 3b: NEO4J_URI set but password missing — skip before driver, warn
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_neo4j_skipped_when_password_not_set(monkeypatch):
+    """With a URI but no NEO4J_PASSWORD the function must not open a driver
+    with an empty password. It returns early with a skip warning instead of
+    attempting an unauthenticated graph delete."""
+    monkeypatch.setenv("NEO4J_URI", "bolt://neo4j-test:7687")
+    monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+
+    mock_async_gdb = MagicMock()
+
+    with patch.dict("sys.modules", {"neo4j": MagicMock(AsyncGraphDatabase=mock_async_gdb)}):
+        import importlib
+
+        import structlog
+
+        import services.admin.app.erasure_routes as mod
+
+        importlib.reload(mod)
+
+        with structlog.testing.capture_logs() as cap_logs:
+            await mod._delete_neo4j_user_graph_data(TEST_TENANT_ID, TEST_USER_ID)
+
+    mock_async_gdb.driver.assert_not_called()
+    assert any(
+        e.get("event") == "erasure_neo4j_skip" and e.get("reason") == "NEO4J_PASSWORD not configured" for e in cap_logs
+    ), f"Expected an erasure_neo4j_skip warning for the missing password; got: {cap_logs}"
+
+
+# ---------------------------------------------------------------------------
 # Test 4: Source-level guardrail — tenant_id never string-formatted in Cypher
 # ---------------------------------------------------------------------------
 

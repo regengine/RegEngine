@@ -76,9 +76,11 @@ def _row(
     ]
 
 
-def _dedup_lots(lots: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _dedup_lots(lots: Sequence[Any]) -> List[Dict[str, Any]]:
     seen: Dict[Any, Dict[str, Any]] = {}
     for lot in lots or []:
+        if not isinstance(lot, dict):
+            continue
         seen.setdefault(lot.get("tlc"), lot)
     return list(seen.values())
 
@@ -103,15 +105,26 @@ def build_trace_csv_rows(result: Any, tlc: str) -> List[List[str]]:
 
     rows: List[List[str]] = []
 
-    if trace_rows:
+    associations = [row for row in (trace_rows or []) if isinstance(row, dict)]
+    if trace_rows and associations:
         # Preferred path: the tracer preserved the real associations.
+        # A non-dict entry is skipped. When every entry is unusable, fall
+        # through to the degraded path instead of aborting the file.
         covered: set = set()
-        for association in trace_rows:
+        for association in associations:
             lot = association.get("lot") or {}
-            rows.append(_row(lot, association.get("event"), association.get("facility")))
+            if not isinstance(lot, dict):
+                lot = {}
+            event = association.get("event")
+            facility = association.get("facility")
+            if not isinstance(event, dict):
+                event = None
+            if not isinstance(facility, dict):
+                facility = None
+            rows.append(_row(lot, event, facility))
             covered.add(lot.get("tlc"))
         # A lot the trace found but could not pair with an event still belongs
-        # in the affected population — emit it with the event cells blank.
+        # in the affected population. Emit it with the event cells blank.
         for lot in lots:
             if lot.get("tlc") not in covered:
                 rows.append(_row(lot, None, None))

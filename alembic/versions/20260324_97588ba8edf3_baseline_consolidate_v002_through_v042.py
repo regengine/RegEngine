@@ -54,6 +54,32 @@ _SQL_FILES = [
 
 def upgrade() -> None:
     """Apply all legacy migrations (V002 through V042) as a single baseline."""
+    # V002 creates RLS policies calling get_tenant_context(), but nothing
+    # before v056 (c2d3e4f5a6b7) creates that function: it arrived outside
+    # the V002-V042 file set. A fresh `alembic upgrade head` therefore died
+    # here with "function get_tenant_context() does not exist". Create the
+    # canonical fail-hard body first (byte-identical semantics to v097,
+    # which owns this function): v056 leaves a UUID-returning function and
+    # its policies alone, and v097 replaces the body unconditionally with
+    # CREATE OR REPLACE, so this converges on every path. This only ever
+    # runs on databases the baseline has not reached; applied databases
+    # never re-execute it.
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION public.get_tenant_context()
+        RETURNS UUID AS $fn$
+        DECLARE
+            tid TEXT;
+        BEGIN
+            tid := NULLIF(current_setting('app.tenant_id', TRUE), '');
+            IF tid IS NULL THEN
+                RAISE EXCEPTION 'app.tenant_id not set - tenant context required for RLS';
+            END IF;
+            RETURN tid::UUID;
+        END;
+        $fn$ LANGUAGE plpgsql STABLE
+        """
+    )
     for filename in _SQL_FILES:
         sql_path = _MIGRATIONS_DIR / filename
         sql = sql_path.read_text(encoding="utf-8")
