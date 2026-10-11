@@ -31,9 +31,17 @@ class MappingEngine:
     """Engine for semantic mapping and harmonization of global regulations."""
 
     def __init__(
-        self, uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = os.getenv("NEO4J_PASSWORD", "")
+        self,
+        uri: str = "bolt://localhost:7687",
+        user: str = "neo4j",
+        password: str = os.getenv("NEO4J_PASSWORD", ""),
+        database: Optional[str] = None,
     ):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        # Tenant database name when the caller routes through one
+        # (Enterprise per-tenant databases). None keeps the driver home
+        # database, which is the only option on Community.
+        self._database = database
         self._groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
         self.llm = None
         if ChatGroq and os.getenv("GROQ_API_KEY"):
@@ -47,27 +55,46 @@ class MappingEngine:
         """Close the Neo4j driver."""
         await self.driver.close()
 
+    def _open_session(self):
+        """Open a session on the configured database when one is set."""
+        # getattr keeps engines built without __init__ (tests that stub
+        # the driver directly) working: no database means home database.
+        database = getattr(self, "_database", None)
+        if database:
+            return self.driver.session(database=database)
+        return self.driver.session()
+
     async def map_requirement(self, obligation_id: str, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find and link similar obligations across different regulations.
 
         Args:
             obligation_id: The obligation text to find mappings for.
-            tenant_id: Optional tenant UUID string for multi-tenant isolation.
+            tenant_id: Tenant UUID string for multi-tenant isolation.
+                Required; null-tenant calls previously read and linked
+                obligations across all tenants.
 
         Returns:
             List of detected mappings.
+
+        Raises:
+            ValueError: if `tenant_id` is None, empty, or whitespace-only.
         """
+        if not tenant_id or not str(tenant_id).strip():
+            raise ValueError(
+                "map_requirement requires a non-empty tenant_id; null-tenant queries are no longer supported"
+            )
+
         if not self.llm:
             logger.warning("mapping_engine_disabled_no_llm")
             return []
 
         # 1. Fetch the source obligation and its context
-        async with self.driver.session() as session:
-            tenant_filter = "AND o.tenant_id = $tenant_id" if tenant_id else ""
+        async with self._open_session() as session:
             source_res = await session.run(
-                f"""
-                MATCH (o:Obligation {{text: $id}})<-[:REQUIRES]-(s:Section)
-                WHERE true {tenant_filter}
+                """
+                MATCH (o:Obligation {text: $id})<-[:REQUIRES]-(s:Section)
+                WHERE o.tenant_id = $tenant_id
+                AND (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 1
             """,
@@ -80,9 +107,10 @@ class MappingEngine:
 
             # 2. Find candidate obligations from OTHER regulations
             candidates_res = await session.run(
-                f"""
+                """
                 MATCH (o:Obligation)<-[:REQUIRES]-(s:Section)
-                WHERE s.regulation <> $reg {tenant_filter}
+                WHERE s.regulation <> $reg AND o.tenant_id = $tenant_id
+                AND (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN o.text as text, s.regulation as regulation, s.id as section_id
                 LIMIT 20
             """,
@@ -140,13 +168,12 @@ class MappingEngine:
 
         # 4. Persistence: Create MAPPED_TO relationships in the graph
         if mappings:
-            tenant_match = ", tenant_id: $tenant_id" if tenant_id else ""
-            async with self.driver.session() as session:
+            async with self._open_session() as session:
                 await session.run(
-                    f"""
+                    """
                     UNWIND $mappings as map
-                    MATCH (o1:Obligation {{text: map.source_id{tenant_match}}})
-                    MATCH (o2:Obligation {{text: map.target_id{tenant_match}}})
+                    MATCH (o1:Obligation {text: map.source_id, tenant_id: $tenant_id})
+                    MATCH (o2:Obligation {text: map.target_id, tenant_id: $tenant_id})
                     MERGE (o1)-[r:MAPPED_TO]->(o2)
                     SET r.confidence = map.confidence,
                         r.justification = map.justification,

@@ -29,11 +29,6 @@ def test_body_at_limit_accepted(body_client):
     assert response.json() == {"bytes_read": 8}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies",
-)
 def test_streamed_body_is_limited_without_content_length(body_client):
     response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
     if "content-length" in response.request.headers:

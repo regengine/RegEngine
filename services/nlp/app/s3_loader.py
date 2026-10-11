@@ -47,18 +47,30 @@ def load_s3_artifact(s3_uri: str) -> str:
         return load_artifact(url)
     except Exception:
         logger.debug("Presigned URL generation failed, falling back to raw download", exc_info=True)
-        # Fallback: download bytes and simple decode
+        # Fallback: download bytes with the same envelope the presigned
+        # path gets via load_artifact (size cap + strict UTF-8). Without
+        # this a hostile object could blow memory and malformed bytes
+        # would be silently dropped, mutilating lot codes downstream.
         params = {"Bucket": bucket, "Key": key}
         owner = os.getenv("OBJECT_STORAGE_EXPECTED_BUCKET_OWNER")
         if owner:
             params["ExpectedBucketOwner"] = owner
         obj = s3.get_object(**params)
-        data = obj["Body"].read()
-        # Same envelope as the presigned-URL path: cap bytes so a large
-        # object cannot pin memory, and decode strictly so malformed
-        # UTF-8 raises instead of silently corrupting lot codes.
-        if len(data) > MAX_DOC_BYTES:
-            raise ValueError("E_DOC_TOO_LARGE: S3 object exceeds cap")
+        declared = obj.get("ContentLength")
+        if isinstance(declared, int) and declared > MAX_DOC_BYTES:
+            raise ValueError("E_DOC_TOO_LARGE: S3 object ContentLength exceeds cap")
+        chunks: list[bytes] = []
+        total = 0
+        body = obj["Body"]
+        while True:
+            piece = body.read(256 * 1024)
+            if not piece:
+                break
+            total += len(piece)
+            if total > MAX_DOC_BYTES:
+                raise ValueError("E_DOC_TOO_LARGE: S3 object bytes exceed cap")
+            chunks.append(piece)
+        data = b"".join(chunks)
         try:
             return data.decode("utf-8", errors="strict")
         except UnicodeDecodeError as exc:

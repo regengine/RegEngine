@@ -14,6 +14,8 @@ on:
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'scripts/**'
+      - '.semgrep/**'
       - '.github/workflows/test-suite-check.yml'
   push:
     branches: [main, develop]
@@ -26,6 +28,8 @@ on:
       - 'pyproject.toml'
       - 'requirements.in'
       - 'requirements.lock'
+      - 'scripts/**'
+      - '.semgrep/**'
       - '.github/workflows/test-suite-check.yml'
 
 concurrency:
@@ -126,7 +130,8 @@ jobs:
           for root in tests regengine/tests services/admin/tests \
                       services/compliance/tests services/graph/tests \
                       services/ingestion/tests services/nlp/tests \
-                      services/scheduler/tests services/shared/tests; do
+                      services/scheduler/tests services/shared/tests \
+                      infra/gateway/tests; do
             if ! echo "$OUTPUT" | grep -q "^${root}/"; then
               MISSING_ROOTS="$MISSING_ROOTS $root"
             fi
@@ -188,8 +193,6 @@ jobs:
             --ignore=tests/security/test_remediation_disabled_contract_pg.py \
             --ignore=tests/security/test_security_audit_fixes.py \
             --ignore=tests/security/test_auth_coverage.py \
-            --ignore=tests/shared/test_visibility_timeout_2918.py \
-            --ignore=tests/shared/test_secret_validation.py \
             -q --no-cov
 
   # ── Per-service collection checks ───────────────────────

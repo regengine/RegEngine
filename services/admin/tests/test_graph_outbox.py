@@ -235,6 +235,41 @@ def test_drainer_marks_row_drained_on_success(session):
     assert params == {"id": "i1"}
 
 
+def test_drainer_redacts_erasure_params_on_success(session):
+    """Drained user_erasure rows drop their params (raw user id stored next
+    to the token), while other operations keep theirs for audit."""
+    tenant = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+    enqueue_graph_write(
+        session,
+        tenant_id=tenant,
+        operation="user_erasure",
+        cypher="MATCH (n {tenant_id: $tenant_id}) DETACH DELETE n",
+        params={"user_id": user_id, "erased_actor_id": "erased-user-abc"},
+        dedupe_key=f"user_erasure:{tenant}:{user_id}",
+    )
+    enqueue_graph_write(
+        session,
+        tenant_id=tenant,
+        operation="invite_created",
+        cypher="MERGE (x:Y {tenant_id: $tenant_id, id: $id})",
+        params={"id": "i1"},
+    )
+    session.commit()
+
+    factory, sink = _factory()
+    drainer = GraphOutboxDrainer(session, neo4j_session_factory=factory)
+    summary = drainer.drain_once(batch_size=10)
+
+    assert summary["drained"] == 2
+    rows = {
+        row["operation"]: row
+        for row in session.execute(text("SELECT * FROM graph_outbox")).mappings().all()
+    }
+    assert json.loads(rows["user_erasure"]["params"]) == {}
+    assert json.loads(rows["invite_created"]["params"]) == {"id": "i1"}
+
+
 def test_drainer_runs_rows_oldest_first(session):
     """Two rows enqueued, the older one must drain first."""
     tenant = str(uuid.uuid4())
