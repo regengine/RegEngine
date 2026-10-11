@@ -17,7 +17,7 @@ import { submitAssessment, AssessmentFormData } from '@/app/actions/submit-asses
 
 const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
     id: 'records-request-checklist',
-    title: 'Records-Request Checklist',
+    title: 'Records Request Checklist',
     description: '§1.1455 is the FDA records-request rule. Teams often keep a sortable electronic spreadsheet so they can answer a records request. This page is a self-reported checklist. It is not a 24-hour capability test, not a recall-readiness score, and not legal advice.',
     icon: 'Shield',
     stages: {

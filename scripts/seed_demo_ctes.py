@@ -10,6 +10,10 @@ to target any non-local host unless BOTH an explicit URL and
 --allow-production are given. The tenant API key comes from the
 REGENGINE_TENANT_API_KEY environment variable only, never from CLI args.
 TLS certificate errors are never downgraded; they abort the run.
+Plain http is refused for any non-local host (localhost, 127.0.0.1 and
+::1 may stay http for local dev), even with --allow-production.
+Redirects are never followed, so the API key is not forwarded to a host
+the allowlist never approved; a redirect fails the run with a clear error.
 """
 
 import argparse
@@ -63,6 +67,7 @@ def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
                 "Pass --allow-production with an explicit URL only if you "
                 "intentionally want demo data in that environment."
             )
+    require_https_for_non_local(target)
     return target
 
 
@@ -91,6 +96,72 @@ def is_tls_cert_failure(exc: BaseException) -> bool:
     if isinstance(exc, ssl.SSLCertVerificationError):
         return True
     return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+
+
+def require_https_for_non_local(target: str) -> None:
+    """Reject plain http targets outside this machine.
+
+    http stays allowed for local dev (localhost, 127.0.0.1, ::1).
+    Anything else must use https, even with --allow-production, so the
+    API key never travels in cleartext.
+    """
+    scheme = urllib.parse.urlparse(target).scheme.lower()
+    if scheme == "http" and not is_local_target(target):
+        raise UnsafeTargetError(
+            f"Refusing plain http for non-local target {target!r}. "
+            "Use https (http is allowed only for local targets such as "
+            "localhost and 127.0.0.1)."
+        )
+
+
+class RedirectRefusedError(urllib.error.HTTPError):
+    """Raised when a redirect is refused so credentials are never forwarded."""
+
+
+class _NoFollowRedirect(urllib.request.HTTPRedirectHandler):
+    """Block every redirect so auth headers never reach another host.
+
+    urllib follows redirects by default and re-sends the original request
+    headers (including X-RegEngine-API-Key) to the redirect target, which
+    the seed allowlist never approved. Seed scripts fail instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RedirectRefusedError(
+            req.get_full_url(),
+            code,
+            f"Refusing to follow redirect (HTTP {code}) to {newurl!r}. "
+            "Seed scripts never follow redirects so the API key is not "
+            "forwarded to another host.",
+            headers,
+            fp,
+        )
+
+
+def _no_redirect_opener(ctx):
+    """Build an opener whose chain has no redirect-following handler.
+
+    Built explicitly instead of build_opener with extras so the default
+    HTTPRedirectHandler, which would forward auth headers, is never in
+    the chain.
+    """
+    opener = urllib.request.OpenerDirector()
+    opener.add_handler(urllib.request.ProxyHandler())
+    opener.add_handler(urllib.request.UnknownHandler())
+    opener.add_handler(urllib.request.HTTPHandler())
+    opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(_NoFollowRedirect())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
+    opener.add_handler(urllib.request.HTTPSHandler(context=ctx))
+    return opener
+
+
+def urlopen_no_redirect(req: urllib.request.Request, *, context=None, timeout=None):
+    """Open an http(s) request without following redirects."""
+    opener = _no_redirect_opener(context)
+    if timeout is None:
+        return opener.open(req)
+    return opener.open(req, timeout=timeout)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -249,7 +320,7 @@ def post_events(base: str, api_key: str, ctx: ssl.SSLContext) -> int:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, context=ctx) as resp:
+        with urlopen_no_redirect(req, context=ctx) as resp:
             result = json.loads(resp.read())
             print(json.dumps(result, indent=2))
             accepted = result.get("accepted", 0)
@@ -259,6 +330,9 @@ def post_events(base: str, api_key: str, ctx: ssl.SSLContext) -> int:
                 for ev in result.get("events", []):
                     if ev.get("status") == "rejected":
                         print(f"  {ev['cte_type']}: {ev.get('errors', [])}")
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
+        return 1
     except urllib.error.HTTPError as e:
         body = e.read().decode()
         print(f"HTTP {e.code}: {body}")

@@ -539,6 +539,8 @@ export interface SupplierBulkUploadCommitSummary {
     last_merkle_hash: string | null;
     sync_warning_count: number;
     sync_warnings: string[];
+    validation_warning_count?: number;
+    validation_warnings?: string[];
 }
 
 export interface SupplierBulkUploadCommitResponse {
