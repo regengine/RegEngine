@@ -89,11 +89,15 @@ ORDER BY v.version DESC
 """
 
 # Simpler alternative: find all facts with same TLC regardless of chain
+# SECURITY (#1256): the OPTIONAL MATCH must scope ``prev`` to the caller's
+# tenant. Without it, a SUPERSEDES edge pointing at another tenant's
+# RegulatoryFact discloses that tenant's TLC in ``superseded_by``.
 LINEAGE_BY_TLC_QUERY = """
 MATCH (f:RegulatoryFact {tenant_id: $tenant_id})
 WHERE f.tlc = $tlc OR f.lot_number = $tlc OR f.identifier = $tlc
 WITH f ORDER BY f.version DESC, f.created_at DESC
 OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact)
+WHERE prev IS NULL OR prev.tenant_id = $tenant_id
 RETURN
     f.tlc AS tlc,
     coalesce(f.version, 1) AS version,

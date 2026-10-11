@@ -283,6 +283,90 @@ class TestValidation:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_validate_naive_past_expiry_rejected_not_raised(self):
+        """A naive expires_at in the past must deny, not raise TypeError.
+
+        Regression: the comparison against an aware now used to raise,
+        which surfaced as a 500 instead of an auth decision. Naive
+        values are treated as UTC, matching APIKeyStore.validate_key.
+        """
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
+
+        raw_key = "rge_naive_past.secretvalue123"
+        key_id = raw_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Naive Past Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1),
+            total_requests=0,
+        )
+        assert model.expires_at.tzinfo is None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_validate_naive_future_expiry_accepted(self):
+        """A naive expires_at in the future must validate, not raise."""
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
+
+        raw_key = "rge_naive_future.secretvalue123"
+        key_id = raw_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Naive Future Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
+            total_requests=0,
+        )
+        assert model.expires_at.tzinfo is None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is not None
+        assert result.key_id == key_id
+
+    @pytest.mark.asyncio
     async def test_runtime_validate_accepts_legacy_hash_without_rewriting_credential(self, monkeypatch):
         """Runtime validation accepts legacy SHA-256 without mutating key material."""
         from shared.api_key_store import (

@@ -1,151 +1,35 @@
-# Break Report: services/shared/fsma and shared auth helpers
+# CLI break report
 
-## Summary
+1 break found. 1 fixed and tested. 0 fixed but still failing. 0 blocked.
 
-Adversarial testing (null inputs, mistyped inputs, boundary values, a
-threaded rate-limit hammer, malformed credentials) found 5 real breaks.
-All 5 are fixed and tested: 26 new regression tests pass, 17 of them fail
-on the pre-fix code. Fixed but failing: 0. Blocked: 0. No live services,
-no production URLs, and no database were touched; everything ran against
-local pytest only. Webhook HMAC secret wiring was left alone per the task
-boundary.
+The RegEngine CLI in `cli/` is a stub with no subcommands. Bad arguments, retired commands, and path-like tokens already exit with code 2. The CLI does not read those paths and does not open a network connection. The real break is an import shadow: `cli/regengine.py` can be loaded as the top-level module `regengine`, hiding the SDK package.
 
-## Finding 1 (high): validate_input decorator silently dropped sanitized values
+## High: importing regengine can load the CLI file instead of the SDK
 
-What broke: decorating a function with `@validate_input(name=...)` ran
-validation but then called the function with the original arguments, so
-any normalized or sanitized value (for example HTML stripped by
-`TextContentField`) never reached the function body. A caller relying on
-the decorator for sanitization got the raw input back.
+What broke: With `cli/` first on `sys.path`, `import regengine` loaded `cli/regengine.py`. That file is the CLI stub. It is not the SDK, so `from regengine import RegEngineClient` failed. `python cli/regengine.py` puts `cli/` first on `sys.path` for that process, which is the same shape. A full `mypy .` run also stopped immediately on a duplicate module named `regengine` (the SDK package and `cli/regengine.py`). That duplicate is gone. Full mypy now stops on a different, pre-existing duplicate (`tests/audit/verify_chain.py` and `frontend/public/sdk/verify_chain.py`), which this change does not touch.
 
-How to reproduce: decorate `def greet(name): return name` with
-`@validate_input(name=TextContentField(allow_html=False))` and call
-`greet("<b>hi</b>")`. Old code returned `'<b>hi</b>'`.
+How to reproduce: From the repo root, put `cli/` ahead of the repo root on `sys.path` and import `regengine`. The module file is `cli/regengine.py`, and `RegEngineClient` is missing. Before this change, `import cli` was a namespace package (`cli.__file__` is `None`), which is why mypy treated `cli/regengine.py` as a second top-level `regengine`.
 
-Root cause: `services/shared/input_validation.py:451` (`_validate_args`
-mutated `bound.arguments` but both wrappers called `func(*args,
-**kwargs)`).
+Root cause: `cli/regengine.py` (module body, previously the bare `import click` at the top of the file). The directory was not a regular package, and the file name is `regengine.py`. Python's script launcher inserts that directory at the front of `sys.path`.
 
-Fix: the wrappers now call the function with the rebuilt
-`bound.args`/`bound.kwargs`, for sync and async paths.
+Fix: `cli/__init__.py` makes `cli` a regular package so the module name is `cli.regengine`. On import, `cli/regengine.py` removes that directory from `sys.path` before it imports Click. If the file was loaded as the top-level name `regengine`, it imports the real SDK and places that module in `sys.modules`. If no SDK package is on the path, the import raises `ImportError` instead of returning the stub.
 
-Test results: 5 new tests pass (sync sanitization, positional args,
-async, rejection still raises, identifier still passes through).
-Verified the 3 sanitization tests fail on pre-fix code.
+Test results: `~/metacode/fleet/heavy .venv/bin/pytest tests/cli/test_regengine_cli.py --tb=line --no-header` after the fix: 24 passed in 1.01s. `.venv/bin/ruff check cli/regengine.py cli/__init__.py tests/cli/test_regengine_cli.py`: all checks passed. Targeted mypy of `cli/regengine.py`, `cli/__init__.py`, and `regengine/__init__.py` exited 0. A full `mypy .` no longer reports the `regengine` duplicate.
 
-## Finding 2 (high): API key validation crashed on non-string credentials
+Confirmed the new tests fail without the fix: the same pytest command, run before `cli/regengine.py` and `cli/__init__.py` were changed, failed `test_import_regengine_is_the_sdk_when_cli_dir_is_first_on_the_path` and `test_import_regengine_does_not_load_the_cli_file_when_the_sdk_is_absent` with `ImportError: cannot import name 'RegEngineClient' from 'regengine' (.../cli/regengine.py)` and `loaded .../cli/regengine.py`. `test_cli_is_a_regular_package` failed because `cli.__file__` was `None`. After the script-shadow test was pointed at that path shape, it failed the same way (`RegEngineClient` imported from `cli/regengine.py`).
 
-What broke: `APIKeyStore.validate_key` and
-`DatabaseAPIKeyStore.validate_key` (plus `set_api_key_lookup_context`)
-called `.startswith("rge_")` without a type check, so a mistyped
-credential (integer, list) raised `AttributeError`, which surfaces as a
-500 instead of an auth rejection.
+## Checked, not a break
 
-How to reproduce: `APIKeyStore().validate_key(12345)` raised
-`AttributeError: 'int' object has no attribute 'startswith'`.
-
-Root cause: `services/shared/auth.py:179`,
-`services/shared/api_key_store.py:120` (lookup context) and
-`services/shared/api_key_store.py:748` (DB store).
-
-Fix: `isinstance(raw_key, str)` guard first, returning `None` (invalid
-key) for anything else. The DB lookup-context path returns `None`
-without touching the database.
-
-Test results: new tests pass, including a round-trip test proving valid
-keys still validate and tampered keys still fail. Verified the mistyped
-tests fail on pre-fix code.
-
-## Finding 3 (medium): permission helpers crashed on null or mistyped grants
-
-What broke: `permission_implies(None, "read")` and
-`has_permission([None], "read")` raised `AttributeError` from
-`str.strip()`. Scopes come from key rows consumed by ingestion and
-billing authz paths, so one junk entry turned an authorization check
-into a 500.
-
-How to reproduce: `permission_implies(None, "read")` raised
-`AttributeError: 'NoneType' object has no attribute 'strip'`.
-
-Root cause: `services/shared/permissions.py:17` (`_normalize` assumed
-`str`).
-
-Fix: non-string input normalizes to `""`, so the implication check
-returns `False` (fail closed). Wildcard and separator behavior is
-unchanged.
-
-Test results: new tests pass (`None`, `123`, junk entries skipped, empty
-list denied, wildcards intact). Verified the misuse tests fail on
-pre-fix code.
-
-## Finding 4 (medium): FSMA identifier helpers raised raw errors on null input
-
-What broke: `normalize_gtin(None)`, `extract_company_prefix(None)`,
-`calculate_gs1_check_digit(None)`, `calculate_gs1_check_digit(123)`,
-`detect_identifier_type(None)`, `validate_gln(123)`,
-`validate_identifier(None)`, and `verify_gs1_check_digit(123)` raised
-raw `TypeError` or `AttributeError` instead of failing closed. The
-shared error handler maps `ValueError` to a client-safe 400, so raw
-errors were the difference between a clean rejection and a 500.
-
-How to reproduce: each call above raised on pre-fix code (observed in
-the probe run before any edit).
-
-Root cause: `services/shared/fsma_validation.py` helpers called
-`re.sub`, `.isdigit()`, or `re.fullmatch` on unvalidated input.
-
-Fix: pure converters (`normalize_gtin`, `extract_company_prefix`,
-`calculate_gs1_check_digit`) raise `ValueError` with a clear message
-for non-string input; boolean checks (`verify_gs1_check_digit`) return
-`False`; detectors and validators (`_detect_identifier_type`,
-`validate_gln/gtin/sscc`, `validate_identifier`) return UNKNOWN or an
-invalid result. Valid-input behavior is unchanged.
-
-Test results: new tests pass, including a TLC strict-mode boundary
-(14 digits alone invalid, 14 digits plus suffix valid). Verified the
-misuse tests fail on pre-fix code.
-
-## Finding 5 (low): jurisdiction check crashed on mistyped input
-
-What broke: `verify_jurisdiction_access` called `.split()` on the
-requested jurisdiction and `in`/`startswith` on entitlement entries, so
-a non-string request or a junk entitlement entry raised instead of
-denying with 403.
-
-How to reproduce: `verify_jurisdiction_access(key, 123)` raised
-`AttributeError` on pre-fix code.
-
-Root cause: `services/shared/auth.py:445` (now shifted by the guard
-edit).
-
-Fix: coerce the request with `str(...)` and skip non-string
-entitlement entries, so malformed input always ends in 403. Federal
-root and entitlement matching are unchanged.
-
-Test results: new tests pass (`None`, `123`, `""` all 403; `US` still
-allowed; `US-CA` still entitled; `US-TX` still denied). Verified the
-mistyped tests fail on pre-fix code.
-
-## Concurrency and boundary probes with no break
-
-Threaded hammer of `APIKeyStore.check_rate_limit` (8 threads x 20
-calls, limit 10) allowed exactly 10, so the lock discipline holds.
-Rate-limit exact boundary (5 of 6 allowed at limit 5) is correct.
-`TimeArrowRule` failing open on unparseable dates was investigated and
-deliberately left alone: both call sites (`chain_integrity.py` and
-`tracer.py`) already compensate for that behavior, and changing it
-would invert their skip logic. The 13-digit GTIN versus GLN
-auto-detect ambiguity was left as a documented open question below.
+- Unknown commands (`nosuch`, `compile`, `list-verticals`, `validate`, empty string, `..`, a long token, `--version`, `-h`) exit 2.
+- A path passed as a command is not read. A sentinel file's text does not appear in the output.
+- A null byte in the command raises Click's usage error with a non-zero exit code.
+- Running the CLI with a socket `connect` guard exits 2 and does not attempt a connection.
+- Four parallel unknown-command processes each exit 2.
+- `--help` exits 0. Click still treats `--help` as eager, so `python -m cli.regengine --help nosuch` exits 0. That is Click's help handling, not a failed command path. A real unknown command without `--help` exits 2.
+- There is no auth surface on this stub, so there is no auth bypass to close.
+- No production URL is contacted. Tests are local subprocesses only.
 
 ## Open questions
 
-1. Should `validate_identifier` prefer GTIN over GLN for 13-digit
-   numeric input, or keep reporting GLN and require callers to pass
-   `expected_type`? Both shapes share the check-digit algorithm, so
-   only the label differs.
-2. Should `TimeArrowRule` gain an opt-in strict mode that flags
-   unparseable dates, so future callers can choose fail-closed without
-   changing the two existing call sites?
-3. `APIKeyStore` keeps an unbounded in-memory rate-limit map; fine for
-   its documented non-production role, but worth noting if its use
-   ever widens.
+- Full `mypy .` still stops on the unrelated `verify_chain` duplicate named above. That is outside `cli/`.
+- `python cli/regengine.py` remains supported. `python -m cli.regengine` remains the entry point named in the module docstring.
