@@ -379,6 +379,12 @@ async def get_record_history(
         raise HTTPException(status_code=503, detail="Database unavailable")
 
     tid = resolve_tenant(tenant_id, principal)
+    exists = db_session.execute(
+        text("SELECT event_id FROM fsma.traceability_events WHERE tenant_id = :tid AND event_id = :eid"),
+        {"tid": tid, "eid": event_id},
+    ).fetchone()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Record not found")
     chain = _get_amendment_chain(db_session, tid, event_id)
     return {"event_id": event_id, "amendment_chain": chain}
 

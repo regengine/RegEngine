@@ -134,6 +134,43 @@ def test_pii_masking_fails_in_production_without_configured_salt(monkeypatch):
         _mask_email("jane.doe@example.com")
 
 
+def test_pii_masking_digest_changes_with_salt(monkeypatch):
+    """The salt must be inside the hash, not just read and ignored.
+
+    Masking the same email under two salts must give different digests;
+    otherwise the assertions above would still pass if _mask_email hashed
+    the email alone.
+    """
+    from services.admin.app.audit_routes import _mask_email
+
+    monkeypatch.setenv("REGENGINE_ENV", "production")
+    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-one-value")
+    first = _mask_email("jane.doe@example.com")
+    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-two-value")
+    second = _mask_email("jane.doe@example.com")
+    assert first.startswith("masked:")
+    assert second.startswith("masked:")
+    assert first != second
+
+
+def test_pii_masking_does_not_use_retired_default_salt(monkeypatch):
+    """The development fallback must not be the old public constant.
+
+    The retired salt regengine-audit-default-salt-v1 is in git history, so
+    any export masked with it is reversible by anyone holding this repo.
+    """
+    import hashlib
+
+    from services.admin.app.audit_routes import _mask_email
+
+    monkeypatch.delenv("AUDIT_PII_HASH_SALT", raising=False)
+    monkeypatch.setenv("REGENGINE_ENV", "development")
+    masked = _mask_email("jane.doe@example.com")
+    legacy = "masked:" + hashlib.sha256(b"regengine-audit-default-salt-v1:jane.doe@example.com").hexdigest()[:24]
+    assert masked.startswith("masked:")
+    assert masked != legacy
+
+
 def test_pii_masking_uses_process_salt_outside_production(monkeypatch):
     from services.admin.app.audit_routes import _mask_email
 

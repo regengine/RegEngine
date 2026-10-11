@@ -1,42 +1,187 @@
-# FIX-REPORT: PR #3225 Team invites (merge efcccfed915b4d806ff252a7cccd8093edcd4452)
+# FIX-REPORT: About page copy
 
-Sources read: all six re-rv-3225-<angle> SUMMARY.md (blast, correct, ops,
-security, tenant, tests), plus the 3225 rows in re-rv-lead-blast,
-re-rv-lead-ops, re-rv-lead-security, re-rv-lead-tenant, re-rv-lead-tests,
-re-rv-area-auth, and re-rv-int-deploy-readiness. Every cited location was
-re-read in the worktree before fixing. Out-of-scope items from the task
-(suspended-tenant deny on live auth, tenant-scope gate failure, 7 xfail
-cross-tenant leaks) were not touched.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-| # | Source report | Severity | Finding | Status | Reason / proof |
-|---|---|---|---|---|---|
-| 1 | re-rv-3225-blast High; re-rv-3225-correct Medium; lead-blast High | High | accept_invite lower() user lookup uses scalar_one_or_none; two users rows differing only by case raise MultipleResultsFound, escaping as 500 instead of the uniform 400 | FIXED AND TESTED | try/except in accept_invite rolls back and raises the existing generic 400; new test fails on old code with MultipleResultsFound |
-| 2 | re-rv-3225-blast Medium; lead-blast Medium | Medium | create_invite member check (line 192) and pending-invite check (line 202) use exact email match while accept folds case, so a case variant of a member gets a mailed invite whose token burns on the accept-time 400 | FIXED AND TESTED | both checks now compare func.lower(email) to the folded invite address; both new 409 tests fail on old code (got 200 with a mailed invite) |
-| 3 | re-rv-3225-correct High | High | require_team_write demands require_permission("team.write"), which the plain admin scope on issued keys (dev bypass, demo admin) does not imply, so real admin callers get 403 on invite and role change | FIXED AND TESTED | team_mgmt.require_team_write is now a dependency that accepts team.write or plain admin, delegating to each scope's own require_permission gate so tenant-mismatch checks and rate limiting still run; owner assignment still needs owner tier; new plain-admin tests fail on old code with 403 |
-| 4 | re-rv-3225-correct Medium | Medium | update_role never reads the member's current role, so a team.write (non-owner-tier) caller can demote an owner to admin or viewer | FIXED AND TESTED | update_role now runs the owner-tier check when the target member's current role is owner; new test fails on old code (got 200) |
-| 5 | re-rv-3225-correct Low | Low | EmailOwnershipConflictError fires for unverified rows too, but the text and comments said verified | FIXED AND TESTED | docstring, message ("already registered for a different user"), and accept_invite comment corrected; existing tests still pass (message keeps the "different user" match) |
-| 6 | re-rv-3225-blast Low | Low | team.write granted nowhere; double require_api_key call consumes two rate-limit tokens per write; GETs unchanged | Not fixed (low, pre-existing) | finding 3 fixes the admin-key 403; the double key check and rate-limit accounting predate PR #3225 and only affect callers of these two non-production routes |
-| 7 | re-rv-3225-ops, re-rv-3225-security, re-rv-3225-tenant, re-rv-3225-tests, lead-security, lead-tenant, lead-tests, area-auth, int-deploy-readiness | OK / none | No findings; tenant isolation, auth, and test coverage confirmed | No change needed | verified by reading; full test pass below |
+## Before and after
 
-## Exact test commands and results
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-All commands were prefixed with ~/metacode/fleet/heavy and run from the worktree root with the shared .venv (symlink, nothing installed).
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. `~/metacode/fleet/heavy .venv/bin/pytest services/ingestion/tests/test_team_mgmt_1342.py services/admin/tests/test_passwordless_identity_provisioning.py services/admin/tests/test_invite_case_variant_create_3225.py services/admin/tests/test_invite_audit_chain_guard_2857.py services/admin/tests/test_accept_invite_rls_2899.py services/admin/tests/test_invite_routes_email.py services/admin/tests/test_qa_admin_auth_scope_export_invite_wave2.py --no-cov -p no:cacheprovider`
-   Result: `130 passed in 9.10s`
-2. Fail-without-fix confirmation (each fix temporarily edited away by hand, test re-run, fix re-applied):
-   - `test_accept_invite_ambiguous_case_variant_users_returns_400` on old code: FAILED with `MultipleResultsFound` (the production 500).
-   - `test_case_variant_of_member_returns_409` and `test_case_variant_of_pending_invite_returns_409` on old code: FAILED (got 200 with an invite row created).
-   - `test_plain_admin_scope_can_invite_viewer` and `test_plain_admin_scope_can_change_role` on old code: FAILED (got 403).
-   - `test_team_write_caller_cannot_demote_owner` on old code: FAILED (got 200).
-3. `~/metacode/fleet/heavy .venv/bin/python scripts/security/scan_tenant_scope.py`
-   Result: only the two known pre-existing `services/graph/app/traceability_linker.py` findings (out of scope for this task); nothing new from the touched files.
-4. `~/metacode/fleet/heavy .venv/bin/ruff check <all six touched files>`
-   Result: `All checks passed!` (one I001 in the new test file was fixed by moving imports to the top).
-   `ruff format --check` flags blank-line drift in invite_routes.py that predates this change; left untouched.
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Needs C.Lee's decision
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-1. Case-variant duplicate users rows are now a clean 400, but the underlying data problem remains. Recommend a follow-up migration that merges such pairs and adds a unique index on lower(email). Until then, any address with a case-duplicate pair cannot accept invites.
-2. Unverified user_emails rows stay unclaimable by invitees (fail closed). If product wants a token holder to claim a stale unverified row, say so; that would loosen finding 5 deliberately.
-3. No migration was added, no scopes or permissions helpers were widened (permission_implies untouched), and the ingestion team router stays off the production router allowlist.
+2. Faster iteration card
+
+Before:
+`Design-partner feedback is scoped to`
+
+After:
+`Early tester feedback is scoped to`
+
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
+
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
