@@ -69,21 +69,6 @@ class GenericRSSScraper(StateRegistryScraper):
             logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
             return
         for entry in feed.entries:
-            yield Source(
-                url=entry.link,
-                title=f"{self.title_prefix}: {entry.title}",
-                jurisdiction_code=self.jurisdiction,
-                metadata={
-                    "published": entry.get("published"),
-                    "summary": entry.get("summary"),
-                },
-            )
-            resp.raise_for_status()
-            feed = feedparser.parse(resp.content)
-        except Exception as e:
-            logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
-            return
-        for entry in feed.entries:
             try:
                 link = entry.get("link")
                 if not link:
