@@ -20,6 +20,10 @@ PROD_URL = "https://regengine-production.up.railway.app"
 # special-casing only the Railway host.
 OTHER_NON_LOCAL_URL = "https://example.com"
 REFUSED_URLS = [PROD_URL, OTHER_NON_LOCAL_URL]
+# Plain-http variants: these must be refused even WITH --allow-production.
+HTTP_NON_LOCAL_URLS = ["http://example.com", "http://regengine-production.up.railway.app"]
+# Local http targets stay allowed for local dev.
+HTTP_LOCAL_URLS = ["http://localhost:8002", "http://127.0.0.1:8002"]
 
 MODULES = ["seed_demo_ctes", "seed_founder_demo_ctes"]
 
@@ -212,8 +216,193 @@ def test_founder_check_wrapped_cert_error_unsuccessful(monkeypatch, capsys):
     mod = _load("seed_founder_demo_ctes")
     monkeypatch.delenv("SEED_BASE_URL", raising=False)
     seen = {}
-    _install_urlopen_failure(monkeypatch, _wrapped_cert_error(), seen)
+    _install_urlopen_failure(monkeypatch, mod, _wrapped_cert_error(), seen)
     rc = mod.main(["--check"])
     assert rc == 1
     assert "tls" in capsys.readouterr().out.lower()
     _assert_verifying_context(seen)
+
+
+@pytest.mark.parametrize("module_name", MODULES)
+@pytest.mark.parametrize("url", HTTP_NON_LOCAL_URLS)
+def test_http_non_local_refused_even_with_flag(module_name, url, monkeypatch):
+    mod = _load(module_name)
+    monkeypatch.delenv("SEED_BASE_URL", raising=False)
+    with pytest.raises(mod.UnsafeTargetError):
+        mod.resolve_base(url, allow_production=True)
+
+
+@pytest.mark.parametrize("module_name", MODULES)
+@pytest.mark.parametrize("url", HTTP_NON_LOCAL_URLS)
+def test_http_non_local_via_env_refused_even_with_flag(module_name, url, monkeypatch):
+    mod = _load(module_name)
+    monkeypatch.setenv("SEED_BASE_URL", url)
+    with pytest.raises(mod.UnsafeTargetError):
+        mod.resolve_base(allow_production=True)
+
+
+@pytest.mark.parametrize("module_name", MODULES)
+@pytest.mark.parametrize("url", HTTP_LOCAL_URLS)
+@pytest.mark.parametrize("flag", [True, False])
+def test_http_local_targets_stay_allowed(module_name, url, flag, monkeypatch):
+    mod = _load(module_name)
+    monkeypatch.delenv("SEED_BASE_URL", raising=False)
+    assert mod.resolve_base(url, allow_production=flag) == url
+
+
+def test_demo_main_refuses_http_with_flag(monkeypatch, capsys):
+    mod = _load("seed_demo_ctes")
+    monkeypatch.delenv("SEED_BASE_URL", raising=False)
+    rc = mod.main(["http://example.com", "--allow-production"])
+    assert rc == 2
+    assert "Refusing" in capsys.readouterr().out
+
+
+def test_founder_main_refuses_http_with_flag(monkeypatch, capsys):
+    mod = _load("seed_founder_demo_ctes")
+    monkeypatch.delenv("SEED_BASE_URL", raising=False)
+    rc = mod.main(["--base", "http://example.com", "--allow-production", "--dry-run"])
+    assert rc == 2
+    assert "Refusing" in capsys.readouterr().out
+
+
+@contextlib.contextmanager
+def _redirect_pair():
+    """Yield (base_url, hits_a, hits_b) using loopback servers only.
+
+    Server A answers every request with a 302 redirect to server B.
+    Server B records every request it receives. Proxy env vars are
+    cleared so loopback traffic is never sent to a proxy.
+    """
+    hits_a = []
+    hits_b = []
+
+    def _record(store, handler):
+        length = int(handler.headers.get("Content-Length", 0) or 0)
+        if length:
+            handler.rfile.read(length)
+        store.append((handler.command, {k.lower(): v for k, v in handler.headers.items()}))
+
+    class _HandlerB(http.server.BaseHTTPRequestHandler):
+        def _serve(self):
+            _record(hits_b, self)
+            body = b'{"accepted": 1, "rejected": 0, "events": []}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_GET = _serve
+        do_POST = _serve
+
+        def log_message(self, *args):
+            pass
+
+    class _HandlerA(http.server.BaseHTTPRequestHandler):
+        def _serve(self):
+            _record(hits_a, self)
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{port_b}/ingest")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        do_GET = _serve
+        do_POST = _serve
+
+        def log_message(self, *args):
+            pass
+
+    saved_proxies = {}
+    for var in (
+        "http_proxy",
+        "https_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+        "no_proxy",
+        "NO_PROXY",
+    ):
+        saved_proxies[var] = os.environ.pop(var, None)
+    try:
+        os.environ["no_proxy"] = "*"
+        with contextlib.ExitStack() as cleanup:
+            server_b = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerB)
+            cleanup.callback(server_b.server_close)
+            port_b = server_b.server_address[1]
+            thread_b = threading.Thread(target=server_b.serve_forever, daemon=True)
+            thread_b.start()
+            cleanup.callback(thread_b.join, timeout=5)
+            cleanup.callback(server_b.shutdown)
+
+            server_a = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _HandlerA)
+            cleanup.callback(server_a.server_close)
+            thread_a = threading.Thread(target=server_a.serve_forever, daemon=True)
+            thread_a.start()
+            cleanup.callback(thread_a.join, timeout=5)
+            cleanup.callback(server_a.shutdown)
+            yield f"http://127.0.0.1:{server_a.server_address[1]}", hits_a, hits_b
+    finally:
+        for var, value in saved_proxies.items():
+            if value is None:
+                os.environ.pop(var, None)
+            else:
+                os.environ[var] = value
+
+
+@pytest.mark.parametrize("module_name", MODULES)
+def test_redirect_handler_refuses(module_name):
+    mod = _load(module_name)
+    handler = mod._NoFollowRedirect()
+    req = urllib.request.Request(
+        "http://127.0.0.1:8002/api/v1/webhooks/ingest",
+        headers={"X-RegEngine-API-Key": "secret-key"},
+    )
+    with pytest.raises(mod.RedirectRefusedError, match="redirect"):
+        handler.redirect_request(req, None, 302, "Found", {}, "https://evil.example/x")
+
+
+def test_demo_post_events_refuses_redirect_without_forwarding_key(capsys):
+    mod = _load("seed_demo_ctes")
+    with _redirect_pair() as (base, hits_a, hits_b):
+        rc = mod.post_events(base, "secret-key", None)
+    assert rc == 1
+    assert "redirect" in capsys.readouterr().out.lower()
+    assert hits_a, "redirecting server should have received the request"
+    assert dict(hits_a[0][1]).get("x-regengine-api-key") == "secret-key"
+    assert hits_b == [], "redirect target must receive nothing"
+
+
+def test_founder_post_batch_refuses_redirect_without_forwarding_headers():
+    mod = _load("seed_founder_demo_ctes")
+    with _redirect_pair() as (base, hits_a, hits_b):
+        with pytest.raises(mod.RedirectRefusedError, match="redirect"):
+            mod.post_batch(base, "secret-key", "tenant-1", "src", [{"a": 1}], "idem-1", "hmac-secret", None)
+    assert hits_a, "redirecting server should have received the request"
+    sent = dict(hits_a[0][1])
+    assert sent.get("x-regengine-api-key") == "secret-key"
+    assert sent.get("x-tenant-id") == "tenant-1"
+    assert sent.get("x-webhook-signature", "").startswith("sha256=")
+    assert hits_b == [], "redirect target must receive nothing"
+
+
+def test_founder_status_refuses_redirect_without_forwarding_key(monkeypatch, capsys):
+    mod = _load("seed_founder_demo_ctes")
+    monkeypatch.setenv("REGENGINE_TENANT_API_KEY", "secret-key")
+    with _redirect_pair() as (base, hits_a, hits_b):
+        rc = mod.status(base, "tenant-1")
+    assert rc == 1
+    assert "redirect" in capsys.readouterr().out.lower()
+    assert hits_a, "redirecting server should have received the request"
+    assert hits_b == [], "redirect target must receive nothing"
+
+
+def test_founder_check_refuses_redirect(capsys):
+    mod = _load("seed_founder_demo_ctes")
+    with _redirect_pair() as (base, hits_a, hits_b):
+        rc = mod.check_health(base)
+    assert rc == 1
+    assert "redirect" in capsys.readouterr().out.lower()
+    assert hits_a, "redirecting server should have received the request"
+    assert hits_b == [], "redirect target must receive nothing"
