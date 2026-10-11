@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import json
 import threading
 from functools import lru_cache
@@ -16,6 +17,15 @@ from .config import get_settings
 from .models import AlertEvent, EnforcementItem
 
 logger = structlog.get_logger("kafka_producer")
+
+# Per-batch delivery failures. emit_batch sets this before it sends. The
+# send errback closes over the list captured at send time. Reading this
+# inside the errback would blame whichever batch happens to be flushing.
+_batch_failure_sink: contextvars.ContextVar[list[int] | None] = contextvars.ContextVar(
+    "scheduler_kafka_batch_failure_sink",
+    default=None,
+)
+_SINK_UNSET = object()
 
 # Producer identity for HMAC signing. Must be a key of
 # shared.kafka_auth._PRODUCER_KEY_ENV_MAP (which resolves the per-service
@@ -46,10 +56,27 @@ class KafkaEventProducer:
         self._delivery_failures = 0
         self._delivery_lock = threading.Lock()
 
-    def _note_delivery_failure(self, topic: str, exc: BaseException) -> None:
-        """Errback for send futures: count + log an async delivery failure."""
-        with self._delivery_lock:
-            self._delivery_failures += 1
+    def _note_delivery_failure(
+        self,
+        topic: str,
+        exc: BaseException,
+        sink: list[int] | None | object = _SINK_UNSET,
+    ) -> None:
+        """Errback for send futures: count + log an async delivery failure.
+
+        ``sink`` is the list captured when the message was sent. Pass it
+        from the errback so a flush on another batch cannot steal the
+        count. Callers that omit it (flush errors, older tests) use the
+        sink for the current batch, or the process counter when none is set.
+        """
+        if sink is _SINK_UNSET:
+            sink = _batch_failure_sink.get()
+        if isinstance(sink, list):
+            with self._delivery_lock:
+                sink.append(1)
+        else:
+            with self._delivery_lock:
+                self._delivery_failures += 1
         logger.error(
             "kafka_delivery_failed",
             topic=topic,
@@ -206,28 +233,36 @@ class KafkaEventProducer:
         """
         success = 0
         failures = 0
+        sink: list[int] = []
+        token = _batch_failure_sink.set(sink)
+        try:
+            for item in items:
+                # Emit to enforcement.changes
+                if self.emit_enforcement_change(item):
+                    success += 1
+                else:
+                    failures += 1
 
-        for item in items:
-            # Emit to enforcement.changes
-            if self.emit_enforcement_change(item):
-                success += 1
-            else:
-                failures += 1
+                # Also emit high-priority alerts. A False return is a
+                # failed send (signing or enqueue), not a skipped one.
+                if item.severity.value in ["critical", "high"]:
+                    if not self.emit_high_priority_alert(item):
+                        failures += 1
 
-            # Also emit high-priority alerts
-            if item.severity.value in ["critical", "high"]:
-                self.emit_high_priority_alert(item)
+            # Flush to ensure all messages are sent
+            self.flush()
 
-        # Flush to ensure all messages are sent
-        self.flush()
-
-        # #2711: reconcile async delivery failures surfaced during flush —
-        # enqueue success is not delivery success. Covers every message
-        # flushed in this window (including high-priority alert sends).
-        undelivered = self.take_delivery_failures()
-        if undelivered:
-            failures += undelivered
-            success = max(0, success - undelivered)
+            # #2711: reconcile async delivery failures surfaced during flush.
+            # Enqueue success is not delivery success. The sink holds this
+            # batch's errbacks. take_delivery_failures() still runs so a
+            # flush error, or a caller that notes a failure without a sink,
+            # is counted too.
+            undelivered = len(sink) + self.take_delivery_failures()
+            if undelivered:
+                failures += undelivered
+                success = max(0, success - undelivered)
+        finally:
+            _batch_failure_sink.reset(token)
 
         return success, failures
 
@@ -281,20 +316,24 @@ class KafkaEventProducer:
         """
         success = 0
         failures = 0
+        sink: list[int] = []
+        token = _batch_failure_sink.set(sink)
+        try:
+            for event in fsma_events:
+                if self.emit_fsma_event(event):
+                    success += 1
+                else:
+                    failures += 1
 
-        for event in fsma_events:
-            if self.emit_fsma_event(event):
-                success += 1
-            else:
-                failures += 1
+            self.flush()
 
-        self.flush()
-
-        # #2711: reconcile async delivery failures surfaced during flush.
-        undelivered = self.take_delivery_failures()
-        if undelivered:
-            failures += undelivered
-            success = max(0, success - undelivered)
+            # #2711: reconcile async delivery failures surfaced during flush.
+            undelivered = len(sink) + self.take_delivery_failures()
+            if undelivered:
+                failures += undelivered
+                success = max(0, success - undelivered)
+        finally:
+            _batch_failure_sink.reset(token)
 
         logger.info(
             "fsma_batch_emitted",
@@ -343,7 +382,12 @@ class KafkaEventProducer:
             # was dead code for the life of the fix. A producer that yields no
             # delivery handle is now a FAILED send (caught below), never a
             # silent success.
-            future.add_errback(lambda exc, t=topic: self._note_delivery_failure(t, exc))
+            #
+            # Capture the batch sink now. The errback may run on another
+            # batch's flush thread, and a contextvar read at that moment
+            # would file this failure against the wrong batch.
+            sink = _batch_failure_sink.get()
+            future.add_errback(lambda exc, t=topic, s=sink: self._note_delivery_failure(t, exc, sink=s))
             return True
 
         except KafkaError as e:

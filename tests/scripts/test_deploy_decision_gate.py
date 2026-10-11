@@ -49,6 +49,17 @@ def test_decision_job_skips_only_when_the_workflow_is_cancelled():
     assert job["needs"] == ["fast-gate", "system-sim"]
 
 
+def test_ai_analysis_exclusion_is_documented_as_advisory_only():
+    # The decision gate deliberately ignores ai-analysis failures, so the
+    # workflow source must say advisory-only is intended. Otherwise a
+    # future reader cannot tell intent from accident.
+    source = (_REPO / ".github" / "workflows" / "qa-pipeline.yml").read_text()
+    assert "advisory-only" in source.lower()
+    assert "ai-analysis" not in _workflow("qa-pipeline.yml")["jobs"]["decision"]["needs"]
+    decision = _DECISION.read_text()
+    assert "advisory-only" in decision.lower()
+
+
 def test_backend_status_gate_still_requires_every_dependency_success():
     job = _workflow("backend-ci.yml")["jobs"]["ci-status"]
     assert job["name"] == "Backend CI Status Gate"

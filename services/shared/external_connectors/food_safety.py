@@ -12,7 +12,12 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from shared.safe_http import DEFAULT_MAX_RESPONSE_BYTES, safe_httpx_get_async
+from shared.safe_http import (
+    DEFAULT_MAX_RESPONSE_BYTES,
+    ResponseTooLargeError,
+    safe_httpx_get_async,
+)
+from shared.url_validation import SSRFError
 
 from .base import (
     AuthType,
@@ -90,6 +95,10 @@ class FoodReadyConnector(IntegrationConnector):
             next_cursor = data.get("next_cursor")
             return events, next_cursor
 
+        except (ResponseTooLargeError, SSRFError):
+            # A size-cap or SSRF refusal must surface in sync errors, never
+            # masquerade as an empty (finished) sync.
+            raise
         except Exception as exc:
             logger.error("foodready_fetch_failed error=%s", str(exc))
             return [], None
@@ -197,6 +206,10 @@ class FoodDocsConnector(IntegrationConnector):
             next_page = data.get("next_page")
             return events, str(next_page) if next_page else None
 
+        except (ResponseTooLargeError, SSRFError):
+            # A size-cap or SSRF refusal must surface in sync errors, never
+            # masquerade as an empty (finished) sync.
+            raise
         except Exception as exc:
             logger.error("fooddocs_fetch_failed error=%s", str(exc))
             return [], None
@@ -309,6 +322,10 @@ class TiveConnector(IntegrationConnector):
                 events.extend(self._shipment_to_ctes(shipment))
             return events[:limit], data.get("next_cursor")
 
+        except (ResponseTooLargeError, SSRFError):
+            # A size-cap or SSRF refusal must surface in sync errors, never
+            # masquerade as an empty (finished) sync.
+            raise
         except Exception as exc:
             logger.error("tive_fetch_failed error=%s", str(exc))
             return [], None

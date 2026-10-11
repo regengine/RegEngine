@@ -96,6 +96,25 @@ class TestExportSelfLogFailsClosed:
         assert rolled_back["called"] is True
 
 
+class TestExportMissingSaltFailsClosed503:
+    def test_production_export_without_salt_raises_503_not_500(self, db_session, monkeypatch):
+        """Without AUDIT_PII_HASH_SALT, a production export must answer 503.
+
+        The masking layer raises RuntimeError; the route must map it to a
+        clear 503 instead of letting FastAPI return 500 (#3230). On the old
+        code this raises RuntimeError, so pytest.raises(HTTPException)
+        fails.
+        """
+        monkeypatch.delenv("AUDIT_PII_HASH_SALT", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+
+        with pytest.raises(HTTPException) as exc_info:
+            _run_export(db_session)
+
+        assert exc_info.value.status_code == 503
+        assert "AUDIT_PII_HASH_SALT" in exc_info.value.detail
+
+
 class TestExportSelfLogHappyPath:
     def test_export_persists_exactly_one_self_log_row(self, db_session):
         """Happy path: 200 + exactly one data.bulk.export row with the

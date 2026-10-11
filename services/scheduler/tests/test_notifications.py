@@ -250,13 +250,20 @@ class TestUnpersistedNack:
         fail_response.status_code = 500
         fail_response.text = "Error"
 
-        with patch.object(notifier.session, "post", return_value=fail_response):
+        with (
+            patch.object(notifier.session, "post", return_value=fail_response),
+            patch.object(notifications_mod.logger, "error") as log_error,
+        ):
             results = notifier.notify([_make_item(severity=EnforcementSeverity.CRITICAL)])
 
         assert results[0].success is False
         assert notifier.unpersisted_dead_letter_count() == 1
         # Still visible in the legacy in-memory list for this process.
         assert len(notifier.get_dead_letters()) == 1
+        # The nack must be a loud error log, not just a counter bump:
+        # deleting the log line alone must turn this red.
+        error_events = [call.args[0] for call in log_error.call_args_list if call.args]
+        assert "webhook_dead_letter_unpersisted" in error_events
 
     @patch.object(notifications_mod.time, "sleep")
     def test_failed_delivery_with_outbox_stays_durable(self, mock_sleep, tmp_path):
@@ -300,11 +307,16 @@ class TestUnpersistedNack:
             fail_response.status_code = 500
             fail_response.text = "Error"
 
-            with patch.object(n.session, "post", return_value=fail_response):
+            with (
+                patch.object(n.session, "post", return_value=fail_response),
+                patch.object(notifications_mod.logger, "error") as log_error,
+            ):
                 results = n.notify([_make_item()])
 
             assert results[0].success is False
             assert n.unpersisted_dead_letter_count() == 1
+            error_events = [call.args[0] for call in log_error.call_args_list if call.args]
+            assert "webhook_outbox_append_failed" in error_events
         finally:
             n.close()
 

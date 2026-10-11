@@ -143,6 +143,9 @@ class TestProducerConsumerRoundTrip:
         mock_enqueue.assert_called_once()
         assert mock_enqueue.call_args.kwargs["task_type"] == "discovery_scrape"
         assert mock_enqueue.call_args.kwargs["tenant_id"] == "tenant-a"
+        # The handler only receives the payload, so the tenant must ride
+        # inside it too, or the scrape falls back to the shared bucket.
+        assert mock_enqueue.call_args.kwargs["payload"]["tenant_id"] == "tenant-a"
         # The item is gone from the tenant's own list, not some other key.
         assert seeded.lists["manual_upload_queue:tenant-a"] == []
 

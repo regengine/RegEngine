@@ -12,8 +12,10 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 
 interface FreeToolPageShellProps {
-    /** Tool name shown in breadcrumb and title (e.g. "Supply Chain Knowledge Graph") */
+    /** Tool name shown in the breadcrumb (e.g. "Supply Chain Knowledge Graph") */
     title: string;
+    /** H1 text. When omitted, the H1 is "RegEngine • {title}". */
+    heading?: string;
     /** Short description below the title */
     subtitle: string;
     /** IDs from FREE_TOOLS to show in the Related Tools section */
@@ -36,6 +38,7 @@ interface FreeToolPageShellProps {
  */
 export function FreeToolPageShell({
     title,
+    heading,
     subtitle,
     relatedToolIds,
     children,
@@ -57,7 +60,7 @@ export function FreeToolPageShell({
                             ]}
                         />
                     }
-                    title={`RegEngine • ${title}`}
+                    title={heading ?? `RegEngine • ${title}`}
                     description={subtitle}
                     meta={
                         <Badge tone="brand" className="whitespace-nowrap">

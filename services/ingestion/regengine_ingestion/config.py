@@ -77,6 +77,9 @@ class IngestionConfig:
 
     source_type: SourceType
     vertical: str
+    # Owner of the ingested documents. Threaded through the job into each
+    # Document so tenant-scoped readers can filter on it.
+    tenant_id: Optional[str] = None
     max_documents: int = 100
     parallel_workers: int = 1
 

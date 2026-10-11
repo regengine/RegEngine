@@ -1,107 +1,35 @@
-# BREAK-REPORT: services/nlp break-it pass (Oct 8, 2026)
+# CLI break report
 
-## Summary
+1 break found. 1 fixed and tested. 0 fixed but still failing. 0 blocked.
 
-Probed malformed text, empty docs, huge docs, encoding traps, and
-classification boundary labels across the NLP subsystem (legacy regex
-extractor, signal classifier, query planner, entity resolver, FSMA
-extractor). Local tests only, no production calls.
+The RegEngine CLI in `cli/` is a stub with no subcommands. Bad arguments, retired commands, and path-like tokens already exit with code 2. The CLI does not read those paths and does not open a network connection. The real break is an import shadow: `cli/regengine.py` can be loaded as the top-level module `regengine`, hiding the SDK package.
 
-Result: 3 breaks found, all 3 fixed and tested. 0 fixed but failing.
-0 blocked. 9 new regression tests pass, full services/nlp/tests suite
-passes, ruff clean on all touched files.
+## High: importing regengine can load the CLI file instead of the SDK
 
-## Finding 1 (high): org-name regex stalls the worker on long word runs
+What broke: With `cli/` first on `sys.path`, `import regengine` loaded `cli/regengine.py`. That file is the CLI stub. It is not the SDK, so `from regengine import RegEngineClient` failed. `python cli/regengine.py` puts `cli/` first on `sys.path` for that process, which is the same shape. A full `mypy .` run also stopped immediately on a duplicate module named `regengine` (the SDK package and `cli/regengine.py`). That duplicate is gone. Full mypy now stops on a different, pre-existing duplicate (`tests/audit/verify_chain.py` and `frontend/public/sdk/verify_chain.py`), which this change does not touch.
 
-What broke: `extract_entities` on a document containing a long run of plain
-words with no corporate suffix took 9.2 seconds at 4000 words and scaled
-worse than quadratically (500 words: 0.06 s, 1000: 0.27 s, 2000: 1.4 s,
-4000: 9.2 s). A multi-MB document, which the loader permits up to 25 MB,
-would stall the extraction worker far beyond any timeout. Any lowercase
-words trigger it because the pattern is case-insensitive.
+How to reproduce: From the repo root, put `cli/` ahead of the repo root on `sys.path` and import `regengine`. The module file is `cli/regengine.py`, and `RegEngineClient` is missing. Before this change, `import cli` was a namespace package (`cli.__file__` is `None`), which is why mypy treated `cli/regengine.py` as a second top-level `regengine`.
 
-How to reproduce: `extract_entities("word " * 4000 + "!")` and time it.
+Root cause: `cli/regengine.py` (module body, previously the bare `import click` at the top of the file). The directory was not a regular package, and the file name is `regengine.py`. Python's script launcher inserts that directory at the front of `sys.path`.
 
-Root cause: services/nlp/app/extractor.py:23. `ORGANIZATION_PATTERN` used an
-unbounded inner repetition `(?:\s+[A-Z][\w&'\.]+)*` ahead of a required
-corporate suffix, so every failure backtracked over all partitions of the
-word run. Reachable in production: server/workers/task_processor.py runs
-`extract_entities` on task text.
+Fix: `cli/__init__.py` makes `cli` a regular package so the module name is `cli.regengine`. On import, `cli/regengine.py` removes that directory from `sys.path` before it imports Click. If the file was loaded as the top-level name `regengine`, it imports the real SDK and places that module in `sys.modules`. If no SDK package is on the path, the import raises `ImportError` instead of returning the stub.
 
-Fix: bounded the inner run to `{0,5}` (six-word names max). Verified the
-bounded pattern returns identical matches on real names ("Tyson Foods,
-Inc.", "Walmart Inc.", "Acme Fresh Produce Distribution Company LLC",
-"Ralphs Grocery Company", "Taylor Fresh Foods, Inc.") and runs linear
-(20000 words in 0.04 s vs about 0.27 s at 1000 words before).
+Test results: `~/metacode/fleet/heavy .venv/bin/pytest tests/cli/test_regengine_cli.py --tb=line --no-header` after the fix: 24 passed in 1.01s. `.venv/bin/ruff check cli/regengine.py cli/__init__.py tests/cli/test_regengine_cli.py`: all checks passed. Targeted mypy of `cli/regengine.py`, `cli/__init__.py`, and `regengine/__init__.py` exited 0. A full `mypy .` no longer reports the `regengine` duplicate.
 
-Test results: new `TestOrgPatternComplexity` (2 tests) passes; full
-services/nlp/tests suite passes.
+Confirmed the new tests fail without the fix: the same pytest command, run before `cli/regengine.py` and `cli/__init__.py` were changed, failed `test_import_regengine_is_the_sdk_when_cli_dir_is_first_on_the_path` and `test_import_regengine_does_not_load_the_cli_file_when_the_sdk_is_absent` with `ImportError: cannot import name 'RegEngineClient' from 'regengine' (.../cli/regengine.py)` and `loaded .../cli/regengine.py`. `test_cli_is_a_regular_package` failed because `cli.__file__` was `None`. After the script-shadow test was pointed at that path shape, it failed the same way (`RegEngineClient` imported from `cli/regengine.py`).
 
-## Finding 2 (medium): 2000-digit number becomes inf in threshold entities
+## Checked, not a break
 
-What broke: `extract_entities("Limit is " + "9"*2000 + " percent.")`
-emitted a THRESHOLD entity with value `inf`, which serializes as
-nonstandard JSON and can poison numeric columns downstream.
-
-How to reproduce: extract thresholds from the text above and check
-`math.isfinite(entity["attrs"]["value"])`.
-
-Root cause: services/nlp/app/extractor.py:323 (threshold loop). `float()`
-of a huge digit run overflows to inf and the value was stored unchecked.
-
-Fix: skip threshold entities whose parsed value is not finite. No real
-threshold looks like that, so dropping the entity is safer than storing
-a fabricated cap.
-
-Test results: new `TestThresholdFinite` passes; confirmed the old code
-emitted `inf` for the same input.
-
-## Finding 3 (low): None and non-string input crash with AttributeError
-
-What broke: `SignalClassifier.classify_signal(None)`,
-`infer_obligation_type(None)`, `parse_query(None)`, and
-`FSMAExtractor.extract(None)` each raised bare `AttributeError`
-(`'NoneType' object has no attribute 'lower'`), and non-string types
-failed the same way. Empty and whitespace documents were already fine
-(UNCATEGORIZED / UNKNOWN with review required).
-
-How to reproduce: call any of the four with None.
-
-Root cause: services/nlp/app/classification.py:41,
-services/nlp/app/extractor.py:177 (obligation) and :291 (entities, already
-guarded), services/nlp/app/query_planner.py:75,
-services/nlp/app/extractors/fsma_extractor/extractor.py:132. No input
-type check before calling string methods.
-
-Fix: each entry point now raises `TypeError` with a clear message for
-non-string input, matching the existing `extract_entities` precedent that
-a missing document must fail loudly instead of reading as "processed OK,
-nothing found". Empty-string behavior is unchanged.
-
-Test results: new `TestInputTypeGuards` (6 tests) passes; confirmed the
-old code raised AttributeError for each case.
-
-## Probed and found safe (no change)
-
-Encoding traps: null bytes, lone surrogates, BOM, RTL marks, emoji, and
-tabs/newlines all extract without errors. Huge digit runs convert fast
-(no float-parsing DoS). Threshold at 305 digits stays finite and valid.
-`EntityResolver.resolve_organization` already returns None for None,
-empty, whitespace, and non-string input. FSMA `extract` on empty and
-whitespace text returns UNKNOWN with review required. `parse_query`
-limit bounds are enforced by pydantic. Query API scope checks and the
-text loader size/MIME/strict-decode caps were already hardened with
-tests. Classification ties resolve to the first category, which errs
-toward the highest risk rating; left as is (see open questions).
+- Unknown commands (`nosuch`, `compile`, `list-verticals`, `validate`, empty string, `..`, a long token, `--version`, `-h`) exit 2.
+- A path passed as a command is not read. A sentinel file's text does not appear in the output.
+- A null byte in the command raises Click's usage error with a non-zero exit code.
+- Running the CLI with a socket `connect` guard exits 2 and does not attempt a connection.
+- Four parallel unknown-command processes each exit 2.
+- `--help` exits 0. Click still treats `--help` as eager, so `python -m cli.regengine --help nosuch` exits 0. That is Click's help handling, not a failed command path. A real unknown command without `--help` exits 2.
+- There is no auth surface on this stub, so there is no auth bypass to close.
+- No production URL is contacted. Tests are local subprocesses only.
 
 ## Open questions
 
-1. Should a classification tie (equal signal counts in two or more
-categories) return UNCATEGORIZED instead of the first-listed category?
-Current behavior errs toward HIGH risk, which seems deliberate for a
-safety classifier, so no change was made. C.Lee decision needed before
-any change here.
-2. The org pattern over-matches across conjunctions (for example,
-"Walmart Inc. and The Kroger Co" matches as one entity). Pre-existing
-behavior, unchanged by this fix. Worth a separate finding if entity
-precision matters downstream.
+- Full `mypy .` still stops on the unrelated `verify_chain` duplicate named above. That is outside `cli/`.
+- `python cli/regengine.py` remains supported. `python -m cli.regengine` remains the entry point named in the module docstring.
