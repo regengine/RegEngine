@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 from datetime import datetime
 from typing import Optional
 
@@ -516,11 +515,15 @@ def _create_tenant_for_actor(
     # checks (high-assurance human or exact-scope workload key).  Arm the
     # global RLS branch here, never in the generic DB dependency.
     arm_global_admin_context(db)
-    sanitized_name = html.escape(body.name)
+    # Store the raw display name verbatim. HTML-escaping is an
+    # output-encoding concern: escaping here permanently corrupts the
+    # stored value ("A&W" becomes "A&amp;W"), double-escapes on every
+    # render, and pollutes the derived slug. Escape at render time.
+    tenant_name = body.name
     try:
         tenant = TenantModel(
-            name=sanitized_name,
-            slug=_ensure_unique_tenant_slug(db, sanitized_name),
+            name=tenant_name,
+            slug=_ensure_unique_tenant_slug(db, tenant_name),
             status="active",
             settings={},
         )
@@ -562,7 +565,7 @@ def _create_tenant_for_actor(
         target=tenant_id,
         selected_tenant=tenant_id,
     )
-    return TenantCreateResponse(tenant_id=tenant_id, name=sanitized_name)
+    return TenantCreateResponse(tenant_id=tenant_id, name=tenant_name)
 
 
 @v1_router.get(

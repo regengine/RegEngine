@@ -21,11 +21,12 @@ Targets the uncovered branches in the bulk-upload Pydantic validators:
   section-level error instead of crashing.
 * ``validate_and_normalize_payload`` Pydantic ValidationError path
   (lines 226-237) — rows that still fail after auto-fill (e.g. non-dict row,
-  non-ISO event_time) must demote to severity=warning and skip the row.
+  non-ISO event_time) are dropped and must report severity=error so the
+  commit cannot report success while silently losing rows.
 * ``validate_and_normalize_payload`` unknown FTL category_id branch
   (lines 254-262) — FTL scoping is a regulatory requirement (see
   project_regulatory_logic_audit_2026_04_17.md re: FTL scoping gap); any
-  category_id outside the valid set must emit a warning and be dropped.
+  category_id outside the valid set drops the row and must emit an error.
 """
 
 from __future__ import annotations
@@ -328,8 +329,12 @@ def test_validate_missing_sections_treated_as_empty():
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_validate_invalid_row_demoted_to_warning_and_skipped():
-    """A row that raises ValidationError becomes a warning and is skipped."""
+def test_validate_invalid_row_is_error_and_skipped():
+    """A row that raises ValidationError is skipped and reports an error.
+
+    The row is dropped, so warning severity would let the commit report
+    success while silently losing user data.
+    """
     # A non-dict row cannot be validated by model_validate; it raises
     # ValidationError → hits the exception path.
     normalized, errors = validate_and_normalize_payload(
@@ -343,14 +348,14 @@ def test_validate_invalid_row_demoted_to_warning_and_skipped():
         valid_ftl_category_ids={"1"},
     )
     assert normalized["facilities"] == []  # skipped
-    warning_errors = [e for e in errors if e.get("section") == "facility" and e.get("severity") == "warning"]
-    assert len(warning_errors) == 1
-    assert warning_errors[0]["row"] == 1
-    assert "message" in warning_errors[0]
+    blocking = [e for e in errors if e.get("section") == "facility" and e.get("severity") == "error"]
+    assert len(blocking) == 1
+    assert blocking[0]["row"] == 1
+    assert "message" in blocking[0]
 
 
-def test_validate_invalid_event_time_demoted_to_warning():
-    """Invalid ISO event_time raises ValidationError → warning row."""
+def test_validate_invalid_event_time_is_error():
+    """Invalid ISO event_time raises ValidationError → error row."""
     normalized, errors = validate_and_normalize_payload(
         {
             "facilities": [],
@@ -369,9 +374,9 @@ def test_validate_invalid_event_time_demoted_to_warning():
         valid_ftl_category_ids={"1"},
     )
     assert normalized["events"] == []
-    warning_errors = [e for e in errors if e.get("section") == "event" and e.get("severity") == "warning"]
-    assert len(warning_errors) == 1
-    assert "ISO-8601" in warning_errors[0]["message"]
+    blocking = [e for e in errors if e.get("section") == "event" and e.get("severity") == "error"]
+    assert len(blocking) == 1
+    assert "ISO-8601" in blocking[0]["message"]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -379,8 +384,8 @@ def test_validate_invalid_event_time_demoted_to_warning():
 # ─────────────────────────────────────────────────────────────────────
 
 
-def test_validate_ftl_scope_unknown_category_emits_warning_and_drops():
-    """Unknown FTL category_id emits a warning and drops the row."""
+def test_validate_ftl_scope_unknown_category_is_error_and_drops():
+    """Unknown FTL category_id drops the row and emits an error."""
     normalized, errors = validate_and_normalize_payload(
         {
             "facilities": [],
@@ -398,7 +403,7 @@ def test_validate_ftl_scope_unknown_category_emits_warning_and_drops():
         e for e in errors if e.get("section") == "ftl_scope" and "Unknown FTL category_id" in e.get("message", "")
     ]
     assert len(unknown_errors) == 1
-    assert unknown_errors[0]["severity"] == "warning"
+    assert unknown_errors[0]["severity"] == "error"
     assert unknown_errors[0]["row"] == 1
 
 

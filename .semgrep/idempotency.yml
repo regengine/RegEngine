@@ -1,0 +1,42 @@
+# Semgrep rules enforcing Pattern 1 ("idempotency keys optional on
+# money and event writes").
+#
+# Every mutating money or compliance-evidence route must read the shared
+# ``Idempotency-Key`` header (via ``shared.idempotency.IdempotencyDependency``
+# or the ``IdempotencyMiddleware`` replay) so normal network retries replay
+# instead of charging twice or duplicating evidence.
+#
+# Wire this file into CI via:
+#   semgrep --config .semgrep/idempotency.yml --error services/ server/
+#
+# To grant a legitimate exception, add a `# nosemgrep: rule-id` comment
+# with a rationale on the same line.
+
+rules:
+  - id: event-write-without-idempotency-key
+    message: >-
+      Mutating event/ingest/trace route without reading an idempotency key.
+      Accept the shared Idempotency-Key header (IdempotencyDependency) or
+      route through the shared idempotent writer so retries are safe.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern-inside: |
+          @$ROUTE.post(...)
+          def $F(...):
+            ...
+      - pattern-not-inside: |
+          @$ROUTE.post(...)
+          def $F(..., idempotency_key: ... = Header(...), ...):
+            ...
+      - pattern-not-inside: |
+          @$ROUTE.post(...)
+          def $F(..., idempotency_key: ... = Depends(...), ...):
+            ...
+      - metavariable-regex:
+          metavariable: $ROUTE
+          regex: .*(ingest|trace|event|webhook|billing|charge|transfer|top.?up|refund).*
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/test_*.py"

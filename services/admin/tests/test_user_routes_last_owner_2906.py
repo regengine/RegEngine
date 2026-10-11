@@ -270,6 +270,10 @@ class TestGuardStaysPermissiveWhereItShould_Issue2906:
     def test_demote_allowed_when_another_authenticating_owner_exists(self, user_routes_mod, db) -> None:
         _seed_owner(db, ALICE_ID)
         _seed_owner(db, BOB_ID)
+        # The acting admin performs this demotion as an Owner, satisfying the
+        # #1387 tier check on role changes (an actor with no tenant role at
+        # all cannot assign roles).
+        _seed_owner(db, ACTOR_ID)
 
         assert _demote(user_routes_mod, db, ALICE_ID) == {"status": "updated"}
         assert _membership(db, ALICE_ID).role_id == MEMBER_ROLE_ID
@@ -304,8 +308,10 @@ class TestGuardIsSharedAndFilters_Issue2906:
         """Run the route against a mock session and return the compiled
         SQL of the second SELECT — the Owner-count query."""
         statements: list = []
-        owner_role = SimpleNamespace(id=OWNER_ROLE_ID, name="Owner", tenant_id=None)
-        member_role = SimpleNamespace(id=MEMBER_ROLE_ID, name="Member", tenant_id=None)
+        owner_role = SimpleNamespace(
+            id=OWNER_ROLE_ID, name="Owner", tenant_id=None, permissions=["users.manage_roles"]
+        )
+        member_role = SimpleNamespace(id=MEMBER_ROLE_ID, name="Member", tenant_id=None, permissions=[])
         membership = SimpleNamespace(user_id=ALICE_ID, tenant_id=TENANT_ID, role_id=OWNER_ROLE_ID, is_active=True)
 
         db = MagicMock()
@@ -314,10 +320,19 @@ class TestGuardIsSharedAndFilters_Issue2906:
             MEMBER_ROLE_ID: member_role,
         }.get(ident)
 
+        single_row_calls = {"n": 0}
+
         def _execute(stmt, *args, **kwargs):
             statements.append(stmt)
             result = MagicMock()
-            result.scalar_one_or_none.return_value = membership
+            single_row_calls["n"] += 1
+            if single_row_calls["n"] == 1:
+                # Target-membership lookup.
+                result.scalar_one_or_none.return_value = membership
+            else:
+                # Caller-role lookup for the #1387 tier check on role
+                # changes: the actor is an Owner, so the route proceeds.
+                result.scalar_one_or_none.return_value = owner_role
             result.all.return_value = [object()]  # a surviving Owner → route proceeds
             return result
 

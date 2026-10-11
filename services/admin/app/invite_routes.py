@@ -17,10 +17,11 @@ from shared.permissions import can_invite_role
 from shared.pii import mask_email
 from shared.rate_limit import limiter
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
-from .auth.identity_helpers import ensure_passwordless_identity
+from .auth.identity_helpers import EmailOwnershipConflictError, ensure_passwordless_identity
 from .database import get_session
 from .dependencies import PermissionChecker, get_current_user
 from .e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
@@ -139,9 +140,14 @@ class InviteCreate(BaseModel):
     @field_validator("email")
     @classmethod
     def validate_email(cls, v: str) -> str:
-        if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", v):
+        normalized = v.strip().lower()
+        if not re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", normalized):
             raise ValueError("Invalid email format")
-        return v
+        # Mailbox matching is case-insensitive everywhere downstream
+        # (accept_invite, ensure_passwordless_identity, challenges), so store
+        # the normalized form. Otherwise a case variant of an existing member
+        # or pending invite slips past the exact-match guards below.
+        return normalized
 
 
 class InviteResponse(BaseModel):
@@ -156,9 +162,9 @@ class InviteResponse(BaseModel):
 
 class AcceptInviteRequest(BaseModel):
     token: str
-    name: str  # Assuming we might want name, though User model doesn't explicitly show it in sqlalchemy_models check.
-    # Note: UserModel has no 'name' col in the viewed file, only email/status/sysadmin metadata.
-    # So I will ignore name for now or assume it's metadata.
+    # Optional and currently unused: UserModel carries no name column, so
+    # accepting must work for clients that send only the token.
+    name: str | None = None
 
 
 class RevokeInviteResponse(BaseModel):
@@ -185,21 +191,26 @@ async def create_invite(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
-    # Check if user already exists in this tenant
+    # Check if user already exists in this tenant. The comparison folds
+    # case and trims whitespace to match accept_invite, so a case variant
+    # of a member's address is rejected here instead of mailing an invite
+    # whose token would burn on the existing-membership 400 at accept.
+    folded_email = invite_data.email.strip().lower()
     existing_member = db.execute(
         select(MembershipModel)
         .join(UserModel)
-        .where(MembershipModel.tenant_id == tenant_id, UserModel.email == invite_data.email)
+        .where(MembershipModel.tenant_id == tenant_id, func.lower(UserModel.email) == folded_email)
     ).scalar_one_or_none()
 
     if existing_member:
         raise HTTPException(status_code=409, detail="User already a member of this tenant")
 
-    # Check if pending invite exists
+    # Check if pending invite exists (same folding, so a case variant of
+    # a live invite is a duplicate instead of a second email).
     existing_invite = db.execute(
         select(InviteModel).where(
             InviteModel.tenant_id == tenant_id,
-            InviteModel.email == invite_data.email,
+            func.lower(InviteModel.email) == folded_email,
             InviteModel.revoked_at.is_(None),
             InviteModel.accepted_at.is_(None),
             InviteModel.expires_at > datetime.now(timezone.utc),
@@ -267,7 +278,15 @@ async def create_invite(
         created_by=current_user.id,
     )
     db.add(new_invite)
-    db.flush()  # Ensure ID is generated
+    try:
+        db.flush()  # Ensure ID is generated
+    except IntegrityError as exc:
+        # Lost a concurrent create for the same mailbox (or hit the unique
+        # index on a backend where it covers revoked rows). Report the same
+        # 409 the pre-checks return instead of a 500.
+        db.rollback()
+        logger.warning("invite_create_conflict", email=mask_email(invite_data.email), error=str(exc))
+        raise HTTPException(status_code=409, detail="Active invite already exists for this email") from exc
 
     # Audit Log
     audit_entry_id = AuditLogger.log_event(
@@ -301,8 +320,14 @@ async def create_invite(
             },
         )
 
-
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Same concurrent-duplicate window as the flush above, surfacing at
+        # commit time. Identical 409, nothing committed.
+        db.rollback()
+        logger.warning("invite_create_conflict", email=mask_email(invite_data.email), error=str(exc))
+        raise HTTPException(status_code=409, detail="Active invite already exists for this email") from exc
     db.refresh(new_invite)
 
     supplier_graph_sync.record_invite_created(
@@ -425,7 +450,6 @@ async def revoke_invite(
             },
         )
 
-
     db.commit()
     return {"status": "revoked"}
 
@@ -513,11 +537,34 @@ async def accept_invite(
     if invite.revoked_at or invite.accepted_at:
         raise generic_400
 
-    # Check if user exists (Global)
-    user = db.execute(select(UserModel).where(UserModel.email == invite.email)).scalar_one_or_none()
+    # Check if user exists (Global). The comparison is case-insensitive so
+    # an invite addressed to a case variant of an existing user's email
+    # attaches to that user instead of creating a duplicate account that
+    # would then claim their verified email row.
+    try:
+        user = db.execute(
+            select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
+        ).scalar_one_or_none()
+    except MultipleResultsFound:
+        # Two users rows differ only by email case. The column is unique
+        # only on the raw value, so both rows are legal. Do not pick one;
+        # fail closed with the same uniform 400 as every other unusable
+        # invite state. A data cleanup plus a lower(email) unique index
+        # is the durable fix.
+        logger.warning(
+            "accept_invite_ambiguous_case_variant_user",
+            email=mask_email(invite.email),
+        )
+        db.rollback()
+        raise generic_400
 
     if user is not None:
-        if user.status != "active":
+        # Both status fields gate authentication (see user_routes: a user
+        # can only hold a session when users.status AND
+        # users.global_status are 'active'). Checking only `status` let a
+        # globally-suspended user accept an invite and gain a live
+        # membership plus fresh passwordless identity rows.
+        if user.status != "active" or getattr(user, "global_status", "active") != "active":
             # Do not reinstate erased / suspended users via invite (#1337).
             logger.warning(
                 "accept_invite_inactive_user_blocked",
@@ -527,9 +574,11 @@ async def accept_invite(
             raise generic_400
 
     else:
-        # Path A — create a passwordless user from an invite token.
+        # Path A — create a passwordless user from an invite token. Store the
+        # normalized address so a later lookup by any case variant resolves to
+        # this same row instead of a case-split duplicate identity.
         user = UserModel(
-            email=invite.email,
+            email=invite.email.strip().lower(),
             status="active",
             is_sysadmin=False,
         )
@@ -560,13 +609,23 @@ async def accept_invite(
     # organization_memberships) or sign-in code emails for this user are
     # silently suppressed. The invite token is proof of mailbox control.
     invite_role = db.get(RoleModel, invite.role_id)
-    ensure_passwordless_identity(
-        db,
-        user=user,
-        email=invite.email,
-        organization_id=invite.tenant_id,
-        role_name=invite_role.name if invite_role is not None else None,
-    )
+    try:
+        ensure_passwordless_identity(
+            db,
+            user=user,
+            email=invite.email,
+            organization_id=invite.tenant_id,
+            role_name=invite_role.name if invite_role is not None else None,
+        )
+    except EmailOwnershipConflictError:
+        # The invited address (up to case) belongs to a different user.
+        # Refuse without revealing which account holds it (uniform 400).
+        logger.warning(
+            "accept_invite_email_ownership_conflict",
+            email=mask_email(invite.email),
+        )
+        db.rollback()
+        raise generic_400
 
     # Update Invite (single-use).
     accepted_at = datetime.now(timezone.utc)
@@ -603,8 +662,15 @@ async def accept_invite(
             },
         )
 
-
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Lost a concurrent accept race for the same invite (duplicate
+        # membership row). Keep the uniform 400 so the outcome is
+        # indistinguishable from any other unusable-invite case.
+        db.rollback()
+        logger.warning("accept_invite_conflict", email=mask_email(invite.email), error=str(exc))
+        raise generic_400 from exc
 
     supplier_graph_sync.record_invite_accepted(
         tenant_id=str(invite.tenant_id),

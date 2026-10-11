@@ -160,6 +160,34 @@ class TestNormaliseEvent:
         assert row["origin_gln"] == ""
         assert row["carrier"] == ""
 
+    def test_zero_temperature_is_preserved(self):
+        """A numeric zero temperature (for example 0F frozen goods) is a
+        real measurement and must survive normalization, not collapse to "".
+        """
+        event = _sample_event(kdes={"event_date": "2026-03-15T10:00:00Z", "temperature": 0})
+        assert _normalise_event(event)["temperature"] == "0"
+
+    def test_zero_float_temperature_is_preserved(self):
+        event = _sample_event(kdes={"event_date": "2026-03-15T10:00:00Z", "temperature": 0.0})
+        assert _normalise_event(event)["temperature"] == "0.0"
+
+    def test_falsy_extra_kdes_are_preserved(self):
+        """Zero and False values in non-column KDEs are evidence and must
+        stay in the overflow JSON; only None and "" are dropped as empty.
+        """
+        event = _sample_event(kdes={"event_date": "2026-03-15T10:00:00Z", "pallet_count": 0, "kept_cold": False})
+        extra = json.loads(_normalise_event(event)["additional_kdes_json"])
+        assert extra["pallet_count"] == 0
+        assert extra["kept_cold"] is False
+
+    def test_none_and_empty_kdes_still_dropped(self):
+        """None and empty-string KDEs are still treated as missing, so the
+        overflow JSON does not fill with noise.
+        """
+        event = _sample_event(kdes={"event_date": "2026-03-15T10:00:00Z", "note": None, "blank": ""})
+        row = _normalise_event(event)
+        assert row["additional_kdes_json"] == ""
+
 
 # ─── generate_fda_csv ────────────────────────────────────────────────────
 

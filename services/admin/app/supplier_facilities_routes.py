@@ -229,7 +229,10 @@ async def get_required_ctes(
     )
 
     graph_payload = supplier_graph_sync.get_required_ctes_for_facility(str(facility.id), tenant_id=str(tenant_id))
-    if graph_payload is not None:
+    # An empty graph payload (no record in Neo4j, or Neo4j down) is not
+    # an answer: fall through to the Postgres scoping rows below instead
+    # of reporting zero coverage and hiding real FTL scoping.
+    if graph_payload is not None and (graph_payload.get("categories") or graph_payload.get("required_ctes")):
         return FacilityFTLScopingResponse(
             facility_id=str(facility.id),
             categories=graph_payload.get("categories", []),

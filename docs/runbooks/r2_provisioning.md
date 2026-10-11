@@ -49,12 +49,15 @@ Railway auto-redeploys after env changes. Watch the deploy with
 # Confirm vars are set (values masked)
 railway variables --json | python3 -c "import json,sys,re; v=json.load(sys.stdin); p=re.compile(r'OBJECT_STORAGE',re.I); print({k: '***SET***' if v[k] else '<empty>' for k in v if p.search(k)})"
 
-# Hit the live endpoints
-REGENGINE_API_KEY=rge_live_... ./scripts/smoke_test_ingest.sh
+# Hit the live endpoints (the smoke script defaults to localhost, so the
+# production base must be set explicitly, with --allow-production)
+REGENGINE_API_BASE=https://regengine.co/api/ingestion REGENGINE_API_KEY=rge_live_... ./scripts/smoke_test_ingest.sh --allow-production
 ```
 
 Expected: all `/v1/ingest/*` endpoints return 200 (not 503). The smoke
 test script already encodes this — exit 0 means provisioning succeeded.
+A localhost pass does not count for this step: without REGENGINE_API_BASE
+and --allow-production the script probes the operator laptop, not Railway.
 
 ## Step 4 — Lifespan probe
 

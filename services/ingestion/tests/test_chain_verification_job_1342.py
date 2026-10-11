@@ -19,6 +19,7 @@ Issue: #1342
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -386,6 +387,38 @@ class TestLogVerificationAudit:
 
         # Must not raise
         _log_verification_audit("t1", "j1", True, 10, [])
+
+    def test_failed_audit_task_logs_at_error(self, monkeypatch, caplog):
+        """A detached write that fails must page the logs at error level
+        instead of dying silently in the task."""
+        import shared.audit_logging as al
+
+        async def _boom():
+            raise RuntimeError("audit database unreachable")
+
+        class _FailingAudit:
+            @classmethod
+            def get_instance(cls):
+                return cls()
+
+            def log(self, **kwargs):
+                return _boom()
+
+        monkeypatch.setattr(al, "AuditLogger", _FailingAudit)
+
+        async def _runner():
+            _log_verification_audit("t1", "j1", True, 10, [])
+            for _ in range(10):
+                await asyncio.sleep(0)
+
+        with caplog.at_level(logging.ERROR, logger="chain-verification"):
+            asyncio.run(_runner())
+
+        assert any(
+            record.levelno >= logging.ERROR
+            and "chain_verification_audit_write_failed" in record.getMessage()
+            for record in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------

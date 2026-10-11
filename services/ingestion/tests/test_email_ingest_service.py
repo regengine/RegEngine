@@ -375,6 +375,39 @@ class TestProcessOneAttachment:
         assert result.status == "rejected"
         assert result.reason == "invalid_base64_content"
 
+    async def test_content_type_with_mime_parameters_is_accepted(self, monkeypatch):
+        # Senders may label CSV with RFC 2045 content-type parameters
+        # (e.g. "text/csv; charset=utf-8"); the parameters describe the
+        # payload, they do not change its type, so the media type must be
+        # compared without them.
+        async def fake_ingest(tenant_id, name, raw):
+            return AttachmentResult(name=name, status="accepted", rows_accepted=1)
+
+        monkeypatch.setattr(service_mod, "_ingest_attachment_csv", fake_ingest)
+        attachment = PostmarkAttachment(Name="export", Content=VALID_B64, ContentType="text/csv; charset=utf-8")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "accepted"
+
+    async def test_line_wrapped_base64_is_accepted(self, monkeypatch):
+        # RFC 2045 encoders wrap base64 at 76 columns and forwarders may
+        # preserve those line breaks in Attachment.Content. Whitespace is
+        # never significant in base64, so wrapping must not fail validation.
+        captured = {}
+
+        async def fake_ingest(tenant_id, name, raw):
+            captured["raw"] = raw
+            return AttachmentResult(name=name, status="accepted", rows_accepted=1)
+
+        monkeypatch.setattr(service_mod, "_ingest_attachment_csv", fake_ingest)
+        csv_bytes = b"col_a,col_b\n" + b"1,2\n" * 20
+        raw_b64 = base64.b64encode(csv_bytes).decode("ascii")
+        wrapped = "\r\n".join(raw_b64[i : i + 76] for i in range(0, len(raw_b64), 76))
+        assert "\r\n" in wrapped  # the test only means something if wrapping occurred
+        attachment = PostmarkAttachment(Name="data.csv", Content=wrapped, ContentType="text/csv")
+        result = await _process_one_attachment("tenant-1", attachment)
+        assert result.status == "accepted"
+        assert captured["raw"] == csv_bytes
+
     async def test_oversized_attachment_is_rejected(self, monkeypatch):
         monkeypatch.setattr(service_mod, "MAX_CSV_FILE_SIZE_BYTES", 4)
         attachment = PostmarkAttachment(Name="data.csv", Content=VALID_B64, ContentType="text/csv")
@@ -740,6 +773,35 @@ class TestProcessInboundEmailUnmappedRecipient:
         assert result.status == "rejected"
         assert result.rejection_reason == "unmapped_recipient"
         assert claim_calls[0]["recipient"] == "tenant-inbox@tenant.regengine.co"
+
+    async def test_unmapped_recipient_with_attachments_runs_no_ingestion_and_sets_no_tenant(self, monkeypatch):
+        # Fail-closed ordering: when the sender is not on the recipient
+        # tenant's allowlist (lookup returns None), the email must never
+        # touch CSV ingestion nor set tenant context, even when it carries
+        # attachments. The claim row is still recorded as rejected for audit.
+        monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
+        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: None)
+        _stub_claim(monkeypatch, succeeds=True)
+        monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", lambda db, **kwargs: {"id": "1"})
+
+        def fail_guc(db, tid):
+            raise AssertionError("set_tenant_guc must not run for an unmapped recipient")
+
+        monkeypatch.setattr(service_mod, "set_tenant_guc", fail_guc)
+
+        async def fail_process_one(tenant_id, attachment):
+            raise AssertionError("attachment ingestion must not run for an unmapped recipient")
+
+        monkeypatch.setattr(service_mod, "_process_one_attachment", fail_process_one)
+
+        db = MagicMock()
+        payload = _payload(
+            Attachments=[{"Name": "a.csv", "Content": VALID_B64, "ContentType": "text/csv"}],
+        )
+        result = await process_inbound_email(db, payload)
+
+        assert result.status == "rejected"
+        assert result.rejection_reason == "unmapped_recipient"
 
 
 class TestProcessInboundEmailMappedTenant:

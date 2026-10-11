@@ -74,7 +74,11 @@ class TestApproveDiscovery:
         mock_enqueue.assert_called_once()
         kw = mock_enqueue.call_args.kwargs
         assert kw["task_type"] == "discovery_scrape"
-        assert kw["payload"] == {"body": "CPPA Warning", "url": "https://cppa.ca.gov/item/1"}
+        assert kw["payload"] == {
+            "body": "CPPA Warning",
+            "url": "https://cppa.ca.gov/item/1",
+            "tenant_id": "tenant-disco",
+        }
         assert kw["tenant_id"] == "tenant-disco"
         expected_hash = hashlib.sha256("CPPA Warninghttps://cppa.ca.gov/item/1".encode("utf-8")).hexdigest()
         assert kw["idempotency_key"] == f"discovery_scrape:tenant-disco:{expected_hash}"
@@ -141,8 +145,8 @@ class TestBulkApproveDiscovery:
         assert mock_enqueue.call_count == 2
 
         payloads = [c.kwargs["payload"] for c in mock_enqueue.call_args_list]
-        assert {"body": "Reg A", "url": "https://example.com/a"} in payloads
-        assert {"body": "Reg B", "url": "https://example.com/b"} in payloads
+        assert {"body": "Reg A", "url": "https://example.com/a", "tenant_id": "tenant-disco"} in payloads
+        assert {"body": "Reg B", "url": "https://example.com/b", "tenant_id": "tenant-disco"} in payloads
         keys = {c.kwargs["idempotency_key"] for c in mock_enqueue.call_args_list}
         expected_a = hashlib.sha256("Reg Ahttps://example.com/a".encode("utf-8")).hexdigest()
         expected_b = hashlib.sha256("Reg Bhttps://example.com/b".encode("utf-8")).hexdigest()
