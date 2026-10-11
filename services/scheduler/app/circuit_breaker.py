@@ -120,6 +120,7 @@ class CircuitBreaker:
         self.stats.failures += 1
         self.stats.total_calls += 1
         self.stats.last_failure_time = time.time()
+        self._consecutive_failures += 1
 
         if self.state == CircuitState.HALF_OPEN:
             # Immediate transition back to open on any failure
@@ -157,6 +158,7 @@ class CircuitBreaker:
         """Transition to closed state."""
         self.state = CircuitState.CLOSED
         self.stats.failures = 0
+        self._consecutive_failures = 0
         self._opened_at = None
         self._half_open_calls = 0
         self._consecutive_failures = 0
