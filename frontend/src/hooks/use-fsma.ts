@@ -148,7 +148,7 @@ export function useRecallDrill(drillId: string, enabled = true) {
   const { isAuthenticated } = useAuth();
   return useQuery({
     queryKey: ['fsma', 'recall', 'drill', drillId],
-    queryFn: () => fsmaFetch<RecallDrill>(`/recall/drill/${drillId}`),
+    queryFn: () => fsmaFetch<RecallDrill>(`/recall/drill/${encodeURIComponent(drillId)}`),
     enabled: enabled && !!drillId && isAuthenticated,
     refetchInterval: 5 * 1000, // Refresh every 5 seconds for active drills
   });
@@ -172,7 +172,7 @@ export function useCancelRecallDrill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (drillId: string) =>
-      fsmaFetch<{ success: boolean }>(`/recall/drill/${drillId}`, {
+      fsmaFetch<{ success: boolean }>(`/recall/drill/${encodeURIComponent(drillId)}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {

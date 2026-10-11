@@ -6,11 +6,9 @@ describe("HomePage Compliance OS foundation", () => {
   it("leads with compliance operating system positioning", () => {
     render(<HomePage />);
 
-    // Per PR #2206: hero rewritten — H1 is now "FSMA 204 traceability evidence layer."
-    // and the supporting copy describes the ingest → preflight → audit → export flow.
     expect(
       screen.getByRole("heading", {
-        name: "FSMA 204 traceability evidence layer.",
+        name: "FSMA 204 recordkeeping for the Food Traceability Rule.",
         level: 1,
       }),
     ).toBeInTheDocument();

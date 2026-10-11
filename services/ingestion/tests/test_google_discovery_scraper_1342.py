@@ -149,7 +149,7 @@ def capture_httpx_get(monkeypatch):
     calls: list[dict] = []
     responses: list[_FakeResponse] = []
 
-    def _get(url, *, params=None, timeout=None, headers=None):
+    def _get(url, *, params=None, timeout=None, headers=None, max_bytes=None):
         # After RE-SEC-INGEST-003 migration the scraper encodes params into the
         # URL itself (safe_httpx_get_sync does not accept a params kwarg). Parse
         # the query string back out so legacy assertions on calls[i]["params"]
@@ -165,7 +165,7 @@ def capture_httpx_get(monkeypatch):
                 if isinstance(v, str) and v.lstrip("-").isdigit():
                     params[k] = int(v)
             url = url.split("?", 1)[0]
-        calls.append({"url": url, "params": params, "timeout": timeout, "headers": headers})
+        calls.append({"url": url, "params": params, "timeout": timeout, "headers": headers, "max_bytes": max_bytes})
         if responses:
             return responses.pop(0)
         return _FakeResponse(json_body={})
@@ -408,6 +408,36 @@ class TestFetch:
         GoogleDiscoveryScraper().fetch(Source(url="https://a.gov/1.pdf"))
         assert calls[0]["headers"] == {"User-Agent": "RegEngine/1.0"}
         assert calls[0]["timeout"] == 30
+
+    def test_document_fetch_uses_document_size_budget(self, patch_settings, capture_httpx_get):
+        """Discovered documents get the document cap, not the page default."""
+        from shared.safe_http import DOCUMENT_MAX_RESPONSE_BYTES
+
+        patch_settings()
+        calls, responses = capture_httpx_get
+        responses.append(_FakeResponse(content=b"%PDF-1.4 body", headers={"Content-Type": "application/pdf"}))
+
+        GoogleDiscoveryScraper().fetch(Source(url="https://a.gov/1.pdf"))
+        assert calls[0]["max_bytes"] == DOCUMENT_MAX_RESPONSE_BYTES
+
+    def test_oversized_document_logs_distinct_event(self, patch_settings, monkeypatch, _patch_logger):
+        """An over-budget document logs google_fetch_too_large, not the
+        generic failure event. Fails on the pre-fix code, which has no
+        separate size branch."""
+        from shared.safe_http import ResponseTooLargeError
+
+        patch_settings()
+
+        def _too_big(*a, **kw):
+            raise ResponseTooLargeError("Response body exceeds 20971520 bytes")
+
+        monkeypatch.setattr(mod, "safe_httpx_get_sync", _too_big)
+
+        item = GoogleDiscoveryScraper().fetch(Source(url="https://a.gov/big.pdf"))
+        assert item.content_bytes == b""
+        events = [event for _level, event, _kw in _patch_logger.calls]
+        assert "google_fetch_too_large" in events
+        assert "google_fetch_failed" not in events
 
     def test_http_error_returns_empty_fetched_item(self, patch_settings, capture_httpx_get, _patch_logger):
         patch_settings()

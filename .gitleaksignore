@@ -132,3 +132,77 @@ a130816b2c95f51e253b311dd73a9597eb2f88c4:.env.production:generic-api-key:37
 # the historical line (squash commit on main + the pre-squash branch commit).
 db6df3d2c2f25e395ef6f66204eb55af893f674a:.gitleaksignore:generic-api-key:108
 7020a8d88edbc8791e16f242cf1187204fb527bc:.gitleaksignore:generic-api-key:108
+
+# ─── Unmasked by removing the '''^docs/''' and '''^scripts/''' blanket
+# ignores from .gitleaks.toml (see the note there). Reviewed individually
+# 2026-10-10 against the blob at each commit, with the value compared to this
+# repository's own key generators in services/shared/api_key_store.py.
+#
+# Documentation placeholders a reader is meant to replace. All four files were
+# deleted from the tree long ago; each value is 12-23 chars of lowercase
+# letters/hyphens/underscores with no entropy, and the surrounding text is an
+# instruction to substitute your own key.
+#   BETA_TESTER_GUIDE.md      rge_your_... (12 chars)
+#   WEBSITE_COPY.md           your-api-key (12 chars)
+#   rls_deployment_runbook.md YOUR_API_KEY (13 chars)
+#   INVESTOR_DEMO_GUIDE.md    sk_live_abc1... illustrative console output
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/BETA_TESTER_GUIDE.md:curl-auth-header:102
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/WEBSITE_COPY.md:curl-auth-header:243
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/rls_deployment_runbook.md:curl-auth-header:63
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/INVESTOR_DEMO_GUIDE.md:generic-api-key:42
+
+# A test fixture: 24 chars, four hyphen-separated English words, used only
+# against the localhost uvicorn the script spawns itself.
+3539b2dc367d24e8ca719734ed5320fc77473ac4:scripts/e2e_brutal_scenario.py:generic-api-key:96
+
+# NOT certified as a non-secret. Pinned only so this one historical line does
+# not block the gate; that is strictly narrower than the '''^scripts/''' ignore
+# which was hiding it entirely, and it does not settle the open question below.
+#
+# scripts/stress_test.py held ADMIN_KEY as a 62-char lowercase-hex literal.
+# #3081 (c249be41, 2026-09-07) removed it as "unused", replacing it with
+# os.environ.get("ADMIN_KEY", ""), so it is gone from the tree; the historical
+# blob remains.
+#
+# It is derived from real credential material. Its first 8 hex characters are
+# identical to the ADMIN_MASTER_KEY that docs/audits/COMPREHENSIVE_AUDIT_
+# 2026_03_09.md lists under "Security Exposures" as a 128-char hex value in a
+# committed .env — an 8-character hex collision is about 1 in 4.3 billion, so
+# this literal was copied from or recalled off that key, and characters 9-62
+# may be a truncation of it rather than invention. It is NOT one of the
+# .env.production secrets verified and rotated on 2026-09-28 (compared
+# exactly: different value, no shared prefix or substring); that rotation does
+# not cover it. Its character distribution gives no evidence of hand-typing
+# either way (omitting one hex digit in 62 chars happens ~25% of the time by
+# chance).
+#
+# The issuance question is already tracked and still open:
+#   - docs/engineering/security-findings-2026-09-10/dispositions.json, GL-057,
+#     fingerprint ad036009...:scripts/stress_test.py:generic-api-key:23:
+#     disposition synthetic_fixture_source, rationale
+#     literal_in_test_source_unverified_issuance — "test location alone cannot
+#     certify non-issuance; owner review remains required."
+#   - docs/engineering/security-findings-2026-09-10/README.md row 15,
+#     ADMIN_MASTER_KEY: "Unresolved ... determine whether it was issued/
+#     deployed; identify old administrative callers and provide provider/
+#     application revocation plus replay-denial evidence if real."
+#
+# So it is deliberately NOT pinned here. AGENTS.md:77 is unambiguous: "A key
+# that appeared in chat, a log or git history is exposed: revoke it and issue a
+# new one." Pinning the fingerprint would hold the gate green while an
+# unverified admin credential stayed reachable in history, which is the one
+# thing an allowlist entry must never buy. This follows the precedent set for
+# the .env.production trio, which #3183 recorded as remaining "intentionally
+# red per #3174" until they were verified on 2026-09-28 and only then pinned
+# above.
+#
+# Effect, measured with gitleaks v8.30.0 on this branch: push and scheduled
+# runs scan full history and report this one finding, so Secrets Scan
+# (gitleaks) is red on main until the credential is verified or revoked;
+# pull_request runs scope to base..HEAD (security.yml), where it is out of
+# range, so they stay green and no PR is blocked by it.
+#
+# The same owner check is owed for the two rge_<id>.<secret> literals in the
+# deleted scripts/test_id_002.py and scripts/test_hash_001.py, which match the
+# legacy rge_<token_urlsafe(16)>.<token_urlsafe(32)> generator exactly and stay
+# masked by '''/test_''' in .gitleaks.toml.

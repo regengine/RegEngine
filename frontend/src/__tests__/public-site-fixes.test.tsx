@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { MARKETING_FOOTER_PRODUCT_LINKS } from '@/components/layout/marketing-nav';
 import { EmailGate } from '@/components/tools/EmailGate';
@@ -25,10 +25,36 @@ vi.mock('next/navigation', () => ({
     }),
 }));
 
+/**
+ * jsdom does not implement navigation, so assigning window.location.href is
+ * unobservable. Swap in a plain stub that records the assignment, then
+ * restore the real location after each test.
+ */
+function stubLocationHref() {
+    const realLocation = window.location;
+    const stub = { href: realLocation.href };
+    Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: stub,
+    });
+    return stub;
+}
+
 describe('public site launch-blocker fixes', () => {
+    const realLocation = window.location;
+
     beforeEach(() => {
         mocks.routerPush.mockClear();
         mocks.fetchWithCsrf.mockImplementation(() => new Promise(() => {}));
+    });
+
+    afterEach(() => {
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            writable: true,
+            value: realLocation,
+        });
     });
 
     it('renders EmailGate children immediately while access check is pending', () => {
@@ -79,6 +105,41 @@ describe('public site launch-blocker fixes', () => {
 
         await userEvent.click(screen.getByRole('button', { name: /continue to signup/i }));
         expect(mocks.routerPush).toHaveBeenCalledWith('/signup?plan=base&billing=annual');
+    });
+
+    it('redirects to Stripe Checkout when the backend URL is allowlisted', async () => {
+        mocks.fetchWithCsrf.mockResolvedValue({
+            ok: true,
+            json: async () => ({ checkout_url: 'https://checkout.stripe.com/c/pay/cs_test_123' }),
+        } as Response);
+        const locationStub = stubLocationHref();
+
+        render(<PricingCheckoutButton tierId="base" label="Start Base Plan" />);
+
+        await userEvent.click(screen.getByRole('link', { name: /start base plan/i }));
+
+        await waitFor(() => {
+            expect(locationStub.href).toBe('https://checkout.stripe.com/c/pay/cs_test_123');
+        });
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('blocks a non-Stripe checkout URL instead of redirecting', async () => {
+        mocks.fetchWithCsrf.mockResolvedValue({
+            ok: true,
+            json: async () => ({ checkout_url: 'https://checkout.stripe.com.evil.test/phish' }),
+        } as Response);
+        const locationStub = stubLocationHref();
+        const hrefBefore = locationStub.href;
+
+        render(<PricingCheckoutButton tierId="base" label="Start Base Plan" />);
+
+        await userEvent.click(screen.getByRole('link', { name: /start base plan/i }));
+
+        const alert = await screen.findByRole('alert');
+        expect(alert).toHaveTextContent(/stripe checkout was unavailable/i);
+        expect(locationStub.href).toBe(hrefBefore);
+        expect(mocks.routerPush).not.toHaveBeenCalled();
     });
 
     it('routes Premium to signup without attempting checkout', async () => {
