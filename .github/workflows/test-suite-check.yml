@@ -126,7 +126,8 @@ jobs:
           for root in tests regengine/tests services/admin/tests \
                       services/compliance/tests services/graph/tests \
                       services/ingestion/tests services/nlp/tests \
-                      services/scheduler/tests services/shared/tests; do
+                      services/scheduler/tests services/shared/tests \
+                      infra/gateway/tests; do
             if ! echo "$OUTPUT" | grep -q "^${root}/"; then
               MISSING_ROOTS="$MISSING_ROOTS $root"
             fi
