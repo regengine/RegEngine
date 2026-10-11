@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 _SERVICE_DIR = Path(__file__).resolve().parent.parent
 _SERVICES_DIR = _SERVICE_DIR.parent
@@ -314,13 +315,18 @@ class TestValidateCteGateRobustness:
     def test_known_checklist_without_scope_is_noop(self, _seeded_rule):
         """No scope field in today's schema, so a known id changes nothing."""
         first = _client.get("/checklists", headers=_headers()).json()["checklists"][0]["id"]
-        resp = _client.post(
+        body = {"ftl_commodity": "leafy_greens"}
+        without_id = _client.post("/validate", json=body, headers=_headers())
+        with_id = _client.post(
             "/validate",
-            json={"ftl_commodity": "leafy_greens", "checklist_id": first},
+            json={**body, "checklist_id": first},
             headers=_headers(),
         )
-        assert resp.status_code == 200, resp.text
-        assert resp.json()["valid"] is True
+        assert without_id.status_code == 200, without_id.text
+        assert with_id.status_code == 200, with_id.text
+        assert with_id.json() == without_id.json()
+        assert with_id.json()["valid"] is True
+        assert with_id.json()["rules_evaluated"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +515,10 @@ CREATE TABLE fsma.compliance_evidence_snapshots (
 )
 """
 
-_QA_TENANT = "qa-gap-tenant"
+# The snapshot routes type the path segment as UUID, so the fixture tenant
+# must be a UUID string. A non-UUID value fails with 422 before the handler
+# runs, which strict xfail would swallow as an expected failure.
+_QA_TENANT = str(uuid4())
 
 
 @pytest.fixture()
@@ -573,10 +582,6 @@ def test_retry_of_create_does_not_duplicate(_gap_client):
     assert len([i for i in listed if i["snapshot_name"] == "Q3 Freeze"]) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG (snapshots.py refreeze_snapshot): refreeze copies name/reason from a tampered row without a seal check, sealing attacker text under a fresh valid hash",
-)
 def test_refreeze_of_tampered_snapshot_is_rejected(_gap_client):
     """Refreezing a row whose seal is already broken must fail closed (409)
     like attest does. Today it succeeds and the tampered metadata is
