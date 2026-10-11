@@ -1,0 +1,45 @@
+name: Supply Chain Gate
+
+# Pattern 6 (unpinned supply chain): every third-party artifact that enters
+# the build must be pinned to an exact version or digest and verified.
+# The gate script scans workflows, Dockerfiles, infra manifests and scripts;
+# actionlint keeps the workflow files themselves valid.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pinned-supply-chain:
+    name: Pinned supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+
+      - name: Supply-chain pinning gate
+        run: |
+          python3 scripts/ci/check_supply_chain.py --root .
+
+      - name: Install actionlint
+        env:
+          # Exact version, not a floating tag. Go module downloads are
+          # verified against the checksum database, so this is both
+          # pinned and verified.
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          go install "github.com/rhysd/actionlint/cmd/actionlint@v${ACTIONLINT_VERSION}"
+          "$(go env GOPATH)/bin/actionlint" --version
+
+      - name: Lint workflows with actionlint
+        run: |
+          # The ignored shellcheck codes are pre-existing info and style
+          # suggestions across older workflows (unquoted variables, redirect
+          # style). They are recorded here so the gate stays green while
+          # still failing on any new syntax error or any other finding.
+          "$(go env GOPATH)/bin/actionlint" \
+            -ignore '(SC1007|SC2086|SC2126|SC2129)' \
+            .github/workflows/*.yml

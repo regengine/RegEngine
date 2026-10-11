@@ -88,3 +88,47 @@ def test_alternate_loopback_encodings_are_blocked(url):
 def test_non_global_special_use_address_is_blocked():
     with pytest.raises(SSRFError):
         validate_url("http://100.64.0.1/")
+
+
+def test_allowlist_exact_domain_passes():
+    assert (
+        validate_url("https://example.com/", allowed_domains=["example.com"], resolve_dns=False)
+        == "https://example.com/"
+    )
+
+
+def test_allowlist_subdomain_passes():
+    assert (
+        validate_url("https://api.example.com/", allowed_domains=["example.com"], resolve_dns=False)
+        == "https://api.example.com/"
+    )
+
+
+def test_allowlist_matching_is_case_insensitive():
+    assert (
+        validate_url("https://API.EXAMPLE.COM/", allowed_domains=["Example.COM"], resolve_dns=False)
+        == "https://API.EXAMPLE.COM/"
+    )
+
+
+def test_allowlist_entry_with_leading_dot_matches_apex_and_subdomains():
+    assert (
+        validate_url("https://example.com/", allowed_domains=[".example.com"], resolve_dns=False)
+        == "https://example.com/"
+    )
+    assert (
+        validate_url("https://api.example.com/", allowed_domains=[".example.com"], resolve_dns=False)
+        == "https://api.example.com/"
+    )
+
+
+def test_allowlist_rejects_bare_suffix_without_dot_boundary():
+    """evilexample.com shares a string suffix with example.com but is a
+    different domain; the allowlist must not match it."""
+    with pytest.raises(SSRFError):
+        validate_url("https://evilexample.com/", allowed_domains=["example.com"], resolve_dns=False)
+
+
+def test_allowlist_rejects_allowlisted_domain_as_subdomain_of_attacker():
+    with pytest.raises(SSRFError):
+        validate_url("https://example.com.evil.com/", allowed_domains=["example.com"], resolve_dns=False)

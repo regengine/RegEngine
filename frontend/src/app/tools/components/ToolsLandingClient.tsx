@@ -64,7 +64,7 @@ export function ToolsLandingClient() {
                         These pages help you look at the Food Traceability List, CTE/KDE fields, and a self-reported records-request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
                     </p>
                     <p className="mt-4 max-w-[68ch] text-small text-re-text-muted">
-                        The federal Food Traceability Rule compliance date is July 20, 2028.
+                        FDA won't enforce before July 20, 2028.
                     </p>
                 </div>
                 <Card className="self-start overflow-hidden">
