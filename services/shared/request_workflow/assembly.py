@@ -29,6 +29,20 @@ logger = structlog.get_logger("request-workflow")
 DEADLINE_STATUS_MAX_CASES = 500
 
 
+def compute_manifest_hash(package_contents: Dict[str, Any]) -> str:
+    """Return the SHA-256 hex digest of a package manifest.
+
+    The digest covers every manifest field EXCEPT ``package_hash`` itself,
+    serialized with sorted keys, so the embedded hash is self-verifiable:
+    strip ``package_hash``, recompute, compare. This is the single function
+    the assembler uses; tests call it directly instead of reimplementing
+    the digest inline.
+    """
+    contents_for_hash = {k: v for k, v in package_contents.items() if k != "package_hash"}
+    manifest_json = json.dumps(contents_for_hash, sort_keys=True, default=str)
+    return hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
+
+
 class AssemblyMixin:
     """Methods for package assembly, signoff, and blocking defect checks."""
 
@@ -252,9 +266,7 @@ class AssemblyMixin:
         }
 
         # Compute manifest hash (exclude package_hash itself for self-verification)
-        contents_for_hash = {k: v for k, v in package_contents.items() if k != "package_hash"}
-        manifest_json = json.dumps(contents_for_hash, sort_keys=True, default=str)
-        package_contents["package_hash"] = hashlib.sha256(manifest_json.encode("utf-8")).hexdigest()
+        package_contents["package_hash"] = compute_manifest_hash(package_contents)
 
         # Use the manifest hash computed above
         contents_json = json.dumps(package_contents, sort_keys=True, default=str)
