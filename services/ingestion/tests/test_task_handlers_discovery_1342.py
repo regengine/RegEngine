@@ -9,6 +9,9 @@ Critical contracts pinned:
     with positional args in that exact order — the underlying
     ``discovery.scrape`` signature is positional, so any kwarg drift
     here would break in production with a confusing TypeError.
+  - The handler forwards the payload's ``tenant_id`` (default ``system``)
+    as a ``tenant_id`` kwarg, so a robots-denied scrape lands in the
+    approving tenant's manual-upload queue, not the shared bucket.
   - The handler is sync (returns ``None``) and wraps the async
     ``scrape`` coroutine via ``asyncio.run`` — this is what allows the
     sync ``TaskWorker`` thread pool to invoke it.
@@ -45,10 +48,10 @@ _scrape_calls: list[tuple] = []
 
 
 class _FakeDiscovery:
-    """Spy that records (body, url) positional args."""
+    """Spy that records (body, url, tenant_id) args."""
 
     @staticmethod
-    async def scrape(body, url):
+    async def scrape(body, url, tenant_id="system"):
         _scrape_calls.append((body, url))
         return None
 
@@ -118,9 +121,22 @@ class TestHandleDiscoveryScrape:
             url="https://example.gov/notice/42",
         )
         assert len(_scrape_calls) == 1
-        body, url = _scrape_calls[0]
+        body, url, tenant_id = _scrape_calls[0]
         assert body == "<html>FDA notice...</html>"
         assert url == "https://example.gov/notice/42"
+        assert tenant_id == "system"
+
+    def test_forwards_payload_tenant_id_to_scrape(self):
+        # The approve routes write the authenticated tenant into the task
+        # payload; the handler must forward it so the scrape queues into
+        # that tenant's manual-upload bucket.
+        _handle_discovery_scrape(
+            body="x",
+            url="https://example.com",
+            tenant_id="tenant-a",
+        )
+        assert len(_scrape_calls) == 1
+        assert _scrape_calls[0] == ("x", "https://example.com", "tenant-a")
 
     def test_returns_none(self):
         # Sync handler, returns None — TaskWorker contract.
@@ -138,14 +154,15 @@ class TestHandleDiscoveryScrape:
             url="https://example.com",
             future_field="ignored",
             another_extra={"k": "v"},
-            tenant_id="t-1",  # not part of the documented signature
+            tenant_id="t-1",
         )
         assert len(_scrape_calls) == 1
+        assert _scrape_calls[0] == ("x", "https://example.com", "t-1")
 
     def test_propagates_scrape_errors(self):
         # If the underlying scrape raises, the handler must propagate
         # so the task queue can mark the job failed and retry.
-        async def _raising(body, url):
+        async def _raising(body, url, tenant_id="system"):
             raise RuntimeError("scrape failed")
 
         original = _FakeDiscovery.scrape

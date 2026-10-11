@@ -104,6 +104,7 @@ _graph_sync_successes = 0
 
 from .security import (  # noqa: E402
     _is_production,
+    _requires_closed_hmac_gate,
     _verify_api_key_present,
     _verify_api_key,
     _webhook_hmac_secret,
@@ -118,6 +119,7 @@ from . import metrics as _metrics_mod  # noqa: E402
 
 WEBHOOK_REPLAY_REJECTED = _metrics_mod.WEBHOOK_REPLAY_REJECTED
 WEBHOOK_HMAC_SKIPPED = _metrics_mod.WEBHOOK_HMAC_SKIPPED
+WEBHOOK_HMAC_REJECTED = _metrics_mod.WEBHOOK_HMAC_REJECTED
 JEV_REVIEW_FLAGGED = _metrics_mod.JEV_REVIEW_FLAGGED
 OBLIGATION_CHECK_SKIPPED = _metrics_mod.OBLIGATION_CHECK_SKIPPED
 _WEBHOOK_METRICS_ENABLED = _metrics_mod._WEBHOOK_METRICS_ENABLED
@@ -127,6 +129,7 @@ if hasattr(_metrics_mod, "_matches_registered_name"):
     _matches_registered_name = _metrics_mod._matches_registered_name
     _get_or_create_counter = _metrics_mod._get_or_create_counter
 _record_hmac_skip = _metrics_mod._record_hmac_skip
+_record_hmac_reject = _metrics_mod._record_hmac_reject
 _classify_replay_rejection = _metrics_mod._classify_replay_rejection
 _record_replay_rejection = _metrics_mod._record_replay_rejection
 _record_obligation_skip = _metrics_mod._record_obligation_skip
@@ -199,6 +202,7 @@ __all__ = [
     "review_event_for_alert_worthiness",
     # Auth / signature / replay window
     "_is_production",
+    "_requires_closed_hmac_gate",
     "_verify_api_key_present",
     "_verify_api_key",
     "_webhook_hmac_secret",
@@ -209,12 +213,14 @@ __all__ = [
     # Metrics
     "WEBHOOK_REPLAY_REJECTED",
     "WEBHOOK_HMAC_SKIPPED",
+    "WEBHOOK_HMAC_REJECTED",
     "JEV_REVIEW_FLAGGED",
     "OBLIGATION_CHECK_SKIPPED",
     "_WEBHOOK_METRICS_ENABLED",
     "_HMAC_SKIP_WARN_INTERVAL_SECS",
     "_last_hmac_skip_warn_at",
     "_record_hmac_skip",
+    "_record_hmac_reject",
     "_classify_replay_rejection",
     "_record_replay_rejection",
     "_record_obligation_skip",

@@ -129,7 +129,8 @@ def sign_webhook_payload(
 
     With ``timestamp`` set, returns ``t=<ts>,v1=<hex>`` over
     ``"<ts>." + payload``. Without it, returns ``"<algorithm>=<hex>"``
-    over the raw payload.
+    over the raw payload. A timestamped header carries no scheme, so
+    verification must pass the same ``algorithm`` used here.
     """
     secret = require_webhook_secret(secret)
     if algorithm not in _SUPPORTED_ALGORITHMS:
@@ -142,25 +143,36 @@ def sign_webhook_payload(
     return "t=%d,v1=%s" % (timestamp, _digest(signed, secret, algorithm))
 
 
-def _parse_signature_header(header: str, *, algorithm: str = "sha256") -> tuple[str, str, Optional[int]]:
-    """Return ``(scheme, provided_hex, timestamp_or_None)`` or raise."""
+def _parse_signature_header(header: str, *, algorithm: str = "sha256") -> tuple[str, list, Optional[int]]:
+    """Return ``(scheme, provided_hexes, timestamp_or_None)`` or raise.
+
+    ``provided_hexes`` is a list because a Stripe-style timestamped
+    header may carry more than one ``v1`` value while a secret is
+    rotated; verification accepts when any one of them matches.
+    """
     text = header.strip()
     timestamp: Optional[int] = None
 
     if "," in text:
-        parts: Dict[str, str] = {}
+        timestamp_text: Optional[str] = None
+        digests: list = []
         for item in text.split(","):
             if "=" not in item:
                 continue
             key, _, value = item.partition("=")
-            parts[key.strip().lower()] = value.strip()
-        if "t" not in parts or "v1" not in parts:
+            key = key.strip().lower()
+            value = value.strip()
+            if key == "t" and timestamp_text is None:
+                timestamp_text = value
+            elif key == "v1" and value:
+                digests.append(value)
+        if timestamp_text is None or not digests:
             raise WebhookSignatureInvalidError("Malformed timestamped signature header. Expected 't=<unix>,v1=<hex>'.")
         try:
-            timestamp = int(parts["t"])
+            timestamp = int(timestamp_text)
         except ValueError:
             raise WebhookSignatureInvalidError("Malformed timestamp in signature header.")
-        return "v1", parts["v1"], timestamp
+        return "v1", digests, timestamp
 
     if "=" in text:
         scheme, _, provided = text.partition("=")
@@ -168,11 +180,11 @@ def _parse_signature_header(header: str, *, algorithm: str = "sha256") -> tuple[
         provided = provided.strip()
         if not scheme or not provided:
             raise WebhookSignatureInvalidError("Malformed signature header.")
-        return scheme, provided, None
+        return scheme, [provided], None
 
     if not text:
         raise WebhookSignatureMissingError("Missing webhook signature.")
-    return algorithm, text, None
+    return algorithm, [text], None
 
 
 def verify_webhook_signature(
@@ -193,7 +205,10 @@ def verify_webhook_signature(
         secret: Configured signing secret. A missing or blank secret is
             a rejection, never a skip.
         connector_id: Used only for server-side logging.
-        algorithm: Default scheme when the header is a bare hex digest.
+        algorithm: Scheme when the header is a bare hex digest, and the
+            HMAC algorithm for timestamped ``t=,v1=`` headers (which
+            carry no scheme of their own). Sign and verify must use the
+            same value; the default is sha256.
         timestamp_tolerance_seconds: Replay window applied only when the
             provider embeds a timestamp.
         now: Unix time override (tests). Defaults to current time.
@@ -214,7 +229,7 @@ def verify_webhook_signature(
         logger.warning("webhook_signature_missing connector=%s", connector_id)
         raise WebhookSignatureMissingError("Missing webhook signature.")
 
-    scheme, provided, timestamp = _parse_signature_header(signature_header, algorithm=algorithm)
+    scheme, provided_hexes, timestamp = _parse_signature_header(signature_header, algorithm=algorithm)
 
     if timestamp is not None:
         current = int(time.time()) if now is None else now
@@ -230,8 +245,14 @@ def verify_webhook_signature(
                 "Webhook timestamp is outside the accepted window "
                 "(skew %ds, tolerance %ds)." % (skew, timestamp_tolerance_seconds)
             )
+        if algorithm not in _SUPPORTED_ALGORITHMS:
+            logger.warning("webhook_signature_unsupported_scheme connector=%s", connector_id)
+            raise WebhookSignatureInvalidError(
+                "Unsupported signature scheme '%s'. Supported schemes: %s."
+                % (algorithm, ", ".join(_SUPPORTED_ALGORITHMS))
+            )
         signed_payload = ("%d." % timestamp).encode("utf-8") + payload
-        expected = _digest(signed_payload, secret, "sha256")
+        expected = _digest(signed_payload, secret, algorithm)
         label = "v1"
     else:
         if scheme not in _SUPPORTED_ALGORITHMS:
@@ -242,7 +263,12 @@ def verify_webhook_signature(
         expected = _digest(payload, secret, scheme)
         label = scheme
 
-    if not hmac.compare_digest(expected, provided):
+    matched = False
+    for provided in provided_hexes:
+        if hmac.compare_digest(expected, provided):
+            matched = True
+            break
+    if not matched:
         logger.warning("webhook_signature_mismatch connector=%s", connector_id)
         raise WebhookSignatureInvalidError("Invalid webhook signature.")
 
@@ -263,7 +289,9 @@ def verify_webhook_or_401(
     secret: Optional[str],
     *,
     connector_id: str = "webhook",
+    algorithm: str = "sha256",
     timestamp_tolerance_seconds: int = DEFAULT_TIMESTAMP_TOLERANCE_SECONDS,
+    now: Optional[int] = None,
 ) -> VerifiedWebhook:
     """FastAPI-route helper: verify, raising HTTP 401 on any rejection."""
     from fastapi import HTTPException
@@ -274,7 +302,9 @@ def verify_webhook_or_401(
             signature_header,
             secret,
             connector_id=connector_id,
+            algorithm=algorithm,
             timestamp_tolerance_seconds=timestamp_tolerance_seconds,
+            now=now,
         )
     except WebhookVerificationError as exc:
         raise verification_http_exception(exc) from exc
