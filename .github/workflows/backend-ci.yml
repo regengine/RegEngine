@@ -887,11 +887,19 @@ jobs:
           # them ignored in test-suite-check's fast shard: pure-offline
           # regression tests with no gate. They run here, where a failure
           # blocks the merge.
+          # The four shared-auth-kernel qa4 files (#3252) are pure-offline
+          # (in-memory stores, fakes, in-process TestClient) and likewise
+          # ran only in test-suite-check, which is not a required check.
+          # They run here, where a failure blocks the merge.
           pytest tests/security/test_audit_integrity.py tests/test_canonical_event.py \
             tests/test_logging_binding_guard.py \
             tests/test_guard_text_bind_casts.py \
             tests/shared/test_visibility_timeout_2918.py \
             tests/shared/test_secret_validation.py \
+            tests/shared/test_shared_auth_contract_qa4.py \
+            tests/shared/test_secrets_manager_qa4.py \
+            tests/shared/test_brute_force_limiter_qa4.py \
+            tests/shared/test_tenant_context_qa4.py \
             -v --no-cov -o "testpaths=tests"
 
       - name: Operator database tooling tests
@@ -1081,13 +1089,25 @@ jobs:
           # the previous step). `alembic check` compares EVERY registered ORM
           # Base (admin, agent-operator, api-key store, scheduler state — see
           # alembic/env.py target_metadata) against that schema and fails on
-          # structural drift: an ORM model whose table/column/index no
-          # migration created. This is the gate that would have caught
+          # structural drift: an ORM model whose table/column/index/FK no
+          # migration created, or whose FK options (ondelete, deferrability)
+          # disagree with the migrated schema. FK comparison used to be off
+          # (include_object excluded every foreign_key_constraint); turning
+          # it on caught 20 ORM FKs missing their ondelete plus 5 FKs missing
+          # from the receipts model. This is the gate that would have caught
           # scheduler_seen_items existing only via runtime create_all (v093).
           # Raw-SQL-managed tables without ORM models are exempt by design
           # (include_object in alembic/env.py); type-level alignment is
           # enforced separately by verify_orm_db_type_alignment.
           alembic check
+          # Behavioral proof the gate is not vacuous: on a throwaway scratch
+          # database (created and dropped by the test, never the shared
+          # rls_migrated) assert autogenerate produces no diff at head, then
+          # drift one FK option and assert the gate fails. With
+          # REGENGINE_REQUIRE_DB=1 (job env) this fails instead of skipping
+          # when Postgres is unreachable.
+          pytest tests/migrations/test_alembic_fk_autogenerate_no_diff.py \
+            -v --no-cov -o "testpaths=tests"
 
       - name: Schema parity audit (WS-2c)
         env:

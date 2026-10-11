@@ -1,48 +1,187 @@
-# FIX-REPORT: PR #3250 supply-chain gate findings
+# FIX-REPORT: About page copy
 
-Merge commit b2d2b1760f336250fa87b8e6cac1ccab79e45da1. Scope: confirmed
-CONCERN and BLOCKER findings about PR #3250 from the six re-rv-3250-<angle>
-reports plus the angle and area leads that mention #3250. Out of scope and
-not touched: the suspended-tenant deny on live auth, the tenant-scope gate
-failure, and the 7 xfail cross-tenant leaks (other tasks own these).
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings
+## Before and after
 
-| # | Source report | Severity | Finding | Status | Reason |
-|---|---|---|---|---|---|
-| 1 | re-rv-3250-correct High 1, re-rv-3250-security High 1, lead-security 14 | High | Substring baseline entries swallow longer image tags and install lines, and one entry clears every matching line in a file | FIXED AND TESTED | All matching is now exact on comment-stripped text (the `exact` flag is accepted but no longer consulted), one entry excuses exactly one line, and all 37 baseline entries were rewritten to full-line exact text |
-| 2 | re-rv-3250-correct High 2, re-rv-3250-security High 3, lead-security 16 | High | `pip-pin` drops the `pip` token, accepts any token containing `==` (wildcards, env vars), mishandles `-r`/`--requirement=` forms, and ignores alternate indexes | FIXED AND TESTED | `check_pip` now requires `name==X.Y.Z` with no `*`, `$`, or extra specifiers, parses `--requirement=file` and attached `-r` forms, requires `--require-hashes` plus a `.lock` file with no extra packages, and fails on `--index-url`, `--extra-index-url`, and `--trusted-host` |
-| 3 | re-rv-3250-security High 2, lead-security 15 | High | Any `sha256sum`/`_SHA256`/`cosign` string anywhere in a file, even a comment, satisfies `download-checksum` for every download in that file | FIXED AND TESTED | Check is now per download: a checksum command on the fetch line or within the next 5 lines must name the downloaded file; comments are stripped and bare variable names do not count |
-| 4 | re-rv-3250-correct Med 4, re-rv-3250-security Med 4, lead-security 36 | Medium | Dockerfiles are only scanned for `FROM` digests and pipe-shell, so a new `RUN pip install` or `RUN curl` of an archive is unchecked | FIXED AND TESTED | `find_violations` now runs the pip, npm, latest-url, and download checks on Dockerfiles; `apt-get` is explicitly documented as out of scope in the code |
-| 5 | re-rv-3250-correct Med 4, re-rv-3250-tests Med | Medium | Only `scripts/**/*.sh` enters the gate, and no test proves the shell loop runs | FIXED AND TESTED | `shell_files` now covers every `*.sh` in the repo (verified: the 3 outer scripts add zero new findings); new tests assert a `scripts/bad.sh` defect and a `bin/setup.sh` defect both fail `main` with exit 1 |
-| 6 | re-rv-3250-security Med 5, lead-security 36 | Medium | Templated (`uses: ${{ matrix.action }}`) and folded (`uses: >`) action refs are silently ignored | FIXED AND TESTED | `check_action_pin` fails closed on any `uses:` value that is not a plain `owner/action@ref`; local reusable workflows stay exempt |
-| 7 | re-rv-3250-correct Med 5, re-rv-3250-security Med 6, re-rv-int-ci-workflows Med, lead-security 36 | Medium | The `Pinned supply chain` job runs on every PR but is not in the required-contexts contract, so a red gate does not block merge | FIXED AND TESTED | Added `Pinned supply chain` to `[required-contexts]` in `scripts/workflow_inventory.txt`; the inventory guard passes (the job runs on unfiltered `pull_request`). The matching GitHub branch-protection UI change still needs C.Lee (see decisions) |
-| 8 | re-rv-3250-blast Med, re-rv-3250-ops High 11, re-rv-3250-correct Med, lead-ops 11 | High | `scripts/deploy_railway.sh` drops the pip fallback and hard-fails on `pip install neo4j==6.3.1` after `git push`, leaving a half-finished prod deploy | FIXED AND TESTED | Neo4j constraint step moved before the push, install uses the repo venv python with a `python3 -m pip` fallback, hard failure kept, no `--break-system-packages`; verified with `bash -n` and the hardened gate (lines recognized as pinned) |
-| 9 | re-rv-3250-tests High, lead-tests 7, area-infra High | High | `tests/scripts/test_check_supply_chain.py` runs in no blocking job, so a checker-only weakening under `scripts/**` goes red invisibly | FIXED AND TESTED | Added the file to the blocking `repo-root-suite` operator step in `backend-ci.yml` (that job already triggers on `scripts/**`); file passes locally (108 passed with the inventory tests) |
-| 10 | re-rv-3250-tests Med | Medium | No test calls `find_violations`/`main` on a `scripts/*.sh` defect, so deleting the shell loop stays green | FIXED AND TESTED | New `test_shell_files_cover_every_sh_repo_wide` writes `scripts/bad.sh` and asserts exit 1 |
-| 11 | re-rv-3250-tests Low | Low | Lockfile-missing, unhashed `-r`, and stale-baseline `main()` exit paths untested | FIXED AND TESTED | New `test_missing_lockfile_fails_gate`, `-r`-without-hashes pip params, and `test_stale_baseline_entry_fails_gate` |
-| 12 | re-rv-3250-correct Low 6 | Low | The gate's own actionlint install resolves its version from an env var, so a later edit to a moving tag would still pass | FIXED AND TESTED | Inlined `actionlint@v1.7.12` on the `go install` line and removed the env indirection |
-| 13 | re-rv-3250-security Low 7 | Low | `PIPE_SHELL_RE` misses `sudo -E bash`, `zsh`, and `bash <(curl ...)` | FIXED AND TESTED | `sudo` with flags is now matched (new test); `zsh` and process substitution remain as documented in Notes |
-| 14 | re-rv-int-deps Med 1 | Medium | Production base images pinned by tag only, no digest (`Dockerfile`, `frontend/Dockerfile`) | BLOCKED | Needs registry access to resolve and verify digests; no network calls except package installs are allowed, so the exact-match baseline entries now at least prevent silent tag changes |
-| 15 | re-rv-int-deps Med 2 | Medium | k6 binary downloaded with no checksum (`scripts/run-performance-baseline.sh`) | BLOCKED | Needs the published SHA256 from the network; kept as an exact baseline entry with a burn-down reason |
-| 16 | re-rv-int-deps Med 3 | Medium | Unpinned pip installs in CI jobs (inflow `uvicorn`, sdk-ci pytest set, security pytest set, installer upgrades) | FIXED AND TESTED | The redundant floating `pip install uvicorn` line was deleted (the line above installs the locked `uvicorn[standard]==0.54.0`, verified in `requirements.lock`); the remaining three installer/bootstrap lines are exact baseline entries with honest reasons; the sdk-ci and security pytest sets stay baselined (security.yml is owned by in-flight work) |
-| 17 | re-rv-3250-ops Low, re-rv-int-ci-workflows Low | Low | `security.yml` tenant-gate step installs `pyyaml` unhashed; `deploy.yml` triggers on `scripts/**`; actionlint shellcheck ignores; `install_pkgs.sh` npm fallback removal; gitleaks help text; inline npm versions | BLOCKED | Intentionally not changed: `security.yml` is owned by in-flight work, deploy triggers and the npm strictness are intended behavior, and the ignores are documented; listed here per scope |
-| 18 | re-rv-3250-blast Low, re-rv-3250-ops Low | Low | `scripts/install_pkgs.sh` `npm ci` hard-fail and `deploy_railway.sh`/`install_pkgs.sh` success paths | FIXED AND TESTED | No change needed: success paths are unchanged and the stricter behavior is intended; the newly surfaced `pip install --upgrade pip` lines are exact baseline exceptions, not silent passes |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Test commands and results
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-- `~/metacode/fleet/heavy .venv/bin/python -m pytest tests/scripts/test_check_supply_chain.py tests/scripts/test_check_workflow_inventory.py --no-cov` → `108 passed in 1.78s` (98 supply-chain, 10 inventory).
-- `python3 scripts/ci/check_supply_chain.py --root .` → `supply-chain gate passed: 37 findings, all covered by baseline`, exit 0.
-- `python3 scripts/check_workflow_inventory.py` → `OK, workflow inventory matches disk; every required context is emitted and reachable`, exit 0.
-- `.venv/bin/python -m ruff check scripts/ci/check_supply_chain.py tests/scripts/test_check_supply_chain.py scripts/check_workflow_inventory.py` → `All checks passed!`; `ruff format --check` clean after formatting.
-- `bash -n scripts/deploy_railway.sh` → syntax ok. The script itself was not executed (it pushes to origin and touches prod deploy flow).
-- Fail-without-fix proof: the new test file was copied to /tmp/oldtree together with the pre-fix checker from `git show HEAD:scripts/ci/check_supply_chain.py`; 17 of the 24 selected new tests fail there (all bypass-closure tests: longer-tag baseline, comment-exempt baseline, one-entry-one-line, 6 pip bypass params, checksum comment/var-name/per-download, Dockerfile RUN, outer-shell defect, templated/folded uses, sudo flags). The 7 that pass on both trees are deliberate wiring guards (extras pass-through, shell-loop coverage, missing-lockfile exit, stale-entry exit, and 3 pip forms the old code already flagged).
-- `scripts/security/scan_tenant_scope.py` was not run: no queries were touched.
-- The full backend-ci job was not run here (needs Docker and live services); the edited YAML files were validated with `yaml.safe_load`.
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-## Needs C.Lee's decision
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-1. GitHub branch protection UI: add `Pinned supply chain` as a required check on `main` to match the inventory change. Until then the gate is advisory despite the file change.
-2. Confirm the supply-chain job is actually green on `main` before requiring it. Oct 8 Actions runs showed `startup_failure` patterns that reviewers could not attribute; requiring a broken job blocks every merge.
-3. Accept or schedule the recorded debt: base-image digests (needs registry access), k6 checksum, the 3 pip-bootstrapping baseline exceptions, and the sdk-ci/security pytest-set pins.
-4. Leftover low: `zsh` and `bash <(curl ...)` process substitution are still not matched by the pipe-shell rule. Say whether to extend the rule or accept the gap.
+2. Faster iteration card
+
+Before:
+`Design-partner feedback is scoped to`
+
+After:
+`Early tester feedback is scoped to`
+
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
+
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.

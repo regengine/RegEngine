@@ -95,7 +95,6 @@ SHIM_RE = re.compile(
 # covers helpers that pass the tenant only as a bind parameter.
 SQL_PRED_RE = re.compile(r"tenant_id|org_id|\btid\b", re.IGNORECASE)
 CYPHER_PRED_RE = re.compile(r"tenant_id", re.IGNORECASE)
-PLACEHOLDER_RE = re.compile(r"\{[^{}]*\}")
 TABLE_REF_RE = re.compile(
     r"\b(?:FROM|JOIN)\s+([A-Za-z_][\w.]*)\b|\bUPDATE\s+([A-Za-z_][\w.]*)\b"
     r"|\bINSERT\s+INTO\s+([A-Za-z_][\w.]*)\b|\bDELETE\s+FROM\s+([A-Za-z_][\w.]*)\b",
@@ -189,7 +188,12 @@ class QueryResolver:
                     parts.append(value.value)
                 else:
                     parts.append(" ")
-            return PLACEHOLDER_RE.sub(" ", "".join(parts))
+            # Literal {...} spans in an f-string are author-written text such
+            # as Cypher maps, not placeholders: interpolations arrive as AST
+            # nodes and are already blanked above. Stripping the literals
+            # deleted real tenant predicates (for example a Lot map holding
+            # tenant_id), so keep them.
+            return "".join(parts)
         if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             left = self.resolve(node.left)
             right = self.resolve(node.right)

@@ -205,7 +205,7 @@ export default function TwentyFourHourRulePage() {
                 </Link>
               </Button>
               <Button asChild variant="secondary" size="lg">
-                <Link href="/tools/readiness-assessment">Take Readiness Assessment</Link>
+                <Link href="/tools/self-reported-checklist">Open Self Reported Checklist</Link>
               </Button>
             </div>
           </Card>
