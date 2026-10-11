@@ -9,14 +9,14 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
-    title: "FTL List Checker | RegEngine",
-    description: "The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one. Verify every grouping against the current FDA FTL.",
+    title: "FTL List Checker for FSMA 204 | RegEngine",
+    description: "Check foods against the FDA Food Traceability List. This free page does not decide who must keep records. Verify every grouping on the current FDA list.",
     alternates: {
         canonical: "https://regengine.co/tools/ftl-checker",
     },
     openGraph: {
-        title: "FTL List Checker — RegEngine",
-        description: "The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one.",
+        title: "FTL List Checker for FSMA 204 | RegEngine",
+        description: "Check foods against the FDA Food Traceability List. This free page does not decide who must keep records. Verify every grouping on the current FDA list.",
         type: "website",
         url: "https://regengine.co/tools/ftl-checker",
     },
@@ -29,11 +29,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Look at the Food Traceability List. This page does not decide if you are a covered person. Verify every grouping against the current FDA FTL.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"

@@ -594,7 +594,7 @@ export default function SupplierDashboardPage() {
                                                         variant="ghost"
                                                         size="icon"
                                                         className="h-8 w-8"
-                                                        onClick={() => window.open(link.portal_url, '_blank')}
+                                                        onClick={() => window.open(link.portal_url, '_blank', 'noopener,noreferrer')}
                                                         title="Open portal"
                                                         aria-label="Open portal"
                                                     >

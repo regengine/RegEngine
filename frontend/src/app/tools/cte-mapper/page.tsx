@@ -10,14 +10,14 @@ import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
-    title: "CTE Mapper | FSMA 204 Critical Tracking Events by Role | RegEngine",
-    description: "See which Critical Tracking Events typically apply to your role under 21 CFR Part 1 Subpart S. Educational starting reference; §1.1305 exemptions may change which CTEs apply to your specific operation.",
+    title: "FSMA 204 CTE Mapper by Role | RegEngine",
+    description: "See which Critical Tracking Events usually apply to a role under 21 CFR Part 1 Subpart S. Educational only. Exemptions can change what applies.",
     alternates: {
         canonical: "https://regengine.co/tools/cte-mapper",
     },
     openGraph: {
-        title: "CTE Mapper — RegEngine",
-        description: "See which Critical Tracking Events typically apply to your role under FSMA 204. Educational starting reference; not a regulatory determination.",
+        title: "FSMA 204 CTE Mapper by Role | RegEngine",
+        description: "See which Critical Tracking Events usually apply to a role under 21 CFR Part 1 Subpart S. Educational only. Exemptions can change what applies.",
         type: "website",
         url: "https://regengine.co/tools/cte-mapper",
     },
@@ -26,15 +26,10 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "CTE Coverage Mapper",
+    "name": "CTE Mapper",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Educational reference mapping common supply-chain roles to FSMA 204 Critical Tracking Events. Not a regulatory determination.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -45,7 +40,7 @@ function CTEMapperFallback() {
     return (
         <div className="py-6" aria-busy="true">
             <div className="mb-10 text-center">
-                <h1 className="text-title text-re-text-primary">CTE Coverage Mapper</h1>
+                <p className="text-title text-re-text-primary">CTE Mapper</p>
                 <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">See which Critical Tracking Events typically apply to your role under 21 CFR Part 1 Subpart S. Educational starting reference; §1.1305 exemptions may change which CTEs apply to your specific operation.</p>
             </div>
             <div className="mx-auto max-w-2xl">
@@ -84,7 +79,7 @@ export default function CTEMapperPage() {
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
-                            { label: "CTE Coverage Mapper" }
+                            { label: "CTE Mapper" }
                         ]}
                     />
                     <Suspense fallback={<CTEMapperFallback />}>

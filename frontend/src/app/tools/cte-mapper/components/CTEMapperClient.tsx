@@ -11,7 +11,7 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const CTE_MAPPER_CONFIG: ToolConfig = {
     id: 'cte-mapper',
-    title: 'CTE Coverage Mapper',
+    title: 'CTE Mapper',
     description: 'Map your supply chain links to see which Critical Tracking Events typically apply at each step under 21 CFR Part 1 Subpart S. Educational only — exemptions under §1.1305 may change which CTEs apply to your specific operation.',
     icon: 'Truck',
     stages: {
@@ -203,7 +203,7 @@ export function CTEMapperClient() {
                                 <p className="mt-2 text-small text-re-text-tertiary">{ROLE_TO_CTES[user_role].note}</p>
                             </>
                         ) : (
-                            <p className="text-small text-re-text-tertiary">CTE assignment depends on your operation. See the per-event KDE Checklist Builder.</p>
+                            <p className="text-small text-re-text-tertiary">CTE assignment depends on your operation. See the per-event KDE Field Checklist.</p>
                         )}
                     </CardContent>
                 </Card>
