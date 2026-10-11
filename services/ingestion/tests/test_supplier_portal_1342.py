@@ -264,6 +264,33 @@ class TestDbUpdateStatus:
         assert _db_update_portal_link_status("tok", "revoked") is False
         assert session.rolled_back is True
 
+    def test_update_scopes_by_tenant_id(self, monkeypatch):
+        # A leaked link_token must not revoke another tenant's link: the
+        # UPDATE must narrow by tenant_id when the caller knows it.
+        # Fails against the token-only UPDATE (no tenant predicate).
+        tenant = "5f0c6f6a-9a1e-4b7e-8a53-2f6a1c9d0e11"
+        session = _FakeSession()
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+        assert _db_update_portal_link_status("tok", "revoked", tenant_id=tenant) is True
+        updates = [(stmt, params) for stmt, params in session.executed if "UPDATE" in stmt]
+        assert len(updates) == 1
+        stmt, params = updates[0]
+        assert "tenant_id" in stmt
+        assert params.get("tenant_id") == tenant
+        assert params.get("link_token") == "tok"
+
+    def test_update_without_tenant_keeps_token_only(self, monkeypatch):
+        # Callers without a tenant (unknown link) keep the old token-only
+        # shape; every production caller passes the link's tenant.
+        session = _FakeSession()
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+        assert _db_update_portal_link_status("tok", "revoked") is True
+        updates = [(stmt, params) for stmt, params in session.executed if "UPDATE" in stmt]
+        assert len(updates) == 1
+        stmt, params = updates[0]
+        assert "tenant_id" not in stmt
+        assert params.get("link_token") == "tok"
+
 
 # ---------------------------------------------------------------------------
 # _get_active_portal_link

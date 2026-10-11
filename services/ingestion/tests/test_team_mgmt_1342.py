@@ -38,6 +38,9 @@ def _principal(scopes: list[str]) -> IngestionPrincipal:
 
 OWNER_PRINCIPAL = _principal(["*"])
 ADMIN_PRINCIPAL = _principal(["team.write"])
+# The plain admin scope the dev bypass and demo admin keys actually carry
+# (services/shared/auth.py). It implies no namespaced permission.
+PLAIN_ADMIN_PRINCIPAL = _principal(["read", "ingest", "admin"])
 NARROW_PRINCIPAL = _principal(["webhooks.ingest"])
 
 # ---------------------------------------------------------------------------
@@ -726,6 +729,102 @@ class TestUpdateRolePrivileges:
     def test_admin_caller_can_promote_to_admin(self, app, client, monkeypatch):
         install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
         monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
+        assert resp.status_code == 200
+        assert resp.json()["new_role"] == "admin"
+
+
+# ---------------------------------------------------------------------------
+# Plain admin scope callers (audit PR #3225: require_permission("team.write")
+# rejected the admin keys this repo actually issues)
+# ---------------------------------------------------------------------------
+
+
+class TestPlainAdminScopeCallers:
+    def test_plain_admin_scope_can_invite_viewer(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, PLAIN_ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "viewer"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["member"]["role"] == "viewer"
+
+    def test_plain_admin_scope_can_change_role(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, PLAIN_ADMIN_PRINCIPAL)
+        monkeypatch.setattr(
+            tm,
+            "_db_get_team",
+            lambda tid: [
+                TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")
+            ],
+        )
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
+        assert resp.status_code == 200
+        assert resp.json()["new_role"] == "admin"
+
+    def test_plain_admin_scope_cannot_invite_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, PLAIN_ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "owner"},
+        )
+        assert resp.status_code == 403
+
+    def test_plain_admin_scope_cannot_demote_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, PLAIN_ADMIN_PRINCIPAL)
+        monkeypatch.setattr(
+            tm,
+            "_db_get_team",
+            lambda tid: [
+                TeamMember(id="m1", name="Owen", email="o@x.com", role="owner", status="active")
+            ],
+        )
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "viewer"})
+        assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Owner-demotion guard (audit PR #3225: update_role never read the member's
+# current role, so a team.write caller could strip an owner)
+# ---------------------------------------------------------------------------
+
+
+class TestOwnerDemotionGuard:
+    def _owner(self):
+        return TeamMember(id="m1", name="Owen", email="o@x.com", role="owner", status="active")
+
+    def test_team_write_caller_cannot_demote_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._owner()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "viewer"})
+        assert resp.status_code == 403
+
+    def test_owner_tier_caller_can_demote_owner(self, client, monkeypatch):
+        # The app fixture installs an owner-tier principal by default.
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._owner()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
+        assert resp.status_code == 200
+        assert resp.json()["new_role"] == "admin"
+
+    def test_team_write_caller_can_still_change_non_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(
+            tm,
+            "_db_get_team",
+            lambda tid: [
+                TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")
+            ],
+        )
         monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
         resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
         assert resp.status_code == 200

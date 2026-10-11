@@ -1,82 +1,187 @@
-# FIX-REPORT: PR #3222 SafetyCulture webhook follow-up
+# FIX-REPORT: About page copy
 
-Merge commit f1dabbb73027940173481e21ebca14f40b217e78.
-Scope: confirmed CONCERN and BLOCKER findings from the six re-rv-3222
-reports plus the lead and area reports that mention #3222. Critical,
-high and medium findings were fixed where confirmable. Lows were fixed
-only when trivial and safe, otherwise listed.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings table
+## Before and after
 
-| # | Source report | Severity | Finding | Status | Reason |
-|---|---|---|---|---|---|
-| 1 | re-rv-3222-correct HIGH; re-rv-area-webhooks H1; re-rv-int-deploy-readiness 3; re-rv-int-env-docs 8 | High | Live SafetyCulture posts may be unsigned, so fail-closed 401s could drop legitimate inspection deliveries with retries | BLOCKED | Code confirms fail-closed 401 on missing signature. Whether the live provider signs, and with which header, cannot be verified from this box: fleet rules forbid network calls and the provider docs are external. Loosening the check would reopen the leak, so no code change was made. Needs Chris decision (see below). |
-| 2 | re-rv-3222-correct Medium; re-rv-area-webhooks M7 | Medium | Signed payloads in the documented nested shape (event.event_types, resource.id) matched neither top level check, so they returned 200 with accepted: 0 and the inspection was silently discarded | FIXED AND TESTED | Parser now accepts both the top level shape and the nested shape, additive only. New tests use nested fixtures and assert the fetch runs with the nested id. |
-| 3 | re-rv-3222-tests Low 1; confirmed by re-rv-lead-tests | Low | Reject tests did not assert _fetch_audit_detail was never called, so a fetch-then-raise reorder would stay green | FIXED AND TESTED | Added assert_not_awaited to all three reject tests. |
-| 4 | re-rv-3222-tests Low 2 | Low | x-safetyculture-signature header branch had no test | FIXED AND TESTED | Added valid and invalid header tests. |
-| 5 | re-rv-3222-tenant Low (rotation); re-rv-area-webhooks M13 part | Low | get_or_create_connector keeps the first instance, so a reconfigure with a rotated webhook secret never took effect | FIXED AND TESTED | configure endpoint now removes the cached instance before creating the replacement. New router test configures twice and asserts the second secret wins. |
-| 6 | re-rv-3222-ops Low; re-rv-3222-blast Low; re-rv-area-webhooks M12 part | Low | RateLimitExceeded handler registered only on the standalone ingestion app, so a breached 60/minute limit on the consolidated app would return 500 instead of 429 if integration is ever allowlisted | FIXED AND TESTED | Registered the standard slowapi 429 handler on server.main beside add_rate_limiting. No behavior change today because integration is not in PRODUCTION_ENABLED_ROUTERS. Verified by compile check, slowapi import check, ruff, and the suites below. No dedicated 61-request test was added (limit driving is slow and flaky; the handler is the slowapi standard one). |
-| 7 | re-rv-3222-tenant Low (oracle); re-rv-lead-tenant confirmed low; re-rv-area-webhooks M13 part | Low | Distinct 404 vs 401 bodies reveal per tenant whether a connector and secret exist | BLOCKED | Fix would change the public status contract (404 becomes 401) for unknown connectors. Needs Chris decision. Responses carry no inspection data, so this stays low. |
-| 8 | re-rv-3222-correct Low; re-rv-3222-blast Low | Low | 60/minute limit keyed by client IP, not tenant, on the shared webhook route | BLOCKED | Re-keying changes throttling semantics for all tenants behind one egress address. Needs a design decision, so listed without change. |
-| 9 | re-rv-int-rollback High (interaction) | Info | Reverting #3222 while keeping #3239 breaks the semgrep CI gate, which flags the exact fail-open pattern #3222 deleted | BLOCKED | Informational only. No code change needed. Revert order if ever required: revert #3239 first, then #3222. |
-| 10 | Out of scope for this task | n/a | Suspended-tenant deny on live auth, tenant-scope gate failure, 7 xfail cross-tenant leaks | BLOCKED | Owned by other tasks, noted only. |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Test commands and results
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-All commands were run through the slot queue (`~/metacode/fleet/heavy`).
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. `~/metacode/fleet/heavy .venv/bin/pytest services/ingestion/tests/test_safetyculture_webhook_auth.py -p no:cacheprovider -q`
-   Result: 17 passed (all green after the fix).
-2. Old-code check: the parser fix and the configure fix were temporarily
-   reverted by hand edit (backups in /tmp/fx3222, no git commands used),
-   then the new tests were run with
-   `-k "nested or reconfigure or without_id or without_fetch or non_completion"`.
-   Result: 4 failed as expected
-   (test_nested_completion_shape_accepted_with_resource_id,
-   test_nested_completion_shape_accepted_with_details_id,
-   test_router_nested_shape_returns_count_only,
-   test_reconfigure_rotates_webhook_secret),
-   proving the new tests fail without the fix. The two no-fetch
-   ignore-shape tests pass on old code too and serve as regression locks.
-   Fixes were then restored from backup and verified present by grep.
-3. `~/metacode/fleet/heavy .venv/bin/pytest services/ingestion/tests/test_safetyculture_webhook_auth.py services/ingestion/tests/test_integration_router_1342.py -p no:cacheprovider -q`
-   Result: 56 passed, no failures.
-4. `~/metacode/fleet/heavy .venv/bin/pytest services/shared/tests/test_external_connectors_defaults.py services/shared/tests/test_connector_safe_http.py -p no:cacheprovider -q`
-   Result: 30 passed, no failures.
-5. `~/metacode/fleet/heavy .venv/bin/ruff check services/shared/external_connectors/safetyculture.py services/ingestion/app/integration_router.py server/main.py services/ingestion/tests/test_safetyculture_webhook_auth.py`
-   Result: All checks passed.
-6. `py_compile` on the three changed source files plus a slowapi import
-   check (`_rate_limit_exceeded_handler`, `RateLimitExceeded`).
-   Result: COMPILE-OK, slowapi imports OK.
-7. `scripts/security/scan_tenant_scope.py` was not run because no queries
-   were touched (no SQL or Cypher changed).
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-No test still fails. No fix was backed out.
+2. Faster iteration card
 
-## What changed (files)
+Before:
+`Design-partner feedback is scoped to`
 
-- services/shared/external_connectors/safetyculture.py: added
-  _COMPLETION_EVENT_TYPES, _is_completion_event and
-  _nested_inspection_id helpers; handle_webhook accepts the nested
-  provider shape and logs top level keys when a signed completion has
-  no usable id.
-- services/ingestion/app/integration_router.py: configure endpoint
-  removes the cached connector before creating the replacement.
-- server/main.py: registered the slowapi RateLimitExceeded 429 handler
-  beside add_rate_limiting.
-- services/ingestion/tests/test_safetyculture_webhook_auth.py: no-fetch
-  asserts, x-safetyculture-signature tests, nested shape tests, router
-  nested test, reconfigure rotation test.
+After:
+`Early tester feedback is scoped to`
 
-## Needs Chris decision
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-1. Capture one live SafetyCulture webhook request and confirm the real
-   signature header and MAC input, then backfill per-tenant webhook
-   secrets for every active SafetyCulture tenant. Until then, tenants
-   without a configured secret get 401s instead of ingested data.
-   (Finding 1, high.)
-2. Whether the webhook route should return the same 401 body for an
-   unknown connector and a bad signature, hiding connector presence.
-   (Finding 7, low.)
-3. Whether the webhook rate limit should be keyed by tenant_id instead
-   of client IP. (Finding 8, low.)
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
+
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
