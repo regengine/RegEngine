@@ -27,6 +27,7 @@ except ImportError:
 
 from fastapi import Depends, Header, HTTPException, status
 from pydantic import BaseModel
+from shared.env import requires_strict_auth_runtime
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -192,6 +193,28 @@ def _count_mfa_backend_error(operation: str, outcome: str) -> None:
         MFA_THROTTLE_BACKEND_ERRORS_COUNTER.labels(operation=operation, outcome=outcome).inc()
     except Exception:  # metrics must never break the auth path
         pass
+
+
+def _require_mfa_throttle_store_or_fail_closed(session_store: "RedisSessionStore"):
+    """Return the throttle store, failing closed when it is missing in strict runtimes.
+
+    The lockout and replay guards are brute-force controls: with no store
+    there is nothing to count attempts in. A strict (production or deployed)
+    runtime therefore denies the attempt with a retryable 503 instead of
+    verifying with protection silently disabled. Explicit local dev and test
+    keep the historical skip so MFA can be exercised without Redis.
+    """
+    if session_store is not None:
+        return session_store
+    if requires_strict_auth_runtime():
+        _logger.error("mfa_throttle_store_missing_rejecting")
+        _count_mfa_backend_error("missing_store", "rejected")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="MFA verification temporarily unavailable",
+            headers={"Retry-After": "30"},
+        )
+    return None
 
 
 async def _mfa_throttle_fail_closed(operation: str, call):
@@ -390,6 +413,13 @@ def store_mfa_secret_on_user(user: "UserModel", secret: str) -> None:
         # plaintext forward.
         user.mfa_secret = None
     else:
+        if requires_strict_auth_runtime():
+            # Startup already refuses to boot a strict runtime without a
+            # valid key; this is defense in depth so plaintext enrollment
+            # can never silently resume if that gate is ever bypassed.
+            raise RuntimeError(
+                "MFA_ENCRYPTION_KEY is required: refusing plaintext TOTP secret storage."
+            )
         _logger.warning(
             "MFA_ENCRYPTION_KEY not set — storing TOTP secret in plaintext. This path is intended for local dev only."
         )
@@ -558,6 +588,7 @@ def _mfa_lock_key(user_id) -> str:
 # protection. Removal is tracked in the 2026-07-07 remediation plan (WS-3).
 async def _check_mfa_counter_lockout(session_store, user_id) -> None:
     """Raise 429 if this user is currently locked out of MFA verification."""
+    session_store = _require_mfa_throttle_store_or_fail_closed(session_store)
     if session_store is None:
         return
 
@@ -576,6 +607,7 @@ async def _check_mfa_counter_lockout(session_store, user_id) -> None:
 
 async def _record_mfa_counter_failure(session_store, user_id) -> None:
     """Increment the failure counter and lock the user out on threshold."""
+    session_store = _require_mfa_throttle_store_or_fail_closed(session_store)
     if session_store is None:
         return
 
@@ -665,6 +697,12 @@ async def require_mfa(
 
     subject_key = _mfa_subject_key(current_user)
 
+    # Fail closed when no throttle store is wired in a strict runtime: the
+    # guards below cannot evaluate without one, so the attempt is denied
+    # (503) instead of verified with brute-force protection silently
+    # disabled. Explicit local dev and test keep the historical skip.
+    throttle_store = _require_mfa_throttle_store_or_fail_closed(session_store)
+
     async def _record_and_raise_invalid_token(*, reason: str, token_type: str, detail: str) -> None:
         _emit_mfa_verification_failed_audit(
             db,
@@ -672,12 +710,12 @@ async def require_mfa(
             reason=reason,
             token_type=token_type,
         )
-        if session_store is not None:
+        if throttle_store is not None:
             # Backend outage here converts the 403 into a fail-closed 503:
             # still a denial, but visible as an outage rather than letting
             # failed attempts go uncounted.
             await _mfa_throttle_fail_closed(
-                "record_failure", _record_mfa_lockout_attempt(session_store, subject_key)
+                "record_failure", _record_mfa_lockout_attempt(throttle_store, subject_key)
             )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -686,9 +724,9 @@ async def require_mfa(
 
     # #1862 — reject early if this user is currently locked out. A throttle
     # backend outage fails closed (503) instead of skipping the check.
-    if session_store is not None:
+    if throttle_store is not None:
         await _mfa_throttle_fail_closed(
-            "check_lockout", _check_mfa_lockout(session_store, subject_key)
+            "check_lockout", _check_mfa_lockout(throttle_store, subject_key)
         )
 
     # Classify token format. TOTP = 6 digits. Recovery = normalized 8 alnum
@@ -714,13 +752,13 @@ async def require_mfa(
                 token_type="totp",
                 detail="Invalid MFA token",
             )
-        if session_store is not None:
+        if throttle_store is not None:
             # Replay protection cannot be skipped: if the backend can't
             # confirm this TOTP hasn't been used, reject (503) rather than
             # accept a potentially replayed code.
             inserted = await _mfa_throttle_fail_closed(
                 "replay_guard",
-                _record_totp_replay_guard(session_store, subject_key, x_mfa_token),
+                _record_totp_replay_guard(throttle_store, subject_key, x_mfa_token),
             )
             if not inserted:
                 await _record_and_raise_invalid_token(
@@ -728,7 +766,7 @@ async def require_mfa(
                     token_type="totp",
                     detail="Invalid MFA token",
                 )
-            await _clear_mfa_lockout_best_effort(session_store, subject_key)
+            await _clear_mfa_lockout_best_effort(throttle_store, subject_key)
         return x_mfa_token
 
     # Recovery code verification (#1041) — argon2 hashes are salted so we
@@ -788,8 +826,8 @@ async def require_mfa(
             detail="Invalid MFA token",
         )
 
-    if session_store is not None:
-        await _clear_mfa_lockout_best_effort(session_store, subject_key)
+    if throttle_store is not None:
+        await _clear_mfa_lockout_best_effort(throttle_store, subject_key)
     _logger.info(f"Recovery code consumed for user {current_user.id}")
     return x_mfa_token
 

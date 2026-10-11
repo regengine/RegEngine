@@ -23,6 +23,9 @@ Hardening (#1351)
   graph shape with what ``RegulatoryEngine._persist_evaluation`` expects
   (which MATCHes ``RegulatoryObligation {obligation_id, tenant_id}``) so
   coverage can actually be non-zero after a load.
+* Decision 3 quarantine marker: the shared ``Obligation {text}`` MERGE
+  stamps ``catalog = true`` ON CREATE, which is the only way a
+  null-tenant row becomes visible across tenants to linker readers.
 """
 
 from __future__ import annotations
@@ -130,6 +133,11 @@ class RegulationLoader:
                 WITH s, sec
                 UNWIND sec.obligations as ob
                 MERGE (o:Obligation {text: ob})
+                // Decision 3 quarantine marker: readers share an Obligation
+                // across tenants only when catalog = true. Anchored to
+                // ON CREATE so matching a tenant-private row with the same
+                // text never promotes it to the shared catalog.
+                ON CREATE SET o.catalog = true
                 MERGE (s)-[:REQUIRES]->(o)
 
                 WITH s, sec

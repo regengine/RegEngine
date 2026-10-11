@@ -104,7 +104,7 @@ class TestTenantIDMandatory:
 
         # Prepare valid request body
         request_body = {
-            "packer_gln": "0614141000001",
+            "packer_gln": "0614141000012",
             "product": {
                 "gtin": "00000012345678",
                 "description": "Test Product",
@@ -134,7 +134,7 @@ class TestTenantIDMandatory:
         client = TestClient(app, raise_server_exceptions=False)
 
         request_body = {
-            "packer_gln": "0614141000001",
+            "packer_gln": "0614141000012",
             "product": {
                 "gtin": "00000012345678",
                 "description": "Test Product",
@@ -186,7 +186,7 @@ class TestAtomicSerialGeneration:
 
         # Create request
         request = LabelBatchInitRequest(
-            packer_gln="0614141000001",
+            packer_gln="0614141000012",
             product=ProductInfo(gtin="00000012345678", description="Test Product", expected_units=1),
             traceability=TraceabilityInfo(lot_number="LOT-TEST-001", pack_date="2024-01-01"),
             quantity=100,
@@ -264,7 +264,7 @@ class TestErrorHandling:
         mock_neo4j.close = AsyncMock()
 
         request = LabelBatchInitRequest(
-            packer_gln="0614141000001",
+            packer_gln="0614141000012",
             product=ProductInfo(gtin="00000012345678", description="Test Product", expected_units=1),
             traceability=TraceabilityInfo(lot_number="LOT-TEST-001", pack_date="2024-01-01"),
             quantity=10,

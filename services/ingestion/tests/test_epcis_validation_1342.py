@@ -29,6 +29,7 @@ Check-digit / strict-rejection / mandatory-GLN behavior stays in
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 import types
 from pathlib import Path
@@ -470,6 +471,36 @@ class TestAuditLogValidationFailure:
 
         assert len(fake.calls) == 1
         assert len(created) == 1
+
+    def test_failed_audit_task_logs_at_error(self, monkeypatch, caplog):
+        # The write is detached by design, so a failed audit row must page
+        # the logs at error level instead of dying silently in the task.
+        fake = _install_fake_audit(monkeypatch)
+
+        def _failing_log(**kwargs):
+            async def _boom():
+                raise RuntimeError("audit database unreachable")
+
+            return _boom()
+
+        fake.log = _failing_log
+
+        async def _runner():
+            _audit_log_validation_failure(
+                [{"loc": ("tlc",)}],
+                tenant_id="t",
+                normalized={"idempotency_key": "k"},
+            )
+            for _ in range(10):
+                await asyncio.sleep(0)
+
+        with caplog.at_level(logging.ERROR, logger="epcis-ingestion"):
+            asyncio.run(_runner())
+
+        assert any(
+            record.levelno >= logging.ERROR and "fsma_validation_audit_write_failed" in record.getMessage()
+            for record in caplog.records
+        )
 
     def test_idempotency_key_defaults_to_literal_unknown(self, monkeypatch):
         # ``.get("idempotency_key") or "unknown"`` — handles both the

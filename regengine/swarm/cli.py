@@ -187,41 +187,62 @@ def cmd_run(args) -> None:
 
             print(f"🧹 Janitor scanning {prs.totalCount} open Pull Requests...\n")
 
+            only_prs = getattr(args, "prs", None)
+            allowed = None
+            if only_prs:
+                try:
+                    allowed = {int(part.strip()) for part in str(only_prs).split(",") if part.strip()}
+                except ValueError:
+                    print("❌ Error: --prs must be a comma-separated list of PR numbers")
+                    sys.exit(1)
+
             for pr in prs:
-                print(f"🔍 Evaluating PR #{pr.number}: {pr.title}")
+                try:
+                    if allowed is not None and pr.number not in allowed:
+                        continue
+                    print(f"🔍 Evaluating PR #{pr.number}: {pr.title}")
 
-                # Gather context for Janitor
-                security_comments = [c.body for c in pr.get_issue_comments() if "Security Audit" in c.body]
-                test_results = "CI status: " + gh.get_pr_checks_status(pr.number)
+                    # Gather context for Janitor
+                    security_comments = [c.body for c in pr.get_issue_comments() if "Security Audit" in c.body]
+                    test_results = "CI status: " + gh.get_pr_checks_status(pr.number)
 
-                context = {
-                    "security_scorecard": "\n".join(security_comments)
-                    if security_comments
-                    else "No security audit found.",
-                    "test_results": test_results,
-                    "ci_status": gh.get_pr_checks_status(pr.number),
-                }
+                    context = {
+                        "security_scorecard": "\n".join(security_comments)
+                        if security_comments
+                        else "No security audit found.",
+                        "test_results": test_results,
+                        "ci_status": gh.get_pr_checks_status(pr.number),
+                    }
 
-                agent_output = asyncio.run(agent_instance.run(f"Evaluate PR #{pr.number}", context))
-                res = agent_output.get("result", {})
-                decision = res.get("decision", "hold")
-                reasoning = res.get("reasoning", "No reasoning.")
+                    agent_output = asyncio.run(agent_instance.run(f"Evaluate PR #{pr.number}", context))
+                    res = agent_output.get("result", {})
+                    decision = res.get("decision", "hold")
+                    reasoning = res.get("reasoning", "No reasoning.")
 
-                print(f"   - Decision: {decision.upper()}")
-                print(f"   - Reasoning: {reasoning}")
+                    print(f"   - Decision: {decision.upper()}")
+                    print(f"   - Reasoning: {reasoning}")
 
-                if decision == "merge":
-                    print(f"   🚀 AUTOMATIC MERGE TRIGGERED for PR #{pr.number}...")
-                    success = gh.merge_pr(pr.number)
-                    if success:
-                        print(f"   ✅ PR #{pr.number} merged successfully.")
-                    else:
-                        print(f"   ❌ Merge failed for PR #{pr.number}.")
+                    if decision == "merge":
+                        if not getattr(args, "approve_merges", False):
+                            print(
+                                f"   ⏭️ Merge skipped for PR #{pr.number}: "
+                                "re-run with --approve-merges plus green checks to merge."
+                            )
+                            continue
+                        print(f"   🚀 MERGE TRIGGERED for PR #{pr.number} (human-approved)...")
+                        success = gh.merge_pr(pr.number, human_approved=True)
+                        if success:
+                            print(f"   ✅ PR #{pr.number} merged successfully.")
+                        else:
+                            print(f"   ❌ Merge failed for PR #{pr.number}.")
+                except Exception as e:
+                    print(f"   ⚠️ Hold on PR #{getattr(pr, 'number', '?')}: scan error ({e}); continuing.")
+                    continue
             return
 
-        result = asyncio.run(swarm.solve(args.task))
+        result = asyncio.run(swarm.solve(args.task, human_approved=getattr(args, "approve_pr", False)))
     else:
-        result = asyncio.run(swarm.solve(args.task))
+        result = asyncio.run(swarm.solve(args.task, human_approved=getattr(args, "approve_pr", False)))
 
     print("\n" + "═" * 60)
     print(f"📊 Result: {result.status}")
@@ -265,7 +286,7 @@ def cmd_troubleshoot(args) -> None:
     print(f"🧬 CI Resilience Agent — Analyzing {len(logs)} chars of logs...\n")
 
     swarm = AgentSwarm()
-    result = asyncio.run(swarm.troubleshoot(logs))
+    result = asyncio.run(swarm.troubleshoot(logs, human_approved=getattr(args, "approve_pr", False)))
 
     print("\n" + "═" * 60)
     print(f"📊 Diagnosis: {result.status}")
@@ -296,7 +317,7 @@ def cmd_solve(args) -> None:
     swarm = AgentSwarm()
     import asyncio
 
-    result = asyncio.run(swarm.solve(task))
+    result = asyncio.run(swarm.solve(task, human_approved=getattr(args, "approve_pr", False)))
 
     print(f"\n📊 Result: {result.status}")
     print(f"   Agents: {', '.join(result.agents_used)}")
@@ -435,6 +456,21 @@ def main() -> None:
     run_parser.add_argument("--task", required=True, help="Task description")
     run_parser.add_argument("--agent", help="Direct to specific agent (e.g. security, core)")
     run_parser.add_argument("--dry-run", action="store_true", help="Use mock LLM")
+    run_parser.add_argument(
+        "--approve-merges",
+        action="store_true",
+        help="Explicit human approval allowing the janitor to merge PRs with green checks",
+    )
+    run_parser.add_argument(
+        "--prs",
+        default=None,
+        help="Comma-separated PR numbers the janitor may evaluate (default: all open PRs)",
+    )
+    run_parser.add_argument(
+        "--approve-pr",
+        action="store_true",
+        help="Explicit human approval allowing this run to push a branch and open a PR on CI auto-fix",
+    )
     run_parser.add_argument("--max-iterations", type=int, default=3, help="Max feedback loops")
     run_parser.add_argument("--output-file", help="Save result JSON to file")
     run_parser.set_defaults(func=cmd_run)
@@ -444,6 +480,11 @@ def main() -> None:
     solve_parser.add_argument("--issue", type=int, required=True, help="Issue number")
     solve_parser.add_argument("--repo", required=True, help="Repository (owner/repo)")
     solve_parser.add_argument("--dry-run", action="store_true", help="Don't post to GitHub")
+    solve_parser.add_argument(
+        "--approve-pr",
+        action="store_true",
+        help="Explicit human approval allowing this run to push a branch and open a PR on CI auto-fix",
+    )
     solve_parser.set_defaults(func=cmd_solve)
 
     # ── label ──
@@ -459,6 +500,11 @@ def main() -> None:
     ts_parser = subparsers.add_parser("troubleshoot", help="Troubleshoot and fix CI failures")
     ts_parser.add_argument("--logs", help="CI failure logs/snippet (string)")
     ts_parser.add_argument("--log-file", help="Path to log file, or '-' for stdin")
+    ts_parser.add_argument(
+        "--approve-pr",
+        action="store_true",
+        help="Explicit human approval allowing this run to push a branch and open a PR on CI auto-fix",
+    )
     ts_parser.set_defaults(func=cmd_troubleshoot)
 
     # ── status ──

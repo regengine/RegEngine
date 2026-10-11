@@ -289,6 +289,26 @@ def _parse_pdf_matrix_table(table: list[list[Any]], parsed: dict[str, Any], warn
     return added
 
 
+# Keys that make up a bare traceability-lot row. A row carrying a
+# ``tlc_code`` plus only these keys is a lot definition; any other
+# populated key is an event signal (event_time, kde_data, reference
+# docs, ...) and keeps the row on the event path so validation still
+# flags a missing cte_type.
+_TLC_SHAPE_KEYS = frozenset({"tlc_code", "facility_name", "name", "product_description", "status"})
+
+
+def _row_has_event_signal(row: dict[str, Any]) -> bool:
+    for key, value in row.items():
+        if key in _TLC_SHAPE_KEYS:
+            continue
+        if isinstance(value, str):
+            if value.strip():
+                return True
+        elif value is not None and value != {} and value != []:
+            return True
+    return False
+
+
 def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for key, value in row.items():
@@ -415,18 +435,11 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     if row.get("cte_type"):
         parsed["events"].append(_extract_event_row(row))
         return
-    if row.get("tlc_code"):
-        # A typeless row naming a lot is a lot definition -- unless it
-        # also carries event signals (a timestamp or event payload),
-        # in which case it is an event whose cte_type failed validation
-        # downstream. A bare ``tlc_code``-routes-to-events check used to
-        # come first and shadowed an identical TLC branch beneath it
-        # into dead code, so lots could never be created from typeless
-        # files.
-        if row.get("event_time") or row.get("timestamp") or row.get("kde_data") or row.get("event_type"):
-            parsed["events"].append(_extract_event_row(row))
-            return
-        parsed["tlcs"].append(
+    if row.get("tlc_code") and _row_has_event_signal(row):
+        parsed["events"].append(_extract_event_row(row))
+        return
+    if row.get("category_id"):
+        parsed["ftl_scopes"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
                 "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),

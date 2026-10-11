@@ -41,6 +41,26 @@ def _is_production() -> bool:
     return is_production()
 
 
+def _requires_closed_hmac_gate() -> bool:
+    """Whether an unset ``WEBHOOK_HMAC_SECRET`` must reject ingest.
+
+    Production always fails closed. Deployed non-production runtimes
+    (staging, preview, or any cloud host outside the local name set)
+    also fail closed: the unsigned migration ramp exists only for local
+    development and test, where no cloud marker is present. This uses
+    the same ``requires_strict_auth_runtime`` posture the auth layer
+    uses, so a cloud staging deploy with no secret cannot accept
+    unsigned compliance events.
+    """
+    if _pkg._is_production():
+        return True
+    try:
+        from shared.env import requires_strict_auth_runtime
+        return requires_strict_auth_runtime()
+    except Exception:  # pragma: no cover - never fail open on import error
+        return True
+
+
 def _verify_api_key_present(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
 ) -> None:
@@ -84,9 +104,11 @@ def _webhook_hmac_secret() -> Optional[str]:
 
     Single global secret to start — per-tenant / per-integration
     rotation is planned as follow-up (see #1243 fix description). When
-    the env is unset the dependency is a no-op, which preserves the
-    existing partner-integration ramp. Production operators MUST set
-    this before relying on webhook-ingest events.
+    the env is unset the dependency is a no-op in local development
+    and test only, which preserves the existing partner-integration
+    ramp there. On a closed gate (production or any strict/cloud
+    runtime) an unset secret rejects every ingest request, so
+    operators MUST set this before relying on webhook-ingest events.
     """
     secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip()
     return secret or None
@@ -115,15 +137,36 @@ async def _verify_webhook_signature(
     Stripe-style senders don't need a separate code path.
 
     Behavior:
-    - ``WEBHOOK_HMAC_SECRET`` unset → verification skipped (migration ramp).
+    - ``WEBHOOK_HMAC_SECRET`` unset + closed gate (production or any
+      strict/cloud runtime, see ``_requires_closed_hmac_gate``) →
+      HTTP 401 (fail closed; an unsigned ingest path must not exist
+      outside local development and test).
+    - ``WEBHOOK_HMAC_SECRET`` unset + local non-production →
+      verification skipped (migration ramp), with a WARN log and a
+      counter increment so ops can alarm on the fail-open path.
     - Secret set + signature missing → HTTP 401.
     - Secret set + signature mismatch → HTTP 401 (timing-safe compare).
     - Unknown scheme → HTTP 401.
     """
     secret = _pkg._webhook_hmac_secret()
     if not secret:
-        # F-5: record the fail-open path so ops can alarm on it. Behavior
-        # itself unchanged — verification still skipped per the migration ramp.
+        if _pkg._requires_closed_hmac_gate():
+            # Fail closed: accepting unsigned compliance events with no
+            # shared secret configured is never safe outside local
+            # development and test. Counted on the reject counter, not
+            # the skip counter, so fail-open alarms keep meaning
+            # "unsigned event accepted". Detail stays opaque (no secret
+            # material); the server-side log carries the operator action.
+            _pkg._record_hmac_reject()
+            _pkg.logger.error(
+                "webhook_hmac_secret_missing_in_production",
+                mitigation="Set WEBHOOK_HMAC_SECRET in environment to accept webhook ingest",
+            )
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "webhook_hmac_not_configured"},
+            )
+        # F-5: record the fail-open path so ops can alarm on it.
         _pkg._record_hmac_skip()
         return
 
@@ -172,7 +215,16 @@ async def _verify_webhook_signature(
         secret.encode("utf-8"), raw_body, hashlib.sha256
     ).hexdigest()
 
-    if not hmac.compare_digest(expected, provided):
+    # ``provided`` comes from a request header, so it can carry non-ASCII
+    # characters. ``hmac.compare_digest`` on str raises TypeError for
+    # non-ASCII input, which would surface as a 500; a signature that is
+    # not even comparable is simply invalid (401), same as a mismatch.
+    try:
+        signature_ok = hmac.compare_digest(expected, provided)
+    except TypeError:
+        signature_ok = False
+
+    if not signature_ok:
         _pkg.logger.warning(
             "webhook_signature_mismatch body_len=%d",
             len(raw_body),
@@ -204,15 +256,15 @@ async def _verify_webhook_signature(
 
 def _max_event_age_days() -> int:
     try:
-        return int(os.getenv("WEBHOOK_MAX_EVENT_AGE_DAYS", "90"))
-    except ValueError:
+        return max(0, int(os.getenv("WEBHOOK_MAX_EVENT_AGE_DAYS", "90")))
+    except (ValueError, TypeError):
         return 90
 
 
 def _max_event_future_hours() -> int:
     try:
-        return int(os.getenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "24"))
-    except ValueError:
+        return max(0, int(os.getenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "24")))
+    except (ValueError, TypeError):
         return 24
 
 
@@ -228,7 +280,10 @@ def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
     """
     try:
         dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
+        # TypeError covers non-string input (e.g. a datetime object passed
+        # to the helper directly); mirrors _classify_replay_rejection so
+        # both helpers agree on what "unparseable" means.
         return f"event.timestamp is not parseable ISO-8601: {timestamp!r}"
 
     if dt.tzinfo is None:

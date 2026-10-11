@@ -60,6 +60,23 @@ spec:
           port: 7687  # Neo4j Bolt
         - protocol: TCP
           port: 7474  # Neo4j HTTP
+    # Internal service calls. The nlp and graph ingress policies admit
+    # ingestion pods, so egress must allow the matching flows or the
+    # calls are denied on the way out.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: nlp
+      ports:
+        - protocol: TCP
+          port: 8100
+    - to:
+        - podSelector:
+            matchLabels:
+              app: graph
+      ports:
+        - protocol: TCP
+          port: 8200
     # External HTTPS (webhooks, third-party APIs)
     - to: []
       ports:

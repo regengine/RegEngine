@@ -383,10 +383,9 @@ class TestExportEndpoints:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant",
-            "key_id": "test-key",
-        }
+        # #2511: the export handlers reconcile the api_key tenant against
+        # the middleware tenant, so the override must agree (as for gaps).
+        app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
         app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
@@ -456,10 +455,9 @@ class TestExportEndpoints:
         ):
             app = FastAPI()
             app.include_router(_build_fsma_router())
-            app.dependency_overrides[require_api_key] = lambda: {
-                "tenant_id": "test-tenant",
-                "key_id": "test-key",
-            }
+            # #2511: the export handlers reconcile the api_key tenant
+            # against the middleware tenant, so the override must agree.
+            app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
             app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
             client = TestClient(app)
 
@@ -502,10 +500,9 @@ class TestExportEndpoints:
         from shared.auth import require_api_key
         from shared.middleware import get_current_tenant_id
 
-        app.dependency_overrides[require_api_key] = lambda: {
-            "tenant_id": "test-tenant",
-            "key_id": "test-key",
-        }
+        # #2511: the export handlers reconcile the api_key tenant against
+        # the middleware tenant, so the override must agree (as for gaps).
+        app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
         app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
 
         client = TestClient(app)
@@ -564,7 +561,9 @@ class TestExportEndpoints:
         ):
             app = FastAPI()
             app.include_router(_build_fsma_router())
-            app.dependency_overrides[require_api_key] = lambda: {"tenant_id": "test-tenant", "key_id": "test-key"}
+            # #2511: the export handlers reconcile the api_key tenant
+            # against the middleware tenant, so the override must agree.
+            app.dependency_overrides[require_api_key] = lambda: _fake_api_key("00000000-0000-0000-0000-000000000001")
             app.dependency_overrides[get_current_tenant_id] = lambda: uuid.UUID("00000000-0000-0000-0000-000000000001")
             client = TestClient(app)
             response = client.get("/v1/fsma/export/recall-contacts/LOT-A", headers=_AUTH_HEADERS)

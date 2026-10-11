@@ -93,7 +93,15 @@ function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
     const fields: Partial<GS1ParsedData> = {};
     for (let i = 0; i < segments.length - 1; i += 1) {
         const ai = segments[i];
-        const value = decodeURIComponent(segments[i + 1]);
+        let value: string;
+        try {
+            value = decodeURIComponent(segments[i + 1]);
+        } catch {
+            // A malformed escape in one segment rejects that field, not the
+            // whole scan: decodeURIComponent throws URIError on input like
+            // '%' or '%ZZ', which used to crash the receiving page.
+            continue;
+        }
         if (!value) continue;
 
         if (ai === '01' && !fields.gtin) fields.gtin = value;
