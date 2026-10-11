@@ -17,7 +17,7 @@ from shared.permissions import can_invite_role
 from shared.pii import mask_email
 from shared.rate_limit import limiter
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
@@ -191,26 +191,26 @@ async def create_invite(
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
 
-    # Check if user already exists in this tenant. Compared
-    # case-insensitively so a case variant of a member's address cannot be
-    # re-invited (legacy rows may predate validator normalization).
+    # Check if user already exists in this tenant. The comparison folds
+    # case and trims whitespace to match accept_invite, so a case variant
+    # of a member's address is rejected here instead of mailing an invite
+    # whose token would burn on the existing-membership 400 at accept.
+    folded_email = invite_data.email.strip().lower()
     existing_member = db.execute(
         select(MembershipModel)
         .join(UserModel)
-        .where(
-            MembershipModel.tenant_id == tenant_id,
-            func.lower(UserModel.email) == invite_data.email,
-        )
+        .where(MembershipModel.tenant_id == tenant_id, func.lower(UserModel.email) == folded_email)
     ).scalar_one_or_none()
 
     if existing_member:
         raise HTTPException(status_code=409, detail="User already a member of this tenant")
 
-    # Check if pending invite exists (case-insensitive, same reason).
+    # Check if pending invite exists (same folding, so a case variant of
+    # a live invite is a duplicate instead of a second email).
     existing_invite = db.execute(
         select(InviteModel).where(
             InviteModel.tenant_id == tenant_id,
-            func.lower(InviteModel.email) == invite_data.email,
+            func.lower(InviteModel.email) == folded_email,
             InviteModel.revoked_at.is_(None),
             InviteModel.accepted_at.is_(None),
             InviteModel.expires_at > datetime.now(timezone.utc),
@@ -541,9 +541,22 @@ async def accept_invite(
     # an invite addressed to a case variant of an existing user's email
     # attaches to that user instead of creating a duplicate account that
     # would then claim their verified email row.
-    user = db.execute(
-        select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
-    ).scalar_one_or_none()
+    try:
+        user = db.execute(
+            select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
+        ).scalar_one_or_none()
+    except MultipleResultsFound:
+        # Two users rows differ only by email case. The column is unique
+        # only on the raw value, so both rows are legal. Do not pick one;
+        # fail closed with the same uniform 400 as every other unusable
+        # invite state. A data cleanup plus a lower(email) unique index
+        # is the durable fix.
+        logger.warning(
+            "accept_invite_ambiguous_case_variant_user",
+            email=mask_email(invite.email),
+        )
+        db.rollback()
+        raise generic_400
 
     if user is not None:
         if user.status != "active":
@@ -600,7 +613,7 @@ async def accept_invite(
             role_name=invite_role.name if invite_role is not None else None,
         )
     except EmailOwnershipConflictError:
-        # The invited address (up to case) is verified for a different user.
+        # The invited address (up to case) belongs to a different user.
         # Refuse without revealing which account holds it (uniform 400).
         logger.warning(
             "accept_invite_email_ownership_conflict",

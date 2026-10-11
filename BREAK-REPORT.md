@@ -1,180 +1,35 @@
-# Break Report: services/admin auth and invite/role routes
+# CLI break report
 
-## Summary
+1 break found. 1 fixed and tested. 0 fixed but still failing. 0 blocked.
 
-Probed invite creation and acceptance, role assignment guards, session and
-challenge auth paths, and token generation, using local SQLite harnesses and
-unit probes only. Found 5 breaks, fixed and tested all 5. No fixes are failing.
-No live endpoints were touched, no Postgres throwaway database was needed
-(SQLite harnesses sufficed), no migrations were added, and the suspended
-tenant and 3225 areas were not reworked. Token entropy was checked and is not
-broken: invites, session tokens, and WebAuthn challenges all use
-256 bit secrets, OTPs are 6 digit codes stored as keyed HMAC digests with a
-5 attempt lockout, and invite tokens are SHA-256 hashed at rest.
+The RegEngine CLI in `cli/` is a stub with no subcommands. Bad arguments, retired commands, and path-like tokens already exit with code 2. The CLI does not read those paths and does not open a network connection. The real break is an import shadow: `cli/regengine.py` can be loaded as the top-level module `regengine`, hiding the SDK package.
 
-Severity counts: 1 high, 2 medium, 2 low.
+## High: importing regengine can load the CLI file instead of the SDK
 
-## Finding 1 (high): case-variant emails bypass invite duplicate guards
+What broke: With `cli/` first on `sys.path`, `import regengine` loaded `cli/regengine.py`. That file is the CLI stub. It is not the SDK, so `from regengine import RegEngineClient` failed. `python cli/regengine.py` puts `cli/` first on `sys.path` for that process, which is the same shape. A full `mypy .` run also stopped immediately on a duplicate module named `regengine` (the SDK package and `cli/regengine.py`). That duplicate is gone. Full mypy now stops on a different, pre-existing duplicate (`tests/audit/verify_chain.py` and `frontend/public/sdk/verify_chain.py`), which this change does not touch.
 
-What broke: POST /admin/invites compared the requested address with exact
-string equality when checking for an existing member and for a pending
-invite. Inviting ADMIN@EXAMPLE.COM while admin@example.com was already a
-member returned 200 and issued a live invite instead of 409. Inviting
-user@EXAMPLE.com while User@example.com had a pending invite returned 200 a
-second time, leaving two usable tokens for one mailbox. Every downstream
-consumer (accept_invite lookup, ensure_passwordless_identity, challenge
-creation) matches case-insensitively, so the create path disagreed with the
-rest of the system about what counts as the same mailbox.
+How to reproduce: From the repo root, put `cli/` ahead of the repo root on `sys.path` and import `regengine`. The module file is `cli/regengine.py`, and `RegEngineClient` is missing. Before this change, `import cli` was a namespace package (`cli.__file__` is `None`), which is why mypy treated `cli/regengine.py` as a second top-level `regengine`.
 
-How to reproduce: mount invite_routes with stubbed auth on SQLite, create a
-member admin@example.com, then POST /admin/invites with
-{"email": "ADMIN@EXAMPLE.COM", ...}. Pre-fix: 200 with an invite body.
+Root cause: `cli/regengine.py` (module body, previously the bare `import click` at the top of the file). The directory was not a regular package, and the file name is `regengine.py`. Python's script launcher inserts that directory at the front of `sys.path`.
 
-Root cause: services/admin/app/invite_routes.py, InviteCreate.validate_email
-(stored the raw address) and the two existence queries in create_invite
-(exact == comparisons).
+Fix: `cli/__init__.py` makes `cli` a regular package so the module name is `cli.regengine`. On import, `cli/regengine.py` removes that directory from `sys.path` before it imports Click. If the file was loaded as the top-level name `regengine`, it imports the real SDK and places that module in `sys.modules`. If no SDK package is on the path, the import raises `ImportError` instead of returning the stub.
 
-Fix: the validator now strips and lowercases the address before validation
-and storage, both existence checks compare with func.lower so legacy
-mixed-case rows are still caught, and accept Path A stores the normalized
-address for newly created users.
+Test results: `~/metacode/fleet/heavy .venv/bin/pytest tests/cli/test_regengine_cli.py --tb=line --no-header` after the fix: 24 passed in 1.01s. `.venv/bin/ruff check cli/regengine.py cli/__init__.py tests/cli/test_regengine_cli.py`: all checks passed. Targeted mypy of `cli/regengine.py`, `cli/__init__.py`, and `regengine/__init__.py` exited 0. A full `mypy .` no longer reports the `regengine` duplicate.
 
-Test results: 4 new tests in
-services/admin/tests/test_invite_break_adversarial_2026.py
-(TestCaseVariantInvites plus test_accept_stores_normalized_user_email). All
-fail on pre-fix code (returned 200 or stored raw case) and pass now. File: 11
-passed.
+Confirmed the new tests fail without the fix: the same pytest command, run before `cli/regengine.py` and `cli/__init__.py` were changed, failed `test_import_regengine_is_the_sdk_when_cli_dir_is_first_on_the_path` and `test_import_regengine_does_not_load_the_cli_file_when_the_sdk_is_absent` with `ImportError: cannot import name 'RegEngineClient' from 'regengine' (.../cli/regengine.py)` and `loaded .../cli/regengine.py`. `test_cli_is_a_regular_package` failed because `cli.__file__` was `None`. After the script-shadow test was pointed at that path shape, it failed the same way (`RegEngineClient` imported from `cli/regengine.py`).
 
-## Finding 2 (medium): concurrent or repeated invite writes return 500
+## Checked, not a break
 
-What broke: two simultaneous creates for the same mailbox both pass the
-pre-checks, then the loser hits the unique index and raises an unhandled
-IntegrityError, which becomes a 500. Re-inviting after a revoke does the
-same on backends whose unique index covers revoked rows (SQLite renders the
-partial index as a full unique index; Postgres excludes revoked rows, so prod
-accepts the re-invite, but the concurrent race still 500s there).
-
-How to reproduce: create an invite, revoke it, re-invite the same address on
-SQLite. Pre-fix: 500 Internal Server Error.
-
-Root cause: services/admin/app/invite_routes.py, bare db.flush and db.commit
-in create_invite with no IntegrityError handling.
-
-Fix: both calls are wrapped. On IntegrityError the handler rolls back, logs
-a warning with the masked email, and returns the same 409 the pre-checks
-return, so concurrent outcomes are indistinguishable from sequential ones.
-
-Test results: 3 new tests (flush conflict, commit conflict with nothing
-persisted, re-invite after revoke). All fail pre-fix (500), pass now.
-
-## Finding 3 (medium): concurrent invite accepts return 500
-
-What broke: two simultaneous accepts of one token both pass the usability
-checks, then the loser collides on the membership primary key and raises an
-unhandled IntegrityError, which becomes a 500. The endpoint promises a
-uniform 400 for every unusable-invite outcome, so the 500 also acts as a
-state oracle.
-
-How to reproduce: force the final commit in accept_invite to raise
-IntegrityError once (simulates losing the race). Pre-fix: 500.
-
-Root cause: services/admin/app/invite_routes.py, bare db.commit at the end
-of accept_invite.
-
-Fix: wrapped in try/except IntegrityError. On conflict the handler rolls
-back, logs a warning, and raises the standard uniform 400.
-
-Test results: 1 new test (test_accept_commit_conflict_returns_uniform_400).
-Fails pre-fix (500), passes now.
-
-## Finding 4 (low): accept requires a name field it never reads
-
-What broke: AcceptInviteRequest declared name as required, but the handler
-only ever reads token. Token-only clients get a 422 for omitting a field
-that has zero effect.
-
-How to reproduce: POST /auth/accept-invite with {"token": "<valid>"} and no
-name. Pre-fix: 422 Field required.
-
-Root cause: services/admin/app/invite_routes.py, AcceptInviteRequest.name
-with no default and no reader.
-
-Fix: name is now optional (str or None, default None). Fully backward
-compatible: clients that send it see no change.
-
-Test results: 1 new test (test_accept_without_name_succeeds, full 201 accept
-through real identity provisioning). Fails pre-fix (422), passes now.
-
-## Finding 5 (low): grant_owner docstring overclaims its scope
-
-What broke: can_invite_role's docstring said users.invite.grant_owner is an
-escape hatch for both the Owner-tier check and the basic tier check. The code
-honors it for Owner-tier targets only. A reader following the docstring would
-believe a low-rank holder of the permission can assign any sub-Owner role
-above their tier, which the code (correctly) denies.
-
-How to reproduce: can_invite_role("manager", ["users.invite.grant_owner"],
-"admin", []) returns False, contradicting the old docstring.
-
-Root cause: services/shared/permissions.py, can_invite_role docstring.
-
-Fix: docstring corrected to state the permission applies to Owner-tier
-targets only and never lifts the basic tier check. Code unchanged, least
-privilege preserved. A unit test pins the behavior both ways (manager with
-grant cannot invite admin; admin with grant can invite owner).
-
-Test results: 1 new test. It passes both before and after (behavior pin, not
-a behavior change), which is expected and noted honestly.
-
-## Areas checked with no break found
-
-* Token entropy: invite tokens, opaque session tokens, and WebAuthn
-  challenges use secrets.token_urlsafe(32). OTPs are HMAC-SHA256 digests
-  bound to challenge, purpose, and email fingerprint, with constant-time
-  verify and a 5 attempt lockout. No change.
-* Role escalation on update_user_role and create_invite: the #1387
-  can_invite_role guard is present on both, wildcard-permission roles rank
-  at Owner tier, cross-tenant roles are rejected as unknown, and the last
-  Owner guard covers demotion and deactivation races. No new break found.
-* Challenge verify: browser binding required, uniform 401s, session and
-  refresh hashes stored hashed. Refresh rotation uses atomic claim with
-  reuse tombstones and family revocation. Session revoke is user-scoped
-  (404 on a session owned by someone else). No change.
-* No role-creation route exists in app code, so trojan custom roles cannot
-  be minted through these routes.
-
-## Verification commands and results
-
-* New file: services/admin/tests/test_invite_break_adversarial_2026.py,
-  11 passed.
-* Fail-before proof: with HEAD's invite_routes.py temporarily in place, 10
-  of 11 new tests fail (the grant_owner pin passes on both, as documented);
-  with the fix restored, 11 of 11 pass.
-* Neighbors: test_invite_audit_chain_guard_2857, test_accept_invite_rls_2899,
-  test_invite_routes_email, test_user_routes, test_user_routes_1342,
-  test_user_routes_last_owner_2906, 47 passed.
-* services/shared/tests/test_permissions.py: 3 passed (full shared suite has
-  one unrelated pre-existing failure in test_extract_document_script about
-  stderr routing, which does not import permissions).
-* ruff check on all touched files: passed. ruff format: new test file
-  clean; invite_routes.py was already non-format-clean at HEAD and was left
-  that way to keep the diff surgical.
+- Unknown commands (`nosuch`, `compile`, `list-verticals`, `validate`, empty string, `..`, a long token, `--version`, `-h`) exit 2.
+- A path passed as a command is not read. A sentinel file's text does not appear in the output.
+- A null byte in the command raises Click's usage error with a non-zero exit code.
+- Running the CLI with a socket `connect` guard exits 2 and does not attempt a connection.
+- Four parallel unknown-command processes each exit 2.
+- `--help` exits 0. Click still treats `--help` as eager, so `python -m cli.regengine --help nosuch` exits 0. That is Click's help handling, not a failed command path. A real unknown command without `--help` exits 2.
+- There is no auth surface on this stub, so there is no auth bypass to close.
+- No production URL is contacted. Tests are local subprocesses only.
 
 ## Open questions
 
-1. Re-invite after revoke still diverges by backend: Postgres returns 201
-   (partial index excludes revoked rows) while SQLite returns the new
-   handled 409 (full unique index). Christopher should decide whether to
-   accept the divergence (SQLite is dev and test only) or align SQLite with
-   a matching partial index in test setup.
-2. The invite email regex still accepts technically invalid forms such as
-   consecutive dots in the domain. Delivery simply fails for those. Tighten
-   only if bounce noise becomes a problem, since stricter rules risk
-   rejecting rare but valid addresses.
-3. deactivate_user, reactivate_user, and revoke_invite have no tier-rank
-   check of the #1387 kind (deactivate needs users.disable, the others need
-   users.manage_roles or users.invite). A subordinate holding those
-   permissions can deactivate an Owner (last-Owner guard aside) or
-   reactivate a dormant non-sysadmin Owner. This matches the current
-   permission design, so no change was made, but Christopher may want to
-   confirm that is intended.
+- Full `mypy .` still stops on the unrelated `verify_chain` duplicate named above. That is outside `cli/`.
+- `python cli/regengine.py` remains supported. `python -m cli.regengine` remains the entry point named in the module docstring.

@@ -15,6 +15,11 @@ from typing import Iterable, Optional
 
 
 def _normalize(permission: str) -> str:
+    # Fail closed on helper misuse: non-string grants (None, numbers, objects
+    # from untrusted rows) normalize to empty so permission_implies returns
+    # False instead of raising AttributeError (a 500 on an auth path).
+    if not isinstance(permission, str):
+        return ""
     return permission.strip().lower().replace(":", ".")
 
 
@@ -65,9 +70,12 @@ _ROLE_RANK_BY_NAME: dict[str, int] = {
     "guest": 10,
 }
 
-# Any role whose permissions array contains "*" or "admin.*" is treated as
-# Owner-tier regardless of its name — that's the de-facto privilege level.
-_OWNER_TIER_PERMISSIONS = {"*", "admin.*"}
+# Any role whose permissions array contains "*", "admin.*", or "super_admin"
+# is treated as Owner-tier regardless of its name, since that is the
+# de-facto privilege level. "super_admin" must stay in this set:
+# permission_implies treats it as every permission, so a low-named role
+# carrying it would otherwise rank below the privilege it confers.
+_OWNER_TIER_PERMISSIONS = {"*", "admin.*", "super_admin"}
 
 
 def role_rank(role_name: Optional[str], permissions: Optional[Iterable[str]] = None) -> int:
@@ -96,17 +104,22 @@ def can_invite_role(
     caller_permissions: Optional[Iterable[str]],
     target_role_name: Optional[str],
     target_permissions: Optional[Iterable[str]],
+    honor_grant_owner: bool = True,
 ) -> bool:
     """Return True iff the caller may issue an invite that confers ``target``.
 
-    #1387 — an inviter may only issue invites at or below their own tier.
+    #1387: an inviter may only issue invites at or below their own tier.
     Owner-tier targets additionally require the explicit
-    ``users.invite.grant_owner`` permission (or Owner rank). That explicit
-    permission applies to Owner-tier targets only: it never lifts the basic
-    tier check for sub-Owner targets, so a low-rank holder of the permission
-    still cannot assign roles above their own tier.
+    ``users.invite.grant_owner`` permission (or Owner rank). The explicit
+    permission acts as an escape hatch for both the Owner-tier check AND
+    the basic tier check.
+
+    Pass ``honor_grant_owner=False`` for immediate membership rewrites
+    (as opposed to invites for outsiders): the hatch exists to let a
+    non-Owner invite a future Owner, not to let a non-Owner promote a
+    current member, self included, to Owner in place.
     """
-    # Materialize perm iterables once — has_permission consumes them.
+    # Materialize perm iterables once: has_permission consumes them.
     caller_perm_list = list(caller_permissions or [])
     target_perm_list = list(target_permissions or [])
 
@@ -115,9 +128,9 @@ def can_invite_role(
     owner_rank = _ROLE_RANK_BY_NAME["owner"]
 
     # Explicit escalation permission bypasses the rank check but only for
-    # Owner-tier targets (that's the whole point — granting the precise
+    # Owner-tier targets (that is the whole point: granting the precise
     # superset you could not otherwise assign).
-    has_grant_owner = has_permission(caller_perm_list, "users.invite.grant_owner")
+    has_grant_owner = honor_grant_owner and has_permission(caller_perm_list, "users.invite.grant_owner")
 
     if target_rank >= owner_rank:
         # Owner-tier target. Allowed iff caller is Owner-tier or holds

@@ -12,14 +12,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.permissions import has_permission
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
-from .authz import IngestionPrincipal, require_permission
+from .authz import IngestionPrincipal, get_ingestion_principal, require_permission
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("team")
@@ -94,8 +94,30 @@ _team_store: dict[str, list[TeamMember]] = {}
 
 # Inviting a member or changing a member role is an admin action: the caller needs the
 # team-management scope. A wildcard-style key passes this check, a narrow
-# ingestion-only key does not.
-require_team_write = require_permission("team.write")
+# ingestion-only key does not. The plain ``admin`` scope issued to admin
+# keys (dev bypass, demo admin) counts as team-management too, because
+# ``permission_implies`` treats it as a plain scope that implies nothing.
+_require_team_write_scope = require_permission("team.write")
+_require_admin_scope = require_permission("admin")
+
+
+async def require_team_write(
+    request: Request,
+    response: Response,
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+) -> IngestionPrincipal:
+    """Allow team writes for ``team.write`` or plain ``admin`` callers.
+
+    Each branch delegates to its own ``require_permission`` gate so the
+    tenant-mismatch check and the rate-limit accounting still run. Owner
+    assignment stays owner-tier: see ``_require_owner_tier_for_owner_role``.
+    """
+    scopes = principal.scopes or []
+    if has_permission(scopes, "team.write"):
+        return await _require_team_write_scope(request=request, response=response, principal=principal)
+    if has_permission(scopes, "admin"):
+        return await _require_admin_scope(request=request, response=response, principal=principal)
+    raise HTTPException(status_code=403, detail="Insufficient permissions: requires 'team.write'")
 
 
 def _normalize_role(role: str | None) -> str:
@@ -338,6 +360,11 @@ async def update_role(
 
     for member in members:
         if member.id == member_id:
+            # Demoting an owner is conferring-equivalent: only an
+            # owner-tier caller may move an owner to a lesser role, or a
+            # team.write key could strip every owner and lock the tenant.
+            if _normalize_role(member.role) == "owner":
+                _require_owner_tier_for_owner_role(principal, "owner")
             member.role = role
 
             # Update in DB or memory

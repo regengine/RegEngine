@@ -169,7 +169,10 @@ class _FakeAsyncStreamClient:
                     headers=httpx.Headers(headers),
                     request=req,
                     is_redirect=False,
-                    aiter_bytes=lambda: _async_raising_gen(consumed),
+                    # Mirrors httpx's real aiter_bytes(chunk_size=None)
+                    # signature; the size is ignored so the test still
+                    # pins exact consumption counts.
+                    aiter_bytes=lambda chunk_size=None: _async_raising_gen(consumed),
                 )
 
             async def __aexit__(self_inner, *exc):
@@ -209,7 +212,8 @@ class _FakeAsyncSmallClient:
                     headers=httpx.Headers({"Content-Type": "application/json"}),
                     request=req,
                     is_redirect=False,
-                    aiter_bytes=lambda: gen(),
+                    # Mirrors httpx's real aiter_bytes(chunk_size=None) signature.
+                    aiter_bytes=lambda chunk_size=None: gen(),
                 )
 
             async def __aexit__(self_inner, *exc):

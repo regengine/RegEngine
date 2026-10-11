@@ -93,17 +93,20 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-def _make_db_store_stub(*, validate_return=None, rate_limit_return=None):
+def _make_db_store_stub(*, validate_return=None, rate_limit_return=None, tenant_status="active"):
     """Create a real ``DatabaseAPIKeyStore`` subclass instance with stubs.
 
     ``require_api_key`` uses ``isinstance(key_store, DatabaseAPIKeyStore)``
     to decide which branch to take, so a plain MagicMock won't work. We
     build the instance via ``object.__new__`` to bypass __init__ (which
-    would otherwise demand a real ``DATABASE_URL``).
+    would otherwise demand a real ``DATABASE_URL``). The live path also
+    reads ``tenants.status`` after validation, so the stub answers
+    ``active`` unless a test overrides it.
     """
     instance = object.__new__(auth.DatabaseAPIKeyStore)
     instance.validate_key = AsyncMock(return_value=validate_return)
     instance.check_rate_limit = AsyncMock(return_value=rate_limit_return)
+    instance.get_tenant_status = AsyncMock(return_value=tenant_status)
     return instance
 
 
