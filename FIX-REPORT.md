@@ -1,52 +1,187 @@
-# FIX-REPORT for PR #3241: Stop bulk upload and webhook paths from reporting success on failure
+# FIX-REPORT: About page copy
 
-Merge commit b68cab26905324d3fdb4b5a8b820c975f15e895d. Reports read: all six
-re-rv-3241-<angle> SUMMARY.md files, plus lead-correct, lead-blast, lead-ops,
-lead-security, lead-tenant, lead-tests, area-webhooks, int-deploy-readiness,
-int-error-semantics and int-frontend-build sections that mention #3241.
+Copy-only change in `frontend/src/app/about/page.tsx`. Two sentences were reworded. The published price was not changed.
 
-## Findings table
+## Before and after
 
-| # | Source report | Severity | Status | Reason |
-|---|---|---|---|---|
-| 1 | re-rv-3241-correct HIGH, re-rv-lead-correct #14, re-rv-area-webhooks #4: failed webhook still acked as seen, status route still reports durable queue | High | FIXED AND TESTED | `_process_new_items` now withholds the seen-ack when notify() adds an unpersisted dead letter, and `_webhook_dlq_status` reports the live count plus `at_risk` |
-| 2 | re-rv-3241-correct Low: commit 400 drops row-level detail | Low | FIXED AND TESTED | Trivial: the ValueError now names section, row and message for up to 5 blocking errors |
-| 3 | re-rv-3241-blast Low, re-rv-int-frontend-build Low: frontend type and UI miss `validation_warning_count` / `validation_warnings` | Low | FIXED AND TESTED | Trivial: two optional fields added to `SupplierBulkUploadCommitSummary`, warning block rendered next to the sync-warning block; standalone tsc parse clean, no syntax errors |
-| 4 | re-rv-3241-tests Low 1: sequential test passes on old global, thread test is timing-dependent | Low | FIXED AND TESTED | Trivial: added deterministic barrier-interleave test `test_concurrent_validations_isolated_with_forced_interleave` |
-| 5 | re-rv-3241-tests Low 2: `TestUnpersistedNack` never asserts the error logs | Low | FIXED AND TESTED | Trivial: both tests now assert `webhook_dead_letter_unpersisted` / `webhook_outbox_append_failed` via a logger mock |
-| 6 | re-rv-3241-tests Low 3: commit test checks only 400 and `failed` status | Low | FIXED AND TESTED | Trivial: asserts detail text names `event row 1` and that no facility or event rows were inserted |
-| 7 | re-rv-3241-correct open question: autofill `TLC-UNKNOWN` commits stay HTTP 200 | Low (question) | BLOCKED | Needs product confirmation that fabricated lot codes are acceptable regulatory data; test `test_commit_summary_carries_autofill_warnings` pins current behavior, left unchanged |
-| 8 | re-rv-int-error-semantics Medium 1 (`supplier_graph_sync.py` RuntimeError swallow) and Medium 2 (POSTGRES boot gate) | Medium | BLOCKED | Out of scope: files belong to PR #3243 / #3234 territory, not PR #3241; listed for Christopher's routing |
-| 9 | Task out-of-scope items: suspended-tenant deny on live auth, tenant-scope gate failure, 7 xfail cross-tenant leaks | Mixed | BLOCKED | Owned by other tasks, noted only |
+1. Verification sentence (principle "Verifiable, not just claimed")
 
-## Exact test commands and results
+Before:
+`Customers can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-All run through `~/metacode/fleet/heavy` with the shared `.venv` (symlink, nothing installed).
+After:
+`You can independently verify export-bundle integrity using our published verify_chain.py script.`
 
-1. ` .venv/bin/pytest services/scheduler/tests/test_notifications.py services/scheduler/tests/test_scheduler_hardening.py services/scheduler/tests/test_webhook_dlq_2510.py services/scheduler/tests/test_webhook_retry_1150.py services/scheduler/tests/test_kafka_emit_observability.py services/scheduler/tests/test_kafka_delivery_ack_2711.py services/scheduler/tests/test_silent_failures_2697.py tests/test_scheduler_dlq_unpersisted_status_3241.py -p no:cacheprovider --no-cov`
-   Result: `82 passed in 1.59s`, exit 0.
-2. `.venv/bin/pytest services/admin/tests/test_bulk_upload_false_success.py services/admin/tests/test_bulk_upload_validators_1342.py -p no:cacheprovider --no-cov`
-   Result: `39 passed in 1.35s`, exit 0.
-3. `.venv/bin/pytest tests/test_monolith_observability_drift.py -p no:cacheprovider --no-cov`
-   Result: `17 passed in 4.77s`, exit 0.
-4. `.venv/bin/ruff check` on all 8 changed Python files: `All checks passed!`
-5. `.venv/bin/ruff format --check` on all touched Python files: clean (one hunk auto-formatted in bulk_upload/routes.py, tests re-run green after).
-6. Frontend: `tsc --noEmit` standalone parse of `frontend/src/types/api.ts` (exit 0, no errors) and `frontend/src/app/onboarding/bulk-upload/page.tsx` (zero syntax errors, zero errors on edited lines 827-836; only missing-node_modules import/JXS-runtime artifacts identical to adjacent pre-existing lines). Full `npm run lint` / `npm run build` not run: `frontend/node_modules` is absent and a full `npm ci` was disproportionate for a 12-line additive UI change.
+The rest of that sentence is unchanged: "Compliance records are hash-linked once ingested, so any later change is detectable."
 
-`scripts/security/scan_tenant_scope.py` not run: no queries were touched, and the gate is already red on main (owned by another task per the brief).
+2. Faster iteration card
 
-## Old-code failure confirmation (each new test fails without its fix)
+Before:
+`Design-partner feedback is scoped to`
 
-1. Ack withhold: temporarily forced `webhook_ack_withheld = False` in `service.py`, ran `TestUnpersistedWebhookWithholdsAck`: `1 failed, 1 passed` (the withhold test failed, the durable-behavior test passed). Fix restored, suite green.
-2. Status `at_risk`: temporarily reverted the `or unpersisted > 0` clause, ran the new status file: `1 failed, 2 passed`. Also verified via `git show HEAD:server/routes_scheduler_status.py` that the old dict contains zero mentions of `unpersisted`. Fix restored, suite green.
-3. Commit detail: temporarily restored the old bare ValueError message, ran the strengthened commit test: `1 failed`. Fix restored, suite green.
-4. Barrier isolation: temporarily simulated the pre-3241 shared global in `validators.py` (collector returns `_AUTOFILL_WARNINGS`, clear at start, read global at end), ran the new barrier test: `1 failed in 0.45s` (deterministic, no hang). Fix restored, suite green.
-5. Log asserts: temporarily deleted the two `logger.error` calls in `notifications.py` (counter kept), ran `TestUnpersistedNack`: `2 failed, 1 passed`. Fix restored, suite green.
+After:
+`Early tester feedback is scoped to`
 
-No fix was backed out: every attempted fix passed its tests on the first full run.
+The rendered sentence now reads: "No committee approvals. Early tester feedback is scoped to ship within days, not quarters."
 
-## Items needing Christopher's decision
+The following line was not changed: "Regulatory updates deploy without waiting for quarterly release trains."
 
-1. Autofill commits (`TLC-UNKNOWN`, `Unnamed Facility`) still return 200 `completed` with warnings. Confirm fabricated lot codes are acceptable regulatory data, or say they must block like unknown FTL categories do.
-2. Route the two int-error-semantics mediums (graph-mirror RuntimeError swallow in `services/admin/app/supplier_graph_sync.py`, POSTGRES variables missing from the boot-required list) to the owning task; they were found while reviewing #3241 but live in other PRs' files.
-3. Deploy note (no code change): dashboards may show new webhook error/warning volume (`webhooks_delivered` now logs at warning on partial failure, plus `webhook_ack_withheld`); if any alert pages on scheduler warning event names, expect new pages until `WEBHOOK_OUTBOX_PATH` is set.
+Price left as it was:
+`RegEngine starts at $425/mo (billed annually).`
+
+## Diff
+
+`git diff --stat` (tracked files only):
+
+```
+ frontend/src/app/about/page.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+```
+
+Two hunks from `git diff -- frontend/src/app/about/page.tsx`:
+
+```
+@@ -69,7 +69,7 @@ const PRINCIPLES = [
+     Icon: Shield,
+     title: "Verifiable, not just claimed",
+     description:
+-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
++      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
+   },
+   {
+     Icon: Lightbulb,
+@@ -206,7 +206,7 @@ export default function AboutPage() {
+                 Faster iteration
+               </p>
+               <p className="mt-1 text-ui text-re-text-secondary">
+-                No committee approvals. Design-partner feedback is scoped to
++                No committee approvals. Early tester feedback is scoped to
+                 ship within days, not quarters. Regulatory updates deploy
+                 without waiting for quarterly release trains.
+               </p>
+```
+
+Untracked test file, not included in `git diff --stat`:
+`frontend/src/__tests__/pages/about-copy.test.tsx`
+
+`frontend/next-env.d.ts` was rewritten by `next build` (dev type paths became production type paths). That file was put back to the committed text. It is not part of this change.
+
+## Build, typecheck, and lint
+
+Install, from `frontend/`, lockfile `package-lock.json`:
+
+`~/metacode/fleet/heavy npm ci`
+
+Result: exit 0. Added 793 packages in 27s. npm also printed 10 high severity audit findings in the existing tree. `npm audit fix` was not run.
+
+Test before the page edit (source assertions only, 2 tests):
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 1.
+
+```
+Test Files  1 failed (1)
+     Tests  2 failed (2)
+```
+
+Both failed because the file still had "Customers can independently verify..." and "Design-partner feedback is scoped to", and did not contain the new phrases.
+
+Test after the page edit, then again after a render assertion was added:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/vitest run src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0. Final run: 1 file passed, 3 tests passed.
+
+Lint on the page and the test:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/eslint src/app/about/page.tsx src/__tests__/pages/about-copy.test.tsx`
+
+Result: exit 0, no findings.
+
+Typecheck of the final tree:
+
+`~/metacode/fleet/heavy ./node_modules/.bin/tsc --noEmit --pretty false --incremental false`
+
+Result: exit 0. An earlier `tsc` run, before the render assertion existed, also exited 0.
+
+Production build, from `frontend/`:
+
+`~/metacode/fleet/heavy npm run build`
+
+Result: exit 0. Next.js 16.3.6 compiled successfully in 13.4s, finished TypeScript in 9.8s, and generated 172 static pages. `/about` is in the route list. Warnings were the usual ones: no build cache, anonymous telemetry notice, custom Cache-Control header, and Edge Runtime deprecation. No build error.
+
+Ruff was not run. This change is TypeScript only.
+
+Browser: the About page was not opened in a browser. The vitest render asserts the visible joined sentence, and `npm run build` compiled the route.
+
+---
+
+# Follow-up: pricing label and pre-revenue copy (2026-10-08)
+
+RegEngine is pre-revenue with no customers or pilots. This follow-up removes public copy that implied otherwise, and renames the price label "for Founding Design Partners" to the Founding rate. Every published price ($425, $499, $649, $749, $849) is unchanged. Copy only; no logic changed.
+
+## Before and after
+
+`frontend/src/components/pricing/PricingPageClient.tsx` (regengine.co/pricing)
+1. `Founding Design Partner discounts are documented in the executed order form or design-partner agreement.` -> `Founding rate discounts are documented in the executed order form or design-partner agreement.`
+2. Tier badge `Founding design partner rate` -> `Founding rate`
+3. `Post-pilot list price · billed annually` -> `Standard list price · billed annually`
+4. `50% off post-pilot list pricing under your executed design-partner terms.` -> `50% off standard list pricing under your executed design-partner terms.`
+5. `We are onboarding a limited number of partners ahead of the July 2028 FSMA 204 enforcement window. Your Founding Design Partner rate is controlled by your agreement,` -> `We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your Founding rate is controlled by your agreement,`
+6. `RegEngine starts at $425/mo (billed annually) for Founding Design Partners.` -> `RegEngine's Founding rate starts at $425/mo (billed annually).`
+7. `RegEngine's current design-partner posture;` -> `RegEngine's current early access posture;`
+8. `Founding Design Partners start at $425/mo, billed annually.` -> `The Founding rate starts at $425/mo, billed annually.`
+
+`frontend/src/app/pricing/page.tsx`
+9. Meta and Open Graph description: `Transparent design-partner pricing with onboarding terms controlled by your agreement.` -> `Transparent Founding rate pricing with onboarding terms controlled by your agreement.`
+10. FAQ: `What do Founding Design Partners get?` / `Founding Design Partner discounts are documented...` -> `What does the Founding rate include?` / `Founding rate discounts are documented...`
+11. FAQ: `Does my partner pricing ever change?` / `Partner pricing is controlled by...` -> `Does my Founding rate ever change?` / `Your Founding rate is controlled by...`
+
+`frontend/src/app/why-regengine/page.tsx`
+12. `Plans from $425/mo (billed annually) for Founding Design Partners. Pricing is published — no "contact sales" required.` -> `Founding rate plans start at $425/mo (billed annually). Pricing is published, so you do not need to "contact sales."`
+13. Three plan cards: `Founding design partner rate, billed annually (...)` -> `Founding rate, billed annually (...)`
+14. `Founding Design Partners get preferred pricing for the life of their account.` -> `The Founding rate is preferred pricing for the life of your account.`
+15. `Founding Design Partner rates from $425/mo (billed annually) get you live.` -> `Founding rates from $425/mo (billed annually) get you live.`
+
+`frontend/src/app/compare/{foodlogiq,tracegains,repositrak}/page.tsx`
+16. `(Founding Design Partner rates from $425/mo, billed annually)` -> `(Founding rates from $425/mo, billed annually)` (all three pages)
+17. FoodLogiQ: `with Founding Design Partner rates from $425/mo (billed annually) — no multi-year commitment required. FoodLogiQ pricing is custom-quoted — request both...` -> `with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both...`
+
+`frontend/src/app/supplier-compliance/page.tsx`
+18. `plans start at $425/mo (billed annually) for Founding Design Partners.` -> `plans start at $425/mo (billed annually) at the Founding rate.`
+
+`frontend/src/app/tools/roi-calculator/components/ROICalculatorClient.tsx` (two places)
+19. `We don't have verified customer ROI data yet — early-design partner pricing reflects that.` -> `We don't have verified customer ROI data yet, and the Founding rate reflects that.`
+
+`frontend/src/app/case-studies/page.tsx`
+20. `RegEngine is in production with founding design partners; self-serve access is in staged rollout.` -> `RegEngine is pre-revenue; self-serve access is in staged rollout.`
+
+`frontend/src/app/developers/page.tsx`
+21. `Already a customer? Sign in` -> `Have a RegEngine workspace? Sign in` ("Already have an account" is blocked by the existing developers-front-door test, so it was not used.)
+
+`frontend/src/app/status/page.tsx`
+22. Meta description: `Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.` -> `Live RegEngine system status: backend service health, last checked timestamp, and support channel.`
+23. Open Graph: `Live RegEngine system status and pilot support contact.` -> `Live RegEngine system status and support contact.`
+24. Heading `Pilot support` -> `Support`
+25. `We aim to respond within one business day during pilot programs.` -> `We aim to respond within one business day during early access.`
+
+## Left alone on purpose
+
+- Program name and its calls to action (`Founding Design Partner Program`, `Apply as founding design partner`, `Become a founding design partner` on /pricing, /walkthrough, /tools/label-scanner). These invite applications rather than claim existing partners, and `frontend/COPY_REMEDIATION_PLAN.md` D7 keeps "Founding Design Partner" as the program name. Renaming the program is a decision for C.Lee.
+- `design-partner agreement` / `design-partner terms` as the name of the contract document (pricing FAQ, pricing card).
+- /pricing comparison table cells `Design-partner workflow`, `Design-partner terms`, `Indicative design-partner ranges; agreement controls`: describe the offer, not existing customers.
+- /why-regengine `Founding Design Partner rate never increases` and `Simple design-partner agreements — no multi-year lock-in` (three places): pricing commitments with an absolute claim and existing dashes; rewording a pricing promise needs C.Lee.
+- /case-studies `Guided onboarding speed for an approved design-partner workspace using synthetic sample data`: scoped to synthetic data.
+- /trust and /integrations status taxonomy (`Pilot`, `Design Partner` labels from `src/lib/customer-readiness.ts`), /docs inflow-lab `Pilot connector`, /contact `pilot onboarding`: capability status labels or offers tied to code identifiers.
+- Homepage `Design-partner. Pre-revenue.`: already honest.
+- "customer" where it means the reader's customers or a future contract party (blog posts, FSMA guides, trust, trust/support, trust/architecture, tools, lead gate), the in-app /remediation metric, and legal pages (/privacy, /terms, /dpa, /legal).
+
+## Tests and build
+
+New test `frontend/src/__tests__/pages/pre-revenue-copy.test.ts` asserts the retired phrases are gone from the 11 edited files, and that the $425/mo Founding rate wording is present.
+
+- `vitest run src/__tests__/pages src/__tests__/public-site-fixes.test.tsx src/lib/csp.test.ts`: 44 files passed, 284 tests passed, 2 skipped.
+- `eslint` on every changed file plus the new test: exit 0.
+- `tsc --noEmit`: exit 0.
+- `npm run build`: exit 0, 172 static pages generated. `next-env.d.ts` was rewritten by the build and put back; it is not part of this change.
