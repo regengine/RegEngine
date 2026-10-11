@@ -702,8 +702,10 @@ async def _process_stripe_webhook(
     _helpers_mod._configure_stripe()
 
     # Fail-closed secret gate owned by the shared webhook template
-    # (``shared.webhook_auth``). Behavior unchanged: a missing secret is
-    # a 500 with the same message the billing tests pin.
+    # (``shared.webhook_auth``). A missing secret is a 500 with the same
+    # message the billing tests pin. Note the one behavior change: a
+    # blank (whitespace-only) secret is now also refused here instead of
+    # being passed to the Stripe SDK.
     try:
         webhook_secret = _webhook_auth_mod.require_webhook_secret(
             os.getenv("STRIPE_WEBHOOK_SECRET"),

@@ -4,10 +4,10 @@ import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 traceability readiness from $425/mo. Transparent design-partner pricing with onboarding terms controlled by your agreement.',
+    description: 'FSMA 204 traceability readiness from $425/mo. Transparent Founding rate pricing with onboarding terms controlled by your agreement.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 traceability readiness from $425/mo. Transparent design-partner pricing with onboarding terms controlled by your agreement.',
+        description: 'FSMA 204 traceability readiness from $425/mo. Transparent Founding rate pricing with onboarding terms controlled by your agreement.',
         url: 'https://regengine.co/pricing',
         type: 'website',
     },
@@ -137,10 +137,10 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
 
 const FAQ: PricingFaqItem[] = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2–3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What do Founding Design Partners get?', a: 'Founding Design Partner discounts are documented in the executed order form or design-partner agreement, including term, scope, renewal, taxes, add-ons, plan-change treatment, onboarding, and integration support.' },
+    { q: 'What does the Founding rate include?', a: 'Founding rate discounts are documented in the executed order form or design-partner agreement, including term, scope, renewal, taxes, add-ons, plan-change treatment, onboarding, and integration support.' },
     { q: 'Can I switch plans anytime?', a: 'Plan changes are handled under your executed order form or design-partner agreement. We scope upgrades, downgrades, facility count, and billing changes before applying them.' },
     { q: 'Do you offer annual billing?', a: 'Annual and monthly billing can be scoped during procurement. Pricing shown is indicative; the executed agreement controls final plan, billing period, and checkout availability.' },
-    { q: 'Does my partner pricing ever change?', a: 'Partner pricing is controlled by the executed order form or design-partner agreement, including renewal, scope, add-ons, taxes, and plan changes.' },
+    { q: 'Does my Founding rate ever change?', a: 'Your Founding rate is controlled by the executed order form or design-partner agreement, including renewal, scope, add-ons, taxes, and plan changes.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: native API, webhook, CSV/SFTP import, or custom-scoped implementation.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Major retailers are already requiring traceability data from suppliers regardless of the FDA timeline. RegEngine gives you the tooling and records to support either trigger — the FDA rule or a retailer mandate.' },
     { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },

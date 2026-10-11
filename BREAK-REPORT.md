@@ -1,170 +1,35 @@
-# Break Report: ingestion authz, auditor_router, canonical_router
+# CLI break report
 
-## Summary
+1 break found. 1 fixed and tested. 0 fixed but still failing. 0 blocked.
 
-Adversarial testing of the ingestion authorization surface, the auditor
-read-only router, the canonical records router, and CSV template handling.
-Local test setups only, no production contact. SafetyCulture webhook
-signature paths were skipped as ordered.
+The RegEngine CLI in `cli/` is a stub with no subcommands. Bad arguments, retired commands, and path-like tokens already exit with code 2. The CLI does not read those paths and does not open a network connection. The real break is an import shadow: `cli/regengine.py` can be loaded as the top-level module `regengine`, hiding the SDK package.
 
-Breaks found: 4. Fixed and tested: 4. Fixed but failing: 0. Blocked: 0.
+## High: importing regengine can load the CLI file instead of the SDK
 
-1. CSV row-cap silently drops rows (Medium). Fixed, tested.
-2. Auditor endpoints accept negative pagination, reaching SQL (Low). Fixed, tested.
-3. Record history returns 200 for missing or foreign-tenant events (Low). Fixed, tested.
-4. Downloaded CSV templates contain formula-leading example cells (Info). Fixed, tested.
+What broke: With `cli/` first on `sys.path`, `import regengine` loaded `cli/regengine.py`. That file is the CLI stub. It is not the SDK, so `from regengine import RegEngineClient` failed. `python cli/regengine.py` puts `cli/` first on `sys.path` for that process, which is the same shape. A full `mypy .` run also stopped immediately on a duplicate module named `regengine` (the SDK package and `cli/regengine.py`). That duplicate is gone. Full mypy now stops on a different, pre-existing duplicate (`tests/audit/verify_chain.py` and `frontend/public/sdk/verify_chain.py`), which this change does not touch.
 
-Authz bypass attempts, IDOR probes on tenant artifacts, quantity and date
-edge cases, malformed payloads, and tenant-mismatch handling were all
-exercised. No bypass or cross-tenant data leak was found. Details below.
+How to reproduce: From the repo root, put `cli/` ahead of the repo root on `sys.path` and import `regengine`. The module file is `cli/regengine.py`, and `RegEngineClient` is missing. Before this change, `import cli` was a namespace package (`cli.__file__` is `None`), which is why mypy treated `cli/regengine.py` as a second top-level `regengine`.
 
-## Finding 1 (Medium): CSV row-cap silently drops rows
+Root cause: `cli/regengine.py` (module body, previously the bare `import click` at the top of the file). The directory was not a regular package, and the file name is `regengine.py`. Python's script launcher inserts that directory at the front of `sys.path`.
 
-What broke: uploading a CSV with more than 500 data rows ingested the
-first 500 and reported a single error, "Row 502: CSV exceeds maximum row
-limit of 500", with no count of how many rows were discarded. A 505-row
-file lost 4 rows the caller was never told about, and the ingestion
-receipt counted 501 records against a 505-row file.
+Fix: `cli/__init__.py` makes `cli` a regular package so the module name is `cli.regengine`. On import, `cli/regengine.py` removes that directory from `sys.path` before it imports Click. If the file was loaded as the top-level name `regengine`, it imports the real SDK and places that module in `sys.modules`. If no SDK package is on the path, the import raises `ImportError` instead of returning the stub.
 
-How to reproduce: call `parse_csv_rows` with 505 valid harvesting rows.
-Before the fix: 500 events, 1 error, no skipped count. After the fix: 500
-events plus an error stating "4 more row(s) after this one were skipped
-and not ingested", followed by the unchanged cap message.
+Test results: `~/metacode/fleet/heavy .venv/bin/pytest tests/cli/test_regengine_cli.py --tb=line --no-header` after the fix: 24 passed in 1.01s. `.venv/bin/ruff check cli/regengine.py cli/__init__.py tests/cli/test_regengine_cli.py`: all checks passed. Targeted mypy of `cli/regengine.py`, `cli/__init__.py`, and `regengine/__init__.py` exited 0. A full `mypy .` no longer reports the `regengine` duplicate.
 
-Root cause: `services/ingestion/app/csv_templates.py:764` (read loop
-breaks after 501 records without consuming the rest of the reader) and
-`:782` (cap error named no count).
+Confirmed the new tests fail without the fix: the same pytest command, run before `cli/regengine.py` and `cli/__init__.py` were changed, failed `test_import_regengine_is_the_sdk_when_cli_dir_is_first_on_the_path` and `test_import_regengine_does_not_load_the_cli_file_when_the_sdk_is_absent` with `ImportError: cannot import name 'RegEngineClient' from 'regengine' (.../cli/regengine.py)` and `loaded .../cli/regengine.py`. `test_cli_is_a_regular_package` failed because `cli.__file__` was `None`. After the script-shadow test was pointed at that path shape, it failed the same way (`RegEngineClient` imported from `cli/regengine.py`).
 
-Fix: after hitting the cap, the reader is drained with a counter (no
-storage) and the skipped count is reported as its own parse error placed
-before the existing cap message, which is kept byte-identical because an
-existing test pins its exact text. A malformed tail degrades to the old
-message rather than rejecting rows already read.
+## Checked, not a break
 
-Test results: new `TestCsvOverflowReporting` in
-`services/ingestion/tests/test_break_ingestion_authz.py` (3 tests) fails
-on old code, passes on new. Existing suites
-`test_csv_templates_1342.py`, `test_csv_jev_header_mapping.py`,
-`test_csv_jev_file_cte.py`, `test_csv_ingestion_receipt.py`,
-`test_csv_ingest_response_model_2892.py`, `test_csv_malformed_input.py`
-all pass.
-
-## Finding 2 (Low): auditor endpoints accept negative pagination
-
-What broke: `GET /api/v1/audit/events` accepted `limit=-5` and
-`offset=-1`, and `/api/v1/audit/exceptions` and `/api/v1/audit/export-log`
-accepted negative `limit`. Validation passed these values straight to
-parameterized SQL, where Postgres rejects negative LIMIT and OFFSET, so an
-unauthenticated-shape adversarial input became a 500 instead of a 422.
-The canonical router already enforced `ge=0` on the same parameters.
-
-How to reproduce: `GET /api/v1/audit/events?limit=-5` returned 200
-through validation (confirmed against a fake session that the value
-passed validation and reached the query layer).
-
-Root cause: `services/ingestion/app/auditor_router.py:224-225`,
-`:547`, `:680` (Query declarations without `ge=0`).
-
-Fix: added `ge=0` to `limit` on all three endpoints and to `offset` on
-`/events`. Negative values now get 422 before any database work.
-`limit=0` remains allowed and returns an empty page.
-
-Test results: new `TestAuditorPaginationBounds` (5 tests) fails on old
-code, passes on new. Existing `test_auditor_router_1342.py` passes.
-
-## Finding 3 (Low): record history returns 200 for missing or foreign events
-
-What broke: `GET /api/v1/records/{event_id}/history` returned 200 with an
-empty amendment chain for an event id that does not exist under the
-caller's tenant, including ids belonging to another tenant. That response
-is identical to "event exists, no amendments", so callers cannot tell a
-wrong or foreign id from a clean record, and sibling endpoints
-(`GET /api/v1/records/{event_id}`, auditor event detail) correctly return
-404 for the same input.
-
-How to reproduce: `GET
-/api/v1/records/evt-foreign/history?tenant_id=tenant-a` returned 200 with
-`{"event_id": "evt-foreign", "amendment_chain": []}` before the fix, and
-404 after it. No cross-tenant data was ever returned (the chain walk is
-tenant-filtered), so this is a consistency issue, not a data leak.
-
-Root cause: `services/ingestion/app/canonical_router.py:372`
-(`get_record_history` walked the chain without checking the event exists
-under the resolved tenant).
-
-Fix: a tenant-scoped existence query up front, 404 when absent. Two
-existing tests in `test_canonical_router.py` were updated to script the
-new leading query in their fake sessions; their assertions are unchanged.
-
-Test results: new `TestRecordHistoryNotFound` (2 tests) fails on old
-code, passes on new. Full `test_canonical_router.py` passes.
-
-## Finding 4 (Info): downloaded CSV templates contain formula-leading examples
-
-What broke: the served `initial_packing` template example row contains
-`+1-202-555-0100` and the `first_land_based_receiving` example contains
-`-1.5`. Both start with characters the project's own CSV safety module
-(`services/shared/fda_export/csv_safety.py`, `DANGEROUS_PREFIXES`)
-defines as spreadsheet formula triggers. Opening a downloaded template in
-Excel evaluates the phone example as arithmetic (displaying -2756 instead
-of the sample number). Exported tenant data was already sanitized by
-`fda_export_service.py`; only the static template examples were missed.
-
-How to reproduce: generate every template with `_generate_csv_template`
-and check each example cell with `sanitize_cell`. Before the fix, 2 cells
-across 8 templates changed under sanitization. After the fix, none do.
-
-Root cause: `services/ingestion/app/csv_templates.py:208`
-(`_generate_csv_template` wrote example values raw).
-
-Fix: the example row passes through the same `sanitize_cell` the FDA
-export uses. Safe values are returned unchanged, so the other 6 templates
-are byte-identical and round-trip ingest tests are unaffected.
-
-Test results: new `TestTemplateFormulaSafety` (1 test) fails on old
-code, passes on new. Existing `test_csv_templates.py`,
-`test_csv_input_quantities.py` pass.
-
-## Tested, no break found
-
-Authz bypass: tenant mismatch via `?tenant_id=` returns 403, via
-`X-Tenant-ID` header returns 403, conflicting query and header returns
-400, wildcard `*` scope on a tenant-bound key cannot pivot tenants
-(`resolve_tenant` and `require_permission` both enforce it), missing key
-is 401 outside explicit dev or test mode, presented-but-invalid keys are
-never downgraded to the dev-open path, and retired `X-Admin-Key` presents
-are rejected. The template download endpoints are unauthenticated but
-serve only static column definitions with no tenant data, and the
-download filename is built from a validated CTE key.
-
-IDOR on tenant artifacts: `get_record`, auditor event detail, and
-ingestion-run detail are tenant-scoped and return 404 for foreign ids
-(verified). Trace forward and backward return tenant-filtered results
-with no existence signal beyond the shared supply-chain lot code.
-
-CSV and payload edge cases: negative, zero, `nan`, `inf`, and
-non-numeric quantities are all rejected; flexible date parsing rejects
-unreadable dates instead of stamping placeholders; duplicate normalized
-columns are rejected; oversized and unreadable files are rejected whole;
-formula-prefix values in uploaded cells are stored raw but every CSV
-export path in scope of this task either returns JSON or sanitizes with
-`sanitize_cell`. `compliance_status` filter values outside the known set
-are silently ignored (returns unfiltered); noted as a wart, left
-unchanged to avoid breaking existing clients.
-
-Not run: `test_auditor_pagination_ties_pg.py` (1 skip, needs a migrated
-Postgres with the fsma schema, not available locally). Negative
-pagination was therefore verified at the validation boundary (422 before
-any query) rather than against live Postgres.
+- Unknown commands (`nosuch`, `compile`, `list-verticals`, `validate`, empty string, `..`, a long token, `--version`, `-h`) exit 2.
+- A path passed as a command is not read. A sentinel file's text does not appear in the output.
+- A null byte in the command raises Click's usage error with a non-zero exit code.
+- Running the CLI with a socket `connect` guard exits 2 and does not attempt a connection.
+- Four parallel unknown-command processes each exit 2.
+- `--help` exits 0. Click still treats `--help` as eager, so `python -m cli.regengine --help nosuch` exits 0. That is Click's help handling, not a failed command path. A real unknown command without `--help` exits 2.
+- There is no auth surface on this stub, so there is no auth bypass to close.
+- No production URL is contacted. Tests are local subprocesses only.
 
 ## Open questions
 
-1. Should the 500-row CSV cap become a full-file rejection instead of
-   partial ingest with a skipped count? The current fix keeps the pinned
-   behavior (first 500 ingested) and reports the drop truthfully.
-2. Should unknown `compliance_status` filter values on
-   `/api/v1/audit/events` return 422 instead of unfiltered results?
-   Caller decision, minor.
-3. The Jev sidecar skill was not consulted: this task made no CTE-type or
-   header-mapping judgment calls (no classification thresholds or
-   mappings were changed), so there was nothing to ask it.
+- Full `mypy .` still stops on the unrelated `verify_chain` duplicate named above. That is outside `cli/`.
+- `python cli/regengine.py` remains supported. `python -m cli.regengine` remains the entry point named in the module docstring.

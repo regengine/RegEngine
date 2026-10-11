@@ -54,7 +54,17 @@ class GenericRSSScraper(StateRegistryScraper):
                 max_bytes=FEED_MAX_BYTES,
             )
             resp.raise_for_status()
-            feed = feedparser.parse(resp.content)
+            # feedparser resolves relative item links only when it knows the
+            # feed URL. The safe helper pins the transport IP, so resp.url
+            # carries the IP literal; the logical final-hop URL rides in
+            # extensions (falling back to the request URL when a stubbed
+            # response in tests does not carry it).
+            extensions = getattr(resp, "extensions", None) or {}
+            base_url = extensions.get("safe_final_url", self.feed_url)
+            feed = feedparser.parse(
+                resp.content,
+                response_headers={"content-location": base_url},
+            )
         except Exception as e:
             logger.warning("generic_rss_discover_failed", url=self.feed_url, error=str(e))
             return

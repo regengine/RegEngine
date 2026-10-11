@@ -28,7 +28,7 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from shared.audit_logging import AuditActor
+from shared.audit_logging import AuditActor, AuditStorageError
 from shared.data_retention import (
     _RESOURCE_RELATIONS,
     RETENTION_CONFIGS,
@@ -221,3 +221,113 @@ def test_declared_relations_are_schema_qualified():
         if relation is None:
             continue
         assert "." in relation, f"{resource} -> {relation!r} must be schema-qualified (e.g. 'public.users')"
+
+
+# ---------------------------------------------------------------------------
+# audit failure after a committed delete (#3234 follow-up)
+# ---------------------------------------------------------------------------
+
+
+def _ok_update(db):
+    """One matching row: the UPDATE/DELETE commits, then the audit write runs."""
+    result = MagicMock()
+    result.rowcount = 1
+    db.execute.return_value = result
+    return db
+
+
+def _audit_failing_manager():
+    mgr = _manager()
+    mgr.audit_logger.log_data_modification = AsyncMock(
+        side_effect=AuditStorageError("audit event evt-1 was not persisted")
+    )
+    return mgr
+
+
+def test_soft_delete_reraises_audit_failure_after_commit():
+    """The UPDATE already committed, so the row IS deleted. A quiet False
+    would read as row not found and skip the hard-delete schedule."""
+    mgr = _audit_failing_manager()
+    db = _ok_update(MagicMock())
+
+    with pytest.raises(AuditStorageError):
+        _run(
+            mgr.soft_delete_record(
+                db=db,
+                resource_type="user_account",
+                record_id=str(uuid.uuid4()),
+                policy=RetentionPolicy.USER_ACCOUNT,
+                deletion_request=DeletionRequest.USER_INITIATED,
+                actor=_actor(),
+                tenant_id=None,
+            )
+        )
+
+    db.rollback.assert_called_once()
+
+
+def test_hard_delete_reraises_audit_failure_after_commit():
+    """The DELETE already committed, so the row IS gone. A quiet False
+    would make the cleanup job report a delete error for a delete that
+    happened, with no audit row to show for it."""
+    mgr = _audit_failing_manager()
+    db = _ok_update(MagicMock())
+
+    with pytest.raises(AuditStorageError):
+        _run(
+            mgr.hard_delete_record(
+                db=db,
+                resource_type="user_account",
+                record_id=str(uuid.uuid4()),
+                actor=_actor(),
+            )
+        )
+
+    db.rollback.assert_called_once()
+
+
+def test_process_deletion_request_reports_committed_delete_with_failed_audit():
+    """Committed delete plus failed audit must read as deleted-with-error,
+    not as soft_deleted False with a null error."""
+    mgr = _audit_failing_manager()
+    db = _ok_update(MagicMock())
+
+    result = _run(
+        mgr.process_deletion_request(
+            db=db,
+            resource_type="user_account",
+            record_id=str(uuid.uuid4()),
+            policy=RetentionPolicy.USER_ACCOUNT,
+            deletion_request=DeletionRequest.USER_INITIATED,
+            actor=_actor(),
+        )
+    )
+
+    assert result["soft_deleted"] is True
+    assert result["hard_delete_scheduled"] is False
+    assert "audit" in result["error"]
+
+
+def test_process_deletion_request_reports_failed_schedule_audit():
+    """Delete and its audit both succeed, but the follow-up schedule audit
+    fails: the delete must still read as done, with the error attached."""
+    mgr = _manager()
+    mgr.audit_logger.log = AsyncMock(
+        side_effect=AuditStorageError("audit event evt-2 was not persisted")
+    )
+    db = _ok_update(MagicMock())
+
+    result = _run(
+        mgr.process_deletion_request(
+            db=db,
+            resource_type="user_account",
+            record_id=str(uuid.uuid4()),
+            policy=RetentionPolicy.USER_ACCOUNT,
+            deletion_request=DeletionRequest.USER_INITIATED,
+            actor=_actor(),
+        )
+    )
+
+    assert result["soft_deleted"] is True
+    assert result["hard_delete_scheduled"] is False
+    assert "audit" in result["error"]

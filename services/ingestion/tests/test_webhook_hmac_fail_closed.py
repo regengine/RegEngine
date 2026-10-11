@@ -80,13 +80,20 @@ class TestProductionWithoutSecretRejects:
             for args, kwargs in calls
         ), "expected an error log line naming the missing production secret"
 
-    def test_production_reject_increments_skip_counter(self, monkeypatch):
+    def test_production_reject_increments_reject_counter_not_skip_counter(
+        self, monkeypatch
+    ):
+        # #3229 follow-up: the closed-gate 401 must not feed the
+        # fail-open skip counter, or alarms on skipped verifications
+        # count rejected requests as accepted unsigned traffic.
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         monkeypatch.setattr(wr, "_is_production", lambda: True)
-        if wr.WEBHOOK_HMAC_SKIPPED is None:
+        if wr.WEBHOOK_HMAC_REJECTED is None or wr.WEBHOOK_HMAC_SKIPPED is None:
             pytest.skip("prometheus_client not available in this env")
-        labelled = wr.WEBHOOK_HMAC_SKIPPED.labels(reason="secret_unset")
-        before = labelled._value.get()
+        rejected = wr.WEBHOOK_HMAC_REJECTED.labels(reason="secret_unset")
+        skipped = wr.WEBHOOK_HMAC_SKIPPED.labels(reason="secret_unset")
+        rejected_before = rejected._value.get()
+        skipped_before = skipped._value.get()
         with pytest.raises(HTTPException):
             asyncio.run(
                 wr._verify_webhook_signature(
@@ -94,16 +101,26 @@ class TestProductionWithoutSecretRejects:
                     x_webhook_signature=None,
                 )
             )
-        assert labelled._value.get() >= before + 1
+        assert rejected._value.get() >= rejected_before + 1
+        assert skipped._value.get() == skipped_before
 
 
 class TestNonProductionRampPreserved:
     def setup_method(self):
         wr._last_hmac_skip_warn_at = 0.0
 
+    def _clear_strict_triggers(self, monkeypatch):
+        from shared.env import CLOUD_ENV_VARS
+
+        for var in CLOUD_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv("REGENGINE_AUTH_STRICT", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "test")
+
     def test_dev_unset_secret_allows_with_warning(self, monkeypatch):
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         monkeypatch.setattr(wr, "_is_production", lambda: False)
+        self._clear_strict_triggers(monkeypatch)
         calls = []
 
         def _spy(*args, **kwargs):
@@ -125,6 +142,7 @@ class TestNonProductionRampPreserved:
     def test_dev_skip_increments_counter(self, monkeypatch):
         monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
         monkeypatch.setattr(wr, "_is_production", lambda: False)
+        self._clear_strict_triggers(monkeypatch)
         if wr.WEBHOOK_HMAC_SKIPPED is None:
             pytest.skip("prometheus_client not available in this env")
         labelled = wr.WEBHOOK_HMAC_SKIPPED.labels(reason="secret_unset")
@@ -152,3 +170,69 @@ class TestValidHmacAccepted:
             )
         )
         assert result is None
+
+
+class TestClosedGateUsesRealEnvironmentPredicate:
+    """These tests do NOT stub ``wr._is_production``: they drive the real
+    ``shared.env`` helpers so a staging-shaped environment cannot stay
+    fail-open while the stubbed tests stay green."""
+
+    def setup_method(self):
+        wr._last_hmac_skip_warn_at = 0.0
+
+    def _clear_cloud_markers(self, monkeypatch):
+        from shared.env import CLOUD_ENV_VARS
+
+        for var in CLOUD_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv("REGENGINE_AUTH_STRICT", raising=False)
+        monkeypatch.delenv("ENV", raising=False)
+
+    def test_staging_cloud_deploy_rejects_without_secret(self, monkeypatch):
+        # This repo writes REGENGINE_ENV=staging for Railway staging
+        # (scripts/railway/bootstrap_staging_database.py). A cloud
+        # staging deploy with no secret must fail closed, not accept
+        # unsigned compliance events.
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "staging")
+        monkeypatch.setenv("RAILWAY_ENVIRONMENT_NAME", "staging")
+        monkeypatch.delenv("ENV", raising=False)
+        monkeypatch.delenv("REGENGINE_AUTH_STRICT", raising=False)
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                wr._verify_webhook_signature(
+                    request=_FakeRequest(b'{"events":[]}'),
+                    x_webhook_signature=None,
+                )
+            )
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == {"error": "webhook_hmac_not_configured"}
+
+    def test_local_development_without_secret_still_skips(self, monkeypatch):
+        # The unsigned ramp survives only for local names with no cloud
+        # marker and no strict flag.
+        self._clear_cloud_markers(monkeypatch)
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "development")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://localhost:5432/regengine")
+        result = asyncio.run(
+            wr._verify_webhook_signature(
+                request=_FakeRequest(b'{"events":[]}'),
+                x_webhook_signature=None,
+            )
+        )
+        assert result is None
+
+    def test_explicit_production_without_secret_rejects(self, monkeypatch):
+        self._clear_cloud_markers(monkeypatch)
+        monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+        monkeypatch.setenv("REGENGINE_ENV", "production")
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                wr._verify_webhook_signature(
+                    request=_FakeRequest(b"{}"),
+                    x_webhook_signature=None,
+                )
+            )
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.detail == {"error": "webhook_hmac_not_configured"}

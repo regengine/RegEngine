@@ -81,7 +81,9 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
     The production monolith installs this middleware outside FastAPI route
     dependencies, so ``request.state.principal`` is not available yet for
     API-key-authenticated requests. This best-effort lookup uses the same key
-    hash candidates as the auth path and only returns enabled, unexpired keys.
+    hash candidates as the auth path and only returns enabled, unexpired keys
+    whose tenant status is active or trial. Anything else resolves nothing
+    so the request falls through to the route's own auth dependency.
     """
     try:
         from shared.api_key_store import set_api_key_lookup_context
@@ -103,30 +105,52 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
                 """
             ).bindparams(bindparam("key_hashes", expanding=True))
             row = db_session.execute(stmt, {"key_hashes": key_hashes}).fetchone()
+            if not row:
+                return None
+            tenant_id, enabled, expires_at, key_id, scopes, jurisdictions, revoked_at = row
+            # Match the canonical key validation
+            # (DatabaseAPIKeyStore.validate_key): a falsy enabled flag or
+            # any revocation timestamp means the key is dead, so it must
+            # not resolve a tenant or replay a cached response. The replay
+            # path serves the cached body before route dependencies run,
+            # so this lookup is the authorization re-check for API-key
+            # traffic: returning None sends the request to the route, whose
+            # own auth dependency answers 401 or 403.
+            if not enabled:
+                return None
+            if revoked_at is not None:
+                return None
+            if expires_at is not None:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at < datetime.now(timezone.utc):
+                    return None
+            if not tenant_id:
+                return None
+            # Suspended tenants must not replay either: a cached 2xx body
+            # from before the suspension must never be served. Bind the
+            # key's own tenant before reading its status: tenants is FORCE
+            # RLS and admits the row only under app.tenant_id. Only the
+            # validated key row's tenant is ever bound here, never request
+            # input. A missing row, a non-active status, or a lookup error
+            # all resolve nothing, so the route's own auth denies instead.
+            try:
+                db_session.execute(
+                    text("SELECT set_config('app.tenant_id', :tid, true)"),
+                    {"tid": str(tenant_id)},
+                )
+                status_row = db_session.execute(
+                    text("SELECT status FROM tenants WHERE id = CAST(:tid AS uuid)"),
+                    {"tid": str(tenant_id)},
+                ).fetchone()
+            except Exception:
+                logger.debug("idempotency_tenant_status_lookup_failed")
+                return None
+            tenant_status = status_row[0] if status_row else None
+            if tenant_status not in ("active", "trial"):
+                return None
         finally:
             db_session.close()
-
-        if not row:
-            return None
-        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions, revoked_at = row
-        # Match the canonical key validation (DatabaseAPIKeyStore.validate_key):
-        # a falsy enabled flag or any revocation timestamp means the key is
-        # dead, so it must not resolve a tenant or replay a cached response.
-        # The replay path serves the cached body before route dependencies
-        # run, so this lookup is the authorization re-check for API-key
-        # traffic: returning None sends the request to the route, whose own
-        # auth dependency answers 401 or 403.
-        if not enabled:
-            return None
-        if revoked_at is not None:
-            return None
-        if expires_at is not None:
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at < datetime.now(timezone.utc):
-                return None
-        if not tenant_id:
-            return None
         # Permission narrowing may retain the same raw key. Bind the current
         # authoritative authorization state so an older response cannot survive it.
         snapshot = json.dumps(
