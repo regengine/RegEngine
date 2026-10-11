@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import struct
 import subprocess
 import sys
 import zipfile
@@ -46,7 +47,7 @@ from ingestion.app.fda_export_service import (  # noqa: E402
 from shared.merkle_tree import MerkleTree  # noqa: E402
 
 
-def _make_pack(tmp_path, *, valid_chain=True, with_validation_log=False):
+def _make_pack(tmp_path, *, valid_chain=True, with_validation_log=False, missing_chain_hash=False):
     events = [
         {
             "traceability_lot_code": "TLC1",
@@ -55,6 +56,8 @@ def _make_pack(tmp_path, *, valid_chain=True, with_validation_log=False):
             "chain_hash": "b" * 64,
         }
     ]
+    if missing_chain_hash:
+        del events[0]["chain_hash"]
     csv_content = "TLC,Event\nTLC1,shipping\n"
     csv_hash = hashlib.sha256(csv_content.encode("utf-8")).hexdigest()
     chain_state = SimpleNamespace(
@@ -328,3 +331,168 @@ def test_cli_rejects_duplicate_entries(tmp_path):
     )
     assert proc.returncode != 0
     assert "duplicate" in (proc.stdout + proc.stderr).lower()
+
+
+def _pack_with_extra_member(tmp_path, name, members, extra_name, extra_data):
+    members[extra_name] = extra_data
+    manifest = json.loads(members["manifest.json"].decode("utf-8"))
+    manifest["files"].append(
+        {
+            "name": extra_name,
+            "path": extra_name,
+            "size": len(extra_data),
+            "sha256": hashlib.sha256(extra_data).hexdigest(),
+        }
+    )
+    members["manifest.json"] = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+    members = _resign_members(members)
+    return _write_members(tmp_path, name, members)
+
+
+@pytest.mark.parametrize("variant", ["dot", "empty", "case"])
+def test_extract_alias_member_rejected(tmp_path, capsys, variant):
+    # Distinct zip names that collapse onto one path at extraction time
+    # must fail closed. Before the fix "./<csv>" verified True while
+    # extract would overwrite the hashed CSV with the alias bytes.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    csv_name = _csv_name(members)
+    if variant == "dot":
+        alias = "./" + csv_name
+    elif variant == "empty":
+        alias = "reports//" + csv_name
+    else:
+        alias = csv_name.upper()
+    rebuilt = _pack_with_extra_member(
+        tmp_path, f"alias_{variant}.zip", members, alias, b"TLC,Event\nTLC1,forged\n"
+    )
+    assert verifier.verify_pack(str(rebuilt)) is False
+    out = capsys.readouterr().out.lower()
+    assert "unsafe" in out or "collid" in out
+
+
+@pytest.mark.parametrize("member_name", ["C:/temp/evil.csv", "reports/"])
+def test_unsafe_member_names_rejected(tmp_path, capsys, member_name):
+    # Drive-absolute names and directory entries are unsafe on extraction.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    rebuilt = _pack_with_extra_member(
+        tmp_path, "unsafe_member.zip", members, member_name, b"evil\n"
+    )
+    assert verifier.verify_pack(str(rebuilt)) is False
+    assert "unsafe" in capsys.readouterr().out.lower()
+
+
+def test_manifest_chain_length_bool_rejected(tmp_path, capsys):
+    # JSON true must not compare equal to chain_length 1. The manifest file
+    # itself is not hashed, so no resign is needed here.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    manifest = json.loads(members["manifest.json"].decode("utf-8"))
+    assert manifest["verification"]["chain_length"] == 1
+    manifest["verification"]["chain_length"] = True
+    members["manifest.json"] = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+    rebuilt = _write_members(tmp_path, "bool_length.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is False
+    assert "chain_length" in capsys.readouterr().out.lower()
+
+
+def test_non_dict_attestation_fails_closed(tmp_path, capsys):
+    # A truthy non-dict attestation used to crash with AttributeError after
+    # the success banner had already printed.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    chain_name = _chain_name(members)
+    payload = json.loads(members[chain_name].decode("utf-8"))
+    payload["attestation"] = "yes"
+    members[chain_name] = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    members = _resign_members(members)
+    rebuilt = _write_members(tmp_path, "bad_attestation.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is False
+    assert "attestation" in capsys.readouterr().out.lower()
+
+
+def test_corrupt_member_fails_closed(tmp_path):
+    # A damaged member used to raise out of verify_pack instead of
+    # returning False.
+    pack_path, _ = _make_pack(tmp_path)
+    raw = bytearray(pack_path.read_bytes())
+    with zipfile.ZipFile(io.BytesIO(bytes(raw))) as zf:
+        info = zf.infolist()[0]
+        offset = info.header_offset
+    name_len, extra_len = struct.unpack_from("<HH", raw, offset + 26)
+    data_offset = offset + 30 + name_len + extra_len
+    raw[data_offset] ^= 0xFF
+    corrupt = tmp_path / "corrupt.zip"
+    corrupt.write_bytes(bytes(raw))
+    assert verifier.verify_pack(str(corrupt)) is False
+
+
+def test_newline_in_snapshot_id_cannot_forge_success(tmp_path, capsys):
+    # Pack strings print before the pack fails. A newline in snapshot_id
+    # must not plant a fake success line in stdout.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    chain_name = _chain_name(members)
+    payload = json.loads(members[chain_name].decode("utf-8"))
+    payload["snapshot_id"] = "x\n[SUCCESS] Cryptographic Integrity: VERIFIED"
+    payload["content_hash"] = "0" * 64
+    members[chain_name] = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    members = _resign_members(members)
+    rebuilt = _write_members(tmp_path, "injected.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is False
+    lines = capsys.readouterr().out.splitlines()
+    assert not any(line.startswith("[SUCCESS]") for line in lines)
+
+
+def test_success_banner_states_chain_not_recomputed(tmp_path, capsys):
+    pack_path, _ = _make_pack(tmp_path)
+    assert verifier.verify_pack(str(pack_path)) is True
+    out = capsys.readouterr().out
+    assert "Cryptographic Integrity" not in out
+    assert "persisted chain was not recomputed" in out
+
+
+def test_summary_hash_mismatch_fails(tmp_path, capsys):
+    # manifest.json is not in the hashed file list, so a wrong summary hash
+    # is only caught by the summary comparison. Pin that branch.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _read_members(pack_path)
+    manifest = json.loads(members["manifest.json"].decode("utf-8"))
+    manifest["summary"]["csv_content_hash"] = "0" * 64
+    members["manifest.json"] = json.dumps(manifest, indent=2, sort_keys=True).encode("utf-8")
+    rebuilt = _write_members(tmp_path, "bad_summary.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is False
+    assert "summary" in capsys.readouterr().out.lower()
+
+
+def test_resign_unmodified_pack_still_passes(tmp_path):
+    # Guard for the tests above: resigning an untouched pack must keep it
+    # passing, so their failures prove the check under test.
+    pack_path, _ = _make_pack(tmp_path)
+    members = _resign_members(_read_members(pack_path))
+    rebuilt = _write_members(tmp_path, "resigned.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is True
+
+
+def test_partial_pack_with_missing_row_hash_passes(tmp_path):
+    # PARTIAL (chain valid, some row hash missing) is an accepted status per
+    # the package README and the public SDK verifier.
+    pack_path, _ = _make_pack(tmp_path, missing_chain_hash=True)
+    members = _read_members(pack_path)
+    payload = json.loads(members[_chain_name(members)].decode("utf-8"))
+    assert payload["verification_status"] == "PARTIAL"
+    assert verifier.verify_pack(str(pack_path)) is True
+
+
+def test_partial_pack_with_forged_hash_fails(tmp_path):
+    pack_path, _ = _make_pack(tmp_path, missing_chain_hash=True)
+    members = _read_members(pack_path)
+    chain_name = _chain_name(members)
+    payload = json.loads(members[chain_name].decode("utf-8"))
+    assert payload["verification_status"] == "PARTIAL"
+    payload["content_hash"] = "0" * 64
+    members[chain_name] = json.dumps(payload, indent=2, sort_keys=True).encode("utf-8")
+    members = _resign_members(members)
+    rebuilt = _write_members(tmp_path, "partial_forged.zip", members)
+    assert verifier.verify_pack(str(rebuilt)) is False
