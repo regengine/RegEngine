@@ -299,6 +299,17 @@ def _extract_850_fields(segments: list[list[str]]) -> dict[str, Any]:
             if len(segment) > 5 and segment[5]:
                 data["product_description"] = data["product_description"] or segment[5]
 
+        elif seg_id == "REF":
+            # A PO number sent only via REF*PO (BEG without BEG03) must
+            # still link the CTE, mirroring the 861 extractor.
+            if len(segment) > 2 and segment[2]:
+                qualifier = segment[1].upper() if len(segment) > 1 else ""
+                if qualifier == "PO":
+                    data["po_number"] = data["po_number"] or segment[2]
+
+    if not data["reference_document_number"]:
+        data["reference_document_number"] = data["po_number"]
+
     if total_quantity > 0:
         data["quantity"] = total_quantity
 

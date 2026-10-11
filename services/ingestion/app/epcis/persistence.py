@@ -458,18 +458,23 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
     tenant_store = _fallback_store_for(tenant_id)
     existing_event_id = tenant_idx.get(idempotency_key)
     if existing_event_id:
-        existing_record = tenant_store[existing_event_id]
-        return (
-            {
-                "status": 200,
-                "cte_id": existing_event_id,
-                "validation_status": existing_record["normalized_cte"]["validation_status"],
-                "kde_completeness": existing_record.get("kde_completeness", 1.0),
-                "alerts": existing_record["alerts"],
-                "idempotent": True,
-            },
-            200,
-        )
+        existing_record = tenant_store.get(existing_event_id)
+        if existing_record is not None:
+            return (
+                {
+                    "status": 200,
+                    "cte_id": existing_event_id,
+                    "validation_status": existing_record["normalized_cte"]["validation_status"],
+                    "kde_completeness": existing_record.get("kde_completeness", 1.0),
+                    "alerts": existing_record["alerts"],
+                    "idempotent": True,
+                },
+                200,
+            )
+        # The index references a record the bounded store has evicted (or
+        # that never landed). Drop the stale entry and fall through to a
+        # fresh ingest instead of raising KeyError (HTTP 500).
+        tenant_idx.pop(idempotency_key, None)
 
     event_id = str(uuid4())
     normalized = _normalize_epcis_to_cte(event)

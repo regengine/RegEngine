@@ -252,7 +252,7 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape)
+      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape + webhook signature)
         run: |
           # No grandfathered tenant-trust findings. Tenant authority must come
           # from authenticated principal state; see services/shared/tenant_context.py.
@@ -265,11 +265,28 @@ jobs:
           semgrep --config=.semgrep/tenant-trust.yaml \
             --config=.semgrep.yml \
             --config=.semgrep/current-user-shape.yaml \
+            --config=.semgrep/webhook-signature.yaml \
             --error \
             --json --output semgrep-tenant-trust.json \
             .
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Tenant-scope query gate (Pattern 3, fails on new violations)
+        # Required check. The scanner flags Cypher MATCH/MERGE on tenant
+        # data and SQL on fsma tenant tables without a tenant predicate,
+        # plus the $tenant_id IS NULL OR fail-open shim. Sites that are
+        # scoped at runtime (dynamic WHERE builders, global-DB reads,
+        # control-plane ops) are baselined in
+        # .semgrep/tenant-scope-allowlist.yml with a reason each; anything
+        # else fails the build. The semgrep rules in
+        # .semgrep/tenant-query-scope.yaml cover the same ground for
+        # editors and ad-hoc runs; they stay out of the blocking gate
+        # until the baselined sites are fixed in product code, because
+        # semgrep cannot consume the allowlist and would fail on them.
+        run: |
+          python -m pip install "pyyaml==6.0.3"
+          python3 scripts/security/scan_tenant_scope.py
 
       - name: Upload EPIC-A Semgrep results
         if: always()
