@@ -29,11 +29,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Import traceability data via CSV, IoT logs, or API for FSMA 204 compliance.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
 };
 
 function DataImportFallback() {

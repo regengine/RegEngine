@@ -675,7 +675,7 @@ export function FTLCheckerClient() {
                 <Breadcrumbs
                     items={[
                         { label: "Free Tools", href: "/tools" },
-                        { label: "FTL Checker" }
+                        { label: "FTL List Checker" }
                     ]}
                 />
             </Container>
