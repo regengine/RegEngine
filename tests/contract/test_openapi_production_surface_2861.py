@@ -21,6 +21,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHILD_ENV = {
     "REGENGINE_ENV": "production",
     "ENV": "production",
+    "EVENT_BACKBONE": "pg",
     "REDIS_URL": "redis://127.0.0.1:6379/15",
     "ACCESS_TOKEN_EXPIRE_MINUTES": "5",
     "SESSION_STORE_BACKEND": "redis",
@@ -31,6 +32,11 @@ _CHILD_ENV = {
     "JWT_SECRET": "openapi-contract-test-import-only-not-a-real-jwt-secret-9c7e",
     "REGENGINE_API_KEY": "openapi-contract-test-import-only-not-a-real-key-1a3d",
     "TOOL_ACCESS_SECRET": "openapi-contract-test-import-only-not-a-real-tool-8e5c",
+    # DATABASE_URL (above) is the only startup credential the production
+    # secret gate requires: optional subsystems stay disabled in the child
+    # (the production router set has no graph; EVENT_BACKBONE is pg),
+    # so no other credential values are seeded here. Never used to
+    # connect anywhere — the child builds a route table and exits.
 }
 
 _CHILD_SCRIPT = """
@@ -50,14 +56,21 @@ def production_paths() -> set[str]:
     env = {**os.environ, **_CHILD_ENV}
     env.pop("ENABLE_EXPERIMENTAL_ROUTERS", None)  # default production posture
     env.pop("DISABLED_ROUTERS", None)
-    # Test-only vars the production config validator rejects outright. Inheriting
-    # them from the pytest environment makes the child refuse to start, which
-    # would look like a contract failure rather than an environment one.
+    # Test-only vars the production config validator rejects outright, plus
+    # placeholder storage keys inherited from the pytest environment (other
+    # suites export test-* values) that the secrets gate rejects as insecure
+    # whenever set. Inheriting any of them makes the child refuse to start,
+    # which would look like a contract failure rather than an environment one.
     for _test_only in (
         "AUTH_TEST_BYPASS_TOKEN",
         "ALLOW_LEGACY_ENTRYPOINT_IN_PROD",
         "ALLOW_INMEMORY_SESSION_STORE",
         "AUTH_ALLOW_LEGACY_JTI_FREE",
+        "NEO4J_URI",
+        "NEO4J_URL",
+        "NEO4J_PASSWORD",
+        "OBJECT_STORAGE_ACCESS_KEY_ID",
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY",
     ):
         env.pop(_test_only, None)
     script = _CHILD_SCRIPT.format(repo=str(_REPO_ROOT), services=str(_REPO_ROOT / "services"))

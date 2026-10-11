@@ -68,7 +68,7 @@ export function useSLARequests() {
   const { tenantId } = useTenant();
   return useApiQuery<FDARequestData[]>(
     ['sla-requests', tenantId],
-    `/api/v1/sla/requests/${tenantId}`,
+    `/api/v1/sla/requests/${encodeURIComponent(tenantId)}`,
     { service: 'ingestion', refetchInterval: POLL_FAST, enabled: !!tenantId },
   );
 }
@@ -78,7 +78,7 @@ export function useSLADashboard() {
   const { tenantId } = useTenant();
   return useApiQuery<SLADashboardData>(
     ['sla-dashboard', tenantId],
-    `/api/v1/sla/dashboard/${tenantId}`,
+    `/api/v1/sla/dashboard/${encodeURIComponent(tenantId)}`,
     { service: 'ingestion', refetchInterval: POLL_FAST, enabled: !!tenantId },
   );
 }
@@ -88,7 +88,7 @@ export function useSLAAlerts() {
   const { tenantId } = useTenant();
   return useApiQuery<SLAAlertData[]>(
     ['sla-alerts', tenantId],
-    `/api/v1/sla/alerts/${tenantId}`,
+    `/api/v1/sla/alerts/${encodeURIComponent(tenantId)}`,
     { service: 'ingestion', refetchInterval: POLL_SLOW, enabled: !!tenantId },
   );
 }
@@ -108,7 +108,7 @@ export function useCreateSLARequest() {
 /** Mark a request as completed. */
 export function useCompleteSLARequest(requestId: string) {
   return useApiMutate<FDARequestData, Record<string, never>>(
-    `/api/v1/sla/requests/${requestId}/complete`,
+    `/api/v1/sla/requests/${encodeURIComponent(requestId)}/complete`,
     {
       service: 'ingestion',
       method: 'PATCH',

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextvars
 from datetime import datetime
 from typing import Any
 
@@ -10,8 +11,27 @@ from ..supplier_cte_service import _next_merkle_hash, _sha256_json
 # ── Auto-clean helpers ────────────────────────────────────────────
 # Instead of rejecting rows with short/empty fields, we auto-fill
 # with safe defaults and collect warnings for the user.
+#
+# The collector is per validation run (a ContextVar), not the old
+# module-global list: concurrent uploads shared that list, so one
+# request could clear or read another request's warnings. The global
+# remains as a fallback for direct ``_autofill_str`` calls made
+# outside ``validate_and_normalize_payload`` (including older tests).
 
 _AUTOFILL_WARNINGS: list[dict[str, Any]] = []
+
+_autofill_warnings_ctx: contextvars.ContextVar[list[dict[str, Any]] | None] = contextvars.ContextVar(
+    "bulk_upload_autofill_warnings",
+    default=None,
+)
+
+
+def _warning_collector() -> list[dict[str, Any]]:
+    """Return the active per-run collector, or the legacy global fallback."""
+    collector = _autofill_warnings_ctx.get()
+    if collector is not None:
+        return collector
+    return _AUTOFILL_WARNINGS
 
 
 def _autofill_str(value: Any, *, field: str, row_hint: str = "", min_len: int = 2, default: str = "Unknown") -> str:
@@ -19,7 +39,7 @@ def _autofill_str(value: Any, *, field: str, row_hint: str = "", min_len: int = 
     cleaned = str(value or "").strip()
     if len(cleaned) < min_len:
         replacement = default
-        _AUTOFILL_WARNINGS.append(
+        _warning_collector().append(
             {
                 "field": field,
                 "original": cleaned or "(empty)",
@@ -196,74 +216,84 @@ def validate_and_normalize_payload(
     }
     errors: list[dict[str, Any]] = []
 
-    # Clear per-run autofill warnings
-    _AUTOFILL_WARNINGS.clear()
+    # Per-run autofill collector: isolated from concurrent validations.
+    collected_warnings: list[dict[str, Any]] = []
+    token = _autofill_warnings_ctx.set(collected_warnings)
+    try:
+        section_specs: list[tuple[str, type[BaseModel], str]] = [
+            ("facilities", BulkFacilityRow, "facility"),
+            ("ftl_scopes", BulkFTLScopeRow, "ftl_scope"),
+            ("tlcs", BulkTLCRow, "tlc"),
+            ("events", BulkCTEEventRow, "event"),
+        ]
 
-    section_specs: list[tuple[str, type[BaseModel], str]] = [
-        ("facilities", BulkFacilityRow, "facility"),
-        ("ftl_scopes", BulkFTLScopeRow, "ftl_scope"),
-        ("tlcs", BulkTLCRow, "tlc"),
-        ("events", BulkCTEEventRow, "event"),
-    ]
-
-    for source_key, model_cls, section_name in section_specs:
-        rows = parsed_payload.get(source_key) or []
-        if not isinstance(rows, list):
-            errors.append(
-                {
-                    "section": section_name,
-                    "row": 0,
-                    "message": "Section must be an array",
-                }
-            )
-            continue
-
-        for index, row in enumerate(rows, start=1):
-            if section_name == "event" and isinstance(row, dict):
-                cte_type = normalize_cte_type(row.get("cte_type"))
-                if cte_type not in supported_cte_types:
-                    errors.append(
-                        {
-                            "section": "event",
-                            "row": index,
-                            "message": f"Unsupported or missing cte_type: {cte_type!r}",
-                            "severity": "error",
-                        }
-                    )
-                    continue
-            try:
-                candidate = model_cls.model_validate(row)
-            except ValidationError as exc:
-                # Even with auto-cleaning, some rows may still be truly invalid
-                # (e.g. wrong types). Demote to warning and skip the row.
+        for source_key, model_cls, section_name in section_specs:
+            rows = parsed_payload.get(source_key) or []
+            if not isinstance(rows, list):
                 errors.append(
                     {
                         "section": section_name,
-                        "row": index,
-                        "message": "; ".join(err.get("msg", "invalid row") for err in exc.errors()),
-                        "severity": "warning",
+                        "row": 0,
+                        "message": "Section must be an array",
                     }
                 )
                 continue
 
-            payload = candidate.model_dump()
-            if section_name == "ftl_scope":
-                category_id = str(payload.get("category_id") or "")
-                if category_id not in valid_ftl_category_ids:
+            for index, row in enumerate(rows, start=1):
+                if section_name == "event" and isinstance(row, dict):
+                    cte_type = normalize_cte_type(row.get("cte_type"))
+                    if cte_type not in supported_cte_types:
+                        errors.append(
+                            {
+                                "section": "event",
+                                "row": index,
+                                "message": f"Unsupported or missing cte_type: {cte_type!r}",
+                                "severity": "error",
+                            }
+                        )
+                        continue
+                try:
+                    candidate = model_cls.model_validate(row)
+                except ValidationError as exc:
+                    # Even with auto-cleaning, some rows may still be truly
+                    # invalid (e.g. wrong types, bad ISO dates). The row is
+                    # dropped, so this is a blocking error: reporting it as
+                    # a warning let commits report success while silently
+                    # losing user data.
                     errors.append(
                         {
                             "section": section_name,
                             "row": index,
-                            "message": f"Unknown FTL category_id: {category_id}",
-                            "severity": "warning",
+                            "message": "; ".join(err.get("msg", "invalid row") for err in exc.errors()),
+                            "severity": "error",
                         }
                     )
                     continue
 
-            normalized[source_key].append(payload)
+                payload = candidate.model_dump()
+                if section_name == "ftl_scope":
+                    category_id = str(payload.get("category_id") or "")
+                    if category_id not in valid_ftl_category_ids:
+                        # The scope row is dropped, leaving the facility
+                        # without required FTL scoping. Blocking error, not
+                        # a warning: a warning allowed commit success while
+                        # the scoping silently vanished.
+                        errors.append(
+                            {
+                                "section": section_name,
+                                "row": index,
+                                "message": f"Unknown FTL category_id: {category_id}",
+                                "severity": "error",
+                            }
+                        )
+                        continue
+
+                normalized[source_key].append(payload)
+    finally:
+        _autofill_warnings_ctx.reset(token)
 
     # Convert autofill warnings into the errors list as non-blocking warnings
-    for warn in _AUTOFILL_WARNINGS:
+    for warn in collected_warnings:
         errors.append(
             {
                 "section": "autofill",

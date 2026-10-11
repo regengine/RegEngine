@@ -45,6 +45,46 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j")
 # 5433 no longer holds any tables (see .env.example).
 POSTGRES_URL = os.getenv("POSTGRES_URL", "postgresql://regengine:regengine@localhost:5432/regengine")
 
+# Localhost is the default target. Seeding a hosted or non-localhost store
+# requires the explicit --allow-production flag.
+PRODUCTION_DB_HINTS = (
+    "supabase.co",
+    "supabase.com",
+    "neon.tech",
+    "railway.app",
+    "amazonaws.com",
+    "ondigitalocean.com",
+    "render.com",
+)
+
+
+def _host_of(url: str) -> str:
+    from urllib.parse import urlsplit
+
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def is_production_target(url: str) -> bool:
+    """True when a store URL points anywhere other than local loopback."""
+    lowered = url.lower()
+    if any(hint in lowered for hint in PRODUCTION_DB_HINTS):
+        return True
+    return _host_of(url) not in {"localhost", "127.0.0.1", "::1"}
+
+
+def ensure_local_targets(postgres_url: str, neo4j_uri: str, allow_production: bool) -> None:
+    """Refuse hosted or non-localhost stores without explicit opt-in."""
+    env = os.getenv("REGENGINE_ENV", "").strip().lower()
+    if (is_production_target(postgres_url) or is_production_target(neo4j_uri) or env == "production") and not allow_production:
+        logger.error(
+            "Refusing to seed a non-localhost store. "
+            "Use localhost URLs or pass --allow-production only if you are certain."
+        )
+        sys.exit(2)
+
 
 # Seed tag so we can identify and clean up test data
 CHAOS_SEED_TAG = "chaos_test_seed"
@@ -389,7 +429,14 @@ def main():
         default="chaos_seed_manifest.json",
         help="Path to write seed manifest (default: chaos_seed_manifest.json)",
     )
+    parser.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow seeding a non-localhost store. Almost never what you want.",
+    )
     args = parser.parse_args()
+
+    ensure_local_targets(POSTGRES_URL, NEO4J_URI, args.allow_production)
 
     if args.cleanup:
         cleanup_all()
