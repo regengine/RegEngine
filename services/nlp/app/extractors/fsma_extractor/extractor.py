@@ -21,12 +21,12 @@ import structlog
 from shared.pii import redact_pii
 
 from ..fsma_types import (
+    HITL_CONFIDENCE_THRESHOLD,
+    TOPIC_GRAPH_UPDATE,
+    TOPIC_NEEDS_REVIEW,
     DocumentType,
     ExtractionConfidence,
     FSMAExtractionResult,
-    TOPIC_GRAPH_UPDATE,
-    TOPIC_NEEDS_REVIEW,
-    HITL_CONFIDENCE_THRESHOLD,
 )
 from .classification import DocumentClassificationMixin
 from .cte_builder import CTEBuilderMixin
@@ -62,10 +62,7 @@ class FSMAExtractor(
     """
 
     def __init__(
-        self,
-        confidence_threshold: float = 0.85,
-        threshold_high: float = 0.95,
-        threshold_medium: float = 0.85
+        self, confidence_threshold: float = 0.85, threshold_high: float = 0.95, threshold_medium: float = 0.85
     ):
         """
         Initialize the FSMA Extractor.
@@ -79,11 +76,7 @@ class FSMAExtractor(
         self.threshold_high = threshold_high
         self.threshold_medium = threshold_medium
         self._table_extractor = None  # Lazy-loaded
-        logger.info(
-            "fsma_extractor_initialized",
-            threshold_high=threshold_high,
-            threshold_medium=threshold_medium
-        )
+        logger.info("fsma_extractor_initialized", threshold_high=threshold_high, threshold_medium=threshold_medium)
 
     def _determine_risk_level(self, confidence: float) -> ExtractionConfidence:
         """Map numerical confidence to SR 11-7 risk levels."""
@@ -130,9 +123,7 @@ class FSMAExtractor(
         if not tenant_id or not str(tenant_id).strip():
             raise ValueError("E_MISSING_TENANT_ID")
         if not isinstance(text, str):
-            raise TypeError(
-                f"extract received {type(text).__name__}; caller must pass a str"
-            )
+            raise TypeError(f"extract received {type(text).__name__}; caller must pass a str")
         logger.info(
             "fsma_extraction_started",
             document_id=document_id,
@@ -154,8 +145,8 @@ class FSMAExtractor(
         if ctes:
             doc_confidence = min(cte.confidence for cte in ctes)
         elif line_items:
-             # Fallback if only line items but no full CTEs (rare)
-             doc_confidence = 0.7
+            # Fallback if only line items but no full CTEs (rare)
+            doc_confidence = 0.7
 
         # Determine risk level
         risk_level = self._determine_risk_level(doc_confidence)
@@ -184,7 +175,7 @@ class FSMAExtractor(
         if doc_type == DocumentType.INVOICE:
             warnings.append("Invoice document routed to HITL review; no CTE emitted automatically")
         if review_required:
-             warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
+            warnings.append(f"Confidence {doc_confidence:.2f} ({risk_level.value}) requires manual review")
         if not kde_minimums_met:
             warnings.append("KDE minimum not met: TLC and Event Date are both required")
 
@@ -199,7 +190,7 @@ class FSMAExtractor(
             warnings=warnings,
             line_items=line_items,
             confidence_level=risk_level,
-            review_required=review_required
+            review_required=review_required,
         )
 
         logger.info(

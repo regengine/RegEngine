@@ -111,7 +111,7 @@ def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) ->
 
 def validate_gln(gln: str) -> ValidationResult:
     """Validate GS1 Global Location Number (13 digits with check digit)."""
-    if not gln:
+    if not isinstance(gln, str) or not gln:
         return ValidationResult(
             is_valid=False,
             identifier_type=IdentifierType.GLN,
@@ -143,7 +143,7 @@ def validate_gln(gln: str) -> ValidationResult:
 
 def validate_gtin(gtin: str) -> ValidationResult:
     """Validate GS1 Global Trade Item Number (GTIN-8/12/13/14)."""
-    if not gtin:
+    if not isinstance(gtin, str) or not gtin:
         return ValidationResult(
             is_valid=False,
             identifier_type=IdentifierType.GTIN,
@@ -247,7 +247,7 @@ def validate_tlc(tlc: str, *, strict: bool = False) -> ValidationResult:
 
 def validate_sscc(sscc: str) -> ValidationResult:
     """Validate GS1 Serial Shipping Container Code (18 digits with check digit)."""
-    if not sscc:
+    if not isinstance(sscc, str) or not sscc:
         return ValidationResult(
             is_valid=False,
             identifier_type=IdentifierType.SSCC,
@@ -285,9 +285,9 @@ def validate_sscc(sscc: str) -> ValidationResult:
 def calculate_gs1_check_digit(digits: str) -> int:
     """Calculate the GS1 check digit for a numeric string (sans check digit).
 
-    Raises ``ValueError`` if *digits* contains non-numeric characters.
+    Raises ``ValueError`` if *digits* is not a non-empty numeric string.
     """
-    if not digits.isdigit():
+    if not isinstance(digits, str) or not digits.isdigit():
         raise ValueError(f"Expected numeric string, got '{digits}'")
     return _gs1_check_digit(digits)
 
@@ -295,16 +295,23 @@ def calculate_gs1_check_digit(digits: str) -> int:
 def verify_gs1_check_digit(number: str) -> bool:
     """Return ``True`` if *number*'s last digit is a valid GS1 check digit.
 
-    Fails closed: any non-digit character makes the whole input invalid —
-    callers must strip formatting/separators before verifying.
+    Fails closed: a non-string input or any non-digit character makes the
+    whole input invalid — callers must strip formatting/separators before
+    verifying.
     """
-    if not number or not re.fullmatch(r"\d{2,}", number):
+    if not isinstance(number, str) or not number or not re.fullmatch(r"\d{2,}", number):
         return False
     return int(number[-1]) == _gs1_check_digit(number[:-1])
 
 
 def normalize_gtin(gtin: str) -> str:
-    """Normalize a GTIN to 14 digits (zero-padded)."""
+    """Normalize a GTIN to 14 digits (zero-padded).
+
+    Raises ``ValueError`` for non-string input so malformed payloads fail
+    with a client-safe 400 instead of a raw ``TypeError``.
+    """
+    if not isinstance(gtin, str):
+        raise ValueError(f"Expected GTIN string, got '{gtin}'")
     clean = re.sub(r"\D", "", gtin)
     return clean.zfill(14)
 
@@ -314,7 +321,12 @@ def extract_company_prefix(gtin14: str, prefix_length: int = 7) -> str:
 
     By default returns the 7-digit prefix (digits 2–8 of GTIN-14, i.e.
     skipping the indicator digit at position 0).
+
+    Raises ``ValueError`` for non-string input so malformed payloads fail
+    with a client-safe 400 instead of a raw ``TypeError``.
     """
+    if not isinstance(gtin14, str):
+        raise ValueError(f"Expected GTIN-14 string, got '{gtin14}'")
     clean = re.sub(r"\D", "", gtin14).zfill(14)
     return clean[1 : 1 + prefix_length]
 
@@ -330,7 +342,13 @@ def detect_identifier_type(value: str) -> IdentifierType:
 
 
 def _detect_identifier_type(value: str) -> IdentifierType:
-    """Best-effort auto-detection of identifier type from its format."""
+    """Best-effort auto-detection of identifier type from its format.
+
+    Non-string input maps to UNKNOWN so the dispatcher fails closed with
+    an invalid result instead of raising ``TypeError``.
+    """
+    if not isinstance(value, str):
+        return IdentifierType.UNKNOWN
     clean = re.sub(r"\D", "", value)
     if clean == value:  # purely numeric
         length = len(clean)
