@@ -14,7 +14,7 @@ echo "=========================================="
 if ! command -v gitleaks &> /dev/null; then
   echo "gitleaks not installed."
   echo "Install via: brew install gitleaks  (macOS)"
-  echo "         or: go install github.com/gitleaks/gitleaks/v8@latest"
+  echo "         or: go install github.com/gitleaks/gitleaks/v8@v8.30.0"
   exit 1
 fi
 

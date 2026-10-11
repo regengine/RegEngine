@@ -67,6 +67,9 @@ logger = logging.getLogger("hierarchy-builder")
 # - Empty segments ("US--CA") — a legitimate segmentation bug.
 _JURISDICTION_CODE_RE = re.compile(r"^[A-Z0-9]{2,6}(?:-[A-Z0-9]{2,6})*$")
 _MAX_JURISDICTION_CODE_LENGTH = 32
+# A real code is at most 32 characters, so an honest chain is short.
+# The cap stops a parent function that never repeats and never ends.
+_MAX_ANCESTOR_HOPS = 16
 
 
 class InvalidJurisdictionCodeError(ValueError):
@@ -108,6 +111,34 @@ def _validate_jurisdiction_code(code: str) -> None:
         )
 
 
+def _links_for(code: str, originals: set[str]) -> list[tuple[str, str]]:
+    """Parent-to-child edges for ``code``, nearest parent first.
+
+    The direct parent of an input code is always linked. Parents further
+    up are linked only when that child was not in the caller's input, so
+    a code the caller already passed is not written a second time. A
+    parent that repeats, or a chain longer than ``_MAX_ANCESTOR_HOPS``,
+    raises ``InvalidJurisdictionCodeError`` before any graph write.
+    """
+    edges: list[tuple[str, str]] = []
+    walked = {code}
+    current = code
+    for _step in range(_MAX_ANCESTOR_HOPS):
+        parent = parent_code_for(current)
+        if not parent:
+            return edges
+        if parent in walked:
+            raise InvalidJurisdictionCodeError(f"jurisdiction parent chain for {code!r} repeats at {parent!r}")
+        _validate_jurisdiction_code(parent)
+        walked.add(parent)
+        if current == code or current not in originals:
+            edges.append((parent, current))
+        current = parent
+    if parent_code_for(current):
+        raise InvalidJurisdictionCodeError(f"jurisdiction parent chain for {code!r} exceeds {_MAX_ANCESTOR_HOPS} steps")
+    return edges
+
+
 def build_jurisdiction_hierarchy(driver: Driver, codes: Iterable[str]) -> None:
     """Build the global jurisdiction hierarchy.
 
@@ -141,15 +172,22 @@ def build_jurisdiction_hierarchy(driver: Driver, codes: Iterable[str]) -> None:
     # late-rejected code would otherwise leave the graph in a partial
     # state.
     deduped = {code for code in codes if code}
+    # Plan every edge before the first MERGE. A repeated parent or an
+    # invalid code aborts the whole build with nothing written.
+    plans: list[tuple[str, list[tuple[str, str]]]] = []
+    seen_edges: set[tuple[str, str]] = set()
     for code in deduped:
         _validate_jurisdiction_code(code)
-        parent = parent_code_for(code)
-        if parent:
-            _validate_jurisdiction_code(parent)
+        edges: list[tuple[str, str]] = []
+        for edge in _links_for(code, deduped):
+            if edge in seen_edges:
+                continue
+            seen_edges.add(edge)
+            edges.append(edge)
+        plans.append((code, edges))
 
     with driver.session() as session:
-        for code in deduped:
-            parent = parent_code_for(code)
+        for code, edges in plans:
             # Ensure the child node exists with the GlobalJurisdiction
             # label and scope property. ``ON CREATE`` semantics via
             # ``SET`` ensures that a pre-existing ``:Jurisdiction``
@@ -163,7 +201,7 @@ def build_jurisdiction_hierarchy(driver: Driver, codes: Iterable[str]) -> None:
                 """,
                 code=code,
             )
-            if parent:
+            for parent, child in edges:
                 session.run(
                     """
                     MERGE (p:Jurisdiction {code: $parent})
@@ -175,7 +213,7 @@ def build_jurisdiction_hierarchy(driver: Driver, codes: Iterable[str]) -> None:
                     MERGE (p)-[:CONTAINS]->(c)
                     """,
                     parent=parent,
-                    child=code,
+                    child=child,
                 )
     logger.info(
         "jurisdiction_hierarchy_built count=%d",

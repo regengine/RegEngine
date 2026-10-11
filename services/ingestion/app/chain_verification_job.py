@@ -12,6 +12,7 @@ Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 from datetime import datetime, timezone
@@ -225,6 +226,16 @@ def _persist_verification_result(
             raise RuntimeError("Verification result could not be durably recorded") from exc
 
 
+def _chain_audit_task_done(task) -> None:
+    """Fail loud, not silent: a detached audit write that raised must page the logs."""
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.error("chain_verification_audit_write_failed error=%s", exc)
+
+
 def _log_verification_audit(
     tenant_id: str,
     job_id: str,
@@ -232,7 +243,13 @@ def _log_verification_audit(
     chain_length: int,
     errors: list[str],
 ) -> None:
-    """Best-effort audit log entry for the verification run."""
+    """Best-effort audit log entry for the verification run.
+
+    Best-effort by design: the verification result is already persisted
+    before this runs, so the audit write is scheduled, not awaited. A
+    failed write is logged at error level via a done callback; it is
+    never silent and it never raises into the job.
+    """
     try:
         import asyncio
 
@@ -272,12 +289,12 @@ def _log_verification_audit(
         )
 
         if loop and loop.is_running():
-            asyncio.ensure_future(coro)
+            asyncio.ensure_future(coro).add_done_callback(_chain_audit_task_done)
         else:
             asyncio.run(coro)
 
     except Exception as exc:
-        logger.debug("audit_log_skipped reason=%s", str(exc))
+        logger.error("audit_log_skipped reason=%s", str(exc))
 
 
 # ---------------------------------------------------------------------------

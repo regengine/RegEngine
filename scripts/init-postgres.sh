@@ -5,25 +5,35 @@
 
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
-    -v runtime_pw="$POSTGRES_PASSWORD" -v admin_runtime_pw="$POSTGRES_PASSWORD" <<-EOSQL
+: "${POSTGRES_USER:?Set POSTGRES_USER before running this script}"
+: "${POSTGRES_DB:?Set POSTGRES_DB before running this script}"
+: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before running this script}"
+
+# Quote the password as a SQL string literal in shell so it travels to psql
+# over stdin. The old code passed it with psql -v flags, which exposes the
+# value in the process list. Only single quotes need doubling when
+# standard_conforming_strings is on (the default); the expanded value is
+# used literally, so $, backticks and backslashes in the password are safe.
+pg_pw_literal=${POSTGRES_PASSWORD//\'/\'\'}
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Independent application logins. Local development reuses the container
     -- password for convenience; production provisions unrelated secrets in
     -- the provider control plane.
     SELECT format(
         'CREATE ROLE regengine LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        :'runtime_pw'
+        '${pg_pw_literal}'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')\gexec
-    ALTER ROLE regengine LOGIN PASSWORD :'runtime_pw'
+    ALTER ROLE regengine LOGIN PASSWORD '${pg_pw_literal}'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     SELECT format(
         'CREATE ROLE regengine_sysadmin LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        :'admin_runtime_pw'
+        '${pg_pw_literal}'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin')\gexec
-    ALTER ROLE regengine_sysadmin LOGIN PASSWORD :'admin_runtime_pw'
+    ALTER ROLE regengine_sysadmin LOGIN PASSWORD '${pg_pw_literal}'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     -- Admin API database
