@@ -10,6 +10,7 @@
 import { getServiceURL } from './api-config';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { apiError } from './api-error';
+import { CSRF_PROTECTED_METHODS } from './csrf';
 
 const BASE = () => getServiceURL('ingestion');
 const API_FETCH_TIMEOUT_MS = 8000;
@@ -23,6 +24,23 @@ const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
 
 function isIdempotentMethod(method: string | undefined): boolean {
     return IDEMPOTENT_METHODS.has((method || 'GET').toUpperCase());
+}
+
+export function isMutatingMethod(method?: string): boolean {
+    return CSRF_PROTECTED_METHODS.has((method || 'GET').toUpperCase());
+}
+
+let fallbackKeyCounter = 0;
+
+export function newIdempotencyKey(): string {
+    if (typeof crypto !== 'undefined') {
+        if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+        if (typeof crypto.getRandomValues === 'function') {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            return `request-${Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+        }
+    }
+    return `request-${Date.now()}-${++fallbackKeyCounter}-${Math.random().toString(36).slice(2)}`;
 }
 
 /** Shared fetch helper with retry logic. Credentials are in HTTP-only cookies.
