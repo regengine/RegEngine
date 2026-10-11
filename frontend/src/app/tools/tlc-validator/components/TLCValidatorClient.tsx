@@ -13,7 +13,7 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const TLC_VALIDATOR_CONFIG: ToolConfig = {
     id: 'tlc-validator',
-    title: 'TLC Validator',
+    title: 'TLC Format Check',
     description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 conventions and common entropy/parseability pitfalls. FDA does not specify a TLC format; uniqueness must be enforced by your assignment system.',
     icon: 'FlaskConical',
     stages: {

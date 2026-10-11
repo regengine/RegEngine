@@ -23,6 +23,10 @@ import structlog
 
 logger = structlog.get_logger("webhook-security")
 
+# Clock-skew allowance for timestamps slightly in the future. Age keeps
+# the full tolerance; future timestamps beyond this are rejected so a
+# pre-minted signature cannot double its validity window.
+MAX_FUTURE_SKEW_SECONDS = 60
 # Default tolerance for timestamp validation (5 minutes)
 DEFAULT_TIMESTAMP_TOLERANCE_SECONDS = 300
 
@@ -201,11 +205,14 @@ def verify_signature(
     """
     parsed = parse_signature_header(signature_header)
 
-    # Validate timestamp to prevent replay attacks
+    # Validate timestamp to prevent replay attacks. Age and future skew
+    # are checked separately: a signature minted up to ``tolerance`` in
+    # the past is fine, but one minted in the future gets only a small
+    # clock-skew allowance, otherwise its validity window doubles.
     current_time = int(time.time())
-    time_diff = abs(current_time - parsed.timestamp)
-
-    if time_diff > tolerance_seconds:
+    age_seconds = current_time - parsed.timestamp
+    if age_seconds > tolerance_seconds or age_seconds < -MAX_FUTURE_SKEW_SECONDS:
+        time_diff = abs(age_seconds)
         logger.warning(
             "webhook_timestamp_rejected",
             timestamp=parsed.timestamp,

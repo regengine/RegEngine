@@ -7,7 +7,7 @@ import socket
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, TypeAdapter, field_validator
 
 # ---------------------------------------------------------------------------
 # SSRF protection (#549)
@@ -148,8 +148,12 @@ class TextExtractionMetadata(BaseModel):
 class NormalizedDocument(BaseModel):
     """Schema for normalized regulatory document payloads."""
 
+    # Plain string (not HttpUrl): besides fetched http(s) URLs this field
+    # carries server-synthesized provenance refs such as ``manual://direct``
+    # (direct text ingest) and ``upload://file/<name>`` (file upload), which
+    # are never fetched. Http(s) values still get the full SSRF screen below.
     document_id: str
-    source_url: HttpUrl
+    source_url: str
     source_system: str
     retrieved_at: datetime
     text: str
@@ -162,8 +166,15 @@ class NormalizedDocument(BaseModel):
 
     @field_validator("source_url")
     @classmethod
-    def source_url_must_not_be_private(cls, v: HttpUrl) -> HttpUrl:
-        _reject_private_host(v)
+    def source_url_must_not_be_private(cls, v: str) -> str:
+        # Only http(s) values can ever be fetched, so only they need the
+        # SSRF screen. Non-http provenance refs (manual://, upload://) are
+        # opaque and accepted as-is. The check stays fail-closed: DNS
+        # failure and private/metadata IPs still reject.
+        from urllib.parse import urlsplit
+
+        if urlsplit(v).scheme.lower() in {"http", "https"}:
+            _reject_private_host(TypeAdapter(HttpUrl).validate_python(v))
         return v
 
 
@@ -175,7 +186,9 @@ class NormalizedEvent(BaseModel):
     document_hash: str  # Content hash for deduplication
     tenant_id: Optional[str] = None  # Tenant UUID for multi-tenancy
     source_system: str
-    source_url: HttpUrl
+    # Plain string for the same reason as NormalizedDocument.source_url:
+    # file and direct ingests emit synthetic provenance refs, not URLs.
+    source_url: str
     raw_s3_path: str
     normalized_s3_path: str
     text_s3_uri: Optional[str] = None  # Claim Check pointer for payloads > 1MB

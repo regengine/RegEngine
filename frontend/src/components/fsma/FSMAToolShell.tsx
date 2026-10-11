@@ -368,7 +368,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                                 <Button
                                     onClick={() => {
                                         trackToolEvent('DEMO_CLICK');
-                                        window.open(CALENDLY_LINK, '_blank');
+                                        window.open(CALENDLY_LINK, '_blank', 'noopener,noreferrer');
                                     }}
                                 >
                                     Book a Demo

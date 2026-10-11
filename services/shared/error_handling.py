@@ -177,6 +177,21 @@ def _sentry_before_send(event, hint):
     return event
 
 
+def _float_env(name: str, default: float) -> float:
+    """Read a float env knob, falling back to ``default`` when malformed.
+
+    A typo in an optional observability knob must not crash startup.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        logger.warning("sentry_invalid_sample_rate", var=name, value=raw)
+        return default
+
+
 def init_sentry() -> None:
     """Initialize Sentry error tracking if SENTRY_DSN is configured.
 
@@ -201,8 +216,8 @@ def init_sentry() -> None:
     sentry_sdk.init(
         dsn=dsn,
         environment=get_environment(),
-        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
-        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+        traces_sample_rate=_float_env("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+        profiles_sample_rate=_float_env("SENTRY_PROFILES_SAMPLE_RATE", 0.1),
         integrations=[
             FastApiIntegration(),
             StarletteIntegration(),

@@ -101,7 +101,7 @@ class DeliveryHandle:
     with the recorded outcome.
     """
 
-    __slots__ = ("topic", "_errbacks", "_callbacks", "_error", "_resolved")
+    __slots__ = ("topic", "_errbacks", "_callbacks", "_error", "_resolved", "_message")
 
     def __init__(self, topic: str) -> None:
         self.topic = topic
@@ -109,6 +109,7 @@ class DeliveryHandle:
         self._callbacks: list[Callable[[Any], Any]] = []
         self._error: Optional[BaseException] = None
         self._resolved = False
+        self._message: Any = None
 
     def add_errback(self, errback: Callable[[BaseException], Any]) -> "DeliveryHandle":
         if self._resolved:
@@ -120,8 +121,10 @@ class DeliveryHandle:
 
     def add_callback(self, callback: Callable[[Any], Any]) -> "DeliveryHandle":
         if self._resolved:
+            # Late registration replays the recorded outcome: the delivery
+            # message on success, matching what early callbacks receive.
             if self._error is None:
-                _invoke_delivery_callback(callback, self.topic)
+                _invoke_delivery_callback(callback, self._message)
         else:
             self._callbacks.append(callback)
         return self
@@ -134,6 +137,7 @@ class DeliveryHandle:
             for errback in self._errbacks:
                 _invoke_delivery_callback(errback, self._error)
         else:
+            self._message = msg
             for callback in self._callbacks:
                 _invoke_delivery_callback(callback, msg)
         self._errbacks.clear()
@@ -207,7 +211,10 @@ class KafkaProducerCompat:
             self._producer.produce(
                 topic,
                 key=self._key_serializer(key),
-                value=self._value_serializer(value),
+                # Preserve None so compacted-topic tombstones stay null;
+                # serializing None to b"" would turn deletes into empty
+                # records that consumers never treat as deletes.
+                value=None if value is None else self._value_serializer(value),
                 headers=headers,
                 on_delivery=handle._on_delivery,
             )
