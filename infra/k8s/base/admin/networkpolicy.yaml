@@ -48,7 +48,9 @@ spec:
       ports:
         - protocol: TCP
           port: 443
-    # Internal service communication (ingestion, compliance, scheduler)
+    # Internal service communication. Ports must match each service's
+    # container port (scheduler listens on 8600, graph on 8200): grouping
+    # them under one port silently denies the mismatched flows.
     - to:
         - podSelector:
             matchLabels:
@@ -56,12 +58,23 @@ spec:
         - podSelector:
             matchLabels:
               app: compliance
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
         - podSelector:
             matchLabels:
               app: scheduler
       ports:
         - protocol: TCP
-          port: 8000
+          port: 8600
+    - to:
+        - podSelector:
+            matchLabels:
+              app: graph
+      ports:
+        - protocol: TCP
+          port: 8200
     # DNS resolution
     - to: []
       ports:

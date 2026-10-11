@@ -181,9 +181,24 @@ export default function () {
     if (listSuccess) {
       const exports = listRes.json('exports') || listRes.json('data') || [];
       check(listRes, {
-        'rlS_isolation: no cross_tenant_data': (r) => {
-          // This is a best-effort check; actual RLS enforcement happens at DB level
-          return true; // DB should enforce tenant isolation
+        'rls_isolation: no cross_tenant_data': (r) => {
+          const items = r.json('exports') || r.json('data') || [];
+          if (!Array.isArray(items)) {
+            return false;
+          }
+          // Every item that carries a tenant marker must belong to this VU's tenant.
+          // Items without a marker cannot prove isolation, so a markerless
+          // non-empty page fails closed instead of passing silently.
+          if (items.length > 0) {
+            const marked = items.filter(
+              (it) => it && (it.tenant_id !== undefined || (it.tenant && it.tenant.id !== undefined))
+            );
+            if (marked.length === 0) {
+              return false;
+            }
+            return marked.every((it) => (it.tenant_id !== undefined ? it.tenant_id : it.tenant.id) === tenantId);
+          }
+          return true;
         },
       });
     }

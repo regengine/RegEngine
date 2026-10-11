@@ -292,10 +292,20 @@ def generate_batch_labels(
     Generate labels for a batch of TLCs.
 
     Returns list of (filename, content_bytes) tuples.
+
+    Raises:
+        ValueError: if ``fmt`` is not "png", "zpl" or "pdf". An unknown
+            format used to return [] silently, so a caller writing the
+            results to disk produced nothing and still exited 0.
     """
+    if fmt not in ("png", "zpl", "pdf"):
+        raise ValueError(f"unsupported label format: {fmt!r} (expected one of 'png', 'zpl', 'pdf')")
     results = []
     for label in labels:
-        safe_tlc = label.traceability_lot_code.replace("/", "_")
+        # Same sanitization as the CLI path below: every character outside
+        # [A-Za-z0-9_.-] becomes "_", so a hostile TLC cannot escape the
+        # output directory or produce names illegal on some filesystems.
+        safe_tlc = re.sub(r"[^a-zA-Z0-9_\-.]", "_", label.traceability_lot_code)
         if fmt == "png":
             content = generate_label_png(label)
             results.append((f"label_{safe_tlc}.png", content))
