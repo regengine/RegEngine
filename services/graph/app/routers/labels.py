@@ -21,7 +21,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, validator
 from shared.auth import require_api_key
-from shared.fsma_validation import calculate_gs1_check_digit
+from shared.fsma_validation import calculate_gs1_check_digit, validate_gln
 from shared.middleware import get_current_tenant_id
 
 from ..exporters import zpl_safe
@@ -191,6 +191,13 @@ async def initialize_label_batch(
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key: str = Depends(require_api_key),
 ):
+    # Reject a malformed packer GLN before touching Neo4j: generate_sscc
+    # raises ValueError on non-numeric input, which would otherwise surface
+    # as a 500 after the serial range was already reserved.
+    gln_result = validate_gln(request.packer_gln)
+    if not gln_result.is_valid:
+        raise HTTPException(status_code=400, detail=f"Invalid packer GLN: {gln_result.errors[0].message}")
+
     # Get tenant specific database
     db_name = Neo4jClient.get_tenant_database_name(tenant_id)
     neo4j = Neo4jClient(database=db_name)

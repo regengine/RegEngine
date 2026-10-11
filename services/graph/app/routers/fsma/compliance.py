@@ -959,6 +959,7 @@ async def get_compliance_score(
     Returns unmeasured dimensions for an empty graph; database failures return 503.
     """
     generated_at = datetime.now(timezone.utc).isoformat()
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
     # Scope to the tenant database like every other endpoint in this module.
     # On Community Neo4j the client pins to the global database either way,

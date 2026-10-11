@@ -105,7 +105,7 @@ class CreateDrillRequest(BaseModel):
 
 @router.get("/history")
 def get_recall_history(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -149,6 +149,14 @@ async def create_recall_drill(
     try:
         drill_type = RecallType(payload.type)
         severity = RecallSeverity(payload.severity)
+
+        # require_api_key returns an APIKey/APIKeyResponse model, which has
+        # no .get() — only test doubles pass dicts. Read the principal by
+        # attribute so drill creation does not 500 under real auth.
+        if isinstance(api_key, dict):
+            initiated_by = api_key.get("user_id", api_key.get("key_id", "api_user"))
+        else:
+            initiated_by = getattr(api_key, "key_id", None) or "api_user"
 
         drill = engine.create_drill(
             tenant_id=tenant_str,

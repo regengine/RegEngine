@@ -244,3 +244,7 @@ async def harmonize_requirement(
     except Exception as e:
         logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=scoped_tenant_id, error=str(e))
         raise HTTPException(status_code=503, detail="Harmonization engine unavailable")
+    finally:
+        # The driver must close even when mapping fails; otherwise every
+        # failed harmonization leaks a driver and its connection pool.
+        await engine.close()
