@@ -1,7 +1,9 @@
 """QA sweep: real ingestion routes, schema boundaries and CSV evidence integrity.
 
-All persistence/auth/provider boundaries use local fakes. Known defects are strict
-expected failures: an unexpected pass requires removing the corresponding finding.
+All persistence/auth/provider boundaries use local fakes. The only remaining
+strict expected failure is BE-001 (naive timestamps); every other case in this
+file is a live assertion, so an unexpected pass or fail needs a code fix, not a
+marker change.
 """
 
 from __future__ import annotations

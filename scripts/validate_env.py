@@ -95,11 +95,21 @@ _PRODUCTION_REQUIRED: list[str] = [
     # delivers and every Stripe webhook 500s. Caught here instead.
     "RESEND_API_KEY",
     "STRIPE_WEBHOOK_SECRET",
-    # #3229 — when unset on a closed gate (production or any strict/cloud
-    # runtime), POST /api/v1/webhooks/ingest rejects every request with
-    # 401 webhook_hmac_not_configured. Required so a deploy wired only
-    # from the templates cannot silently stop all webhook ingest.
-    "WEBHOOK_HMAC_SECRET",
+    # #3230 — absence of either of these does NOT fail the boot, but the
+    # first production use does: audit export raises RuntimeError (now a
+    # 503) and passkey verify answers 503. Caught here instead.
+    "AUDIT_PII_HASH_SALT",
+    "WEBAUTHN_EXPECTED_ORIGIN",
+]
+
+# ---------------------------------------------------------------------------
+# Variables required in staging as well as production
+# ---------------------------------------------------------------------------
+# #3230 — staging runs the same multi-worker image as production. A missing
+# PII salt falls back to one random value per gunicorn worker, so the same
+# email masks to different values depending on which worker answers.
+_STAGING_REQUIRED: list[str] = [
+    "AUDIT_PII_HASH_SALT",
 ]
 
 # ---------------------------------------------------------------------------
@@ -170,6 +180,14 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
         for var in _PRODUCTION_REQUIRED:
             if not env.get(var):
                 result.errors.append(f"[production] Required variable not set: {var}")
+
+    # ── 2b. Staging-required variables ──────────────────────────────────────
+    # #3230: staging shares the production image and worker count, so the
+    # audit PII salt must be explicit there too.
+    if env.get("REGENGINE_ENV", "").lower() == "staging":
+        for var in _STAGING_REQUIRED:
+            if not env.get(var):
+                result.errors.append(f"[staging] Required variable not set: {var}")
 
     # ── 3. Check for known weak defaults in credential variables ────────────
     for var in _CREDENTIAL_VARS:

@@ -6,7 +6,7 @@ import structlog
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel
 from shared.pagination import PaginatedResponse, PaginationParams
-from shared.permissions import can_invite_role
+from shared.permissions import can_invite_role, role_rank
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -223,11 +223,16 @@ async def update_user_role(
                 tenant_id=str(tenant_id),
             )
             raise HTTPException(status_code=403, detail="No active role in this tenant")
+        # The grant_owner hatch is for inviting outsiders, not for promoting
+        # current members in place: a non-Owner holding
+        # users.invite.grant_owner must not be able to make anyone,
+        # self included, an Owner through this route.
         if not can_invite_role(
             caller_role_name=getattr(caller_role, "name", None),
             caller_permissions=getattr(caller_role, "permissions", None) or [],
             target_role_name=getattr(target_role, "name", None),
             target_permissions=getattr(target_role, "permissions", None) or [],
+            honor_grant_owner=False,
         ):
             logger.warning(
                 "role_change_escalation_blocked",
@@ -237,6 +242,26 @@ async def update_user_role(
                 target_role=getattr(target_role, "name", None),
             )
             # Opaque 403 so an attacker can't enumerate role tiers by response.
+            raise HTTPException(status_code=403, detail="Insufficient privilege to assign this role")
+        # A caller may not move a member whose current role outranks their
+        # own: without this an Admin could demote another Owner, leaving
+        # only the last-Owner backstop, which keys off the exact name.
+        current_rank = role_rank(
+            getattr(current_role, "name", None),
+            getattr(current_role, "permissions", None) or [],
+        )
+        caller_rank = role_rank(
+            getattr(caller_role, "name", None),
+            getattr(caller_role, "permissions", None) or [],
+        )
+        if current_rank > caller_rank:
+            logger.warning(
+                "role_change_demotion_blocked",
+                user_id=str(current_user.id),
+                tenant_id=str(tenant_id),
+                caller_role=getattr(caller_role, "name", None),
+                current_role=getattr(current_role, "name", None),
+            )
             raise HTTPException(status_code=403, detail="Insufficient privilege to assign this role")
 
     # Update

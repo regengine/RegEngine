@@ -824,6 +824,16 @@ export default function BulkUploadPage() {
                   </ul>
                 </div>
               )}
+              {(commitResult.summary.validation_warning_count ?? 0) > 0 && (
+                <div className="mt-3 rounded-lg border border-re-warning/20 bg-re-warning/5 p-3 text-xs text-re-warning">
+                  <p className="font-semibold mb-1">Validation warnings ({commitResult.summary.validation_warning_count})</p>
+                  <ul className="list-disc pl-5">
+                    {(commitResult.summary.validation_warnings ?? []).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <details className="mt-3">
                 <summary className="text-xs text-[var(--re-text-muted)] cursor-pointer hover:text-[var(--re-text-secondary)]">Raw summary JSON</summary>
                 <pre className="mt-2 overflow-x-auto text-xs text-[var(--re-text-muted)] bg-[var(--re-surface-elevated)] rounded-lg p-3 border border-[var(--re-surface-border)]">
