@@ -176,8 +176,10 @@ def validate_env(strict: bool = False, env: Optional[dict] = None) -> Validation
             # (NEO4J_PASSWORD, GRAFANA_PASSWORD, …) are optional by design.
             continue
         if value.lower() in _KNOWN_WEAK_VALUES:
+            # The credential value itself is never echoed: these messages
+            # land in CI logs and terminal scrollback.
             msg = (
-                f"Insecure default value detected for {var}: '{value}'. "
+                f"Insecure default value detected for {var}. "
                 f"Generate a strong secret with: "
                 f'python -c "import secrets; print(secrets.token_urlsafe(64))"'
             )

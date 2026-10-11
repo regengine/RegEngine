@@ -34,7 +34,20 @@ from regengine.swarm.llm import BaseLLMClient, LLMClientFactory
 logger = structlog.get_logger("swarm.coordinator")
 
 LEGACY_SWARM_ENV = "REGENGINE_ENABLE_LEGACY_SWARM"
+CI_AUTO_FIX_ENV = "REGENGINE_CI_AUTO_FIX"
+AUTO_PR_APPROVAL_ENV = "REGENGINE_SWARM_AUTO_PR_APPROVED"
 _TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def swarm_auto_pr_approved(explicit: bool = False) -> bool:
+    """Check whether autonomous PR creation has explicit human approval.
+
+    Approval is either the explicit flag passed by the caller or the
+    human-set environment variable. Defaults to not approved.
+    """
+    if explicit:
+        return True
+    return os.getenv(AUTO_PR_APPROVAL_ENV, "").strip().lower() in _TRUE_VALUES
 
 
 class LegacySwarmDisabledError(RuntimeError):
@@ -143,8 +156,16 @@ class AgentSwarm:
         """Get all messages addressed to a specific agent."""
         return [m for m in self.message_bus if m.receiver == agent_name]
 
-    async def _create_auto_fix_pr(self, task: str, coder_output: Dict[str, Any]):
-        """Helper to create a GitHub PR for autonomous CI fixes."""
+    async def _create_auto_fix_pr(self, task: str, coder_output: Dict[str, Any], human_approved: bool = False):
+        """Helper to create a GitHub PR for autonomous CI fixes.
+
+        Pushing a branch and opening a PR requires explicit human approval
+        (human_approved=True or the approval env var). Returns None without
+        touching git or GitHub when approval is missing.
+        """
+        if not swarm_auto_pr_approved(human_approved):
+            self.log.warning("ci_auto_fix_blocked", reason="missing_human_approval")
+            return None
         try:
             import subprocess
 
@@ -237,7 +258,12 @@ class AgentSwarm:
         results = await asyncio.gather(*[wrapped_solve(t) for t in tasks])
         return results
 
-    async def solve(self, task: str, context: Optional[Dict[str, Any]] = None) -> SwarmResult:
+    async def solve(
+        self,
+        task: str,
+        context: Optional[Dict[str, Any]] = None,
+        human_approved: bool = False,
+    ) -> SwarmResult:
         """Execute the full agent chain to solve a task.
 
         Chain: Planner → Coder → Reviewer → (feedback loop) → Tester
@@ -245,6 +271,8 @@ class AgentSwarm:
         Args:
             task: Natural language task description
             context: Optional additional context (file contents, constraints)
+            human_approved: Explicit human approval for autonomous PR creation.
+                Off by default; without it no branch is pushed and no PR is opened.
 
         Returns:
             SwarmResult with the aggregated output from all agents
@@ -403,13 +431,16 @@ class AgentSwarm:
         )
 
         # ── Autonomous CI Auto-Fix ───────────────────────
-        if os.getenv("REGENGINE_CI_AUTO_FIX") == "true" and status == "completed":
-            self.log.info("ci_auto_fix_triggered")
-            try:
-                await self._create_auto_fix_pr(task, code_result)
-            except Exception as e:
-                self.log.error("ci_auto_fix_failed_final", error=str(e))
-                result.errors.append(f"CI Auto-Fix failed: {e}")
+        if os.getenv(CI_AUTO_FIX_ENV) == "true" and status == "completed":
+            if not swarm_auto_pr_approved(human_approved):
+                self.log.warning("ci_auto_fix_blocked", reason="missing_human_approval")
+            else:
+                self.log.info("ci_auto_fix_triggered")
+                try:
+                    await self._create_auto_fix_pr(task, code_result, human_approved=human_approved)
+                except Exception as e:
+                    self.log.error("ci_auto_fix_failed_final", error=str(e))
+                    result.errors.append(f"CI Auto-Fix failed: {e}")
 
         return result
 

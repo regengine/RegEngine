@@ -85,11 +85,9 @@ jobs:
       - name: Install Claude Code CLI
         # Issue #2812: this job checks out untrusted PR head code, so the CLI
         # must be pinned to an exact version rather than resolving to whatever
-        # `latest` is. Mirrors the RAILWAY_CLI_VERSION pattern in deploy.yml.
-        env:
-          CLAUDE_CODE_VERSION: 2.1.246
+        # `latest` is.
         run: |
-          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          npm install -g "@anthropic-ai/claude-code@2.1.246"
           claude --version
 
       - name: Verify gh + anchor index

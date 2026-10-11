@@ -211,8 +211,14 @@ def cmd_run(args) -> None:
                 print(f"   - Reasoning: {reasoning}")
 
                 if decision == "merge":
-                    print(f"   🚀 AUTOMATIC MERGE TRIGGERED for PR #{pr.number}...")
-                    success = gh.merge_pr(pr.number)
+                    if not getattr(args, "approve_merges", False):
+                        print(
+                            f"   ⏭️ Merge skipped for PR #{pr.number}: "
+                            "re-run with --approve-merges plus green checks to merge."
+                        )
+                        continue
+                    print(f"   🚀 MERGE TRIGGERED for PR #{pr.number} (human-approved)...")
+                    success = gh.merge_pr(pr.number, human_approved=True)
                     if success:
                         print(f"   ✅ PR #{pr.number} merged successfully.")
                     else:
@@ -435,6 +441,11 @@ def main() -> None:
     run_parser.add_argument("--task", required=True, help="Task description")
     run_parser.add_argument("--agent", help="Direct to specific agent (e.g. security, core)")
     run_parser.add_argument("--dry-run", action="store_true", help="Use mock LLM")
+    run_parser.add_argument(
+        "--approve-merges",
+        action="store_true",
+        help="Explicit human approval allowing the janitor to merge PRs with green checks",
+    )
     run_parser.add_argument("--max-iterations", type=int, default=3, help="Max feedback loops")
     run_parser.add_argument("--output-file", help="Save result JSON to file")
     run_parser.set_defaults(func=cmd_run)
