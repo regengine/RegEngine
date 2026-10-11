@@ -69,7 +69,7 @@ const PRINCIPLES = [
     Icon: Shield,
     title: "Verifiable, not just claimed",
     description:
-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
+      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
   },
   {
     Icon: Lightbulb,
@@ -206,7 +206,7 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="mt-1 text-ui text-re-text-secondary">
-                No committee approvals. Design-partner feedback is scoped to
+                No committee approvals. Early tester feedback is scoped to
                 ship within days, not quarters. Regulatory updates deploy
                 without waiting for quarterly release trains.
               </p>
