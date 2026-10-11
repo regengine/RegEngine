@@ -184,3 +184,27 @@ class TestMerkleTreeEdgeCases:
         restored = MerkleProofStep.from_dict(d)
         assert restored.position == "left"
         assert restored.hash == "abc123"
+
+
+class TestChildOrderIsPositional:
+    """Child hashing is positional, not sorted (see _hash_pair docstring).
+
+    Swapping two children must change the digest. This locks the
+    documented contract so a future "canonical sorting" change cannot
+    land silently and invalidate existing roots and proofs.
+    """
+
+    def test_hash_pair_is_order_sensitive(self):
+        from shared.merkle_tree import _hash_pair
+
+        assert _hash_pair("aaa", "bbb") != _hash_pair("bbb", "aaa")
+
+    def test_leaf_order_changes_root(self):
+        assert compute_merkle_root(["aaa", "bbb"]) != compute_merkle_root(["bbb", "aaa"])
+
+    def test_proof_binds_position(self):
+        tree = MerkleTree(["aaa", "bbb"])
+        proof_for_first = tree.generate_proof(0)
+        # The proof for leaf 0 does not verify leaf 1: position matters.
+        assert verify_proof("bbb", proof_for_first, tree.root) is False
+        assert verify_proof("aaa", proof_for_first, tree.root) is True

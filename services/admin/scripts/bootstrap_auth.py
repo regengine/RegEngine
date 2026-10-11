@@ -18,6 +18,17 @@ sys.path.append("/app")
 from shared.api_key_store import get_db_key_store
 
 
+def public_key_reference(key_resp) -> str:
+    """Render an API key creation response for operator stdout without secrets.
+
+    The raw key is shown only at creation time and must never reach logs or
+    terminal transcripts. Operators identify the key by its stored prefix;
+    the raw value has to be captured by the caller from the response object,
+    not from this script's output.
+    """
+    return f"key_prefix={key_resp.key_prefix}"
+
+
 async def bootstrap():
     print("Bootstrapping Auth...")
     store = await get_db_key_store()
@@ -31,7 +42,10 @@ async def bootstrap():
         name="Remediation-Bootstrap-Key", tenant_id=tenant_id, billing_tier="ENTERPRISE", created_by="system-bootstrap"
     )
 
-    print(f"BOOTSTRAP_SUCCESS: {key_resp.raw_key}")
+    # Never print key_resp.raw_key: it is secret material and stdout is
+    # captured in CI/run logs. The raw key is available on the response
+    # object to the process that minted it.
+    print(f"BOOTSTRAP_SUCCESS: {public_key_reference(key_resp)}")
     print(f"TENANT_ID: {tenant_id}")
 
     await store.close()

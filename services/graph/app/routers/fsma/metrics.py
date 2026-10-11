@@ -185,8 +185,11 @@ async def fsma_dashboard(
             ],
         }
     except Exception as e:
+        # Log the full detail server-side; the caller gets only the generic
+        # degraded shape. Raw driver errors can carry connection strings,
+        # query text, and topology details that must not leave the service.
         logger.exception("dashboard_error", error=str(e))
         return {
             "status": "degraded",
-            "error": str(e),
+            "error": "Internal server error",
         }

@@ -23,7 +23,12 @@ from typing import List, Optional
 
 
 def _hash_pair(left: str, right: str) -> str:
-    """Hash two hex-encoded SHA-256 digests together, sorted for canonical ordering."""
+    """Hash two hex-encoded SHA-256 digests together in positional order.
+
+    The pair is NOT sorted: ``left`` always hashes first, so swapping the
+    children produces a different digest. Callers (tree building and proof
+    verification) must preserve each node's left/right position.
+    """
     combined = f"{left}|{right}"
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
