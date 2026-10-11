@@ -36,7 +36,13 @@ interface SnapshotComparisonChange {
     severity: 'critical' | 'high' | 'positive' | 'info';
 }
 
-const DEV_ENVS = new Set(['development', 'dev', 'test', 'local']);
+/**
+ * Explicit opt-in flag for the in-memory dev compliance snapshot fallback.
+ * The fallback serves hardcoded COMPLIANT payloads, so it must never switch
+ * on implicitly from an environment name. This flag is never set in
+ * production builds, and the gate below also refuses production outright.
+ */
+const DEV_SNAPSHOT_FALLBACK_FLAG = 'REGENGINE_ENABLE_DEV_COMPLIANCE_SNAPSHOTS';
 
 const globalForSnapshots = globalThis as typeof globalThis & {
     __regengineDevComplianceSnapshots?: Map<string, DevComplianceSnapshot[]>;
@@ -79,12 +85,9 @@ function computeSnapshotHash(snapshot: {
 }
 
 export function allowDevComplianceSnapshotFallback(): boolean {
-    const runtimeEnv = (
-        process.env.REGENGINE_ENV ||
-        process.env.NODE_ENV ||
-        ''
-    ).trim().toLowerCase();
-    return DEV_ENVS.has(runtimeEnv);
+    // Fail closed in production even if the flag was set by mistake.
+    if ((process.env.NODE_ENV || '').trim().toLowerCase() === 'production') return false;
+    return (process.env[DEV_SNAPSHOT_FALLBACK_FLAG] || '').trim() === '1';
 }
 
 export function listDevComplianceSnapshots(tenantId: string): DevComplianceSnapshot[] {

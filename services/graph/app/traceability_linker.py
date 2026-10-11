@@ -114,8 +114,7 @@ class TraceabilityLinker:
         _require_tenant_id(tenant_id)
         async with self.driver.session() as session:
             query = f"""
-                MATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent)
-                WHERE e.tenant_id = $tenant_id
+                MATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent {{tenant_id: $tenant_id}})
                 MATCH (o:Obligation)-[:GOVERNS]->(e)
                 WHERE {_OBLIGATION_TENANT_PREDICATE}
                 MATCH (o)<-[:REQUIRES]-(s:Section)
@@ -129,7 +128,7 @@ class TraceabilityLinker:
         _require_tenant_id(tenant_id)
         async with self.driver.session() as session:
             query = f"""
-                MATCH (o:Obligation {{id: $id}})-[:GOVERNS]->(e:TraceEvent)
+                MATCH (o:Obligation {{id: $id}})-[:GOVERNS]->(e:TraceEvent {{tenant_id: $tenant_id}})
                 WHERE {_OBLIGATION_TENANT_PREDICATE}
                 MATCH (l:Lot)-[:UNDERWENT]->(e)
                 WHERE l.tenant_id = $tenant_id

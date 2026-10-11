@@ -36,7 +36,8 @@ from pathlib import Path
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 USES_RE = re.compile(r"[\"']?uses[\"']?:\s*[\"']?([A-Za-z0-9_.\-/]+)(?:@([^\"'#\s]+))?[\"']?")
-PIPE_SHELL_RE = re.compile(r"\|\s*(sudo\s+)?(sh|bash)\b")
+USES_KEY_RE = re.compile(r"^\s*(?:-\s*)?[\"']?uses[\"']?\s*:(.*)$")
+PIPE_SHELL_RE = re.compile(r"\|\s*(sudo(\s+-\S+)*\s+)?(sh|bash)\b")
 LATEST_URL_RE = re.compile(r"https?://\S*latest\S*|@latest\b", re.IGNORECASE)
 FROM_RE = re.compile(r"^\s*FROM\s+(\S+)")
 # Full-line value (not \S+) so `${{ ... }}` expressions with spaces cannot
@@ -50,8 +51,13 @@ DIGEST_RE = re.compile(r"[^@\s]+@sha256:[0-9a-fA-F]{64}")
 FLOW_IMAGE_RE = re.compile(r""""[^"\n]*"|'[^'\n]*'|[{,]\s*["']?(?P<key>image|container)["']?\s*:\s*""")
 FLOW_VALUE_RE = re.compile(r""""[^"\n]*"|'[^'\n]*'|[^,}]+""")
 ARCHIVE_FETCH_RE = re.compile(r"\b(curl|wget)\b.*https?://\S+\.(tar\.gz|tgz|tar\.bz2|zip|whl)\b")
-CHECKSUM_EVIDENCE_RE = re.compile(r"sha256sum|shasum\s+-c|_SHA256|cosign\s+verify")
-PIP_INSTALL_RE = re.compile(r"(?:^|[\s;|&])(?:python3?\s+-m\s+)?pip3?\s+install\b(.*)$")
+PIP_INSTALL_RE = re.compile(r"(?:^|[\s;|&])(?:[\"']?\S*python3?[\"']?\s+-m\s+)?pip3?\s+install\b(.*)$")
+INDEX_FLAG_RES = (
+    re.compile(r"^--(extra-)?index-url($|=)"),
+    re.compile(r"^--trusted-host($|=)"),
+)
+PINNED_NAME_RE = re.compile(r"^[A-Za-z0-9_.\-]+(\[[A-Za-z0-9_,\-]+\])?$")
+PINNED_VERSION_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 BREAK_SYSTEM_RE = re.compile(r"--break-system-packages")
 NPM_INSTALL_RE = re.compile(r"\bnpm\s+(install|i)\b(?!\s+ci\b)(.*)$")
 NPM_EXACT_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -109,10 +115,7 @@ def compose_files(root: Path) -> list[Path]:
 
 
 def shell_files(root: Path) -> list[Path]:
-    scripts = root / "scripts"
-    if not scripts.is_dir():
-        return []
-    return [p for p in repo_files(scripts, "*.sh") if p.is_file()]
+    return [p for p in repo_files(root, "*.sh") if p.is_file()]
 
 
 def infra_manifests(root: Path) -> list[Path]:
@@ -160,6 +163,17 @@ def check_action_pin(path: Path, rel: str) -> list[Violation]:
             continue
         match = USES_RE.search(line)
         if not match:
+            # Fail closed: a `uses:` key whose value is not a plain
+            # `owner/action@ref` (a `${{ }}` expression, a `>`/`|` block
+            # scalar, or anything else unparseable) cannot be proven
+            # pinned, so it fails. Local reusable workflows stay exempt.
+            code = strip_comment(line)
+            key = USES_KEY_RE.match(code)
+            if key:
+                value = _unquote(key.group(1).strip())
+                if value and (value.startswith(("./", "/")) or value.endswith((".yml", ".yaml"))):
+                    continue
+                out.append(Violation("action-pin", rel, lineno, line.strip()))
             continue
         target, ref = match.group(1), match.group(2)
         if ref is None:
@@ -287,15 +301,93 @@ def check_image_digest_workflow(path: Path, rel: str) -> list[Violation]:
     return out
 
 
+CHECKSUM_COMMAND_RE = re.compile(r"sha256sum|shasum\s+-c|cosign\s+verify")
+CHECKSUM_WINDOW = 5
+
+
+def _archive_names(code: str) -> list[str]:
+    """File names that identify one archive download: the URL basename
+    plus any `-o`/`-O` output target basename."""
+    names: list[str] = []
+    url = re.search(r"https?://(\S+)", code)
+    if url:
+        names.append(url.group(1).rstrip("/").split("/")[-1].strip("\"'"))
+    output = re.search(r"\s-[oO]\s+(\S+)", code)
+    if output:
+        names.append(output.group(1).rstrip("/").split("/")[-1].strip("\"'"))
+    return [name for name in names if name]
+
+
+def _has_checksum(lines: list[str], index: int, names: list[str]) -> bool:
+    """Is there a checksum *command* near this download that names it?
+
+    Comments are ignored, a bare `_SHA256` variable name is not evidence,
+    and the evidence must mention the downloaded file so one verified
+    download cannot cover a second unverified one.
+    """
+    window = lines[index : index + CHECKSUM_WINDOW + 1]
+    for candidate in window:
+        if not CHECKSUM_COMMAND_RE.search(candidate):
+            continue
+        if any(name and name in candidate for name in names):
+            return True
+    return False
+
+
 def check_download_checksum(path: Path, rel: str) -> list[Violation]:
-    text = path.read_text()
-    if not CHECKSUM_EVIDENCE_RE.search(text):
-        out: list[Violation] = []
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if ARCHIVE_FETCH_RE.search(strip_comment(line)):
-                out.append(Violation("download-checksum", rel, lineno, line.strip()))
-        return out
-    return []
+    out: list[Violation] = []
+    raw = path.read_text().splitlines()
+    stripped = [strip_comment(line) for line in raw]
+    for lineno, code in enumerate(stripped, start=1):
+        if not ARCHIVE_FETCH_RE.search(code):
+            continue
+        if not _has_checksum(stripped, lineno - 1, _archive_names(code)):
+            out.append(Violation("download-checksum", rel, lineno, raw[lineno - 1].strip()))
+    return out
+
+
+def _is_pinned_requirement(token: str) -> bool:
+    """Is this package token pinned to one exact version?
+
+    `name==1.2.3` only. Wildcards (`foo==1.*`), environment variables
+    (`"pkg==${VER}"`), ranges, and multi-specifiers (`,`/`;`) are not
+    pins, and neither is a bare name (including `pip` itself).
+    """
+    name, sep, version = token.strip("\"'").partition("==")
+    if not sep or not name or not version:
+        return False
+    if "=" in version:
+        return False
+    return bool(PINNED_NAME_RE.match(name)) and bool(PINNED_VERSION_RE.match(version))
+
+
+def _requirement_files(tokens: list[str]) -> tuple[list[str], list[str]]:
+    """Split `-r`/`--requirement` file operands from the other tokens.
+
+    Returns (files, rest) where files are the requirement-file operands
+    (both `-r file` and `--requirement=file` forms) and rest is every
+    other token. A bare `-r` with no operand contributes nothing.
+    """
+    files: list[str] = []
+    rest: list[str] = []
+    skip_next = False
+    for i, token in enumerate(tokens):
+        if skip_next:
+            skip_next = False
+            continue
+        if token in ("-r", "--requirement"):
+            skip_next = True
+            if i + 1 < len(tokens) and not tokens[i + 1].startswith("-"):
+                files.append(tokens[i + 1].strip("\"'"))
+            continue
+        if token.startswith("--requirement="):
+            files.append(token.split("=", 1)[1].strip("\"'"))
+            continue
+        if token.startswith("-r") and len(token) > 2:
+            files.append(token[2:].strip("\"'"))
+            continue
+        rest.append(token)
+    return files, rest
 
 
 def check_pip(path: Path, rel: str) -> list[Violation]:
@@ -311,15 +403,30 @@ def check_pip(path: Path, rel: str) -> list[Violation]:
             continue
         rest = match.group(1)
         tokens = rest.split()
-        if "-r" in tokens or "--requirement" in tokens:
-            if "--require-hashes" not in tokens:
+        if any(rx.match(token) for token in tokens for rx in INDEX_FLAG_RES):
+            # An alternate index or trusted host can serve code the
+            # lockfile never hashed, whatever else the line pins.
+            out.append(Violation("pip-pin", rel, lineno, line.strip()))
+            continue
+        files, rest_tokens = _requirement_files(tokens)
+        if files:
+            # A locked `pip install -r` covers the whole line only when
+            # hashes are required, the file is a lockfile, and no extra
+            # package rides along beside it.
+            hashed = "--require-hashes" in tokens
+            locked = all(Path(name).name.endswith(".lock") for name in files)
+            pkgs = [
+                t.strip("\"'")
+                for t in rest_tokens
+                if not t.startswith("-") and not t.startswith(("./", "../", "/", "http"))
+            ]
+            if not hashed or not locked or pkgs:
                 out.append(Violation("pip-pin", rel, lineno, line.strip()))
             continue
         pkgs = [
             t.strip("\"'") for t in tokens if not t.startswith("-") and not t.startswith(("./", "../", "/", "http"))
         ]
-        pkgs = [t for t in pkgs if t not in ("pip",)]
-        if pkgs and any("==" not in p for p in pkgs):
+        if pkgs and any(not _is_pinned_requirement(p) for p in pkgs):
             out.append(Violation("pip-pin", rel, lineno, line.strip()))
     return out
 
@@ -381,6 +488,13 @@ def find_violations(root: Path) -> list[Violation]:
         rel = path.relative_to(root).as_posix()
         found.extend(check_image_digest_dockerfile(path, rel))
         found.extend(check_pipe_shell(path, rel))
+        # Dockerfile RUN lines build the shipped image, so installs,
+        # floating URLs, and archive fetches there face the same rules.
+        # (apt-get is out of scope: distros have no gate-readable pin.)
+        found.extend(check_latest_url(path, rel))
+        found.extend(check_download_checksum(path, rel))
+        found.extend(check_pip(path, rel))
+        found.extend(check_npm(path, rel))
     for path in compose_files(root) + infra_manifests(root):
         rel = path.relative_to(root).as_posix()
         found.extend(check_image_digest_yaml(path, rel))
@@ -409,28 +523,32 @@ def load_baseline(path: Path) -> list[BaselineEntry]:
 
 
 def _baseline_matches(entry: BaselineEntry, violation: Violation) -> bool:
+    # Every entry matches exactly on comment-stripped text. Substring
+    # matching let a longer tag or a longer install line hide under a
+    # shorter baselined fragment, so the `exact` flag is accepted for
+    # backward compatibility but no longer consulted.
     if violation.rule != entry.rule or violation.file != entry.file:
         return False
-    if entry.exact:
-        return violation.text.strip() == entry.match.strip()
-    return entry.match in violation.text
+    return strip_comment(violation.text).strip() == strip_comment(entry.match).strip()
 
 
 def apply_baseline(
     violations: list[Violation], baseline: list[BaselineEntry]
 ) -> tuple[list[Violation], list[BaselineEntry]]:
-    """Split violations into unbaselined failures and stale baseline entries."""
+    """Split violations into unbaselined failures and stale baseline entries.
+
+    One entry excuses exactly one violation line, so a second identical
+    line still fails until it gets its own entry.
+    """
     remaining = list(violations)
-    stale = list(baseline)
+    stale: list[BaselineEntry] = []
     for entry in baseline:
-        matched = False
-        for violation in violations:
+        for violation in remaining:
             if _baseline_matches(entry, violation):
-                matched = True
-                if violation in remaining:
-                    remaining.remove(violation)
-        if matched and entry in stale:
-            stale.remove(entry)
+                remaining.remove(violation)
+                break
+        else:
+            stale.append(entry)
     return remaining, stale
 
 
