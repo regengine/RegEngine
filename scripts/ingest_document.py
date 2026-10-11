@@ -34,11 +34,14 @@ Usage:
 
 import argparse
 import hashlib
+import ipaddress
 import os
+import socket
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 from uuid import UUID, uuid4
 
 import requests
@@ -49,6 +52,40 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 from services.nlp.app.extractors import DORAExtractor, NYDFSExtractor, SECSCIExtractor
+
+MAX_DOWNLOAD_REDIRECTS = 5
+
+
+def validate_download_url(url: str):
+    """Check an operator-supplied URL before fetching it.
+
+    Only http(s) URLs whose host resolves entirely to public addresses are
+    allowed, so a malicious or mistyped URL cannot reach internal services
+    (localhost, private ranges, cloud metadata endpoints). Redirect targets
+    must be validated with this function before each follow-up request.
+    Raises ValueError on any problem.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Refusing to fetch URL with non-HTTP scheme: {url!r}")
+    if not parsed.hostname:
+        raise ValueError(f"Refusing to fetch URL without a host: {url!r}")
+    if parsed.username or parsed.password:
+        raise ValueError("Refusing to fetch URL containing credentials")
+    try:
+        addr_infos = socket.getaddrinfo(parsed.hostname, None)
+    except OSError as e:
+        raise ValueError(f"Refusing to fetch URL: host does not resolve: {parsed.hostname}") from e
+    for info in addr_infos:
+        try:
+            addr = ipaddress.ip_address(info[4][0])
+        except ValueError as e:
+            raise ValueError(f"Refusing to fetch URL: unparseable address for {parsed.hostname}") from e
+        if not addr.is_global:
+            raise ValueError(
+                f"Refusing to fetch URL: host resolves to a non-public address: {parsed.hostname}"
+            )
+    return parsed
 
 
 class DocumentIngestion:
@@ -196,11 +233,25 @@ class DocumentIngestion:
             return f.read()
 
     def _download_file(self, url: str) -> bytes:
-        """Download file from URL."""
-        print(f"   Downloading from {url}...")
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        return response.content
+        """Download file from URL.
+
+        The initial URL and every redirect target are validated with
+        validate_download_url before requesting, so redirects cannot be used
+        to smuggle a private address past the check.
+        """
+        current = url
+        for _ in range(MAX_DOWNLOAD_REDIRECTS + 1):
+            validate_download_url(current)
+            print(f"   Downloading from {current}...")
+            response = requests.get(current, timeout=30, allow_redirects=False)
+            if not response.is_redirect:
+                response.raise_for_status()
+                return response.content
+            location = response.headers.get("location")
+            if not location:
+                raise ValueError("Refusing to follow redirect without a Location header")
+            current = urljoin(current, location)
+        raise ValueError("Refusing to follow more than 5 redirects")
 
     def _calculate_hash(self, content: bytes) -> str:
         """Calculate SHA-256 hash of content."""

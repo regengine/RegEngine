@@ -68,14 +68,26 @@ def health() -> dict[str, object]:
         kafka_status = "not_configured"
         overall_status = "healthy"
 
-    # F-5: surface webhook HMAC config status so ops can alarm if production
-    # drifts to fail-open (WEBHOOK_HMAC_SECRET unset).
+    # F-5 / #3229: surface webhook HMAC config status so ops can alarm
+    # when a closed gate (production or any strict/cloud runtime) has no
+    # secret. The gate fails closed there, so ingest is fully 401 while
+    # this probe would otherwise stay green.
     try:
         from .webhook_router_v2 import webhook_hmac_configured
 
         hmac_configured = webhook_hmac_configured()
     except Exception:  # pragma: no cover - never break /health on import error
         hmac_configured = False
+
+    if not hmac_configured:
+        try:
+            from shared.env import requires_strict_auth_runtime
+
+            if requires_strict_auth_runtime():
+                overall_status = "degraded"
+                logger.warning("ingestion_health_hmac_secret_missing")
+        except Exception:  # pragma: no cover - never break /health on import error
+            pass
 
     # Advertise the ingest contract version so integrators (inflow-lab's
     # test-connection probe, the Inflow Lab Contract CI) can detect

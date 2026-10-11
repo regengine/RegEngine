@@ -77,6 +77,10 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
             'x-api-key',
             'x-regengine-api-key',
             'x-tenant-id',
+            // #3229: signed partners send X-Webhook-Signature; the proxy
+            // must not strip it or every browser-relayed signed post
+            // arrives unsigned at the HMAC gate.
+            'x-webhook-signature',
         ]);
 
         // Inject access token + tenant API key + tenant ID from cookies.
