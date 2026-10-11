@@ -95,6 +95,17 @@ class TraceabilityInfo(BaseModel):
 
 class LabelBatchInitRequest(BaseModel):
     packer_gln: str
+
+    @validator("packer_gln")
+    def validate_packer_gln(cls, v):
+        # Reject at the boundary: generate_sscc feeds this into the GS1
+        # check-digit helper, which raises an unhandled ValueError (plain
+        # 500) for non-numeric input, and a wrong-length GLN silently
+        # produces wrong SSCCs downstream.
+        if not v.isdigit() or len(v) != 13:
+            raise ValueError("packer_gln must be a 13-digit GS1 GLN")
+        return v
+
     product: ProductInfo
     traceability: TraceabilityInfo
     quantity: int = Field(..., gt=0, le=10000)

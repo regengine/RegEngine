@@ -14,7 +14,7 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const KDE_CHECKER_CONFIG: ToolConfig = {
     id: 'kde-checker',
-    title: 'KDE Checklist Builder',
+    title: 'KDE Field Checklist',
     description: 'Tell us your product and your role in the supply chain and we\'ll draft a starting KDE checklist mapped to the relevant CTE under 21 CFR Part 1 Subpart S. Educational; review with your compliance team before relying on it.',
     icon: 'ClipboardList',
     stages: {

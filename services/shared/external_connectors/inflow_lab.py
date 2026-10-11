@@ -16,6 +16,7 @@ from .base import (
     ConnectorConfig,
     IntegrationConnector,
     NormalizedCTEEvent,
+    _optional_float,
 )
 
 SUPPORTED_CTE_TYPES = [
@@ -71,8 +72,8 @@ class InflowLabConnector(IntegrationConnector):
             cte_type=str(raw_event.get("cte_type", "shipping")),
             traceability_lot_code=str(raw_event.get("traceability_lot_code", "")),
             product_description=str(raw_event.get("product_description", "")),
-            quantity=float(raw_event.get("quantity", 0)),
-            unit_of_measure=str(raw_event.get("unit_of_measure", "each")),
+            quantity=_optional_float(raw_event.get("quantity", 0)),
+            unit_of_measure=str(raw_event.get("unit_of_measure") or "each"),
             timestamp=str(timestamp),
             location_gln=raw_event.get("location_gln"),
             location_name=raw_event.get("location_name"),

@@ -67,12 +67,46 @@ def _host_of(url: str) -> str:
         return ""
 
 
+def _effective_hosts(url: str) -> list[str]:
+    """Every host a driver may connect to for this URL.
+
+    The authority host plus any ``host`` / ``hostaddr`` query values, which
+    Postgres drivers accept as overrides. A URL that looks like localhost
+    but carries a remote query host is not local.
+    """
+    from urllib.parse import parse_qs, urlsplit
+
+    hosts: list[str] = []
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return [""]
+    if parts.hostname:
+        hosts.append(parts.hostname.lower())
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return hosts or [""]
+    for key in ("host", "hostaddr"):
+        for value in query.get(key, []):
+            # Multi-host values are comma-separated; each names a target.
+            hosts.extend(h.strip().lower() for h in value.split(",") if h.strip())
+    return hosts or [""]
+
+
+LOOPBACK_HOSTS = {"localhost", "127.0.0.1", "::1"}
+# Compose service names from .env.example (local dev stack only).
+DEV_COMPOSE_HOSTS = {"postgres", "neo4j", "redis"}
+LOCAL_HOSTS = LOOPBACK_HOSTS | DEV_COMPOSE_HOSTS
+
+
 def is_production_target(url: str) -> bool:
-    """True when a store URL points anywhere other than local loopback."""
+    """True when a store URL points anywhere other than a local host."""
     lowered = url.lower()
     if any(hint in lowered for hint in PRODUCTION_DB_HINTS):
         return True
-    return _host_of(url) not in {"localhost", "127.0.0.1", "::1"}
+    hosts = _effective_hosts(url)
+    return not (hosts and all(h in LOCAL_HOSTS for h in hosts))
 
 
 def ensure_local_targets(postgres_url: str, neo4j_uri: str, allow_production: bool) -> None:

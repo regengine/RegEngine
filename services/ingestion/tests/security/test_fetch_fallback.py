@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import httpx
 import pytest
 
 
@@ -84,6 +85,29 @@ def test_wrapped_ssrf_value_error_does_not_trigger_fallback(monkeypatch):
     with pytest.raises(ValueError, match="URL validation failed"):
         fetch_utils.fetch_content("https://example.com/foo")
 
+    browser_mock.assert_not_called()
+
+
+def test_decode_failure_does_not_trigger_browser_fallback(monkeypatch):
+    """A decode failure must not promote to the browser fetcher.
+
+    The browser path has no byte cap and follows redirects itself, so
+    re-fetching hostile or malformed body bytes there would sidestep both
+    guards. Fails on the pre-fix code, which falls through to the browser
+    for any non-SSRF, non-size exception.
+    """
+    from regengine_ingestion.utils import fetch_utils
+    from shared import safe_http
+
+    def bad_encoding(*args, **kwargs):
+        raise httpx.DecodingError("gzip decompression failed")
+
+    monkeypatch.setattr(safe_http, "safe_httpx_get_sync", bad_encoding)
+    browser_mock = MagicMock(side_effect=AssertionError("browser must not run"))
+    monkeypatch.setattr(fetch_utils, "_fetch_with_browser_sync", browser_mock)
+
+    with pytest.raises(httpx.DecodingError):
+        fetch_utils.fetch_content("https://example.com/foo")
     browser_mock.assert_not_called()
 
 
