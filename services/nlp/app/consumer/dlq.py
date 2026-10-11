@@ -9,6 +9,7 @@ from __future__ import annotations
 import structlog
 
 from shared.kafka_compat import (
+    KafkaError,
     KafkaProducerCompat as KafkaProducer,
     KafkaTimeoutError,
 )
