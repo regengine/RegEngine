@@ -215,7 +215,16 @@ async def _verify_webhook_signature(
         secret.encode("utf-8"), raw_body, hashlib.sha256
     ).hexdigest()
 
-    if not hmac.compare_digest(expected, provided):
+    # ``provided`` comes from a request header, so it can carry non-ASCII
+    # characters. ``hmac.compare_digest`` on str raises TypeError for
+    # non-ASCII input, which would surface as a 500; a signature that is
+    # not even comparable is simply invalid (401), same as a mismatch.
+    try:
+        signature_ok = hmac.compare_digest(expected, provided)
+    except TypeError:
+        signature_ok = False
+
+    if not signature_ok:
         _pkg.logger.warning(
             "webhook_signature_mismatch body_len=%d",
             len(raw_body),
@@ -247,15 +256,15 @@ async def _verify_webhook_signature(
 
 def _max_event_age_days() -> int:
     try:
-        return int(os.getenv("WEBHOOK_MAX_EVENT_AGE_DAYS", "90"))
-    except ValueError:
+        return max(0, int(os.getenv("WEBHOOK_MAX_EVENT_AGE_DAYS", "90")))
+    except (ValueError, TypeError):
         return 90
 
 
 def _max_event_future_hours() -> int:
     try:
-        return int(os.getenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "24"))
-    except ValueError:
+        return max(0, int(os.getenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", "24")))
+    except (ValueError, TypeError):
         return 24
 
 
@@ -271,7 +280,10 @@ def _validate_event_timestamp_window(timestamp: str) -> Optional[str]:
     """
     try:
         dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
+        # TypeError covers non-string input (e.g. a datetime object passed
+        # to the helper directly); mirrors _classify_replay_rejection so
+        # both helpers agree on what "unparseable" means.
         return f"event.timestamp is not parseable ISO-8601: {timestamp!r}"
 
     if dt.tzinfo is None:
