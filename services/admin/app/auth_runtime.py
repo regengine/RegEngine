@@ -90,6 +90,27 @@ def load_auth_runtime_config() -> AuthRuntimeConfig:
     if strict and redis_url is None:
         raise AuthRuntimeConfigurationError("REDIS_URL is required for strict authentication")
 
+    # MFA TOTP seeds are auth credentials. Without an encryption key new
+    # enrollments fall back to plaintext storage, so a strict runtime must
+    # refuse to boot when the key is missing or malformed instead of
+    # silently persisting plaintext secrets in production.
+    mfa_key = os.getenv("MFA_ENCRYPTION_KEY", "").strip() or None
+    if strict and mfa_key is None:
+        raise AuthRuntimeConfigurationError("MFA_ENCRYPTION_KEY is required for strict authentication")
+    if strict and mfa_key is not None:
+        try:
+            from cryptography.fernet import Fernet
+        except ImportError as exc:
+            raise AuthRuntimeConfigurationError(
+                "MFA_ENCRYPTION_KEY is set but the cryptography package is not installed"
+            ) from exc
+        try:
+            Fernet(mfa_key.encode() if isinstance(mfa_key, str) else mfa_key)
+        except Exception as exc:
+            raise AuthRuntimeConfigurationError(
+                "MFA_ENCRYPTION_KEY is not a valid Fernet key"
+            ) from exc
+
     return AuthRuntimeConfig(
         access_token_expire_minutes=access_token_expire_minutes,
         production=production,

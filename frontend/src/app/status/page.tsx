@@ -8,10 +8,10 @@ import { Card } from '@/components/ui/card';
 export const metadata: Metadata = {
   title: 'System Status | RegEngine',
   description:
-    'Live RegEngine system status — backend service health, last checked timestamp, and pilot support channel.',
+    'Live RegEngine system status: backend service health, last checked timestamp, and support channel.',
   openGraph: {
     title: 'System Status | RegEngine',
-    description: 'Live RegEngine system status and pilot support contact.',
+    description: 'Live RegEngine system status and support contact.',
     url: 'https://regengine.co/status',
     type: 'website',
   },
@@ -47,7 +47,7 @@ export default function StatusPage() {
       <Container as="section" width="marketing" className="pb-16">
         <Card padding="spacious">
           <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">
-            Pilot support
+            Support
           </h2>
           <p className="mb-4 max-w-[68ch] text-ui text-re-text-secondary">
             Production issues, integration questions, or anything blocking your evaluation:
@@ -58,7 +58,7 @@ export default function StatusPage() {
             >
               support@regengine.co
             </a>
-. We aim to respond within one business day during pilot programs. For urgent
+. We aim to respond within one business day during early access. For urgent
             ingestion or auth issues, include your workspace slug and the timestamp
             of the request so we can correlate with logs.
           </p>
