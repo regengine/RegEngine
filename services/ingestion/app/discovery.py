@@ -108,7 +108,9 @@ class EthicalScraper:
             robots_allowed = self.can_fetch(source_url)
         except SSRFError as e:
             logger.warning("scrape_refused_unsafe_url", body=body, url=source_url, error=str(e))
-            return {"status": "failed", "body": body, "error": f"URL refused: {e}"}
+            # Fixed string: the SSRF message can carry the resolved private
+            # address, which must stay in server logs, not caller responses.
+            return {"status": "failed", "body": body, "error": "URL refused: target is not publicly reachable"}
 
         if not robots_allowed:
             logger.info("scraping_denied_by_robots", body=body, url=source_url)
@@ -219,6 +221,12 @@ class EthicalScraper:
                 "content_hash": content_hash[:12],
             }
 
+        except ResponseTooLargeError as e:
+            # An oversized page or PDF is a size-policy refusal, not a parse
+            # failure: report it distinctly instead of a generic failure so
+            # operators can tell a too-large document from a broken one.
+            logger.warning("ethical_scrape_too_large", body=body, url=source_url, error=str(e))
+            return {"status": "failed", "body": body, "error": f"Response exceeds size cap: {e}"}
         except Exception as e:
             logger.error("ethical_scrape_failed", body=body, url=source_url, error=str(e))
             return {"status": "failed", "body": body, "error": str(e)}
