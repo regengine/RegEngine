@@ -4,26 +4,20 @@
 
 echo "Creating Neo4j Indexes..."
 
+: "${NEO4J_PASSWORD:?Set NEO4J_PASSWORD before running this script}"
+# Export so docker can pass it through by name (-e NEO4J_PASSWORD below).
+# The value never appears in any process command line.
+export NEO4J_PASSWORD
+
 # Wait for Neo4j to be ready
 until curl -s http://localhost:7474 > /dev/null; do
     echo "Waiting for Neo4j..."
     sleep 5
 done
 
-# Run Cypher commands via Docker exec.
-# Never pass the password with -p: it lands in the host process table where
-# anyone on the box can read it. cypher-shell also accepts NEO4J_USERNAME /
-# NEO4J_PASSWORD from the environment, so hand them over in a 0600 env file
-# instead of argv (Pattern 11: secrets from env, never argv).
-if [[ -z "${NEO4J_PASSWORD:-}" ]]; then
-    echo "ERROR: set NEO4J_PASSWORD in the environment" >&2
-    exit 2
-fi
-ENV_FILE="$(mktemp)"
-chmod 600 "$ENV_FILE"
-trap 'rm -f "$ENV_FILE"' EXIT
-printf 'NEO4J_USERNAME=%s\nNEO4J_PASSWORD=%s\n' "neo4j" "$NEO4J_PASSWORD" > "$ENV_FILE"
-docker exec --env-file "$ENV_FILE" neo4j cypher-shell -u neo4j <<EOF
+# Run Cypher commands via Docker exec. cypher-shell reads NEO4J_PASSWORD from
+# the environment, so no secret is passed with -p on the command line.
+docker exec -e NEO4J_PASSWORD neo4j cypher-shell -u neo4j <<EOF
 // Traceability Indexes
 CREATE INDEX trace_event_lot_code IF NOT EXISTS FOR (e:TraceEvent) ON (e.lot_code);
 CREATE INDEX trace_event_date IF NOT EXISTS FOR (e:TraceEvent) ON (e.event_date);

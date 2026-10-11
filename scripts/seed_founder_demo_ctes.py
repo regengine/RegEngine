@@ -24,10 +24,20 @@ Secrets come from the environment ONLY (inject via `railway run`):
   WEBHOOK_HMAC_SECRET   (required for the write; prod has it configured)
 
 Usage:
-  railway run python3 seed_founder_demo_ctes.py --status    # read-only score
-  python3 seed_founder_demo_ctes.py --dry-run               # print+validate, no net
-  python3 seed_founder_demo_ctes.py --check                 # GET /health HMAC state
-  railway run python3 seed_founder_demo_ctes.py             # SEED prod (writes!)
+  python3 seed_founder_demo_ctes.py --status    # read-only score (localhost)
+  python3 seed_founder_demo_ctes.py --dry-run   # print+validate, no net
+  python3 seed_founder_demo_ctes.py --check     # GET /health HMAC state
+  python3 seed_founder_demo_ctes.py --base https://host --allow-production  # SEED (writes!)
+
+Defaults to the local ingestion service (http://localhost:8002) and refuses
+to target any non-local host unless BOTH an explicit URL and
+--allow-production are given. Secrets come from the environment only.
+TLS certificate errors are never downgraded; they abort the run.
+Plain http is refused for any non-local host (localhost, 127.0.0.1 and
+::1 may stay http for local dev), even with --allow-production.
+Redirects are never followed, so the API key, tenant ID and webhook
+signature are not forwarded to a host the allowlist never approved;
+a redirect fails the run with a clear error.
 """
 
 from __future__ import annotations
@@ -40,11 +50,138 @@ import os
 import ssl
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 FOUNDER_TENANT = os.getenv("SEED_TENANT_ID", "38e99859-7364-4932-99fa-b1f114bf0202")
-DEFAULT_BASE = os.getenv("SEED_BASE_URL", "https://regengine-production.up.railway.app")
+DEFAULT_BASE = "http://localhost:8002"
+BASE_ENV_VAR = "SEED_BASE_URL"
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 SEED_VERSION = "founderseed-v1"  # bump to force re-processing past the 24h idempotency cache
+
+
+class UnsafeTargetError(ValueError):
+    """Raised when a seed target is not local and not explicitly allowed."""
+
+
+def is_local_target(base: str) -> bool:
+    """Return True when the URL targets this machine only."""
+    try:
+        host = (urllib.parse.urlparse(base).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in LOCAL_HOSTS
+
+
+def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
+    """Resolve the seed target. Defaults to localhost.
+
+    A non-local target is returned only when it was explicitly supplied
+    (CLI --base or SEED_BASE_URL) AND allow_production is True.
+    Otherwise raises UnsafeTargetError.
+    """
+    env_base = os.getenv(BASE_ENV_VAR, "").strip()
+    if cli_base:
+        target, explicit = cli_base.strip(), True
+    elif env_base:
+        target, explicit = env_base, True
+    else:
+        target, explicit = DEFAULT_BASE, False
+    if not is_local_target(target):
+        if not explicit:
+            raise UnsafeTargetError(f"Refusing to seed non-local target {target!r} without an explicit URL.")
+        if not allow_production:
+            raise UnsafeTargetError(
+                f"Refusing to seed non-local target {target!r}. "
+                "Pass --allow-production with an explicit URL only if you "
+                "intentionally want demo data in that environment."
+            )
+    require_https_for_non_local(target)
+    return target
+
+
+def create_ssl_context() -> ssl.SSLContext:
+    """Return a default verifying SSL context. Never downgraded."""
+    return ssl.create_default_context()
+
+
+def is_tls_cert_failure(exc: BaseException) -> bool:
+    """True when exc is (or urllib-wraps) an SSL cert verification failure.
+
+    urllib.request.urlopen surfaces TLS failures as
+    urllib.error.URLError(reason=SSLCertVerificationError), never as the
+    bare ssl exception, so both shapes must be detected.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return True
+    return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+
+
+def require_https_for_non_local(target: str) -> None:
+    """Reject plain http targets outside this machine.
+
+    http stays allowed for local dev (localhost, 127.0.0.1, ::1).
+    Anything else must use https, even with --allow-production, so the
+    API key never travels in cleartext.
+    """
+    scheme = urllib.parse.urlparse(target).scheme.lower()
+    if scheme == "http" and not is_local_target(target):
+        raise UnsafeTargetError(
+            f"Refusing plain http for non-local target {target!r}. "
+            "Use https (http is allowed only for local targets such as "
+            "localhost and 127.0.0.1)."
+        )
+
+
+class RedirectRefusedError(urllib.error.HTTPError):
+    """Raised when a redirect is refused so credentials are never forwarded."""
+
+
+class _NoFollowRedirect(urllib.request.HTTPRedirectHandler):
+    """Block every redirect so auth headers never reach another host.
+
+    urllib follows redirects by default and re-sends the original request
+    headers (including X-RegEngine-API-Key, X-Tenant-ID and
+    X-Webhook-Signature) to the redirect target, which the seed allowlist
+    never approved. Seed scripts fail instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RedirectRefusedError(
+            req.get_full_url(),
+            code,
+            f"Refusing to follow redirect (HTTP {code}) to {newurl!r}. "
+            "Seed scripts never follow redirects so the API key, tenant ID "
+            "and webhook signature are not forwarded to another host.",
+            headers,
+            fp,
+        )
+
+
+def _no_redirect_opener(ctx):
+    """Build an opener whose chain has no redirect-following handler.
+
+    Built explicitly instead of build_opener with extras so the default
+    HTTPRedirectHandler, which would forward auth headers, is never in
+    the chain.
+    """
+    opener = urllib.request.OpenerDirector()
+    opener.add_handler(urllib.request.ProxyHandler())
+    opener.add_handler(urllib.request.UnknownHandler())
+    opener.add_handler(urllib.request.HTTPHandler())
+    opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(_NoFollowRedirect())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
+    opener.add_handler(urllib.request.HTTPSHandler(context=ctx))
+    return opener
+
+
+def urlopen_no_redirect(req: urllib.request.Request, *, context=None, timeout=None):
+    """Open an http(s) request without following redirects."""
+    opener = _no_redirect_opener(context)
+    if timeout is None:
+        return opener.open(req)
+    return opener.open(req, timeout=timeout)
 
 
 # GS1 check digit — mirrors services/shared/fsma_validation.py:_gs1_check_digit
@@ -353,29 +490,28 @@ BATCHES = [CHAIN_A, CHAIN_B, CHAIN_C]
 RESUBMIT_TLCS = {"VFF-ROM-0708-P", "FC-MIX-0709-X", "SGF-TOM-0712-P", "PGC-SAL-0715-F"}
 
 
-def _ssl_ctx(base: str):
-    ctx = ssl.create_default_context()
+def check_health(base: str) -> int:
+    ctx = create_ssl_context()
     try:
-        urllib.request.urlopen(urllib.request.Request(f"{base}/health"), context=ctx, timeout=8)
-    except ssl.SSLCertVerificationError:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-    except Exception:
-        pass
-    return ctx
-
-
-def check_health(base: str) -> None:
-    ctx = _ssl_ctx(base)
-    try:
-        with urllib.request.urlopen(urllib.request.Request(f"{base}/health"), context=ctx, timeout=10) as r:
+        with urlopen_no_redirect(urllib.request.Request(f"{base}/health"), context=ctx, timeout=10) as r:
             body = json.loads(r.read())
+    except ssl.SSLCertVerificationError as e:
+        print(f"ERROR: TLS certificate verification failed: {e}. Refusing to continue.")
+        return 1
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
+        return 1
     except Exception as e:  # noqa: BLE001
+        if is_tls_cert_failure(e):
+            reason = getattr(e, "reason", e)
+            print(f"ERROR: TLS certificate verification failed: {reason}. Refusing to continue.")
+            return 1
         print(f"health check failed: {e}")
-        return
+        return 0
     print(f"BASE={base}")
     print("webhook_hmac_configured:", body.get("webhook_hmac_configured"))
     print(json.dumps(body, indent=2)[:1500])
+    return 0
 
 
 def status(base: str, tenant: str) -> int:
@@ -384,15 +520,23 @@ def status(base: str, tenant: str) -> int:
     if not api_key:
         print("ERROR: REGENGINE_TENANT_API_KEY not in environment (run under `railway run`).")
         return 2
-    ctx = _ssl_ctx(base)
+    ctx = create_ssl_context()
     url = f"{base}/api/v1/readiness/assessment?tenant_id={tenant}"
     req = urllib.request.Request(url, headers={"X-RegEngine-API-Key": api_key, "X-Tenant-ID": tenant})
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=30) as r:
+        with urlopen_no_redirect(req, context=ctx, timeout=30) as r:
             body = json.loads(r.read())
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
+        return 1
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code}: {e.read().decode()[:400]}")
         return 1
+    except urllib.error.URLError as e:
+        if is_tls_cert_failure(e):
+            print(f"ERROR: TLS certificate verification failed: {e.reason}. Refusing to continue.")
+            return 1
+        raise
     # nosemgrep: tenant-id-from-request-body — `body` is the authenticated API *response*, printed for CLI display
     print(f"tenant={body.get('tenant_id')}")
     print(
@@ -449,26 +593,36 @@ def post_batch(base, api_key, tenant, source, events, idem, hmac_secret, ctx) ->
         sig = hmac.new(hmac_secret.encode(), data, hashlib.sha256).hexdigest()
         headers["X-Webhook-Signature"] = f"sha256={sig}"
     req = urllib.request.Request(f"{base}/api/v1/webhooks/ingest", data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, context=ctx, timeout=60) as resp:
+    with urlopen_no_redirect(req, context=ctx, timeout=60) as resp:
         return json.loads(resp.read())
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Seed founder demo CTEs (defaults to localhost).")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--fix", action="store_true", help="re-submit only the RESUBMIT_TLCS with fresh idem keys")
-    ap.add_argument("--base", default=DEFAULT_BASE)
+    ap.add_argument("--base", default=None, help="Explicit target base URL.")
+    ap.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow seeding a non-local target. Requires an explicit URL.",
+    )
     ap.add_argument("--tenant", default=FOUNDER_TENANT)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     tenant = args.tenant
 
+    try:
+        base = resolve_base(args.base, allow_production=args.allow_production)
+    except UnsafeTargetError as e:
+        print(f"ERROR: {e}")
+        return 2
+
     if args.check:
-        check_health(args.base)
-        return 0
+        return check_health(base)
     if args.status:
-        return status(args.base, tenant)
+        return status(base, tenant)
 
     rc = validate_local()
     if args.dry_run:
@@ -487,11 +641,10 @@ def main() -> int:
         return 2
     hmac_secret = os.getenv("WEBHOOK_HMAC_SECRET", "").strip() or None
     print(
-        f"Seeding tenant={tenant} base={args.base} "
-        f"hmac={'signing' if hmac_secret else 'NONE — will 401 (prod requires it)'}"
+        f"Seeding tenant={tenant} base={base} hmac={'signing' if hmac_secret else 'NONE — will 401 (prod requires it)'}"
     )
 
-    ctx = _ssl_ctx(args.base)
+    ctx = create_ssl_context()
     grand_ok = grand_bad = 0
     for source, events in BATCHES:
         if args.fix:
@@ -500,10 +653,21 @@ def main() -> int:
                 continue
         idem = f"{SEED_VERSION}-{'fix1-' if args.fix else ''}{source}"
         try:
-            result = post_batch(args.base, api_key, tenant, source, events, idem, hmac_secret, ctx)
+            result = post_batch(base, api_key, tenant, source, events, idem, hmac_secret, ctx)
+        except RedirectRefusedError as e:
+            print(f"[{source}] ERROR: {e.msg} Refusing to continue.")
+            return 1
         except urllib.error.HTTPError as e:
             print(f"[{source}] HTTP {e.code}: {e.read().decode()[:500]}")
             return 1
+        except ssl.SSLCertVerificationError as e:
+            print(f"[{source}] TLS certificate verification failed: {e}. Refusing to continue.")
+            return 1
+        except urllib.error.URLError as e:
+            if is_tls_cert_failure(e):
+                print(f"[{source}] TLS certificate verification failed: {e.reason}. Refusing to continue.")
+                return 1
+            raise
         acc, rej = result.get("accepted", 0), result.get("rejected", 0)
         grand_ok += acc
         grand_bad += rej

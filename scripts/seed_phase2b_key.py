@@ -30,6 +30,12 @@ def hash_key(raw_key):
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
+def mask_key(raw_key):
+    """Return a log-safe representation of a minted key (key id only)."""
+    key_id, _, _ = raw_key.partition(".")
+    return f"{key_id}.***" if key_id else "***"
+
+
 def seed_key():
     if not SECRET:
         raise RuntimeError("Set PHASE2B_API_SECRET before running this script")
@@ -41,10 +47,8 @@ def seed_key():
     key_prefix = RAW_KEY[:12]
     now = datetime.now(timezone.utc)
 
-    # Never print the raw key: it would land in shell history, CI logs and
-    # any log shipper. The masked form still shows which key was seeded.
-    print(f"Seeding API Key: {mask_secret(RAW_KEY)}")
-    print(f"Key prefix stored: {key_prefix}")
+    print(f"Seeding API Key: {mask_key(RAW_KEY)}")
+    print(f"Hash: {key_hash}")
 
     tenant_id = "11111111-1111-1111-1111-111111111111"
 

@@ -31,11 +31,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Interactive visual builder for designing FSMA 204 compliant supply chain networks.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"

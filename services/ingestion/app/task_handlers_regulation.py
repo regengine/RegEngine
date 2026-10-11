@@ -35,6 +35,41 @@ logger = structlog.get_logger("ingestion.regulation")
 INGEST_STAGING_DIR = os.getenv("INGEST_STAGING_DIR", "/tmp/regengine_ingest")
 
 
+def _resolve_staging_path(file_path: str) -> str:
+    """Resolve ``file_path`` and require it to live inside the staging dir.
+
+    Both sides are resolved with ``os.path.realpath`` so ``..`` segments
+    and symlinks (including a symlink placed inside the staging dir that
+    points outside it) cannot escape. Raises ``ValueError`` when the
+    resolved path is outside the staging directory.
+    """
+    if not isinstance(file_path, str) or not file_path:
+        raise ValueError("staging path must be a non-empty string")
+    staging = os.path.realpath(INGEST_STAGING_DIR)
+    resolved = os.path.realpath(file_path)
+    if resolved != staging and not resolved.startswith(staging + os.sep):
+        raise ValueError(f"staging path escapes staging directory: {file_path!r}")
+    return resolved
+
+
+def _remove_staging_file_quietly(file_path: str) -> None:
+    """Delete ``file_path`` only when it resolves inside the staging dir.
+
+    Re-resolves immediately before deleting so a path that was never
+    validated (or that changed since validation) can never cause a file
+    outside the staging directory to be removed. Never raises.
+    """
+    try:
+        resolved = _resolve_staging_path(file_path)
+    except (OSError, ValueError, TypeError):
+        logger.error("regulation_staging_path_rejected", file_path=file_path)
+        return
+    try:
+        os.remove(resolved)
+    except OSError:
+        pass
+
+
 async def _process_regulation_from_file(
     job_id: str,
     name: str,
@@ -61,9 +96,16 @@ async def _process_regulation_from_file(
     if tenant_id:
         r.setex(f"ingest:owner:{job_id}", 7200, tenant_id)
 
+    try:
+        resolved_path = _resolve_staging_path(file_path)
+    except (OSError, ValueError, TypeError) as exc:
+        logger.error("regulation_staging_path_rejected", job_id=job_id, file_path=file_path, error=str(exc))
+        r.setex(f"ingest:status:{job_id}", 7200, "failed: invalid staging path")
+        return
+
     content = None
     try:
-        with open(file_path, "rb") as fh:
+        with open(resolved_path, "rb") as fh:
             content = fh.read()
     except (OSError, IOError) as exc:
         logger.error("regulation_staging_file_missing", job_id=job_id, file_path=file_path, error=str(exc))
@@ -125,11 +167,9 @@ async def _process_regulation_from_file(
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
-        # Clean up the staging file regardless of outcome
-        try:
-            os.remove(file_path)
-        except OSError:
-            pass
+        # Clean up the staging file regardless of outcome, but only when
+        # it resolves inside the staging directory.
+        _remove_staging_file_quietly(file_path)
 
 
 def _handle_regulation_ingest(

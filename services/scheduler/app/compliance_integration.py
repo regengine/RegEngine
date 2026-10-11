@@ -92,6 +92,9 @@ class ComplianceIntegration:
                         item,
                         match["reasons"],
                     )
+                    session.commit()
+                    # Report only after the commit: a tenant whose write
+                    # did not persist must not count as alerted.
                     if alert_id:
                         alerted_tenants.append(match["tenant_id"])
                         logger.warning(
@@ -106,15 +109,22 @@ class ComplianceIntegration:
                     # ObjectNotExecutableError that this PR is fixing) are no
                     # longer silently swallowed — they bubble up and surface
                     # in Sentry.
+                    #
+                    # The handler logs the loop tenant_id (always bound),
+                    # not match["tenant_id"]: when _find_matching_tenants
+                    # itself raises, match is unbound (or stale from a
+                    # previous tenant), which turned one tenant's failure
+                    # into a NameError that aborted every remaining tenant.
+                    # The commit sits inside the try so a commit failure
+                    # also skips only this tenant.
                     logger.error(
                         "alert_creation_failed",
-                        tenant_id=str(match["tenant_id"]),
+                        tenant_id=str(tenant_id),
                         error=str(e),
                         error_type=type(e).__name__,
                     )
                     session.rollback()
                     continue
-                session.commit()
 
         if not alerted_tenants:
             logger.info(

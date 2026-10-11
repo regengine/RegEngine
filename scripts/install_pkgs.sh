@@ -48,10 +48,10 @@ pip install --quiet --require-hashes -r requirements.lock
 # --- Frontend ---
 if [ -d "frontend" ] && [ -f "frontend/package-lock.json" ]; then
     echo "  [web] installing frontend node_modules"
-    if ! (cd frontend && npm ci --no-audit --no-fund --silent); then
-        echo "  [web] npm ci failed (lockfile drift?); falling back to npm install"
-        (cd frontend && npm install --no-audit --no-fund --silent)
-    fi
+    # No fallback from locked (npm ci) to unlocked (npm install): an
+    # unlocked install can pull dependency versions nobody reviewed.
+    # Fail loudly so lockfile drift gets fixed instead of papered over.
+    (cd frontend && npm ci --no-audit --no-fund --silent)
 fi
 
 # --- .env scaffold ---

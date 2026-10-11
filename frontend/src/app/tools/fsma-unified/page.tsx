@@ -29,11 +29,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Consolidated FSMA 204 command center for anomaly detection and supply chain mapping.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"

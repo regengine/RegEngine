@@ -5,15 +5,16 @@
 
 set -e
 
-# Never pass passwords with psql -v: the values sit in the process table
-# where anyone on the box can read them (Pattern 11: secrets from env,
-# never argv). The password travels on stdin instead, SQL-quoted by
-# doubling single quotes. Shell expansion results are inserted literally,
-# so no further escaping is needed.
-sql_quote() {
-    printf '%s' "$1" | sed "s/'/''/g"
-}
-RUNTIME_PW_QUOTED="$(sql_quote "${POSTGRES_PASSWORD:-}")"
+: "${POSTGRES_USER:?Set POSTGRES_USER before running this script}"
+: "${POSTGRES_DB:?Set POSTGRES_DB before running this script}"
+: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before running this script}"
+
+# Quote the password as a SQL string literal in shell so it travels to psql
+# over stdin. The old code passed it with psql -v flags, which exposes the
+# value in the process list. Only single quotes need doubling when
+# standard_conforming_strings is on (the default); the expanded value is
+# used literally, so $, backticks and backslashes in the password are safe.
+pg_pw_literal=${POSTGRES_PASSWORD//\'/\'\'}
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Independent application logins. Local development reuses the container
@@ -21,18 +22,18 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
     -- the provider control plane.
     SELECT format(
         'CREATE ROLE regengine LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        '$RUNTIME_PW_QUOTED'
+        '${pg_pw_literal}'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')\gexec
-    ALTER ROLE regengine LOGIN PASSWORD '$RUNTIME_PW_QUOTED'
+    ALTER ROLE regengine LOGIN PASSWORD '${pg_pw_literal}'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     SELECT format(
         'CREATE ROLE regengine_sysadmin LOGIN PASSWORD %L NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION',
-        '$RUNTIME_PW_QUOTED'
+        '${pg_pw_literal}'
     )
     WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine_sysadmin')\gexec
-    ALTER ROLE regengine_sysadmin LOGIN PASSWORD '$RUNTIME_PW_QUOTED'
+    ALTER ROLE regengine_sysadmin LOGIN PASSWORD '${pg_pw_literal}'
       NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;
 
     -- Admin API database

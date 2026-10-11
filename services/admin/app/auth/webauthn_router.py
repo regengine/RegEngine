@@ -76,11 +76,17 @@ def _rp_name() -> str:
     return os.getenv(WEBAUTHN_RP_NAME_ENV, WEBAUTHN_DEFAULT_RP_NAME).strip() or WEBAUTHN_DEFAULT_RP_NAME
 
 
-def _expected_origin(request: Request) -> str:
+def _expected_origin(request: Request | None = None) -> str:
+    """Return the configured passkey origin.
+
+    The request Host is deliberately never used here: it is
+    client-controlled, so deriving the WebAuthn origin from it would let
+    an attacker satisfy the ceremony check from their own origin.
+    """
     configured = os.getenv(WEBAUTHN_EXPECTED_ORIGIN_ENV, "").strip()
     if configured:
         return configured.rstrip("/")
-    return f"{request.url.scheme}://{request.url.netloc}".rstrip("/")
+    raise _temporarily_unavailable()
 
 
 def _login_options_min_seconds() -> float:
@@ -180,7 +186,7 @@ def _webauthn_verify_registration_response(
     *,
     credential: dict[str, Any],
     expected_challenge: str,
-    request: Request,
+    request: Request | None = None,
 ):
     from webauthn import verify_registration_response
 
@@ -217,7 +223,7 @@ def _webauthn_verify_authentication_response(
     credential: dict[str, Any],
     expected_challenge: str,
     stored_credential: WebAuthnCredentialModel,
-    request: Request,
+    request: Request | None = None,
 ):
     from webauthn import verify_authentication_response
 
@@ -409,6 +415,8 @@ async def verify_webauthn_registration(
                     expected_challenge=challenge.challenge,
                     request=request,
                 )
+            except HTTPException:
+                raise
             except Exception as exc:
                 raise _invalid_webauthn() from exc
 
@@ -518,6 +526,8 @@ async def verify_webauthn_login(
                     stored_credential=credential,
                     request=request,
                 )
+            except HTTPException:
+                raise
             except Exception as exc:
                 raise _invalid_webauthn() from exc
 
