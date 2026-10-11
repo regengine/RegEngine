@@ -2171,7 +2171,7 @@ function GroupRootCausePanel({
                                 Upload supplier CSV
                             </Button>
                             <Button asChild variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noreferrer">
+                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noopener noreferrer">
                                     View FSMA 204 KDE list
                                 </a>
                             </Button>
