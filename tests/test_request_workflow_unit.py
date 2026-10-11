@@ -575,6 +575,115 @@ class TestPackageHashGeneration:
         assert compute_manifest_hash(tampered) != original
 
 
+class TestAssembledPackageHashLinkage:
+    """The assembler must store compute_manifest_hash(contents), not a copy.
+
+    The tests above only exercise ``compute_manifest_hash`` in isolation:
+    pointing the call site at a different digest would leave them green.
+    These tests assemble a package through the real method and assert the
+    stored hash equals the helper's digest of the stored contents.
+    """
+
+    def _fake_db(self, captured):
+        import json as _json
+
+        from sqlalchemy.sql.elements import TextClause
+
+        class _Mappings:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def fetchall(self):
+                return self._rows
+
+            def fetchone(self):
+                return self._rows[0] if self._rows else None
+
+        class _Result:
+            def __init__(self, rows=None, scalar_value=None):
+                self._rows = rows or []
+                self._scalar = scalar_value
+
+            def scalar(self):
+                return self._scalar
+
+            def mappings(self):
+                return _Mappings(self._rows)
+
+            def fetchall(self):
+                return self._rows
+
+        def _execute(statement, params=None):
+            sql = statement.text if isinstance(statement, TextClause) else str(statement)
+            if "MAX(version_number)" in sql:
+                return _Result(scalar_value=0)
+            if "INSERT INTO fsma.response_packages" in sql:
+                captured["contents_json"] = params["contents"]
+                captured["hash"] = params["hash"]
+                contents = _json.loads(params["contents"])
+                return _Result(rows=[{"package_contents": contents, "package_hash": params["hash"]}])
+            return _Result(rows=[])
+
+        db = MagicMock()
+        db.execute.side_effect = _execute
+        return db
+
+    def _assemble(self):
+        from services.shared.request_workflow import RequestWorkflow
+
+        captured = {}
+        db = self._fake_db(captured)
+        wf = RequestWorkflow(db)
+        wf._get_case = MagicMock(return_value=_mock_case_row(status="assembling"))
+        wf._get_scope_event_ids = MagicMock(return_value=[])
+        wf._compute_gap_snapshot = MagicMock(return_value={"open_gaps": 0})
+        result = wf.assemble_response_package(TENANT, CASE_ID, generated_by="tester")
+        return result, captured
+
+    def test_assembled_hash_matches_helper_digest(self):
+        """Stored package_hash equals compute_manifest_hash(stored contents)."""
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        result, _ = self._assemble()
+        contents = result["package_contents"]
+        if isinstance(contents, str):
+            import json as _json
+
+            contents = _json.loads(contents)
+        check = {k: v for k, v in contents.items() if k != "package_hash"}
+        assert result["package_hash"] == compute_manifest_hash(check), (
+            "assembler stored a hash that is not compute_manifest_hash(contents): "
+            "the call site no longer uses the helper"
+        )
+
+    def test_assembled_hash_covers_tenant_and_case(self):
+        """The digest binds the manifest to its tenant and case."""
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        result, _ = self._assemble()
+        contents = result["package_contents"]
+        if isinstance(contents, str):
+            import json as _json
+
+            contents = _json.loads(contents)
+        assert contents["tenant_id"] == TENANT
+        assert contents["request_case_id"] == CASE_ID
+        rebased = dict(contents)
+        rebased["tenant_id"] = "tenant-evil"
+        assert compute_manifest_hash(rebased) != result["package_hash"]
+
+    def test_insert_receives_helper_digest(self):
+        """The hash written to the DB row is the helper digest, not inline SQL."""
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        _, captured = self._assemble()
+        import json as _json
+
+        contents = _json.loads(captured["contents_json"])
+        check = {k: v for k, v in contents.items() if k != "package_hash"}
+        assert captured["hash"] == compute_manifest_hash(check)
+
+
 # ---------------------------------------------------------------------------
 # 9. Submit Package — validation
 # ---------------------------------------------------------------------------

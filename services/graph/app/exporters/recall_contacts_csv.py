@@ -96,15 +96,21 @@ def build_recall_contacts_rows(result: Any) -> List[List[str]]:
     # association's facility dict; look it up by GLN, never guess it.
     by_key: Dict[Any, Dict[str, Any]] = {}
     for facility in facilities:
+        if not isinstance(facility, dict):
+            continue
         by_key.setdefault(_facility_key(facility), facility)
 
     rows: List[List[str]] = []
     received_at: set = set()
 
     for association in trace_rows or []:
+        if not isinstance(association, dict):
+            continue
         event = association.get("event") or {}
+        if not isinstance(event, dict):
+            event = {}
         facility = association.get("facility")
-        if not facility:
+        if not isinstance(facility, dict) or not facility:
             continue
         if str(event.get("type") or "").upper() not in RECEIVING_EVENT_TYPES:
             continue
@@ -115,12 +121,17 @@ def build_recall_contacts_rows(result: Any) -> List[List[str]]:
             for field in ("name", "address", "facility_type"):
                 if not merged.get(field) and known.get(field):
                     merged[field] = known[field]
-        rows.append(_row(merged, association.get("lot"), event))
+        lot = association.get("lot")
+        if not isinstance(lot, dict):
+            lot = None
+        rows.append(_row(merged, lot, event))
         received_at.add(key)
 
     # Facilities the trace reached without a receiving event on record stay
     # on the notification list with the receipt cells blank.
     for facility in facilities:
+        if not isinstance(facility, dict):
+            continue
         if _facility_key(facility) not in received_at:
             rows.append(_row(facility, None, None))
 

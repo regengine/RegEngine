@@ -25,7 +25,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Auto-generate starting-template FSMA 204 Traceability Plans. Output is a draft; review with counsel before adoption.",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
 };
 
 export default function SOPGeneratorPage() {
@@ -36,7 +35,7 @@ export default function SOPGeneratorPage() {
                 <SOPGeneratorClient />
             </EmailGate>
             <RelatedTools tools={[
-                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your FSMA 204 compliance posture before generating your traceability plan." },
+                { href: "/tools/self-reported-checklist", title: "Self Reported Checklist", description: "You answer and the page echoes what you reported. It does not score readiness." },
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the Critical Tracking Events your SOPs need to cover across your supply chain." },
                 { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the Key Data Element checklist to include in your traceability procedures." },
             ]} />
