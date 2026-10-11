@@ -31,9 +31,17 @@ class MappingEngine:
     """Engine for semantic mapping and harmonization of global regulations."""
 
     def __init__(
-        self, uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = os.getenv("NEO4J_PASSWORD", "")
+        self,
+        uri: str = "bolt://localhost:7687",
+        user: str = "neo4j",
+        password: str = os.getenv("NEO4J_PASSWORD", ""),
+        database: Optional[str] = None,
     ):
         self.driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        # Tenant database name when the caller routes through one
+        # (Enterprise per-tenant databases). None keeps the driver home
+        # database, which is the only option on Community.
+        self._database = database
         self._groq_model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
         self.llm = None
         if ChatGroq and os.getenv("GROQ_API_KEY"):
@@ -46,6 +54,15 @@ class MappingEngine:
     async def close(self):
         """Close the Neo4j driver."""
         await self.driver.close()
+
+    def _open_session(self):
+        """Open a session on the configured database when one is set."""
+        # getattr keeps engines built without __init__ (tests that stub
+        # the driver directly) working: no database means home database.
+        database = getattr(self, "_database", None)
+        if database:
+            return self.driver.session(database=database)
+        return self.driver.session()
 
     async def map_requirement(self, obligation_id: str, tenant_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Find and link similar obligations across different regulations.
@@ -60,9 +77,9 @@ class MappingEngine:
             List of detected mappings.
 
         Raises:
-            ValueError: if `tenant_id` is None or empty.
+            ValueError: if `tenant_id` is None, empty, or whitespace-only.
         """
-        if not tenant_id:
+        if not tenant_id or not str(tenant_id).strip():
             raise ValueError(
                 "map_requirement requires a non-empty tenant_id; null-tenant queries are no longer supported"
             )
@@ -72,7 +89,7 @@ class MappingEngine:
             return []
 
         # 1. Fetch the source obligation and its context
-        async with self.driver.session() as session:
+        async with self._open_session() as session:
             source_res = await session.run(
                 """
                 MATCH (o:Obligation {text: $id})<-[:REQUIRES]-(s:Section)
@@ -151,7 +168,7 @@ class MappingEngine:
 
         # 4. Persistence: Create MAPPED_TO relationships in the graph
         if mappings:
-            async with self.driver.session() as session:
+            async with self._open_session() as session:
                 await session.run(
                     """
                     UNWIND $mappings as map

@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
-from shared.auth import APIKey, require_api_key
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from shared.auth import APIKey, reconcile_tenant_scope, require_api_key
 from shared.middleware import get_current_tenant_id
 
 from ..neo4j_utils import Neo4jClient
@@ -212,6 +212,7 @@ async def get_requirement_mappings(
 
 @router.post("/harmonize/{obligation_id}")
 async def harmonize_requirement(
+    request: Request,
     obligation_id: str,
     api_key: APIKey = Depends(require_api_key),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
@@ -241,5 +242,5 @@ async def harmonize_requirement(
             "mappings": mappings,
         }
     except Exception as e:
-        logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=str(tenant_id), error=str(e))
+        logger.error("harmonization_api_failed", obligation_id=obligation_id, tenant_id=scoped_tenant_id, error=str(e))
         raise HTTPException(status_code=503, detail="Harmonization engine unavailable")
