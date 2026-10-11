@@ -57,7 +57,18 @@ try:  # pragma: no cover - metrics are best-effort; never break ingest on regist
     WEBHOOK_HMAC_SKIPPED = _get_or_create_counter(
         "webhook_hmac_verification_skipped_total",
         "Webhook ingest requests where HMAC verification was skipped because "
-        "WEBHOOK_HMAC_SECRET is unset (F-5, fail-open visibility).",
+        "WEBHOOK_HMAC_SECRET is unset outside a closed gate "
+        "(F-5, fail-open visibility).",
+        ["reason"],
+    )
+    # #3229: rejected-before-verify counter for the closed gate
+    # (production or strict/cloud runtime with the secret unset). Kept
+    # separate from the skip counter so an alarm on skipped verifications
+    # never counts rejected requests as accepted unsigned traffic.
+    WEBHOOK_HMAC_REJECTED = _get_or_create_counter(
+        "webhook_hmac_verification_rejected_total",
+        "Webhook ingest requests rejected because WEBHOOK_HMAC_SECRET is "
+        "unset on a closed gate (#3229, fail-closed visibility).",
         ["reason"],
     )
     # Jev obligation second-judgment + M-5 silent-skip observability.
@@ -76,6 +87,7 @@ except Exception as _wh_metrics_exc:  # pragma: no cover
     _pkg.logger.debug("webhook_replay_metric_init_failed: %s", _wh_metrics_exc)
     WEBHOOK_REPLAY_REJECTED = None
     WEBHOOK_HMAC_SKIPPED = None
+    WEBHOOK_HMAC_REJECTED = None
     JEV_REVIEW_FLAGGED = None
     OBLIGATION_CHECK_SKIPPED = None
     _WEBHOOK_METRICS_ENABLED = False
@@ -105,6 +117,21 @@ def _record_hmac_skip() -> None:
             reason="WEBHOOK_HMAC_SECRET unset; webhook signatures NOT verified",
             mitigation="Set WEBHOOK_HMAC_SECRET in environment to enforce signing",
         )
+
+
+def _record_hmac_reject() -> None:
+    """#3229: count closed-gate rejections when the secret is unset.
+
+    Called on the fail-closed branch only (production or strict/cloud
+    runtime). It never emits the fail-open skip warning, so alarms on
+    ``webhook_hmac_verification_skipped_total`` keep meaning "unsigned
+    event accepted". Never raises.
+    """
+    if _pkg.WEBHOOK_HMAC_REJECTED is not None:
+        try:
+            _pkg.WEBHOOK_HMAC_REJECTED.labels(reason="secret_unset").inc()
+        except Exception:  # pragma: no cover
+            pass
 
 
 def _classify_replay_rejection(timestamp: str) -> tuple[str, str]:

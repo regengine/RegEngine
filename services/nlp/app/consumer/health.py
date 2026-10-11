@@ -9,7 +9,6 @@ from __future__ import annotations
 import http.server
 import json
 import os
-import socket
 import threading
 import time
 from typing import Any, Optional
@@ -178,6 +177,19 @@ def consumer_health() -> tuple[int, dict[str, Any]]:
 _HEALTH_PORT = int(os.getenv("NLP_HEALTH_PORT", "8099"))
 
 
+class _ReusableHTTPServer(http.server.HTTPServer):
+    """HTTPServer with SO_REUSEADDR set before bind.
+
+    ``allow_reuse_address`` is read by ``server_bind`` during __init__,
+    so it must be a class attribute: calling ``setsockopt(SO_REUSEADDR)``
+    after the constructor has already bound (as the old code did) has no
+    effect on the bind, and a fast restart could hit EADDRINUSE and come
+    up with no liveness endpoint at all.
+    """
+
+    allow_reuse_address = True
+
+
 class _HealthHandler(http.server.BaseHTTPRequestHandler):
     """Minimal HTTP handler for the consumer liveness probe."""
 
@@ -212,8 +224,7 @@ def _start_health_server() -> None:
     the probe is available from process startup (before the first Kafka poll).
     """
     try:
-        server = http.server.HTTPServer(("0.0.0.0", _HEALTH_PORT), _HealthHandler)
-        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server = _ReusableHTTPServer(("0.0.0.0", _HEALTH_PORT), _HealthHandler)
     except OSError as exc:
         logger.warning(
             "health_server_bind_failed",

@@ -896,7 +896,9 @@ class TestLogV2Export:
             "tlc": "TLC-X",
             "start_date": "2026-04-01",
             "end_date": "2026-04-10",
+            "event_type": None,
         }
+        assert audit.pii_included is False
         datetime.fromisoformat(audit.initiated_at_utc)
 
     def test_package_format_uses_v2_package(self):

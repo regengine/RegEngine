@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ class ResponseMeta(BaseModel):
     """Standard metadata for all Graph API responses."""
 
     request_id: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     version: str = "1.0.0"
 
 

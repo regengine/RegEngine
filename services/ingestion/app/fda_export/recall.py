@@ -210,6 +210,7 @@ async def export_recall_filtered_handler(
             product=product,
             location=location,
             event_type=event_type,
+            include_pii=include_pii,
         )
 
         timestamp = make_timestamp()

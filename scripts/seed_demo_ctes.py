@@ -2,26 +2,179 @@
 """Seed all 7 FSMA 204 CTE types to push compliance score toward 100%.
 
 Usage:
-    python3 scripts/seed_demo_ctes.py [BASE_URL] [API_KEY]
+    python3 scripts/seed_demo_ctes.py [--base BASE_URL] [--allow-production]
+    python3 scripts/seed_demo_ctes.py [BASE_URL] [--allow-production]
 
-Defaults to the production ingestion service URL.
-Uses an individually attributable tenant key from REGENGINE_TENANT_API_KEY
-when no CLI key is supplied.
+Defaults to the local ingestion service (http://localhost:8002) and refuses
+to target any non-local host unless BOTH an explicit URL and
+--allow-production are given. The tenant API key comes from the
+REGENGINE_TENANT_API_KEY environment variable only, never from CLI args.
+TLS certificate errors are never downgraded; they abort the run.
+Plain http is refused for any non-local host (localhost, 127.0.0.1 and
+::1 may stay http for local dev), even with --allow-production.
+Redirects are never followed, so the API key is not forwarded to a host
+the allowlist never approved; a redirect fails the run with a clear error.
 """
 
+import argparse
 import json
 import os
 import ssl
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 
-BASE = sys.argv[1] if len(sys.argv) > 1 else "https://regengine-production.up.railway.app"
-API_KEY = sys.argv[2] if len(sys.argv) > 2 else os.getenv("REGENGINE_TENANT_API_KEY", "")
-if not API_KEY:
-    print("Error: No API key. Pass as 2nd arg or set REGENGINE_TENANT_API_KEY.")
-    sys.exit(1)
+DEFAULT_BASE = "http://localhost:8002"
+BASE_ENV_VAR = "SEED_BASE_URL"
+API_KEY_ENV_VAR = "REGENGINE_TENANT_API_KEY"  # pragma: allowlist secret -- environment variable name
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
-ENDPOINT = f"{BASE}/api/v1/webhooks/ingest"
+
+class UnsafeTargetError(ValueError):
+    """Raised when a seed target is not local and not explicitly allowed."""
+
+
+def is_local_target(base: str) -> bool:
+    """Return True when the URL targets this machine only."""
+    try:
+        host = (urllib.parse.urlparse(base).hostname or "").lower()
+    except ValueError:
+        return False
+    return host in LOCAL_HOSTS
+
+
+def resolve_base(cli_base=None, *, allow_production: bool = False) -> str:
+    """Resolve the seed target. Defaults to localhost.
+
+    A non-local target is returned only when it was explicitly supplied
+    (CLI argument or SEED_BASE_URL) AND allow_production is True.
+    Otherwise raises UnsafeTargetError.
+    """
+    env_base = os.getenv(BASE_ENV_VAR, "").strip()
+    if cli_base:
+        target, explicit = cli_base.strip(), True
+    elif env_base:
+        target, explicit = env_base, True
+    else:
+        target, explicit = DEFAULT_BASE, False
+    if not is_local_target(target):
+        if not explicit:
+            raise UnsafeTargetError(f"Refusing to seed non-local target {target!r} without an explicit URL.")
+        if not allow_production:
+            raise UnsafeTargetError(
+                f"Refusing to seed non-local target {target!r}. "
+                "Pass --allow-production with an explicit URL only if you "
+                "intentionally want demo data in that environment."
+            )
+    require_https_for_non_local(target)
+    return target
+
+
+def get_api_key() -> str:
+    """Read the tenant API key from the environment only."""
+    api_key = os.getenv(API_KEY_ENV_VAR, "").strip()
+    if not api_key:
+        raise UnsafeTargetError(
+            f"No API key. Set {API_KEY_ENV_VAR} in the environment. API keys are never accepted as CLI arguments."
+        )
+    return api_key
+
+
+def create_ssl_context() -> ssl.SSLContext:
+    """Return a default verifying SSL context. Never downgraded."""
+    return ssl.create_default_context()
+
+
+def is_tls_cert_failure(exc: BaseException) -> bool:
+    """True when exc is (or urllib-wraps) an SSL cert verification failure.
+
+    urllib.request.urlopen surfaces TLS failures as
+    urllib.error.URLError(reason=SSLCertVerificationError), never as the
+    bare ssl exception, so both shapes must be detected.
+    """
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return True
+    return isinstance(getattr(exc, "reason", None), ssl.SSLCertVerificationError)
+
+
+def require_https_for_non_local(target: str) -> None:
+    """Reject plain http targets outside this machine.
+
+    http stays allowed for local dev (localhost, 127.0.0.1, ::1).
+    Anything else must use https, even with --allow-production, so the
+    API key never travels in cleartext.
+    """
+    scheme = urllib.parse.urlparse(target).scheme.lower()
+    if scheme == "http" and not is_local_target(target):
+        raise UnsafeTargetError(
+            f"Refusing plain http for non-local target {target!r}. "
+            "Use https (http is allowed only for local targets such as "
+            "localhost and 127.0.0.1)."
+        )
+
+
+class RedirectRefusedError(urllib.error.HTTPError):
+    """Raised when a redirect is refused so credentials are never forwarded."""
+
+
+class _NoFollowRedirect(urllib.request.HTTPRedirectHandler):
+    """Block every redirect so auth headers never reach another host.
+
+    urllib follows redirects by default and re-sends the original request
+    headers (including X-RegEngine-API-Key) to the redirect target, which
+    the seed allowlist never approved. Seed scripts fail instead.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RedirectRefusedError(
+            req.get_full_url(),
+            code,
+            f"Refusing to follow redirect (HTTP {code}) to {newurl!r}. "
+            "Seed scripts never follow redirects so the API key is not "
+            "forwarded to another host.",
+            headers,
+            fp,
+        )
+
+
+def _no_redirect_opener(ctx):
+    """Build an opener whose chain has no redirect-following handler.
+
+    Built explicitly instead of build_opener with extras so the default
+    HTTPRedirectHandler, which would forward auth headers, is never in
+    the chain.
+    """
+    opener = urllib.request.OpenerDirector()
+    opener.add_handler(urllib.request.ProxyHandler())
+    opener.add_handler(urllib.request.UnknownHandler())
+    opener.add_handler(urllib.request.HTTPHandler())
+    opener.add_handler(urllib.request.HTTPDefaultErrorHandler())
+    opener.add_handler(_NoFollowRedirect())
+    opener.add_handler(urllib.request.HTTPErrorProcessor())
+    opener.add_handler(urllib.request.HTTPSHandler(context=ctx))
+    return opener
+
+
+def urlopen_no_redirect(req: urllib.request.Request, *, context=None, timeout=None):
+    """Open an http(s) request without following redirects."""
+    opener = _no_redirect_opener(context)
+    if timeout is None:
+        return opener.open(req)
+    return opener.open(req, timeout=timeout)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description="Seed demo CTE events (defaults to localhost).")
+    ap.add_argument("base_positional", nargs="?", default=None, help="Explicit target base URL.")
+    ap.add_argument("--base", default=None, help="Explicit target base URL.")
+    ap.add_argument(
+        "--allow-production",
+        action="store_true",
+        help="Allow seeding a non-local target. Requires an explicit URL.",
+    )
+    return ap
+
 
 # One event per CTE type with all required KDEs (including reference_document)
 EVENTS = [
@@ -146,43 +299,68 @@ EVENTS = [
     },
 ]
 
-payload = {
-    "tenant_id": "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
-    "source": "demo_seed",
-    "events": EVENTS,
-}
 
-# Handle macOS SSL cert issue
-ctx = ssl.create_default_context()
-try:
-    urllib.request.urlopen(urllib.request.Request(f"{BASE}/health"), context=ctx, timeout=5)
-except ssl.SSLCertVerificationError:
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+def build_payload() -> dict:
+    return {
+        "tenant_id": "5946c58f-ddf9-4db0-9baa-acb11c6fce91",
+        "source": "demo_seed",
+        "events": EVENTS,
+    }
 
-data = json.dumps(payload).encode()
-req = urllib.request.Request(
-    ENDPOINT,
-    data=data,
-    headers={
-        "Content-Type": "application/json",
-        "X-RegEngine-API-Key": API_KEY,
-    },
-    method="POST",
-)
 
-try:
-    with urllib.request.urlopen(req, context=ctx) as resp:
-        result = json.loads(resp.read())
-        print(json.dumps(result, indent=2))
-        accepted = result.get("accepted", 0)
-        rejected = result.get("rejected", 0)
-        print(f"\n✅ Accepted: {accepted}  ❌ Rejected: {rejected}")
-        if rejected > 0:
-            for ev in result.get("events", []):
-                if ev.get("status") == "rejected":
-                    print(f"  {ev['cte_type']}: {ev.get('errors', [])}")
-except urllib.error.HTTPError as e:
-    body = e.read().decode()
-    print(f"HTTP {e.code}: {body}")
-    sys.exit(1)
+def post_events(base: str, api_key: str, ctx: ssl.SSLContext) -> int:
+    data = json.dumps(build_payload()).encode()
+    req = urllib.request.Request(
+        f"{base}/api/v1/webhooks/ingest",
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "X-RegEngine-API-Key": api_key,
+        },
+        method="POST",
+    )
+    try:
+        with urlopen_no_redirect(req, context=ctx) as resp:
+            result = json.loads(resp.read())
+            print(json.dumps(result, indent=2))
+            accepted = result.get("accepted", 0)
+            rejected = result.get("rejected", 0)
+            print(f"\nAccepted: {accepted}  Rejected: {rejected}")
+            if rejected > 0:
+                for ev in result.get("events", []):
+                    if ev.get("status") == "rejected":
+                        print(f"  {ev['cte_type']}: {ev.get('errors', [])}")
+    except RedirectRefusedError as e:
+        print(f"ERROR: {e.msg} Refusing to continue.")
+        return 1
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        print(f"HTTP {e.code}: {body}")
+        return 1
+    return 0
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    cli_base = args.base or args.base_positional
+    try:
+        base = resolve_base(cli_base, allow_production=args.allow_production)
+        api_key = get_api_key()
+    except UnsafeTargetError as e:
+        print(f"ERROR: {e}")
+        return 2
+    print(f"Seeding demo CTEs to {base}")
+    try:
+        return post_events(base, api_key, create_ssl_context())
+    except ssl.SSLCertVerificationError as e:
+        print(f"ERROR: TLS certificate verification failed: {e}. Refusing to continue.")
+        return 1
+    except urllib.error.URLError as e:
+        if is_tls_cert_failure(e):
+            print(f"ERROR: TLS certificate verification failed: {e.reason}. Refusing to continue.")
+            return 1
+        raise
+
+
+if __name__ == "__main__":
+    sys.exit(main())
