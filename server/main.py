@@ -395,6 +395,19 @@ from shared.auth import validate_auth_config
 
 validate_auth_config()
 
+# Fail fast in production when required credentials are missing or still
+# set to insecure defaults. The credential getters fall back to localhost
+# with empty passwords for local development only; without this gate a
+# production deploy missing its secret wiring would boot against those
+# fallbacks and serve traffic unauthenticated to its backends.
+from shared.secrets_manager import (
+    require_secure_secrets_in_production,
+    validate_production_secrets,
+)
+
+require_secure_secrets_in_production()
+validate_production_secrets()
+
 # #1325: mount Prometheus RED metrics on /metrics for the monolith. add_security/
 # add_observability above wire CORS + OTel tracing but NOT the Prometheus
 # endpoint — install_metrics is the single source of truth for /metrics across

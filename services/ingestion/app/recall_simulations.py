@@ -20,6 +20,7 @@ from shared.tenant_settings import get_tenant_data, list_tenant_data, set_tenant
 
 from .authz import IngestionPrincipal, require_permission
 from .disclaimers import SIMULATION_DISCLAIMER
+from .shared.csv_safety import sanitize_row
 from .shared.tenant_resolution import resolve_principal_tenant_id
 
 logger = logging.getLogger("recall-simulations")
@@ -414,7 +415,12 @@ def _build_csv_export(simulation: dict, view: str) -> str:
 
     writer = csv.DictWriter(output, fieldnames=list(rows[0].keys()))
     writer.writeheader()
-    writer.writerows(rows)
+    # Neutralize spreadsheet-formula prefixes in tenant-influenced cells
+    # (scenario names, timeline text, facility names). ``sanitize_row``
+    # prepends a single quote when a cell starts with ``=``, ``+``,
+    # ``-``, ``@``, tab, or carriage return, so Excel/Sheets render the
+    # value as text instead of executing it as a formula.
+    writer.writerows([sanitize_row(row) for row in rows])
     return output.getvalue()
 
 

@@ -192,7 +192,8 @@ async def list_industries() -> IndustriesResponse:
 async def list_checklists(industry: str | None = None) -> ChecklistsResponse:
     results = _CHECKLISTS
     if industry:
-        wanted = _INDUSTRY_FILTER_ALIASES.get(industry.lower(), industry.lower())
+        key = industry.strip().lower()
+        wanted = _INDUSTRY_FILTER_ALIASES.get(key, key)
         results = [c for c in results if c.industry.lower() == wanted]
     return {"checklists": [c.model_dump() for c in results], "total": len(results)}
 
@@ -520,7 +521,9 @@ async def validate_compliance(
         )
 
     cte_value = request.config.get("cte_type")
-    cte_type = cte_value.upper() if isinstance(cte_value, str) else None
+    # Strip to match _config_to_engine_event, which strips before lowercasing:
+    # padded input must reach the engine, not die here as INVALID_CTE_TYPE.
+    cte_type = cte_value.strip().upper() if isinstance(cte_value, str) else None
     if cte_type not in _ALLOWED_VALIDATE_CTE_TYPES:
         # Fail fast with a structured error rather than handing the engine
         # an event_type no rule targets (which would surface as a less

@@ -12,7 +12,39 @@ from unittest.mock import MagicMock
 import pytest
 
 
-def test_ssrf_does_not_trigger_browser_fallback(monkeypatch):
+@pytest.fixture(autouse=True)
+def _no_dns_for_mocked_fetches(monkeypatch):
+    from shared import safe_http
+
+    monkeypatch.setattr(safe_http, "validate_url", lambda url: url)
+
+
+def test_size_cap_failure_does_not_trigger_browser_fallback(monkeypatch):
+    from regengine_ingestion.utils import fetch_utils
+    from shared import safe_http
+
+    def too_large(*args, **kwargs):
+        raise safe_http.ResponseTooLargeError("Response body exceeds 10 bytes")
+
+    monkeypatch.setattr(safe_http, "safe_httpx_get_sync", too_large)
+    browser_mock = MagicMock(side_effect=AssertionError("browser must not bypass size cap"))
+    monkeypatch.setattr(fetch_utils, "_fetch_with_browser_sync", browser_mock)
+
+    with pytest.raises(safe_http.ResponseTooLargeError):
+        fetch_utils.fetch_content("https://example.com/foo")
+    browser_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "Resolved IP 169.254.169.254 is in blocked network",
+        "Refusing cross-origin redirect with headers",
+        "Refusing HTTPS->HTTP downgrade redirect",
+        "URLs with embedded credentials are not allowed",
+    ],
+)
+def test_ssrf_does_not_trigger_browser_fallback(monkeypatch, reason):
     from regengine_ingestion.utils import fetch_utils
     from shared import safe_http
     from shared.url_validation import SSRFError
@@ -21,7 +53,7 @@ def test_ssrf_does_not_trigger_browser_fallback(monkeypatch):
     # because ``fetch_utils.fetch_content`` now delegates to
     # ``safe_http.safe_fetch_content``.
     def boom(*args, **kwargs):
-        raise SSRFError("Resolved IP 169.254.169.254 is in blocked network")
+        raise SSRFError(reason)
 
     monkeypatch.setattr(safe_http, "safe_httpx_get_sync", boom)
 

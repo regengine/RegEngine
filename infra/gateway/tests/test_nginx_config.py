@@ -37,7 +37,11 @@ class TestUpstreamDefinitions:
     def test_admin_service_upstream(self, nginx_config):
         """Admin service upstream is defined."""
         assert "upstream admin_service" in nginx_config
-        assert "admin-api:8400" in nginx_config
+        assert "admin-service:8400" in nginx_config
+
+    def test_no_stale_admin_api_hostname(self, nginx_config):
+        """The admin-api hostname matches no k8s Service; it must not appear."""
+        assert "admin-api" not in nginx_config
 
     def test_ingestion_service_upstream(self, nginx_config):
         """Ingestion service upstream is defined."""
@@ -206,6 +210,28 @@ class TestRateLimiting:
 
 
 # ============================================================================
+# UPSTREAM WIRING TESTS
+# ============================================================================
+
+
+class TestUpstreamWiring:
+    """Every proxy_pass target must resolve to a defined upstream block."""
+
+    def test_all_proxy_pass_targets_are_defined_upstreams(self, nginx_config):
+        """A proxy_pass to an undefined upstream fails at nginx startup."""
+        upstreams = set(re.findall(r"upstream\s+(\w+)", nginx_config))
+        targets = set(re.findall(r"proxy_pass\s+http://([A-Za-z0-9_]+)", nginx_config))
+        assert targets, "no proxy_pass targets found"
+        missing = targets - upstreams
+        assert not missing, f"proxy_pass targets with no upstream block: {missing}"
+
+    def test_no_lua_block(self, nginx_config):
+        """Stock nginx images lack lua-nginx-module, so lua blocks fail nginx -t."""
+        assert "content_by_lua_block" not in nginx_config
+        assert "ngx.say" not in nginx_config
+
+
+# ============================================================================
 # HEALTH CHECK TESTS
 # ============================================================================
 
@@ -370,6 +396,17 @@ class TestSSLConfiguration:
     def test_tls_protocols(self, nginx_config):
         """TLS protocols are specified (TLS 1.2+)."""
         assert "TLSv1.2" in nginx_config or "ssl_protocols" in nginx_config
+
+    def test_tls13_enabled_no_legacy_protocols(self, nginx_config):
+        """The template enables TLS 1.3 and names no legacy 1.0/1.1."""
+        assert "TLSv1.3" in nginx_config
+        assert "TLSv1.0" not in nginx_config
+        assert "TLSv1.1" not in nginx_config
+
+    def test_tls_ciphers_include_strong_suites(self, nginx_config):
+        """Cipher list covers AES-256-GCM and ChaCha20, not just AES-128."""
+        assert "CHACHA20" in nginx_config
+        assert "AES256-GCM" in nginx_config or "AES256_GCM" in nginx_config
 
     def test_hsts_header_template(self, nginx_config):
         """HSTS header template exists."""

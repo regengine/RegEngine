@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from app import team_mgmt as tm
+from app.authz import IngestionPrincipal
 from app.team_mgmt import (
     ROLE_PERMISSIONS,
     InviteRequest,
@@ -27,7 +28,17 @@ from app.webhook_compat import _verify_api_key
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from services.ingestion.tests.authz_overrides import install_ingestion_principal_override
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
+
+
+def _principal(scopes: list[str]) -> IngestionPrincipal:
+    return IngestionPrincipal(key_id="test-caller", scopes=scopes, tenant_id="t1")
+
+
+OWNER_PRINCIPAL = _principal(["*"])
+ADMIN_PRINCIPAL = _principal(["team.write"])
+NARROW_PRINCIPAL = _principal(["webhooks.ingest"])
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,6 +58,10 @@ def app():
     app.include_router(router)
     app.dependency_overrides[_verify_api_key] = lambda: None
     install_tenant_context_override(app)
+    # Default caller is owner-tier so the pre-existing endpoint tests keep
+    # exercising the happy path; privilege tests below install narrower
+    # principals per test.
+    install_ingestion_principal_override(app, OWNER_PRINCIPAL)
     return app
 
 
@@ -591,3 +606,127 @@ class TestRouterSurface:
         assert "/api/v1/team/{tenant_id}/invite" in paths
         assert "/api/v1/team/{tenant_id}/{member_id}/role" in paths
         assert "/api/v1/team/roles/definitions" in paths
+
+
+# ---------------------------------------------------------------------------
+# Invite privilege and role validation (audit: any key holder could invite
+# any role string, including owner)
+# ---------------------------------------------------------------------------
+
+
+class TestInvitePrivileges:
+    def test_unknown_role_rejected(self, client, monkeypatch):
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "superuser"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Invalid role"
+
+    def test_blank_role_rejected(self, client, monkeypatch):
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "  "},
+        )
+        assert resp.status_code == 400
+
+    def test_mixed_case_role_normalized(self, client, monkeypatch):
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "Admin"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["member"]["role"] == "admin"
+
+    def test_narrow_scope_caller_cannot_invite(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, NARROW_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "viewer"},
+        )
+        assert resp.status_code == 403
+        assert _team_store.get("t1", []) == []
+
+    def test_admin_caller_can_invite_viewer(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "viewer"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["member"]["role"] == "viewer"
+
+    def test_admin_caller_cannot_invite_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "owner"},
+        )
+        assert resp.status_code == 403
+
+    def test_owner_caller_can_invite_owner(self, client, monkeypatch):
+        # The app fixture installs an owner-tier principal by default.
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.post(
+            "/api/v1/team/t1/invite",
+            json={"email": "new@x.com", "name": "New Person", "role": "owner"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["member"]["role"] == "owner"
+
+
+# ---------------------------------------------------------------------------
+# Update-role privilege and role validation
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateRolePrivileges:
+    def _member(self):
+        return TeamMember(id="m1", name="Alice", email="a@x.com", role="viewer", status="active")
+
+    def test_unknown_role_rejected(self, client, monkeypatch):
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "superuser"})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Invalid role"
+
+    def test_narrow_scope_caller_cannot_change_role(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, NARROW_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
+        assert resp.status_code == 403
+
+    def test_admin_caller_cannot_promote_to_owner(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "owner"})
+        assert resp.status_code == 403
+
+    def test_owner_caller_can_promote_to_owner(self, client, monkeypatch):
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "owner"})
+        assert resp.status_code == 200
+        assert resp.json()["new_role"] == "owner"
+
+    def test_admin_caller_can_promote_to_admin(self, app, client, monkeypatch):
+        install_ingestion_principal_override(app, ADMIN_PRINCIPAL)
+        monkeypatch.setattr(tm, "_db_get_team", lambda tid: [self._member()])
+        monkeypatch.setattr(tm, "_db_add_team_member", lambda tid, m: True)
+        resp = client.put("/api/v1/team/t1/m1/role", params={"role": "admin"})
+        assert resp.status_code == 200
+        assert resp.json()["new_role"] == "admin"
