@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 NGINX_CONF_PATH = Path(__file__).parent.parent.parent.parent / "infra" / "gateway" / "nginx.conf"
 
@@ -37,21 +38,31 @@ class TestUpstreamDefinitions:
     def test_admin_service_upstream(self, nginx_config):
         """Admin service upstream is defined."""
         assert "upstream admin_service" in nginx_config
-        assert "admin-service:8400" in nginx_config
+        assert "admin-service:80" in nginx_config
 
     def test_no_stale_admin_api_hostname(self, nginx_config):
         """The admin-api hostname matches no k8s Service; it must not appear."""
         assert "admin-api" not in nginx_config
 
+    def test_no_stale_container_port_upstreams(self, nginx_config):
+        """Upstreams must use the k8s Service port, not container ports.
+
+        DNS resolves each name to the Service ClusterIP, and the Services
+        only publish port 80. server lines aimed at 8400/8000/8100/8200/8500
+        hit a closed Service port.
+        """
+        for stale in ("-service:8400", "-service:8000", "-service:8100", "-service:8200", "-service:8500"):
+            assert stale not in nginx_config, f"upstream still uses container port {stale}"
+
     def test_ingestion_service_upstream(self, nginx_config):
         """Ingestion service upstream is defined."""
         assert "upstream ingestion_service" in nginx_config
-        assert "ingestion-service:8000" in nginx_config
+        assert "ingestion-service:80" in nginx_config
 
     def test_nlp_service_upstream(self, nginx_config):
         """NLP service upstream is defined and enabled."""
         assert "upstream nlp_service" in nginx_config
-        assert "nlp-service:8100" in nginx_config
+        assert "nlp-service:80" in nginx_config
         # Should NOT be commented out
         lines = nginx_config.split("\n")
         for i, line in enumerate(lines):
@@ -61,7 +72,7 @@ class TestUpstreamDefinitions:
     def test_graph_service_upstream(self, nginx_config):
         """Graph service upstream is defined and enabled."""
         assert "upstream graph_service" in nginx_config
-        assert "graph-service:8200" in nginx_config
+        assert "graph-service:80" in nginx_config
         # Should NOT be commented out
         lines = nginx_config.split("\n")
         for i, line in enumerate(lines):
@@ -71,7 +82,30 @@ class TestUpstreamDefinitions:
     def test_compliance_service_upstream(self, nginx_config):
         """Compliance service upstream is defined."""
         assert "upstream compliance_service" in nginx_config
-        assert "compliance-service:8500" in nginx_config
+        assert "compliance-service:80" in nginx_config
+
+    def test_upstream_hosts_and_ports_match_k8s_services(self, nginx_config):
+        """Every upstream server host:port must match a k8s Service name:port.
+
+        A future Service rename or port change must turn this red instead of
+        leaving nginx dialing a name or port nothing publishes.
+        """
+        k8s_base = Path(__file__).parent.parent.parent.parent / "infra" / "k8s" / "base"
+        services = {}
+        for deployment in sorted(k8s_base.glob("*/deployment.yaml")):
+            for doc in yaml.safe_load_all(deployment.read_text()):
+                if doc and doc.get("kind") == "Service":
+                    name = doc["metadata"]["name"]
+                    ports = [p["port"] for p in doc["spec"].get("ports", [])]
+                    services[name] = ports
+        assert services, "no k8s Services found to check against"
+        servers = re.findall(r"^\s*server\s+([A-Za-z0-9_.-]+):(\d+);", nginx_config, re.M)
+        assert servers, "no upstream server lines found"
+        for host, port in servers:
+            assert host in services, f"upstream host {host} matches no k8s Service"
+            assert int(port) in services[host], (
+                f"upstream {host}:{port} publishes no such port (Service ports: {services[host]})"
+            )
 
     def test_keepalive_connections(self, nginx_config):
         """Upstreams have keepalive connections configured."""
@@ -277,8 +311,15 @@ class TestLogging:
         assert '"status"' in nginx_config
 
     def test_json_log_format_does_not_log_raw_query_string(self, nginx_config):
-        """Access logs use path-only URI values so raw query params stay out of logs."""
-        assert "$request_uri" not in nginx_config
+        """Access logs use path-only URI values so raw query params stay out of logs.
+
+        Scoped to the log_format block: $request_uri legitimately appears
+        elsewhere (the commented HTTPS-redirect template needs the original
+        URI to preserve the request), and only its presence in the emitted
+        log line leaks query params.
+        """
+        block = nginx_config.split("log_format json_audit", 1)[1].split("}';", 1)[0]
+        assert "$request_uri" not in block
         assert '"request_path":"$uri"' in nginx_config
 
     def test_access_log_uses_json(self, nginx_config):
@@ -382,35 +423,68 @@ class TestCORS:
 
 
 # ============================================================================
-# SSL/TLS TESTS (Commented section validation)
+# SSL/TLS TESTS (Commented template plus live-state pins)
 # ============================================================================
 
 
+def _uncommented_lines(nginx_config):
+    """Yield config lines that nginx actually loads (strip # comments)."""
+    for line in nginx_config.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            continue
+        yield line
+
+
 class TestSSLConfiguration:
-    """Tests for SSL/TLS configuration (even if commented)."""
+    """Tests for the commented SSL/TLS template and the live plaintext state.
+
+    The 443 server block is a commented template: no test below may claim
+    TLS is enabled. Template checks pin the commented text; live-state
+    checks assert on uncommented directives only, so uncommenting half a
+    TLS setup turns them red.
+    """
 
     def test_ssl_section_exists(self, nginx_config):
         """SSL server block template exists."""
         assert "listen 443 ssl" in nginx_config or "listen 443" in nginx_config
 
     def test_tls_protocols(self, nginx_config):
-        """TLS protocols are specified (TLS 1.2+)."""
+        """TLS protocols are specified (TLS 1.2+) in the template."""
         assert "TLSv1.2" in nginx_config or "ssl_protocols" in nginx_config
 
     def test_tls13_enabled_no_legacy_protocols(self, nginx_config):
-        """The template enables TLS 1.3 and names no legacy 1.0/1.1."""
+        """The template names TLS 1.3 and no legacy 1.0/1.1."""
         assert "TLSv1.3" in nginx_config
         assert "TLSv1.0" not in nginx_config
         assert "TLSv1.1" not in nginx_config
 
     def test_tls_ciphers_include_strong_suites(self, nginx_config):
-        """Cipher list covers AES-256-GCM and ChaCha20, not just AES-128."""
+        """Template cipher list covers AES-256-GCM and ChaCha20, not just AES-128."""
         assert "CHACHA20" in nginx_config
         assert "AES256-GCM" in nginx_config or "AES256_GCM" in nginx_config
 
     def test_hsts_header_template(self, nginx_config):
         """HSTS header template exists."""
         assert "Strict-Transport-Security" in nginx_config
+
+    def test_redirect_template_line_exists(self, nginx_config):
+        """The port 80 block carries the commented 301 line to enable with TLS."""
+        assert "return 301 https://$host$request_uri;" in nginx_config
+
+    def test_live_server_has_no_active_tls(self, nginx_config):
+        """Live state pin: the only loaded server still listens on plaintext 80.
+
+        There is no uncommented 443 listener, certificate, ssl_protocols, or
+        redirect yet, and the HSTS header on port 80 is ignored by browsers
+        until responses arrive over HTTPS. When real certificates land and
+        the template is enabled, update this test to pin the live TLS state.
+        """
+        live = "\n".join(_uncommented_lines(nginx_config))
+        assert "listen 443" not in live, "443 listener is live, update the TLS state pins"
+        assert "ssl_certificate" not in live, "TLS cert is live, update the TLS state pins"
+        assert "ssl_protocols" not in live, "ssl_protocols is live, update the TLS state pins"
+        assert "return 301 https" not in live, "HTTPS redirect is live, update the TLS state pins"
 
 
 # ============================================================================
