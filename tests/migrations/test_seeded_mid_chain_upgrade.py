@@ -335,9 +335,32 @@ def test_audit_append_only_still_enforced_at_head(rehearsal: RehearsalResult) ->
         )
 
 
+# Fixed IDs from seed_mid_chain.sql (v079 variant adds password_hash only).
+SEED_USER_EMAILS = {
+    "00000000-0000-4000-8000-0000000000aa": "seed-admin@example.test",
+    "00000000-0000-4000-8000-0000000000ab": "seed-user@example.test",
+}
+
+
+def _assert_seeded_users_preserved(engine: Engine) -> None:
+    """Fail if any post-v089 migration dropped or rewrote a seeded user."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id::text, email FROM public.users WHERE id::text = ANY(CAST(:ids AS text[]))"),
+            {"ids": list(SEED_USER_EMAILS)},
+        ).all()
+    found = {row[0]: row[1] for row in rows}
+    assert found == SEED_USER_EMAILS, f"seeded users did not survive the upgrade intact: {found!r}"
+
+
 def test_v079_identity_backfill_preserves_existing_users(rehearsal: RehearsalResult) -> None:
+    # Every leg proves the seeded users survive to head with emails intact.
+    _assert_seeded_users_preserved(rehearsal.engine)
     if MID_CHAIN_REVISION != "267d8053ced5":
-        return  # v089 fixture users are created after the v084 backfill.
+        pytest.skip(
+            "user_emails completeness only applies to the v079 seed: "
+            "v089 fixture users are created after the v084 backfill ran"
+        )
     with rehearsal.engine.connect() as conn:
         missing = conn.execute(
             text("""SELECT count(*) FROM public.users u

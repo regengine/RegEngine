@@ -202,6 +202,13 @@ class IngestEvent(BaseModel):
         except (ValueError, AttributeError):
             raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
 
+        if dt.tzinfo is None:
+            # Naive timestamps are assumed UTC, mirroring the ingest
+            # replay-window check (webhook_router_v2/security.py). Without
+            # this the aware/naive comparison below raises a bare TypeError
+            # (HTTP 500) instead of a 422 validation error.
+            dt = dt.replace(tzinfo=timezone.utc)
+
         now = datetime.now(timezone.utc)
         # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.
         # Events older than 90 days are accepted but flagged via _historical_warning.

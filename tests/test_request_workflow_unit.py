@@ -523,28 +523,56 @@ class TestCheckDeadlineStatus:
 
 
 class TestPackageHashGeneration:
-    def test_sha256_of_sorted_json(self):
-        """Verify that the hash computation matches the module's approach."""
+    def test_assembler_hash_is_deterministic(self):
+        """The assembler's own hash function returns stable 64-char digests."""
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
         contents = {
             "request_case_id": "c1",
             "version_number": 1,
             "trace_data": [{"event_id": "e1"}],
         }
-        contents_json = json.dumps(contents, sort_keys=True, default=str)
-        expected_hash = hashlib.sha256(contents_json.encode("utf-8")).hexdigest()
 
-        # Verify the hash is deterministic
-        assert len(expected_hash) == 64
-        # Same input, same hash
-        contents_json_2 = json.dumps(contents, sort_keys=True, default=str)
-        assert hashlib.sha256(contents_json_2.encode("utf-8")).hexdigest() == expected_hash
+        first = compute_manifest_hash(contents)
+        assert len(first) == 64
+        assert compute_manifest_hash(contents) == first
 
-    def test_different_content_different_hash(self):
-        c1 = json.dumps({"a": 1}, sort_keys=True)
-        c2 = json.dumps({"a": 2}, sort_keys=True)
-        h1 = hashlib.sha256(c1.encode()).hexdigest()
-        h2 = hashlib.sha256(c2.encode()).hexdigest()
-        assert h1 != h2
+    def test_assembler_hash_ignores_embedded_package_hash(self):
+        """An embedded package_hash (stale or attacker-set) must not move the digest.
+
+        This is the self-verification the assembler promises: strip the
+        embedded hash and the digest must match the stored one.
+        """
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        contents = {
+            "request_case_id": "c1",
+            "version_number": 1,
+            "trace_data": [{"event_id": "e1"}],
+        }
+        clean_digest = compute_manifest_hash(contents)
+
+        contents["package_hash"] = "0" * 64  # stale or attacker-supplied value
+        assert compute_manifest_hash(contents) == clean_digest
+
+        contents["package_hash"] = clean_digest  # as stored by the assembler
+        check = {k: v for k, v in contents.items() if k != "package_hash"}
+        assert compute_manifest_hash(check) == contents["package_hash"]
+
+    def test_assembler_hash_changes_with_content(self):
+        """Tampered manifest content must change the assembler's digest."""
+        from services.shared.request_workflow.assembly import compute_manifest_hash
+
+        contents = {
+            "request_case_id": "c1",
+            "version_number": 1,
+            "trace_data": [{"event_id": "e1"}],
+        }
+        original = compute_manifest_hash(contents)
+
+        tampered = dict(contents)
+        tampered["trace_data"] = [{"event_id": "evil"}]
+        assert compute_manifest_hash(tampered) != original
 
 
 # ---------------------------------------------------------------------------

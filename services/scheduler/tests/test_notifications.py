@@ -233,6 +233,82 @@ class TestOutboxPersistence:
         assert n._outbox_path is None
 
 
+# ─── Unpersisted dead letters are nacked, not silently kept ──────────
+
+
+class TestUnpersistedNack:
+    """Deliveries that fail with no outbox file die with the process.
+
+    They must be nacked loudly (error log + counter + ``success=False``
+    result) instead of sitting silently in the in-memory list.
+    """
+
+    @patch.object(notifications_mod.time, "sleep")
+    def test_failed_delivery_without_outbox_counts_unpersisted(self, mock_sleep, notifier):
+        assert notifier.outbox_durable is False
+        fail_response = MagicMock()
+        fail_response.status_code = 500
+        fail_response.text = "Error"
+
+        with patch.object(notifier.session, "post", return_value=fail_response):
+            results = notifier.notify([_make_item(severity=EnforcementSeverity.CRITICAL)])
+
+        assert results[0].success is False
+        assert notifier.unpersisted_dead_letter_count() == 1
+        # Still visible in the legacy in-memory list for this process.
+        assert len(notifier.get_dead_letters()) == 1
+
+    @patch.object(notifications_mod.time, "sleep")
+    def test_failed_delivery_with_outbox_stays_durable(self, mock_sleep, tmp_path):
+        outbox = tmp_path / "webhook_outbox.jsonl"
+        n = WebhookNotifier(
+            urls=["https://hook1.example.com/webhook"],
+            timeout=5,
+            max_retries=2,
+            max_workers=1,
+            outbox_path=str(outbox),
+        )
+        try:
+            assert n.outbox_durable is True
+            fail_response = MagicMock()
+            fail_response.status_code = 500
+            fail_response.text = "Error"
+
+            with patch.object(n.session, "post", return_value=fail_response):
+                results = n.notify([_make_item(severity=EnforcementSeverity.CRITICAL)])
+
+            assert results[0].success is False
+            assert n.unpersisted_dead_letter_count() == 0
+            assert len([ln for ln in outbox.read_text().splitlines() if ln.strip()]) == 1
+        finally:
+            n.close()
+
+    @patch.object(notifications_mod.time, "sleep")
+    def test_outbox_append_failure_counts_unpersisted(self, mock_sleep, tmp_path):
+        """A disk failure keeps the scrape cycle alive but nacks durability."""
+        outbox_dir = tmp_path / "outbox_is_a_directory"
+        outbox_dir.mkdir()
+        n = WebhookNotifier(
+            urls=["https://hook1.example.com/webhook"],
+            timeout=5,
+            max_retries=1,
+            max_workers=1,
+            outbox_path=str(outbox_dir),  # open() for append raises OSError
+        )
+        try:
+            fail_response = MagicMock()
+            fail_response.status_code = 500
+            fail_response.text = "Error"
+
+            with patch.object(n.session, "post", return_value=fail_response):
+                results = n.notify([_make_item()])
+
+            assert results[0].success is False
+            assert n.unpersisted_dead_letter_count() == 1
+        finally:
+            n.close()
+
+
 # ─── Summary building ───────────────────────────────────────────────────
 
 
