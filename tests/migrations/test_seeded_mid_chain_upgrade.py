@@ -353,9 +353,15 @@ def _assert_seeded_users_preserved(engine: Engine) -> None:
     assert found == SEED_USER_EMAILS, f"seeded users did not survive the upgrade intact: {found!r}"
 
 
-def test_v079_identity_backfill_preserves_existing_users(rehearsal: RehearsalResult) -> None:
-    # Every leg proves the seeded users survive to head with emails intact.
+def test_seeded_users_preserved_to_head(rehearsal: RehearsalResult) -> None:
+    # Every matrix leg proves the seeded users survive to head with emails
+    # intact. This runs to a pass/fail verdict on every leg: the old shape
+    # ran this check first and then skipped on non-v079 legs, so a passing
+    # preservation proof was reported as a skip.
     _assert_seeded_users_preserved(rehearsal.engine)
+
+
+def test_v079_identity_backfill_preserves_existing_users(rehearsal: RehearsalResult) -> None:
     if MID_CHAIN_REVISION != "267d8053ced5":
         pytest.skip(
             "user_emails completeness only applies to the v079 seed: "

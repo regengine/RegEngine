@@ -18,6 +18,14 @@ spec:
   # cert-manager provisions this certificate from the letsencrypt-prod
   # cluster-issuer above. Without a tls block the annotation alone does
   # nothing and the host serves plaintext.
+  #
+  # Apply order matters. No ClusterIssuer lives in this repo, so the
+  # cluster must already provide a ClusterIssuer named letsencrypt-prod
+  # (managed outside this repo). Apply this manifest, then wait until
+  # cert-manager issues the certificate (kubectl get certificate
+  # regengine-tls) BEFORE relying on the force-ssl-redirect annotation:
+  # while the secret is empty the redirect sends clients to HTTPS that
+  # never comes up.
   tls:
   - hosts:
     - api.regengine.co
