@@ -48,7 +48,7 @@ class _FakeDiscovery:
     """Spy that records (body, url) positional args."""
 
     @staticmethod
-    async def scrape(body, url):
+    async def scrape(body, url, tenant_id="system"):
         _scrape_calls.append((body, url))
         return None
 
@@ -145,7 +145,7 @@ class TestHandleDiscoveryScrape:
     def test_propagates_scrape_errors(self):
         # If the underlying scrape raises, the handler must propagate
         # so the task queue can mark the job failed and retry.
-        async def _raising(body, url):
+        async def _raising(body, url, tenant_id="system"):
             raise RuntimeError("scrape failed")
 
         original = _FakeDiscovery.scrape

@@ -99,6 +99,11 @@ class TestVerifyFailClosed:
         with pytest.raises(WebhookSignatureInvalidError):
             verify_webhook_signature(webhook_payload, "md5=abcdef", webhook_secret)
 
+    def test_unknown_scheme_rejected_even_with_valid_digest(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        real_hex = hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha256).hexdigest()
+        with pytest.raises(WebhookSignatureInvalidError, match="Unsupported signature scheme"):
+            verify_webhook_signature(webhook_payload, "md5=" + real_hex, webhook_secret)
+
     def test_malformed_header_rejected(self, webhook_payload: bytes, webhook_secret: str) -> None:
         with pytest.raises(WebhookSignatureInvalidError):
             verify_webhook_signature(webhook_payload, "t=abc,v1=def", webhook_secret)
@@ -170,6 +175,59 @@ class TestBareHexAlgorithmSelection:
         header = "sha256=" + hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha256).hexdigest()
         result = verify_webhook_signature(webhook_payload, header, webhook_secret, algorithm="sha1")
         assert result.scheme == "sha256"
+
+
+class TestTimestampedAlgorithmAgreement:
+    """Sign and verify must use the same HMAC algorithm on ``t=,v1=`` headers."""
+
+    def test_timestamped_sha1_round_trips(self, webhook_secret: str) -> None:
+        payload = b'{"event_type": "sha1-ts"}'
+        header = sign_webhook_payload(payload, webhook_secret, timestamp=int(time.time()), algorithm="sha1")
+        result = verify_webhook_signature(payload, header, webhook_secret, algorithm="sha1")
+        assert result.scheme == "v1"
+        assert result.timestamp is not None
+
+    def test_timestamped_sha1_rejected_under_default_sha256(self, webhook_secret: str) -> None:
+        payload = b'{"event_type": "sha1-ts"}'
+        header = sign_webhook_payload(payload, webhook_secret, timestamp=int(time.time()), algorithm="sha1")
+        with pytest.raises(WebhookSignatureInvalidError):
+            verify_webhook_signature(payload, header, webhook_secret)
+
+    def test_timestamped_sha256_still_default(self, webhook_secret: str) -> None:
+        payload = b'{"event_type": "sha256-ts"}'
+        header = sign_webhook_payload(payload, webhook_secret, timestamp=int(time.time()))
+        result = verify_webhook_signature(payload, header, webhook_secret)
+        assert result.scheme == "v1"
+
+
+class TestRotatedMultiV1Headers:
+    """Every ``v1`` value in a Stripe-style header is tried; any match verifies."""
+
+    def _header_with_v1s(self, payload: bytes, secret: str, v1s: list, timestamp: int) -> str:
+        return "t=%d,%s" % (timestamp, ",".join("v1=" + v for v in v1s))
+
+    def test_second_v1_matches_during_rotation(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        ts = int(time.time())
+        signed = ("%d." % ts).encode("utf-8") + webhook_payload
+        valid = hmac.new(webhook_secret.encode(), signed, hashlib.sha256).hexdigest()
+        header = self._header_with_v1s(webhook_payload, webhook_secret, [valid, "0" * 64], ts)
+        result = verify_webhook_signature(webhook_payload, header, webhook_secret)
+        assert result.scheme == "v1"
+        assert result.timestamp == ts
+
+    def test_first_v1_matches_during_rotation(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        ts = int(time.time())
+        signed = ("%d." % ts).encode("utf-8") + webhook_payload
+        valid = hmac.new(webhook_secret.encode(), signed, hashlib.sha256).hexdigest()
+        header = self._header_with_v1s(webhook_payload, webhook_secret, ["f" * 64, valid], ts)
+        result = verify_webhook_signature(webhook_payload, header, webhook_secret)
+        assert result.timestamp == ts
+
+    def test_no_matching_v1_rejected(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        ts = int(time.time())
+        header = self._header_with_v1s(webhook_payload, webhook_secret, ["0" * 64, "f" * 64], ts)
+        with pytest.raises(WebhookSignatureInvalidError):
+            verify_webhook_signature(webhook_payload, header, webhook_secret)
 
 
 class TestTimestampTolerance:
@@ -252,6 +310,21 @@ class TestHttpMapping:
         result = verify_webhook_or_401(payload, header, webhook_secret)
         assert isinstance(result, VerifiedWebhook)
 
+    def test_or_401_forwards_algorithm(self, webhook_payload: bytes, webhook_secret: str) -> None:
+        bare_sha1 = hmac.new(webhook_secret.encode(), webhook_payload, hashlib.sha1).hexdigest()
+        result = verify_webhook_or_401(webhook_payload, bare_sha1, webhook_secret, algorithm="sha1")
+        assert result.scheme == "sha1"
+
+    def test_or_401_forwards_clock(self, webhook_secret: str) -> None:
+        payload = b'{"event_type": "clock"}'
+        frozen = 1_700_000_000
+        header = sign_webhook_payload(payload, webhook_secret, timestamp=frozen)
+        result = verify_webhook_or_401(payload, header, webhook_secret, now=frozen + 60)
+        assert result.timestamp == frozen
+        with pytest.raises(HTTPException) as exc_info:
+            verify_webhook_or_401(payload, header, webhook_secret, now=frozen + 3600)
+        assert exc_info.value.status_code == 401
+
     def test_verification_error_maps_to_401(self) -> None:
         exc = verification_http_exception(WebhookSignatureMissingError("Missing webhook signature."))
         assert exc.status_code == 401
@@ -282,6 +355,17 @@ class TestConnectorAdoption:
     def test_enable_time_gate_passes_with_secret(self) -> None:
         assert self._connector().require_webhook_secret() == "connector-secret"
 
+    def test_enable_time_gate_does_not_mask_unexpected_errors(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import shared.webhook_auth as webhook_auth_mod
+
+        def _boom(secret: object, *, connector_id: str = "webhook") -> str:
+            raise RuntimeError("backend exploded")
+
+        monkeypatch.setattr(webhook_auth_mod, "require_webhook_secret", _boom)
+        connector = self._connector()
+        with pytest.raises(RuntimeError, match="backend exploded"):
+            connector.require_webhook_secret()
+
     def test_connector_rejects_missing_secret(self, webhook_payload: bytes, sign_webhook) -> None:  # type: ignore[no-untyped-def]
         connector = self._connector(secret="")
         header = sign_webhook(webhook_payload, "connector-secret", timestamp=None)
@@ -308,6 +392,11 @@ class TestConnectorAdoption:
     def test_connector_rejects_unknown_scheme(self, webhook_payload: bytes) -> None:
         connector = self._connector()
         assert connector.verify_webhook_signature(webhook_payload, "md5=abcdef") is False
+
+    def test_connector_rejects_unknown_scheme_even_with_valid_digest(self, webhook_payload: bytes) -> None:
+        connector = self._connector()
+        real_hex = hmac.new(b"connector-secret", webhook_payload, hashlib.sha256).hexdigest()
+        assert connector.verify_webhook_signature(webhook_payload, "md5=" + real_hex) is False
 
     def test_connector_accepts_bare_sha1_when_selected(self, webhook_payload: bytes) -> None:
         connector = self._connector()

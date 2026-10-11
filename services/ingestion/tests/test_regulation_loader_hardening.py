@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -143,6 +144,43 @@ class TestLoadTenantScopedWrite:
         assert any("(ro:RegulatoryObligation" in c and "tenant_id" in c for c in cypher_calls), (
             "Expected RegulatoryObligation MERGE with tenant_id parameter"
         )
+
+    def test_catalog_obligation_merge_stamps_catalog_marker_on_create(self):
+        """The shared Obligation catalog MERGE must stamp ``catalog = true``.
+
+        Decision 3 quarantines null-tenant Obligation rows: readers only
+        share rows explicitly marked as catalog, so the loader must mark
+        the rows it creates. The marker must be anchored to ON CREATE so
+        a MERGE that matches a tenant-private row with the same text can
+        never promote it to the shared catalog.
+        """
+        loader, mock_session = self._build_loader_with_mock_driver()
+        sections = [
+            {
+                "section_id": "1.1320",
+                "title": "t",
+                "text": "t",
+                "citations": [],
+                "obligations": ["shall record lot code"],
+                "penalties": [],
+                "jurisdiction": "FDA",
+                "effective_date": None,
+                "content_hash": "h",
+            }
+        ]
+        loader._load_sync(sections, "21 CFR 1", "1.0", None)
+
+        cypher_calls = [str(c.args[0]) for c in mock_session.run.call_args_list]
+        obligation_stmts = [c for c in cypher_calls if ":Obligation" in c]
+        assert obligation_stmts, "Expected an Obligation MERGE in the loader write"
+        assert any(
+            re.search(
+                r"MERGE\s*\(\s*o\s*:\s*Obligation\b.*ON CREATE SET\s+o\.catalog\s*=\s*true",
+                c,
+                re.DOTALL,
+            )
+            for c in obligation_stmts
+        ), "Obligation MERGE must ON CREATE SET o.catalog = true so readers share it"
 
     def test_tenant_scoped_rows_carry_stable_obligation_id(self):
         loader, mock_session = self._build_loader_with_mock_driver()

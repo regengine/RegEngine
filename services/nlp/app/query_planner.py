@@ -48,7 +48,6 @@ _FORWARD_KEYWORDS = ("trace forward", "downstream", "where did")
 _BACKWARD_KEYWORDS = (
     "trace back",
     "trace backward",
-    "where did",
     "come from",
     "source",
     "origin",

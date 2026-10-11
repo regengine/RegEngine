@@ -61,14 +61,28 @@ def _clean_rls_context():
 
 class TestNaiveExpiresAt:
     def test_naive_future_expiry_validates(self, store: APIKeyStore):
-        naive_future = datetime.now() + timedelta(days=1)
+        # Naive instant derived from UTC, so the assertion holds in any
+        # host timezone. The store treats naive values as UTC.
+        naive_future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
         raw, _ = store.create_key(name="naive-future", expires_at=naive_future)
         assert store.validate_key(raw) is not None
 
     def test_naive_past_expiry_rejected_not_raised(self, store: APIKeyStore):
-        naive_past = datetime.now() - timedelta(days=1)
+        naive_past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
         raw, _ = store.create_key(name="naive-past", expires_at=naive_past)
         assert store.validate_key(raw) is None
+
+    def test_naive_expiry_inside_one_hour_window(self, store: APIKeyStore):
+        # A one-day delta sorts the same way in every real offset, so the
+        # cases above pass even if the UTC labeling were wrong. These
+        # sub-hour cases pin the naive-as-UTC rule: the instants are past
+        # and future in UTC terms regardless of host zone.
+        naive_past = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=30)
+        raw_past, _ = store.create_key(name="naive-past-30m", expires_at=naive_past)
+        assert store.validate_key(raw_past) is None
+        naive_future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=30)
+        raw_future, _ = store.create_key(name="naive-future-30m", expires_at=naive_future)
+        assert store.validate_key(raw_future) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +231,10 @@ class TestValidateAuthConfig:
         monkeypatch.setenv("REGENGINE_ENV", "test")
         monkeypatch.delenv("AUTH_SECRET_KEY", raising=False)
         monkeypatch.delenv("JWT_SECRET", raising=False)
+        # validate_auth_config also consults CI markers, so clear them:
+        # otherwise a dropped strict check could hide behind `not is_ci`.
+        monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+        monkeypatch.delenv("CI", raising=False)
         validate_auth_config()
 
     def test_known_default_secret_raises_in_strict(self, monkeypatch):

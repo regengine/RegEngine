@@ -82,20 +82,20 @@ export default function SysAdminDashboard() {
         setLoading(true)
         setError(null)
         try {
-            const headers = {
-                "Authorization": `Bearer ${accessToken}`
-            }
-
+            // Same-origin admin proxy call: the proxy injects the real
+            // credential from HTTP-only cookies server-side. No explicit
+            // Authorization header here — accessToken is routinely the
+            // "cookie-managed" placeholder, which must never be sent.
             const adminBase = getServiceURL('admin')
 
             // Fetch Status
-            const statusRes = await fetch(`${adminBase}/v1/system/status`, { headers })
+            const statusRes = await fetch(`${adminBase}/v1/system/status`)
             if (!statusRes.ok) throw new Error("Failed to fetch system status")
             const statusData = await statusRes.json()
             setStatus(statusData)
 
             // Fetch Metrics
-            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`, { headers })
+            const metricsRes = await fetch(`${adminBase}/v1/system/metrics`)
             if (!metricsRes.ok) throw new Error("Failed to fetch system metrics")
             const metricsData = await metricsRes.json()
             setMetrics(metricsData)

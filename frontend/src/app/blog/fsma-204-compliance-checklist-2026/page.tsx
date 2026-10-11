@@ -262,10 +262,10 @@ export default function FSMA204ComplianceChecklist() {
                   link: '/retailer-readiness',
                 },
                 {
-                  name: 'Recall Readiness Tool',
-                  desc: 'Test your ability to respond to a mock product recall within 24 hours',
+                  name: 'Records Request Checklist',
+                  desc: 'A self reported checklist for an FDA records request. Not a 24 hour test and not a readiness score.',
                   phase: 'Phase 3-4',
-                  link: '/tools/recall-readiness',
+                  link: '/tools/records-request-checklist',
                 },
                 {
                   name: 'Drill Simulator',

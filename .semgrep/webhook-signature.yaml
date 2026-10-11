@@ -38,14 +38,13 @@ rules:
       verify_webhook_or_401) at request time.
     paths:
       exclude:
-        # Known fail-open line owned by in-flight PRs; do not touch.
-        # Re-enable coverage here once those PRs land the shared helper.
-        - "services/shared/external_connectors/safetyculture.py"
         - "**/tests/**"
         - "**/test_*.py"
         - "**/conftest.py"
     patterns:
-      - pattern: "if $SECRET and $SIG: ..."
+      - pattern-either:
+          - pattern: "if $SECRET and $SIG: ..."
+          - pattern: "if $SIG and $SECRET: ..."
       - metavariable-regex:
           metavariable: $SECRET
           regex: (?i).*(secret|hmac).*
