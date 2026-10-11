@@ -77,8 +77,8 @@ async def list_records(
     source_system: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
-    limit: int = Query(50, le=500),
-    offset: int = Query(0),
+    limit: int = Query(50, ge=0, le=500),
+    offset: int = Query(0, ge=0),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
     db_session=Depends(get_db_session),
 ):
@@ -165,7 +165,7 @@ async def list_records(
 async def list_ingestion_runs(
     tenant_id: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
-    limit: int = Query(20, le=100),
+    limit: int = Query(20, ge=0, le=100),
     offset: int = Query(0, ge=0),
     principal: IngestionPrincipal = Depends(require_permission("records.read")),
     db_session=Depends(get_db_session),

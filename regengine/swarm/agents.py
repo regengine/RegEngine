@@ -19,6 +19,15 @@ from regengine.swarm.base import BaseAgent
 logger = structlog.get_logger("swarm.agents")
 
 
+def is_path_within_base(base_dir: Path, full_path: Path) -> bool:
+    """Check that a resolved path stays inside the working directory.
+
+    Uses path-aware comparison so a sibling directory that shares a text
+    prefix (for example /repo-backup next to /repo) is not accepted.
+    """
+    return full_path.is_relative_to(base_dir)
+
+
 # ── Planner Agent ─────────────────────────────────────────
 
 
@@ -159,7 +168,7 @@ class CoderAgent(BaseAgent):
             try:
                 base_dir = Path.cwd().resolve()
                 full_path = (base_dir / path).resolve()
-                if not str(full_path).startswith(str(base_dir)):
+                if not is_path_within_base(base_dir, full_path):
                     self.log.warning("path_traversal_blocked", path=path)
                     continue
                 full_path.parent.mkdir(parents=True, exist_ok=True)

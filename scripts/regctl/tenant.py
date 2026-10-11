@@ -53,6 +53,21 @@ def _validate_identifier(name: str, label: str = "identifier") -> str:
     return name
 
 
+def mask_api_key(api_key: str) -> str:
+    """Return a masked key for display, never the full secret.
+    Shows the key prefix plus the last 4 characters (e.g. sk_live_...9f3a).
+    """
+    if not api_key or len(api_key) <= 10:
+        return "***"
+    return f"{api_key[:7]}...{api_key[-4:]}"
+
+
+def _write_private_file(path: str, write) -> None:
+    """Run a file write callback, then restrict the file to owner-only (0600)."""
+    write(path)
+    os.chmod(path, 0o600)
+
+
 class TenantManager:
     """Manages tenant provisioning and lifecycle."""
 
@@ -160,7 +175,7 @@ class TenantManager:
             except (ValueError, KeyError):
                 created_str = tenant.get("created_at", "N/A")
 
-            table.add_row(tenant["name"], tenant["tenant_id"], tenant["api_key"], created_str)
+            table.add_row(tenant["name"], tenant["tenant_id"], mask_api_key(tenant.get("api_key", "")), created_str)
 
         console.print(table)
         console.print(f"[dim]Total: {len(tenants)} tenant(s)[/dim]")
@@ -306,7 +321,7 @@ class TenantManager:
             click.echo("         ⚠️  Demo data loader not found (continuing)")
 
     def _save_tenant_record(self, tenant_id: UUID, name: str, api_key: str):
-        """Save tenant record to local database."""
+        """Save tenant record to a local file restricted to owner-only (0600)."""
         import json
 
         record = {
@@ -316,9 +331,12 @@ class TenantManager:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Append to tenants database file
-        with open(self.tenants_db_file, "a") as f:
-            f.write(json.dumps(record) + "\n")
+        # Append to tenants database file; the file holds secrets, keep it 0600.
+        def _append(path: str) -> None:
+            with open(path, "a") as f:
+                f.write(json.dumps(record) + "\n")
+
+        _write_private_file(self.tenants_db_file, _append)
 
     def _delete_neo4j_database(self, tenant_id: UUID):
         """Delete Neo4j database for tenant."""
@@ -376,10 +394,13 @@ class TenantManager:
         # Filter out the deleted tenant
         tenants = [t for t in tenants if t["tenant_id"] != str(tenant_id)]
 
-        # Rewrite file
-        with open(self.tenants_db_file, "w") as f:
-            for tenant in tenants:
-                f.write(json.dumps(tenant) + "\n")
+        # Rewrite file; it holds secrets, keep it 0600.
+        def _rewrite(path: str) -> None:
+            with open(path, "w") as f:
+                for tenant in tenants:
+                    f.write(json.dumps(tenant) + "\n")
+
+        _write_private_file(self.tenants_db_file, _rewrite)
 
     def _get_tenant_info(self, tenant_id: UUID) -> Optional[dict]:
         """Get tenant information."""

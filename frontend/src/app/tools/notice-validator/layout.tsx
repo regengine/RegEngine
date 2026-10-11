@@ -22,7 +22,6 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Heuristic checker that validates draft FDA records request responses against FSMA 204 CTE, KDE, and retrieval requirements.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 

@@ -5,6 +5,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     # Security headers
     nginx.ingress.kubernetes.io/configuration-snippet: |
       more_set_headers "X-Frame-Options: DENY";
@@ -14,6 +15,13 @@ metadata:
       more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
       more_set_headers "Content-Security-Policy: default-src 'self'";
 spec:
+  # cert-manager provisions this certificate from the letsencrypt-prod
+  # cluster-issuer above. Without a tls block the annotation alone does
+  # nothing and the host serves plaintext.
+  tls:
+  - hosts:
+    - api.regengine.co
+    secretName: regengine-tls
   rules:
   - host: api.regengine.co
     http:
