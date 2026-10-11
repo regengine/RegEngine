@@ -44,7 +44,7 @@ class QueryPlan(BaseModel):
 _ORPHAN_KEYWORDS = ("orphan", "unlinked", "disconnected")
 _GAP_KEYWORDS = ("gaps", "missing", "incomplete", "compliance issues")
 _TIMELINE_KEYWORDS = ("timeline", "history of", "events for lot")
-_FORWARD_KEYWORDS = ("trace forward", "downstream", "where did")
+_FORWARD_KEYWORDS = ("trace forward", "downstream")
 _BACKWARD_KEYWORDS = (
     "trace back",
     "trace backward",
@@ -141,11 +141,19 @@ def _detect_intent(lowered_query: str) -> IntentName:
     if _contains_any(lowered_query, _TIMELINE_KEYWORDS):
         return "lot_timeline"
 
+    # "where did" appears in both directions in plain English, so it is
+    # not a keyword in either tuple above. Direction comes from the verb
+    # that follows it: "where did X go" is downstream (forward),
+    # "where did X come from" is upstream (backward). Previously the bare
+    # phrase sat in both tuples, which made every "where did" query match
+    # both sides and fall into the prefer-backward tie-break, so
+    # downstream tracing questions were answered with upstream results.
+    where_did = "where did" in lowered_query
     has_forward = _contains_any(lowered_query, _FORWARD_KEYWORDS) or (
-        "where did" in lowered_query and " go" in lowered_query
+        where_did and " go" in lowered_query
     )
     has_backward = _contains_any(lowered_query, _BACKWARD_KEYWORDS) or (
-        "where did" in lowered_query and "come from" in lowered_query
+        where_did and "come from" in lowered_query
     )
 
     if has_forward and not has_backward:
@@ -155,6 +163,10 @@ def _detect_intent(lowered_query: str) -> IntentName:
     if has_backward and has_forward:
         # Prefer backward when both appear because source-of-origin queries
         # are a common compliance ask.
+        return "trace_backward"
+    if where_did:
+        # Bare "where did ..." with no direction signal keeps the legacy
+        # default (backward) rather than dropping to an event search.
         return "trace_backward"
 
     return "events_search"
