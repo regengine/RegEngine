@@ -158,11 +158,14 @@ async def find_orphaned_lots(
         result = await session.run(query, tenant_id=tenant_id, cutoff_date=cutoff_date)
 
         async for record in result:
-            # Calculate stagnant days
+            # Calculate stagnant days. The parsed date is naive, so anchor
+            # it to UTC before subtracting: an aware minus naive
+            # subtraction raises TypeError, which the fallback below would
+            # swallow and report every lot as exactly `days_stagnant` old.
             last_date = record["last_event_date"]
             if last_date:
                 try:
-                    last_dt = datetime.strptime(str(last_date)[:10], "%Y-%m-%d")
+                    last_dt = datetime.strptime(str(last_date)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
                     stagnant = (datetime.now(timezone.utc) - last_dt).days
                 except (ValueError, TypeError):
                     stagnant = days_stagnant  # Default if date parsing fails

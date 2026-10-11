@@ -20,7 +20,7 @@ logger = structlog.get_logger("fsma-utils")
 
 async def find_gaps(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
 ) -> List[Dict[str, Any]]:
     """
     Find TraceEvents with missing required KDEs.
@@ -43,7 +43,10 @@ async def find_gaps(
 
     start_time = time.time()
 
-    # Find events missing key fields
+    # Find events missing key fields.
+    # The Lot inside the missing-lot EXISTS check is tenant-scoped: a
+    # cross-tenant UNDERWENT edge must not satisfy the existence check and
+    # suppress a genuine missing-lot gap.
     query = """
     MATCH (e:TraceEvent)
     WHERE e.tenant_id = $tenant_id
@@ -185,8 +188,11 @@ async def find_broken_chains(
     WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
       AND origin.tenant_id = $tenant_id
       AND origin.event_date IS NOT NULL
-    // Optimization: min() aggregate computes earliest origin date in a single
-    // pass, replacing ORDER BY + collect()[0] that sorted all origins per lot.
+    // Sort origins per lot before aggregating: collect() preserves the
+    // encounter order, so head(collect(...)) is the id of the earliest
+    // origin matching min(origin.event_date). Without this the reported
+    // origin_event_id can point at a different origin than origin_date.
+    WITH l, shipping, origin ORDER BY origin.event_date ASC
     WITH l, shipping,
          min(origin.event_date) AS earliest_origin_date,
          head(collect(origin.event_id)) AS earliest_origin_id
@@ -326,6 +332,7 @@ async def find_broken_chains(
             l.product_description      AS product_description,
             origins                    AS expected_predecessors
         ORDER BY shipping.event_date
+        LIMIT 2000
         """
 
         result = await session.run(crypto_gap_query, tenant_id=tenant_id)
@@ -368,7 +375,7 @@ async def find_broken_chains(
 
 async def find_all_gaps(
     client: Neo4jClient,
-    tenant_id: Optional[str] = None,
+    tenant_id: str,
 ) -> List[Dict[str, Any]]:
     """
     Find all gaps and violations including broken chains.
