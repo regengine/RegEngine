@@ -11,7 +11,7 @@ import re
 import time
 from datetime import datetime, timezone
 from typing import Iterator, List, Optional, Tuple
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import structlog
@@ -137,7 +137,7 @@ class FDAImportAlertsScraper(BaseScraper):
         """Close the underlying HTTP client to release connections."""
         self.session.close()
 
-    def _scrape_alerts_page(self) -> List[EnforcementItem]:
+    def _scrape_alerts_page(self) -> Tuple[List[EnforcementItem], List[str]]:
         """Parse FDA Import Alerts HTML page."""
         # #1138: retry on 5xx/transport errors.
         response = fetch_with_retry(
@@ -200,10 +200,20 @@ class FDAImportAlertsScraper(BaseScraper):
         for alert_number, title, href in self._iter_alert_candidates(soup):
             if alert_number in seen_alert_numbers:
                 continue
-            seen_alert_numbers.add(alert_number)
 
-            # Resolve relative URLs against the page URL.
+            # Resolve relative URLs against the page URL, then drop anything
+            # that is not http(s). javascript:, data:, and file: hrefs must
+            # not be published. Skip before marking the alert seen so a later
+            # http(s) link for the same number can still be kept.
             absolute_url = urljoin(base_url, href)
+            if urlparse(absolute_url).scheme.lower() not in {"http", "https"}:
+                logger.warning(
+                    "fda_import_alert_non_http_url_skipped",
+                    alert_number=alert_number,
+                    scheme=urlparse(absolute_url).scheme,
+                )
+                continue
+            seen_alert_numbers.add(alert_number)
 
             source_id = self._create_source_id("fda_ia", alert_number)
 

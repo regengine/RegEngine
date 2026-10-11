@@ -37,9 +37,10 @@ python3 scripts/run_recall_fixture.py --case all --output-dir /tmp/regengine-rec
 
 It runs the same synthetic scenario three ways (complete records, a withheld 3PL pallet-content record, and an unreachable ERP served from its retained snapshot), writes an evidence package per case, and reconciles each against `sample_data/recall_fixture/answer_key.json`. It is DB-free and reuses the canonical event model and hash chain. See `sample_data/recall_fixture/README.md`.
 
-For the heavier live-service scenario, use:
+For the heavier live-service scenario, export the service secret first, then use:
 
 ```bash
+export REGENGINE_INTERNAL_SECRET='<the secret matching the service under test>'
 python3 scripts/e2e_brutal_scenario.py
 ```
 

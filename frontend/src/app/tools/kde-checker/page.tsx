@@ -9,14 +9,14 @@ import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
-    title: "KDE Checklist Builder | FSMA 204 Starting Checklist | RegEngine",
-    description: "Generate a starting KDE checklist mapped to your FTL product and trading role under 21 CFR Part 1 Subpart S. Educational; verify against the rule and consult counsel before relying on it.",
+    title: "FSMA 204 KDE Field Checklist | RegEngine",
+    description: "A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it.",
     alternates: {
         canonical: "https://regengine.co/tools/kde-checker",
     },
     openGraph: {
-        title: "KDE Checklist Builder — RegEngine",
-        description: "Generate a starting KDE checklist mapped to your FTL product and trading role. Educational; not a regulatory determination.",
+        title: "FSMA 204 KDE Field Checklist | RegEngine",
+        description: "A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it.",
         type: "website",
         url: "https://regengine.co/tools/kde-checker",
     },
@@ -25,15 +25,10 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "KDE Completeness Checker",
+    "name": "KDE Field Checklist",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Starting Key Data Element (KDE) checklist mapped to your FTL product and trading role. Educational; not a regulatory determination.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -60,7 +55,7 @@ export default function KDECheckerPage() {
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
-                            { label: "KDE Checker" }
+                            { label: "KDE Field Checklist" }
                         ]}
                     />
                     <Suspense fallback={<KDECheckerFallback />}>
@@ -72,7 +67,7 @@ export default function KDECheckerPage() {
             </div>
             <RelatedTools tools={[
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Visualize all 7 Critical Tracking Events across your supply chain nodes." },
-                { href: "/tools/tlc-validator", title: "TLC Validator", description: "Validate your Traceability Lot Code format against GS1 and FDA standards." },
+                { href: "/tools/tlc-validator", title: "TLC Format Check", description: "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
             ]} />
         </>

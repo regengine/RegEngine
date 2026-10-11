@@ -63,10 +63,13 @@ class RegulationOverride:
 
     @staticmethod
     def merge_cypher() -> str:
+        # ON MATCH sets only the mutable rule fields. tenant_id and
+        # override_id stay in the MERGE key; copying them from $properties
+        # would let a caller retag a node onto another tenant.
         return """
-        MERGE (r:RegulationOverride {override_id: $override_id})
+        MERGE (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
         ON CREATE SET r += $properties, r.created_at = datetime()
-        ON MATCH SET r += $properties
+        ON MATCH SET r.rule_id = $properties.rule_id, r.parameter = $properties.parameter, r.value = $properties.value
         RETURN r
         """
 
@@ -77,6 +80,6 @@ class OverlayRelationships:
     # Tenant HAS_OVERLAY -> RegulationOverride
     TENANT_HAS_OVERRIDE = """
     MATCH (t:TenantOverlay {tenant_id: $tenant_id})
-    MATCH (r:RegulationOverride {override_id: $override_id})
+    MATCH (r:RegulationOverride {override_id: $override_id, tenant_id: $tenant_id})
     MERGE (t)-[:HAS_OVERRIDE]->(r)
     """

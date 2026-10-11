@@ -445,9 +445,12 @@ has not been tried on a non-Postgres service (open question 9). Afterwards:
   sets its initial password only on an empty store. If `NEO4J_PASSWORD` was
   rotated since, set it back to match, or change the password with
   `cypher-shell` (section 8.3).
-- GDPR erasure deletes a user's graph nodes (`services/admin/app/erasure_routes.py`).
-  A backup from before an erasure brings those nodes back, so repeat any
-  erasure completed after the backup was taken.
+- GDPR erasure deletes a user's identity graph nodes (`User`, `Account`,
+  `TeamMember`, `SupplierContact`) and rewrites `actor_id` / `user_id` on
+  their other graph nodes to a pseudonymous token
+  (`services/admin/app/erasure_routes.py`). A backup from before an erasure
+  brings the original nodes back, so repeat any erasure completed after the
+  backup was taken.
 
 **With no backup:** re-upload the regulation source files through
 `POST /v1/ingest/regulation`. The supplier mirror stays empty until a rebuild

@@ -23,14 +23,13 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Generate SHA-256 chain-verified FDA-oriented records packages for FSMA 204 traceability workflows.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 
 const relatedTools = [
     { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data via CSV, IoT temperature logs, or webhook API before exporting.' },
     { href: '/tools/notice-validator', title: 'FDA Request Validator', description: 'Validate your draft FDA response against FSMA 204 record requirements before submission.' },
-    { href: '/tools/recall-readiness', title: 'FSMA 204 Readiness Self-Check', description: 'Self-check your ability to meet the §1.1455(c) 24-hour records request obligation.' },
+    { href: '/tools/records-request-checklist', title: 'Records Request Checklist', description: 'A self reported checklist for an FDA records request. Not a 24 hour test and not a readiness score.' },
 ];
 
 export default function ExportLayout({ children }: { children: React.ReactNode }) {

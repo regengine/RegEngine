@@ -10,9 +10,14 @@ phase-2b audit fixture.
 
 import hashlib
 import os
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 import psycopg
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from services.shared.secret_redaction import mask_secret, redact_text  # noqa: E402
 
 # Config
 DB_URL = os.environ.get("ADMIN_DATABASE_URL", "postgresql://regengine:regengine@localhost:5433/regengine_admin")
@@ -23,6 +28,12 @@ RAW_KEY = f"{KEY_ID}.{SECRET}"
 
 def hash_key(raw_key):
     return hashlib.sha256(raw_key.encode()).hexdigest()
+
+
+def mask_key(raw_key):
+    """Return a log-safe representation of a minted key (key id only)."""
+    key_id, _, _ = raw_key.partition(".")
+    return f"{key_id}.***" if key_id else "***"
 
 
 def seed_key():
@@ -36,7 +47,7 @@ def seed_key():
     key_prefix = RAW_KEY[:12]
     now = datetime.now(timezone.utc)
 
-    print(f"Seeding API Key: {RAW_KEY}")
+    print(f"Seeding API Key: {mask_key(RAW_KEY)}")
     print(f"Hash: {key_hash}")
 
     tenant_id = "11111111-1111-1111-1111-111111111111"
@@ -92,7 +103,8 @@ def seed_key():
 
     except Exception as e:
         conn.rollback()
-        print(f"❌ Failed to seed key: {e}")
+        # redact_text guards against DB errors that echo the connection string.
+        print(f"❌ Failed to seed key: {redact_text(str(e))}")
         raise
     finally:
         cur.close()

@@ -1,0 +1,265 @@
+{
+  "version": 1,
+  "note": "Accepted supply-chain findings. Each entry records one violation line the gate would otherwise fail, with the reason it is accepted for now. Entries match by rule plus file plus the full comment-stripped line (exact match only), and one entry excuses exactly one line, so this file cannot silently rot: a longer tag, an extra package, or a second identical line all fail until they get their own entry. Remove an entry when the underlying site is pinned.",
+  "entries": [
+    {
+      "rule": "image-digest",
+      "file": "Dockerfile",
+      "match": "FROM python:3.11-slim AS builder",
+      "reason": "Base image tag is fixed at python 3.11 slim. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "Dockerfile",
+      "match": "FROM python:3.11-slim AS runtime",
+      "reason": "Base image tag is fixed at python 3.11 slim. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "frontend/Dockerfile",
+      "match": "FROM node:20-alpine AS builder",
+      "reason": "Base image tag is fixed at node 20 alpine. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "frontend/Dockerfile",
+      "match": "FROM node:20-alpine AS runner",
+      "reason": "Base image tag is fixed at node 20 alpine. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "docker-compose.dev.yml",
+      "match": "image: postgres:17",
+      "reason": "Local development compose file only, never shipped. Major version tag accepted for dev parity.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "docker-compose.dev.yml",
+      "match": "image: redis:7",
+      "reason": "Local development compose file only, never shipped. Major version tag accepted for dev parity.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/admin/deployment.yaml",
+      "match": "image: regengine/admin-service:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/compliance/deployment.yaml",
+      "match": "image: regengine/compliance-service:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/graph/deployment.yaml",
+      "match": "image: regengine/graph-service:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/ingestion/deployment.yaml",
+      "match": "image: regengine/ingestion-service:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/nlp/deployment.yaml",
+      "match": "image: regengine/nlp-service:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/scheduler/deployment.yaml",
+      "match": "image: regengine/scheduler:$(IMAGE_TAG)",
+      "reason": "First-party image built from this repo's own pinned Dockerfile. Tag is supplied at deploy time, not pulled from upstream.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": "infra/k8s/base/monitoring/alertmanager.yaml",
+      "match": "image: quay.io/prometheus/alertmanager:v0.32.1",
+      "reason": "Third-party monitoring image with a fixed version tag. Digest not recorded yet because digest resolution needs registry access. Record it on the next refresh.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: postgres:16",
+      "reason": "Pre-existing CI service tag postgres:16, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: postgres:16",
+      "reason": "Pre-existing CI service tag postgres:16, not digest-pinned. Second occurrence; one entry excuses exactly one line.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: postgres:16",
+      "reason": "Pre-existing CI service tag postgres:16, not digest-pinned. Third occurrence; one entry excuses exactly one line.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Second occurrence; one entry excuses exactly one line.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Third occurrence; one entry excuses exactly one line.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: ${{ matrix.service == 'graph' && 'neo4j:5.24-community' || '' }}",
+      "reason": "Pre-existing conditional service expression for neo4j, not digest-pinned (empty when not graph). Explicit accepted debt awaiting a verified registry digest or removal of the conditional; exact match covers only this expression.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: localstack/localstack:3",
+      "reason": "Pre-existing CI service tag localstack:3, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: postgres:17",
+      "reason": "Pre-existing CI service tag postgres:17, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/backend-ci.yml",
+      "match": "image: postgres:17",
+      "reason": "Pre-existing CI service tag postgres:17, not digest-pinned. Second occurrence; one entry excuses exactly one line.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/frontend-ci.yml",
+      "match": "image: postgres:17",
+      "reason": "Pre-existing CI service tag postgres:17, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/frontend-ci.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/security.yml",
+      "match": "image: postgres:17",
+      "reason": "Pre-existing CI service tag postgres:17, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/security.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/inflow-contract-ci.yml",
+      "match": "image: postgres:17",
+      "reason": "Pre-existing CI service tag postgres:17, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
+      "file": ".github/workflows/inflow-contract-ci.yml",
+      "match": "image: redis:7-alpine",
+      "reason": "Pre-existing CI service tag redis:7-alpine, not digest-pinned. Explicit accepted debt awaiting a verified registry digest; exact match covers only this tag.",
+      "exact": true
+    },
+    {
+      "rule": "download-checksum",
+      "file": "scripts/run-performance-baseline.sh",
+      "match": "wget https://github.com/grafana/k6/releases/download/v0.47.0/k6-v0.47.0-linux-amd64.tar.gz",
+      "reason": "k6 download is fixed at v0.47.0 but has no checksum verification. Add a verified SHA256 before the next k6 version bump.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": ".github/workflows/inflow-contract-ci.yml",
+      "match": "python -m pip install --upgrade uv",
+      "reason": "Installer tool upgrade in a contract-test job, exact version unknown without network access. The actual dependencies install with uv sync --frozen right after.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": ".github/workflows/sdk-ci.yml",
+      "match": "python -m pip install --upgrade pip",
+      "reason": "Bootstraps pip itself before installing the local SDK path. pip is the installer, not a locked dependency, so no verified pin is available. Revisit by pinning pip once a verified version is recorded.",
+      "exact": true
+    },
+    {
+      "rule": "npm-unlocked",
+      "file": ".github/workflows/qa-health.yml",
+      "match": "npm install --no-save --no-audit --no-fund --ignore-scripts",
+      "reason": "Diagnostic fallback in a continue-on-error health check. It never produces build artifacts. The primary install stays npm ci.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": ".github/workflows/sdk-ci.yml",
+      "match": "python -m pip install pytest pytest-asyncio httpx requests",
+      "reason": "Test-only dependencies in the SDK job. httpx is not in requirements.lock, so no verified pin is available without network access. Pin the set on the next touch.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": ".github/workflows/security.yml",
+      "match": "pip install pytest httpx pytest-json-report pytest-asyncio requests sqlalchemy \"psycopg[binary]\"",
+      "reason": "Test-only dependencies in a scanner job. This file is owned by in-flight work, so it is baselined, not edited here. Pin on the next touch.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": "scripts/install_pkgs.sh",
+      "match": "pip install --quiet --upgrade pip",
+      "reason": "Bootstraps pip itself before the locked install. pip is the installer, not a locked dependency, so no verified pin is available. Revisit by pinning pip once a verified version is recorded.",
+      "exact": true
+    },
+    {
+      "rule": "pip-pin",
+      "file": "scripts/setup_dev.sh",
+      "match": "pip install --quiet --upgrade pip",
+      "reason": "Bootstraps pip itself before the locked install. pip is the installer, not a locked dependency, so no verified pin is available. Revisit by pinning pip once a verified version is recorded.",
+      "exact": true
+    }
+  ]
+}
