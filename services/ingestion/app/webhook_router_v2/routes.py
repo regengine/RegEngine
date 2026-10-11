@@ -108,9 +108,12 @@ async def ingest_events(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
     _auth: None = Depends(_verify_api_key),
-    # #1243: HMAC signature check runs in parallel with the API-key check.
-    # A leaked key alone is no longer sufficient to forge events when
-    # ``WEBHOOK_HMAC_SECRET`` is configured.
+    # #1243 / #3229: HMAC signature check runs in parallel with the
+    # API-key check. A leaked key alone is no longer sufficient to forge
+    # events: with ``WEBHOOK_HMAC_SECRET`` configured the body must be
+    # signed, and on a closed gate (production or any strict/cloud
+    # runtime) an unset secret rejects every ingest request instead of
+    # skipping verification.
     _signature: None = Depends(_verify_webhook_signature),
     _subscription: None = Depends(require_active_subscription),
     _idempotency_key: Optional[str] = Depends(_require_idempotency_key),

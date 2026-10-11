@@ -5,12 +5,18 @@ Tests basic flow: login → verify session in Redis → refresh → logout
 """
 
 import json
+import os
 import subprocess
+import sys
 import time
+from pathlib import Path
 
 import requests
 
-BASE_URL = "http://localhost:8400"
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from services.shared.secret_redaction import mask_secret, read_secret  # noqa: E402
+
+BASE_URL = os.environ.get("TEST_BASE_URL", "http://localhost:8400")
 
 
 def run_redis_cmd(cmd):
@@ -42,9 +48,12 @@ def test_redis_sessions():
 
     # Test 3: Login
     print("\n3. Testing login endpoint...")
+    # Credentials come from the environment so no committed password can
+    # drift into a shared or production-adjacent account. The defaults only
+    # match the local throwaway dev seed.
     login_data = {
-        "email": "admin@example.com",  # Adjust to your test user
-        "password": "password123",
+        "email": os.environ.get("TEST_USER_EMAIL", "admin@example.com"),
+        "password": read_secret("TEST_USER_PASSWORD", default="password123"),
     }
 
     try:
@@ -56,8 +65,10 @@ def test_redis_sessions():
             access_token = data.get("access_token")
             refresh_token = data.get("refresh_token")
             print(f"   ✅ Login successful")
-            print(f"   Access token: {access_token[:20]}...")
-            print(f"   Refresh token: {refresh_token[:20]}...")
+            # Masked fingerprints only: a 20-char token prefix in a log
+            # still exposes enough of the credential to abuse it.
+            print(f"   Access token: {mask_secret(access_token)}")
+            print(f"   Refresh token: {mask_secret(refresh_token)}")
         else:
             print(f"   ❌ Login failed: {response.text}")
             print(f"   Note: Make sure test user exists in database")
@@ -114,7 +125,7 @@ def test_redis_sessions():
         new_access_token = data.get("access_token")
         new_refresh_token = data.get("refresh_token")
         print(f"   ✅ Token refresh successful")
-        print(f"   New access token: {new_access_token[:20]}...")
+        print(f"   New access token: {mask_secret(new_access_token)}")
         print(f"   Token rotation: {'Yes' if new_refresh_token != refresh_token else 'No'}")
     else:
         print(f"   ❌ Token refresh failed: {response.status_code}")
