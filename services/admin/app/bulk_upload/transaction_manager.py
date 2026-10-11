@@ -464,7 +464,11 @@ def execute_bulk_commit(
 
         db.commit()
 
-    except SQLAlchemyError:
+    except (SQLAlchemyError, ValueError):
+        # ValueError covers commit-time validation failures (unknown
+        # facility reference, unknown FTL category, missing TLC code).
+        # The rows flushed before the failure must be rolled back too;
+        # otherwise the session keeps a half-flushed bulk import.
         db.rollback()
         raise
 

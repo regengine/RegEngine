@@ -22,7 +22,6 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Maps FSMA 204 compliance obligations across CTE capture, KDE completeness, supplier onboarding, and 2-year record retention.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 

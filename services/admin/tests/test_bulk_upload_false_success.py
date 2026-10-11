@@ -198,6 +198,74 @@ def test_concurrent_validations_do_not_share_autofill_warnings():
     assert mismatches == [], f"warnings crossed request boundaries: {mismatches[:5]}"
 
 
+def test_concurrent_validations_isolated_with_forced_interleave(monkeypatch):
+    """Two validations running inside each other never share a collector.
+
+    The thread-stress test above can pass on the old module-global list
+    when the GIL never interleaves the clear and the later read. This
+    test forces the interleave with a barrier inside the warning
+    collector: both threads must be mid-validation at the same moment.
+    With the old shared list each run would then report 2 warnings
+    instead of its own 1.
+    """
+    import app.bulk_upload.validators as validators_mod
+
+    barrier = threading.Barrier(2)
+    original_collector = validators_mod._warning_collector
+    arrivals: list[int] = []
+    arrivals_lock = threading.Lock()
+
+    def hooked_collector():
+        collector = original_collector()
+        # Rendezvous only the first two collector calls overall (one per
+        # thread): later calls pass straight through so the barrier can
+        # never strand a thread whose peer already finished.
+        with arrivals_lock:
+            arrivals.append(1)
+            rendezvous = len(arrivals) <= 2
+        if rendezvous:
+            barrier.wait(timeout=15)
+        return collector
+
+    monkeypatch.setattr(validators_mod, "_warning_collector", hooked_collector)
+
+    facility_payload = {
+        "facilities": [{"name": "", "street": "s", "city": "c", "state": "st", "postal_code": "p"}],
+        "ftl_scopes": [],
+        "tlcs": [],
+        "events": [],
+    }
+    tlc_payload = {
+        "facilities": [],
+        "ftl_scopes": [],
+        "tlcs": [{"tlc_code": "", "facility_name": "Salinas Packhouse"}],
+        "events": [],
+    }
+    results: dict[str, list] = {}
+
+    def worker(name, payload):
+        _, errors = validate_and_normalize_payload(
+            payload,
+            supported_cte_types={"shipping"},
+            valid_ftl_category_ids={"1"},
+        )
+        results[name] = [e for e in errors if e.get("section") == "autofill"]
+
+    threads = [
+        threading.Thread(target=worker, args=("facility", facility_payload)),
+        threading.Thread(target=worker, args=("tlc", tlc_payload)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(results["facility"]) == 1, results
+    assert "facility_name" in results["facility"][0]["message"], results
+    assert len(results["tlc"]) == 1, results
+    assert "tlc_code" in results["tlc"][0]["message"], results
+
+
 def test_sequential_validations_do_not_carry_warnings_over():
     """A clean upload after a messy one reports zero autofill warnings."""
     messy = {
@@ -234,7 +302,7 @@ def test_sequential_validations_do_not_carry_warnings_over():
 # ── Honest commit reporting ───────────────────────────────────────
 
 
-def test_commit_rejects_upload_with_dropped_invalid_row(client_and_store):
+def test_commit_rejects_upload_with_dropped_invalid_row(client_and_store, db_session):
     """A dropped invalid row blocks commit instead of silent success."""
     client, store = client_and_store
     tenant_key = str(TEST_TENANT_ID)
@@ -272,8 +340,17 @@ def test_commit_rejects_upload_with_dropped_invalid_row(client_and_store):
 
     resp = client.post(f"/v1/supplier/bulk-upload/commit?session_id={sid}")
     assert resp.status_code == 400, resp.text
+    # The failure names the blocking row so the caller knows what to fix,
+    # instead of a bare "invalid rows" sentence.
+    detail = resp.json().get("detail", "")
+    assert "invalid row" in detail
+    assert "event row 1" in detail
     session_data = _run(store.get_session(tenant_key, user_key, sid))
     assert session_data["status"] == "failed"
+    assert "event row 1" in (session_data.get("error") or "")
+    # Nothing from the rejected payload was persisted.
+    assert db_session.query(SupplierFacilityModel).count() == 0
+    assert db_session.query(SupplierCTEEventModel).count() == 0
 
 
 def test_commit_summary_carries_autofill_warnings(client_and_store):

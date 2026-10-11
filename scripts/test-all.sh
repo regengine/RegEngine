@@ -29,17 +29,22 @@ SKIPPED=0
 
 run_test() {
     local name=$1
-    local cmd=$2
-    
+    shift
+
     echo -e "${YELLOW}▶ Running: ${name}${NC}"
-    
-    if eval "$cmd"; then
+
+    # The command and its arguments are passed as separate words and run
+    # directly as argv, so arguments cannot be reinterpreted as shell
+    # syntax.
+    local output
+    if output=$("$@" 2>&1); then
         echo -e "${GREEN}✓ ${name} PASSED${NC}"
-        ((PASSED++))
+        PASSED=$((PASSED + 1))
     else
         echo -e "${RED}✗ ${name} FAILED${NC}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
     fi
+    printf '%s\n' "$output" | tail -5
     echo ""
 }
 
@@ -54,10 +59,10 @@ for port in 8002 8100 8200 8300 8400 8500 8600; do
     status=$(curl -sf http://localhost:$port/health 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))" 2>/dev/null || echo "DOWN")
     if [[ "$status" == "healthy" || "$status" == "ok" ]]; then
         echo -e "${GREEN}✓ Port $port: $status${NC}"
-        ((SERVICES_UP++))
+        SERVICES_UP=$((SERVICES_UP + 1))
     else
         echo -e "${RED}✗ Port $port: $status${NC}"
-        ((SERVICES_DOWN++))
+        SERVICES_DOWN=$((SERVICES_DOWN + 1))
     fi
 done
 
@@ -70,9 +75,9 @@ echo -e "${BLUE}━━━ 2. Unit Tests (shared/) ━━━${NC}"
 echo ""
 
 if $QUICK_MODE; then
-    run_test "Unit Tests (quick)" "python3 -m pytest tests/shared/ -q --tb=no -x 2>&1 | tail -5"
+    run_test "Unit Tests (quick)" python3 -m pytest tests/shared/ -q --tb=no -x
 else
-    run_test "Unit Tests" "python3 -m pytest tests/shared/ -v --tb=short 2>&1 | tail -30"
+    run_test "Unit Tests" python3 -m pytest tests/shared/ -v --tb=short
 fi
 
 # 3. Contract Tests (need live services)
@@ -81,12 +86,12 @@ echo ""
 
 if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping contract tests in quick mode (require live services)${NC}"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
-    run_test "Contract Tests" "python3 -m pytest tests/contract/ -v --tb=short 2>&1 | tail -20"
+    run_test "Contract Tests" python3 -m pytest tests/contract/ -v --tb=short
 else
     echo -e "${YELLOW}⚠ Skipping contract tests - some services are down${NC}"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
 fi
 
 # 4. Security Tests (hermetic — no live services needed)
@@ -95,13 +100,13 @@ echo ""
 
 if [[ -d "tests/security" ]]; then
     if $QUICK_MODE; then
-        run_test "Security Tests (quick)" "python3 -m pytest tests/security/ -q --tb=no -x 2>&1 | tail -5"
+        run_test "Security Tests (quick)" python3 -m pytest tests/security/ -q --tb=no -x
     else
-        run_test "Security Tests" "python3 -m pytest tests/security/ -v --tb=short 2>&1 | tail -20"
+        run_test "Security Tests" python3 -m pytest tests/security/ -v --tb=short
     fi
 else
     echo -e "${YELLOW}⚠ Security tests directory not found${NC}"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
 fi
 
 # 5. E2E Tests (need live services)
@@ -110,12 +115,12 @@ echo ""
 
 if $QUICK_MODE; then
     echo -e "${YELLOW}⚠ Skipping E2E tests in quick mode (require live services)${NC}"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
 elif [[ $SERVICES_DOWN -eq 0 ]]; then
-    run_test "E2E Tests" "python3 -m pytest tests/e2e/ -v --tb=short 2>&1 | tail -20"
+    run_test "E2E Tests" python3 -m pytest tests/e2e/ -v --tb=short
 else
     echo -e "${YELLOW}⚠ Skipping E2E tests - some services are down${NC}"
-    ((SKIPPED++))
+    SKIPPED=$((SKIPPED + 1))
 fi
 
 # 6. Frontend Tests (if not quick mode)
@@ -124,18 +129,16 @@ if ! $QUICK_MODE; then
     echo ""
     
     if [[ -f "frontend/package.json" ]]; then
-        cd frontend
-        if npm run test:run -- --reporter=dot 2>&1 | tail -10; then
+        if (cd frontend && npm run test:run -- --reporter=dot 2>&1 | tail -10); then
             echo -e "${GREEN}✓ Frontend Tests PASSED${NC}"
-            ((PASSED++))
+            PASSED=$((PASSED + 1))
         else
             echo -e "${YELLOW}⚠ Frontend Tests need review${NC}"
-            ((SKIPPED++))
+            SKIPPED=$((SKIPPED + 1))
         fi
-        cd ..
     else
         echo -e "${YELLOW}⚠ Frontend not found${NC}"
-        ((SKIPPED++))
+        SKIPPED=$((SKIPPED + 1))
     fi
 fi
 
