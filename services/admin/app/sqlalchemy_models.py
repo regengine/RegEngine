@@ -295,8 +295,8 @@ class MembershipModel(Base):
 
     __tablename__ = "memberships"
 
-    user_id = Column(GUID(), ForeignKey("users.id"), primary_key=True)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), primary_key=True)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
     role_id = Column(GUID(), ForeignKey("roles.id"), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -314,7 +314,7 @@ class MFARecoveryCodeModel(Base):
     __tablename__ = "admin_mfa_recovery_codes"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     code_hash = Column(String, nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -383,7 +383,7 @@ class InviteModel(Base):
     __tablename__ = "invites"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     email = Column(String, nullable=False)
     role_id = Column(GUID(), ForeignKey("roles.id"), nullable=False)
     token_hash = Column(String, nullable=False, unique=True)
@@ -413,8 +413,8 @@ class SupplierFacilityModel(Base):
     __tablename__ = "supplier_facilities"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
-    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name = Column(String, nullable=False)
     street = Column(String, nullable=False)
     city = Column(String, nullable=False)
@@ -437,8 +437,8 @@ class SupplierFacilityFTLCategoryModel(Base):
     __tablename__ = "supplier_facility_ftl_categories"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
-    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id", ondelete="CASCADE"), nullable=False)
     category_id = Column(String, nullable=False)
     category_name = Column(String, nullable=False)
     required_ctes = Column(JSONType(), nullable=False, default=list)
@@ -457,9 +457,9 @@ class SupplierTraceabilityLotModel(Base):
     __tablename__ = "supplier_traceability_lots"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
-    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id", ondelete="CASCADE"), nullable=False)
     tlc_code = Column(String, nullable=False)
     product_description = Column(String, nullable=True)
     status = Column(String, nullable=False, default="active")
@@ -480,10 +480,10 @@ class SupplierCTEEventModel(Base):
     __tablename__ = "supplier_cte_events"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
-    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=False)
-    lot_id = Column(GUID(), ForeignKey("supplier_traceability_lots.id"), nullable=False)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id", ondelete="CASCADE"), nullable=False)
+    lot_id = Column(GUID(), ForeignKey("supplier_traceability_lots.id", ondelete="CASCADE"), nullable=False)
     cte_type = Column(String, nullable=False)
     event_time = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     kde_data = Column(JSONType(), nullable=False, default=dict)
@@ -508,9 +508,11 @@ class SupplierFunnelEventModel(Base):
     __tablename__ = "supplier_funnel_events"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    tenant_id = Column(GUID(), ForeignKey("tenants.id"), nullable=False)
-    supplier_user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id"), nullable=True)
+    tenant_id = Column(GUID(), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    supplier_user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Nullable on purpose: deleting a facility keeps the funnel event and
+    # clears the link (v077 DDL: ON DELETE SET NULL).
+    facility_id = Column(GUID(), ForeignKey("supplier_facilities.id", ondelete="SET NULL"), nullable=True)
     event_name = Column(String, nullable=False)
     step = Column(String, nullable=True)
     status = Column(String, nullable=True)
@@ -572,8 +574,10 @@ class SessionModel(Base):
     __tablename__ = "sessions"
 
     id = Column(GUID(), primary_key=True, default=uuid_module.uuid4)
-    user_id = Column(GUID(), ForeignKey("users.id"), nullable=False)
-    active_membership_id = Column(GUID(), ForeignKey("organization_memberships.id"), nullable=True)
+    user_id = Column(GUID(), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Nullable on purpose: deleting a membership keeps the session and
+    # clears the link (v084 DDL: ON DELETE SET NULL).
+    active_membership_id = Column(GUID(), ForeignKey("organization_memberships.id", ondelete="SET NULL"), nullable=True)
     token_hash = Column(String, nullable=True)
     auth_method = Column(String, nullable=False, default="email_otp", server_default="email_otp")
     authenticated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

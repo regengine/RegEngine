@@ -78,8 +78,11 @@ class CircuitBreaker:
             return True
 
         if self.state == CircuitState.OPEN:
-            # Check if recovery timeout has elapsed
-            if self._opened_at and (time.time() - self._opened_at) >= self.recovery_timeout:
+            # Recovery uses a monotonic clock. A wall-clock step backward
+            # (NTP or a VM resume) used to keep this negative forever, so
+            # the breaker stayed open. 0.0 is a real monotonic reading, so
+            # the timestamp is compared with `is not None`.
+            if self._opened_at is not None and (time.monotonic() - self._opened_at) >= self.recovery_timeout:
                 self._transition_to_half_open()
                 return True
             self.stats.rejected_calls += 1
@@ -140,7 +143,7 @@ class CircuitBreaker:
     def _transition_to_open(self) -> None:
         """Transition to open state."""
         self.state = CircuitState.OPEN
-        self._opened_at = time.time()
+        self._opened_at = time.monotonic()
         self._half_open_calls = 0
         self._consecutive_failures = 0
 

@@ -92,6 +92,9 @@ class ComplianceIntegration:
                         item,
                         match["reasons"],
                     )
+                    session.commit()
+                    # Report only after the commit: a tenant whose write
+                    # did not persist must not count as alerted.
                     if alert_id:
                         alerted_tenants.append(match["tenant_id"])
                         logger.warning(
@@ -107,12 +110,13 @@ class ComplianceIntegration:
                     # longer silently swallowed — they bubble up and surface
                     # in Sentry.
                     #
-                    # Log the loop's tenant_id, not match["tenant_id"]:
-                    # match is only bound after _find_matching_tenants
-                    # returns, so a matcher failure left this handler
-                    # reading an unbound local (NameError), which escaped
-                    # the narrow per-item handler upstream and aborted
-                    # alerts for the rest of the batch.
+                    # The handler logs the loop tenant_id (always bound),
+                    # not match["tenant_id"]: when _find_matching_tenants
+                    # itself raises, match is unbound (or stale from a
+                    # previous tenant), which turned one tenant's failure
+                    # into a NameError that aborted every remaining tenant.
+                    # The commit sits inside the try so a commit failure
+                    # also skips only this tenant.
                     logger.error(
                         "alert_creation_failed",
                         tenant_id=str(tenant_id),
@@ -121,7 +125,6 @@ class ComplianceIntegration:
                     )
                     session.rollback()
                     continue
-                session.commit()
 
         if not alerted_tenants:
             logger.info(

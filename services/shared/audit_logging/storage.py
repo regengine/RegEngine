@@ -4,6 +4,7 @@ Audit storage backends.
 Abstract base class and in-memory implementation for audit event storage.
 """
 
+import logging
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -19,6 +20,18 @@ from shared.audit_logging.schema import (
     AuditSeverity,
 )
 
+logger = logging.getLogger(__name__)
+
+
+class AuditStorageError(RuntimeError):
+    """An audit event could not be durably persisted.
+
+    Raised instead of returning ``False`` so a failed audit write can
+    never read as success to a caller that does not check a return
+    value. Compliance-critical callers must treat this as a failed
+    operation, not a best-effort miss.
+    """
+
 
 class AuditStorageBackend(ABC):
     """Abstract base class for audit storage backends."""
@@ -32,6 +45,11 @@ class AuditStorageBackend(ABC):
 
         Returns:
             True if stored successfully
+
+        Raises:
+            AuditStorageError: If the event could not be persisted.
+                Backends must raise rather than return False, and
+                callers must not treat a quiet False as success.
         """
         pass
 
@@ -147,14 +165,31 @@ class PostgresHashChainAuditStorage(AuditStorageBackend):
                 metadata=metadata,
                 request_id=request_id,
             )
-            if entry_id is None:
-                db.rollback()
-                return False
-            db.commit()
-            return True
         except Exception:
             db.rollback()
             raise
+        else:
+            # A None entry id means the chain writer swallowed its own
+            # failure. Raising here (in `else`, outside the guarded
+            # region above) surfaces it as an error instead of a quiet
+            # False the caller could mistake for success.
+            if entry_id is None:
+                db.rollback()
+                logger.error(
+                    "audit_storage_write_failed event_id=%s event_type=%s action=%s",
+                    event.event_id,
+                    event.event_type.value,
+                    event.action,
+                )
+                raise AuditStorageError(
+                    f"audit event {event.event_id} was not persisted (chain writer returned no entry id)"
+                )
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            return True
         finally:
             db.close()
 

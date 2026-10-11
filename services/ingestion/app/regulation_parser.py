@@ -153,7 +153,11 @@ class RegulationParser:
 
 def extract_citations(text: str) -> List[str]:
     """Extract common legal citations using regex."""
-    return list(set(re.findall(r"(?i)(§?\s*[\d.]+|\d+\s+CFR\s+[\d.]+)", text)))
+    # The CFR alternative comes first, and the bare-number branch is
+    # anchored with \b: otherwise the generic branch matches at the
+    # whitespace before the digits ("21 CFR 123.4" would come back as the
+    # fragments " 21" and " 123.4" and the CFR branch would never fire).
+    return list(set(re.findall(r"(?i)(\d+\s+CFR\s+[\d.]+|§\s*[\d.]+|\b[\d.]+\b)", text)))
 
 
 def extract_requirements(text: str) -> List[str]:

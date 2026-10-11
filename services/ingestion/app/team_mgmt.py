@@ -12,12 +12,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.permissions import has_permission
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
+from .authz import IngestionPrincipal, get_ingestion_principal, require_permission
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("team")
@@ -88,6 +90,58 @@ ROLE_PERMISSIONS = {
 
 # In-memory fallback for when DB is unavailable
 _team_store: dict[str, list[TeamMember]] = {}
+
+
+# Inviting a member or changing a member role is an admin action: the caller needs the
+# team-management scope. A wildcard-style key passes this check, a narrow
+# ingestion-only key does not. The plain ``admin`` scope issued to admin
+# keys (dev bypass, demo admin) counts as team-management too, because
+# ``permission_implies`` treats it as a plain scope that implies nothing.
+_require_team_write_scope = require_permission("team.write")
+_require_admin_scope = require_permission("admin")
+
+
+async def require_team_write(
+    request: Request,
+    response: Response,
+    principal: IngestionPrincipal = Depends(get_ingestion_principal),
+) -> IngestionPrincipal:
+    """Allow team writes for ``team.write`` or plain ``admin`` callers.
+
+    Each branch delegates to its own ``require_permission`` gate so the
+    tenant-mismatch check and the rate-limit accounting still run. Owner
+    assignment stays owner-tier: see ``_require_owner_tier_for_owner_role``.
+    """
+    scopes = principal.scopes or []
+    if has_permission(scopes, "team.write"):
+        return await _require_team_write_scope(request=request, response=response, principal=principal)
+    if has_permission(scopes, "admin"):
+        return await _require_admin_scope(request=request, response=response, principal=principal)
+    raise HTTPException(status_code=403, detail="Insufficient permissions: requires 'team.write'")
+
+
+def _normalize_role(role: str | None) -> str:
+    """Return the canonical lowercase role name for a caller-supplied value."""
+    return (role or "").strip().lower()
+
+
+def _validate_role(role: str | None) -> str:
+    """Return the normalized role, rejecting anything outside the known set."""
+    normalized = _normalize_role(role)
+    if normalized not in ROLE_PERMISSIONS:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    return normalized
+
+
+def _require_owner_tier_for_owner_role(principal: IngestionPrincipal, role: str) -> None:
+    """Refuse to confer the owner role unless the caller is owner-tier.
+
+    Owner-tier here means a wildcard-style scope (``*``, ``admin.*``), the
+    scope equivalent of the owner rank in shared.permissions. Anything less
+    gets an opaque 403 so callers cannot probe role tiers by response.
+    """
+    if role == "owner" and not has_permission(principal.scopes or [], "*"):
+        raise HTTPException(status_code=403, detail="Insufficient privilege to assign this role")
 
 
 def _db_get_team(tenant_id: str) -> Optional[list[TeamMember]]:
@@ -250,9 +304,12 @@ async def invite_member(
     tenant_id: str,
     request: InviteRequest,
     ctx: TenantContext = Depends(require_tenant_context),
+    principal: IngestionPrincipal = Depends(require_team_write),
 ):
     """Invite a new team member."""
     tenant_id = ctx.tenant_id
+    role = _validate_role(request.role)
+    _require_owner_tier_for_owner_role(principal, role)
     # Get current count from DB or memory
     members = _db_get_team(tenant_id)
     if members is None:
@@ -265,7 +322,7 @@ async def invite_member(
         id=f"{tenant_id}-user-{len(members) + 1:03d}",
         name=request.name,
         email=request.email,
-        role=request.role,
+        role=role,
         status="invited",
         invited_at=now.isoformat(),
         avatar_initials="".join(w[0].upper() for w in request.name.split()[:2]),
@@ -290,9 +347,12 @@ async def update_role(
     member_id: str,
     role: str,
     ctx: TenantContext = Depends(require_tenant_context),
+    principal: IngestionPrincipal = Depends(require_team_write),
 ):
     """Update a team member's role."""
     tenant_id = ctx.tenant_id
+    role = _validate_role(role)
+    _require_owner_tier_for_owner_role(principal, role)
     # Try DB first
     members = _db_get_team(tenant_id)
     if members is None:
@@ -300,6 +360,11 @@ async def update_role(
 
     for member in members:
         if member.id == member_id:
+            # Demoting an owner is conferring-equivalent: only an
+            # owner-tier caller may move an owner to a lesser role, or a
+            # team.write key could strip every owner and lock the tenant.
+            if _normalize_role(member.role) == "owner":
+                _require_owner_tier_for_owner_role(principal, "owner")
             member.role = role
 
             # Update in DB or memory
