@@ -845,6 +845,15 @@ def parse_csv_rows(
             except ValueError:
                 parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
                 continue
+            # IngestEvent requires a finite quantity greater than 0. Reject
+            # here with a row-specific message instead of falling through to
+            # the generic "could not be parsed" handler below.
+            if not math.isfinite(quantity):
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be a finite number")
+                continue
+            if quantity <= 0:
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be greater than 0")
+                continue
 
             # Lot code: extract and run integrity checks
             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
