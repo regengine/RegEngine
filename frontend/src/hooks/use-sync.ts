@@ -15,6 +15,20 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
 
+/**
+ * Tenant named inside a stored offline scan payload, if any. Legacy records
+ * without a payload carry no owner and are handled by the caller.
+ */
+function storedScanTenantId(payload: string | undefined): string | undefined {
+    if (!payload) return undefined;
+    try {
+        const parsed = JSON.parse(payload) as { tenant_id?: unknown };
+        return typeof parsed?.tenant_id === 'string' ? parsed.tenant_id : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
     const [isSyncing, setIsSyncing] = useState(false);
