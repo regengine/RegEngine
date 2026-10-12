@@ -75,6 +75,30 @@ class TestAuthGate:
         )
         assert resp.status_code == 401
 
+    def test_failure_budget_is_scoped_to_the_real_client_ip(self, client, monkeypatch):
+        # Through the real route, FastAPI must inject the Request into
+        # ``verify_inbound_email_auth`` so failures count against the
+        # caller's IP, not a shared "unknown" bucket. An ``Optional[Request]``
+        # annotation on that dependency broke route registration and app
+        # boot entirely (staging deploy of 2ba4281a).
+        import app.email_ingest.auth as auth_mod
+        from shared.rate_limit import BruteForceLimiter
+
+        limiter = BruteForceLimiter(
+            namespace="test-email-router-auth-fail", max_failures=2, window_seconds=60, redis_client=None
+        )
+        limiter._redis = None  # ignore any env-provided Redis; per-test memory budget
+        monkeypatch.setattr(auth_mod, "_email_auth_limiter", limiter)
+
+        bad = _auth_header(password="wrong")
+        for _ in range(2):
+            resp = client.post("/webhooks/email/inbound", json=MINIMAL_PAYLOAD, headers=bad)
+            assert resp.status_code == 401
+        assert limiter.is_limited("testclient")
+        assert not limiter.is_limited("unknown")
+        resp = client.post("/webhooks/email/inbound", json=MINIMAL_PAYLOAD, headers=bad)
+        assert resp.status_code == 429
+
     def test_auth_not_configured_is_401(self, client, monkeypatch):
         monkeypatch.delenv("EMAIL_INBOUND_BASIC_AUTH_USER", raising=False)
         monkeypatch.delenv("EMAIL_INBOUND_BASIC_AUTH_PASSWORD", raising=False)
@@ -147,7 +171,9 @@ class TestHappyPath:
         # Provider webhooks retry on 5xx — a data-quality rejection must
         # never look like a transient failure to Postmark.
         async def fake_process(db_session, payload):
-            return InboundEmailResult(message_id=payload.MessageID, status="rejected", rejection_reason="unmapped_recipient")
+            return InboundEmailResult(
+                message_id=payload.MessageID, status="rejected", rejection_reason="unmapped_recipient"
+            )
 
         monkeypatch.setattr(router_mod, "process_inbound_email", fake_process)
 
