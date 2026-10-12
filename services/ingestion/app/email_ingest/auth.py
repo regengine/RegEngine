@@ -78,13 +78,16 @@ def email_inbound_auth_configured() -> bool:
 
 
 async def verify_inbound_email_auth(
-    request: Optional[Request] = None,
+    request: Request,
     authorization: Optional[str] = Header(default=None),
 ) -> None:
     """FastAPI dependency enforcing HTTP Basic Auth on the inbound webhook.
 
-    ``request`` is only used to scope the brute-force budget by client IP;
-    it stays optional so direct unit calls without a request still work.
+    ``request`` is only used to scope the brute-force budget by client IP.
+    It must be annotated as a bare ``Request``: FastAPI injects only that
+    exact annotation, and ``Optional[Request]`` is treated as a body field,
+    which raises ``FastAPIError`` when the route registers (staging boot
+    failure). ``_client_ip`` still tolerates a request without ``client``.
     """
     client_ip = _client_ip(request)
     if _get_email_auth_limiter().is_limited(client_ip):
