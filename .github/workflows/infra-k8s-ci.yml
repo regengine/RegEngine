@@ -40,7 +40,7 @@ jobs:
 
       - name: Run infra config tests
         run: |
-          python3 -m pip install --quiet pytest pyyaml
+          python3 -m pip install --quiet "pytest==9.1.1" "pytest-asyncio==1.4.0" "pytest-cov==7.1.0" "pyyaml==6.0.3"
           python3 -m pytest tests/infra infra/gateway/tests -q --no-cov -o "testpaths=tests" -p no:cacheprovider
 
   production-kustomize:
