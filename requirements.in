@@ -68,7 +68,7 @@ xlrd>=2.0.2
 # Floored to >=2.13.0 for PYSEC-2026-175 (SSRF via PyJWKClient jku),
 # PYSEC-2026-177 (unbounded JWKS fetch DoS), PYSEC-2026-178 (detached-JWS
 # work-amplifier DoS), and PYSEC-2026-179 (HMAC-with-JWK key confusion).
-PyJWT>=2.14.0
+PyJWT>=2.15.1
 pyotp>=2.10.0
 argon2-cffi>=25.1.0
 authlib>=1.8.0
