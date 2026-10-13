@@ -14,7 +14,7 @@
 # 1.6.0, so only fastapi actually moved.
 fastapi>=0.141.1
 uvicorn[standard]>=0.53.0
-sqlalchemy>=2.0.54
+sqlalchemy>=2.1.3
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
 # Pin it explicitly so pip-compile always emits a hash — otherwise --require-hashes
 # rejects the build on Railway. See build failure on #1823 / #1842.
