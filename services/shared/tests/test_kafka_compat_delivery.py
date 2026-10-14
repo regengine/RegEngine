@@ -68,12 +68,14 @@ class TestDeliveryHandle:
         handle._on_delivery(None, "msg")
         assert seen == ["msg"]
 
-    def test_callback_registered_after_success_receives_topic(self):
+    def test_callback_registered_after_success_receives_message(self):
+        # #3296: a late callback replays the delivery message, matching what
+        # an early callback receives (it used to get the topic name).
         handle = kc.DeliveryHandle("topic")
         handle._on_delivery(None, "msg")
         seen: list = []
         handle.add_callback(seen.append)
-        assert seen == ["topic"]
+        assert seen == ["msg"]
 
 class TestProducerErrorMapping:
     def test_buffer_error_becomes_kafka_error(self, fake_producer, monkeypatch):

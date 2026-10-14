@@ -107,10 +107,13 @@ def test_missing_config_key_raises_value_error(tmp_path):
 
 
 def test_empty_config_file_raises_value_error_not_type_error(tmp_path):
-    """An empty yaml file loads as None; the caller deserves a ValueError."""
+    """An empty yaml file loads as None; the caller deserves a ValueError.
+
+    #3321 (merged after this test) gave empty specs their own message.
+    """
     path = tmp_path / "spec.yaml"
     path.write_text("")
-    with pytest.raises(ValueError, match="not a mapping"):
+    with pytest.raises(ValueError, match="Empty configuration"):
         mod.LaunchOrchestrator(path, mod.OrchestrationMode.DRY_RUN, dry_run=True)
 
 
@@ -316,13 +319,17 @@ def test_persona_collateral_registers_artifact_and_writes_nothing(orch):
 
 
 def test_outbound_sequence_derives_channels(orch):
+    # #3321 requires every step to carry a template_ref that exists on disk;
+    # a sequence with a missing template records failure instead.
+    for name in ("email_1.md", "email_2.md", "linkedin_1.md"):
+        (orch.base_dir / name).write_text("# template")
     campaign = {
         "id": "seq1",
         "persona": "qa_persona",
         "steps": [
-            {"channel": "email"},
-            {"channel": "email"},
-            {"channel": "linkedin"},
+            {"channel": "email", "template_ref": "email_1.md"},
+            {"channel": "email", "template_ref": "email_2.md"},
+            {"channel": "linkedin", "template_ref": "linkedin_1.md"},
         ],
     }
     orch._initialize_outbound_sequence(mod.OrchestrationPhase.SALES_GTM, campaign)

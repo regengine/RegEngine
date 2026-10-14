@@ -73,12 +73,9 @@ def test_allowlist_rejects_unlisted_domain():
             validate_url("https://other.com/", allowed_domains=["example.com"])
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG url_validation.py:validate_url allowlist uses bare endswith, "
-    "so evilexample.com passes an example.com allowlist",
-)
 def test_allowlist_rejects_suffix_impersonation():
+    # Was a strict xfail; #3230 made the allowlist match the exact host or a
+    # subdomain at a dot boundary, so evilexample.com no longer passes.
     with patch("socket.getaddrinfo", return_value=_addrinfo(["8.8.8.8"])):
         with pytest.raises(SSRFError):
             validate_url("https://evilexample.com/", allowed_domains=["example.com"])

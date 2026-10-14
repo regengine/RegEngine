@@ -179,6 +179,9 @@ class TestRequireApiKeyEnforcesAllWindows:
         key = _make_key(rate_limit_per_minute=1000, rate_limit_per_hour=2)
         store = _make_store()
         store.validate_key = AsyncMock(return_value=key)
+        # The store bypasses the database for key validation, so it must
+        # bypass the live tenant-status read (#3352) the same way.
+        store.get_tenant_status = AsyncMock(return_value="active")
         monkeypatch.setattr(auth, "_db_store_instance", store)
 
         assert await auth.require_api_key(_make_request(), "rge_testkey.secret")

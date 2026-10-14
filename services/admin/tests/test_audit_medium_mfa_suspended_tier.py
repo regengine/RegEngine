@@ -75,6 +75,10 @@ def _set_strict(monkeypatch):
     monkeypatch.delenv("REGENGINE_AUTH_STRICT", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://example.invalid/regengine")
     monkeypatch.setenv("REDIS_URL", "redis://example.invalid/0")
+    # Other admin test modules set SESSION_STORE_BACKEND=memory at import time.
+    monkeypatch.delenv("AUTH_ALLOW_LEGACY_JTI_FREE", raising=False)
+    monkeypatch.delenv("SESSION_STORE_BACKEND", raising=False)
+    monkeypatch.delenv("ALLOW_INMEMORY_SESSION_STORE", raising=False)
 
 
 def _set_non_strict(monkeypatch):

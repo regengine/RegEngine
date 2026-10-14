@@ -72,13 +72,6 @@ if not _tool_access_secret_env:
     )
 TOOL_ACCESS_SECRET = _tool_access_secret_env
 
-# Lifetime of a minted tool-access JWT, in days. Matches the 30-day
-# ``re_tool_access`` cookie the frontend sets on confirm success
-# (frontend/src/app/api/tools/verify/route.ts). decode enforces exp
-# automatically (PyJWT verifies exp whenever the claim is present);
-# pre-expiry legacy tokens without exp keep working until replaced.
-TOOL_ACCESS_TOKEN_TTL_DAYS = 30
-
 # ---------------------------------------------------------------------------
 # Tool-access JWT lifetime — tokens must expire (#medium-9).
 #

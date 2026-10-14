@@ -438,8 +438,8 @@ def _classify_row(parsed: dict[str, Any], row: dict[str, Any], *, warnings: list
     if row.get("tlc_code") and _row_has_event_signal(row):
         parsed["events"].append(_extract_event_row(row))
         return
-    if row.get("category_id"):
-        parsed["ftl_scopes"].append(
+    if row.get("tlc_code"):
+        parsed["tlcs"].append(
             {
                 "tlc_code": str(row.get("tlc_code") or "").strip(),
                 "facility_name": str(row.get("facility_name") or row.get("name") or "").strip(),

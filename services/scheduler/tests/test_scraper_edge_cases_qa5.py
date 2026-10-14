@@ -4,7 +4,8 @@ Covers real failure modes found by probe:
 
 1. Malformed RSS XML must fail closed as a ScrapeResult (success=False),
    not escape as an exception (xml ParseError is a SyntaxError, which the
-   old narrow except tuple did not catch).
+   old narrow except tuple did not catch). Since #3323 the openFDA API
+   fallback runs first; the scrape fails only when that is empty too.
 2. get_by_classification must skip a single malformed row and keep the
    valid rows, matching _fetch_recalls behavior (one bad row used to fail
    the whole result).
@@ -87,6 +88,35 @@ class TestMalformedRSSFailsClosed:
         assert result.success is False
         assert result.items == []
         assert result.error_message
+
+    def test_unreadable_feed_and_empty_api_error_names_both(self, wl_scraper, monkeypatch):
+        # defusedxml's EntitiesForbidden takes the same path as a ParseError.
+        hostile = b"<?xml version='1.0'?><!DOCTYPE foo [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]><rss>&xxe;</rss>"
+        monkeypatch.setattr(
+            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            lambda *args, **kwargs: _FakeResponse(content=hostile),
+        )
+        result = wl_scraper.scrape()
+        assert result.success is False
+        assert result.error_message.startswith("rss_unreadable: EntitiesForbidden")
+        assert "openFDA API fallback returned no items" in result.error_message
+
+    def test_garbage_xml_with_api_items_stays_success_with_warning(self, wl_scraper, monkeypatch):
+        # #3323: the API fallback still delivers data, so the scrape
+        # succeeds, but the broken feed is surfaced as a warning.
+        monkeypatch.setattr(
+            "app.scrapers.fda_warning_letters.fetch_with_retry",
+            lambda *args, **kwargs: _FakeResponse(
+                content=b"<rss><channel><item><title>truncated garbage",
+                json_payload={"results": [_GOOD_RECALL]},
+            ),
+        )
+        result = wl_scraper.scrape()
+        assert result.success is True
+        assert result.error_message is None
+        assert [item.raw_data["recall_number"] for item in result.items] == ["F-1111-2026"]
+        assert len(result.warnings) == 1
+        assert result.warnings[0].startswith("rss_unreadable: ParseError")
 
     def test_well_formed_holding_page_stays_success_with_zero_items(self, wl_scraper, monkeypatch):
         # A 200 holding page is well-formed XML with no items. That is not

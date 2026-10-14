@@ -298,10 +298,17 @@ def test_idempotency_lookup_treats_naive_expiry_as_utc(monkeypatch) -> None:
     import shared.idempotency as idempotency
 
     naive_future = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
-    row = ("tenant-1", True, naive_future, "key-1", ["read"], ["US"])
+    # Current lookup shape: the key row carries revoked_at (#3242), and a
+    # second query reads the key tenant's status (#3352).
+    row = ("tenant-1", True, naive_future, "key-1", ["read"], ["US"], None)
+
+    def execute(statement, *args, **kwargs):
+        result = MagicMock()
+        result.fetchone.return_value = ("active",) if "FROM tenants" in str(statement) else row
+        return result
 
     session = MagicMock()
-    session.execute.return_value.fetchone.return_value = row
+    session.execute.side_effect = execute
     monkeypatch.setattr("shared.database.SessionLocal", lambda: session)
     monkeypatch.setattr(
         "shared.api_key_store.set_api_key_lookup_context",

@@ -258,11 +258,19 @@ class TestValidateProductionSecrets:
         )
         sm.validate_production_secrets()
 
-    @pytest.mark.parametrize("weak", ["change-me", "password", "test", "test-key", "demo123"])
+    @pytest.mark.parametrize("weak", ["change-me", "password", "test"])
     def test_insecure_defaults_fail(self, monkeypatch, weak):
         _prod_env(monkeypatch, NEO4J_PASSWORD=weak)
         with pytest.raises(RuntimeError, match="insecure default"):
             sm.validate_production_secrets()
+
+    # #3341 made the placeholder check exact (case-insensitive) so a value
+    # that merely starts with a placeholder token boots. These two were
+    # rejected only by the prefix match this file was written against.
+    @pytest.mark.parametrize("prefixed", ["test-key", "demo123"])
+    def test_placeholder_prefixed_values_pass(self, monkeypatch, prefixed):
+        _prod_env(monkeypatch, NEO4J_PASSWORD=prefixed)
+        sm.validate_production_secrets()
 
     def test_exact_test_storage_pair_fails(self, monkeypatch):
         _prod_env(

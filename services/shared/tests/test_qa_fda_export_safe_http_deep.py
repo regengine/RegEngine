@@ -8,6 +8,7 @@ deterministic: DNS and transports are mocked, no network, no sleeps.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -158,7 +159,7 @@ class TestPinnedSession:
     def test_get_merges_params_into_url(self, monkeypatch):
         seen = {}
 
-        def fake_get(url, *, headers=None, timeout=None):
+        def fake_get(url, *, headers=None, timeout=None, max_bytes=None):
             seen["url"] = url
             return "sentinel"
 
@@ -187,11 +188,14 @@ class TestSafeHttpRedirects:
             def __exit__(self, *args):
                 return False
 
-            def get(self, url):
-                return httpx.Response(
+            # safe_httpx_get_sync streams each hop so it can cap the body
+            # size (#3232); a hop is a stream() context, not a get().
+            @contextlib.contextmanager
+            def stream(self, method, url):
+                yield httpx.Response(
                     302,
                     headers={"location": "https://example.com/next"},
-                    request=httpx.Request("GET", url),
+                    request=httpx.Request(method, url),
                 )
 
         monkeypatch.setattr(safe_http.httpx, "Client", LoopingClient)

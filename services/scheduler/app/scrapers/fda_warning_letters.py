@@ -28,6 +28,10 @@ FDA_WARNING_LETTERS_RSS = "https://www.fda.gov/about-fda/contact-fda/stay-inform
 FDA_API_BASE = "https://api.fda.gov/food/enforcement.json"
 
 
+class _UnreadableRSSFeed(Exception):
+    """The RSS body could not be parsed, or defusedxml rejected it."""
+
+
 class FDAWarningLettersScraper(BaseScraper):
     """Scraper for FDA Warning Letters.
 
@@ -60,11 +64,16 @@ class FDAWarningLettersScraper(BaseScraper):
         """Scrape FDA Warning Letters from RSS feed."""
         start_time = time.time()
         items: List[EnforcementItem] = []
+        warnings: List[str] = []
         error_message: Optional[str] = None
+        rss_unreadable: Optional[str] = None
 
         try:
             # Try RSS feed first
-            items = self._scrape_rss()
+            try:
+                items = self._scrape_rss()
+            except _UnreadableRSSFeed as unreadable:
+                rss_unreadable = f"rss_unreadable: {unreadable}"
 
             if items:
                 logger.info(
@@ -73,7 +82,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
             else:
-                # If _scrape_rss returned [] because of a 404, we try API
+                # The feed gave no items (404, empty, or unreadable): try the API.
                 logger.debug("no_rss_items_trying_api_fallback")
                 items = self._scrape_api()
                 logger.info(
@@ -81,6 +90,15 @@ class FDAWarningLettersScraper(BaseScraper):
                     source="api",
                     count=len(items),
                 )
+                # An unreadable feed still falls back to the API (#3323). If
+                # the API is empty too, nothing shows the source is healthy,
+                # so record a failed scrape (#3293). If the API has items,
+                # data still flows and the broken feed becomes a warning.
+                if rss_unreadable:
+                    if items:
+                        warnings.append(rss_unreadable)
+                    else:
+                        error_message = f"{rss_unreadable}; openFDA API fallback returned no items"
 
         # QA5: broad catch is intentional. The scraper contract is to always
         # return a ScrapeResult, never raise: the scheduler records a failure
@@ -105,6 +123,7 @@ class FDAWarningLettersScraper(BaseScraper):
             items=items,
             error_message=error_message,
             duration_ms=duration_ms,
+            warnings=warnings,
         )
 
     def _scrape_rss(self) -> List[EnforcementItem]:
@@ -139,16 +158,17 @@ class FDAWarningLettersScraper(BaseScraper):
         try:
             root = ElementTree.fromstring(response.content)
         except Exception as parse_error:
-            # ParseError is a SyntaxError, so scrape() lets it escape and
-            # the API fallback never runs. EntitiesForbidden is a ValueError
-            # that scrape() records as a failed scrape, again with no
-            # fallback. An unreadable body is an empty feed.
+            # ParseError is a SyntaxError and EntitiesForbidden is a
+            # ValueError. Raised as is, either becomes a failed scrape with
+            # no API fallback. scrape() treats an unreadable body as an empty
+            # feed and falls back, but unlike a well-formed empty feed it is
+            # a failure when the fallback is empty too.
             logger.warning(
                 "rss_unreadable_falling_back_to_api",
                 error=str(parse_error),
                 error_type=type(parse_error).__name__,
             )
-            return []
+            raise _UnreadableRSSFeed(f"{type(parse_error).__name__}: {parse_error}") from parse_error
 
         # RSS structure: rss/channel/item
         for item in root.findall(".//item"):
