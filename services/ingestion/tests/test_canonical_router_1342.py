@@ -508,6 +508,8 @@ class TestAmendmentChainForwardWalk:
         # then the second probe returns None → loop exits.
         session = _FakeSession(
             [
+                # existence check: event belongs to the resolved tenant.
+                _Result(row=(EVENT_ID,)),
                 # backward step: event has no supersedes (row[1] is None).
                 _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
                 # forward step 1: successor found.
@@ -534,6 +536,7 @@ class TestAmendmentChainForwardWalk:
         """Covers the ``r[2].isoformat() if r[2] else None`` None branch."""
         session = _FakeSession(
             [
+                _Result(row=(EVENT_ID,)),  # existence check
                 _Result(row=(EVENT_ID, None, "shipping", "active", NOW, None)),
                 _Result(row=("evt-new", "active", None)),  # created_at = None
                 _Result(row=None),

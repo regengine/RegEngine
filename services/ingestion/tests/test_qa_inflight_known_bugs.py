@@ -5,7 +5,8 @@
 draft PRs, so this file adds tests only and changes no product code. Each
 test below documents a real bug found during the QA pass and is marked
 ``xfail(strict=True)``: it fails on current code and must be converted to a
-passing test when the owning work fixes the behavior.
+passing test when the owning work fixes the behavior. Tests whose bug has
+been fixed carry no marker and now guard against regression.
 """
 
 from __future__ import annotations
@@ -41,6 +42,14 @@ def team_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app = FastAPI()
     app.include_router(team_router)
     app.dependency_overrides[_verify_api_key] = lambda: None
+    # Team writes require a ``team.write`` principal (#3225/#3314); without
+    # this override the routes answer 401 unless REGENGINE_ENV enables the
+    # dev-open fallback.
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key",
+        scopes=["team.write"],
+        tenant_id="t1",
+    )
     install_tenant_context_override(app)
     _team_store.clear()
     monkeypatch.setattr(tm, "_db_get_team", lambda tid: None)
@@ -66,10 +75,7 @@ def recall_client() -> TestClient:
     _recall_store.clear()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="team_mgmt invite_member stores any role string without checking ROLE_PERMISSIONS (in-flight file, not fixed here)",
-)
+# Fixed by #3225/#3314 (team_mgmt._validate_role): now an enforced regression test.
 def test_team_invite_rejects_unknown_role(team_client: TestClient) -> None:
     response = team_client.post(
         "/api/v1/team/t1/invite",
@@ -90,10 +96,7 @@ def test_team_invite_rejects_malformed_email(team_client: TestClient) -> None:
     assert response.status_code in (400, 422)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="team_mgmt update_role writes any role string without checking ROLE_PERMISSIONS (in-flight file, not fixed here)",
-)
+# Fixed by #3225/#3314 (team_mgmt._validate_role): now an enforced regression test.
 def test_team_update_role_rejects_unknown_role(
     team_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

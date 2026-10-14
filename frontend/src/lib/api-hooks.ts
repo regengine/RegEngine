@@ -54,8 +54,9 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
     const RETRY_DELAYS = [500, 1500];
     let lastError: Error | null = null;
 
-    // Retry safety: mint one key per logical call and reuse it on every
-    // attempt, so a retried POST replays instead of duplicating the write.
+    // One key per logical call so the server can dedupe a replayed write.
+    // POST and PATCH are not retried here (see isIdempotentMethod); methods
+    // that are retried send the same key on every attempt.
     const incoming = new Headers(options.headers ?? {}).get('Idempotency-Key');
     const idempotencyKey = incoming ?? (isMutatingMethod(options.method) ? newIdempotencyKey() : null);
 
@@ -96,23 +97,11 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
             return res.json();
         }
 
-        // Don't retry client errors (4xx): the request itself is wrong, so
-        // resending it only repeats the failure. Thrown outside the
-        // try/catch above so this throw is never mistaken for a retryable
-        // transport failure.
-        if (res.status >= 400 && res.status < 500) {
-            throw new Error(`API error: ${res.status} ${res.statusText}`);
-        }
-
-        // Server error (5xx) — retry with backoff.
-        lastError = new Error(`API error: ${res.status} ${res.statusText}`);
-        if (attempt < MAX_RETRIES) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
-        }
-
         // 429 and 5xx are transient: retry. Every other 4xx is final, in
         // particular 401/403 which need immediate session handling, not
-        // two more doomed requests and seconds of added latency.
+        // two more doomed requests and seconds of added latency. Both throws
+        // sit outside the try/catch above so they are never mistaken for a
+        // retryable transport failure.
         if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
             lastError = apiError(res.status, res.statusText);
             if (attempt < MAX_RETRIES) {

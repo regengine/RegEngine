@@ -23,7 +23,8 @@
   "knip": {
     "entry": [
       "playwright.demo-smoke.config.ts",
-      "scripts/design-lint.mjs"
+      "scripts/design-lint.mjs",
+      "tests/e2e/qa-2026-10-02/fe-regressions.config.ts"
     ]
   },
   "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",

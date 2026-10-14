@@ -55,6 +55,8 @@ PUBLIC_OPERATIONS = frozenset(
         ("admin", "POST", "/v1/auth/accept-invite"),
         ("admin", "POST", "/api/v1/tools/verify-email"),
         ("admin", "POST", "/api/v1/tools/confirm-code"),
+        # Verifies a lead-capture tool-access token and returns only a boolean.
+        ("admin", "POST", "/api/v1/tools/check-access"),
         ("admin", "POST", "/api/v1/tools/lead-erasure/request"),
         ("admin", "POST", "/api/v1/tools/lead-erasure/confirm"),
     }

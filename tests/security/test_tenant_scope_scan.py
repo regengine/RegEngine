@@ -219,12 +219,14 @@ def test_comma_from_list_checks_every_table(tmp_path: Path):
 
 
 def test_fstring_cypher_map_with_tenant_passes(tmp_path: Path):
-    # The Lot map is the only tenant predicate here, mirroring
-    # get_governing_regulations: stripping literal {...} spans deleted it
-    # and falsely flagged the query.
+    # The node maps are the only tenant predicates here, mirroring
+    # get_governing_regulations: stripping literal {...} spans deleted them
+    # and falsely flagged the query. Each tenant label needs its own map or
+    # comparison (see test_cypher_match_scoped_on_one_label_only_flags_the_other).
     violations = scan_text(
         tmp_path,
-        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent)\n'
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})'
+        "-[:UNDERWENT]->(e:TraceEvent {{tenant_id: $tenant_id}})\n"
         'RETURN l\n"""\n',
     )
     assert violations == []
@@ -293,9 +295,11 @@ def test_fstring_cypher_map_with_params_keeps_tenant_evidence(tmp_path: Path):
     # Cypher map literals in f-strings use doubled braces, so the resolved
     # text holds {tlc: $tlc, ...}. Segments with a $param are query text,
     # not builder placeholders, and must survive placeholder stripping.
+    # Each tenant label carries its own tenant map.
     violations = scan_text(
         tmp_path,
-        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent)\nRETURN l\n"""\n',
+        'QUERY = f"""\nMATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})'
+        '-[:UNDERWENT]->(e:TraceEvent {{tenant_id: $tenant_id}})\nRETURN l\n"""\n',
     )
     assert violations == []
     # A map without a tenant binding is still flagged.

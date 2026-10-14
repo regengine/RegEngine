@@ -30,15 +30,16 @@ beforeEach(() => {
 });
 
 describe('apiFetch idempotency keys', () => {
-    it('reuses one key across retry attempts of a POST', async () => {
+    it('sends a key on a failing POST and does not retry it', async () => {
+        // apiFetch attempts POST exactly once (#3255, pinned by
+        // api-fetch-hygiene.test.ts), so the key is never re-sent here; it
+        // lets the server's IdempotencyMiddleware dedupe a replayed write.
         mockedFetch.mockResolvedValueOnce(serverError()).mockResolvedValueOnce(okResponse({}));
 
-        await acknowledgeAlert('tenant-1', null, 'alert-1');
+        await expect(acknowledgeAlert('tenant-1', null, 'alert-1')).rejects.toThrow('API error: 500');
 
-        expect(mockedFetch).toHaveBeenCalledTimes(2);
-        const keys = sentKeys();
-        expect(keys[0]).toBeTruthy();
-        expect(keys[1]).toBe(keys[0]);
+        expect(mockedFetch).toHaveBeenCalledTimes(1);
+        expect(sentKeys()[0]).toBeTruthy();
     });
 
     it('mints a fresh key per logical call', async () => {

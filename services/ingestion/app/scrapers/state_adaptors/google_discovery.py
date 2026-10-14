@@ -9,7 +9,7 @@ from shared.safe_http import (
     ResponseTooLargeError,
     safe_httpx_get_sync,
 )
-from shared.url_validation import validate_url
+from shared.url_validation import SSRFError, validate_url
 
 from ...config import get_settings
 from .base import FetchedItem, Source, StateRegistryScraper

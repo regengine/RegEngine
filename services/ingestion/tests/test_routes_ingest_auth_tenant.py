@@ -128,11 +128,10 @@ def test_ingest_direct_default_source_url_uses_handler_default(monkeypatch):
     (``payload.source_url or "manual://direct"``) must reach
     ``_process_and_emit`` as ``url_str``. The stub then builds the
     response through the real ``NormalizedEvent`` model, so the test
-    fails if the default ever stops matching the model: today the
-    ``manual://`` default fails HttpUrl validation and the handler
-    catch-all converts that into a 500. When the default is fixed to a
-    valid URL, update the expected status here instead of re-adding an
-    xfail.
+    fails if the default ever stops matching the model. The model accepts
+    the ``manual://`` marker as a never-fetched provenance ref (#3274,
+    #3287), so the request succeeds; it used to fail HttpUrl validation
+    and the handler catch-all converted that into a 500.
     """
     from app.models import NormalizedEvent
 
@@ -159,4 +158,5 @@ def test_ingest_direct_default_source_url_uses_handler_default(monkeypatch):
     payload = {"text": "lot 7 shipped", "source_system": "probe"}
     resp = client.post("/v1/ingest", json=payload)
     assert seen.get("url_str") == "manual://direct"
-    assert resp.status_code == 500
+    assert resp.status_code == 200
+    assert resp.json()["source_url"] == "manual://direct"

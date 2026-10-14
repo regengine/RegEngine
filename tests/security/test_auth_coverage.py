@@ -70,6 +70,9 @@ def _build_test_app():
         for route in inventory_app.routes
         if isinstance(route, APIRoute) and route_owner(route) in PRODUCTION_OWNERS
     )
+    # Classify before swapping the global throttle: a manifest error then
+    # leaves no probe throttle behind to 429 later modules in the session.
+    app.state.security_manifest = build_route_security_manifest(inventory_app)
     from services.admin.app import privileged_auth
 
     app.state.previous_privileged_auth_throttle = privileged_auth._privileged_auth_throttle
@@ -78,7 +81,6 @@ def _build_test_app():
         redis_client=privileged_auth_redis
     )
     app.state.privileged_auth_probe_redis = privileged_auth_redis
-    app.state.security_manifest = build_route_security_manifest(inventory_app)
     return app
 
 

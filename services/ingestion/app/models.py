@@ -122,15 +122,17 @@ class IngestRequest(BaseModel):
 # Stored source-URL markers for non-fetched ingests (#qa5)
 # The file-upload and direct-text routes store a source identifier that is
 # never fetched over the network: ``manual://direct`` (default direct-ingest
-# marker) and ``http://upload.internal/<name>`` (server-built file marker).
-# The SSRF guard above intentionally rejects both (unresolvable host), so
-# the stored models below exempt exactly these non-routable markers while
-# keeping the fetch boundary (IngestRequest, _validate_url, _fetch) strict.
+# marker), ``upload://file/<name>`` (server-built file marker) and the
+# legacy ``http://upload.internal/<name>`` file marker. The SSRF guard above
+# intentionally rejects them (unresolvable host), so the stored models below
+# (NormalizedDocument and NormalizedEvent) exempt exactly these non-routable
+# markers while keeping the fetch boundary (IngestRequest, _validate_url,
+# _fetch) strict.
 # Matching is exact: ``upload.internal.evil.com`` still goes through DNS
 # validation, and no fetcher accepts these markers without revalidation.
 # ---------------------------------------------------------------------------
 
-_INTERNAL_SOURCE_SCHEMES = frozenset({"manual"})
+_INTERNAL_SOURCE_SCHEMES = frozenset({"manual", "upload"})
 _INTERNAL_SOURCE_HOSTS = frozenset({"upload.internal"})
 
 _http_url_adapter = TypeAdapter(HttpUrl)
@@ -188,7 +190,8 @@ class NormalizedDocument(BaseModel):
     # Plain string (not HttpUrl): besides fetched http(s) URLs this field
     # carries server-synthesized provenance refs such as ``manual://direct``
     # (direct text ingest) and ``upload://file/<name>`` (file upload), which
-    # are never fetched. Http(s) values still get the full SSRF screen below.
+    # are never fetched. Everything else must be an http(s) URL that passes
+    # the full SSRF screen (see ``_validate_stored_source_url``).
     document_id: str
     source_url: str
     source_system: str
@@ -204,15 +207,11 @@ class NormalizedDocument(BaseModel):
     @field_validator("source_url")
     @classmethod
     def source_url_must_not_be_private(cls, v: str) -> str:
-        # Only http(s) values can ever be fetched, so only they need the
-        # SSRF screen. Non-http provenance refs (manual://, upload://) are
-        # opaque and accepted as-is. The check stays fail-closed: DNS
-        # failure and private/metadata IPs still reject.
-        from urllib.parse import urlsplit
-
-        if urlsplit(v).scheme.lower() in {"http", "https"}:
-            _reject_private_host(TypeAdapter(HttpUrl).validate_python(v))
-        return v
+        # Same rule as NormalizedEvent.source_url: the internal provenance
+        # markers are opaque and accepted without DNS; anything else must be
+        # an http(s) URL and stays fail-closed (DNS failure and private or
+        # metadata IPs still reject).
+        return _validate_stored_source_url(v)
 
 
 class NormalizedEvent(BaseModel):

@@ -1,6 +1,7 @@
 """Offline regression tests for the RLS probe helper.
 
-``tests/test_e2e_tenant_isolation.py::_rls_unfiltered_rows`` is the sole
+``tests/rls_probe.py::_rls_unfiltered_rows`` (used by
+``tests/test_e2e_tenant_isolation.py``) is the sole
 proof that an unfiltered read as the app role surfaces exactly one
 tenant's rows. Two earlier defects made that proof vacuous: on any
 ``SET ROLE`` failure the helper rolled back the caller's transaction
@@ -11,7 +12,7 @@ behavior with a fake session: no database is touched.
 
 import pytest
 
-from tests.test_e2e_tenant_isolation import _rls_unfiltered_rows
+from tests.rls_probe import _rls_unfiltered_rows
 
 
 class _FakeResult:

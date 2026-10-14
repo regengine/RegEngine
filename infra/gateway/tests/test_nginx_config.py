@@ -470,7 +470,7 @@ class TestSSLConfiguration:
 
     def test_redirect_template_line_exists(self, nginx_config):
         """The port 80 block carries the commented 301 line to enable with TLS."""
-        assert "return 301 https://$host$request_uri;" in nginx_config
+        assert "return 301 https://$server_name$request_uri;" in nginx_config
 
     def test_live_server_has_no_active_tls(self, nginx_config):
         """Live state pin: the only loaded server still listens on plaintext 80.
