@@ -113,7 +113,10 @@ jobs:
     runs-on: ubuntu-latest
     # Ingestion's ~5,000 coverage tests reached 98% before the old 10-minute
     # job deadline, which also includes service startup and dependency install.
-    timeout-minutes: ${{ matrix.service == 'ingestion' && 15 || 10 }}
+    # By 2026-10-14 the suite had 6,139 tests: the test step took 10m23s on
+    # one runner and only reached 74% at 15 minutes on slower runners, so
+    # ingestion gets 25 minutes. The deadline still stops a hung test.
+    timeout-minutes: ${{ matrix.service == 'ingestion' && 25 || 10 }}
 
     strategy:
       fail-fast: false
