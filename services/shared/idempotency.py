@@ -88,6 +88,7 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
     try:
         from shared.api_key_store import set_api_key_lookup_context
         from shared.database import SessionLocal
+        from shared.tenant_context import set_tenant_guc_if_uuid
         from sqlalchemy import bindparam, text
 
         db_session = SessionLocal()
@@ -135,10 +136,7 @@ def _lookup_api_key_context(raw_api_key: str) -> Optional[tuple[str, str]]:
             # input. A missing row, a non-active status, or a lookup error
             # all resolve nothing, so the route's own auth denies instead.
             try:
-                db_session.execute(
-                    text("SELECT set_config('app.tenant_id', :tid, true)"),
-                    {"tid": str(tenant_id)},
-                )
+                set_tenant_guc_if_uuid(db_session, tenant_id)
                 status_row = db_session.execute(
                     text("SELECT status FROM tenants WHERE id = CAST(:tid AS uuid)"),
                     {"tid": str(tenant_id)},

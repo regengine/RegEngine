@@ -487,6 +487,7 @@ async def export_trace_csv(
         writer = csv.writer(csv_buffer)
         writer.writerow(TRACE_CSV_HEADER)
         data_rows = build_trace_csv_rows(result, tlc)
+        # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- every cell is csv_safe()-wrapped in build_trace_csv_rows; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
         writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()
@@ -555,6 +556,7 @@ async def export_recall_contacts(
         writer.writerow(RECALL_CONTACTS_HEADER)
         # RE-SEC-002: every cell is csv_safe()-wrapped inside the builder.
         data_rows = build_recall_contacts_rows(result)
+        # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- every cell is csv_safe()-wrapped in build_recall_contacts_rows; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
         writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()

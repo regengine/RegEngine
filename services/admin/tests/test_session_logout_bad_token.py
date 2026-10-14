@@ -57,6 +57,7 @@ async def test_logout_rejects_foreign_signed_token_with_401():
     from services.admin.app.auth.sessions_router import logout
     from services.admin.app.session_store import InMemorySessionStore
 
+    # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret -- test-only foreign signing key
     foreign = jwt.encode({"sub": "someone-else"}, "foreign-key", algorithm="HS256")
     with pytest.raises(HTTPException) as exc:
         await logout(

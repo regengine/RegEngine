@@ -42,8 +42,11 @@ for _ck in [
 ]:
     sys.modules.setdefault(_ck, _mock_kafka)
 
+# feedparser is deliberately absent: it is a pinned dependency
+# (requirements.lock), and this module runs at collection time in every
+# xdist worker, so a MagicMock here replaced the real parser for every other
+# test file in the run (GenericRSSScraper tests then parsed zero entries).
 for _mod in [
-    "feedparser",
     "kafka",
     "kafka.errors",
     "opentelemetry",

@@ -4,6 +4,9 @@ Each test is ``xfail(strict=True)`` so it fails today (documenting the
 bug) and forces cleanup the day the bug is fixed (an XPASS fails strict
 mode). Details for each live under Notes for the reviewer in
 .metacode_pr.md. No network: HTTP and feed layers are stubbed.
+
+Bugs fixed since (BUG-nydfs-safe-http and BUG-generic-rss-missing-link,
+both by #3283) keep their test without the marker as a regression guard.
 """
 
 from __future__ import annotations
@@ -11,29 +14,15 @@ from __future__ import annotations
 import pytest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-nydfs-safe-http: NYDFSScraper.fetch validates the URL then "
-    "fetches with plain requests.get, bypassing shared.safe_http (no "
-    "per-hop revalidation or IP pinning). Every sibling adaptor routes "
-    "through safe_httpx_get_sync.",
-)
 def test_nydfs_fetch_routes_through_safe_http():
     import app.scrapers.state_adaptors.nydfs as nydfs_mod
 
     assert hasattr(nydfs_mod, "safe_httpx_get_sync"), "nydfs does not use the safe_http helper"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG-generic-rss-missing-link: GenericRSSScraper.list_sources "
-    "dereferences entry.link with no guard, so one malformed feed entry "
-    "raises AttributeError and kills the whole discovery run. Sibling "
-    "GenericListScraper wraps its parse loop in try/except.",
-)
 def test_generic_rss_entry_without_link_is_skipped_not_fatal(monkeypatch):
+    import app.scrapers.state_adaptors.generic as generic_mod
     import feedparser
-    from app.scrapers.state_adaptors.generic import GenericRSSScraper
 
     class _Entry:
         def __init__(self):
@@ -45,12 +34,28 @@ def test_generic_rss_entry_without_link_is_skipped_not_fatal(monkeypatch):
     class _Feed:
         entries = [_Entry()]
 
-    monkeypatch.setattr(feedparser, "parse", lambda _url: _Feed())
+    class _Response:
+        content = b"<rss/>"
 
-    scraper = GenericRSSScraper(
+        def raise_for_status(self):
+            pass
+
+    parsed = []
+
+    def _parse(*args, **kwargs):
+        parsed.append(args)
+        return _Feed()
+
+    # list_sources downloads the feed through the safe HTTP helper before
+    # parsing, so stub that hop too (no network).
+    monkeypatch.setattr(generic_mod, "safe_httpx_get_sync", lambda url, **kwargs: _Response())
+    monkeypatch.setattr(feedparser, "parse", _parse)
+
+    scraper = generic_mod.GenericRSSScraper(
         feed_url="https://example.com/feed", jurisdiction="US-XX", title_prefix="X"
     )
     assert list(scraper.list_sources()) == []
+    assert parsed, "the feed was never parsed, so the entry loop did not run"
 
 
 @pytest.mark.xfail(

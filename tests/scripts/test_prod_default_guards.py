@@ -529,6 +529,8 @@ def _make_fake_smoke_bin(tmp_path: Path):
         'exec /bin/rm "$@"\n'
     )
     for name in ("curl", "cat", "rm"):
+        # Fake test binary in pytest tmp_path: it must be executable for the script under test.
+        # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
         os.chmod(bin_dir / name, 0o755)
     return bin_dir, curl_log, cat_log, rm_log
 

@@ -102,6 +102,8 @@ def test_lifespan_initializes_and_always_shuts_down_auth_runtime():
 
 
 def test_railway_cloud_import_disables_public_docs():
+    from cryptography.fernet import Fernet
+
     script = """
 import json
 from fastapi.routing import APIRoute
@@ -165,6 +167,9 @@ print("DOCS_RESULT_JSON=" + json.dumps({
                 "AUTH_SECRET_KEY": "test-secret-key-for-railway-docs-lockdown",  # pragma: allowlist secret
                 "DATABASE_URL": database_url,
                 "ENABLED_ROUTERS": ",".join(sorted(PRODUCTION_ENABLED_ROUTERS)),
+                # Strict auth refuses to boot without a valid Fernet key (#3238);
+                # generated per run so no key material lives in this file.
+                "MFA_ENCRYPTION_KEY": Fernet.generate_key().decode(),
                 "REDIS_URL": "redis://localhost:6379/15",
                 "RATE_LIMIT_FAIL_MODE": "closed",
                 "RAILWAY_ENVIRONMENT_NAME": "production",

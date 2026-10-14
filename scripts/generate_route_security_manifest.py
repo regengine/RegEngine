@@ -65,6 +65,8 @@ def _manifest_text(manifest: dict[str, Any]) -> str:
 
 
 def _production_environment() -> dict[str, str]:
+    from cryptography.fernet import Fernet
+
     from server.router_policy import PRODUCTION_ENABLED_ROUTERS
 
     env = {
@@ -91,6 +93,9 @@ def _production_environment() -> dict[str, str]:
             "DATABASE_URL": database_url,
             "ENABLED_ROUTERS": ",".join(sorted(PRODUCTION_ENABLED_ROUTERS)),
             "METRICS_API_KEY": "route-manifest-production-metrics",  # pragma: allowlist secret
+            # Strict auth refuses to boot without a valid Fernet key (#3238);
+            # generated per run so no key material lives in this file.
+            "MFA_ENCRYPTION_KEY": Fernet.generate_key().decode(),
             "RATE_LIMIT_FAIL_MODE": "closed",
             "REDIS_URL": "redis://localhost:6379/15",
             "REGENGINE_ENV": "production",

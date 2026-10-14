@@ -17,7 +17,7 @@ from shared.permissions import can_invite_role
 from shared.pii import mask_email
 from shared.rate_limit import limiter
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy.exc import IntegrityError, MultipleResultsFound
 from sqlalchemy.orm import Session
 
 from .audit import AuditLogger

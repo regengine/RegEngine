@@ -150,6 +150,15 @@ a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/BETA_TESTER_GUIDE.md:curl-auth-hea
 a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/WEBSITE_COPY.md:curl-auth-header:243
 a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/rls_deployment_runbook.md:curl-auth-header:63
 a6d476464bfe7afaf3ff830b65dc312a2be6d426:docs/INVESTOR_DEMO_GUIDE.md:generic-api-key:42
+# The same four placeholders at a130816b, the root of the separate history
+# reachable from tags v0.6.0 and v0.7.0. CI's fetch-depth: 0 checkout fetches
+# tags, so push/schedule scans report them there too (a clone without those
+# tags only sees a6d47646). Each file's blob at a130816b is byte-identical to
+# the one reviewed at a6d47646 (same git blob SHA), as with the pairs above.
+a130816b2c95f51e253b311dd73a9597eb2f88c4:docs/BETA_TESTER_GUIDE.md:curl-auth-header:102
+a130816b2c95f51e253b311dd73a9597eb2f88c4:docs/WEBSITE_COPY.md:curl-auth-header:243
+a130816b2c95f51e253b311dd73a9597eb2f88c4:docs/rls_deployment_runbook.md:curl-auth-header:63
+a130816b2c95f51e253b311dd73a9597eb2f88c4:docs/INVESTOR_DEMO_GUIDE.md:generic-api-key:42
 
 # A test fixture: 24 chars, four hyphen-separated English words, used only
 # against the localhost uvicorn the script spawns itself.

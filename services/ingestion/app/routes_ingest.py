@@ -722,9 +722,9 @@ async def ingest_file(
 
         event = _process_and_emit(
             raw_bytes=content,
-            # Opaque provenance ref, never fetched: NormalizedDocument only
-            # SSRF-screens http(s) values, and an http(s) URL here would
-            # fail its DNS check (upload.internal does not resolve).
+            # Opaque provenance ref, never fetched: the stored-source
+            # validator in models.py accepts the ``upload://`` marker
+            # without DNS and SSRF-screens every other value.
             url_str=f"upload://file/{safe_filename}",
             source_system=source_system,
             tenant_id=tenant_id,

@@ -74,8 +74,8 @@ class TestGenericRSSFeedFetch:
 
         calls = []
 
-        def _safe_get(url, *, timeout=None, headers=None):
-            calls.append({"url": url, "timeout": timeout, "headers": headers})
+        def _safe_get(url, *, timeout=None, headers=None, max_bytes=None):
+            calls.append({"url": url, "timeout": timeout, "headers": headers, "max_bytes": max_bytes})
             return _FakeResponse(
                 content=RSS_BYTES,
                 headers={"Content-Type": "application/rss+xml"},
@@ -86,11 +86,11 @@ class TestGenericRSSFeedFetch:
         seen = []
         real_parse = mod.feedparser.parse
 
-        def _parse(payload):
+        def _parse(payload, **kwargs):
             seen.append(payload)
             if isinstance(payload, str):
                 raise AssertionError("feedparser must not receive a URL (raw HTTP fetch)")
-            return real_parse(payload)
+            return real_parse(payload, **kwargs)
 
         monkeypatch.setattr(mod.feedparser, "parse", _parse)
         monkeypatch.setattr(mod, "validate_url", lambda u: u)
@@ -105,6 +105,7 @@ class TestGenericRSSFeedFetch:
         assert len(calls) == 1
         assert calls[0]["url"] == "https://example.gov/feed.xml"
         assert calls[0]["timeout"] == 30
+        assert calls[0]["max_bytes"] == mod.FEED_MAX_BYTES
         assert len(sources) == 2
         assert seen and isinstance(seen[0], (bytes, bytearray))
 
@@ -129,7 +130,7 @@ class TestGenericRSSFeedFetch:
                 _Entry(link="https://example.gov/ok", title="OK"),
             ]
         )
-        monkeypatch.setattr(mod.feedparser, "parse", lambda payload: fake_feed)
+        monkeypatch.setattr(mod.feedparser, "parse", lambda payload, **kw: fake_feed)
         monkeypatch.setattr(mod, "validate_url", lambda u: u)
 
         scraper = mod.GenericRSSScraper(
@@ -152,7 +153,7 @@ class TestGenericRSSFeedFetch:
             lambda url, **kw: _FakeResponse(content=RSS_BYTES),
         )
         real_parse = mod.feedparser.parse
-        monkeypatch.setattr(mod.feedparser, "parse", lambda payload: real_parse(payload))
+        monkeypatch.setattr(mod.feedparser, "parse", lambda payload, **kw: real_parse(payload, **kw))
 
         def _validate(url):
             if "doc/1" in url:
@@ -337,7 +338,7 @@ class TestFDAMalformedItems:
         html = b"<html><body><a href='warning.pdf'>Download PDF</a></body></html>"
         calls = []
 
-        def _get(url, *, timeout=None, headers=None):
+        def _get(url, *, timeout=None, headers=None, max_bytes=None):
             calls.append(url)
             if url.endswith(".pdf"):
                 return _FakeResponse(content=b"%PDF-1.4", headers={"Content-Type": "application/pdf"})

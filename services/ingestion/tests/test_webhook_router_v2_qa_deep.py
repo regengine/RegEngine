@@ -136,11 +136,11 @@ def test_positive_int_env_helper(monkeypatch):
     from app.webhook_router_v2 import ratelimit as rl
 
     monkeypatch.setenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "not-a-number")
-    assert rl._positive_int_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 120
+    assert rl._limit_from_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 120
     monkeypatch.setenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "-7")
-    assert rl._positive_int_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 1
+    assert rl._limit_from_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 1
     monkeypatch.setenv("WEBHOOK_INGEST_RATE_LIMIT_RPM", "45")
-    assert rl._positive_int_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 45
+    assert rl._limit_from_env("WEBHOOK_INGEST_RATE_LIMIT_RPM", 120) == 45
 
 
 # ---------------------------------------------------------------------------

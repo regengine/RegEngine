@@ -126,6 +126,9 @@ def test_generic_rss_downloads_feed_through_safe_helper(monkeypatch):
         return FakeResponse()
 
     monkeypatch.setattr(generic, "safe_httpx_get_sync", fake_get)
+    # Item links are SSRF-validated with a live DNS lookup; pass them through
+    # so the test stays offline (rejection is covered in test_scrapers_deep_qa).
+    monkeypatch.setattr(generic, "validate_url", lambda url: url)
 
     scraper = generic.GenericRSSScraper(
         feed_url="https://example.com/feed",
@@ -220,6 +223,9 @@ def test_generic_rss_relative_item_links_resolve_against_final_url(monkeypatch):
             pass
 
     monkeypatch.setattr(generic, "safe_httpx_get_sync", lambda url, **kwargs: FakeResponse())
+    # agency.example never resolves: pass item links through the live-DNS
+    # SSRF check so the test exercises link resolution offline.
+    monkeypatch.setattr(generic, "validate_url", lambda url: url)
 
     scraper = generic.GenericRSSScraper(
         feed_url="https://agency.example/regs/feed.xml",
@@ -245,6 +251,9 @@ def test_generic_rss_relative_item_links_fall_back_to_feed_url(monkeypatch):
             pass
 
     monkeypatch.setattr(generic, "safe_httpx_get_sync", lambda url, **kwargs: FakeResponse())
+    # agency.example never resolves: pass item links through the live-DNS
+    # SSRF check so the test exercises link resolution offline.
+    monkeypatch.setattr(generic, "validate_url", lambda url: url)
 
     scraper = generic.GenericRSSScraper(
         feed_url="https://agency.example/regs/feed.xml",

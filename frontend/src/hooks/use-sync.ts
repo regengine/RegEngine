@@ -82,6 +82,13 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    const queuedTenantId = storedScanTenantId(scan.payload);
+                    if (queuedTenantId && queuedTenantId !== tenantId) {
+                        // Captured under a different tenant session (account
+                        // switch while offline). Never replay it under this
+                        // session; keep it queued until its owner signs in.
+                        throw new Error('Scan belongs to a different tenant session; kept queued.');
+                    }
                     const idempotencyKey = scanIdempotencyKey(scan);
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
