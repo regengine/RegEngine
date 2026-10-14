@@ -40,9 +40,11 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 _SERVICES_DIR = Path(__file__).resolve().parent.parent.parent
 if str(_SERVICES_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVICES_DIR))
-for _name in list(sys.modules):
-    if _name == "app" or _name.startswith("app."):
-        sys.modules.pop(_name, None)
+# No collection-time purge of ``app.*`` here: services/scheduler/conftest.py
+# already evicts a foreign service's ``app``, and the root conftest restores
+# its cached scheduler modules for any name missing from sys.modules. A blanket
+# purge re-imported ``app.models`` while those restored scrapers kept the old
+# classes, so later files failed pydantic isinstance checks in a full run.
 
 from shared.paths import ensure_shared_importable  # noqa: E402
 

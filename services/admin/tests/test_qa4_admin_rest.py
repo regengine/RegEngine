@@ -718,8 +718,9 @@ class TestValidationPreviewCommitGate:
             db,
             tenant_id=TENANT_ID,
             supplier_user_id=USER_ID,
+            # One row: an all-empty upload is itself a blocking error (#3263).
             normalized_payload={
-                "facilities": [],
+                "facilities": [{"name": "Farm A"}],
                 "ftl_scopes": [],
                 "tlcs": [],
                 "events": [],

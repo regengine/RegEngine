@@ -132,7 +132,16 @@ def header_filename(name: str, max_len: int = 200) -> str:
     if not segment:
         return "download"
     encoded = urllib.parse.quote(segment, safe="._-")
-    return encoded[:max_len] or "download"
+    truncated = encoded[:max_len]
+    # Truncation may split a %XX escape at the cut point, leaving a
+    # trailing "%" or "%H". Every "%" in the encoded output opens a
+    # triplet, so such a tail is always a fragment: drop it so the
+    # filename stays valid percent-encoding.
+    if truncated.endswith("%"):
+        truncated = truncated[:-1]
+    elif len(truncated) >= 2 and truncated[-2] == "%" and truncated[-1] in "0123456789ABCDEFabcdef":
+        truncated = truncated[:-2]
+    return truncated or "download"
 
 
 def rfc5987_filename(name: str) -> str:

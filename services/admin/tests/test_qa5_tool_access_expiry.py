@@ -4,8 +4,9 @@
 ``decode_tool_access_token`` enforced only signature/aud/iss. A
 one-time email check therefore minted a perpetual Bearer [REDACTED]: a leaked
 token stayed valid indefinitely and survived email changes and
-offboarding. New tokens carry a 30-day expiry matching the frontend
-``re_tool_access`` cookie.
+offboarding. New tokens carry a 24-hour expiry, the same lifetime as the
+frontend ``re_tool_access`` cookie, and tokens without ``exp`` must
+reverify (#3228, #3318).
 """
 
 from __future__ import annotations
@@ -65,10 +66,10 @@ def tvr(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_confirm_code_token_carries_30_day_exp(tvr, monkeypatch):
+async def test_confirm_code_token_carries_24_hour_exp(tvr, monkeypatch):
     """End-to-end through ``confirm_code`` with the code check passing
     and the lead save stubbed: the minted token must decode with
-    exp/iat and a 30-day lifetime."""
+    exp/iat and a 24-hour lifetime."""
     import jwt as pyjwt
 
     async def _ok(_email, _code):
@@ -88,7 +89,7 @@ async def test_confirm_code_token_carries_30_day_exp(tvr, monkeypatch):
         issuer=tvr.SESSION_ISSUER,
     )
     assert decoded["email"] == "lead@example.com"
-    assert decoded["exp"] - decoded["iat"] == 30 * 24 * 3600
+    assert decoded["exp"] - decoded["iat"] == 24 * 3600
 
 
 def test_expired_tool_token_rejected(tvr):
@@ -114,9 +115,9 @@ def test_expired_tool_token_rejected(tvr):
         tvr.decode_tool_access_token(stale)
 
 
-def test_legacy_token_without_exp_still_decodes(tvr):
-    """Transitional promise: pre-expiry tokens with no exp claim keep
-    working until they are replaced."""
+def test_legacy_token_without_exp_must_reverify(tvr):
+    """Pre-expiry tokens with no exp claim are rejected, so their holders
+    must verify their email again (#3228)."""
     import jwt as pyjwt
 
     legacy = pyjwt.encode(
@@ -130,4 +131,5 @@ def test_legacy_token_without_exp_still_decodes(tvr):
         tvr.TOOL_ACCESS_SECRET,
         algorithm="HS256",
     )
-    assert tvr.decode_tool_access_token(legacy)["email"] == "lead@example.com"
+    with pytest.raises(pyjwt.exceptions.MissingRequiredClaimError, match="exp"):
+        tvr.decode_tool_access_token(legacy)

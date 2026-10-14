@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -151,11 +152,13 @@ async def test_compliance_score_uses_tenant_database():
 
     class _FakeResult:
         async def single(self):
+            # covered_obligations: the score query returns it since #3273.
             return {
                 "total_obligations": 4,
                 "controls_mapped": 2,
                 "evidence_items": 0,
                 "avg_effectiveness": 0.9,
+                "covered_obligations": 2,
                 "fresh_evidence": 0,
             }
 
@@ -215,9 +218,12 @@ async def test_harmonize_closes_engine_when_mapping_fails():
         return_value=fake_engine,
     ):
         try:
+            # harmonize reconciles the middleware tenant with the API-key
+            # tenant first (#3316), so the principal must carry TENANT_A.
             await regulations_router.harmonize_requirement(
+                request=_make_request("/regulations/harmonize/obl-1"),
                 obligation_id="obl-1",
-                api_key=MagicMock(),
+                api_key=_real_api_key(),
                 tenant_id=TENANT_A,
             )
         except HTTPException as exc:
@@ -362,8 +368,19 @@ def test_mobile_capture_succeeds_when_canonical_store_is_down():
 # ── 6. Labels batch/init must reject an invalid packer GLN before Neo4j ────
 
 
-def test_labels_batch_rejects_invalid_packer_gln():
-    """A non-GLN packer id must be a 400, not a 500 from SSCC generation."""
+@pytest.mark.parametrize(
+    ("packer_gln", "expected_status"),
+    [
+        # Not 13 digits: the LabelBatchInitRequest validator (#3360) rejects
+        # it at the request boundary with FastAPI's 422.
+        ("NOT-A-GLN", 422),
+        # 13 digits with a bad GS1 check digit passes the shape check and is
+        # rejected by the handler's validate_gln (#3272) with a 400.
+        ("0614141000013", 400),
+    ],
+)
+def test_labels_batch_rejects_invalid_packer_gln(packer_gln, expected_status):
+    """An invalid packer GLN is a 4xx before Neo4j, not a 500 from SSCC generation."""
     from shared.auth import require_api_key
     from shared.middleware import get_current_tenant_id
 
@@ -379,7 +396,7 @@ def test_labels_batch_rejects_invalid_packer_gln():
         response = client.post(
             "/batch/init",
             json={
-                "packer_gln": "NOT-A-GLN",
+                "packer_gln": packer_gln,
                 "product": {
                     "gtin": "00000012345678",
                     "description": "Test Product",
@@ -392,5 +409,5 @@ def test_labels_batch_rejects_invalid_packer_gln():
             },
             headers=_AUTH_HEADERS,
         )
-    assert response.status_code == 400, response.text
+    assert response.status_code == expected_status, response.text
     mock_cls.assert_not_called()

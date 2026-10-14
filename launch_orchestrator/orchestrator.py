@@ -74,6 +74,10 @@ def _validate_config_schema(config: Dict[str, Any]) -> None:
     persona id, a mistyped step key) explodes mid-run as a bare KeyError,
     TypeError or AttributeError that aborts every remaining phase.
     """
+    # An explicitly null block means "no environment requirements", the same
+    # as an empty mapping (#3365); only a non-mapping value is malformed.
+    if config["environment"] is None:
+        config["environment"] = {}
     env = _require_mapping(config["environment"], "environment")
     required_vars = env.get("required_env_vars", [])
     if required_vars is None:
@@ -283,11 +287,6 @@ class LaunchOrchestrator:
         try:
             with open(self.config_path, "r") as f:
                 config = yaml.safe_load(f)
-
-            if not isinstance(config, dict):
-                raise ValueError(
-                    f"Orchestrator config {self.config_path} is not a mapping"
-                )
 
             # Basic validation
             if config is None:
@@ -537,9 +536,7 @@ Contact: sales@regengine.ai
 
         # Generate legal agreement
         legal_ref = dp_config.get("legal_template_ref", "")
-        legal_template = self.base_dir / legal_ref
-        if legal_ref and legal_template.is_file():
-            self.result.add_artifact("design_partner_agreement", str(legal_template))
+        if not legal_ref:
             self.result.add_event(
                 phase,
                 "validate_legal_template",
@@ -547,12 +544,20 @@ Contact: sales@regengine.ai
                 details={"reason": "no legal_template_ref configured"},
             )
         else:
-            self.result.add_event(
-                phase,
-                "validate_legal_template",
-                "skipped",
-                details={"template_ref": legal_ref, "reason": "template_missing"},
-            )
+            legal_template = self.base_dir / legal_ref
+            if legal_template.is_file():
+                self.result.add_artifact("design_partner_agreement", str(legal_template))
+                self.result.add_event(
+                    phase, "validate_legal_template", "success", details={"template_path": str(legal_template)}
+                )
+            else:
+                self.result.add_event(
+                    phase,
+                    "validate_legal_template",
+                    "failure",
+                    details={"template_path": str(legal_template)},
+                    error=f"Legal template not found: {legal_ref}",
+                )
 
         # Pre-provision sandboxes
         sandbox_config = dp_config.get("sandbox") or {}
@@ -626,17 +631,26 @@ Contact: sales@regengine.ai
 
         # Validate investor memo
         memo_ref = investor_config.get("memo_template_ref", "")
-        memo_path = self.base_dir / memo_ref
-        if memo_ref and memo_path.is_file():
-            self.result.add_artifact("investor_memo", str(memo_path))
-            self.result.add_event(phase, "validate_investor_memo", "success", details={"memo_path": str(memo_path)})
-        else:
+        if not memo_ref:
             self.result.add_event(
                 phase,
                 "validate_investor_memo",
                 "skipped",
-                details={"template_ref": memo_ref, "reason": "template_missing"},
+                details={"reason": "no memo_template_ref configured"},
             )
+        else:
+            memo_path = self.base_dir / memo_ref
+            if memo_path.is_file():
+                self.result.add_artifact("investor_memo", str(memo_path))
+                self.result.add_event(phase, "validate_investor_memo", "success", details={"memo_path": str(memo_path)})
+            else:
+                self.result.add_event(
+                    phase,
+                    "validate_investor_memo",
+                    "failure",
+                    details={"memo_path": str(memo_path)},
+                    error=f"Investor memo template not found: {memo_ref}",
+                )
 
         # Validate required slides
         required_slides = investor_config.get("slides_required", [])

@@ -144,9 +144,10 @@ def test_pii_masking_digest_changes_with_salt(monkeypatch):
     from services.admin.app.audit_routes import _mask_email
 
     monkeypatch.setenv("REGENGINE_ENV", "production")
-    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-one-value")
+    # Production requires a salt of at least 16 characters (#3306).
+    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-one-test-value")
     first = _mask_email("jane.doe@example.com")
-    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-two-value")
+    monkeypatch.setenv("AUDIT_PII_HASH_SALT", "salt-two-test-value")
     second = _mask_email("jane.doe@example.com")
     assert first.startswith("masked:")
     assert second.startswith("masked:")

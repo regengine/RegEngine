@@ -354,6 +354,15 @@ async def test_lineage_fallback_scopes_prev_to_tenant():
 # ============================================================================
 
 
+def _harmonize_api_key():
+    """Principal whose tenant matches TENANT_A.
+
+    harmonize reconciles the middleware tenant with the API-key tenant
+    before building the engine (#3316), so the key must carry TENANT_A.
+    """
+    return MagicMock(key_id="k", tenant_id=str(TENANT_A))
+
+
 async def test_harmonize_closes_engine_on_mapping_failure():
     """A failed mapping must still close the engine (driver leak)."""
     engine = AsyncMock()
@@ -362,8 +371,9 @@ async def test_harmonize_closes_engine_on_mapping_failure():
     with patch("services.graph.app.mapping_engine.MappingEngine", MagicMock(return_value=engine)):
         with pytest.raises(HTTPException) as exc_info:
             await regulations_module.harmonize_requirement(
+                request=_make_request("/regulations/harmonize/OB-1"),
                 obligation_id="OB-1",
-                api_key={"key_id": "k"},
+                api_key=_harmonize_api_key(),
                 tenant_id=TENANT_A,
             )
     assert exc_info.value.status_code == 503
@@ -375,8 +385,9 @@ async def test_harmonize_maps_constructor_failure_to_503():
     with patch("services.graph.app.mapping_engine.MappingEngine", MagicMock(side_effect=RuntimeError("no uri"))):
         with pytest.raises(HTTPException) as exc_info:
             await regulations_module.harmonize_requirement(
+                request=_make_request("/regulations/harmonize/OB-1"),
                 obligation_id="OB-1",
-                api_key={"key_id": "k"},
+                api_key=_harmonize_api_key(),
                 tenant_id=TENANT_A,
             )
     assert exc_info.value.status_code == 503

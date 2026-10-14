@@ -27,6 +27,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import shared.document_extract.client as extract_client
 import structlog
 from llama_cloud import AuthenticationError, _polling
 from shared.document_extract import DocumentExtractor, DocumentExtractSettings
@@ -107,8 +108,16 @@ class FakeClient:
 
 
 @pytest.fixture(autouse=True)
-def _reset_structlog():
-    """main() configures structlog for the run; leave no configuration behind for other tests."""
+def _reset_structlog(monkeypatch):
+    """main() configures structlog for the run; leave no configuration behind for other tests.
+
+    The wrapper's module logger is a lazy proxy. If an earlier test logged
+    through it while structlog had ``cache_logger_on_first_use=True`` (set at
+    import by ``shared.observability.context``), that configuration is frozen
+    into the proxy and main()'s ``--verbose`` setup never reaches it. Each
+    test starts from a fresh proxy, as a new process would.
+    """
+    monkeypatch.setattr(extract_client, "logger", structlog.get_logger("document_extract"))
     yield
     structlog.reset_defaults()
 

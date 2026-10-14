@@ -54,8 +54,9 @@ def _quarantine_visible(node: dict, tenant_id: str) -> bool:
 
 # Independent expectation, written as a literal on purpose: importing the
 # product constant would mirror the implementation and let a weakened
-# predicate pass. Every Obligation MATCH must carry this exact WHERE clause.
-_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id)"
+# predicate pass. Every Obligation MATCH must carry this exact WHERE clause:
+# the #3344 quarantine predicate, not the pre-quarantine IS NULL shim.
+_EXPECTED_OBLIGATION_PREDICATE = "(o.tenant_id = $tenant_id OR o.catalog = true)"
 _OBLIGATION_WHERE_RE = re.compile(r"WHERE\s*" + re.escape(_EXPECTED_OBLIGATION_PREDICATE) + r"\s*(MATCH|RETURN|MERGE)")
 
 
@@ -234,7 +235,7 @@ async def test_obligation_predicate_rejects_or_true_mutation(linker, fake_sessio
     monkeypatch.setattr(
         linker_module,
         "_OBLIGATION_TENANT_PREDICATE",
-        "(o.tenant_id IS NULL OR o.tenant_id = $tenant_id OR true)",
+        "(o.tenant_id = $tenant_id OR o.catalog = true OR true)",
     )
     fake_session.queue(_FakeResult(single_row={"text": "Cooling logs", "category": "COOLING"}))
     fake_session.queue(_FakeResult(rows=[{"event_id": "e1", "type": "COOLING"}]))
@@ -259,7 +260,13 @@ async def test_get_governing_regulations_scopes_obligation_to_tenant(linker, fak
     assert "o.tenant_id" in cypher
     assert "$tenant_id" in cypher
     assert _EXPECTED_QUARANTINE_PREDICATE in cypher
-    assert "IS NULL" not in cypher
+    # The old Obligation shim stays banned. The joined Section is mixed
+    # shared-or-own catalog with no catalog marker, so it carries the
+    # null-or-own predicate the tenant-scope proof requires (#3332). That
+    # one Section arm is the only IS NULL allowed anywhere in the query.
+    section_predicate = "(s.tenant_id IS NULL OR s.tenant_id = $tenant_id)"
+    assert cypher.count(section_predicate) == 1
+    assert "IS NULL" not in cypher.replace(section_predicate, "")
     assert kwargs["tenant_id"] == TENANT_A
     assert kwargs["tlc"] == "tlc-1"
 

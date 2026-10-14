@@ -113,11 +113,17 @@ class TraceabilityLinker:
         """Find all regulations (via obligations) governing a specific lot."""
         _require_tenant_id(tenant_id)
         async with self.driver.session() as session:
+            # Section is mixed shared-or-own catalog (the regulation loader
+            # writes sections with no tenant_id), so it carries the same
+            # null-or-own predicate as the mapping engine and regulation
+            # list Section reads (#3332). Obligation keeps the Decision 3
+            # quarantine predicate above.
             query = f"""
                 MATCH (l:Lot {{tlc: $tlc, tenant_id: $tenant_id}})-[:UNDERWENT]->(e:TraceEvent {{tenant_id: $tenant_id}})
                 MATCH (o:Obligation)-[:GOVERNS]->(e)
                 WHERE {_OBLIGATION_TENANT_PREDICATE}
                 MATCH (o)<-[:REQUIRES]-(s:Section)
+                WHERE (s.tenant_id IS NULL OR s.tenant_id = $tenant_id)
                 RETURN DISTINCT s.regulation as regulation, o.text as requirement, o.id as requirement_id
             """
             result = await session.run(query, tlc=lot_tlc, tenant_id=tenant_id)

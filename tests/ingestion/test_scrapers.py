@@ -121,7 +121,7 @@ class TestNYDFSScraper:
         scraper = NYDFSScraper()
         source = Source(url="https://www.dfs.ny.gov/test", jurisdiction_code="US-NY")
 
-        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.requests.get") as mock_get:
+        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.safe_httpx_get_sync") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.content = b"<html><body>Regulation text</body></html>"
@@ -141,7 +141,7 @@ class TestNYDFSScraper:
         scraper = NYDFSScraper()
         source = Source(url="https://www.dfs.ny.gov/test", jurisdiction_code="US-NY")
 
-        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.requests.get") as mock_get:
+        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.safe_httpx_get_sync") as mock_get:
             with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.time.sleep"):
                 # First call returns 429, second succeeds
                 mock_429 = MagicMock()
@@ -179,7 +179,7 @@ class TestNYDFSScraper:
         </html>
         """
 
-        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.requests.get") as mock_get:
+        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.safe_httpx_get_sync") as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.content = html_content
@@ -194,8 +194,12 @@ class TestNYDFSScraper:
             assert "console.log" not in text
 
     def test_fetch_handles_timeout(self):
-        """Verify timeout is handled with retry."""
-        import requests
+        """Verify timeout is handled with retry.
+
+        #3283 moved NYDFS to safe_httpx_get_sync: timeouts are httpx errors,
+        and the final failure surfaces as OSError for the scrape-job caller.
+        """
+        import httpx
 
         from services.ingestion.app.scrapers.state_adaptors.base import Source
         from services.ingestion.app.scrapers.state_adaptors.nydfs import NYDFSScraper
@@ -203,12 +207,15 @@ class TestNYDFSScraper:
         scraper = NYDFSScraper()
         source = Source(url="https://www.dfs.ny.gov/test", jurisdiction_code="US-NY")
 
-        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.requests.get") as mock_get:
+        with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.safe_httpx_get_sync") as mock_get:
             with patch("services.ingestion.app.scrapers.state_adaptors.nydfs.time.sleep"):
-                mock_get.side_effect = requests.Timeout("Connection timed out")
+                mock_get.side_effect = httpx.TimeoutException("Connection timed out")
 
-                with pytest.raises(requests.Timeout):
+                with pytest.raises(OSError) as exc_info:
                     scraper.fetch(source)
+
+                assert isinstance(exc_info.value.__cause__, httpx.TimeoutException)
+                assert mock_get.call_count == NYDFSScraper.MAX_RETRIES
 
 
 class TestGenericScraper:

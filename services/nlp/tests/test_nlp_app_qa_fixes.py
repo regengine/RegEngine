@@ -6,6 +6,7 @@ in obligation inference, unparseable dates passing the KDE gate, and the
 S3 fallback path ignoring size and decoding guards.
 """
 
+import io
 from datetime import date
 from unittest.mock import MagicMock, patch
 
@@ -98,7 +99,10 @@ class TestUnparseableDatesFailClosed:
 def _mock_s3_client(body: bytes):
     client = MagicMock()
     client.generate_presigned_url.side_effect = Exception("presign unavailable")
-    client.get_object.return_value = {"Body": MagicMock(read=MagicMock(return_value=body))}
+    # Like a real StreamingBody: the bytes, then b"" at EOF. The fallback
+    # reads in capped chunks (#3291) until EOF, so a read() that returned
+    # the same bytes forever never ended and tripped the size cap.
+    client.get_object.return_value = {"Body": MagicMock(read=MagicMock(side_effect=io.BytesIO(body).read))}
     return client
 
 

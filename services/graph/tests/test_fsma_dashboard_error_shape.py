@@ -29,9 +29,15 @@ async def test_dashboard_degraded_hides_internal_error_text(monkeypatch):
 
     monkeypatch.setattr(dashboard_metrics, "Neo4jClient", _FailingClient)
 
+    # #3316 reconciles the middleware tenant with the API-key tenant before
+    # any read, so the key must carry the same tenant to reach the driver.
+    tenant_id = uuid.uuid4()
+    request = MagicMock()
+    request.url.path = "/dashboard"
     result = await dashboard_metrics.fsma_dashboard(
-        tenant_id=uuid.uuid4(),
-        api_key=MagicMock(),
+        request=request,
+        tenant_id=tenant_id,
+        api_key=MagicMock(tenant_id=str(tenant_id)),
     )
 
     assert result["status"] == "degraded"

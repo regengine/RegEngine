@@ -23,6 +23,7 @@ Four real defects, each pinned so a future refactor fails fast:
 
 from __future__ import annotations
 
+import re
 import sys
 import uuid
 from pathlib import Path
@@ -250,7 +251,17 @@ def test_lineage_fallback_query_scopes_prev_node():
     """``superseded_by`` must resolve through a tenant-scoped ``prev``."""
     from services.graph.app.routers.lineage_traversal import LINEAGE_BY_TLC_QUERY
 
-    assert "prev:RegulatoryFact {tenant_id: $tenant_id}" in LINEAGE_BY_TLC_QUERY, (
+    # The tenant predicate must belong to the OPTIONAL MATCH itself, inline
+    # or as its own WHERE (the #3360 shape main already carried when this
+    # landed), so a non-matching prev stays NULL instead of dropping rows.
+    flat = " ".join(LINEAGE_BY_TLC_QUERY.split())
+    inline = "OPTIONAL MATCH (f)-[:SUPERSEDES]->(prev:RegulatoryFact {tenant_id: $tenant_id})" in flat
+    optional_where = re.search(
+        r"OPTIONAL MATCH \(f\)-\[:SUPERSEDES\]->\(prev:RegulatoryFact\) "
+        r"WHERE (prev IS NULL OR )?prev\.tenant_id = \$tenant_id RETURN ",
+        flat,
+    )
+    assert inline or optional_where, (
         "unscoped prev leaks a cross-tenant TLC into superseded_by; "
-        "scope it inline so non-matches stay NULL instead of dropping rows"
+        "scope it on the OPTIONAL MATCH so non-matches stay NULL instead of dropping rows"
     )

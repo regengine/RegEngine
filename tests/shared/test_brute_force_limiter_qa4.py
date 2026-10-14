@@ -16,9 +16,11 @@ Pure Python, no network. Redis is faked in process.
 
 from __future__ import annotations
 
+import importlib.util
+
 import pytest
 from fastapi import FastAPI
-from shared.rate_limit import BruteForceLimiter, add_rate_limiting, slowapi_storage_backend
+from shared.rate_limit import BruteForceLimiter, add_rate_limiting
 
 
 class _FakeRedis:
@@ -204,11 +206,20 @@ class TestReporting:
 
 
 class TestSlowapiHelpers:
-    def test_storage_backend_reports_memory_by_default(self):
+    def test_storage_backend_reports_memory_by_default(self, monkeypatch):
+        # The storage URI is resolved once, at import, and this process may
+        # have imported the module under a job-level REDIS_URL (the backend-ci
+        # repo-root-suite job sets one). Run a fresh copy of the module with
+        # every storage variable unset; the shared module is left untouched.
         import shared.rate_limit as rl_mod
 
-        assert rl_mod._SLOWAPI_STORAGE_URI == "memory://"
-        assert slowapi_storage_backend() == "memory"
+        monkeypatch.delenv("RATE_LIMIT_STORAGE_URI", raising=False)
+        spec = importlib.util.spec_from_file_location("_rate_limit_default_probe", rl_mod.__file__)
+        fresh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(fresh)
+
+        assert fresh._SLOWAPI_STORAGE_URI == "memory://"
+        assert fresh.slowapi_storage_backend() == "memory"
 
     def test_add_rate_limiting_installs_limiter(self):
         from shared.rate_limit import limiter as shared_limiter
