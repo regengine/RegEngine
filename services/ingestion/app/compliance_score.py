@@ -1148,7 +1148,10 @@ async def get_pending_reviews(
             or 0
         )
 
-        # 4. Events with failed critical rule evaluations (unresolved)
+        # 4. Events with failed critical rule evaluations (unresolved).
+        # linked_event_ids is UUID[] and event_id is UUID: compare them
+        # uncast. A ::text[] cast here has no uuid[] @> text[] operator,
+        # so Postgres rejects the statement and the endpoint returns 503.
         critical_failures = (
             db_session.execute(
                 text("""
@@ -1162,7 +1165,7 @@ async def get_pending_reviews(
                   AND NOT EXISTS (
                       SELECT 1 FROM fsma.exception_cases ec
                       WHERE ec.tenant_id = re.tenant_id
-                        AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
+                        AND ec.linked_event_ids @> ARRAY[re.event_id]
                         AND ec.status IN ('resolved', 'waived')
                   )
             """),
