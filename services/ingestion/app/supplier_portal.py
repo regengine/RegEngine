@@ -234,93 +234,36 @@ def _db_store_portal_link(portal_id: str, link_data: dict) -> bool:
 
 
 def _db_get_portal_link(portal_id: str) -> Optional[dict]:
-    """Fetch a portal link from the database by link_token. Returns dict or None."""
+    """Fetch a portal link from the database by link_token. Returns dict or None.
+
+    The token is the credential and the tenant comes from its row, so this
+    pre-tenant lookup goes only through the v075 SECURITY DEFINER function
+    (active, unexpired links only). There is no raw-table fallback: a read
+    of fsma.tenant_portal_links without a tenant predicate is never safe.
+    """
     db = get_db_safe()
     if not db:
         return None
     try:
-        try:
-            row = db.execute(
-                # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized token
-                text("""
-                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
-                           integration_profile_id, link_token, status, created_at, expires_at
-                    FROM fsma.get_active_portal_link_by_token(:link_token)
-                """),
-                {"link_token": portal_id},
-            ).fetchone()
-            if row and len(row) >= 9:
-                return {
-                    "tenant_id": str(row[0]),
-                    "supplier_name": row[1],
-                    "supplier_email": row[2],
-                    "allowed_cte_types": list(row[3] or ["shipping"]),
-                    "integration_profile_id": row[4],
-                    "expires_at": row[8].isoformat() if row[8] else None,
-                    "created_at": row[7].isoformat() if row[7] else None,
-                }
-        except Exception as exc:
-            logger.debug("portal_link_function_lookup_unavailable error=%s", str(exc))
-            db.rollback()
-
-        try:
-            row = db.execute(
-                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-                text("""
-                    SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
-                           integration_profile_id, link_token, status, created_at, expires_at
-                    FROM fsma.tenant_portal_links
-                    WHERE link_token = :link_token AND status = 'active'
-                """),
-                {"link_token": portal_id},
-            ).fetchone()
-            if not row:
-                return None
-            if len(row) < 9:
-                return {
-                    "tenant_id": str(row[0]),
-                    "supplier_name": row[1],
-                    "supplier_email": None,
-                    "allowed_cte_types": ["shipping"],
-                    "integration_profile_id": None,
-                    "expires_at": row[5].isoformat() if row[5] else None,
-                    "created_at": row[4].isoformat() if row[4] else None,
-                }
-            return {
-                "tenant_id": str(row[0]),
-                "supplier_name": row[1],
-                "supplier_email": row[2],
-                "allowed_cte_types": list(row[3] or ["shipping"]),
-                "integration_profile_id": row[4],
-                "expires_at": row[8].isoformat() if row[8] else None,
-                "created_at": row[7].isoformat() if row[7] else None,
-            }
-        except Exception as exc:
-            if (
-                "supplier_email" not in str(exc)
-                and "allowed_cte_types" not in str(exc)
-                and "integration_profile_id" not in str(exc)
-            ):
-                raise
-            row = db.execute(
-                # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-                text("""
-                    SELECT tenant_id, supplier_name, link_token, status, created_at, expires_at
-                    FROM fsma.tenant_portal_links
-                    WHERE link_token = :link_token AND status = 'active'
-                """),
-                {"link_token": portal_id},
-            ).fetchone()
+        row = db.execute(
+            # nosemgrep: avoid-sqlalchemy-text — SECURITY DEFINER function, parameterized token
+            text("""
+                SELECT tenant_id, supplier_name, supplier_email, allowed_cte_types,
+                       integration_profile_id, link_token, status, created_at, expires_at
+                FROM fsma.get_active_portal_link_by_token(:link_token)
+            """),
+            {"link_token": portal_id},
+        ).fetchone()
         if not row:
             return None
         return {
             "tenant_id": str(row[0]),
             "supplier_name": row[1],
-            "supplier_email": None,
-            "allowed_cte_types": ["shipping"],
-            "integration_profile_id": None,
-            "expires_at": row[5].isoformat() if row[5] else None,
-            "created_at": row[4].isoformat() if row[4] else None,
+            "supplier_email": row[2],
+            "allowed_cte_types": list(row[3] or ["shipping"]),
+            "integration_profile_id": row[4],
+            "expires_at": row[8].isoformat() if row[8] else None,
+            "created_at": row[7].isoformat() if row[7] else None,
         }
     except Exception as exc:
         logger.warning("db_get_portal_link_failed error=%s", str(exc))
