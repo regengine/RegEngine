@@ -330,26 +330,26 @@ def _query_audit_trail(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     limit: int = 200,
-    use_admin: bool = False,
 ) -> List["FSMAAuditEntry"]:
     """Execute a SELECT against fsma.fsma_audit_trail and return FSMAAuditEntry list.
 
     Uses typed filter kwargs instead of raw SQL strings to prevent injection (#968).
+    Every DB read is pinned to one tenant: without a tenant_id there is no
+    cross-tenant DB read and callers fall back to the in-process cache.
     """
-    engine = _get_audit_admin_engine() if use_admin else _get_audit_db_engine()
+    if not tenant_id:
+        return []
+    engine = _get_audit_db_engine()
     if engine is None:
         return []
     try:
         from sqlalchemy import text
 
         conditions: List[str] = []
-        params: Dict[str, Any] = {"_limit": limit}
+        params: Dict[str, Any] = {"_limit": limit, "tenant_id": tenant_id}
         if target_id is not None:
             conditions.append("target_id = :target_id")
             params["target_id"] = target_id
-        if tenant_id is not None:
-            conditions.append("tenant_id = :tenant_id")
-            params["tenant_id"] = tenant_id
         if action is not None:
             conditions.append("action = :action")
             params["action"] = action
@@ -360,21 +360,19 @@ def _query_audit_trail(
             conditions.append("created_at <= :end")
             params["end"] = end
 
-        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        extra = "".join(f" AND {c}" for c in conditions)
         sql = f"""
             SELECT event_id, actor, actor_type, action, target_type, target_id,
                    tenant_id, correlation_id, confidence, evidence_link,
                    checksum, previous_checksum, diff_json, created_at
             FROM fsma.fsma_audit_trail
-            {where_clause}
+            WHERE tenant_id = :tenant_id{extra}
             ORDER BY created_at DESC
             LIMIT :_limit
         """
-        with engine.connect() as conn:
-            if use_admin:
-                from services.admin.app.database import arm_global_admin_context
+        from shared.tenant_context import tenant_scope
 
-                arm_global_admin_context(conn)
+        with tenant_scope(tenant_id), engine.connect() as conn:
             rows = conn.execute(text(sql), params).fetchall()
         return [_row_to_audit_entry(r) for r in rows]
     except Exception as e:
@@ -774,13 +772,12 @@ class FSMAAuditLog:
         )
         from shared.tenant_context import tenant_scope
 
-        # Tenant-scoped read when a tenant is supplied; the tenantless
-        # variant is a cross-tenant operator view via the admin engine.
+        # DB reads are tenant-scoped only; a tenantless call reads the
+        # in-process cache below and never the shared table.
+        db_entries = []
         if tenant_id:
             with tenant_scope(tenant_id):
-                db_entries = _query_audit_trail(target_id=target_id)
-        else:
-            db_entries = _query_audit_trail(target_id=target_id, use_admin=True)
+                db_entries = _query_audit_trail(target_id=target_id, tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -824,26 +821,28 @@ class FSMAAuditLog:
             event_ids = self._by_tenant.get(tenant_id, [])
             return [e for e in self._entries if e.event_id in event_ids]
 
-    def get_by_action(self, action: FSMAAuditAction) -> List[FSMAAuditEntry]:
+    def get_by_action(self, action: FSMAAuditAction, tenant_id: Optional[str] = None) -> List[FSMAAuditEntry]:
         """Get all audit entries for a specific action type.
 
-        Reads from PostgreSQL when available so entries survive restarts.
+        Reads the tenant's rows from PostgreSQL when a tenant is supplied.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(action=action.value, use_admin=True)
+        db_entries = _query_audit_trail(action=action.value, tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
         with self._lock:
             return [e for e in self._entries if e.action == action]
 
-    def get_by_time_range(self, start: datetime, end: datetime) -> List[FSMAAuditEntry]:
+    def get_by_time_range(
+        self, start: datetime, end: datetime, tenant_id: Optional[str] = None
+    ) -> List[FSMAAuditEntry]:
         """Get audit entries within a time range.
 
-        Reads from PostgreSQL when available so entries survive restarts.
+        Reads the tenant's rows from PostgreSQL when a tenant is supplied.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(start=start, end=end, use_admin=True)
+        db_entries = _query_audit_trail(start=start, end=end, tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
@@ -855,13 +854,13 @@ class FSMAAuditLog:
                     result.append(entry)
             return result
 
-    def get_all(self) -> List[FSMAAuditEntry]:
+    def get_all(self, tenant_id: Optional[str] = None) -> List[FSMAAuditEntry]:
         """Get all audit entries (most recent 200).
 
-        Reads from PostgreSQL when available so entries survive restarts.
+        Reads the tenant's rows from PostgreSQL when a tenant is supplied.
         Falls back to the in-process cache when the DB is unreachable.
         """
-        db_entries = _query_audit_trail(use_admin=True)
+        db_entries = _query_audit_trail(tenant_id=tenant_id)
         if db_entries:
             return db_entries
         # Fallback to in-memory
