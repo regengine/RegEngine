@@ -20,7 +20,7 @@ All three come from historical `.env.production` in commit `a130816b2c95f51e253b
 
 | Line | Variable name | Current finding disposition | Required owner evidence |
 | --- | --- | --- | --- |
-| 15 | ADMIN_MASTER_KEY | Unresolved; no explicit placeholder marker | Determine whether it was issued/deployed; identify old administrative callers and provide provider/application revocation plus replay-denial evidence if real. |
+| 15 | ADMIN_MASTER_KEY | Resolved 2026-10-14: verified inert (owner sign-off C.Lee). Also covers the derived `scripts/stress_test.py` literal, GL-057. | Provided: no ADMIN_MASTER_KEY or ADMIN_KEY value in Railway production, Vercel, or the Supabase `api_keys` table matches by hash or prefix; X-Admin-Key authentication is retired (`services/ingestion/app/authz.py`, `services/admin/app/privileged_auth.py` return 401); production `GET /v1/admin/keys` returns 401. GL-057 fingerprint pinned in `.gitleaksignore`; see `owner_resolution` on GL-057 in `dispositions.json`. |
 | 18 | AUTH_SECRET_KEY | Unresolved; no explicit placeholder marker | Determine deployment history and signing-key identity; provide cutover and old-token denial evidence if real. |
 | 37 | REDIS_PASSWORD | Unresolved; no explicit placeholder marker | Identify affected Redis instance(s), credential-change event and old-credential connection denial if real. |
 
