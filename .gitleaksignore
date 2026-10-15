@@ -193,8 +193,19 @@ ad036009024a51c2804c1822233892296c39f594:scripts/stress_test.py:generic-api-key:
 # finding, so it stops holding Secrets Scan (gitleaks) red on main.
 # pull_request runs scope to base..HEAD (security.yml) and were never affected.
 #
-# STILL OWED, NOT pinned: the same owner check for the two rge_<id>.<secret>
-# literals in the
-# deleted scripts/test_id_002.py and scripts/test_hash_001.py, which match the
-# legacy rge_<token_urlsafe(16)>.<token_urlsafe(32)> generator exactly and stay
-# masked by '''/test_''' in .gitleaks.toml.
+# GL-190/192/288/290: verified inert, pinned with owner sign-off (C.Lee,
+# 2026-10-15). The two rge_<id>.<secret> literals in the deleted
+# scripts/test_id_002.py and scripts/test_hash_001.py, compared only by SHA-256
+# of key_id, full legacy SHA-256 digest and 12-char prefix: 0 matches in
+# Railway prod and staging api_keys (Railway Postgres, the DB prod uses),
+# Supabase public.api_keys (magbeerafyxmyuqmbfgv), all Railway RegEngine-Prod
+# service variables, and Vercel regengine production/preview/development env.
+# Production GET /v1/admin/keys with each real key_id plus a random secret
+# returned 401, same as a random control; the real secret was never sent.
+# They remain masked by the '''/test_''' path allowlist in .gitleaks.toml;
+# these pins make the disposition explicit.
+# GL-190, GL-192, GL-288, GL-290 in that order.
+a130816b2c95f51e253b311dd73a9597eb2f88c4:scripts/test_hash_001.py:generic-api-key:8
+a130816b2c95f51e253b311dd73a9597eb2f88c4:scripts/test_id_002.py:generic-api-key:6
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:scripts/test_hash_001.py:generic-api-key:8
+a6d476464bfe7afaf3ff830b65dc312a2be6d426:scripts/test_id_002.py:generic-api-key:6
