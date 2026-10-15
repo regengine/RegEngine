@@ -73,6 +73,16 @@ baseline:
     target: Provision
     qhash: "27d08b6ac953dd73"
     reason: "Reads the global regulatory database via global_client for the jurisdiction provision list; mapping check is tenant-scoped."
+  # The TenantControl match carries tenant_id; the flagged label is the
+  # hash-keyed Provision stub CREATEd beside the mapping in the per-tenant
+  # database (overlay_writer db_name). Nothing reads it back.
+  # test_tenant_models_cypher_scoping_1413 locks Provision WITHOUT tenant_id.
+  - file: services/shared/tenant_models.py
+    scope: ControlMapping.to_cypher_create
+    rule: cypher-match-without-tenant
+    target: Provision
+    qhash: "4f992219b8459dfb"
+    reason: "CREATE of a hash-keyed Provision stub in the per-tenant DB; Provision-without-tenant_id is locked by test_tenant_models_cypher_scoping_1413."
   # Dynamic WHERE builders below seed tenant_id unconditionally at runtime
   # (see the where_clauses seed in each function); the static gate cannot
   # see through the builder variable, so each site is recorded here.
@@ -200,6 +210,42 @@ baseline:
     target: fsma.tenant_portal_links
     qhash: "925bd8bb23bfdffc"
     reason: "Gated by the secret link_token credential with tenant context set; token is the auth, not guessable."
+  # Pre-tenant lookups through single-purpose SECURITY DEFINER functions:
+  # the tenant is not known yet and is derived from the returned row.
+  - file: services/ingestion/app/supplier_portal.py
+    scope: _db_get_portal_link
+    rule: sql-without-tenant-predicate
+    target: fsma.get_active_portal_link_by_token
+    qhash: "7b18d2c623bb8a07"  # pragma: allowlist secret
+    reason: "Unauthenticated supplier portal: the secret link_token is the credential and the tenant comes from its row; v075 function returns active, unexpired links only."
+  - file: services/ingestion/app/email_ingest/service.py
+    scope: get_inbound_email_audit_by_message_id
+    rule: sql-without-tenant-predicate
+    target: fsma.get_inbound_email_audit_by_message_id
+    qhash: "25895a899b898848"
+    reason: "Postmark idempotency check by provider MessageID before tenant resolution (tenant may be null for rejected mail); v121 function, no table grant."
+  # INSERT ... SELECT chain writes: the inserted row takes tenant_id from the
+  # :tenant_id bind and the WHERE EXISTS guard is tenant-bound. The gate
+  # cannot express a WHERE predicate on an INSERT target, so only the
+  # target table (fsma.hash_chain) is recorded here.
+  - file: services/shared/canonical_persistence/writer.py
+    scope: CanonicalEventStore._insert_chain_entry
+    rule: sql-without-tenant-predicate
+    target: fsma.hash_chain
+    qhash: "9e0a8e5c7c7a175a"  # pragma: allowlist secret
+    reason: "INSERT target row carries :tenant_id; existence guard binds te.tenant_id = :tenant_id."
+  - file: services/shared/cte_persistence/writes.py
+    scope: WritePathMixin.store_event
+    rule: sql-without-tenant-predicate
+    target: fsma.hash_chain
+    qhash: "0201a0b2c4a6944d"  # pragma: allowlist secret
+    reason: "INSERT target row carries :tenant_id; existence guard binds ce.tenant_id = :tenant_id."
+  - file: services/shared/cte_persistence/batch.py
+    scope: BatchWritePathMixin.store_events_batch
+    rule: sql-without-tenant-predicate
+    target: fsma.hash_chain
+    qhash: "0201a0b2c4a6944d"  # pragma: allowlist secret
+    reason: "INSERT target row carries :tenant_id; existence guard binds ce.tenant_id = :tenant_id."
   - file: services/shared/rules/deadletter_replay.py
     scope: replay_deadletter_for_tenant
     rule: sql-without-tenant-predicate
@@ -221,6 +267,12 @@ baseline:
     target: fsma.fsma_audit_trail
     qhash: "1c027aa936cabd05"
     reason: "Global hash-chain tip by design (comment at the call site); read through the audited control-plane role."
+  - file: services/graph/app/fsma_audit.py
+    scope: FSMAAuditLog.verify_chain_integrity
+    rule: sql-without-tenant-predicate
+    target: fsma.fsma_audit_trail
+    qhash: "b4309fcbf9fdb4f1"
+    reason: "Verifies the single global audit hash chain whose tip _load_last_checksum reads; links cross tenants, so a per-tenant read would report false breaks. Control-plane engine."
   - file: services/scheduler/service.py
     scope: SchedulerService.enforce_kde_retention
     rule: sql-without-tenant-predicate
@@ -302,6 +354,18 @@ baseline:
     target: fsma.task_queue
     qhash: "1140857c384aa94b"
     reason: "Worker state transition keyed by leased task id; cross-tenant by design (ADR #1644)."
+  - file: services/shared/task_queue.py
+    scope: TaskWorker._claim_one
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    qhash: "63cabbe7474f53b3"  # pragma: allowlist secret
+    reason: "Worker claim picks the next eligible task across tenants (weighted fair queuing #1644) under _arm_global_queue_transaction; the row's tenant_id becomes the handler's tenant."
+  - file: server/workers/task_processor.py
+    scope: _execute_claim
+    rule: sql-without-tenant-predicate
+    target: fsma.task_queue
+    qhash: "34d13b5e9267b3e4"  # pragma: allowlist secret
+    reason: "Worker claim UPDATE ... SKIP LOCKED across tenants under arm_global_admin_context; the claimed row's tenant_id is the handler's tenant authority (EPIC-A #1651)."
   - file: server/workers/task_processor.py
     scope: _complete_task
     rule: sql-without-tenant-predicate
