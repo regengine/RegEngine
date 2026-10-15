@@ -768,7 +768,18 @@
       "rationale_code": "literal_in_test_source_unverified_issuance",
       "rationale": "Exact finding is embedded in test source. Its fixture context is confirmed, but test location alone cannot certify non-issuance; owner review remains required.",
       "occurrence_id": "GL-057",
-      "commit_url": "https://github.com/regengine/RegEngine/commit/ad036009024a51c2804c1822233892296c39f594"
+      "commit_url": "https://github.com/regengine/RegEngine/commit/ad036009024a51c2804c1822233892296c39f594",
+      "owner_resolution": {
+        "status": "verified_inert",
+        "reviewed_by": "C.Lee",
+        "reviewed_on": "2026-10-14",
+        "evidence": [
+          "No ADMIN_MASTER_KEY or ADMIN_KEY value in Railway production, Vercel, or the Supabase api_keys table matches the literal by hash or by prefix.",
+          "X-Admin-Key authentication is retired: services/ingestion/app/authz.py and services/admin/app/privileged_auth.py reject any request carrying the header with 401.",
+          "Production GET /v1/admin/keys returns 401."
+        ],
+        "scanner_disposition": "Fingerprint pinned in .gitleaksignore with owner sign-off. The original disposition and rationale_code above are retained as the 2026-09-10 inventory record."
+      }
     },
     {
       "rule": "generic-api-key",
