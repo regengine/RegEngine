@@ -72,11 +72,11 @@ class _ChainSession:
     def execute(self, stmt, params=None):
         sql = str(getattr(stmt, "text", stmt))
         self.calls.append(sql)
-        if "LEFT JOIN fsma.cte_events" in sql and "ORDER BY hc.sequence_num" in sql:
+        if "FROM fsma.hash_chain hc" in sql and "ORDER BY hc.sequence_num" in sql:
             return _ScriptedResult(self.chain_rows)
         if "COUNT(*)" in sql and "validation_status != 'rejected'" in sql:
             return _ScriptedResult([(self.event_count,)])
-        if "LEFT JOIN fsma.hash_chain" in sql and "hc.id IS NULL" in sql:
+        if "NOT EXISTS" in sql and "FROM fsma.hash_chain hc" in sql:
             return _ScriptedResult([(i,) for i in self.missing_ids])
         return _ScriptedResult([])
 

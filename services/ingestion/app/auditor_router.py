@@ -230,7 +230,7 @@ async def audit_events(
     tid = resolve_tenant(tenant_id, principal)
     set_tenant_guc_if_uuid(db_session, tid)  # RLS backstop (UUID tenants only)
 
-    where = ["e.tenant_id = :tid", "e.status = 'active'"]
+    where = ["e.status = 'active'"]
     params: Dict[str, Any] = {"tid": tid, "lim": limit, "off": offset}
 
     if tlc:
@@ -272,7 +272,7 @@ async def audit_events(
             FROM fsma.rule_evaluations re
             WHERE re.event_id = e.event_id AND re.tenant_id = :tid
         ) eval_summary ON TRUE
-        WHERE {where_sql}
+        WHERE e.tenant_id = :tid AND {where_sql}
     """
 
     if compliance_status == "compliant":
@@ -559,7 +559,7 @@ async def audit_exceptions(
                    ec.resolution_summary, ec.waiver_reason, ec.waiver_approved_by,
                    ec.owner_user_id, ec.created_at, ec.resolved_at,
                    (SELECT COUNT(*) FROM fsma.exception_signoffs es
-                    WHERE es.case_id = ec.case_id) AS signoff_count
+                    WHERE es.case_id = ec.case_id AND es.tenant_id = :tid) AS signoff_count
             FROM fsma.exception_cases ec
             WHERE ec.tenant_id = :tid
             ORDER BY ec.created_at DESC
@@ -608,11 +608,11 @@ async def audit_requests(
                    rc.scope_type, rc.package_status, rc.total_records, rc.gap_count,
                    rc.request_received_at, rc.response_due_at, rc.submission_timestamp,
                    (SELECT COUNT(*) FROM fsma.response_packages rp
-                    WHERE rp.request_case_id = rc.request_case_id) AS package_count,
+                    WHERE rp.request_case_id = rc.request_case_id AND rp.tenant_id = :tid) AS package_count,
                    (SELECT COUNT(*) FROM fsma.submission_log sl
-                    WHERE sl.request_case_id = rc.request_case_id) AS submission_count,
+                    WHERE sl.request_case_id = rc.request_case_id AND sl.tenant_id = :tid) AS submission_count,
                    (SELECT COUNT(*) FROM fsma.request_signoffs rs
-                    WHERE rs.request_case_id = rc.request_case_id) AS signoff_count
+                    WHERE rs.request_case_id = rc.request_case_id AND rs.tenant_id = :tid) AS signoff_count
             FROM fsma.request_cases rc
             WHERE rc.tenant_id = :tid
             ORDER BY rc.request_received_at DESC

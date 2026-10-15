@@ -213,7 +213,7 @@ class TestDbGetPortalLink:
     def test_found_with_timestamps(self, monkeypatch):
         now = datetime(2026, 4, 17, 10, 0, tzinfo=timezone.utc)
         exp = now + timedelta(days=30)
-        session = _FakeSession(row=("t1", "S", "tok", "active", now, exp))
+        session = _FakeSession(row=("t1", "S", None, None, None, "tok", "active", now, exp))
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
         link = _db_get_portal_link("tok")
         assert link is not None
@@ -223,8 +223,24 @@ class TestDbGetPortalLink:
         assert link["expires_at"] == exp.isoformat()
         assert link["created_at"] == now.isoformat()
 
+    def test_lookup_uses_only_the_token_function(self, monkeypatch):
+        # Pre-tenant lookup: never a raw read of fsma.tenant_portal_links,
+        # which would carry no tenant predicate and skip the expiry check.
+        session = _FakeSession(row=None)
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+        assert _db_get_portal_link("tok") is None
+        assert len(session.executed) == 1
+        assert "fsma.get_active_portal_link_by_token(:link_token)" in session.executed[0][0]
+        assert "FROM fsma.tenant_portal_links" not in session.executed[0][0]
+
+    def test_function_error_fails_closed(self, monkeypatch):
+        session = _FakeSession(raise_on_execute=RuntimeError("function missing"))
+        monkeypatch.setattr(sp, "get_db_safe", lambda: session)
+        assert _db_get_portal_link("tok") is None
+        assert len(session.executed) == 1
+
     def test_found_with_null_timestamps(self, monkeypatch):
-        session = _FakeSession(row=("t1", "S", "tok", "active", None, None))
+        session = _FakeSession(row=("t1", "S", None, None, None, "tok", "active", None, None))
         monkeypatch.setattr(sp, "get_db_safe", lambda: session)
         link = _db_get_portal_link("tok")
         assert link is not None

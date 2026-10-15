@@ -112,6 +112,26 @@ class AgentArtifactTimelineResponse(StrictOperatorViewModel):
     chain_valid: Optional[bool] = None
 
 
+# Every tenant table behind the operator view, narrowed to the caller's
+# tenant before it is joined. The outer queries read these CTEs, so no
+# joined row (review, run, receipt) can come from another tenant even where
+# the join keys alone would allow it.
+_TENANT_SCOPED_REVIEW_CTES = """
+    WITH aa AS (
+        SELECT aa.* FROM fsma.agent_artifacts aa WHERE aa.tenant_id = :tenant_id
+    ),
+    ar AS (
+        SELECT r.* FROM fsma.agent_artifact_reviews r WHERE r.tenant_id = :tenant_id
+    ),
+    ir AS (
+        SELECT i.* FROM fsma.ingestion_runs i WHERE i.tenant_id = :tenant_id
+    ),
+    receipt_scope AS (
+        SELECT x.* FROM fsma.ingestion_run_receipts x WHERE x.tenant_id = :tenant_id
+    )
+"""
+
+
 def fetch_agent_review_items(
     db_session: Any,
     *,
@@ -144,10 +164,10 @@ def fetch_agent_review_items(
     total = int(
         db_session.execute(
             text(
-                f"""
+                f"""{_TENANT_SCOPED_REVIEW_CTES}
                 SELECT COUNT(*)
-                FROM fsma.agent_artifacts aa
-                LEFT JOIN fsma.agent_artifact_reviews ar
+                FROM aa
+                LEFT JOIN ar
                   ON ar.tenant_id = aa.tenant_id
                  AND ar.artifact_id = aa.artifact_id
                 WHERE {where_sql}
@@ -161,7 +181,7 @@ def fetch_agent_review_items(
     rows = (
         db_session.execute(
             text(
-                f"""
+                f"""{_TENANT_SCOPED_REVIEW_CTES}
                 SELECT
                     aa.artifact_id,
                     aa.tenant_id,
@@ -188,16 +208,16 @@ def fetch_agent_review_items(
                     aa.rule_id,
                     aa.rule_version,
                     aa.artifact
-                FROM fsma.agent_artifacts aa
-                LEFT JOIN fsma.agent_artifact_reviews ar
+                FROM aa
+                LEFT JOIN ar
                   ON ar.tenant_id = aa.tenant_id
                  AND ar.artifact_id = aa.artifact_id
-                LEFT JOIN fsma.ingestion_runs ir
+                LEFT JOIN ir
                   ON ir.tenant_id = aa.tenant_id
                  AND ir.id = aa.ingestion_run_id
                 LEFT JOIN LATERAL (
                     SELECT receipt_id, state, receipt_hash
-                    FROM fsma.ingestion_run_receipts receipt
+                    FROM receipt_scope receipt
                     WHERE receipt.tenant_id = aa.tenant_id
                       AND receipt.ingestion_run_id = aa.ingestion_run_id
                       AND receipt.metadata->'agent_artifact'->>'artifact_id' = aa.artifact_id::text
@@ -409,7 +429,7 @@ def _fetch_agent_review_item_row(
     return (
         db_session.execute(
             text(
-                """
+                f"""{_TENANT_SCOPED_REVIEW_CTES}
                 SELECT
                     aa.artifact_id,
                     aa.tenant_id,
@@ -436,16 +456,16 @@ def _fetch_agent_review_item_row(
                     aa.rule_id,
                     aa.rule_version,
                     aa.artifact
-                FROM fsma.agent_artifacts aa
-                LEFT JOIN fsma.agent_artifact_reviews ar
+                FROM aa
+                LEFT JOIN ar
                   ON ar.tenant_id = aa.tenant_id
                  AND ar.artifact_id = aa.artifact_id
-                LEFT JOIN fsma.ingestion_runs ir
+                LEFT JOIN ir
                   ON ir.tenant_id = aa.tenant_id
                  AND ir.id = aa.ingestion_run_id
                 LEFT JOIN LATERAL (
                     SELECT receipt_id, state, receipt_hash
-                    FROM fsma.ingestion_run_receipts receipt
+                    FROM receipt_scope receipt
                     WHERE receipt.tenant_id = aa.tenant_id
                       AND receipt.ingestion_run_id = aa.ingestion_run_id
                       AND receipt.metadata->'agent_artifact'->>'artifact_id' = aa.artifact_id::text
@@ -473,16 +493,16 @@ def _fetch_artifact_review_anchor(
     rows = (
         db_session.execute(
             text(
-                """
+                f"""{_TENANT_SCOPED_REVIEW_CTES}
                 SELECT
                     aa.artifact_id::text AS artifact_id,
                     aa.tenant_id::text AS tenant_id,
                     aa.ingestion_run_id::text AS ingestion_run_id,
                     advisory.receipt_id::text AS advisory_receipt_id
-                FROM fsma.agent_artifacts aa
+                FROM aa
                 LEFT JOIN LATERAL (
                     SELECT receipt_id
-                    FROM fsma.ingestion_run_receipts receipt
+                    FROM receipt_scope receipt
                     WHERE receipt.tenant_id = aa.tenant_id
                       AND receipt.ingestion_run_id = aa.ingestion_run_id
                       AND receipt.metadata->'agent_artifact'->>'artifact_id' = aa.artifact_id::text

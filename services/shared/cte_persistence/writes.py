@@ -356,8 +356,8 @@ class WritePathMixin:
                 SELECT :tenant_id, :cte_event_id, :sequence_num,
                        :event_hash, :previous_chain_hash, :chain_hash
                 WHERE EXISTS (
-                    SELECT 1 FROM fsma.cte_events
-                    WHERE id = :cte_event_id AND tenant_id = :tenant_id
+                    SELECT 1 FROM fsma.cte_events ce
+                    WHERE ce.id = :cte_event_id AND ce.tenant_id = :tenant_id
                 )
             """),
             {

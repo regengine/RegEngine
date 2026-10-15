@@ -309,7 +309,7 @@ def _capture_posture(db: Any, tenant_id: str) -> dict[str, Any]:
                     "SELECT COUNT(*) AS active_count, "
                     "SUM(CASE WHEN lower(severity) IN :critical THEN 1 ELSE 0 END) AS critical_count "
                     "FROM fsma.compliance_alerts "
-                    "WHERE (tenant_id = :tid OR (tenant_id IS NULL AND org_id = :tid)) "
+                    "WHERE tenant_id = :tid "
                     "AND (resolved IS NULL OR resolved = false)"
                 ).bindparams(bindparam("critical", expanding=True)),
                 {"tid": tenant_id, "critical": list(_CRITICAL_SEVERITIES)},

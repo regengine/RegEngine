@@ -94,10 +94,6 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
         "worker-maintenance",
         1,
     ),
-    ("services/graph/app/fsma_audit.py", "_query_audit_trail"): (
-        "worker-maintenance",
-        1,
-    ),
     ("services/graph/app/audit_buffer_reconciler.py", "_open_session"): (
         "worker-maintenance",
         1,
@@ -164,10 +160,7 @@ def _global_admin_arm_calls() -> Counter[tuple[str, str]]:
 
             def visit_Call(self, node: ast.Call) -> None:
                 direct = isinstance(node.func, ast.Name) and node.func.id in imported_names
-                attribute = (
-                    isinstance(node.func, ast.Attribute)
-                    and node.func.attr == "arm_global_admin_context"
-                )
+                attribute = isinstance(node.func, ast.Attribute) and node.func.attr == "arm_global_admin_context"
                 if direct or attribute:
                     function_name = function_stack[-1] if function_stack else "<module>"
                     calls[(relative_path, function_name)] += 1
@@ -182,19 +175,14 @@ def test_every_global_admin_arm_is_classified_with_exact_call_count():
     expected = Counter(
         {
             callsite: expected_count
-            for callsite, (_classification, expected_count) in (
-                APPROVED_GLOBAL_ADMIN_ARMS.items()
-            )
+            for callsite, (_classification, expected_count) in (APPROVED_GLOBAL_ADMIN_ARMS.items())
         }
     )
     assert actual == expected
 
 
 def test_allowlist_uses_only_reviewed_authority_classes():
-    assert {
-        classification
-        for classification, _count in APPROVED_GLOBAL_ADMIN_ARMS.values()
-    } == {
+    assert {classification for classification, _count in APPROVED_GLOBAL_ADMIN_ARMS.values()} == {
         "auth-bootstrap",
         "global-human",
         "global-human-or-workload",

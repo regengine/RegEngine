@@ -175,10 +175,15 @@ class AssemblyMixin:
         try:
             ent_result = self.db.execute(
                 text("""
+                    WITH a AS (
+                        SELECT x.entity_id, x.alias_value, x.alias_type
+                        FROM fsma.entity_aliases x
+                        WHERE x.tenant_id = :tenant_id
+                    )
                     SELECT e.entity_id, e.canonical_name, e.entity_type,
                            e.confidence_score, a.alias_value, a.alias_type
                     FROM fsma.canonical_entities e
-                    LEFT JOIN fsma.entity_aliases a ON a.entity_id = e.entity_id
+                    LEFT JOIN a ON a.entity_id = e.entity_id
                     WHERE e.tenant_id = :tenant_id
                 """),
                 {"tenant_id": tenant_id},
@@ -490,7 +495,7 @@ class AssemblyMixin:
                       AND rd.severity = 'critical'
                       AND NOT EXISTS (
                           SELECT 1 FROM fsma.exception_cases ec
-                          WHERE ec.tenant_id = re.tenant_id
+                          WHERE ec.tenant_id = :tenant_id
                             AND ec.linked_event_ids @> ARRAY[re.event_id]
                             AND ec.status IN ('resolved', 'waived')
                       )
@@ -612,6 +617,8 @@ class AssemblyMixin:
                     JOIN fsma.canonical_entities eb
                       ON irq.entity_b_id = eb.entity_id
                     WHERE irq.tenant_id = :tenant_id
+                      AND ea.tenant_id = :tenant_id
+                      AND eb.tenant_id = :tenant_id
                       AND irq.status = 'pending'
                       AND irq.match_confidence >= 0.85
                     LIMIT 20
@@ -653,6 +660,7 @@ class AssemblyMixin:
                         JOIN fsma.rule_definitions rd
                           ON re.rule_id = rd.rule_id
                         WHERE re.tenant_id = :tenant_id
+                          AND e.tenant_id = :tenant_id
                           AND re.event_id = ANY(CAST(:event_ids AS uuid[]))
                           AND (
                             COALESCE(e.amended_at, e.created_at) > re.evaluated_at

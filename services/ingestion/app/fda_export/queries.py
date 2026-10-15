@@ -152,11 +152,11 @@ def fetch_recall_events(db_session, where_clause: str, params: dict, limit: int 
                 e.location_gln, e.location_name, e.source, e.sha256_hash,
                 h.chain_hash,
                 (SELECT jsonb_object_agg(k.kde_key, k.kde_value)
-                 FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes,
+                 FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id AND k.tenant_id = :tid) AS kdes,
                 e.ingested_at
             FROM fsma.cte_events e
-            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
-            WHERE {where_clause}
+            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = :tid
+            WHERE e.tenant_id = :tid AND {where_clause}
             ORDER BY e.event_timestamp ASC
             LIMIT :lim
         """),
@@ -290,9 +290,7 @@ def build_recall_where_clause_canonical(
     return where_clause, params
 
 
-def fetch_recall_events_canonical(
-    db_session, where_clause: str, params: dict, limit: int = 10001
-) -> list:
+def fetch_recall_events_canonical(db_session, where_clause: str, params: dict, limit: int = 10001) -> list:
     """Canonical-store twin of ``fetch_recall_events``.
 
     Column order and shapes match the legacy SELECT exactly so
@@ -317,8 +315,8 @@ def fetch_recall_events_canonical(
                  WHERE kv.value <> 'null'::jsonb) AS kdes,
                 e.ingested_at
             FROM fsma.traceability_events e
-            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
-            WHERE {where_clause}
+            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = :tid
+            WHERE e.tenant_id = :tid AND {where_clause}
             ORDER BY e.event_timestamp ASC
             LIMIT :lim
         """),
@@ -686,9 +684,9 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.no_verdict_reason
             FROM fsma.traceability_events e
             LEFT JOIN fsma.rule_evaluations re
-                ON re.event_id = e.event_id AND re.tenant_id = e.tenant_id
+                ON re.event_id = e.event_id AND re.tenant_id = :tid
             LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
-            WHERE {where_clause}
+            WHERE e.tenant_id = :tid AND {where_clause}
             GROUP BY
                 e.event_id, e.event_type, e.traceability_lot_code,
                 e.product_reference, e.quantity, e.unit_of_measure,

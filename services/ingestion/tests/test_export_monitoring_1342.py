@@ -589,7 +589,11 @@ class TestCheckKdeCompleteness:
         assert len(session.calls) == 2, "the coverage read issues one statement per aggregate"
         assert session.closed
         for sql, params in session.calls:
-            assert "FROM fsma.cte_events WHERE tenant_id = :tid" in " ".join(sql.split())
+            # The events table may be aliased; its own tenant bind must not be.
+            assert re.search(
+                r"FROM fsma\.cte_events(?: (\w+))? WHERE (?:\1\.)?tenant_id = :tid\b",
+                " ".join(sql.split()),
+            )
             assert "kde_data" not in sql
             assert params == {"tid": "t"}
         assert "fsma.cte_kdes" in session.calls[1][0]

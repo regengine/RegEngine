@@ -69,11 +69,14 @@ class ChainVerificationMixin:
         # per-row checks below still work left-to-right.
         rows = self.session.execute(
             text("""
+                WITH ce AS (
+                    SELECT c.id, c.tenant_id FROM fsma.cte_events c WHERE c.tenant_id = :tid
+                )
                 SELECT hc.sequence_num, hc.event_hash,
                        hc.previous_chain_hash, hc.chain_hash,
                        hc.cte_event_id, ce.id AS matched_event_id
                 FROM fsma.hash_chain hc
-                LEFT JOIN fsma.cte_events ce
+                LEFT JOIN ce
                     ON ce.id = hc.cte_event_id
                    AND ce.tenant_id = hc.tenant_id
                 WHERE hc.tenant_id = :tid
@@ -214,12 +217,12 @@ class ChainVerificationMixin:
             text("""
                 SELECT ce.id::text
                 FROM fsma.cte_events ce
-                LEFT JOIN fsma.hash_chain hc
-                    ON hc.cte_event_id = ce.id
-                   AND hc.tenant_id = ce.tenant_id
                 WHERE ce.tenant_id = :tid
                   AND ce.validation_status != 'rejected'
-                  AND hc.id IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM fsma.hash_chain hc
+                      WHERE hc.cte_event_id = ce.id AND hc.tenant_id = :tid
+                  )
                 ORDER BY ce.ingested_at
                 LIMIT 1000
             """),

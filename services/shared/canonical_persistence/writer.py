@@ -1250,18 +1250,20 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
         the caller may re-select to obtain the existing row's
         ``sha256_hash`` / ``chain_hash`` for the per-event result).
         """
+        # tenant_id is a fixed leading column, so every inserted row carries
+        # its tenant by construction rather than by the params' key set.
+        col_names = [k for k in self._event_to_params(events[0]).keys() if k != "tenant_id"]
         values_clauses = []
         params: Dict[str, Any] = {}
         for i, evt in enumerate(events):
             p = self._event_to_params(evt)
             suffixed = {f"{k}_{i}": v for k, v in p.items()}
             params.update(suffixed)
-            cols = [f":{k}_{i}" for k in p.keys()]
+            cols = [f":tenant_id_{i}"] + [f":{k}_{i}" for k in col_names]
             values_clauses.append(f"({', '.join(cols)})")
 
-        col_names = list(self._event_to_params(events[0]).keys())
         sql = f"""
-            INSERT INTO fsma.traceability_events ({", ".join(col_names)})
+            INSERT INTO fsma.traceability_events (tenant_id, {", ".join(col_names)})
             VALUES {", ".join(values_clauses)}
             ON CONFLICT (tenant_id, idempotency_key) DO NOTHING
             RETURNING event_id
@@ -1299,8 +1301,8 @@ class CanonicalEventStore(CanonicalChainVerificationMixin):
                 SELECT :tenant_id, :cte_event_id, :sequence_num,
                        :event_hash, :previous_chain_hash, :chain_hash
                 WHERE EXISTS (
-                    SELECT 1 FROM fsma.traceability_events
-                    WHERE event_id = :cte_event_id AND tenant_id = :tenant_id
+                    SELECT 1 FROM fsma.traceability_events te
+                    WHERE te.event_id = :cte_event_id AND te.tenant_id = :tenant_id
                 )
             """),
             {

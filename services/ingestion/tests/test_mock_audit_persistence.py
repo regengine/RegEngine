@@ -143,7 +143,7 @@ class TestLoadDrill:
             deadline,
         )
 
-        drill = _load_drill("drill-123")
+        drill = _load_drill("drill-123", "11111111-1111-1111-1111-111111111111")
 
         assert drill == {
             "tenant_id": "11111111-1111-1111-1111-111111111111",
@@ -156,17 +156,29 @@ class TestLoadDrill:
         }
         assert session.close.called
 
+    def test_read_is_scoped_to_caller_tenant(self, monkeypatch):
+        # drill_id is unique only per tenant: the read must bind the caller's
+        # tenant, never return another tenant's drill with the same id.
+        session = _fake_session(monkeypatch)
+        session.execute.return_value.fetchone.return_value = None
+
+        _load_drill("drill-123", "t1")
+
+        sql = str(session.execute.call_args[0][0])
+        assert "tenant_id = CAST(:tid AS uuid)" in sql
+        assert session.execute.call_args[0][1] == {"drill_id": "drill-123", "tid": "t1"}
+
     def test_returns_none_when_no_row(self, monkeypatch):
         session = _fake_session(monkeypatch)
         session.execute.return_value.fetchone.return_value = None
 
-        assert _load_drill("drill-123") is None
+        assert _load_drill("drill-123", "11111111-1111-1111-1111-111111111111") is None
 
     def test_returns_none_on_db_failure(self, monkeypatch):
         session = _fake_session(monkeypatch)
         session.execute.side_effect = RuntimeError("DB gone")
 
-        assert _load_drill("drill-123") is None
+        assert _load_drill("drill-123", "11111111-1111-1111-1111-111111111111") is None
         assert session.close.called
 
 
@@ -216,7 +228,7 @@ class TestStartDrillPersists:
 
 class TestGetDrillDbFallback:
     def test_falls_back_to_db_when_not_in_memory(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_load_drill", lambda drill_id: _drill_dict(hours_ago=1.0))
+        monkeypatch.setattr(ma, "_load_drill", lambda drill_id, tenant_id: _drill_dict(hours_ago=1.0))
 
         r = client.get("/api/v1/audit/drill/drill-db-1")
 
@@ -226,7 +238,7 @@ class TestGetDrillDbFallback:
         assert body["time_remaining_seconds"] > 0
 
     def test_404_when_neither_memory_nor_db(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_load_drill", lambda drill_id: None)
+        monkeypatch.setattr(ma, "_load_drill", lambda drill_id, tenant_id: None)
 
         r = client.get("/api/v1/audit/drill/drill-db-1")
 
@@ -235,7 +247,7 @@ class TestGetDrillDbFallback:
     def test_memory_hit_skips_db(self, client, monkeypatch):
         _active_drills["drill-mem-1"] = _drill_dict()
 
-        def _boom(drill_id):
+        def _boom(drill_id, tenant_id):
             raise AssertionError("DB should not be queried on a memory hit")
 
         monkeypatch.setattr(ma, "_load_drill", _boom)
@@ -247,7 +259,7 @@ class TestGetDrillDbFallback:
 
 class TestSubmitDbFallback:
     def test_grades_db_loaded_drill(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_load_drill", lambda drill_id: _drill_dict(hours_ago=1.0))
+        monkeypatch.setattr(ma, "_load_drill", lambda drill_id, tenant_id: _drill_dict(hours_ago=1.0))
         completions: list = []
         monkeypatch.setattr(
             ma,
@@ -269,7 +281,7 @@ class TestSubmitDbFallback:
         assert _active_drills["drill-db-2"]["status"] == "completed"
 
     def test_404_when_db_drill_belongs_to_other_tenant(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_load_drill", lambda drill_id: _drill_dict(tenant_id="other-tenant"))
+        monkeypatch.setattr(ma, "_load_drill", lambda drill_id, tenant_id: _drill_dict(tenant_id="other-tenant"))
         monkeypatch.setattr(
             ma,
             "_mark_drill_completed",

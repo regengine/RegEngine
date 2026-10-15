@@ -908,7 +908,11 @@ class TestRecoverySimulationEndpoint:
         assert kde_session.calls, "the KDE check issued no statement"
         assert kde_session.closed is True
         for sql, params in kde_session.calls:
-            assert "FROM fsma.cte_events WHERE tenant_id = :tid" in " ".join(sql.split())
+            # The events table may be aliased; its own tenant bind must not be.
+            assert re.search(
+                r"FROM fsma\.cte_events(?: (\w+))? WHERE (?:\1\.)?tenant_id = :tid\b",
+                " ".join(sql.split()),
+            )
             assert "kde_completeness" not in sql
             assert params == {"tid": "t1"}
 

@@ -188,7 +188,7 @@ def test_verification_job_completes_invalid_when_previous_hash_is_missing(monkey
                 return _Result(canonical_rows)
             if "validation_status" in sql:
                 return _Result([(2,)])
-            if "hc.id IS NULL" in sql:
+            if "NOT EXISTS" in sql:
                 return _Result([])
             return _Result(legacy_rows)
 

@@ -297,9 +297,11 @@ class _FakeSession:
     def __init__(self, tier1_rows, profile_rows):
         self.tier1_rows = tier1_rows
         self.profile_rows = profile_rows
+        self.calls = []
 
     def execute(self, statement, params=None):
         sql = str(statement)
+        self.calls.append((sql, dict(params or {})))
         if "traceability_events" in sql:
             return _FakeResult(self.tier1_rows)
         if "tenant_product_profile" in sql:
@@ -356,6 +358,21 @@ class TestFindMatchingTenantsOutcomes:
         session = _FakeSession(tier1_rows=[(tenant_id,)], profile_rows=[])
         item = _make_item(raw_data={"code_info": "LOT-9"})
 
-        assert integration._find_matching_tenants(session, item) == [
+        assert integration._find_matching_tenants(session, item, tenant_id=tenant_id) == [
             {"tenant_id": tenant_id, "reasons": ["match_tier:lot_code"]}
         ]
+
+    def test_every_matching_query_is_bound_to_one_tenant(self):
+        # No lot-code or profile read may span tenants: each carries the
+        # caller's tenant as a bound predicate.
+        _, integration = _bare_integration()
+        tenant_id = str(uuid4())
+        session = _FakeSession(tier1_rows=[], profile_rows=[])
+        item = _make_item(raw_data={"code_info": "LOT-9"})
+
+        integration._find_matching_tenants(session, item, tenant_id=tenant_id)
+
+        assert len(session.calls) == 2
+        for sql, params in session.calls:
+            assert "tenant_id = CAST(:tenant_id AS uuid)" in sql
+            assert params["tenant_id"] == tenant_id
