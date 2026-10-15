@@ -139,9 +139,12 @@ class ComplianceIntegration:
         session: Session,
         item: EnforcementItem,
         *,
-        tenant_id: str | None = None,
+        tenant_id: str,
     ) -> List[Dict]:
         """Find tenants whose product profile matches the enforcement item.
+
+        Always scoped to one tenant: the caller iterates tenants and binds
+        each in its own transaction, so no read here spans tenants.
 
         Matching tiers (highest confidence first):
           Tier 1 — exact lot-code match against fsma.traceability_events
@@ -160,28 +163,18 @@ class ComplianceIntegration:
 
             if lot_codes:
                 try:
-                    if tenant_id is None:
-                        tlc_statement = text(
-                            """
-                            SELECT DISTINCT tenant_id
-                              FROM fsma.traceability_events
-                             WHERE traceability_lot_code = ANY(:lot_codes)
-                            """
-                        )
-                        tlc_params = {"lot_codes": lot_codes}
-                    else:
-                        tlc_statement = text(
-                            """
-                            SELECT DISTINCT tenant_id
-                              FROM fsma.traceability_events
-                             WHERE tenant_id = CAST(:tenant_id AS uuid)
-                               AND traceability_lot_code = ANY(:lot_codes)
-                            """
-                        )
-                        tlc_params = {
-                            "tenant_id": tenant_id,
-                            "lot_codes": lot_codes,
-                        }
+                    tlc_statement = text(
+                        """
+                        SELECT DISTINCT tenant_id
+                          FROM fsma.traceability_events
+                         WHERE tenant_id = CAST(:tenant_id AS uuid)
+                           AND traceability_lot_code = ANY(:lot_codes)
+                        """
+                    )
+                    tlc_params = {
+                        "tenant_id": tenant_id,
+                        "lot_codes": lot_codes,
+                    }
                     tlc_rows = session.execute(tlc_statement, tlc_params)
                     for row in tlc_rows:
                         tid = str(row[0])
@@ -211,19 +204,12 @@ class ComplianceIntegration:
         # silently swallowing — Tier-2/3 supplier-name compliance alerts
         # never fired in production. The query is static (no interpolation),
         # so the wrapping is byte-identical for valid inputs.
-        if tenant_id is None:
-            profile_statement = text(
-                "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
-                "FROM tenant_product_profile LIMIT 1000"
-            )
-            profile_params = {}
-        else:
-            profile_statement = text(
-                "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
-                "FROM tenant_product_profile "
-                "WHERE tenant_id = CAST(:tenant_id AS uuid) LIMIT 1"
-            )
-            profile_params = {"tenant_id": tenant_id}
+        profile_statement = text(
+            "SELECT tenant_id, product_categories, supply_regions, supplier_identifiers "
+            "FROM tenant_product_profile "
+            "WHERE tenant_id = CAST(:tenant_id AS uuid) LIMIT 1"
+        )
+        profile_params = {"tenant_id": tenant_id}
         result = session.execute(profile_statement, profile_params)
 
         matching = []
