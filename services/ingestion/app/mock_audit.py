@@ -83,11 +83,11 @@ def _persist_drill(drill_id: str, drill: dict) -> None:
         raise HTTPException(status_code=503, detail="Drill storage is unavailable") from None
 
 
-def _load_drill(drill_id: str) -> dict | None:
+def _load_drill(drill_id: str, tenant_id: str) -> dict | None:
     """Load a drill row from fsma.mock_audit_drills as an in-memory-shaped dict.
 
-    RLS scopes the read to the caller's tenant at runtime. Returns None when
-    the drill does not exist or the DB is unavailable.
+    Scoped to the caller's tenant (drill_id is unique only per tenant).
+    Returns None when the drill does not exist or the DB is unavailable.
     """
     try:
         from shared.database import SessionLocal
@@ -98,9 +98,10 @@ def _load_drill(drill_id: str) -> dict | None:
             row = db.execute(
                 text(
                     "SELECT tenant_id, scenario, status, grade, score, started_at, deadline "
-                    "FROM fsma.mock_audit_drills WHERE drill_id = :drill_id LIMIT 1"
+                    "FROM fsma.mock_audit_drills "
+                    "WHERE drill_id = :drill_id AND tenant_id = CAST(:tid AS uuid) LIMIT 1"
                 ),
-                {"drill_id": drill_id},
+                {"drill_id": drill_id, "tid": tenant_id},
             ).fetchone()
         finally:
             db.close()
@@ -332,7 +333,7 @@ async def start_drill(
 )
 async def get_drill_status(drill_id: str, ctx: TenantContext = Depends(require_tenant_context)) -> DrillStatus:
     """Get current status of an active drill."""
-    drill = _active_drills.get(drill_id) or _load_drill(drill_id)
+    drill = _active_drills.get(drill_id) or _load_drill(drill_id, ctx.tenant_id)
     if not drill or drill.get("tenant_id") != ctx.tenant_id:
         raise HTTPException(status_code=404, detail="Drill not found")
 
@@ -378,7 +379,7 @@ async def submit_drill_response(
     ctx: TenantContext = Depends(require_tenant_context),
 ) -> DrillGrade:
     """Grade a drill response."""
-    drill = _active_drills.get(drill_id) or _load_drill(drill_id)
+    drill = _active_drills.get(drill_id) or _load_drill(drill_id, ctx.tenant_id)
     if not drill:
         raise HTTPException(status_code=404, detail="Drill not found")
     if drill.get("tenant_id") != ctx.tenant_id:
