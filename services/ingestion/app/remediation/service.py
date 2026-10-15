@@ -842,20 +842,19 @@ def list_runs(db, *, tenant_id: str, limit: int = 100) -> List[Dict[str, Any]]:
                    COALESCE(agg.passed_staged, 0), COALESCE(agg.blocked, 0),
                    COALESCE(agg.released, 0)
             FROM fsma.manifest_blobs b
-            JOIN fsma.ingestion_runs r
-              ON r.id = b.ingestion_run_id AND r.tenant_id = b.tenant_id
-            LEFT JOIN (
-                SELECT ingestion_run_id,
-                       COUNT(*) FILTER (WHERE validation_status = 'passed'
-                                          AND release_status = 'staged') AS passed_staged,
-                       COUNT(*) FILTER (WHERE validation_status = 'failed'
-                                          AND release_status = 'staged') AS blocked,
-                       COUNT(*) FILTER (WHERE release_status = 'released') AS released
-                FROM fsma.manifest_records
-                WHERE tenant_id = CAST(:tenant_id AS uuid)
-                GROUP BY ingestion_run_id
-            ) agg ON agg.ingestion_run_id = b.ingestion_run_id
+            JOIN fsma.ingestion_runs r ON r.id = b.ingestion_run_id
+            LEFT JOIN LATERAL (
+                SELECT COUNT(*) FILTER (WHERE m.validation_status = 'passed'
+                                          AND m.release_status = 'staged') AS passed_staged,
+                       COUNT(*) FILTER (WHERE m.validation_status = 'failed'
+                                          AND m.release_status = 'staged') AS blocked,
+                       COUNT(*) FILTER (WHERE m.release_status = 'released') AS released
+                FROM fsma.manifest_records m
+                WHERE m.tenant_id = CAST(:tenant_id AS uuid)
+                  AND m.ingestion_run_id = b.ingestion_run_id
+            ) agg ON TRUE
             WHERE b.tenant_id = CAST(:tenant_id AS uuid)
+              AND r.tenant_id = CAST(:tenant_id AS uuid)
             ORDER BY b.created_at DESC
             LIMIT :limit
             """
@@ -891,14 +890,14 @@ def list_run_cases(db, *, tenant_id: str, run_id: str) -> Dict[str, Dict[str, An
             SELECT c.manifest_record_id, c.id, c.status, c.due_at,
                    EXISTS (
                        SELECT 1 FROM fsma.notification_outbox n
-                       WHERE n.tenant_id = c.tenant_id AND n.case_id = c.id
+                       WHERE n.tenant_id = CAST(:tenant_id AS uuid) AND n.case_id = c.id
                    ) AS notified
             FROM fsma.remediation_cases c
             WHERE c.tenant_id = CAST(:tenant_id AS uuid)
               AND c.manifest_record_id IN (
-                  SELECT id FROM fsma.manifest_records
-                  WHERE tenant_id = CAST(:tenant_id AS uuid)
-                    AND ingestion_run_id = CAST(:run_id AS uuid)
+                  SELECT m.id FROM fsma.manifest_records m
+                  WHERE m.tenant_id = CAST(:tenant_id AS uuid)
+                    AND m.ingestion_run_id = CAST(:run_id AS uuid)
               )
             """
         ),
@@ -928,7 +927,7 @@ def compute_metrics(db, *, tenant_id: str) -> Dict[str, Any]:
           AND m.validation_status = 'passed'
           AND NOT EXISTS (
               SELECT 1 FROM fsma.correction_patches p
-              WHERE p.tenant_id = m.tenant_id AND p.manifest_record_id = m.id
+              WHERE p.tenant_id = CAST(:tenant_id AS uuid) AND p.manifest_record_id = m.id
           )
         """
     )
@@ -946,11 +945,11 @@ def compute_metrics(db, *, tenant_id: str) -> Dict[str, Any]:
           AND c.status = 'released'
           AND EXISTS (
               SELECT 1 FROM fsma.correction_patches p
-              WHERE p.tenant_id = c.tenant_id AND p.case_id = c.id
+              WHERE p.tenant_id = CAST(:tenant_id AS uuid) AND p.case_id = c.id
           )
           AND NOT EXISTS (
               SELECT 1 FROM fsma.correction_patches p
-              WHERE p.tenant_id = c.tenant_id AND p.case_id = c.id
+              WHERE p.tenant_id = CAST(:tenant_id AS uuid) AND p.case_id = c.id
                 AND p.auth_method != 'remediation_token'
           )
         """

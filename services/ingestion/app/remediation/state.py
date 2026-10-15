@@ -109,13 +109,13 @@ def _mirror_update(db, *, mirrored: str, tenant_id: str, case_id: str) -> None:
             """
             UPDATE fsma.exception_cases
             SET status = :mirrored, updated_at = now()
-            WHERE tenant_id = CAST(:tenant_id AS uuid)
-              AND case_id = (
-                  SELECT exception_case_id FROM fsma.remediation_cases
-                  WHERE id = CAST(:case_id AS uuid)
-                    AND tenant_id = CAST(:tenant_id AS uuid)
+            WHERE exception_cases.tenant_id = CAST(:tenant_id AS uuid)
+              AND exception_cases.case_id = (
+                  SELECT rc.exception_case_id FROM fsma.remediation_cases rc
+                  WHERE rc.id = CAST(:case_id AS uuid)
+                    AND rc.tenant_id = CAST(:tenant_id AS uuid)
               )
-              AND status NOT IN ('resolved', 'waived')
+              AND exception_cases.status NOT IN ('resolved', 'waived')
             """
         ),
         {"mirrored": mirrored, "tenant_id": tenant_id, "case_id": case_id},

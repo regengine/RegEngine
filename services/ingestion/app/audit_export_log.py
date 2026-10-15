@@ -131,7 +131,7 @@ def _query_exports(
 
         db = SessionLocal()
         try:
-            conditions = ["tenant_id = :tid"]
+            conditions: list[str] = []
             params: dict = {"tid": tenant_id, "lim": limit}
 
             if start_date:
@@ -141,13 +141,13 @@ def _query_exports(
                 conditions.append("generated_at <= :end")
                 params["end"] = end_date
 
-            where_clause = " AND ".join(conditions)
+            extra = "".join(f" AND {c}" for c in conditions)
             rows = db.execute(
                 text(f"""
                     SELECT id, tenant_id, export_type, record_count,
                            export_hash, generated_at, query_tlc
                     FROM fsma.fda_export_log
-                    WHERE {where_clause}
+                    WHERE tenant_id = :tid{extra}
                     ORDER BY generated_at DESC
                     LIMIT :lim
                 """),

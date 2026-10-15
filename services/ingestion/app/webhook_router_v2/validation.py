@@ -194,6 +194,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                         SELECT COUNT(*) FROM fsma.hash_chain h
                         JOIN fsma.cte_events e ON e.id = h.cte_event_id
                         WHERE e.tenant_id = :tid
+                          AND h.tenant_id = :tid
                           AND e.traceability_lot_code = :tlc
                     """),
                     {"tid": tenant_id, "tlc": event.traceability_lot_code},
@@ -258,9 +259,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             # event still look review-worthy? A flag here is observability,
             # not a compliance determination — it is returned to the caller
             # and never written to fsma.compliance_alerts.
-            review_flag = _pkg.review_event_for_alert_worthiness(
-                event, rules_evaluated=len(rows)
-            )
+            review_flag = _pkg.review_event_for_alert_worthiness(event, rules_evaluated=len(rows))
             if review_flag is not None:
                 _pkg._record_jev_review_flag(tenant_id)
                 alerts.append(review_flag)

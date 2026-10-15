@@ -621,19 +621,25 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
             db.execute(
                 text(
                     """
-                SELECT run_id, tenant_id::text AS tenant_id, source, csv_text,
-                       result_payload, readiness_payload, commit_gate_payload,
-                       input_hash, result_hash, saved_at,
+                WITH run AS (
+                    SELECT r.run_id, r.tenant_id, r.source, r.csv_text,
+                           r.result_payload, r.readiness_payload, r.commit_gate_payload,
+                           r.input_hash, r.result_hash, r.saved_at
+                    FROM fsma.inflow_workbench_runs r
+                    WHERE r.tenant_id = CAST(:tenant_id AS uuid) AND r.run_id = :run_id
+                )
+                SELECT run.run_id, run.tenant_id::text AS tenant_id, run.source, run.csv_text,
+                       run.result_payload, run.readiness_payload, run.commit_gate_payload,
+                       run.input_hash, run.result_hash, run.saved_at,
                        (
-                           SELECT decision_id
+                           SELECT d.decision_id
                            FROM fsma.inflow_workbench_commit_decisions d
-                           WHERE d.tenant_id = fsma.inflow_workbench_runs.tenant_id
-                             AND d.run_id = fsma.inflow_workbench_runs.run_id
+                           WHERE d.tenant_id = CAST(:tenant_id AS uuid)
+                             AND d.run_id = run.run_id
                            ORDER BY d.created_at DESC
                            LIMIT 1
                        ) AS commit_decision_id
-                FROM fsma.inflow_workbench_runs
-                WHERE tenant_id = CAST(:tenant_id AS uuid) AND run_id = :run_id
+                FROM run
                 """
                 ),
                 {"run_id": run_id, "tenant_id": tenant_uuid},

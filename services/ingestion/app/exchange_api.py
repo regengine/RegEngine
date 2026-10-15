@@ -79,7 +79,6 @@ def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSen
         )
 
     where = [
-        "e.tenant_id = :tenant_id",
         "e.event_type = 'shipping'",
         "e.validation_status != 'rejected'",
     ]
@@ -124,12 +123,12 @@ def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSen
                     (
                         SELECT jsonb_object_agg(k.kde_key, k.kde_value)
                         FROM fsma.cte_kdes k
-                        WHERE k.cte_event_id = e.id AND k.tenant_id = e.tenant_id
+                        WHERE k.cte_event_id = e.id AND k.tenant_id = :tenant_id
                     ),
                     '{{}}'::jsonb
                 ) AS kdes
             FROM fsma.cte_events e
-            WHERE {" AND ".join(where)}
+            WHERE e.tenant_id = :tenant_id AND {" AND ".join(where)}
             ORDER BY e.event_timestamp ASC
             LIMIT :limit
             """
@@ -501,9 +500,7 @@ async def send_exchange_package(
         # The DB-backed path rejects filter-less sends with 400 before any
         # I/O; the fallback enforces the same contract instead of queueing
         # an empty package no receiver can use.
-        fallback_tlcs = sorted(
-            {code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code}
-        )
+        fallback_tlcs = sorted({code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code})
         fallback_event_ids = sorted({event_id for event_id in request.event_ids if event_id})
         if not fallback_tlcs and not fallback_event_ids:
             raise HTTPException(
