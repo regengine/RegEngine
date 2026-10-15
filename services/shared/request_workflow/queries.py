@@ -34,12 +34,12 @@ class QueryMixin:
                        EXTRACT(EPOCH FROM (rc.response_due_at - NOW())) / 3600.0
                            AS hours_remaining,
                        rc.response_due_at < NOW() AS is_overdue,
-                       (SELECT COUNT(*) FROM fsma.request_signoffs rs
-                        WHERE rs.request_case_id = rc.request_case_id
-                          AND rs.tenant_id = rc.tenant_id) AS signoff_count,
+                       (SELECT COUNT(*) FROM fsma.request_signoffs
+                        WHERE request_signoffs.request_case_id = rc.request_case_id
+                          AND request_signoffs.tenant_id = :tenant_id) AS signoff_count,
                        (SELECT COUNT(*) FROM fsma.response_packages rp
                         WHERE rp.request_case_id = rc.request_case_id
-                          AND rp.tenant_id = rc.tenant_id) AS package_count
+                          AND rp.tenant_id = :tenant_id) AS package_count
                 FROM fsma.request_cases rc
                 WHERE rc.tenant_id = :tenant_id
                   AND {status_filter}
@@ -72,6 +72,9 @@ class QueryMixin:
 
         result = self.db.execute(
             text("""
+                WITH sl AS (
+                    SELECT s.* FROM fsma.submission_log s WHERE s.tenant_id = :tenant_id
+                )
                 SELECT rp.package_id, rp.version_number,
                        rp.package_hash, rp.gap_analysis,
                        rp.diff_from_previous,
@@ -79,7 +82,7 @@ class QueryMixin:
                        sl.submitted_at, sl.submitted_by,
                        sl.submission_type, sl.submission_method
                 FROM fsma.response_packages rp
-                LEFT JOIN fsma.submission_log sl
+                LEFT JOIN sl
                   ON sl.package_id = rp.package_id
                  AND sl.tenant_id = rp.tenant_id
                 WHERE rp.request_case_id = :case_id
