@@ -199,6 +199,12 @@ class CanonicalChainVerificationMixin:
 
         rows = self.session.execute(
             text("""
+                WITH te AS (
+                    SELECT t.* FROM fsma.traceability_events t WHERE t.tenant_id = :tid
+                ),
+                ce AS (
+                    SELECT c.id, c.tenant_id FROM fsma.cte_events c WHERE c.tenant_id = :tid
+                )
                 SELECT hc.sequence_num, hc.event_hash,
                        hc.previous_chain_hash, hc.chain_hash,
                        hc.cte_event_id,
@@ -211,7 +217,7 @@ class CanonicalChainVerificationMixin:
                        te.normalized_payload->>'event_timestamp' AS hashed_timestamp,
                        te.sha256_hash AS canonical_sha256
                 FROM fsma.hash_chain hc
-                LEFT JOIN fsma.traceability_events te
+                LEFT JOIN te
                     ON te.event_id = hc.cte_event_id
                    AND te.tenant_id = hc.tenant_id
                 -- Existence-only probe of the legacy store: during the WS-1
@@ -223,7 +229,7 @@ class CanonicalChainVerificationMixin:
                 -- _combine_results already documents and applies. No legacy
                 -- business data is read (WS-1 never-do list); WS-1d removes
                 -- this join with the legacy store itself.
-                LEFT JOIN fsma.cte_events ce
+                LEFT JOIN ce
                     ON ce.id = hc.cte_event_id
                    AND ce.tenant_id = hc.tenant_id
                 WHERE hc.tenant_id = :tid

@@ -719,6 +719,7 @@ class QueryPathMixin:
                 FROM fsma.cte_events e
                 JOIN fsma.hash_chain h ON h.cte_event_id = e.id
                 WHERE e.tenant_id = :tid
+                  AND h.tenant_id = :tid
                   AND h.sequence_num > :since
                   AND e.validation_status != 'rejected'
                 ORDER BY h.sequence_num ASC
