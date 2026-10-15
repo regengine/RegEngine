@@ -174,6 +174,22 @@ def test_join_condition_between_columns_is_not_a_predicate(tmp_path: Path):
     assert violations[0].target == "fsma.cte_events,fsma.cte_kdes"
 
 
+def test_join_type_word_is_not_read_as_from_alias(tmp_path: Path):
+    # ``FROM fsma.cte_events e LEFT JOIN`` binds alias ``e``, not ``left``.
+    violations = scan_text(
+        tmp_path,
+        'QUERY = "SELECT * FROM fsma.cte_events e LEFT JOIN fsma.task_queue q ON q.id = e.id '
+        'WHERE e.tenant_id = :t AND q.tenant_id = :t"\n',
+    )
+    assert violations == []
+    violations = scan_text(
+        tmp_path,
+        'QUERY = "SELECT * FROM fsma.cte_events e LEFT JOIN fsma.task_queue q ON q.id = e.id WHERE e.tenant_id = :t"\n',
+    )
+    assert [v.rule for v in violations] == ["sql-without-tenant-predicate"]
+    assert violations[0].target == "fsma.task_queue"
+
+
 def test_parenthesized_shim_is_flagged(tmp_path: Path):
     violations = scan_text(
         tmp_path,

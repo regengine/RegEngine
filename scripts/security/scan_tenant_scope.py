@@ -551,6 +551,9 @@ def _from_items(text: str) -> list[str]:
     return items
 
 
+_JOIN_TYPE_WORDS = frozenset({"LEFT", "RIGHT", "INNER", "FULL", "CROSS", "OUTER", "NATURAL"})
+
+
 def _is_function_call(text: str, match_end: int) -> bool:
     """Whether a FROM/JOIN table reference opens an argument list, making
     it a set-returning function call rather than a plain table."""
@@ -610,6 +613,10 @@ def _sql_tables_and_aliases(text: str, global_tables: set[str], known_tenant_tab
 
     for item in _from_items(text):
         parts = item.split()
+        # The FROM item is cut at JOIN, so ``FROM fsma.a e LEFT JOIN ...``
+        # leaves the join type behind; it is never the alias.
+        while len(parts) > 1 and parts[-1].upper() in _JOIN_TYPE_WORDS:
+            parts.pop()
         if not parts:
             continue
         if "(" in parts[0]:
