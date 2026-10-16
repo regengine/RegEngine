@@ -1,0 +1,6 @@
+# DevOps notes — 2026-10-16
+
+- Added a POSIX `ignoreCommand` in `frontend/vercel.json`: skip `dependabot/*` and every non-production environment; build other production refs. The root `vercel.json` already skips every build and was left as is.
+- Config review found no invalid Vercel key or install mismatch: `npm ci` has a committed frontend lockfile, and `npm run build` runs `next build`. Legacy `version` and `env` keys are [supported but deprecated](https://vercel.com/docs/project-configuration/vercel-json).
+- `.nvmrc` pins Node 20 for CI, but the Vercel project's Node setting is unverified. `frontend/vercel.json` sets `REGENGINE_DEPLOY_MODE=cloud` for functions; `frontend/next.config.js` reads it during build and defaults to the same non-static mode if it is absent. Sentry's build plugin is conditional on environment variables. No specific production build failure is established without provider settings and build logs.
+- Risk: the Vercel project's Root Directory and exposure of `VERCEL_ENV` / `VERCEL_GIT_COMMIT_REF` are unverified. A repository-root project would use the root config and cancel production builds; missing `VERCEL_ENV` would also cancel them under the new command. Vercel [counts canceled builds as deployments](https://vercel.com/docs/project-configuration/project-settings#ignored-build-step). No deployment was run.
