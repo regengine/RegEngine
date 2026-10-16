@@ -1,6 +1,6 @@
 -- Read-only object inventory for apply_v128_fsma_rls.sql.
--- Run under the same search_path intended for APPLY so the unqualified
--- get_tenant_context() resolution is representative. PUBLIC is a pseudo-role.
+-- Check the public.get_tenant_context() function used by APPLY.
+-- PUBLIC is a pseudo-role.
 
 SELECT 'role' AS object_type, expected.name AS object_name,
        CASE WHEN expected.name = 'PUBLIC' THEN TRUE
@@ -18,7 +18,7 @@ ORDER BY expected.name;
 SELECT 'function' AS object_type, expected.signature AS object_name,
        p.oid IS NOT NULL AS "exists", n.nspname AS resolved_schema
 FROM (VALUES
-    ('get_tenant_context()'),
+    ('public.get_tenant_context()'),
     ('to_regclass(text)')
 ) AS expected(signature)
 LEFT JOIN pg_catalog.pg_proc p ON p.oid = pg_catalog.to_regprocedure(expected.signature)

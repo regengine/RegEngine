@@ -36,7 +36,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_canonical_entities_select_regengine ON fsma.canonical_entities
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -51,8 +51,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_canonical_entities ON fsma.canonical_entities
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -89,7 +89,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_cte_events_select_regengine ON fsma.cte_events
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -116,7 +116,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_cte_events_insert_regengine ON fsma.cte_events
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -143,7 +143,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_cte_events_delete_regengine ON fsma.cte_events
             FOR DELETE TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -158,8 +158,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_cte_events ON fsma.cte_events
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -196,7 +196,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_cte_kdes_select_regengine ON fsma.cte_kdes
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -223,7 +223,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_cte_kdes_insert_regengine ON fsma.cte_kdes
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -238,8 +238,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_cte_kdes ON fsma.cte_kdes
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -276,7 +276,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_entity_aliases_select_regengine ON fsma.entity_aliases
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -291,8 +291,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_entity_aliases ON fsma.entity_aliases
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -329,7 +329,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_cases_select_regengine ON fsma.exception_cases
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -356,7 +356,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_cases_insert_regengine ON fsma.exception_cases
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -383,7 +383,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_cases_update_regengine ON fsma.exception_cases
             FOR UPDATE TO regengine
-            USING (tenant_id = get_tenant_context()) WITH CHECK (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()) WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -398,8 +398,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_exception_cases ON fsma.exception_cases
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -436,7 +436,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_comments_select_regengine ON fsma.exception_comments
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -463,7 +463,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_comments_insert_regengine ON fsma.exception_comments
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -478,8 +478,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_exception_comments ON fsma.exception_comments
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -516,7 +516,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_signoffs_select_regengine ON fsma.exception_signoffs
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -543,7 +543,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_exception_signoffs_insert_regengine ON fsma.exception_signoffs
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -558,8 +558,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_exception_signoffs ON fsma.exception_signoffs
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -596,7 +596,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_fda_export_log_select_regengine ON fsma.fda_export_log
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -623,7 +623,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_fda_export_log_insert_regengine ON fsma.fda_export_log
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -638,8 +638,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_fda_export_log ON fsma.fda_export_log
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -676,7 +676,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_hash_chain_select_regengine ON fsma.hash_chain
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -703,7 +703,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_hash_chain_insert_regengine ON fsma.hash_chain
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -718,8 +718,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_hash_chain ON fsma.hash_chain
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -756,7 +756,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_identity_review_queue_select_regengine ON fsma.identity_review_queue
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -771,8 +771,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_identity_review_queue ON fsma.identity_review_queue
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -809,7 +809,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_ingestion_runs_select_regengine ON fsma.ingestion_runs
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -836,7 +836,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_ingestion_runs_insert_regengine ON fsma.ingestion_runs
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -863,7 +863,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_ingestion_runs_update_regengine ON fsma.ingestion_runs
             FOR UPDATE TO regengine
-            USING (tenant_id = get_tenant_context()) WITH CHECK (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text) WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -890,7 +890,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_ingestion_runs_select_regengine_sysadmin ON fsma.ingestion_runs
             FOR SELECT TO regengine_sysadmin
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -905,8 +905,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_ingestion_runs ON fsma.ingestion_runs
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -943,7 +943,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_request_cases_select_regengine ON fsma.request_cases
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -970,7 +970,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_request_cases_insert_regengine ON fsma.request_cases
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -997,7 +997,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_request_cases_update_regengine ON fsma.request_cases
             FOR UPDATE TO regengine
-            USING (tenant_id = get_tenant_context()) WITH CHECK (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()) WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1012,8 +1012,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_request_cases ON fsma.request_cases
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1050,7 +1050,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_request_signoffs_select_regengine ON fsma.request_signoffs
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1077,7 +1077,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_request_signoffs_insert_regengine ON fsma.request_signoffs
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1092,8 +1092,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_request_signoffs ON fsma.request_signoffs
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1130,7 +1130,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_response_packages_select_regengine ON fsma.response_packages
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1157,7 +1157,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_response_packages_insert_regengine ON fsma.response_packages
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1172,8 +1172,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_response_packages ON fsma.response_packages
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1210,7 +1210,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_rule_evaluations_select_regengine ON fsma.rule_evaluations
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1237,7 +1237,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_rule_evaluations_insert_regengine ON fsma.rule_evaluations
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1252,8 +1252,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_rule_evaluations ON fsma.rule_evaluations
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1290,7 +1290,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_submission_log_select_regengine ON fsma.submission_log
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1317,7 +1317,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_submission_log_insert_regengine ON fsma.submission_log
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context())
     $policy$;
 END IF;
 
@@ -1332,8 +1332,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_submission_log ON fsma.submission_log
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1370,7 +1370,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_tenant_suppliers_select_regengine ON fsma.tenant_suppliers
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -1385,8 +1385,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_tenant_suppliers ON fsma.tenant_suppliers
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1423,7 +1423,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_traceability_events_select_regengine ON fsma.traceability_events
             FOR SELECT TO regengine
-            USING (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -1450,7 +1450,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_traceability_events_insert_regengine ON fsma.traceability_events
             FOR INSERT TO regengine
-             WITH CHECK (tenant_id = get_tenant_context())
+             WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -1477,7 +1477,7 @@ IF NOT EXISTS (
     EXECUTE $policy$
         CREATE POLICY v128_traceability_events_update_regengine ON fsma.traceability_events
             FOR UPDATE TO regengine
-            USING (tenant_id = get_tenant_context()) WITH CHECK (tenant_id = get_tenant_context())
+            USING (tenant_id = public.get_tenant_context()::text) WITH CHECK (tenant_id = public.get_tenant_context()::text)
     $policy$;
 END IF;
 
@@ -1492,8 +1492,8 @@ END IF;
             EXECUTE $policy$
                 CREATE POLICY v128_client_guard_traceability_events ON fsma.traceability_events
                     AS RESTRICTIVE FOR ALL TO PUBLIC
-                    USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
-                    WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated'))
+                    USING ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
+                    WITH CHECK ((tenant_id = public.get_tenant_context()::text) AND current_user NOT IN ('anon', 'authenticated'))
             $policy$;
         END IF;
     END
@@ -1519,8 +1519,8 @@ BEGIN
         EXECUTE $policy$
             CREATE POLICY v128_client_guard_cte_kdes_backfill_log_v059 ON fsma.cte_kdes_backfill_log_v059
                 AS RESTRICTIVE FOR ALL TO PUBLIC
-                USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
-                WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                USING (current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                WITH CHECK (current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
         $policy$;
     END IF;
 END
@@ -1546,8 +1546,8 @@ BEGIN
         EXECUTE $policy$
             CREATE POLICY v128_client_guard_entity_merge_history ON fsma.entity_merge_history
                 AS RESTRICTIVE FOR ALL TO PUBLIC
-                USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
-                WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
         $policy$;
     END IF;
 END
@@ -1573,8 +1573,8 @@ BEGIN
         EXECUTE $policy$
             CREATE POLICY v128_client_guard_exception_attachments ON fsma.exception_attachments
                 AS RESTRICTIVE FOR ALL TO PUBLIC
-                USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
-                WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                USING ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                WITH CHECK ((tenant_id = public.get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
         $policy$;
     END IF;
 END
@@ -1600,8 +1600,8 @@ BEGIN
         EXECUTE $policy$
             CREATE POLICY v128_client_guard_key_data_elements ON fsma.key_data_elements
                 AS RESTRICTIVE FOR ALL TO PUBLIC
-                USING ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
-                WITH CHECK ((tenant_id = get_tenant_context()) AND current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                USING (current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
+                WITH CHECK (current_user NOT IN ('anon', 'authenticated', 'regengine', 'regengine_sysadmin'))
         $policy$;
     END IF;
 END

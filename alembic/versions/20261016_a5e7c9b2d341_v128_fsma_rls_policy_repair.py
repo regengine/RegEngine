@@ -1,4 +1,4 @@
-"""Restore runtime RLS policies on tenant-scoped FSMA tables.
+"""Restore runtime RLS policies on FSMA tables.
 
 The production catalog export showed 22 RLS-enabled tables without
 policies.  The v111 runtime ACL permits regengine on 18 of them and permits
@@ -55,16 +55,33 @@ _CLOSED_TABLES = (
     "exception_attachments",
     "key_data_elements",
 )
+_TENANTLESS_CLOSED_TABLES = frozenset({"cte_kdes_backfill_log_v059", "key_data_elements"})
 
 _TABLES = tuple(_RUNTIME_ACCESS) + _CLOSED_TABLES
-_TENANT = "tenant_id = get_tenant_context()"
+_TEXT_TENANT_TABLES = frozenset(
+    {
+        "cte_events",
+        "cte_kdes",
+        "fda_export_log",
+        "hash_chain",
+        "ingestion_runs",
+        "tenant_suppliers",
+        "traceability_events",
+    }
+)
 _COMMAND_CODES = {"SELECT": "r", "INSERT": "a", "UPDATE": "w", "DELETE": "d"}
+
+
+def _tenant_predicate(table: str) -> str:
+    cast = "::text" if table in _TEXT_TENANT_TABLES else ""
+    return f"tenant_id = public.get_tenant_context(){cast}"
 
 
 def _app_policy(table: str, command: str, role: str) -> str:
     name = f"v128_{table}_{command.lower()}_{role}"
-    using = f"USING ({_TENANT})" if command != "INSERT" else ""
-    check = f"WITH CHECK ({_TENANT})" if command in ("INSERT", "UPDATE") else ""
+    tenant = _tenant_predicate(table)
+    using = f"USING ({tenant})" if command != "INSERT" else ""
+    check = f"WITH CHECK ({tenant})" if command in ("INSERT", "UPDATE") else ""
     return f"""
         IF NOT EXISTS (
             SELECT 1 FROM pg_policy p
@@ -104,7 +121,9 @@ def upgrade() -> None:
             denied_roles += ["regengine", "regengine_sysadmin"]
         guard = f"v128_client_guard_{table}"
         role_check = "current_user NOT IN (" + ", ".join(f"'{role}'" for role in denied_roles) + ")"
-        predicate = f"({_TENANT}) AND {role_check}"
+        predicate = (
+            role_check if table in _TENANTLESS_CLOSED_TABLES else f"({_tenant_predicate(table)}) AND {role_check}"
+        )
         # v078 creates this quarantine log only when a legacy KDE conversion
         # is needed.  Every other listed table is required at this head.
         missing_table = (
