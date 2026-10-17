@@ -9,7 +9,8 @@ Cell values are kept verbatim, as they are for CSV: a value such as
 ``=HYPERLINK(...)`` stays plain text and is neutralized by ``sanitize_cell``
 wherever the data is exported back to a spreadsheet. Formula cells are read
 with ``data_only=True``, so only the value Excel last computed is used and
-the formula itself is never carried over.
+the formula itself is never carried over. Formula cells without a saved
+computed value are reported as warnings.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ MAX_XLSX_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 # Empty rows are skipped but still cost a loop turn; a sheet whose rows sit
 # far apart must not make us walk a million blank rows.
 _MAX_XLSX_SCAN_ROWS = 20_000
+_MAX_UNCACHED_FORMULA_CELLS_LISTED = 20
 
 _UNSUPPORTED_DETAIL = (
     "Legacy .xls and macro-enabled Excel files (.xlsm, .xlsb) are not supported. "
@@ -92,8 +94,8 @@ def cell_to_text(value: object) -> str:
     return str(value)
 
 
-def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_data_rows: int) -> str:
-    """Convert workbook bytes to CSV text for ``parse_csv_rows``.
+def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_data_rows: int) -> tuple[str, list[str]]:
+    """Convert workbook bytes to CSV text and report formulas without cached values.
 
     Reads the first worksheet, or ``sheet_name`` when given (400 if it does
     not exist). Fully empty rows are skipped and the first non-empty row is
@@ -116,9 +118,13 @@ def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_da
 
     from openpyxl import load_workbook
 
+    workbook = None
     try:
         workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        formula_workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
     except Exception as exc:  # openpyxl raises many types for malformed packages
+        if workbook is not None:
+            workbook.close()
         raise HTTPException(status_code=400, detail=_INVALID_DETAIL) from exc
     try:
         if sheet_name is not None:
@@ -130,18 +136,37 @@ def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_da
             sheet = workbook[sheet_name]
         else:
             sheet = workbook.worksheets[0]
+        formula_sheet = formula_workbook[sheet.title]
 
         out = io.StringIO()
         writer = csv.writer(out, lineterminator="\n")
         emitted = 0
+        headers: Optional[list[str]] = None
+        uncached_formulas: list[str] = []
+        uncached_count = 0
         try:
-            rows = sheet.iter_rows(max_col=MAX_XLSX_COLUMNS + 1, values_only=True)
-            for scanned, row in enumerate(rows, start=1):
+            rows = sheet.iter_rows(max_col=MAX_XLSX_COLUMNS + 1)
+            formula_rows = formula_sheet.iter_rows(max_col=MAX_XLSX_COLUMNS + 1)
+            for scanned, (row, formula_row) in enumerate(zip(rows, formula_rows), start=1):
                 if scanned > _MAX_XLSX_SCAN_ROWS:
                     break
-                cells = [cell_to_text(value) for value in row]
+                cells = [cell_to_text(cell.value) for cell in row]
                 while cells and not cells[-1].strip():
                     cells.pop()
+                if cells and headers is None:
+                    headers = cells
+                for column, (cached_cell, formula_cell) in enumerate(zip(row, formula_row), start=1):
+                    formula_value = formula_cell.value
+                    if cached_cell.value is None and (
+                        formula_cell.data_type == "f"
+                        or isinstance(formula_value, str) and formula_value.startswith("=")
+                    ):
+                        uncached_count += 1
+                        if len(uncached_formulas) < _MAX_UNCACHED_FORMULA_CELLS_LISTED:
+                            location = f"{sheet.title}!{formula_cell.coordinate}"
+                            if headers and column <= len(headers) and headers[column - 1]:
+                                location += f" ({headers[column - 1][:80]})"
+                            uncached_formulas.append(location)
                 if not cells:
                     continue
                 if len(cells) > MAX_XLSX_COLUMNS:
@@ -157,6 +182,17 @@ def xlsx_to_csv_text(content: bytes, *, sheet_name: Optional[str] = None, max_da
             raise
         except Exception as exc:
             raise HTTPException(status_code=400, detail=_INVALID_DETAIL) from exc
-        return out.getvalue()
+        warnings = []
+        if uncached_count:
+            extra = uncached_count - len(uncached_formulas)
+            suffix = f", and {extra} more" if extra else ""
+            warnings.append(
+                "Excel formula cells have no cached values: "
+                + ", ".join(uncached_formulas)
+                + suffix
+                + ". Recalculate and save the workbook, then upload it again."
+            )
+        return out.getvalue(), warnings
     finally:
         workbook.close()
+        formula_workbook.close()

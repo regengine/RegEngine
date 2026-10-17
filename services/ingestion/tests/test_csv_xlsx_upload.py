@@ -10,6 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import sys
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -249,6 +251,89 @@ class TestRejectedFiles:
 
 class TestFormulaSafety:
     PAYLOAD = '=HYPERLINK("http://evil.example","click")'
+
+    def test_formula_without_cached_value_warns_with_cell_and_header(self, client, captured):
+        row = list(XLSX_ROWS[0])
+        row[7] = "=1+1"
+        resp = _post(client, XLSX_NAME, _xlsx_bytes({"Log": [HEADER, row]}), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["accepted"] == 1
+        warnings = resp.json()["kde_warnings"]
+        assert any("Log!H2" in warning and "reference_document" in warning for warning in warnings)
+        assert resp.json()["kde_warning_count"] == len(warnings)
+
+    def test_plain_values_have_no_formula_warning(self, client, captured):
+        resp = _post(client, XLSX_NAME, _xlsx_bytes({"Log": [HEADER, XLSX_ROWS[0]]}), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 200, resp.text
+        assert not any("formula" in warning.lower() for warning in resp.json()["kde_warnings"])
+
+    def test_formula_with_cached_value_has_no_formula_warning(self, client, captured):
+        row = list(XLSX_ROWS[0])
+        row[7] = "=1+1"
+        body = _xlsx_bytes({"Log": [HEADER, row]})
+        cached = io.BytesIO()
+        namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        with zipfile.ZipFile(io.BytesIO(body)) as source, zipfile.ZipFile(cached, "w") as output:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == "xl/worksheets/sheet1.xml":
+                    root = ET.fromstring(data)
+                    cell = root.find(".//s:c[@r='H2']", namespace)
+                    assert cell is not None
+                    value = cell.find("s:v", namespace)
+                    assert value is not None
+                    value.text = "2"
+                    data = ET.tostring(root, encoding="utf-8")
+                output.writestr(item, data)
+
+        resp = _post(client, XLSX_NAME, cached.getvalue(), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 200, resp.text
+        assert not any("formula" in warning.lower() for warning in resp.json()["kde_warnings"])
+        assert captured["payload"].events[0].kdes["reference_document"] == "2"
+
+    def test_required_formula_without_cache_is_reported_on_invalid_rows(self, client, captured):
+        row = list(XLSX_ROWS[0])
+        row[3] = "=5*2"
+        resp = _post(client, XLSX_NAME, _xlsx_bytes({"Log": [HEADER, row]}), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert any("Log!D2" in warning and "quantity" in warning for warning in detail["kde_warnings"])
+        assert any("quantity is required" in error for error in detail["errors"])
+        assert "payload" not in captured
+
+    def test_formula_only_sheet_reports_warning_without_data_rows(self, client, captured):
+        resp = _post(client, XLSX_NAME, _xlsx_bytes({"Log": [["=1+1"]]}), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        assert detail["message"] == "CSV contained no data rows"
+        assert any("Log!A1" in warning for warning in detail["kde_warnings"])
+        assert "payload" not in captured
+
+    def test_formula_warning_lists_at_most_twenty_cells(self, client, captured):
+        header = [*HEADER, *(f"extra_{index}" for index in range(22))]
+        row = [*XLSX_ROWS[0], *(["=1+1"] * 22)]
+        resp = _post(client, XLSX_NAME, _xlsx_bytes({"Log": [header, row]}), XLSX_CONTENT_TYPE)
+
+        assert resp.status_code == 200, resp.text
+        formula_warnings = [warning for warning in resp.json()["kde_warnings"] if "formula" in warning.lower()]
+        assert len(formula_warnings) == 1
+        assert "Log!AB2" in formula_warnings[0]
+        assert "Log!AC2" not in formula_warnings[0]
+        assert "and 2 more" in formula_warnings[0]
+
+    def test_formula_on_unselected_sheet_does_not_warn(self, client, captured):
+        other_row = list(XLSX_ROWS[0])
+        other_row[7] = "=1+1"
+        body = _xlsx_bytes({"Other": [HEADER, other_row], "Log": [HEADER, XLSX_ROWS[0]]})
+        resp = _post(client, XLSX_NAME, body, XLSX_CONTENT_TYPE, sheet_name="Log")
+
+        assert resp.status_code == 200, resp.text
+        assert not any("formula" in warning.lower() for warning in resp.json()["kde_warnings"])
 
     def test_formula_text_matches_csv_and_is_neutralized(self, client, captured):
         csv_row = ["harvesting", "TLC-1", self.PAYLOAD, "10", "lbs", "2026-04-17", "Farm A", "REF-1"]

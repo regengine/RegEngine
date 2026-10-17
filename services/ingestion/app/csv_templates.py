@@ -1422,8 +1422,11 @@ async def ingest_csv(
     content = await read_upload_with_limit(
         file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Excel file" if is_xlsx_name else "CSV file"
     )
+    xlsx_warnings: list[str] = []
     if is_xlsx_upload(file.filename, file.content_type, content):
-        text = await run_in_threadpool(xlsx_to_csv_text, content, sheet_name=sheet_name, max_data_rows=MAX_CSV_ROWS)
+        text, xlsx_warnings = await run_in_threadpool(
+            xlsx_to_csv_text, content, sheet_name=sheet_name, max_data_rows=MAX_CSV_ROWS
+        )
         if source == "csv_upload":
             # Record the real format in the ingestion run's source_system.
             source = "xlsx_upload"
@@ -1459,9 +1462,13 @@ async def ingest_csv(
     events, parse_errors, kde_warnings = parse_csv_rows(
         text, fallback_cte, header_mapping=header_mapping.applied_mapping
     )
+    kde_warnings.extend(xlsx_warnings)
 
     if not events and parse_errors:
         detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+        if xlsx_warnings:
+            detail["kde_warnings"] = kde_warnings
+            detail["kde_warning_count"] = len(kde_warnings)
         suggestion = _cte_type_suggestion_result(file_cte)
         if suggestion is not None:
             # The uploader can re-upload with this CTE in one step.
@@ -1474,6 +1481,15 @@ async def ingest_csv(
             ]
         raise HTTPException(status_code=400, detail=detail)
     if not events:
+        if xlsx_warnings:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "CSV contained no data rows",
+                    "kde_warnings": kde_warnings,
+                    "kde_warning_count": len(kde_warnings),
+                },
+            )
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
 
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
@@ -1528,7 +1544,7 @@ async def ingest_csv(
 
     if kde_warnings:
         logger.warning(
-            "csv_ingest_kde_warnings: %d events with missing KDEs: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
+            "csv_ingest_kde_warnings: %d warnings: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
         )
 
     logger.info(
