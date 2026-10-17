@@ -53,6 +53,7 @@ from .config import get_settings
 from .shared.csv_safety import sanitize_cell
 from .shared.tenant_resolution import resolve_principal_tenant_id
 from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
+from .shared.xlsx_rows import is_xlsx_upload, reject_unsupported_excel, xlsx_to_csv_text
 from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
@@ -1388,7 +1389,8 @@ def _cte_type_suggestion_result(
     description=(
         "Parse a CSV file, validate rows, and persist CTE events to the database. "
         "Supports single-type files (pass cte_type) or mixed-type files with a "
-        "cte_type/event_type column per row."
+        "cte_type/event_type column per row. An Excel .xlsx workbook is also "
+        "accepted and read like the same data saved as CSV (first sheet, or sheet_name)."
     ),
 )
 async def ingest_csv(
@@ -1396,6 +1398,7 @@ async def ingest_csv(
     cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
     source: str = Form("csv_upload", description="Source identifier"),
     tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+    sheet_name: Optional[str] = Form(None, description="Worksheet to read from an .xlsx upload (default: first sheet)"),
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -1412,15 +1415,26 @@ async def ingest_csv(
 
     tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
-    # Read and parse CSV
-    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
-    try:
-        text = content.decode("utf-8-sig")  # Handle BOM
-    except UnicodeDecodeError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
-        ) from exc
+    # Read and parse CSV. An .xlsx workbook is converted to the same CSV
+    # text first, so everything below treats both formats alike.
+    reject_unsupported_excel(file.filename, file.content_type)
+    is_xlsx_name = is_xlsx_upload(file.filename, None)
+    content = await read_upload_with_limit(
+        file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Excel file" if is_xlsx_name else "CSV file"
+    )
+    if is_xlsx_upload(file.filename, file.content_type, content):
+        text = await run_in_threadpool(xlsx_to_csv_text, content, sheet_name=sheet_name, max_data_rows=MAX_CSV_ROWS)
+        if source == "csv_upload":
+            # Record the real format in the ingestion run's source_system.
+            source = "xlsx_upload"
+    else:
+        try:
+            text = content.decode("utf-8-sig")  # Handle BOM
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
+            ) from exc
     file_cte: Optional[CteClassificationResult] = None
     if fallback_cte is None:
         # Independent questions over the same upload: ask both at once.
