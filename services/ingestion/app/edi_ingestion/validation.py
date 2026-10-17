@@ -5,9 +5,22 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from .utils import _parse_edi_date_digits, _valid_gln_or_none
 
 logger = logging.getLogger("edi-ingestion")
+
+
+class _WarehouseLineRequiredKDEs(BaseModel):
+    """Lot and positive quantity required on each 944 or 945 line.
+
+    The failure is a pydantic ValidationError so the document route can
+    use the same strict and advisory rejection path as the other sets.
+    """
+
+    lot_number: str = Field(min_length=1)
+    quantity: float = Field(gt=0)
 
 
 def _validate_edi_as_fsma_event(
@@ -33,8 +46,29 @@ def _validate_edi_as_fsma_event(
         "850": FSMAEventType.SHIPPING,
         "810": FSMAEventType.SHIPPING,
         "861": FSMAEventType.RECEIVING,
+        "944": FSMAEventType.RECEIVING,
+        "945": FSMAEventType.SHIPPING,
     }
     fsma_type = type_map.get(transaction_set, FSMAEventType.SHIPPING)
+
+    if transaction_set in ("944", "945"):
+        line = _WarehouseLineRequiredKDEs(
+            lot_number=extracted.get("lot_number"),
+            quantity=extracted.get("quantity"),
+        )
+        tlc = line.lot_number
+        # Follow the shared EDI schema TLC rule; originator lot versus
+        # GTIN-prefixed TLC remains a founder decision (#1104).
+        try:
+            FSMAEvent.validate_tlc_format(tlc)
+        except ValueError:
+            for item_id, lengths in (
+                (extracted.get("gtin"), (8, 12, 13, 14)),
+                (extracted.get("upc"), (12, 13)),
+            ):
+                if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
+                    tlc = f"{item_id.zfill(14)}-{line.lot_number}"
+                    break
 
     # Resolve location GLN from whichever field is available
     location_gln = (
@@ -67,6 +101,8 @@ def _validate_edi_as_fsma_event(
         "850": "EDI_850",
         "810": "EDI_810",
         "861": "EDI_861",
+        "944": "EDI_944",
+        "945": "EDI_945",
     }
 
     fsma_event = FSMAEvent(

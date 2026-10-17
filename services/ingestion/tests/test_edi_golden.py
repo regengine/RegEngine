@@ -85,6 +85,8 @@ _FIXTURES = {
     "po_850": "850",
     "invoice_810": "810",
     "receiving_861": "861",
+    "receipt_944": "944",
+    "advice_945": "945",
 }
 
 # #2976: fixture stem -> the transaction set every ST/SE pair carries.
@@ -320,20 +322,20 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
         captured_payload["payload"] = payload
-        event = payload.events[0]
         return IngestResponse(
-            accepted=1,
+            accepted=len(payload.events),
             rejected=0,
-            total=1,
+            total=len(payload.events),
             events=[
                 EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
                     status="accepted",
-                    event_id="evt-edi-golden",
+                    event_id=f"evt-edi-golden-{index}",
                     sha256_hash="hash-1",
                     chain_hash="chain-1",
                 )
+                for index, event in enumerate(payload.events, start=1)
             ],
         )
 
@@ -397,6 +399,22 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "location_gln": "6141410000069",  # receiving_location_gln
         "event_date": "2026-03-12",  # receive_date_raw
     },
+    "receipt_944": {
+        "cte_type": "receiving",
+        "quantity": 10.0,
+        "unit_of_measure": "cases",  # W07 "CA"
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # warehouse GLN
+        "event_date": "2026-03-18",  # W17 date, not G62
+    },
+    "advice_945": {
+        "cte_type": "shipping",
+        "quantity": 10.0,  # W1203 shipped, not W1202 ordered
+        "unit_of_measure": "cases",
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # ship-from warehouse GLN
+        "event_date": "2026-03-19",  # W06 date, not G62
+    },
 }
 
 
@@ -408,12 +426,15 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     output to persisted FSMA KDEs for all four sets — not just 856.
     """
     raw = (_CORPUS_DIR / f"{name}.edi").read_bytes()
+    data = {
+        "traceability_lot_code": _VALID_FSMA_TLC,
+        "tenant_id": TEST_TENANT_ID,
+    }
+    if name in ("receipt_944", "advice_945"):
+        data["tlc_source_reference"] = "Packinghouse Assigner"
     response = client.post(
         "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
+        data=data,
         files={"file": (f"{name}.edi", raw, "application/edi-x12")},
         headers={"X-Partner-ID": "WALMART"},
     )
@@ -421,6 +442,16 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     body = response.json()
     assert body["document_type"] == f"X12_{_FIXTURES[name]}"
     assert body["extracted"]["fsma_validation_status"] == "passed"
+    if name in ("receipt_944", "advice_945"):
+        assert body["extracted"]["event_count"] == 3
+        assert body["ingestion_result"]["total"] == len(body["ingestion_result"]["events"]) == 3
+        assert [event.traceability_lot_code for event in captured_payload["payload"].events] == [
+            "00012345678905-A",
+            "00012345678912-B",
+            "00012345678929-C",
+        ]
+        assert [event.quantity for event in captured_payload["payload"].events] == [10.0, 20.0, 30.0]
+        assert [event.unit_of_measure for event in captured_payload["payload"].events] == ["cases", "cases", "each"]
 
     payload = captured_payload["payload"]
     assert payload.tenant_id == TEST_TENANT_ID

@@ -1,6 +1,6 @@
 # ============================================================
 # UNSAFE ZONE: This file (1043 lines) mixes EDI X12 segment
-# parsing (856/850/810/861), field mapping, CTE normalization,
+# parsing (856/850/810/861/944/945), field mapping, CTE normalization,
 # and validation in a single module. Fragile string parsing of
 # EDI segments — changes to segment mapping risk silent data
 # corruption in ingested events.
@@ -14,6 +14,8 @@ events through the existing webhook ingestion pipeline. Supports:
   - 850 (Purchase Order)
   - 810 (Invoice)
   - 861 (Receiving Advice)
+  - 944 (Warehouse Stock Transfer Receipt Advice)
+  - 945 (Warehouse Shipping Advice)
 
 Extracts shipment details, product identifiers, quantities, and locations
 relevant to FSMA Critical Tracking Events.
@@ -41,6 +43,7 @@ from ..webhook_models import (
 )
 from .constants import (
     _CTE_TYPE_BY_SET,
+    _QUANTITY_ELEMENT_INDEX_BY_SET,
     _QUANTITY_SEGMENT_BY_SET,
     _REQUIRED_856_SEGMENTS,
     _REQUIRED_SEGMENTS_BY_SET,
@@ -643,12 +646,17 @@ def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -
     all" (leave today's behaviour alone) apart from "a quantity element
     was sent but is zero or non-numeric" (fail closed rather than let
     ``_safe_float``'s 1.0 fallback fabricate a KDE).
+
+    The quantity element is not at index 2 on every set. 944 reads W0701
+    (quantity received). 945 reads W1203 (units shipped, not ordered).
     """
     wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
     if not wanted:
         return False
+    index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
     return any(
-        segment and segment[0].upper() == wanted and len(segment) > 2 and segment[2].strip() for segment in segments
+        segment and segment[0].upper() == wanted and len(segment) > index and bool(segment[index].strip())
+        for segment in segments
     )
 
 
@@ -726,13 +734,13 @@ def _build_ingest_event_for_set(
     # Resolve location (varies by document type)
     location_name = location_override
     location_gln = None
-    if transaction_set in ("856", "850"):
+    if transaction_set in ("856", "850", "945"):
         location_name = location_name or extracted.get("ship_from_name") or extracted.get("seller_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("ship_from_gln") or extracted.get("seller_gln"))
     elif transaction_set == "810":
         location_name = location_name or extracted.get("seller_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("seller_gln"))
-    elif transaction_set == "861":
+    elif transaction_set in ("861", "944"):
         location_name = location_name or extracted.get("receiving_location_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("receiving_location_gln"))
 
@@ -742,12 +750,17 @@ def _build_ingest_event_for_set(
         "850": ("po_date_raw", None),
         "810": ("invoice_date_raw", None),
         "861": ("receive_date_raw", None),
+        "944": ("receive_date_raw", None),
+        "945": ("ship_date_raw", None),
     }
     date_field, time_field = date_field_map.get(transaction_set, (None, None))
-    timestamp, event_date = _ship_timestamp_and_date(
-        extracted.get(date_field) if date_field else None,
-        extracted.get(time_field) if time_field else None,
-    )
+    if transaction_set in ("944", "945") and extracted.get("_event_timestamp"):
+        timestamp, event_date = extracted["_event_timestamp"], extracted["_event_date"]
+    else:
+        timestamp, event_date = _ship_timestamp_and_date(
+            extracted.get(date_field) if date_field else None,
+            extracted.get(time_field) if time_field else None,
+        )
 
     # Build KDEs
     kdes: dict[str, Any] = {
@@ -808,6 +821,80 @@ def _build_ingest_event_for_set(
                 "condition_code": extracted.get("condition_code"),
             }
         )
+    elif transaction_set == "944":
+        kdes.update(
+            {
+                "receiving_advice_number": extracted.get("warehouse_receipt_number"),
+                "po_number": extracted.get("po_number"),
+                "ship_from_location": extracted.get("ship_from_name"),
+                "receiving_location": extracted.get("receiving_location_name"),
+                "receiving_location_gln": extracted.get("receiving_location_gln"),
+                "lot_number": extracted.get("lot_number"),
+                "warehouse_name": extracted.get("warehouse_name"),
+                "warehouse_id": extracted.get("warehouse_id"),
+                "depositor_name": extracted.get("depositor_name"),
+                "depositor_id": extracted.get("depositor_id"),
+                "gtin": extracted.get("gtin"),
+                "upc": extracted.get("upc"),
+            }
+        )
+    elif transaction_set == "945":
+        kdes.update(
+            {
+                "ship_from_location": extracted.get("ship_from_name"),
+                "ship_to_location": extracted.get("ship_to_name"),
+                "ship_from_gln": extracted.get("ship_from_gln"),
+                "ship_to_gln": extracted.get("ship_to_gln"),
+                "lot_number": extracted.get("lot_number"),
+                "warehouse_name": extracted.get("warehouse_name"),
+                "depositor_name": extracted.get("depositor_name"),
+                "depositor_id": extracted.get("depositor_id"),
+                "po_number": extracted.get("po_number"),
+                "gtin": extracted.get("gtin"),
+                "upc": extracted.get("upc"),
+                "shipment_id": extracted.get("shipment_id"),
+                "quantity_ordered": extracted.get("quantity_ordered"),
+            }
+        )
+
+    if transaction_set in ("944", "945"):
+        kdes.update(
+            {
+                "edi_line_index": extracted.get("edi_line_index"),
+                "edi_isa_receiver_id": extracted.get("isa_receiver_id"),
+                "edi_gs_receiver_id": extracted.get("gs_receiver_id"),
+                "reporting_code": extracted.get("reporting_code"),
+                "depositor_order_number": extracted.get("depositor_order_number"),
+                "shipment_id": extracted.get("shipment_id"),
+                "agent_shipment_id": extracted.get("agent_shipment_id"),
+                "warehouse_receipt_number": extracted.get("warehouse_receipt_number"),
+                "warehouse_name": extracted.get("warehouse_name"),
+                "warehouse_id": extracted.get("warehouse_id"),
+                "warehouse_id_qualifier": extracted.get("warehouse_id_qualifier"),
+                "warehouse_gln": extracted.get("warehouse_gln"),
+                "depositor_name": extracted.get("depositor_name"),
+                "depositor_id": extracted.get("depositor_id"),
+                "depositor_id_qualifier": extracted.get("depositor_id_qualifier"),
+                "ship_from_gln": extracted.get("ship_from_gln"),
+                "ship_to_location": extracted.get("ship_to_name"),
+                "ship_to_gln": extracted.get("ship_to_gln"),
+                "bill_of_lading": extracted.get("bill_of_lading"),
+                "reference_numbers": dict(extracted.get("reference_numbers") or {}),
+                "g62_date_raw": extracted.get("g62_date_raw"),
+                "g62_date_qualifier": extracted.get("g62_date_qualifier"),
+                "receive_date_raw": extracted.get("receive_date_raw"),
+                "ship_date_raw": extracted.get("ship_date_raw"),
+                "reference_document": extracted.get("reference_document_number"),
+                "tlc_source_reference": extracted.get("tlc_source_reference"),
+            }
+        )
+        if transaction_set == "944":
+            kdes["receive_date"] = event_date
+            kdes["immediate_previous_source"] = extracted.get("ship_from_name") or extracted.get("ship_from_gln")
+        else:
+            kdes["ship_date"] = event_date
+        if extracted.get("depositor_gln"):
+            kdes["depositor_gln"] = extracted["depositor_gln"]
 
     return IngestEvent(
         cte_type=cte_type,
@@ -826,16 +913,22 @@ def _build_ingest_event_for_set(
     "/document",
     response_model=EDIIngestResponse,
     status_code=201,
-    summary="Ingest X12 EDI document (856/850/810/861)",
+    summary="Ingest X12 EDI document (856/850/810/861/944/945)",
     description=(
         "Unified EDI inbound route that auto-detects the transaction set "
-        "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice) "
+        "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice, "
+        "944 Warehouse Stock Transfer Receipt Advice, "
+        "945 Warehouse Shipping Advice) "
         "and extracts FSMA-relevant KDEs for CTE creation."
     ),
 )
 async def ingest_edi_document(
     file: UploadFile = File(..., description="X12 EDI file"),
-    traceability_lot_code: str = Form(..., description="FSMA Traceability Lot Code"),
+    traceability_lot_code: str = Form(
+        ...,
+        description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
+    ),
+    tlc_source_reference: Optional[str] = Form(None, description="Optional TLC source reference copied to 944/945 KDEs"),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -956,10 +1049,46 @@ async def ingest_edi_document(
 
     extracted = extractions[0]
 
-    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup. Run once
-    # per interchange — the envelope is shared by every slice, and
-    # re-running it would 409 the interchange against its own first set.
+    # #1160 + #1165: validate and reserve the shared envelope once per
+    # document, before validating any transaction set or warehouse line.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
+
+    # Warehouse transaction sets carry one CTE per W07/W12 line. Keep
+    # ST/SE extraction and envelope handling at document scope, then copy
+    # the shared fields onto each line before validation or persistence.
+    event_inputs: list[tuple[str, dict[str, Any], list[list[str]]]] = []
+    first_event_indexes: list[int] = []
+    for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices):
+        first_event_indexes.append(len(event_inputs))
+        if slice_set in ("944", "945"):
+            header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
+            header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
+            date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
+            header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(header.get(date_field), None)
+            # A header with no item segment still follows the same FSMA
+            # validation/rejection path as a line missing its quantity.
+            lines = slice_extracted["line_items"] or [{"quantity": None, "lot_number": None}]
+            for line in lines:
+                event_inputs.append(
+                    (
+                        slice_set,
+                        {
+                            **header,
+                            **line,
+                            "edi_line_index": len(event_inputs) + 1,
+                            # LT identifies one lot, so a header LT cannot
+                            # be copied as a reference for unrelated lines.
+                            "reference_numbers": {
+                                key: value
+                                for key, value in header["reference_numbers"].items()
+                                if key != "LT" or value == line.get("lot_number")
+                            },
+                        },
+                        slice_segments,
+                    )
+                )
+        else:
+            event_inputs.append((slice_set, slice_extracted, slice_segments))
 
     # #1174: FSMA validation is fail-closed by default. A schema failure
     # returns HTTP 422 with per-field errors and nothing is persisted.
@@ -976,23 +1105,26 @@ async def ingest_edi_document(
     # whole interchange stays out of the canonical stream — a batch must
     # not half-land.
     rejection_record: dict[str, Any] | None = None
-    for slice_set, slice_extracted in zip(slice_sets, extractions):
+    for slice_set, slice_extracted, _ in event_inputs:
         try:
-            _validate_edi_as_fsma_event(
+            validated = _validate_edi_as_fsma_event(
                 slice_extracted,
                 slice_set,
                 traceability_lot_code,
                 sender_tenant_id,
             )
+            if slice_set in ("944", "945"):
+                slice_extracted["traceability_lot_code"] = validated["tlc"]
             slice_extracted["fsma_validation_status"] = "passed"
         except ValidationError as ve:
+            errors = ve.errors(include_context=False) if slice_set in ("944", "945") else ve.errors()
             strict_effective = strict and _edi_strict_mode()
             if strict_effective:
                 logger.warning(
                     "edi_fsma_validation_rejected set=%s tlc=%s errors=%d",
                     slice_set,
                     traceability_lot_code,
-                    len(ve.errors()),
+                    len(errors),
                 )
                 # Record on the strict path too — the canonical stream is
                 # untouched either way, but auditors still need the trail.
@@ -1000,7 +1132,7 @@ async def ingest_edi_document(
                     tenant_id=sender_tenant_id,
                     transaction_set=slice_set,
                     traceability_lot_code=traceability_lot_code,
-                    errors=ve.errors(),
+                    errors=errors,
                     extracted=slice_extracted,
                     partner_id=x_partner_id,
                     source=source,
@@ -1018,7 +1150,7 @@ async def ingest_edi_document(
                             "windows — failed rows are written to the EDI "
                             "rejection log, never the canonical FSMA stream."
                         ),
-                        "errors": ve.errors(),
+                        "errors": errors,
                     },
                 )
             # Advisory mode: record the rejection separately and short-
@@ -1031,18 +1163,23 @@ async def ingest_edi_document(
                 tenant_id=sender_tenant_id,
                 transaction_set=slice_set,
                 traceability_lot_code=traceability_lot_code,
-                errors=ve.errors(),
+                errors=errors,
                 extracted=slice_extracted,
                 partner_id=x_partner_id,
                 source=source,
             )
             rejection_record = rejection_record or recorded
         except ImportError:
+            if slice_set in ("944", "945"):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Warehouse line validation is unavailable; no events were persisted.",
+                )
             logger.debug("shared.schemas not available — skipping FSMA validation")
             slice_extracted["fsma_validation_status"] = "unknown"
 
     def _summarize(slice_set: str, slice_extracted: dict[str, Any]) -> dict[str, Any]:
-        return {
+        summary = {
             "transaction_set": slice_set,
             "control_number": slice_extracted.get("control_number"),
             "quantity": slice_extracted.get("quantity"),
@@ -1051,14 +1188,29 @@ async def ingest_edi_document(
             "reference_document_number": slice_extracted.get("reference_document_number"),
             "fsma_validation_status": slice_extracted.get("fsma_validation_status"),
         }
+        if slice_set in ("944", "945"):
+            summary.update(
+                line_index=slice_extracted.get("edi_line_index"),
+                traceability_lot_code=slice_extracted.get("traceability_lot_code"),
+                lot_number=slice_extracted.get("lot_number"),
+                gtin=slice_extracted.get("gtin"),
+                upc=slice_extracted.get("upc"),
+            )
+            if slice_set == "945":
+                summary["quantity_ordered"] = slice_extracted.get("quantity_ordered")
+        return summary
 
-    summaries = [_summarize(slice_set, slice_extracted) for slice_set, slice_extracted in zip(slice_sets, extractions)]
+    summaries = [_summarize(slice_set, item) for slice_set, item, _ in event_inputs]
     # Keep the first set's fields at the top level for callers written
     # against the single-transaction-set response, and expose the full
     # batch alongside them (#2976).
     extracted_summary: dict[str, Any] = dict(summaries[0])
-    extracted_summary["transaction_set_count"] = len(summaries)
-    extracted_summary["transaction_sets"] = summaries
+    extracted_summary["transaction_set_count"] = len(slice_sets)
+    extracted_summary["transaction_sets"] = [summaries[index] for index in first_event_indexes]
+    if transaction_set in ("944", "945"):
+        extracted_summary["event_count"] = len(summaries)
+        extracted_summary["events"] = summaries
+        extracted_summary["submitted_traceability_lot_code"] = traceability_lot_code
 
     if rejection_record is not None:
         # Rejected in advisory mode: respond 201 (document was accepted
@@ -1123,18 +1275,40 @@ async def ingest_edi_document(
                 },
             )
 
+    if transaction_set in ("944", "945") and len(event_inputs) > len(slice_sets):
+        supplied_overrides = [
+            name
+            for name, value in (
+                ("product_description", product_description),
+                ("quantity_override", quantity_override),
+                ("unit_of_measure_override", unit_of_measure_override),
+                ("location_override", location_override),
+            )
+            if value is not None
+        ]
+        if supplied_overrides:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "edi_overrides_with_multiple_line_items",
+                    "message": "Field overrides cannot apply to multiple warehouse lines. Resubmit without overrides.",
+                    "overrides": supplied_overrides,
+                    "event_count": len(event_inputs),
+                },
+            )
+
     events = [
         _build_ingest_event_for_set(
             transaction_set=slice_set,
             extracted=slice_extracted,
-            traceability_lot_code=traceability_lot_code,
+            traceability_lot_code=slice_extracted.get("traceability_lot_code", traceability_lot_code),
             product_description_override=product_description,
             quantity_override=quantity_override,
             unit_override=unit_of_measure_override,
             location_override=location_override,
             segments=slice_segments,
         )
-        for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices)
+        for slice_set, slice_extracted, slice_segments in event_inputs
     ]
 
     payload = WebhookPayload(
@@ -1152,7 +1326,7 @@ async def ingest_edi_document(
         document_type=f"X12_{transaction_set}",
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
-        traceability_lot_code=traceability_lot_code,
+        traceability_lot_code=events[0].traceability_lot_code if transaction_set in ("944", "945") else traceability_lot_code,
         extracted=extracted_summary,
         ingestion_result=ingestion_result,
     )
