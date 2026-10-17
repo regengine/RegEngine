@@ -243,14 +243,11 @@ export function CTEMapperClient() {
             <FSMAToolShell
                 config={CTE_MAPPER_CONFIG}
                 renderResults={renderResults}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('cte_mapped', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('cte_mapped', {
+                        tool_id: CTE_MAPPER_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 

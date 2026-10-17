@@ -11,6 +11,7 @@ import { Callout } from '@/components/ui/callout';
 import { Card, CardContent } from '@/components/ui/card';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
 interface Requirement {
     id: string;
@@ -139,6 +140,13 @@ export default function NoticeValidatorPage() {
         </Callout>
     );
 
+    const runCheck = () => {
+        if (!noticeText.trim()) return;
+        trackToolRunStarted('notice-validator');
+        setHasAnalyzed(true);
+        trackToolRunCompleted('notice-validator', 'success');
+    };
+
     return (
         <EmailGate toolName="notice-validator">
         <div className="min-h-screen bg-re-surface-base py-6 sm:py-8">
@@ -196,7 +204,7 @@ export default function NoticeValidatorPage() {
                             <Button
                                 type="button"
                                 size="lg"
-                                onClick={() => setHasAnalyzed(Boolean(noticeText.trim()))}
+                                onClick={runCheck}
                                 disabled={!noticeText.trim()}
                                 trailingIcon={<ArrowRight aria-hidden="true" strokeWidth={1.75} />}
                             >

@@ -12,6 +12,14 @@ import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { getConversionAttribution, trackBookCallClick, trackContactFormSubmit } from '@/lib/conversion-events';
+
+function contactErrorCode(status: number): 'validation' | 'rate_limited' | 'unavailable' | 'server' {
+  if (status === 400 || status === 422) return 'validation';
+  if (status === 429) return 'rate_limited';
+  if (status === 503) return 'unavailable';
+  return 'server';
+}
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', company: '', message: '', website: '' });
@@ -27,12 +35,18 @@ export default function ContactPage() {
       const res = await fetchWithCsrf('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, ...getConversionAttribution() }),
       });
-      if (!res.ok) throw new Error(`API responded ${res.status}`);
+      if (!res.ok) {
+        trackContactFormSubmit('error', contactErrorCode(res.status));
+        setStatus('error');
+        return;
+      }
+      trackContactFormSubmit('success');
       setStatus('success');
       setForm({ name: '', email: '', company: '', message: '', website: '' });
     } catch {
+      trackContactFormSubmit('error', 'server');
       setStatus('error');
     }
   };
@@ -57,6 +71,7 @@ export default function ContactPage() {
           <Button asChild variant="secondary" size="lg" className="shrink-0">
             <a
               href="https://calendly.com/regengine/fsma-strategy-session"
+              onClick={() => trackBookCallClick('contact_page')}
               target="_blank"
               rel="noopener noreferrer"
             >

@@ -7,6 +7,8 @@ import type {
   IngestURLRequest,
   IngestURLResponse,
   IngestCSVResponse,
+  EpcisIngestResponse,
+  EpcisValidateResponse,
   ComplianceChecklist,
   Industry,
   TenantResponse,
@@ -498,6 +500,61 @@ class APIClient {
       }
       throw error;
     }
+  }
+
+  // EPCIS 2.0 ingestion. All calls go through the same-origin Next.js
+  // ingestion proxy as the CSV upload, with the API key carried the same
+  // way (X-RegEngine-API-Key header unless the cookie-managed placeholder
+  // is in use, in which case the proxy reads the cookie).
+  async ingestEpcisEvent(apiKey: string | null | undefined, event: Record<string, unknown>): Promise<EpcisIngestResponse> {
+    const response = await this.ingestionClient.post<EpcisIngestResponse>(
+      '/api/v1/epcis/events',
+      event,
+      {
+        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+        timeout: 120000,
+      },
+    );
+    return response.data;
+  }
+
+  async ingestEpcisBatch(apiKey: string | null | undefined, events: Record<string, unknown>[]): Promise<EpcisIngestResponse> {
+    const response = await this.ingestionClient.post<EpcisIngestResponse>(
+      '/api/v1/epcis/events/batch',
+      { events },
+      {
+        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+        timeout: 300000,
+      },
+    );
+    return response.data;
+  }
+
+  async ingestEpcisXml(apiKey: string | null | undefined, xml: string): Promise<EpcisIngestResponse> {
+    const response = await this.ingestionClient.post<EpcisIngestResponse>(
+      '/api/v1/epcis/events/xml',
+      xml,
+      {
+        headers: {
+          ...credentialHeader('X-RegEngine-API-Key', apiKey),
+          'Content-Type': 'application/xml',
+        },
+        timeout: 300000,
+      },
+    );
+    return response.data;
+  }
+
+  async validateEpcisEvent(apiKey: string | null | undefined, event: Record<string, unknown>): Promise<EpcisValidateResponse> {
+    const response = await this.ingestionClient.post<EpcisValidateResponse>(
+      '/api/v1/epcis/validate',
+      event,
+      {
+        headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+        timeout: 120000,
+      },
+    );
+    return response.data;
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {

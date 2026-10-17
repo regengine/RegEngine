@@ -8,13 +8,12 @@ import { usePostHog } from '@/lib/posthog-provider';
 // other surface that wanted it. It is now one component shared with /sandbox.
 import { SandboxResultView, type SandboxResult } from '@/components/marketing/sandbox-grid/SandboxResultView';
 
-export function SharedSandboxResult({ result, shareId }: { result: SandboxResult; shareId: string }) {
+export function SharedSandboxResult({ result }: { result: SandboxResult; shareId: string }) {
   const posthog = usePostHog();
 
   // Track share link views
   useEffect(() => {
     posthog.capture('SANDBOX_SHARE_VIEWED', {
-      share_id: shareId,
       total_events: result.total_events,
       compliant_events: result.compliant_events,
       non_compliant_events: result.non_compliant_events,

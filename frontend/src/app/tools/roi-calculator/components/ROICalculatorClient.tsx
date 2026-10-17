@@ -3,6 +3,7 @@
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ROI_CALCULATOR_CONFIG, calculateROI } from '@/lib/roi-calculator-data';
 import { usePostHog } from '@/lib/posthog-provider';
+import { trackBookCallClick } from '@/lib/conversion-events';
 import { Card, CardContent } from '@/components/ui/card';
 import { Callout } from '@/components/ui/callout';
 import { Container } from '@/components/layout/container';
@@ -73,6 +74,7 @@ export function ROICalculatorClient() {
                             href="https://calendly.com/regengine/fsma-strategy-session"
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => trackBookCallClick('roi_calculator', 'roi-calculator')}
                             className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand"
                         >
                             Book a call
@@ -115,14 +117,11 @@ export function ROICalculatorClient() {
                 <FSMAToolShell
                     config={ROI_CALCULATOR_CONFIG}
                     renderResults={renderResults}
-                    onLeadCapture={(lead) => {
-                        if (lead.email) {
-                            posthog?.capture('roi_calculated', {
-                                email: lead.email,
-                                answers: lead.answers
-                            });
-                            posthog?.identify(lead.email, { email: lead.email });
-                        }
+                    onLeadCapture={() => {
+                        posthog?.capture('roi_calculated', {
+                            tool_id: ROI_CALCULATOR_CONFIG.id,
+                            lead_captured: true
+                        });
                     }}
                 />
 
