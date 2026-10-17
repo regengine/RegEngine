@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { BookCallLink } from '@/components/conversion/BookCallLink';
 import {
     Check,
     X,
@@ -776,9 +777,9 @@ HTTP 201
                             </Link>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
-                            <Link href="/contact">
+                            <BookCallLink href="/contact" placement="why_regengine">
                                 Talk to Us
-                            </Link>
+                            </BookCallLink>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
                             <Link href="/pricing">

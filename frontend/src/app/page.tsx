@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
 import {
   ArrowRight,
@@ -218,7 +219,7 @@ export default function HomePage() {
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/contact">Book a 30-min call</Link>
+              <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
             </Button>
           </div>
           <MetricRail />

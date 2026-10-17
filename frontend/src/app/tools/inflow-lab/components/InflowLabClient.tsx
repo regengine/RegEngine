@@ -39,6 +39,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { trackToolRunCompleted, trackToolRunStarted } from "@/lib/conversion-events";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
@@ -1001,6 +1002,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     };
 
     const runPipeline = async () => {
+        trackToolRunStarted("inflow-lab");
         setIsBusy(true);
         setRunStage("generating");
         setActiveTab(primaryTab);
@@ -1023,9 +1025,11 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             await inflowJson("/api/simulate/stop", { method: "POST" });
             await refreshService();
             setRunStage("complete");
+            trackToolRunCompleted("inflow-lab", "success");
         } catch (error) {
             setServiceError(error instanceof Error ? error.message : "Could not run Inflow Lab pipeline");
             setRunStage("loaded");
+            trackToolRunCompleted("inflow-lab", "error");
         } finally {
             setIsBusy(false);
         }
@@ -1059,6 +1063,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             return;
         }
 
+        trackToolRunStarted("inflow-lab");
         setIsFeederEvaluating(true);
         setFeederError(null);
         try {
@@ -1122,8 +1127,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                         : "Workbench preview unavailable"
                 );
             }
+            trackToolRunCompleted("inflow-lab", "success");
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
+            trackToolRunCompleted("inflow-lab", "error");
         } finally {
             setIsFeederEvaluating(false);
         }

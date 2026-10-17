@@ -1,6 +1,7 @@
 'use client';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 import { useState } from 'react';
 import { Zap, ArrowRight, AlertTriangle, Check, Database } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -377,6 +378,8 @@ function AskPageContent() {
     const finalQuery = q || query;
     if (!finalQuery.trim()) return;
 
+    trackToolRunStarted('ask');
+    let outcome: 'success' | 'error' = 'error';
     setIsLoading(true);
     setNlpError(null);
     setIsLiveResult(false);
@@ -404,20 +407,25 @@ function AskPageContent() {
           })),
         });
         setIsLiveResult(true);
+        outcome = 'success';
       } else if (response.status === 503) {
         // NLP service not configured — fall back to local stub with a notice.
         setNlpError('NLP service not configured — showing simulated results.');
         setResult(parseQuery(finalQuery));
+        outcome = 'success';
       } else {
         const errData = await response.json().catch(() => ({}));
         setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'} — showing simulated results.`);
         setResult(parseQuery(finalQuery));
+        outcome = 'success';
       }
     } catch (err) {
       setNlpError(`Could not reach NLP service: ${String(err)} — showing simulated results.`);
       setResult(parseQuery(finalQuery));
+      outcome = 'success';
     } finally {
       setIsLoading(false);
+      trackToolRunCompleted('ask', outcome);
     }
   };
 

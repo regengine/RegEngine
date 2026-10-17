@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tutorial } from "@/components/ui/tutorial";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { trackToolRunCompleted, trackToolRunStarted } from "@/lib/conversion-events";
 import { useAuth } from "@/lib/auth-context";
 import { hasPermission } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant-context";
@@ -988,6 +989,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         if (csvOverride !== undefined) {
             setFeederCsv(csvOverride);
         }
+        if (previewMode) trackToolRunStarted("inflow-lab-dashboard-preview");
         setIsFeederEvaluating(true);
         setIsRunning(true);
         setFeederError(null);
@@ -1037,8 +1039,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     /* authenticated readiness preview is best-effort */
                 }
             }
+            if (previewMode) trackToolRunCompleted("inflow-lab-dashboard-preview", "success");
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
+            if (previewMode) trackToolRunCompleted("inflow-lab-dashboard-preview", "error");
         } finally {
             setIsFeederEvaluating(false);
             setIsRunning(false);

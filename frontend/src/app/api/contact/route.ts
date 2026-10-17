@@ -23,6 +23,14 @@ interface ContactPayload {
   // Honeypot — humans never see or fill this; bots that auto-fill every field
   // trip it. Rendered as a visually-hidden input by the contact form.
   website?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+}
+
+function utmValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  return value.trim().toLowerCase().slice(0, 100) || null;
 }
 
 // Pragmatic email regex — rejects obvious garbage, accepts anything that
@@ -103,6 +111,9 @@ export async function POST(request: Request) {
     email,
     company,
     message,
+    utm_source: utmValue(payload.utm_source),
+    utm_medium: utmValue(payload.utm_medium),
+    utm_campaign: utmValue(payload.utm_campaign),
   };
 
   // Never write contact content or identity to platform logs. The provider is

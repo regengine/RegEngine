@@ -73,7 +73,7 @@ async def test_confirm_code_token_carries_24_hour_exp(tvr, monkeypatch):
     import jwt as pyjwt
 
     async def _ok(_email, _code):
-        return True, ""
+        return True, "", {}
 
     monkeypatch.setattr(tvr, "_check_code", _ok)
     monkeypatch.setattr(tvr, "_save_lead", lambda *a, **k: None)
