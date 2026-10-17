@@ -1,7 +1,7 @@
 """Add campaign attribution to verified tool leads (v131).
 
 Revision ID: 0a329588b824
-Revises: a5e7c9b2d341
+Revises: 93eb33f262a1
 Create Date: 2026-10-16
 
 origin/main currently has two Alembic heads: a5e7c9b2d341 and the held v129
@@ -14,7 +14,7 @@ moves v129 to alembic/held.
 from alembic import op
 
 revision = "0a329588b824"  # pragma: allowlist secret
-down_revision = "a5e7c9b2d341"  # pragma: allowlist secret
+down_revision = "93eb33f262a1"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

@@ -7203,6 +7203,18 @@
         "nullable": true,
         "type": "text"
       },
+      "utm_campaign": {
+        "nullable": true,
+        "type": "varchar(100)"
+      },
+      "utm_medium": {
+        "nullable": true,
+        "type": "varchar(100)"
+      },
+      "utm_source": {
+        "nullable": true,
+        "type": "varchar(100)"
+      },
       "verified_at": {
         "nullable": false,
         "type": "timestamp"
