@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
 import { usePostHog } from '@/lib/posthog-provider';
+import { trackBookCallClick, trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
@@ -42,11 +43,20 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [showLeadGate, setShowLeadGate] = useState(false);
     const [email, setEmail] = useState('');
+    const runStarted = useRef(false);
+    const runCompleted = useRef(false);
 
     const questions = config.stages.questions;
     const progress = ((currentStep + 1) / questions.length) * 100;
     const posthog = usePostHog();
     const searchParams = useSearchParams();
+
+    useEffect(() => {
+        if (status === 'RESULTS' && runStarted.current && !runCompleted.current) {
+            runCompleted.current = true;
+            trackToolRunCompleted(config.id, 'success');
+        }
+    }, [status, config.id]);
 
     const utmParams = useMemo(() => ({
         utm_source: searchParams.get('utm_source'),
@@ -92,6 +102,8 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         if (currentStep > 0) {
             setCurrentStep(prev => prev - 1);
         } else {
+            runStarted.current = false;
+            runCompleted.current = false;
             setStatus('START');
         }
     };
@@ -173,6 +185,10 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                             className="w-full"
                             trailingIcon={<ChevronRight strokeWidth={1.75} aria-hidden="true" />}
                             onClick={() => {
+                                if (!runStarted.current) {
+                                    runStarted.current = true;
+                                    trackToolRunStarted(config.id);
+                                }
                                 setStatus('QUESTIONS');
                                 trackToolEvent('TOOL_START');
                             }}
@@ -356,6 +372,8 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
 
                         <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-re-border-subtle pt-6">
                             <Button variant="secondary" onClick={() => {
+                                runStarted.current = false;
+                                runCompleted.current = false;
                                 setStatus('START');
                                 setAnswers({});
                                 setCurrentStep(0);
@@ -368,6 +386,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                                 <Button
                                     onClick={() => {
                                         trackToolEvent('DEMO_CLICK');
+                                        trackBookCallClick('tool_shell', config.id);
                                         window.open(CALENDLY_LINK, '_blank', 'noopener,noreferrer');
                                     }}
                                 >

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangle, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { trackToolRunStarted, trackToolRunCompleted } from "@/lib/conversion-events";
 
 // ── Lazy-loaded recharts ──
 type RechartsModule = typeof import("recharts");
@@ -178,8 +179,15 @@ export function AnomalyDetectionSimulator() {
     const [selectedHour, setSelectedHour] = useState<string | null>(null);
     const [fpCost, setFpCost] = useState(800);
     const [fnCost, setFnCost] = useState(50000);
+    const reseedPendingRef = useRef(false);
 
     const dataset = useMemo(() => generateSyntheticColdChain(seed, 90), [seed]);
+    useEffect(() => {
+        if (reseedPendingRef.current) {
+            reseedPendingRef.current = false;
+            trackToolRunCompleted('fsma-unified', 'success');
+        }
+    }, [dataset]);
     const det = useMemo(() => detectAnomalies(dataset.points, mode, sensitivity / 100), [dataset.points, mode, sensitivity]);
     const conf = useMemo(() => confusionMatrix(dataset.points, det.flaggedHours), [dataset.points, det.flaggedHours]);
     const rec = useMemo(() => costRec(conf, fpCost, fnCost), [conf, fpCost, fnCost]);
@@ -245,7 +253,13 @@ export function AnomalyDetectionSimulator() {
                             <SelectItem value="pattern">Pattern (drift)</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="secondary" leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />} onClick={() => { setSeed(s => (s + 1) % 10000); setSelectedHour(null); }}>Reseed</Button>
+                    <Button variant="secondary" leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />} onClick={() => {
+                        if (reseedPendingRef.current) return;
+                        reseedPendingRef.current = true;
+                        trackToolRunStarted('fsma-unified');
+                        setSeed(s => (s + 1) % 10000);
+                        setSelectedHour(null);
+                    }}>Reseed</Button>
                 </div>
             </div>
 

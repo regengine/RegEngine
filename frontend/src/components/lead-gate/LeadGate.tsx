@@ -12,6 +12,11 @@ import { Field } from '@/components/ui/field';
 import { fieldControlClasses } from '@/components/ui/field-control';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit } from '@/lib/conversion-events';
+
+function leadErrorCode(error?: string): 'validation' | 'server' {
+    return error?.includes('required') || error?.includes('valid email') ? 'validation' : 'server';
+}
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Props                                                        */
@@ -74,13 +79,13 @@ export function LeadGate({
     // render without breaking SSR.
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const params = new URLSearchParams(window.location.search);
+        const attribution = getConversionAttribution();
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setUtmParams({
-            utmSource: params.get('utm_source') || '',
-            utmMedium: params.get('utm_medium') || '',
-            utmCampaign: params.get('utm_campaign') || '',
-            referrer: document.referrer || '',
+            utmSource: attribution.utm_source || '',
+            utmMedium: attribution.utm_medium || '',
+            utmCampaign: attribution.utm_campaign || '',
+            referrer: getReferrerHostname(),
         });
     }, []);
 
@@ -122,14 +127,24 @@ export function LeadGate({
                 ...utmParams,
             };
 
-            const result = await submitAssessment(data);
+            let result;
+            try {
+                result = await submitAssessment(data);
+            } catch {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'error', error_code: 'server' });
+                setError('Something went wrong.');
+                setSubmitting(false);
+                return;
+            }
             setSubmitting(false);
 
             if (!result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'error', error_code: leadErrorCode(result.error) });
                 setError(result.error || 'Something went wrong.');
                 return;
             }
 
+            trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'success' });
             // Persist a non-PII flag so returning visitors bypass the gate
             try { localStorage.setItem('re_lead_captured', '1'); } catch {}
             setGateData(data);
@@ -156,12 +171,26 @@ export function LeadGate({
                 productCategories: fd.get('productCategories') as string,
             };
 
-            await submitAssessment(enrichData);
+            let result;
+            try {
+                result = await submitAssessment(enrichData);
+            } catch {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'error', error_code: 'server' });
+                setSubmitting(false);
+                setStep('done');
+                onUnlock?.();
+                return;
+            }
+            if (result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'success' });
+            } else {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'error', error_code: leadErrorCode(result.error) });
+            }
             setSubmitting(false);
             setStep('done');
             onUnlock?.();
         },
-        [gateData, onUnlock],
+        [gateData, onUnlock, source],
     );
 
     const skipEnrichment = useCallback(() => {

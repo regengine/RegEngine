@@ -36,6 +36,7 @@ import {
     type ColumnSuggestion,
 } from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
+import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -157,12 +158,14 @@ export function DataImportClient() {
     // mounted and clickable for a moment after a click: state alone cannot stop
     // a second click from storing the same file twice.
     const uploadInFlightRef = useRef(false);
+    const sampleInFlightRef = useRef(false);
 
     // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
     // confirming the CTE Jev suggested for a file the server rejected.
     const handleUpload = useCallback(async (cteType?: string) => {
         if (!selectedFile || uploadInFlightRef.current) return;
         uploadInFlightRef.current = true;
+        trackToolRunStarted('data-import');
         setUploadState('uploading');
         setUploadResult(null);
         try {
@@ -170,6 +173,7 @@ export function DataImportClient() {
             const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub', cteType);
             setUploadResult({ data: result });
             setUploadState(result.accepted === 0 ? 'error' : result.rejected > 0 ? 'partial' : 'success');
+            trackToolRunCompleted('data-import', result.accepted === 0 ? 'error' : 'success');
         } catch (err: unknown) {
             setUploadResult({
                 error: err instanceof Error ? err.message : 'Upload failed',
@@ -178,6 +182,7 @@ export function DataImportClient() {
                 columnSuggestions: columnSuggestionsFromUploadError(err),
             });
             setUploadState('error');
+            trackToolRunCompleted('data-import', 'error');
         } finally {
             uploadInFlightRef.current = false;
         }
@@ -191,6 +196,9 @@ export function DataImportClient() {
     }, [handleFileChange]);
 
     const handleLoadSample = useCallback(async () => {
+        if (sampleInFlightRef.current) return;
+        sampleInFlightRef.current = true;
+        trackToolRunStarted('data-import');
         setSampleState('running');
         setSampleSteps([]);
 
@@ -240,11 +248,15 @@ export function DataImportClient() {
             );
 
             setSampleState(result.accepted > 0 ? 'done' : 'error');
+            trackToolRunCompleted('data-import', result.accepted > 0 ? 'success' : 'error');
         } catch (err: unknown) {
             const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
             const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Webhook ingest failed';
             addStep('Batch ingest', false, msg);
             setSampleState('error');
+            trackToolRunCompleted('data-import', 'error');
+        } finally {
+            sampleInFlightRef.current = false;
         }
     }, [apiKey]);
 
