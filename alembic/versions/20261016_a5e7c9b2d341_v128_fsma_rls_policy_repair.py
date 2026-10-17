@@ -186,9 +186,9 @@ def upgrade() -> None:
             if table == "cte_kdes_backfill_log_v059"
             else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
-        declare, set_cast = "", ""
+        declare, set_cast = "DECLARE previous_lock_timeout text := current_setting('lock_timeout');", ""
         if table in _TEXT_TENANT_TABLES:
-            declare = "DECLARE tenant_cast text;"
+            declare += " tenant_cast text;"
             set_cast = f"""
                 SELECT CASE WHEN atttypid = 'uuid'::regtype THEN '()' ELSE '()::text' END
                 INTO tenant_cast FROM pg_attribute
@@ -216,7 +216,7 @@ def upgrade() -> None:
                     SELECT 1 FROM pg_policy
                     WHERE polrelid = 'fsma.{table}'::regclass
                       AND polname = '{guard}'
-                ) THEN
+                ){guard_reaches} THEN
                     {_execute(table, guard_sql)}
                 END IF;
                 {restore_lock_timeout}
