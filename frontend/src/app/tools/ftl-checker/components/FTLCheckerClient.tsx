@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { usePostHog } from '@/lib/posthog-provider';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,6 +47,7 @@ import { Container } from '@/components/layout/container';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit, trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 /** Selected/unselected row recipe shared by the pick lists (SPEC §4). */
 const pickClasses = (selected: boolean) =>
@@ -460,6 +461,8 @@ export function FTLCheckerClient() {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState<'All' | 'Seafood' | 'Produce' | 'Dairy' | 'Eggs' | 'Other'>('All');
     const { toast } = useToast();
+    const runStarted = useRef(false);
+    const runCompleted = useRef(false);
 
     // Hydrate state from URL on initial load
     useEffect(() => {
@@ -481,6 +484,13 @@ export function FTLCheckerClient() {
             }
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (currentStep === 'results' && runStarted.current && !runCompleted.current) {
+            runCompleted.current = true;
+            trackToolRunCompleted('ftl-checker', 'success');
+        }
+    }, [currentStep]);
 
     // Generate shareable URL
     const getShareableUrl = () => {
@@ -538,6 +548,14 @@ export function FTLCheckerClient() {
 
     const handleCheck = () => {
         if (selectedCategories.length > 0) {
+            if (runCompleted.current) {
+                runStarted.current = false;
+                runCompleted.current = false;
+            }
+            if (!runStarted.current) {
+                runStarted.current = true;
+                trackToolRunStarted('ftl-checker');
+            }
             const hasCoveredCategories = FTL_CATEGORIES.filter(c => selectedCategories.includes(c.id)).some(c => c.covered);
             if (hasCoveredCategories) {
                 setCurrentStep('exemptions');
@@ -551,7 +569,7 @@ export function FTLCheckerClient() {
     const handleSkipExemptions = () => { setCurrentStep('results'); setShowResults(true); };
     const handleFinishExemptions = () => { setCurrentStep('results'); setShowResults(true); };
     const handleBackToCategories = () => { setCurrentStep('categories'); setExemptionAnswers({}); };
-    const handleStartOver = () => { setSelectedCategories([]); setExemptionAnswers({}); setCurrentStep('categories'); setShowResults(false); setEmailSubmitted(false); };
+    const handleStartOver = () => { runStarted.current = false; runCompleted.current = false; setSelectedCategories([]); setExemptionAnswers({}); setCurrentStep('categories'); setShowResults(false); setEmailSubmitted(false); };
 
     const handleEmailSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -569,18 +587,33 @@ export function FTLCheckerClient() {
 
             // Persist lead to assessment_submissions so it survives without PostHog access.
             // Fire-and-forget: UI transitions optimistically, errors logged but not surfaced.
+            const { utm_source, utm_medium, utm_campaign } = getConversionAttribution();
             submitAssessment({
                 name: email.split('@')[0],
                 email,
                 company: 'Unknown (FTL Checker)',
                 role: '',
                 source: 'ftl-checker',
+                utmSource: utm_source,
+                utmMedium: utm_medium,
+                utmCampaign: utm_campaign,
+                referrer: getReferrerHostname(),
                 toolInputs: {
                     selectedCategories,
                     coveredCount: results.coveredCount,
                     riskLevel: results.coveredCount > 0 ? 'HIGH' : 'LOW',
                 },
+            }).then((result) => {
+                if (result.success) {
+                    trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'success' });
+                } else {
+                    trackEmailCaptureSubmit({
+                        form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'error',
+                        error_code: result.error?.includes('valid email') ? 'validation' : 'server',
+                    });
+                }
             }).catch(() => {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'error', error_code: 'server' });
                 console.error('[ftl-checker] submitAssessment failed');
             });
 

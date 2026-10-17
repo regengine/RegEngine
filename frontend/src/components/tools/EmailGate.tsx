@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { getConversionAttribution, trackEmailCaptureSubmit } from '@/lib/conversion-events';
+
+function verificationErrorCode(status: number): 'validation' | 'rate_limited' | 'server' {
+    if (status === 400 || status === 422) return 'validation';
+    if (status === 429) return 'rate_limited';
+    return 'server';
+}
 
 interface EmailGateProps {
     toolName: string;
@@ -123,18 +130,22 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                         email: email.trim(),
                         tool_name: toolName,
                         source_url: window.location.href,
+                        ...getConversionAttribution(),
                     }),
                 });
 
                 const data = await res.json();
                 if (!res.ok) {
+                    trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'error', error_code: verificationErrorCode(res.status) });
                     setError(data.error || 'Something went wrong. Please try again.');
                     return;
                 }
 
+                trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'success' });
                 setStep('code');
                 setResendCountdown(30);
             } catch {
+                trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'error', error_code: 'server' });
                 setError('Network error. Please check your connection.');
             } finally {
                 setLoading(false);
@@ -162,15 +173,18 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                 });
 
                 const data = await res.json();
-                if (!res.ok) {
+                if (!res.ok || data.status !== 'verified') {
+                    trackEmailCaptureSubmit({ form: 'email_gate', step: 'confirm', tool: toolName, outcome: 'error', error_code: verificationErrorCode(res.status) });
                     setError(data.error || 'Invalid code. Please try again.');
                     setCode('');
                     codeInputRef.current?.focus();
                     return;
                 }
 
+                trackEmailCaptureSubmit({ form: 'email_gate', step: 'confirm', tool: toolName, outcome: 'success' });
                 setStep('verified');
             } catch {
+                trackEmailCaptureSubmit({ form: 'email_gate', step: 'confirm', tool: toolName, outcome: 'error', error_code: 'server' });
                 setError('Network error. Please check your connection.');
             } finally {
                 setLoading(false);
@@ -201,18 +215,22 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                     action: 'verify',
                     email: email.trim(),
                     tool_name: toolName,
+                    ...getConversionAttribution(),
                 }),
             });
 
             if (!res.ok) {
+                trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'error', error_code: verificationErrorCode(res.status) });
                 const data = await res.json();
                 setError(data.error || 'Failed to resend code.');
                 return;
             }
 
+            trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'success' });
             setResendCountdown(30);
             setCode('');
         } catch {
+            trackEmailCaptureSubmit({ form: 'email_gate', step: 'verify', tool: toolName, outcome: 'error', error_code: 'server' });
             setError('Network error.');
         } finally {
             setLoading(false);

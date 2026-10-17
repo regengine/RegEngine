@@ -10,10 +10,11 @@ import { Callout } from '@/components/ui/callout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StatTile } from '@/components/ui/stat-tile';
-import Link from 'next/link';
+import { BookCallLink } from '@/components/conversion/BookCallLink';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 import { submitAssessment, AssessmentFormData } from '@/app/actions/submit-assessment';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit } from '@/lib/conversion-events';
 
 const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
     id: 'records-request-checklist',
@@ -156,6 +157,7 @@ export function RecordsRequestChecklistClient() {
         setSubmitting(true);
         setSubmitError('');
         const formData = new FormData(e.currentTarget);
+        const attribution = getConversionAttribution();
         const data: AssessmentFormData = {
             name: formData.get('name') as string,
             email: formData.get('email') as string,
@@ -163,19 +165,34 @@ export function RecordsRequestChecklistClient() {
             role: formData.get('role') as string || 'Unknown',
             phone: formData.get('phone') as string || '',
             source: 'records-request-checklist',
+            utmSource: attribution.utm_source,
+            utmMedium: attribution.utm_medium,
+            utmCampaign: attribution.utm_campaign,
+            referrer: getReferrerHostname(),
             toolInputs: {
                 score: lastScore.score,
                 grade: lastScore.grade,
                 answers: lastAnswers
             }
         };
-        const result = await submitAssessment(data);
-        if (result.success) {
-            setLeadSubmitted(true);
-        } else {
-            setSubmitError(result.error || 'Submission failed. Please try again.');
+        try {
+            const result = await submitAssessment(data);
+            if (result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'success' });
+                setLeadSubmitted(true);
+            } else {
+                trackEmailCaptureSubmit({
+                    form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'error',
+                    error_code: result.error?.includes('valid email') ? 'validation' : 'server',
+                });
+                setSubmitError(result.error || 'Submission failed. Please try again.');
+            }
+        } catch {
+            trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'error', error_code: 'server' });
+            setSubmitError('Submission failed. Please try again.');
+        } finally {
+            setSubmitting(false);
         }
-        setSubmitting(false);
     };
 
     const renderResults = (answers: Record<string, any>) => {
@@ -253,10 +270,10 @@ export function RecordsRequestChecklistClient() {
                             </p>
                             <div className="mt-4">
                                 <Button asChild variant="secondary" size="sm">
-                                    <Link href="/contact">
+                                    <BookCallLink href="/contact" placement="records_request_checklist" tool="records-request-checklist">
                                         Book a 30-min Call
                                         <ArrowRight aria-hidden="true" size={16} strokeWidth={1.75} className="ml-2" />
-                                    </Link>
+                                    </BookCallLink>
                                 </Button>
                             </div>
                         </Callout>

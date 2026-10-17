@@ -10,6 +10,7 @@ V111 = ROOT / "alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.p
 V128 = ROOT / "alembic/versions/20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py"
 APPLY = ROOT / "sql/prod-apply/apply_v128_fsma_rls.sql"
 PRECHECK = ROOT / "sql/prod-apply/PRECHECK_v128_fsma_rls.sql"
+DATABASE = ROOT / "services/shared/database.py"
 TEXT_TENANT_TABLES = {
     "cte_events",
     "cte_kdes",
@@ -45,7 +46,7 @@ def _tenant_predicate(table: str) -> str:
 def test_policy_scope_matches_runtime_acl() -> None:
     grants = _load(V111)
     repair = _load(V128)
-    assert repair.down_revision == "ed902d03df45"
+    assert repair.down_revision == "ed902d03df45"  # pragma: allowlist secret
     assert len(repair._TABLES) == 22
     assert len(repair._RUNTIME_ACCESS) == 18
     for table, operations in repair._RUNTIME_ACCESS.items():
@@ -67,7 +68,11 @@ def test_upgrade_denies_client_roles_and_limits_runtime_commands() -> None:
     for table, sql in zip(repair._TABLES, statements, strict=True):
         tenant = _tenant_predicate(table)
         if table == "cte_kdes_backfill_log_v059":
-            assert re.search(r"IF to_regclass\('fsma.cte_kdes_backfill_log_v059'\) IS NULL THEN\s+RETURN;", sql)
+            assert re.search(
+                r"IF to_regclass\('fsma.cte_kdes_backfill_log_v059'\) IS NULL THEN\s+"
+                r"PERFORM set_config\('lock_timeout', previous_lock_timeout, true\); RETURN;",
+                sql,
+            )
         else:
             assert f"Expected fsma.{table} at v128" in sql
         assert f"CREATE POLICY v128_client_guard_{table}" in sql
@@ -94,6 +99,38 @@ def test_upgrade_denies_client_roles_and_limits_runtime_commands() -> None:
     assert "FOR SELECT TO regengine_sysadmin" in statements[repair._TABLES.index("ingestion_runs")]
     assert "FOR DELETE TO regengine" in statements[repair._TABLES.index("cte_events")]
     assert "FOR DELETE TO regengine" not in statements[repair._TABLES.index("hash_chain")]
+
+
+def test_canary_table_guard_requires_a_permissive_policy_reaching_a_denied_role() -> None:
+    repair = _load(V128)
+    canary_sql = DATABASE.read_text().split('_RUNTIME_CUTOVER_CANARY_SQL = """', 1)[1].split('"""', 1)[0]
+    fingerprinted = set(re.findall(r"\('fsma', '(\w+)'\)", canary_sql))
+    # Frozen when v128 shipped. A later canary relation gets its fingerprint
+    # from the migrated catalog; it is not a reason to edit v128.
+    assert fingerprinted & set(repair._TABLES) == repair._CANARY_TABLES == {"ingestion_runs"}
+    for table, sql in zip(repair._TABLES, _sql(repair, "upgrade"), strict=True):
+        condition = sql.split(f"AND polname = 'v128_client_guard_{table}'", 1)[1]
+        condition = condition.split(f"CREATE POLICY v128_client_guard_{table}", 1)[0]
+        if table in repair._CANARY_TABLES:
+            assert "AND p.polpermissive" in condition
+            assert "0::oid = ANY(p.polroles)" in condition
+            assert "d.rolname IN ('anon', 'authenticated')" in condition
+            assert "pg_has_role(d.oid, t.role_oid, 'USAGE')" in condition
+        else:
+            assert re.fullmatch(r"\s*\) THEN\s+EXECUTE (?:replace\()?\$policy\$\s*", condition)
+
+
+def test_upgrade_bounds_lock_waits_and_restores_the_setting() -> None:
+    repair = _load(V128)
+    restore = "PERFORM set_config('lock_timeout', previous_lock_timeout, true);"
+    for table, sql in zip(repair._TABLES, _sql(repair, "upgrade"), strict=True):
+        assert "previous_lock_timeout text := current_setting('lock_timeout');" in sql
+        head, _, tail = sql.partition("PERFORM set_config('lock_timeout', '10s', true);")
+        assert tail, table
+        assert "CREATE POLICY" not in head
+        # The quarantine log may be absent; its early RETURN restores first.
+        assert sql.count(restore) == (2 if table == "cte_kdes_backfill_log_v059" else 1)
+        assert tail.rstrip().endswith(f"{restore}\n            END\n            $repair$;")
 
 
 def test_tenant_predicates_match_column_types_in_migration_and_apply_sql() -> None:
