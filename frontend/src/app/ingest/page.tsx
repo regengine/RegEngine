@@ -703,6 +703,9 @@ export default function IngestPage() {
                               </div>
                             </label>
                           </div>
+                          <p className="text-small text-re-text-tertiary">
+                            CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.
+                          </p>
                           <div className="mt-1">
                             <Button variant="link" size="sm" asChild>
                               <a href="/samples/sample_epcis_2.0.json" download>

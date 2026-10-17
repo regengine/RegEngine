@@ -77,6 +77,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
 
   it('offers an EPCIS 2.0 tab with a JSON/XML chooser and the sample file link', async () => {
     await openEpcisTab();
+    expect(screen.getByText('CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.')).toBeInTheDocument();
     expect(document.getElementById('epcis-file-upload')).toHaveAttribute(
       'accept',
       '.json,application/json,.xml,application/xml,text/xml',
