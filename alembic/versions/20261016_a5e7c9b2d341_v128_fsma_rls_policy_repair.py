@@ -77,11 +77,29 @@ def _tenant_predicate(table: str) -> str:
     return f"tenant_id = public.get_tenant_context(){cast}"
 
 
+def _execute(table: str, statement: str) -> str:
+    # The production catalog stores tenant_id as text on _TEXT_TENANT_TABLES,
+    # but a database built by this alembic chain stores uuid there.  On a uuid
+    # column the ::text cast would fail with uuid = text, so it is dropped at
+    # run time (tenant_cast, set in upgrade()).  Text columns are unchanged.
+    if table not in _TEXT_TENANT_TABLES:
+        return f"EXECUTE $policy${statement}$policy$;"
+    return f"EXECUTE replace($policy${statement}$policy$, '()::text', tenant_cast);"
+
+
 def _app_policy(table: str, command: str, role: str) -> str:
     name = f"v128_{table}_{command.lower()}_{role}"
     tenant = _tenant_predicate(table)
     using = f"USING ({tenant})" if command != "INSERT" else ""
     check = f"WITH CHECK ({tenant})" if command in ("INSERT", "UPDATE") else ""
+    create = _execute(
+        table,
+        f"""
+                CREATE POLICY {name} ON fsma.{table}
+                    FOR {command} TO {role}
+                    {using} {check}
+            """,
+    )
     return f"""
         IF NOT EXISTS (
             SELECT 1 FROM pg_policy p
@@ -90,12 +108,12 @@ def _app_policy(table: str, command: str, role: str) -> str:
               AND p.polpermissive
               AND p.polcmd IN ('*', '{_COMMAND_CODES[command]}')
               AND (0::oid = ANY(p.polroles) OR r.oid = ANY(p.polroles))
+        ) AND NOT EXISTS (
+            SELECT 1 FROM pg_policy
+            WHERE polrelid = 'fsma.{table}'::regclass
+              AND polname = '{name}'
         ) THEN
-            EXECUTE $policy$
-                CREATE POLICY {name} ON fsma.{table}
-                    FOR {command} TO {role}
-                    {using} {check}
-            $policy$;
+            {create}
         END IF;
     """
 
@@ -129,28 +147,37 @@ def upgrade() -> None:
         missing_table = (
             "RETURN;" if table == "cte_kdes_backfill_log_v059" else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
+        declare, set_cast = "", ""
+        if table in _TEXT_TENANT_TABLES:
+            declare = "DECLARE tenant_cast text;"
+            set_cast = f"""
+                SELECT CASE WHEN atttypid = 'uuid'::regtype THEN '()' ELSE '()::text' END
+                INTO tenant_cast FROM pg_attribute
+                WHERE attrelid = 'fsma.{table}'::regclass AND attname = 'tenant_id';"""
+        guard_sql = f"""
+                        CREATE POLICY {guard} ON fsma.{table}
+                            AS RESTRICTIVE FOR ALL TO PUBLIC
+                            USING ({predicate})
+                            WITH CHECK ({predicate})
+                    """
         op.execute(
             f"""
             DO $repair$
+            {declare}
             BEGIN
                 IF to_regclass('fsma.{table}') IS NULL THEN
                     {missing_table}
                 END IF;
                 IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'fsma.{table}'::regclass) THEN
                     RAISE EXCEPTION 'Expected RLS on fsma.{table} at v128';
-                END IF;
+                END IF;{set_cast}
                 {app_repair}
                 IF NOT EXISTS (
                     SELECT 1 FROM pg_policy
                     WHERE polrelid = 'fsma.{table}'::regclass
                       AND polname = '{guard}'
                 ) THEN
-                    EXECUTE $policy$
-                        CREATE POLICY {guard} ON fsma.{table}
-                            AS RESTRICTIVE FOR ALL TO PUBLIC
-                            USING ({predicate})
-                            WITH CHECK ({predicate})
-                    $policy$;
+                    {_execute(table, guard_sql)}
                 END IF;
             END
             $repair$;
