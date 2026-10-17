@@ -28,7 +28,7 @@ from shared.auth import APIKey, require_api_key
 from shared.database import get_db_session as _get_db_session
 from shared.tenant_context import TenantContext, resolve_tenant_context
 
-from .webhook_models import EventResult, IngestResponse, WebhookPayload
+from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
     _generate_alerts,
@@ -38,6 +38,23 @@ from .webhook_router_v2 import (
 )
 
 logger = logging.getLogger("webhook-compat")
+
+
+def _batch_dedup_key(event: IngestEvent) -> str:
+    key = (
+        f"{event.cte_type.value}|{event.traceability_lot_code}"
+        f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
+    )
+    # Repeated warehouse lines can share a TLC, time, and location. Their
+    # interchange position distinguishes W07/W12 lines without changing
+    # the batch key for any other event type.
+    line_index = event.kdes.get("edi_line_index")
+    if event.kdes.get("edi_transaction_set") in ("944", "945") and isinstance(line_index, int) and line_index > 0:
+        return (
+            f"{key}|{event.kdes.get('edi_isa13') or ''}"
+            f"|{event.kdes.get('edi_control_number') or ''}|{line_index}"
+        )
+    return key
 
 
 async def _verify_api_key(
@@ -256,10 +273,7 @@ async def ingest_events(
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
         for event in payload.events:
-            dedup_key = (
-                f"{event.cte_type.value}|{event.traceability_lot_code}"
-                f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
-            )
+            dedup_key = _batch_dedup_key(event)
             if dedup_key in seen_in_batch:
                 results.append(
                     EventResult(

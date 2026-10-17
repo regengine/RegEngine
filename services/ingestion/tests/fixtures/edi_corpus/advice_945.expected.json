@@ -13,20 +13,43 @@
   "gs_control_number": "1",
   "gs_receiver_id": "RECEIVERID",
   "gs_sender_id": "SENDERID",
-  "gtin": "00012345678905",
   "isa13": "000000945",
   "isa_receiver_id": "RECEIVERID",
   "isa_sender_id": "SENDERID",
-  "lot_number": "LOT-ROM-19",
+  "line_items": [
+    {
+      "gtin": "00012345678905",
+      "lot_number": "A",
+      "product_description": "Romaine Hearts 12ct",
+      "quantity": 10.0,
+      "quantity_ordered": 80.0,
+      "unit_of_measure": "CA",
+      "upc": "012345678905"
+    },
+    {
+      "gtin": "00012345678912",
+      "lot_number": "B",
+      "product_description": "Romaine Hearts 24ct",
+      "quantity": 20.0,
+      "quantity_ordered": 40.0,
+      "unit_of_measure": "CA",
+      "upc": "012345678912"
+    },
+    {
+      "gtin": "00012345678929",
+      "lot_number": "C",
+      "product_description": "Spinach Clamshell",
+      "quantity": 30.0,
+      "quantity_ordered": 60.0,
+      "unit_of_measure": "EA",
+      "upc": "012345678929"
+    }
+  ],
   "po_number": "PO-8801",
-  "product_description": "Romaine Hearts 12ct",
-  "quantity": 120.0,
-  "quantity_ordered": 80.0,
   "receiver_id": "RECEIVERID",
   "reference_document_number": "SID-945001",
   "reference_numbers": {
-    "BM": "BOL-9451",
-    "LT": "LOT-ROM-19"
+    "BM": "BOL-9451"
   },
   "reporting_code": "F",
   "sender_id": "SENDERID",
@@ -36,8 +59,6 @@
   "ship_to_gln": "6141410000014",
   "ship_to_name": "Harbor Market",
   "shipment_id": "SID-945001",
-  "unit_of_measure": "CA",
-  "upc": "012345678905",
   "warehouse_gln": "6141410000069",
   "warehouse_id": "6141410000069",
   "warehouse_id_qualifier": "UL",

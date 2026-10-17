@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
 
 from fastapi import HTTPException
@@ -554,8 +555,6 @@ def _apply_n9(data: dict[str, Any], segment: list[str]) -> None:
     data["reference_numbers"].setdefault(qualifier, value)
     if qualifier == "PO":
         data["po_number"] = data["po_number"] or value
-    elif qualifier == "LT":
-        data["lot_number"] = data["lot_number"] or value
     elif qualifier == "BM":
         data["bill_of_lading"] = data["bill_of_lading"] or value
 
@@ -596,35 +595,6 @@ def _assign_identified_party(
     _keep_first(data, f"{prefix}_id", identifier)
     _keep_first(data, f"{prefix}_id_qualifier", qualifier)
     _keep_first(data, f"{prefix}_gln", gln)
-
-
-def _add_positive(total: float, raw: str | None) -> float:
-    if not raw:
-        return total
-    return total + _safe_float(raw, fallback=0.0)
-
-
-def _refuse_mixed_line_units(transaction_set: str, segment_id: str, raw_units: list[str]) -> None:
-    """Refuse to sum a line quantity across units that do not resolve to one name.
-
-    CA and CS both resolve to cases, so they are one unit. Two codes that
-    do not resolve stay distinct and still refuse.
-    """
-    distinct_units = {(_resolve_unit_code(unit) or unit) for unit in raw_units if unit}
-    if len(distinct_units) <= 1:
-        return
-    raise HTTPException(
-        status_code=422,
-        detail={
-            "error": f"edi_{transaction_set}_mixed_units_of_measure",
-            "message": (
-                f"EDI {transaction_set} {segment_id} lines disagree on the unit of measure. "
-                "Quantities across differing units cannot be summed into a single CTE."
-            ),
-            "units": sorted({unit for unit in raw_units if unit}),
-            "resolved_units": sorted(distinct_units),
-        },
-    )
 
 
 def _fill_reference_if_blank(data: dict[str, Any]) -> None:
@@ -685,13 +655,8 @@ def _extract_944_fields(segments: list[list[str]]) -> dict[str, Any]:
         "ship_to_gln": None,
         "receiving_location_name": None,
         "receiving_location_gln": None,
-        "quantity": None,
-        "unit_of_measure": None,
-        "upc": None,
-        "gtin": None,
-        "product_description": None,
-        "lot_number": None,
         "reference_numbers": {},
+        "line_items": [],
     }
 
     _apply_envelope_ids(data, segments)
@@ -712,9 +677,6 @@ def _extract_944_fields(segments: list[list[str]]) -> dict[str, Any]:
     data["reference_document_number"] = data["warehouse_receipt_number"] or data["shipment_id"]
 
     saw_ship_from = False
-    line_description: str | None = None
-    total_quantity = 0.0
-    raw_units: list[str] = []
     for segment in segments:
         if not segment:
             continue
@@ -742,24 +704,22 @@ def _extract_944_fields(segments: list[list[str]]) -> dict[str, Any]:
 
         elif seg_id == "G69":
             text = _element(segment, 1)
-            if text and line_description is None:
-                line_description = text
+            if text and data["line_items"]:
+                data["line_items"][-1]["product_description"] = text
 
         elif seg_id == "W07":
-            total_quantity = _add_positive(total_quantity, _element(segment, 1))
-            unit = _element(segment, 2)
-            if unit:
-                _keep_first(data, "unit_of_measure", unit)
-                raw_units.append(unit.upper())
-            _keep_first(data, "upc", _element(segment, 3))
-            _apply_product_pairs(data, segment, _W07_PRODUCT_PAIRS)
-            _keep_first(data, "lot_number", _element(segment, 8))
+            quantity = _safe_float(_element(segment, 1), fallback=0.0)
+            line = {
+                "quantity": quantity if isfinite(quantity) and quantity > 0 else None,
+                "unit_of_measure": _element(segment, 2),
+                "upc": _element(segment, 3),
+                "gtin": None,
+                "product_description": None,
+                "lot_number": _element(segment, 8),
+            }
+            _apply_product_pairs(line, segment, _W07_PRODUCT_PAIRS)
+            data["line_items"].append(line)
 
-    _refuse_mixed_line_units("944", "W07", raw_units)
-    if total_quantity > 0:
-        data["quantity"] = total_quantity
-    if line_description:
-        data["product_description"] = line_description
     if not saw_ship_from:
         data["ship_from_name"] = data["depositor_name"]
         data["ship_from_gln"] = data["depositor_gln"]
@@ -804,14 +764,8 @@ def _extract_945_fields(segments: list[list[str]]) -> dict[str, Any]:
         "ship_from_gln": None,
         "ship_to_name": None,
         "ship_to_gln": None,
-        "quantity": None,
-        "quantity_ordered": None,
-        "unit_of_measure": None,
-        "upc": None,
-        "gtin": None,
-        "product_description": None,
-        "lot_number": None,
         "reference_numbers": {},
+        "line_items": [],
     }
 
     _apply_envelope_ids(data, segments)
@@ -832,10 +786,6 @@ def _extract_945_fields(segments: list[list[str]]) -> dict[str, Any]:
     data["reference_document_number"] = data["shipment_id"] or data["depositor_order_number"]
 
     saw_ship_from = False
-    line_description: str | None = None
-    total_quantity = 0.0
-    total_ordered = 0.0
-    raw_units: list[str] = []
     for segment in segments:
         if not segment:
             continue
@@ -863,27 +813,28 @@ def _extract_945_fields(segments: list[list[str]]) -> dict[str, Any]:
 
         elif seg_id == "G69":
             text = _element(segment, 1)
-            if text and line_description is None:
-                line_description = text
+            if text and data["line_items"]:
+                data["line_items"][-1]["product_description"] = text
 
         elif seg_id == "W12":
-            total_ordered = _add_positive(total_ordered, _element(segment, 2))
-            total_quantity = _add_positive(total_quantity, _element(segment, 3))
-            unit = _element(segment, 5)
-            if unit:
-                _keep_first(data, "unit_of_measure", unit)
-                raw_units.append(unit.upper())
-            _keep_first(data, "upc", _element(segment, 6))
-            _apply_product_pairs(data, segment, _W12_PRODUCT_PAIRS)
-            _keep_first(data, "lot_number", _element(segment, 9))
+            ordered_raw = _element(segment, 2)
+            try:
+                ordered = float(ordered_raw) if ordered_raw is not None else None
+            except ValueError:
+                ordered = None
+            quantity = _safe_float(_element(segment, 3), fallback=0.0)
+            line = {
+                "quantity": quantity if isfinite(quantity) and quantity > 0 else None,
+                "quantity_ordered": ordered if ordered is not None and isfinite(ordered) else None,
+                "unit_of_measure": _element(segment, 5),
+                "upc": _element(segment, 6),
+                "gtin": None,
+                "product_description": None,
+                "lot_number": _element(segment, 9),
+            }
+            _apply_product_pairs(line, segment, _W12_PRODUCT_PAIRS)
+            data["line_items"].append(line)
 
-    _refuse_mixed_line_units("945", "W12", raw_units)
-    if total_quantity > 0:
-        data["quantity"] = total_quantity
-    if total_ordered > 0:
-        data["quantity_ordered"] = total_ordered
-    if line_description:
-        data["product_description"] = line_description
     if not saw_ship_from:
         data["ship_from_name"] = data["warehouse_name"]
         data["ship_from_gln"] = data["warehouse_gln"]

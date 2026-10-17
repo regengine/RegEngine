@@ -12,8 +12,8 @@ from .utils import _parse_edi_date_digits, _valid_gln_or_none
 logger = logging.getLogger("edi-ingestion")
 
 
-class _WarehouseReceiptRequiredKDEs(BaseModel):
-    """Lot and a positive quantity are required on a 944 receiving CTE.
+class _WarehouseLineRequiredKDEs(BaseModel):
+    """Lot and positive quantity required on each 944 or 945 line.
 
     The failure is a pydantic ValidationError so the document route can
     use the same strict and advisory rejection path as the other sets.
@@ -50,6 +50,25 @@ def _validate_edi_as_fsma_event(
         "945": FSMAEventType.SHIPPING,
     }
     fsma_type = type_map.get(transaction_set, FSMAEventType.SHIPPING)
+
+    if transaction_set in ("944", "945"):
+        line = _WarehouseLineRequiredKDEs(
+            lot_number=extracted.get("lot_number"),
+            quantity=extracted.get("quantity"),
+        )
+        tlc = line.lot_number
+        # Follow the shared EDI schema TLC rule; originator lot versus
+        # GTIN-prefixed TLC remains a founder decision (#1104).
+        try:
+            FSMAEvent.validate_tlc_format(tlc)
+        except ValueError:
+            for item_id, lengths in (
+                (extracted.get("gtin"), (8, 12, 13, 14)),
+                (extracted.get("upc"), (12, 13)),
+            ):
+                if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
+                    tlc = f"{item_id.zfill(14)}-{line.lot_number}"
+                    break
 
     # Resolve location GLN from whichever field is available
     location_gln = (
@@ -100,13 +119,4 @@ def _validate_edi_as_fsma_event(
         reference_document_number=extracted.get("reference_document_number"),
         tenant_id=tenant_id,
     )
-    if transaction_set == "944":
-        # A warehouse receipt with no lot, or no positive quantity, is
-        # not a usable receiving CTE. Raising here (instead of synthesizing
-        # a quantity later) keeps the strict 422 and the advisory rejection
-        # log on the same path the other sets already use.
-        _WarehouseReceiptRequiredKDEs(
-            lot_number=extracted.get("lot_number"),
-            quantity=extracted.get("quantity"),
-        )
     return fsma_event.model_dump()
