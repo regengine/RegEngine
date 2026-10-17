@@ -85,6 +85,8 @@ _FIXTURES = {
     "po_850": "850",
     "invoice_810": "810",
     "receiving_861": "861",
+    "receipt_944": "944",
+    "advice_945": "945",
 }
 
 # #2976: fixture stem -> the transaction set every ST/SE pair carries.
@@ -396,6 +398,22 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000069",  # receiving_location_gln
         "event_date": "2026-03-12",  # receive_date_raw
+    },
+    "receipt_944": {
+        "cte_type": "receiving",
+        "quantity": 120.0,
+        "unit_of_measure": "cases",  # W07 "CA"
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # warehouse GLN
+        "event_date": "2026-03-18",  # W17 date, not G62
+    },
+    "advice_945": {
+        "cte_type": "shipping",
+        "quantity": 120.0,  # W1203 shipped, not W1202 ordered
+        "unit_of_measure": "cases",
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # ship-from warehouse GLN
+        "event_date": "2026-03-19",  # W06 date, not G62
     },
 }
 

@@ -131,6 +131,26 @@ def test_all_four_extractors_populate_envelope():
         assert data["sender_id"] == "GS_SENDER"
 
 
+def test_warehouse_extractors_populate_envelope():
+    """944 and 945 carry the same ISA and GS envelope keys as 856."""
+    from pathlib import Path
+
+    from app.edi_ingestion.extractors import _extract_944_fields, _extract_945_fields
+
+    corpus = Path(__file__).parent / "fixtures" / "edi_corpus"
+    for name, extractor in (
+        ("receipt_944.edi", _extract_944_fields),
+        ("advice_945.edi", _extract_945_fields),
+    ):
+        segments = _parse_x12_segments((corpus / name).read_text(encoding="utf-8"))
+        data = extractor(segments)
+        assert data["isa13"]
+        assert data["gs_sender_id"] == "SENDERID"
+        assert data["sender_id"] == "SENDERID"
+        assert data["receiver_id"] == "RECEIVERID"
+        assert data["envelope_mismatch"] is False
+
+
 # ---------------------------------------------------------------------------
 # ISA13 dedup
 # ---------------------------------------------------------------------------

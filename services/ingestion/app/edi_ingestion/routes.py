@@ -1,6 +1,6 @@
 # ============================================================
 # UNSAFE ZONE: This file (1043 lines) mixes EDI X12 segment
-# parsing (856/850/810/861), field mapping, CTE normalization,
+# parsing (856/850/810/861/944/945), field mapping, CTE normalization,
 # and validation in a single module. Fragile string parsing of
 # EDI segments — changes to segment mapping risk silent data
 # corruption in ingested events.
@@ -14,6 +14,8 @@ events through the existing webhook ingestion pipeline. Supports:
   - 850 (Purchase Order)
   - 810 (Invoice)
   - 861 (Receiving Advice)
+  - 944 (Warehouse Stock Transfer Receipt Advice)
+  - 945 (Warehouse Shipping Advice)
 
 Extracts shipment details, product identifiers, quantities, and locations
 relevant to FSMA Critical Tracking Events.
@@ -41,6 +43,7 @@ from ..webhook_models import (
 )
 from .constants import (
     _CTE_TYPE_BY_SET,
+    _QUANTITY_ELEMENT_INDEX_BY_SET,
     _QUANTITY_SEGMENT_BY_SET,
     _REQUIRED_856_SEGMENTS,
     _REQUIRED_SEGMENTS_BY_SET,
@@ -643,12 +646,17 @@ def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -
     all" (leave today's behaviour alone) apart from "a quantity element
     was sent but is zero or non-numeric" (fail closed rather than let
     ``_safe_float``'s 1.0 fallback fabricate a KDE).
+
+    The quantity element is not at index 2 on every set. 944 reads W0701
+    (quantity received). 945 reads W1203 (units shipped, not ordered).
     """
     wanted = _QUANTITY_SEGMENT_BY_SET.get(transaction_set)
     if not wanted:
         return False
+    index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
     return any(
-        segment and segment[0].upper() == wanted and len(segment) > 2 and segment[2].strip() for segment in segments
+        segment and segment[0].upper() == wanted and len(segment) > index and bool(segment[index].strip())
+        for segment in segments
     )
 
 
@@ -726,13 +734,13 @@ def _build_ingest_event_for_set(
     # Resolve location (varies by document type)
     location_name = location_override
     location_gln = None
-    if transaction_set in ("856", "850"):
+    if transaction_set in ("856", "850", "945"):
         location_name = location_name or extracted.get("ship_from_name") or extracted.get("seller_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("ship_from_gln") or extracted.get("seller_gln"))
     elif transaction_set == "810":
         location_name = location_name or extracted.get("seller_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("seller_gln"))
-    elif transaction_set == "861":
+    elif transaction_set in ("861", "944"):
         location_name = location_name or extracted.get("receiving_location_name") or "Unknown"
         location_gln = _valid_gln_or_none(extracted.get("receiving_location_gln"))
 
@@ -742,6 +750,8 @@ def _build_ingest_event_for_set(
         "850": ("po_date_raw", None),
         "810": ("invoice_date_raw", None),
         "861": ("receive_date_raw", None),
+        "944": ("receive_date_raw", None),
+        "945": ("ship_date_raw", None),
     }
     date_field, time_field = date_field_map.get(transaction_set, (None, None))
     timestamp, event_date = _ship_timestamp_and_date(
@@ -808,6 +818,40 @@ def _build_ingest_event_for_set(
                 "condition_code": extracted.get("condition_code"),
             }
         )
+    elif transaction_set == "944":
+        kdes.update(
+            {
+                "receiving_advice_number": extracted.get("warehouse_receipt_number"),
+                "po_number": extracted.get("po_number"),
+                "ship_from_location": extracted.get("ship_from_name"),
+                "receiving_location": extracted.get("receiving_location_name"),
+                "receiving_location_gln": extracted.get("receiving_location_gln"),
+                "lot_number": extracted.get("lot_number"),
+                "warehouse_name": extracted.get("warehouse_name"),
+                "warehouse_id": extracted.get("warehouse_id"),
+                "depositor_name": extracted.get("depositor_name"),
+                "depositor_id": extracted.get("depositor_id"),
+                "gtin": extracted.get("gtin"),
+                "upc": extracted.get("upc"),
+            }
+        )
+    elif transaction_set == "945":
+        kdes.update(
+            {
+                "ship_from_location": extracted.get("ship_from_name"),
+                "ship_to_location": extracted.get("ship_to_name"),
+                "ship_from_gln": extracted.get("ship_from_gln"),
+                "ship_to_gln": extracted.get("ship_to_gln"),
+                "lot_number": extracted.get("lot_number"),
+                "warehouse_name": extracted.get("warehouse_name"),
+                "depositor_name": extracted.get("depositor_name"),
+                "depositor_id": extracted.get("depositor_id"),
+                "po_number": extracted.get("po_number"),
+                "gtin": extracted.get("gtin"),
+                "upc": extracted.get("upc"),
+                "shipment_id": extracted.get("shipment_id"),
+            }
+        )
 
     return IngestEvent(
         cte_type=cte_type,
@@ -826,10 +870,12 @@ def _build_ingest_event_for_set(
     "/document",
     response_model=EDIIngestResponse,
     status_code=201,
-    summary="Ingest X12 EDI document (856/850/810/861)",
+    summary="Ingest X12 EDI document (856/850/810/861/944/945)",
     description=(
         "Unified EDI inbound route that auto-detects the transaction set "
-        "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice) "
+        "(856 ASN, 850 Purchase Order, 810 Invoice, 861 Receiving Advice, "
+        "944 Warehouse Stock Transfer Receipt Advice, "
+        "945 Warehouse Shipping Advice) "
         "and extracts FSMA-relevant KDEs for CTE creation."
     ),
 )

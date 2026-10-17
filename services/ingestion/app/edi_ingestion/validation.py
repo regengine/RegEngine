@@ -5,9 +5,22 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from .utils import _parse_edi_date_digits, _valid_gln_or_none
 
 logger = logging.getLogger("edi-ingestion")
+
+
+class _WarehouseReceiptRequiredKDEs(BaseModel):
+    """Lot and a positive quantity are required on a 944 receiving CTE.
+
+    The failure is a pydantic ValidationError so the document route can
+    use the same strict and advisory rejection path as the other sets.
+    """
+
+    lot_number: str = Field(min_length=1)
+    quantity: float = Field(gt=0)
 
 
 def _validate_edi_as_fsma_event(
@@ -33,6 +46,8 @@ def _validate_edi_as_fsma_event(
         "850": FSMAEventType.SHIPPING,
         "810": FSMAEventType.SHIPPING,
         "861": FSMAEventType.RECEIVING,
+        "944": FSMAEventType.RECEIVING,
+        "945": FSMAEventType.SHIPPING,
     }
     fsma_type = type_map.get(transaction_set, FSMAEventType.SHIPPING)
 
@@ -67,6 +82,8 @@ def _validate_edi_as_fsma_event(
         "850": "EDI_850",
         "810": "EDI_810",
         "861": "EDI_861",
+        "944": "EDI_944",
+        "945": "EDI_945",
     }
 
     fsma_event = FSMAEvent(
@@ -83,4 +100,13 @@ def _validate_edi_as_fsma_event(
         reference_document_number=extracted.get("reference_document_number"),
         tenant_id=tenant_id,
     )
+    if transaction_set == "944":
+        # A warehouse receipt with no lot, or no positive quantity, is
+        # not a usable receiving CTE. Raising here (instead of synthesizing
+        # a quantity later) keeps the strict 422 and the advisory rejection
+        # log on the same path the other sets already use.
+        _WarehouseReceiptRequiredKDEs(
+            lot_number=extracted.get("lot_number"),
+            quantity=extracted.get("quantity"),
+        )
     return fsma_event.model_dump()
