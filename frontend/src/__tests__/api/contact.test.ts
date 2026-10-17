@@ -42,6 +42,26 @@ describe('POST /api/contact abuse controls', () => {
         expect(await res.json()).toEqual({ ok: true });
     });
 
+    it('forwards normalized UTM fields to the webhook without logging them', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const res = await POST(makeRequest({
+            ...valid,
+            utm_source: '  CampaignSource  ',
+            utm_medium: ' Email ',
+            utm_campaign: 'A'.repeat(110),
+        }, '198.51.100.13'));
+
+        expect(res.status).toBe(200);
+        const [, options] = vi.mocked(fetch).mock.calls[0];
+        const submission = JSON.parse(options?.body as string);
+        expect(submission).toMatchObject({
+            utm_source: 'campaignsource',
+            utm_medium: 'email',
+            utm_campaign: 'a'.repeat(100),
+        });
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('campaignsource');
+    });
+
     it('drops honeypot submissions with a fake success', async () => {
         const res = await POST(
             makeRequest({ ...valid, website: 'http://spam.example' }, '198.51.100.11'),

@@ -142,14 +142,11 @@ export function KDECheckerClient() {
             <FSMAToolShell
                 config={KDE_CHECKER_CONFIG}
                 renderResults={renderResults}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('kde_checked', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('kde_checked', {
+                        tool_id: KDE_CHECKER_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 
