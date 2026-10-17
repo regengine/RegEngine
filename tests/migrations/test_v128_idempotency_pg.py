@@ -24,6 +24,7 @@ from alembic.command import upgrade
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 
 from tests.migrations.rls_db import _normalize_psycopg
@@ -129,8 +130,12 @@ def _execute(database_url: str, sql: str) -> None:
         engine.dispose()
 
 
-def test_fresh_upgrade_reaches_single_v128_head(upgraded_db: str) -> None:
-    assert _current_revisions(upgraded_db) == {"93eb33f262a1"}  # pragma: allowlist secret
+def test_fresh_upgrade_reaches_the_single_head_through_v128(upgraded_db: str) -> None:
+    script = ScriptDirectory(str(REPO_ROOT / "alembic"))
+    (head,) = script.get_heads()
+    assert _current_revisions(upgraded_db) == {head}
+    chain = {rev.revision for rev in script.iterate_revisions(head, "base")}
+    assert {"a5e7c9b2d341", "93eb33f262a1"} <= chain  # pragma: allowlist secret
     policies = {(row[1], row[2]) for row in _snapshot(upgraded_db)}
     assert ("cte_events", "v128_client_guard_cte_events") in policies
     consolidate = _load(CONSOLIDATE)
