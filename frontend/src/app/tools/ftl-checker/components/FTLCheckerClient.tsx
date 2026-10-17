@@ -580,12 +580,10 @@ export function FTLCheckerClient() {
 
             // PostHog event for funnel analytics
             posthog?.capture('ftl_report_requested', {
-                email: email,
                 categories_selected: selectedCategories,
                 covered_count: results.coveredCount,
                 risk_level: results.coveredCount > 0 ? 'HIGH' : 'LOW'
             });
-            posthog?.identify(email, { email: email });
 
             // Persist lead to assessment_submissions so it survives without PostHog access.
             // Fire-and-forget: UI transitions optimistically, errors logged but not surfaced.

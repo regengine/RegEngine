@@ -80,13 +80,13 @@ export async function submitAssessment(
     });
 
     if (error) {
-      console.error('Assessment submission error:', error);
+      console.error('Assessment submission error');
       return { success: false, error: 'Something went wrong. Please try again.' };
     }
 
     return { success: true };
-  } catch (err) {
-    console.error('Assessment submission exception:', err);
+  } catch {
+    console.error('Assessment submission exception');
     return { success: false, error: 'Something went wrong. Please try again.' };
   }
 }

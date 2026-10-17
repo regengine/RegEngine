@@ -117,14 +117,11 @@ export function ROICalculatorClient() {
                 <FSMAToolShell
                     config={ROI_CALCULATOR_CONFIG}
                     renderResults={renderResults}
-                    onLeadCapture={(lead) => {
-                        if (lead.email) {
-                            posthog?.capture('roi_calculated', {
-                                email: lead.email,
-                                answers: lead.answers
-                            });
-                            posthog?.identify(lead.email, { email: lead.email });
-                        }
+                    onLeadCapture={() => {
+                        posthog?.capture('roi_calculated', {
+                            tool_id: ROI_CALCULATOR_CONFIG.id,
+                            lead_captured: true
+                        });
                     }}
                 />
 

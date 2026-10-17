@@ -140,14 +140,11 @@ export function TLCValidatorClient() {
             <FSMAToolShell
                 config={TLC_VALIDATOR_CONFIG}
                 renderResults={analyzeTLC}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('tlc_validated', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('tlc_validated', {
+                        tool_id: TLC_VALIDATOR_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 

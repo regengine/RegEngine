@@ -66,13 +66,9 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
         utm_term: searchParams.get('utm_term'),
     }), [searchParams]);
 
-    const trackToolEvent = (eventName: string, metadata: Record<string, unknown> = {}) => {
+    const trackToolEvent = (eventName: string) => {
         posthog.capture(`${config.id}_${eventName}`, {
-            ...metadata,
-            ...utmParams,
             tool_id: config.id,
-            tool_title: config.title,
-            timestamp: new Date().toISOString()
         });
     };
 
@@ -129,6 +125,23 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
     };
 
     const submitLead = () => {
+        // The assessment RPC is the existing write-only lead path. The gate
+        // collects no name or company, so use fixed values for required fields.
+        void submitAssessment({
+            name: 'FSMA tool lead',
+            email,
+            company: 'Unknown (FSMA tool)',
+            role: '',
+            source: config.id,
+            utmSource: utmParams.utm_source || undefined,
+            utmMedium: utmParams.utm_medium || undefined,
+            utmCampaign: utmParams.utm_campaign || undefined,
+            toolInputs: {
+                utm_content: utmParams.utm_content,
+                utm_term: utmParams.utm_term,
+            },
+        }).catch(() => undefined);
+
         if (onLeadCapture) {
             const intentScore = deriveIntentScore();
             onLeadCapture({
@@ -139,7 +152,7 @@ export function FSMAToolShell({ config, onLeadCapture, renderResults }: FSMATool
                 answers
             });
         }
-        trackToolEvent('LEAD_CAPTURE', { email });
+        trackToolEvent('LEAD_CAPTURE');
         setStatus('RESULTS');
     };
 
