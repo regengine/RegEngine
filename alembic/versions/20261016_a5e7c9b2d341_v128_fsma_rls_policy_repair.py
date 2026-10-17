@@ -7,7 +7,9 @@ four have no runtime grant and remain closed.
 
 Existing policies are left intact on databases where earlier migrations
 installed them.  A restrictive policy blocks the client roles even if one
-of those older permissive policies targets PUBLIC.
+of those older permissive policies targets PUBLIC.  On ingestion_runs, which
+the boot-time runtime catalog canary fingerprints, that guard is created
+only where a permissive policy reaches a denied role (see _CANARY_TABLES).
 
 Revision ID: a5e7c9b2d341
 Revises: ed902d03df45
@@ -70,6 +72,23 @@ _TEXT_TENANT_TABLES = frozenset(
     }
 )
 _COMMAND_CODES = {"SELECT": "r", "INSERT": "a", "UPDATE": "w", "DELETE": "d"}
+
+# The runtime catalog canary (_RUNTIME_CUTOVER_CANARY_SQL in
+# services/shared/database.py) fingerprints every policy on its required
+# relations whose roles include the runtime role or PUBLIC.  ingestion_runs
+# is the only v128 table on that list.  A TO PUBLIC guard there changes both
+# runtime fingerprints, and containers then refuse to boot against the
+# migrated database.  On these tables the guard is created only where a
+# permissive policy can reach a denied role.  Where none can, RLS already
+# denies those roles direct access by default.  A view owned by another role
+# is checked as its owner and bypasses the guard either way.
+_CANARY_TABLES = frozenset({"ingestion_runs"})
+
+# CREATE POLICY takes ACCESS EXCLUSIVE, and the deploy runs the whole chain in
+# one transaction while the previous container still serves.  As in v126, a
+# busy table fails the deploy fast and rolls back instead of queueing every
+# query on the tables already locked.
+_LOCK_TIMEOUT = "10s"
 
 
 def _tenant_predicate(table: str) -> str:
@@ -138,14 +157,34 @@ def upgrade() -> None:
         if table in _CLOSED_TABLES:
             denied_roles += ["regengine", "regengine_sysadmin"]
         guard = f"v128_client_guard_{table}"
-        role_check = "current_user NOT IN (" + ", ".join(f"'{role}'" for role in denied_roles) + ")"
+        denied = ", ".join(f"'{role}'" for role in denied_roles)
+        role_check = f"current_user NOT IN ({denied})"
+        # RLS applies a policy to PUBLIC or to roles whose privileges the
+        # current user has (pg_has_role USAGE).
+        guard_reaches = ""
+        if table in _CANARY_TABLES:
+            guard_reaches = f"""
+                  AND EXISTS (
+                    SELECT 1 FROM pg_policy p
+                    WHERE p.polrelid = 'fsma.{table}'::regclass
+                      AND p.polpermissive
+                      AND (0::oid = ANY(p.polroles) OR EXISTS (
+                        SELECT 1 FROM pg_roles d, unnest(p.polroles) AS t(role_oid)
+                        WHERE d.rolname IN ({denied})
+                          AND t.role_oid <> 0
+                          AND pg_has_role(d.oid, t.role_oid, 'USAGE')
+                      ))
+                  )"""
         predicate = (
             role_check if table in _TENANTLESS_CLOSED_TABLES else f"({_tenant_predicate(table)}) AND {role_check}"
         )
         # v078 creates this quarantine log only when a legacy KDE conversion
         # is needed.  Every other listed table is required at this head.
+        restore_lock_timeout = "PERFORM set_config('lock_timeout', previous_lock_timeout, true);"
         missing_table = (
-            "RETURN;" if table == "cte_kdes_backfill_log_v059" else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
+            f"{restore_lock_timeout} RETURN;"
+            if table == "cte_kdes_backfill_log_v059"
+            else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
         declare, set_cast = "", ""
         if table in _TEXT_TENANT_TABLES:
@@ -165,6 +204,7 @@ def upgrade() -> None:
             DO $repair$
             {declare}
             BEGIN
+                PERFORM set_config('lock_timeout', '{_LOCK_TIMEOUT}', true);
                 IF to_regclass('fsma.{table}') IS NULL THEN
                     {missing_table}
                 END IF;
@@ -179,6 +219,7 @@ def upgrade() -> None:
                 ) THEN
                     {_execute(table, guard_sql)}
                 END IF;
+                {restore_lock_timeout}
             END
             $repair$;
             """
