@@ -1,19 +1,27 @@
 """Consolidate four exact-scope duplicate permissive RLS policy pairs.
 
 Revision ID: 93eb33f262a1
-Revises: ed902d03df45
+Revises: a5e7c9b2d341
 Create Date: 2026-10-16
 
 The catalog pairs are all FOR ALL TO PUBLIC with the same USING predicate.
 An omitted WITH CHECK on an ALL policy inherits USING, so both effective
 write checks in each pair are the same as well. Other policy overlaps have
 different role scopes and are intentionally left alone.
+
+A pair whose removed policy is gone while the retained policy exists was
+already consolidated (the same SQL was applied by hand on some databases,
+and the retained policy may since have been rewrapped). Such a pair is
+skipped untouched; any other state still goes through the fail-closed
+snapshot assertion.
 """
+
+import sqlalchemy as sa
 
 from alembic import op
 
 revision = "93eb33f262a1"  # pragma: allowlist secret
-down_revision = "ed902d03df45"  # pragma: allowlist secret
+down_revision = "a5e7c9b2d341"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
@@ -74,6 +82,20 @@ def _assert_catalog_policy(table: str, name: str, explicit_check: bool) -> None:
     )
 
 
+def _policy_exists(table: str, name: str) -> bool:
+    return (
+        op.get_bind()
+        .execute(
+            sa.text(
+                "SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = :table AND policyname = :name"
+            ),
+            {"table": table, "name": name},
+        )
+        .first()
+        is not None
+    )
+
+
 def _create_original(table: str, name: str, explicit_check: bool) -> None:
     check_clause = f" WITH CHECK ({_PREDICATE})" if explicit_check else ""
     op.execute(
@@ -83,6 +105,8 @@ def _create_original(table: str, name: str, explicit_check: bool) -> None:
 
 def upgrade() -> None:
     for table, retained, retained_check, removed, removed_check in _PAIRS:
+        if _policy_exists(table, retained) and not _policy_exists(table, removed):
+            continue
         _assert_catalog_policy(table, retained, retained_check)
         _assert_catalog_policy(table, removed, removed_check)
         op.execute(f"DROP POLICY {retained} ON public.{table}")
