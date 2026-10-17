@@ -10,7 +10,6 @@ from __future__ import annotations
 import csv
 import io
 import sys
-import xml.etree.ElementTree as ET
 import zipfile
 from datetime import date, datetime
 from pathlib import Path
@@ -274,18 +273,13 @@ class TestFormulaSafety:
         row[7] = "=1+1"
         body = _xlsx_bytes({"Log": [HEADER, row]})
         cached = io.BytesIO()
-        namespace = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
         with zipfile.ZipFile(io.BytesIO(body)) as source, zipfile.ZipFile(cached, "w") as output:
             for item in source.infolist():
                 data = source.read(item.filename)
                 if item.filename == "xl/worksheets/sheet1.xml":
-                    root = ET.fromstring(data)
-                    cell = root.find(".//s:c[@r='H2']", namespace)
-                    assert cell is not None
-                    value = cell.find("s:v", namespace)
-                    assert value is not None
-                    value.text = "2"
-                    data = ET.tostring(root, encoding="utf-8")
+                    formula_cell = b'<c r="H2"><f>1+1</f><v></v></c>'
+                    assert data.count(formula_cell) == 1
+                    data = data.replace(formula_cell, b'<c r="H2"><f>1+1</f><v>2</v></c>')
                 output.writestr(item, data)
 
         resp = _post(client, XLSX_NAME, cached.getvalue(), XLSX_CONTENT_TYPE)
