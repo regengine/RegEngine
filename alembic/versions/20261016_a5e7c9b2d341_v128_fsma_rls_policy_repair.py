@@ -186,9 +186,10 @@ def upgrade() -> None:
             if table == "cte_kdes_backfill_log_v059"
             else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
-        declare, set_cast = "", ""
+        declare = "DECLARE previous_lock_timeout text := pg_catalog.current_setting('lock_timeout');"
+        set_cast = ""
         if table in _TEXT_TENANT_TABLES:
-            declare = "DECLARE tenant_cast text;"
+            declare += " tenant_cast text;"
             set_cast = f"""
                 SELECT CASE WHEN atttypid = 'uuid'::regtype THEN '()' ELSE '()::text' END
                 INTO tenant_cast FROM pg_attribute
