@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'next/navigation';
+import { submitAssessment } from '@/app/actions/submit-assessment';
 import { usePostHog } from '@/lib/posthog-provider';
 import { trackBookCallClick, trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 import { Card } from '@/components/ui/card';
