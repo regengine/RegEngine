@@ -186,7 +186,7 @@ def upgrade() -> None:
             if table == "cte_kdes_backfill_log_v059"
             else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
-        declare = "DECLARE previous_lock_timeout text := pg_catalog.current_setting('lock_timeout');"
+        declare = "DECLARE previous_lock_timeout text := current_setting('lock_timeout');"
         set_cast = ""
         if table in _TEXT_TENANT_TABLES:
             declare += " tenant_cast text;"
@@ -217,7 +217,7 @@ def upgrade() -> None:
                     SELECT 1 FROM pg_policy
                     WHERE polrelid = 'fsma.{table}'::regclass
                       AND polname = '{guard}'
-                ) THEN
+                ){guard_reaches} THEN
                     {_execute(table, guard_sql)}
                 END IF;
                 {restore_lock_timeout}
