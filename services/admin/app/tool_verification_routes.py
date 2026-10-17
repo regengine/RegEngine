@@ -8,6 +8,7 @@ unlock free compliance tools. Verified leads are stored in tool_leads.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import re
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from shared.blocked_email_domains import extract_domain, is_personal_email
 from shared.env import requires_strict_auth_runtime
 from shared.pii import mask_email
@@ -262,21 +263,23 @@ def _cleanup_memory() -> None:
         _memory_store.pop(k, None)
 
 
-async def _store_code(email: str, code: str) -> None:
+async def _store_code(email: str, code: str, utm: dict[str, str] | None = None) -> None:
     key = f"tool_verify:{email}"
-    payload = f"{code}:{MAX_VERIFICATION_ATTEMPTS}"
+    utm = utm or {}
+    payload = json.dumps({"code": code, "attempts": MAX_VERIFICATION_ATTEMPTS, "utm": utm})
     if await _redis_set_code(key, payload, "store_tool_code"):
         return
     _cleanup_memory()
     _memory_store[key] = {
         "code": code,
         "attempts": MAX_VERIFICATION_ATTEMPTS,
+        "utm": utm,
         "expires": time.time() + VERIFICATION_CODE_TTL,
     }
 
 
-async def _check_code(email: str, code: str) -> tuple[bool, str]:
-    """Return (success, error_message). Decrements attempts on failure."""
+async def _check_code(email: str, code: str) -> tuple[bool, str, dict[str, str]]:
+    """Return (success, error_message, UTM values). Decrement attempts on failure."""
     key = f"tool_verify:{email}"
 
     redis_checked = False
@@ -286,36 +289,49 @@ async def _check_code(email: str, code: str) -> tuple[bool, str]:
 
     if redis_checked:
         if not raw:
-            return False, "Code expired or not found. Please request a new code."
-        stored_code, attempts_str = raw.rsplit(":", 1)
-        attempts = int(attempts_str)
+            return False, "Code expired or not found. Please request a new code.", {}
+        if raw.startswith("{"):
+            stored_payload = json.loads(raw)
+            stored_code = stored_payload["code"]
+            attempts = int(stored_payload["attempts"])
+            utm = stored_payload.get("utm", {})
+        else:
+            # Codes issued before this change remain valid during deployment.
+            stored_code, attempts_str = raw.rsplit(":", 1)
+            attempts = int(attempts_str)
+            utm = {}
         if attempts <= 0:
             await _redis_delete_code(key, "delete_exhausted_tool_code")
-            return False, "Too many attempts. Please request a new code."
+            return False, "Too many attempts. Please request a new code.", {}
         if stored_code != code:
-            await _redis_set_code(key, f"{stored_code}:{attempts - 1}", "decrement_tool_code_attempts")
+            if raw.startswith("{"):
+                stored_payload["attempts"] = attempts - 1
+                next_payload = json.dumps(stored_payload)
+            else:
+                next_payload = f"{stored_code}:{attempts - 1}"
+            await _redis_set_code(key, next_payload, "decrement_tool_code_attempts")
             remaining = attempts - 1
-            return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+            return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.", {}
         await _redis_delete_code(key, "consume_tool_code")
-        return True, ""
+        return True, "", utm
 
     # In-memory fallback
     _cleanup_memory()
     stored = _memory_store.get(key)
     if not stored:
-        return False, "Code expired or not found. Please request a new code."
+        return False, "Code expired or not found. Please request a new code.", {}
     if stored["expires"] < time.time():
         _memory_store.pop(key, None)
-        return False, "Code expired. Please request a new code."
+        return False, "Code expired. Please request a new code.", {}
     if stored["attempts"] <= 0:
         _memory_store.pop(key, None)
-        return False, "Too many attempts. Please request a new code."
+        return False, "Too many attempts. Please request a new code.", {}
     if stored["code"] != code:
         stored["attempts"] -= 1
         remaining = stored["attempts"]
-        return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+        return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.", {}
     _memory_store.pop(key, None)
-    return True, ""
+    return True, "", stored.get("utm", {})
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +405,9 @@ class VerifyEmailRequest(BaseModel):
     email: EmailStr
     tool_name: str = "unknown"
     source_url: str = ""
+    utm_source: str | None = Field(default=None, max_length=100)
+    utm_medium: str | None = Field(default=None, max_length=100)
+    utm_campaign: str | None = Field(default=None, max_length=100)
 
 
 class ConfirmCodeRequest(BaseModel):
@@ -444,7 +463,12 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
         )
 
     code = f"{secrets.randbelow(900000) + 100000}"
-    await _store_code(email, code)
+    utm = {
+        key: value.strip()
+        for key in ("utm_source", "utm_medium", "utm_campaign")
+        if (value := getattr(payload, key)) and value.strip()
+    }
+    await _store_code(email, code, utm)
 
     # Send via Resend
     if RESEND_API_KEY:
@@ -483,7 +507,7 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     email = payload.email.strip().lower()
     code = payload.code.strip()
 
-    ok, err = await _check_code(email, code)
+    ok, err, utm = await _check_code(email, code)
     if not ok:
         status = 429 if "Too many" in err else 400
         raise HTTPException(status_code=status, detail=err)
@@ -491,9 +515,9 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     # Save lead to Postgres (best-effort — don't block verification on DB failure)
     domain = extract_domain(email)
     try:
-        _save_lead(email, domain, payload.tool_name)
+        _save_lead(email, domain, payload.tool_name, utm)
     except Exception as exc:
-        logger.error("lead_save_failed", email=mask_email(email), error=str(exc))
+        logger.error("lead_save_failed", email=mask_email(email), error=type(exc).__name__)
 
     # Sign a short-lived JWT for the cookie — aud/iss pin this to the
     # tool-access domain so it cannot be swapped in as a session token
@@ -745,7 +769,7 @@ def _enforce_tool_access_max_lifetime(payload: dict) -> None:
 # ---------------------------------------------------------------------------
 # Database — save lead (sync, uses existing SQLAlchemy session pattern)
 # ---------------------------------------------------------------------------
-def _save_lead(email: str, domain: str, tool_name: str) -> None:
+def _save_lead(email: str, domain: str, tool_name: str, utm: dict[str, str]) -> None:
     """Insert or update a tool lead row. Uses the Admin DB sync session."""
     from sqlalchemy import text
 
@@ -755,13 +779,26 @@ def _save_lead(email: str, domain: str, tool_name: str) -> None:
     try:
         session.execute(
             text("""
-                INSERT INTO tool_leads (email, domain, first_tool_used)
-                VALUES (:email, :domain, :tool)
+                INSERT INTO tool_leads (
+                    email, domain, first_tool_used, utm_source, utm_medium, utm_campaign
+                ) VALUES (
+                    :email, :domain, :tool, :utm_source, :utm_medium, :utm_campaign
+                )
                 ON CONFLICT (email) DO UPDATE SET
                     last_tool_access = NOW(),
-                    access_count = tool_leads.access_count + 1
+                    access_count = tool_leads.access_count + 1,
+                    utm_source = COALESCE(tool_leads.utm_source, EXCLUDED.utm_source),
+                    utm_medium = COALESCE(tool_leads.utm_medium, EXCLUDED.utm_medium),
+                    utm_campaign = COALESCE(tool_leads.utm_campaign, EXCLUDED.utm_campaign)
             """),
-            {"email": email, "domain": domain, "tool": tool_name},
+            {
+                "email": email,
+                "domain": domain,
+                "tool": tool_name,
+                "utm_source": utm.get("utm_source"),
+                "utm_medium": utm.get("utm_medium"),
+                "utm_campaign": utm.get("utm_campaign"),
+            },
         )
         session.commit()
     except Exception:

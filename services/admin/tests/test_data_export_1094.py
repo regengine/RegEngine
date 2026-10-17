@@ -199,6 +199,30 @@ class TestExportPersonalData:
         assert len(data["memberships"]) == 1
         assert data["memberships"][0]["role"] == "admin"
 
+    def test_export_includes_tool_lead_attribution(self):
+        from app.data_export_routes import _build_user_export
+
+        db = _make_db()
+        db.execute.return_value.mappings.return_value.all.return_value = [
+            {
+                "email": "user@example.com",
+                "domain": "example.com",
+                "first_tool_used": "ftl-checker",
+                "access_count": 1,
+                "created_at": NOW,
+                "verified_at": NOW,
+                "utm_source": "search",
+                "utm_medium": "paid",
+                "utm_campaign": "fall-2026",
+            }
+        ]
+
+        data = _build_user_export(db, str(_USER_ID))
+
+        assert data["tool_leads"][0]["utm_source"] == "search"
+        assert data["tool_leads"][0]["utm_medium"] == "paid"
+        assert data["tool_leads"][0]["utm_campaign"] == "fall-2026"
+
     @pytest.mark.asyncio
     async def test_response_does_not_contain_password_hash(self):
         """password_hash must never appear anywhere in the export payload."""

@@ -20,6 +20,7 @@ import {
     type ValidationResult,
 } from '../lib/record-validator';
 import { cn } from '@/lib/utils';
+import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 type Phase = 'scenario' | 'upload' | 'analyzing' | 'results' | 'report';
 
@@ -78,6 +79,7 @@ export function DrillSimulatorClient() {
     const [currentStage, setCurrentStage] = useState(0);
     const [expandedFinding, setExpandedFinding] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const analysisInFlightRef = useRef(false);
 
     // Timer for SLA countdown
     const [timeRemaining, setTimeRemaining] = useState(24 * 60 * 60);
@@ -177,28 +179,38 @@ export function DrillSimulatorClient() {
     };
 
     const handleAnalyze = async () => {
-        if (!state.uploadedFile) return;
+        if (!state.uploadedFile || analysisInFlightRef.current) return;
+        analysisInFlightRef.current = true;
+        trackToolRunStarted('drill-simulator');
 
         setState({ ...state, phase: 'analyzing' });
         setCurrentStage(0);
 
-        const text = await state.uploadedFile.text();
-        const records = parseCSV(text);
-        const result = validateRecords(records, new Date(state.drillStartTime || Date.now()));
+        try {
+            const text = await state.uploadedFile.text();
+            const records = parseCSV(text);
+            const result = validateRecords(records, new Date(state.drillStartTime || Date.now()));
 
-        for (let i = 0; i < analysisStages.length; i++) {
-            await new Promise((resolve) =>
-                setTimeout(resolve, analysisStages[i].duration)
-            );
-            setCurrentStage(i + 1);
+            for (let i = 0; i < analysisStages.length; i++) {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, analysisStages[i].duration)
+                );
+                setCurrentStage(i + 1);
+            }
+
+            setState({
+                ...state,
+                phase: 'results',
+                validationResult: result,
+                uploadTime: Date.now(),
+            });
+            trackToolRunCompleted('drill-simulator', 'success');
+        } catch {
+            trackToolRunCompleted('drill-simulator', 'error');
+            setState((current) => ({ ...current, phase: 'upload' }));
+        } finally {
+            analysisInFlightRef.current = false;
         }
-
-        setState({
-            ...state,
-            phase: 'results',
-            validationResult: result,
-            uploadTime: Date.now(),
-        });
     };
 
     const handleLoadSampleData = async () => {

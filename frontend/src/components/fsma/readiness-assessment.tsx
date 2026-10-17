@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
     Leaf,
 } from 'lucide-react';
 import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
+import { trackReadinessAssessmentSubmit, trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
 // Food Traceability List categories — synced with the final FDA FTL as implemented
 // in src/app/tools/ftl-checker/components/FTLCheckerClient.tsx (source of truth)
@@ -122,6 +123,8 @@ const selectableClasses = (selected: boolean, padding: string) =>
 
 export function FSMA204Assessment() {
     const [currentStep, setCurrentStep] = useState(0);
+    const resultTracked = useRef(false);
+    const toolRunStarted = useRef(false);
     const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
     const [selectedRole, setSelectedRole] = useState<string | null>(null);
     const [selectedCTEs, setSelectedCTEs] = useState<string[]>([]);
@@ -131,6 +134,10 @@ export function FSMA204Assessment() {
     const progress = ((currentStep + 1) / ASSESSMENT_STEPS.length) * 100;
 
     const toggleProduct = (id: string) => {
+        if (window.location.pathname === '/tools/self-reported-checklist' && !toolRunStarted.current) {
+            toolRunStarted.current = true;
+            trackToolRunStarted('self-reported-checklist');
+        }
         setSelectedProducts(prev =>
             prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
         );
@@ -510,14 +517,22 @@ export function FSMA204Assessment() {
 
                 {currentStep < ASSESSMENT_STEPS.length - 1 ? (
                     <Button
-                        onClick={() => setCurrentStep(prev => prev + 1)}
+                        onClick={() => {
+                            if (currentStep === ASSESSMENT_STEPS.length - 2 && !resultTracked.current) {
+                                // This assessment scores locally; entering the result is its submit action.
+                                trackReadinessAssessmentSubmit({ outcome: 'success' });
+                                if (toolRunStarted.current) trackToolRunCompleted('self-reported-checklist', 'success');
+                                resultTracked.current = true;
+                            }
+                            setCurrentStep(prev => prev + 1);
+                        }}
                         disabled={!canProceed()}
                         trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                     >
                         Next
                     </Button>
                 ) : (
-                    <Button onClick={() => setCurrentStep(0)}>
+                    <Button onClick={() => { resultTracked.current = false; toolRunStarted.current = false; setCurrentStep(0); }}>
                         Start Over
                     </Button>
                 )}

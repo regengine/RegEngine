@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from starlette.requests import Request
 
 _REPO_ADMIN = Path(__file__).resolve().parents[1]
@@ -81,7 +82,164 @@ async def test_verify_email_confirm_code_round_trip_uses_normalized_email(tvr, m
     assert confirm.status == "verified"
     assert confirm.token
     assert "tool_verify:lead@corp.com" not in tvr._memory_store
-    save_lead.assert_called_once_with("lead@corp.com", "corp.com", "ftl-checker")
+    save_lead.assert_called_once_with("lead@corp.com", "corp.com", "ftl-checker", {})
+
+
+@pytest.mark.asyncio
+async def test_verify_utm_is_saved_only_after_successful_confirmation(tvr, monkeypatch):
+    monkeypatch.setattr(tvr.secrets, "randbelow", lambda _: 234567)
+    save_lead = MagicMock()
+    monkeypatch.setattr(tvr, "_save_lead", save_lead)
+
+    await tvr.verify_email(
+        payload=tvr.VerifyEmailRequest(
+            email="lead@corp.com",
+            tool_name="ftl-checker",
+            utm_source="  Search  ",
+            utm_medium="email",
+            utm_campaign="fall-2026",
+        ),
+        request=_stub_request(),
+    )
+    assert tvr._memory_store["tool_verify:lead@corp.com"]["utm"] == {
+        "utm_source": "Search",
+        "utm_medium": "email",
+        "utm_campaign": "fall-2026",
+    }
+    save_lead.assert_not_called()
+
+    with pytest.raises(HTTPException):
+        await tvr.confirm_code(
+            payload=tvr.ConfirmCodeRequest(email="lead@corp.com", code="000000", tool_name="ftl-checker"),
+            request=_stub_request(),
+        )
+    save_lead.assert_not_called()
+
+    await tvr.confirm_code(
+        payload=tvr.ConfirmCodeRequest(email="lead@corp.com", code="334567", tool_name="ftl-checker"),
+        request=_stub_request(),
+    )
+    save_lead.assert_called_once_with(
+        "lead@corp.com",
+        "corp.com",
+        "ftl-checker",
+        {"utm_source": "Search", "utm_medium": "email", "utm_campaign": "fall-2026"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_lead_save_failure_does_not_log_bound_lead_data(tvr, monkeypatch):
+    async def code_accepted(_email, _code):
+        return True, "", {"utm_campaign": "private-campaign"}
+
+    def save_fails(*_args):
+        raise RuntimeError("bound values: lead@corp.com, private-campaign")
+
+    logger = MagicMock()
+    monkeypatch.setattr(tvr, "_check_code", code_accepted)
+    monkeypatch.setattr(tvr, "_save_lead", save_fails)
+    monkeypatch.setattr(tvr, "logger", logger)
+
+    response = await tvr.confirm_code(
+        payload=tvr.ConfirmCodeRequest(email="lead@corp.com", code="123456"),
+        request=_stub_request(),
+    )
+
+    assert response.status == "verified"
+    assert logger.error.call_args.kwargs["error"] == "RuntimeError"
+    assert "lead@corp.com" not in repr(logger.mock_calls)
+    assert "private-campaign" not in repr(logger.mock_calls)
+
+
+def test_verify_utm_fields_reject_values_over_100_characters(tvr):
+    for field in ("utm_source", "utm_medium", "utm_campaign"):
+        with pytest.raises(ValidationError):
+            tvr.VerifyEmailRequest(email="lead@corp.com", **{field: "x" * 101})
+
+
+@pytest.mark.asyncio
+async def test_utm_survives_failed_attempt_in_redis_store(tvr, monkeypatch):
+    class FakeRedis:
+        def __init__(self):
+            self.values = {}
+
+        async def setex(self, key, _ttl, value):
+            self.values[key] = value
+
+        async def get(self, key):
+            return self.values.get(key)
+
+        async def delete(self, key):
+            self.values.pop(key, None)
+
+    fake_redis = FakeRedis()
+
+    async def get_fake_redis():
+        return fake_redis
+
+    monkeypatch.setattr(tvr, "_get_redis", get_fake_redis)
+    monkeypatch.setattr(tvr.secrets, "randbelow", lambda _: 234567)
+    save_lead = MagicMock()
+    monkeypatch.setattr(tvr, "_save_lead", save_lead)
+    tvr._redis_available = True
+
+    await tvr.verify_email(
+        payload=tvr.VerifyEmailRequest(email="lead@corp.com", utm_source="search"),
+        request=_stub_request(),
+    )
+    with pytest.raises(HTTPException):
+        await tvr.confirm_code(
+            payload=tvr.ConfirmCodeRequest(email="lead@corp.com", code="000000"),
+            request=_stub_request(),
+        )
+    save_lead.assert_not_called()
+
+    await tvr.confirm_code(
+        payload=tvr.ConfirmCodeRequest(email="lead@corp.com", code="334567"),
+        request=_stub_request(),
+    )
+    save_lead.assert_called_once_with("lead@corp.com", "corp.com", "unknown", {"utm_source": "search"})
+    assert "tool_verify:lead@corp.com" not in fake_redis.values
+
+
+@pytest.mark.asyncio
+async def test_legacy_redis_code_remains_valid_during_rollout(tvr, monkeypatch):
+    async def get_legacy_code(_key, _operation):
+        return True, "123456:3"
+
+    deleted = []
+
+    async def delete_legacy_code(key, _operation):
+        deleted.append(key)
+        return True
+
+    monkeypatch.setattr(tvr, "_redis_get_code", get_legacy_code)
+    monkeypatch.setattr(tvr, "_redis_delete_code", delete_legacy_code)
+    tvr._redis_available = True
+
+    assert await tvr._check_code("lead@corp.com", "123456") == (True, "", {})
+    assert deleted == ["tool_verify:lead@corp.com"]
+
+
+def test_save_lead_uses_parameterized_utm_and_keeps_first_attribution(tvr, monkeypatch):
+    from app import database
+
+    session = MagicMock()
+    monkeypatch.setattr(database, "SessionLocal", lambda: session)
+
+    tvr._save_lead("lead@corp.com", "corp.com", "ftl-checker", {"utm_source": "search"})
+
+    statement, params = session.execute.call_args.args
+    assert params == {
+        "email": "lead@corp.com",
+        "domain": "corp.com",
+        "tool": "ftl-checker",
+        "utm_source": "search",
+        "utm_medium": None,
+        "utm_campaign": None,
+    }
+    assert "COALESCE(tool_leads.utm_source, EXCLUDED.utm_source)" in str(statement)
+    session.commit.assert_called_once()
 
 
 @pytest.mark.asyncio

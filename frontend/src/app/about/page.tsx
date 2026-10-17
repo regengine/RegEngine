@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
 import {
   ArrowRight,
   Building2,
@@ -261,10 +262,10 @@ export default function AboutPage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/contact">
+              <BookCallLink href="/contact" placement="about_page">
                 Book a free gap analysis call
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </Link>
+              </BookCallLink>
             </Button>
             <Button asChild variant="secondary" size="lg">
               <Link href="/pricing">View pricing</Link>

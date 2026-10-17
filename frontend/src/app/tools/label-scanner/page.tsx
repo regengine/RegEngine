@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -138,6 +139,7 @@ function LabelScannerContent() {
 
     const analyze = useCallback(async () => {
         if (!imageFile) return;
+        trackToolRunStarted('label-scanner');
         setAnalyzing(true);
         setError(null);
         setResult(null);
@@ -157,8 +159,10 @@ function LabelScannerContent() {
 
             const data: LabelResult = await res.json();
             setResult(data);
+            trackToolRunCompleted('label-scanner', 'success');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Analysis failed');
+            trackToolRunCompleted('label-scanner', 'error');
         } finally {
             setAnalyzing(false);
         }
