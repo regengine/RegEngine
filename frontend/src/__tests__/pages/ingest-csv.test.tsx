@@ -6,6 +6,10 @@ import IngestPage from '@/app/ingest/page';
 const mocks = vi.hoisted(() => ({
   ingestFile: vi.fn(),
   ingestURL: vi.fn(),
+  ingestEpcisEvent: vi.fn(),
+  ingestEpcisBatch: vi.fn(),
+  ingestEpcisXml: vi.fn(),
+  validateEpcis: vi.fn(),
   getIngestionJob: vi.fn(),
   refresh: vi.fn(),
   storeApiKey: vi.fn(),
@@ -15,8 +19,12 @@ vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ apiKey: 'cookie-managed', setApiKey: mocks.storeApiKey }), // pragma: allowlist secret
 }));
 vi.mock('@/hooks/use-api', () => ({
-  useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn() }),
-  useIngestFile: () => ({ mutateAsync: mocks.ingestFile, reset: vi.fn() }),
+  useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn(), isPending: false, isError: false }),
+  useIngestFile: () => ({ mutateAsync: mocks.ingestFile, reset: vi.fn(), isPending: false, isError: false }),
+  useIngestEpcisEvent: () => ({ mutateAsync: mocks.ingestEpcisEvent, reset: vi.fn(), isPending: false }),
+  useIngestEpcisBatch: () => ({ mutateAsync: mocks.ingestEpcisBatch, reset: vi.fn(), isPending: false }),
+  useIngestEpcisXml: () => ({ mutateAsync: mocks.ingestEpcisXml, reset: vi.fn(), isPending: false }),
+  useValidateEpcisEvent: () => ({ mutateAsync: mocks.validateEpcis, reset: vi.fn(), isPending: false }),
 }));
 vi.mock('@/lib/api-client', () => ({
   apiClient: { getIngestionJob: mocks.getIngestionJob },

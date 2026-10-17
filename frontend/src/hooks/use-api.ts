@@ -212,6 +212,44 @@ export const useIngestFile = () => {
   });
 };
 
+// EPCIS 2.0 ingestion — same mutation pattern as useIngestFile, against the
+// backend routes in services/ingestion/app/epcis/router.py.
+export const useIngestEpcisEvent = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, event }: {
+      apiKey?: string | null;
+      event: Record<string, unknown>;
+    }) => apiClient.ingestEpcisEvent(apiKey, event),
+  });
+};
+
+export const useIngestEpcisBatch = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, events }: {
+      apiKey?: string | null;
+      events: Record<string, unknown>[];
+    }) => apiClient.ingestEpcisBatch(apiKey, events),
+  });
+};
+
+export const useIngestEpcisXml = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, xml }: {
+      apiKey?: string | null;
+      xml: string;
+    }) => apiClient.ingestEpcisXml(apiKey, xml),
+  });
+};
+
+export const useValidateEpcisEvent = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, event }: {
+      apiKey?: string | null;
+      event: Record<string, unknown>;
+    }) => apiClient.validateEpcisEvent(apiKey, event),
+  });
+};
+
 export const useCreateTenant = () => {
   return useMutation({
     mutationFn: ({ name }: { name: string }) => apiClient.createTenant(name),
