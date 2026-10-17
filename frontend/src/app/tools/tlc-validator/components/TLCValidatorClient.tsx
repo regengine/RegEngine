@@ -3,6 +3,7 @@
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ToolConfig } from '@/types/fsma-tools';
 import { usePostHog } from '@/lib/posthog-provider';
+import { trackBookCallClick } from '@/lib/conversion-events';
 import { Badge } from '@/components/ui/badge';
 import { Search, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -123,6 +124,7 @@ export function TLCValidatorClient() {
                                 href="https://calendly.com/regengine/fsma-strategy-session"
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => trackBookCallClick('tlc_validator', 'tlc-validator')}
                             >
                                 Schedule a Demo <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
                             </a>
@@ -138,14 +140,11 @@ export function TLCValidatorClient() {
             <FSMAToolShell
                 config={TLC_VALIDATOR_CONFIG}
                 renderResults={analyzeTLC}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('tlc_validated', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('tlc_validated', {
+                        tool_id: TLC_VALIDATOR_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 

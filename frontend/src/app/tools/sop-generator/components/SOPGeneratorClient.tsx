@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
@@ -17,6 +17,7 @@ import {
     Package,
     Printer,
 } from 'lucide-react';
+import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 type Phase = 'form' | 'generating' | 'preview';
 
@@ -34,6 +35,7 @@ export function SOPGeneratorClient() {
     const [facilities, setFacilities] = useState<string[]>(['']);
     const [retailers, setRetailers] = useState<string[]>([]);
     const [generatedDoc, setGeneratedDoc] = useState('');
+    const generatingRef = useRef(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const target = e.target;
@@ -42,12 +44,23 @@ export function SOPGeneratorClient() {
     };
 
     const handleGenerate = () => {
+        if (generatingRef.current) return;
+        generatingRef.current = true;
+        trackToolRunStarted('sop-generator');
         setPhase('generating');
         // Simulate generation delay
         setTimeout(() => {
-            const doc = generatePreview();
-            setGeneratedDoc(doc);
-            setPhase('preview');
+            try {
+                const doc = generatePreview();
+                setGeneratedDoc(doc);
+                setPhase('preview');
+                trackToolRunCompleted('sop-generator', 'success');
+            } catch {
+                trackToolRunCompleted('sop-generator', 'error');
+                setPhase('form');
+            } finally {
+                generatingRef.current = false;
+            }
         }, 2000);
     };
 
