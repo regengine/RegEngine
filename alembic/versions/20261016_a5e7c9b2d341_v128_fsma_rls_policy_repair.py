@@ -194,6 +194,7 @@ def upgrade() -> None:
                 SELECT CASE WHEN atttypid = 'uuid'::regtype THEN '()' ELSE '()::text' END
                 INTO tenant_cast FROM pg_attribute
                 WHERE attrelid = 'fsma.{table}'::regclass AND attname = 'tenant_id';"""
+        declare = "DECLARE\n                " + "\n                ".join(declarations)
         guard_sql = f"""
                         CREATE POLICY {guard} ON fsma.{table}
                             AS RESTRICTIVE FOR ALL TO PUBLIC
