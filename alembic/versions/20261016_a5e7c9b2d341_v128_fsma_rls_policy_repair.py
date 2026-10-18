@@ -186,14 +186,10 @@ def upgrade() -> None:
             if table == "cte_kdes_backfill_log_v059"
             else f"RAISE EXCEPTION 'Expected fsma.{table} at v128';"
         )
-        # Capture the caller's lock_timeout before the 10s bound, and put it
-        # back at every exit. The name is a PL/pgSQL variable; leaving it
-        # undeclared makes `alembic upgrade` fail with "column
-        # previous_lock_timeout does not exist" on the first table.
-        declarations = ["previous_lock_timeout text := current_setting('lock_timeout');"]
+        declare = "DECLARE previous_lock_timeout text := current_setting('lock_timeout');"
         set_cast = ""
         if table in _TEXT_TENANT_TABLES:
-            declarations.append("tenant_cast text;")
+            declare += " tenant_cast text;"
             set_cast = f"""
                 SELECT CASE WHEN atttypid = 'uuid'::regtype THEN '()' ELSE '()::text' END
                 INTO tenant_cast FROM pg_attribute
