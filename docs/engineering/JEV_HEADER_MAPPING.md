@@ -45,10 +45,15 @@ for coding-agent sessions.
 | Evaluation on labelled data | `scripts/jev_eval.py` with `docs/engineering/examples/jev_eval_cases.json` (see [Measure Jev on RegEngine data](#measure-jev-on-regengine-data)) |
 | Tests | `services/shared/tests/test_jev_client.py`, `services/shared/tests/test_jev_header_mapping.py`, `services/shared/tests/test_jev_cte_classification.py`, `services/ingestion/tests/test_csv_jev_header_mapping.py`, `services/ingestion/tests/test_csv_jev_file_cte.py`, `services/ingestion/tests/test_jev_header_preview_script.py`, `frontend/src/__tests__/lib/cte-suggestion.test.ts` |
 
-Only `POST /api/v1/ingest/csv` calls Jev. The inbound-email path
+Only `POST /api/v1/ingest/csv` calls Jev. An `.xlsx` upload on that route
+is converted to CSV text first (`xlsx_to_csv_text` in
+`services/ingestion/app/shared/xlsx_rows.py`); both questions then run on
+that text, not on the workbook. The inbound-email path
 (`services/ingestion/app/email_ingest/service.py`) calls the same route
 function (`ingest_csv`) for each CSV attachment with no `cte_type`, so its
-attachments get both questions and the same apply switches.
+attachments get both questions and the same apply switches. Email still
+rejects `.xlsx` before that call. Workbook limits and the email exception
+are in [TRACEABILITY_FILE_INTAKE.md](TRACEABILITY_FILE_INTAKE.md).
 
 ## Request flow
 

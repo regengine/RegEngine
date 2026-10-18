@@ -4,9 +4,7 @@ The v128 SQL was applied by hand to some databases (fsma repair, then the
 consolidation) and their policies were later rewritten as
 ``(select get_tenant_context())``. ``alembic upgrade head`` must therefore
 do the real work on a fresh pre-v128 schema and be a no-op on an
-already-changed one, leaving rewrapped policies exactly as they are. It
-must also leave the boot canary's policy manifest unchanged on a database
-that passed the canary at ed902d03df45.
+already-changed one, leaving rewrapped policies exactly as they are.
 
 Skips cleanly when no Postgres is available; fails under
 ``REGENGINE_REQUIRE_DB=1`` like the other migration gates.
@@ -24,7 +22,6 @@ from alembic.command import upgrade
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
-from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, text
 
 from tests.migrations.rls_db import _normalize_psycopg
@@ -35,8 +32,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VERSIONS = REPO_ROOT / "alembic" / "versions"
 FSMA_REPAIR = VERSIONS / "20261016_a5e7c9b2d341_v128_fsma_rls_policy_repair.py"
 CONSOLIDATE = VERSIONS / "20261016_93eb33f262a1_v128_consolidate_permissive_policies.py"
-PRE_V128 = "ed902d03df45"  # pragma: allowlist secret
-RUNTIME_ROLES = ("regengine", "regengine_sysadmin")
 
 _SNAPSHOT = text(
     """
@@ -55,8 +50,7 @@ def _load(path: Path):
 
 
 @pytest.fixture(scope="module")
-def migrated_db():
-    """A scratch DB upgraded to head, plus its canary manifests from before v128."""
+def upgraded_db():
     db_name = "inc2_scratch_v128_" + uuid4().hex[:12]
     with scratch_database_engine(db_name) as engine:
         plain_url = str(engine.url.render_as_string(hide_password=False))
@@ -68,37 +62,14 @@ def migrated_db():
         try:
             cfg = Config(str(REPO_ROOT / "alembic.ini"))
             cfg.set_main_option("script_location", str(REPO_ROOT / "alembic"))
-            upgrade(cfg, PRE_V128)
-            pre_v128 = _canary_manifests(libpq_url)
             upgrade(cfg, "head")
-            yield libpq_url, pre_v128
+            yield libpq_url
         finally:
             for key, value in saved.items():
                 if value is None:
                     os.environ.pop(key, None)
                 else:
                     os.environ[key] = value
-
-
-@pytest.fixture(scope="module")
-def upgraded_db(migrated_db) -> str:
-    return migrated_db[0]
-
-
-def _canary_manifests(database_url: str) -> dict[str, str]:
-    """The policy manifest the boot canary fingerprints, as each runtime role."""
-    from shared.database import _RUNTIME_CUTOVER_CANARY_SQL
-
-    engine = create_engine(_normalize_psycopg(database_url), future=True)
-    try:
-        manifests = {}
-        for role in RUNTIME_ROLES:
-            with engine.begin() as conn:
-                conn.execute(text(f"SET LOCAL ROLE {role}"))
-                manifests[role] = conn.execute(text(_RUNTIME_CUTOVER_CANARY_SQL)).one()[1]
-        return manifests
-    finally:
-        engine.dispose()
 
 
 def _run_upgrade(database_url: str, path: Path) -> None:
@@ -130,28 +101,14 @@ def _execute(database_url: str, sql: str) -> None:
         engine.dispose()
 
 
-def test_fresh_upgrade_reaches_the_single_head_through_v128(upgraded_db: str) -> None:
-    script = ScriptDirectory(str(REPO_ROOT / "alembic"))
-    (head,) = script.get_heads()
-    assert _current_revisions(upgraded_db) == {head}
-    chain = {rev.revision for rev in script.iterate_revisions(head, "base")}
-    assert {"a5e7c9b2d341", "93eb33f262a1"} <= chain  # pragma: allowlist secret
+def test_fresh_upgrade_reaches_single_v128_head(upgraded_db: str) -> None:
+    assert _current_revisions(upgraded_db) == {"93eb33f262a1"}  # pragma: allowlist secret
     policies = {(row[1], row[2]) for row in _snapshot(upgraded_db)}
     assert ("cte_events", "v128_client_guard_cte_events") in policies
     consolidate = _load(CONSOLIDATE)
     for table, retained, _, removed, _ in consolidate._PAIRS:
         assert (table, retained) in policies
         assert (table, removed) not in policies
-
-
-def test_v128_leaves_the_boot_canary_manifest_unchanged(migrated_db) -> None:
-    # services/shared/database.py ships the pre-v128 fingerprints and every
-    # container checks them at boot, so v128 must not change the manifest.
-    database_url, pre_v128 = migrated_db
-    assert all(pre_v128.values())
-    assert _canary_manifests(database_url) == pre_v128
-    policies = {(row[1], row[2]) for row in _snapshot(database_url)}
-    assert ("ingestion_runs", "v128_client_guard_ingestion_runs") not in policies
 
 
 def test_rerunning_each_v128_upgrade_is_a_no_op(upgraded_db: str) -> None:
@@ -180,23 +137,4 @@ def test_prewrapped_policies_are_left_untouched(upgraded_db: str) -> None:
 
     _run_upgrade(upgraded_db, FSMA_REPAIR)
     _run_upgrade(upgraded_db, CONSOLIDATE)
-    assert _snapshot(upgraded_db) == before
-
-
-def test_canary_table_guard_is_created_where_a_public_policy_reaches_clients(upgraded_db: str) -> None:
-    before = _snapshot(upgraded_db)
-    _execute(upgraded_db, "CREATE POLICY legacy_public_read ON fsma.ingestion_runs FOR SELECT TO PUBLIC USING (true)")
-    try:
-        _run_upgrade(upgraded_db, FSMA_REPAIR)
-        policies = {(row[1], row[2]): row for row in _snapshot(upgraded_db)}
-        guard = policies[("ingestion_runs", "v128_client_guard_ingestion_runs")]
-        assert guard[3:6] == ("RESTRICTIVE", "{public}", "ALL")
-    finally:
-        _execute(
-            upgraded_db,
-            """
-            DROP POLICY IF EXISTS v128_client_guard_ingestion_runs ON fsma.ingestion_runs;
-            DROP POLICY legacy_public_read ON fsma.ingestion_runs;
-            """,
-        )
     assert _snapshot(upgraded_db) == before

@@ -106,7 +106,10 @@ named in `DISABLED_ROUTERS`).
   rejected outright by the content-type/extension check in
   [service.py](../../services/ingestion/app/email_ingest/service.py); this
   matches the design spec, it is not a partial implementation of a wider
-  format list.
+  format list. The HTTP route `POST /api/v1/ingest/csv` does accept
+  `.xlsx` (converted to CSV text before the same parser). That acceptance
+  does not extend to this webhook. See
+  [TRACEABILITY_FILE_INTAKE.md](TRACEABILITY_FILE_INTAKE.md).
 - **No SendGrid/Mailgun support.** Only Postmark's inbound-parse JSON
   shape is modeled in [schemas.py](../../services/ingestion/app/email_ingest/schemas.py).
 - **No reply to the sender.** A rejected or partially-rejected email gets
