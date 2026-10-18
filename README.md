@@ -39,9 +39,9 @@ Implemented capabilities in the current tree. Route availability is controlled b
 | Canonical tenant context for API-key, JWT, and ingestion RBAC callers | [services/shared/tenant_context.py](services/shared/tenant_context.py) |
 | Legacy ingestion route tenant-context migration inventory | [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) |
 | Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
-| CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
-| EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
-| EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| CSV template download and CSV or Excel `.xlsx` CTE ingest (workbook converted to CSV text on the same route) | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py), [services/ingestion/app/shared/xlsx_rows.py](services/ingestion/app/shared/xlsx_rows.py), [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) |
+| EPCIS 2.0 JSON and XML ingest, including the `/ingest` dashboard upload tab | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py), [frontend/src/lib/epcis-upload.ts](frontend/src/lib/epcis-upload.ts) |
+| EDI X12 ingest for 856, 850, 810, 861, 944, and 945 (944/945 emit one CTE per warehouse line) | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
 | GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
 | Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
 | Optional LlamaIndex Extract v2.5 document extraction: a fail-open second pass on bulk-upload supplier PDFs the table parser cannot read, with per-field citations, confidence and evidence; rows still go through classify, validate and human commit; operator command-line tool | [services/shared/document_extract/](services/shared/document_extract/), [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) |
@@ -367,6 +367,7 @@ These are current repo facts, not speculation:
 - [docs/PRODUCT_DESCRIPTION.md](docs/PRODUCT_DESCRIPTION.md) — canonical positioning and capability availability.
 - [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) — optional CSV suggestions, review policy, privacy defaults, and evaluation tools.
 - [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) — optional document data extraction (LlamaIndex Extract v2.5 on supplier PDFs): request flow, failure modes, data handling, configuration, command line.
+- [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) — Excel `.xlsx` on the CSV ingest route, the dashboard EPCIS 2.0 upload, and X12 944/945 warehouse advices: routes, field mapping, and rejection rules.
 - [frontend/README.md](frontend/README.md) — current UI surfaces and consolidated-backend development setup.
 
 - [2026-09-04 GitHub issue review and rollout](docs/audits/GITHUB_ISSUE_REVIEW_2026_09_04.md) — fixes, validation, and outstanding provisioning.
