@@ -253,6 +253,8 @@ def create_app(lab: Lab) -> FastAPI:
             response.headers[name] = value
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        else:  # the page and its script revalidate on every load, so an upgrade never pairs old HTML with new JS
+            response.headers["Cache-Control"] = "no-cache"
         return response
 
     @app.get("/")

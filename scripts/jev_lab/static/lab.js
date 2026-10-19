@@ -10,6 +10,9 @@
   const BINS = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0];
   const CORE_MAX = 1.2; // Jev's core at mean confidence 1, as a multiple of geom.core
   const CROWN = 1.75; // the reliability crown's radius, as a multiple of the core's
+  const STAR_REACH = 14; // px a confidence-1 star's marks reach toward Jev (the twin dot: about 2.7 x size 5)
+  const MIN_RING_BAND = 16; // px between the crown and the stars kept for generation rings
+  const MIN_RING_STEP = 2; // px per ring; past that only the latest rings that fit are drawn
 
   // ---------------------------------------------------------------- storage (per-viewer conveniences only)
   const store = {
@@ -226,12 +229,14 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const R = Math.min(w, h) * 0.47;
     // Radial bands from the centre out, none overlapping: Jev's core, the reliability crown (its
-    // largest radius, at mean confidence 1, plus its ticks), the generation rings, then the stars
-    // (a confident star's glyph and nova halo reach about 10 px inside rMin).
+    // largest radius, at mean confidence 1, plus its ticks), the generation rings, then the stars.
+    // A confident star's glyph, nova halo and order-check twin reach STAR_REACH px inside rMin.
+    // Small skies push the stars out a little so the ring band keeps MIN_RING_BAND px.
     const core = R * 0.085;
     const crownMax = core * CORE_MAX * CROWN;
-    const rMin = R * 0.34;
-    geom = { w, h, cx: w / 2, cy: h / 2, R, core, crownMax, ringIn: crownMax + 7, ringOut: Math.max(crownMax + 9, rMin - 10), rMin, rMax: R * 0.84, orbit: R * 0.97 };
+    const ringIn = crownMax + 7;
+    const rMin = Math.max(R * 0.34, ringIn + MIN_RING_BAND + STAR_REACH);
+    geom = { w, h, cx: w / 2, cy: h / 2, R, core, crownMax, ringIn, ringOut: rMin - STAR_REACH, rMin, rMax: R * 0.84, orbit: R * 0.97 };
     layoutDirty = true;
   }
   new ResizeObserver(() => { resize(); requestDraw(); }).observe(canvas);
@@ -438,8 +443,12 @@
     ctx.restore();
 
     // Generation rings around Jev, for the selected question: drawn over the glow, outside the crown.
-    const rings = S.rings.map((ring) => ({ generation: ring.generation, result: ring.results[S.kind] })).filter((ring) => ring.result && ['holdout', 'screen'].includes(ring.result.stage));
-    const step = rings.length ? Math.min(9, (geom.ringOut - geom.ringIn) / rings.length) : 0;
+    // The latest ones that fit at MIN_RING_STEP px each; the Loop tab's Brier chart has every generation.
+    const band = geom.ringOut - geom.ringIn;
+    const rings = S.rings.map((ring) => ({ generation: ring.generation, result: ring.results[S.kind] }))
+      .filter((ring) => ring.result && ['holdout', 'screen'].includes(ring.result.stage))
+      .slice(-Math.max(1, Math.floor(band / MIN_RING_STEP)));
+    const step = rings.length ? Math.min(9, band / rings.length) : 0;
     rings.forEach((ring, i) => {
       const r = geom.ringIn + step * (i + 0.5);
       const res = ring.result;
@@ -488,9 +497,14 @@
       ctx.restore();
     });
     ctx.save();
-    ctx.fillStyle = p.ink;
     ctx.font = '600 12px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
+    // A sky-coloured halo keeps the label readable where a generation ring passes under it.
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = p.sky0;
+    ctx.strokeText('Jev', cx, cy + coreR * 2.4 + 12);
+    ctx.fillStyle = p.ink;
     ctx.fillText('Jev', cx, cy + coreR * 2.4 + 12);
     ctx.restore();
 
@@ -587,10 +601,12 @@
       }
       ctx.globalAlpha = fade;
       if (comet.fate === 'unchanged') {
-        // Nothing to judge: a hollow ring that never leaves the moon.
-        ctx.strokeStyle = color;
+        // Nothing to judge: a hollow ring around the moon, in the ink colour so it never merges with the crescent.
+        ctx.strokeStyle = p.ink;
         ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.arc(hx, hy, moonR + 5, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([]);
       } else {
         ctx.fillStyle = color;
         const burst = comet.fate === 'invalid' ? (still ? 6 : 3 + 6 * (1 - fade)) : 3.5;
@@ -819,8 +835,9 @@
       }
       S.tide.push({ generation: d.generation, incumbent: S.incumbentMetrics, candidate: S.candidateMetrics, accepted, results });
       S.candidateMetrics = null;
+      // A generation Jev never judged (no proposal, Jev unavailable, no decisions) bursts at the moon.
       const fate = accepted.length ? 'accepted'
-        : d.outcome === 'no_proposal' ? 'invalid'
+        : d.outcome === 'no_proposal' || d.outcome === 'jev_unavailable' || !d.decisions ? 'invalid'
         : KINDS.some((k) => results[k] && results[k].stage === 'holdout') ? 'holdout'
         : KINDS.some((k) => results[k] && results[k].stage === 'screen') ? 'screen'
         : KINDS.some((k) => results[k] && results[k].stage === 'invalid') ? 'invalid' : 'unchanged';
@@ -930,6 +947,12 @@
     } catch (e) {
       $('#now-text').textContent = 'Lost the connection to the lab. Retrying…';
     }
+    // Without the stream nothing will judge a pending comet or end the run: settle the sky so it
+    // stops redrawing. A reconnect's hello and backlog replay rebuild whatever is still going on.
+    S.running = false;
+    S.phase = 'idle';
+    endPendingComets();
+    requestDraw();
     setTimeout(connect, 2000);
   }
 
@@ -954,9 +977,11 @@
       const label = (kind) => (status.incumbents[kind] ? status.incumbents[kind].label : 'production');
       $('#hdr-wording').options[0].textContent = `Lab incumbent: header fields ${label('header_mapping')}, file CTE ${label('file_cte')}${fake ? ' (offline fake ledger)' : ''}`;
     }
-    // Promotion only ever starts from wording live Jev judged.
-    $('#ledger-promote').hidden = fake;
-    $('#ledger-promote-fake').hidden = !fake;
+    // Promotion only ever starts from wording live Jev judged. (Guarded: a cached older page may lack them.)
+    for (const [id, hide] of [['#ledger-promote', fake], ['#ledger-promote-fake', !fake]]) {
+      const node = $(id);
+      if (node) node.hidden = hide;
+    }
     $('#pill-claude').textContent = 'Claude: ' + status.proposer.backend + (status.proposer.backend === 'offline' ? ' (heuristic)' : '');
     $('#pill-budget').textContent = `Requests: ${status.jev.sent}/${status.jev.max_requests}` + (status.jev.cache_hits ? ` · ${status.jev.cache_hits} cached` : '');
     const select = $('#loop-proposer');

@@ -103,6 +103,10 @@ def test_every_response_carries_the_security_headers_and_no_cors(client):
         assert response.headers["x-frame-options"] == "DENY"
         assert response.headers["referrer-policy"] == "no-referrer"
         assert "access-control-allow-origin" not in response.headers
+    # The page and its script revalidate on every load; API answers are never stored.
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/static/lab.js").headers["cache-control"] == "no-cache"
+    assert client.get("/api/status", headers=AUTH).headers["cache-control"] == "no-store"
 
 
 @pytest.mark.parametrize(
