@@ -768,6 +768,16 @@ def test_a_live_ledger_ignores_fake_wording_left_by_an_older_lab(tmp_path):
     live.path.write_text("".join(json.dumps(row) + "\n" for row in legacy))
 
     assert live.incumbents()[questions.HEADER_MAPPING].label == questions.baseline(questions.HEADER_MAPPING).label
+    assert live.judged_by_fake(rewrite.digest)
+    assert not live.judged_by_fake(questions.baseline(questions.HEADER_MAPPING).digest)
+    # An older fake run cut off before its generation row left no fake marker, and no live evidence either.
+    live.path.write_text(json.dumps(legacy[1]) + "\n")
+    assert live.incumbents()[questions.HEADER_MAPPING].label == questions.baseline(questions.HEADER_MAPPING).label
+    # Wording live Jev judged (its rows say so) is trusted.
+    live_row = {**legacy[1], "run_id": "new", "mode": "live"}
+    live.path.write_text(json.dumps(legacy[1]) + "\n" + json.dumps(live_row) + "\n")
+    assert live.incumbents()[questions.HEADER_MAPPING].label == "lab-old-g1-header_mapping"
+    assert not live.judged_by_fake(rewrite.digest)
     # The same rows, read as the fake ledger they were, still count there.
     fake_view = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
     fake_view.ensure()

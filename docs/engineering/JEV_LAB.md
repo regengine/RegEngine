@@ -222,6 +222,13 @@ become the live incumbent or use the live held-out split. `ledger`,
 
 Never written: API keys, the page token, row values, Claude's transcript.
 
+A live ledger trusts only runs with a row saying live Jev judged them. A
+home used by an older Jev Lab, before fake runs moved to `fake/`, can hold
+fake-judged rows. Their wording never becomes the live incumbent, and
+`ledger` and `export` mark it as the fake's. Held-out looks those runs
+spent still count against the live split: run `reset --rotate-split` once
+on such a home.
+
 ## Promotion
 
 1. `venv/bin/python scripts/jev_lab export <digest>` prints three things:

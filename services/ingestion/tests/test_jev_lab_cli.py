@@ -175,6 +175,22 @@ def test_fake_judged_wording_is_never_offered_for_promotion(capsys, home):
     assert all(qs.label.startswith("csv-") for qs in home.incumbents().values())
 
 
+def test_an_older_labs_fake_rows_in_the_live_ledger_are_marked_and_never_promoted(capsys, home):
+    """Before fake runs moved to <home>/fake, they wrote to the live files: same rows, same layout."""
+    digest = _accepted_digest(capsys, home, "--fake")
+    fake_dir = home.home / "fake"
+    for name in ("ledger.jsonl", "split.json"):
+        (home.home / name).write_text((fake_dir / name).read_text())
+    for path in (fake_dir / "question_sets").iterdir():
+        (home.sets_dir / path.name).write_text(path.read_text())
+
+    code, out, _ = _run(capsys, ["ledger", "--home", str(home.home)])
+    assert code == 0 and "[offline fake, not Jev]" in out
+    assert "Incumbent header_mapping: csv-header-mapping.v3" in out
+    code, out, _ = _run(capsys, ["export", digest, "--home", str(home.home)])
+    assert code == 0 and "Judged by the OFFLINE FAKE Jev" in out and "grep -rn" not in out
+
+
 def test_confirm_reports_insufficient_fresh_data(capsys, home):
     code, out, _ = _run(capsys, ["export", "incumbent", "--home", str(home.home)])
     assert code == 0 and "differs from production csv-header-mapping.v3 in: nothing" in out

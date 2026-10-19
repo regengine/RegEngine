@@ -380,10 +380,12 @@ def _cmd_ledger(args: argparse.Namespace, ledger: Any) -> int:
         return EXIT_OK
     if not rows:
         print(f"No generations recorded in {ledger.home}.")
+    trusted = ledger.live_runs() if ledger.mode == "live" else set()
     for row in rows:
         decisions = row.get("decisions") or {}
         kept = ", ".join(row.get("accepted") or []) or "-"
-        print(f"{row['at']}  run {row['run_id']}  g{row['generation']}  {row['outcome']:<11} kept: {kept}")
+        judge = "" if row.get("run_id") in trusted else "  [offline fake, not Jev]"
+        print(f"{row['at']}  run {row['run_id']}  g{row['generation']}  {row['outcome']:<11} kept: {kept}{judge}")
         for kind, digest in (row.get("candidates") or {}).items():
             reasons = decisions.get(kind, {}).get("reasons") or []
             print(f"    {kind:<15} {digest[:12]}  {reasons[0] if reasons else 'accepted'}")
@@ -416,7 +418,7 @@ def _cmd_export(args: argparse.Namespace, ledger: Any) -> int:
                 f"\n+ candidate:  {json.dumps(new, ensure_ascii=False)}"
             )
         print("\n" + json.dumps(qs.to_dict(), indent=1, ensure_ascii=False))
-        if changed and ledger.mode == "fake":
+        if changed and ledger.judged_by_fake(qs.digest):
             print(
                 "\nJudged by the OFFLINE FAKE Jev, not by Jev: this is no evidence for production. "
                 "Run the loop live to get a rewrite worth promoting."

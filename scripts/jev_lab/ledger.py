@@ -69,6 +69,11 @@ def _judged_by_fake(row: Mapping[str, Any]) -> bool:
     return row.get("mode") == FAKE or (isinstance(jev, Mapping) and jev.get("mode") == FAKE)
 
 
+def _judged_live(row: Mapping[str, Any]) -> bool:
+    jev = row.get("jev")
+    return row.get("mode") == LIVE or (isinstance(jev, Mapping) and jev.get("mode") == LIVE)
+
+
 def default_home() -> Path:
     raw = os.environ.get(HOME_ENV, "").strip()
     return Path(raw).expanduser() if raw else DEFAULT_HOME
@@ -224,28 +229,61 @@ class Ledger:
         A recorded incumbent built on a production wording that has since
         changed is ignored, so the lab never keeps optimising stale text, and
         one judged on another epoch's held-out split is ignored too. A live
-        ledger also ignores wording the offline fake picked: a home written
-        before fake runs moved to ``<home>/fake`` can hold such rows.
+        ledger accepts only wording live Jev judged (see :meth:`live_runs`):
+        a home written before fake runs moved to ``<home>/fake`` can hold
+        rows the offline fake picked.
         """
         current = {kind: baseline(kind) for kind in KINDS}
         epoch = self.epoch()["salt"]
         rows = self.rows()
-        fake_runs = (
-            {row["run_id"] for row in rows if row.get("run_id") and _judged_by_fake(row)}
-            if self.mode == LIVE
-            else set()
-        )
+        trusted = self.live_runs(rows) if self.mode == LIVE else None
         for row in rows:
             if row.get("type") != "incumbent" or row.get("kind") not in current:
                 continue
             if row.get("baseline_digest") != baseline(row["kind"]).digest or row.get("epoch") != epoch:
                 continue
-            if self.mode == LIVE and (_judged_by_fake(row) or row.get("run_id") in fake_runs):
+            if trusted is not None and row.get("run_id") not in trusted:
                 continue
             loaded = self.load_set(str(row.get("digest", "")))
             if loaded is not None:
                 current[row["kind"]] = loaded
         return current
+
+    def live_runs(self, rows: list[dict[str, Any]] | None = None) -> set[str]:
+        """Runs with positive evidence that live Jev judged them, and none that the fake did.
+
+        Evidence is a row of the run stamped ``mode: live`` or carrying the
+        live decider's stats (``jev.mode: live``). ``reset`` counts: it only
+        ever restores production wording. A run any row of which says the
+        fake judged it is never trusted, and neither is one with no evidence
+        at all (an older lab's fake run cut off before it wrote one).
+        """
+        rows = self.rows() if rows is None else rows
+        live = {"reset"}
+        fake = set()
+        for row in rows:
+            run_id = row.get("run_id")
+            if not run_id:
+                continue
+            if _judged_by_fake(row):
+                fake.add(run_id)
+            elif _judged_live(row):
+                live.add(run_id)
+        return live - fake
+
+    def judged_by_fake(self, digest: str) -> bool:
+        """True unless this ledger shows live Jev judged the wording (production wording always counts)."""
+        if self.mode == FAKE:
+            return True
+        if digest in {baseline(kind).digest for kind in KINDS}:
+            return False
+        rows = self.rows()
+        trusted = self.live_runs(rows)
+        for row in rows:
+            named = row.get("digest") == digest or digest in (row.get("candidates") or {}).values()
+            if named and row.get("run_id") in trusted:
+                return False
+        return True
 
     def record_incumbent(self, qs: QuestionSet, *, generation: int, run_id: str, salt: str) -> None:
         if self.epoch()["salt"] != salt:
