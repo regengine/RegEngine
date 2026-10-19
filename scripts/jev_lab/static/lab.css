@@ -211,6 +211,7 @@ textarea { min-height: 72px; resize: vertical; font-family: ui-monospace, SFMono
 .chip.strong { border-color: var(--ok); color: var(--ok); }
 .chip.moderate { border-color: var(--warn); color: var(--warn); }
 .chip.unsure { border-color: var(--bad); color: var(--bad); }
+.chip.fake { border-color: var(--warn); color: var(--warn); font-weight: 600; }
 .bars { display: grid; gap: 3px; margin-top: 4px; }
 .barrow { display: grid; grid-template-columns: minmax(80px, 34%) 1fr 48px; gap: 6px; align-items: center; font-size: 12.5px; }
 .barrow .track { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }

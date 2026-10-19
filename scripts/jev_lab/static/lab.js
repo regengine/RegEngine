@@ -8,6 +8,8 @@
   const KIND_NAMES = { header_mapping: 'Header fields', file_cte: 'File CTE' };
   const NO_ANSWER = new Set(['no_match', 'mixed_or_unclear']);
   const BINS = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0];
+  const CORE_MAX = 1.2; // Jev's core at mean confidence 1, as a multiple of geom.core
+  const CROWN = 1.75; // the reliability crown's radius, as a multiple of the core's
 
   // ---------------------------------------------------------------- storage (per-viewer conveniences only)
   const store = {
@@ -100,6 +102,7 @@
     margins: null,
     noise: null,
     looks: {},
+    lookCap: 12,
     claudeCost: 0,
     foresight: { predicted: 0, came_true: 0 },
     lastSummary: null,
@@ -118,8 +121,14 @@
     if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', theme);
     $('#theme-toggle').textContent = 'Theme: ' + theme;
+    repaint();
+  }
+  // A new palette: every canvas redraws, the charts too (they return early while the Loop tab is hidden).
+  function repaint() {
     palette = null;
     drawLegend();
+    drawTide();
+    drawReliability();
     requestDraw();
   }
   let theme = THEMES.includes(store.get('jevLabTheme')) ? store.get('jevLabTheme') : 'auto';
@@ -128,7 +137,7 @@
     store.set('jevLabTheme', theme);
     applyTheme(theme);
   });
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { palette = null; drawLegend(); requestDraw(); });
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', repaint);
   function syncMotionButton() {
     const btn = $('#motion-toggle');
     btn.setAttribute('aria-pressed', String(!S.motion));
@@ -216,7 +225,13 @@
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const R = Math.min(w, h) * 0.47;
-    geom = { w, h, cx: w / 2, cy: h / 2, R, core: R * 0.085, ringIn: R * 0.14, ringOut: R * 0.27, rMin: R * 0.31, rMax: R * 0.84, orbit: R * 0.97 };
+    // Radial bands from the centre out, none overlapping: Jev's core, the reliability crown (its
+    // largest radius, at mean confidence 1, plus its ticks), the generation rings, then the stars
+    // (a confident star's glyph and nova halo reach about 10 px inside rMin).
+    const core = R * 0.085;
+    const crownMax = core * CORE_MAX * CROWN;
+    const rMin = R * 0.34;
+    geom = { w, h, cx: w / 2, cy: h / 2, R, core, crownMax, ringIn: crownMax + 7, ringOut: Math.max(crownMax + 9, rMin - 10), rMin, rMax: R * 0.84, orbit: R * 0.97 };
     layoutDirty = true;
   }
   new ResizeObserver(() => { resize(); requestDraw(); }).observe(canvas);
@@ -258,7 +273,8 @@
 
   function starRadius(s, now) {
     const target = radiusFor(s.cur);
-    if (s.fromR === undefined || !animated()) return target;
+    if (!animated()) { s.fromR = undefined; return target; }
+    if (s.fromR === undefined) return target;
     const t = Math.min(1, (now - s.t0) / 900);
     if (t >= 1) { s.fromR = undefined; return target; }
     return s.fromR + (target - s.fromR) * ease(t);
@@ -361,19 +377,21 @@
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
 
-    // Threshold circles: where the auto-apply and review bands begin.
+    // Threshold circles: where the auto-apply and review bands begin. Their labels sit in the
+    // starless gap along the horizontal axis on the right, one above it and one below, so they
+    // never share a line with each other or with the split labels on the left.
+    const autoR = geom.rMin + (1 - autoApply()) * (geom.rMax - geom.rMin);
     ctx.save();
     ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
-    // Labels sit on the circles at different angles so they never collide.
-    for (const [conf, label, side] of [[autoApply(), 'auto-apply ≥ ' + autoApply().toFixed(2), -1], [reviewAt(), 'review ≥ ' + reviewAt().toFixed(2), 1]]) {
+    for (const [conf, label, dy] of [[autoApply(), 'auto-apply ≥ ' + autoApply().toFixed(2), -5], [reviewAt(), 'review ≥ ' + reviewAt().toFixed(2), 14]]) {
       const r = geom.rMin + (1 - conf) * (geom.rMax - geom.rMin);
       ctx.strokeStyle = p.grid;
       ctx.setLineDash([4, 6]);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = p.muted;
-      ctx.textAlign = side < 0 ? 'right' : 'left';
-      ctx.fillText(label, cx + side * (r + 4), cy - 5);
+      ctx.textAlign = 'left';
+      ctx.fillText(label, Math.min(cx + r + 4, w - 4 - ctx.measureText(label).width), cy + dy);
     }
     ctx.restore();
 
@@ -387,8 +405,11 @@
     ctx.fillStyle = p.muted;
     ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('▲ Training: Claude sees these misses', 10, cy - 8);
-    ctx.fillText('▼ Held out: Claude never sees this half', 10, cy + 18);
+    // The long labels only where they end before the threshold labels begin (narrow skies get the short ones).
+    const room = cx + autoR - 4 - 10;
+    for (const [full, short, y] of [['▲ Training: Claude sees these misses', '▲ Training', cy - 8], ['▼ Held out: Claude never sees this half', '▼ Held out', cy + 18]]) {
+      ctx.fillText(ctx.measureText(full).width <= room ? full : short, 10, y);
+    }
     ctx.restore();
 
     // Milky Way: one mote per sandbox question this session.
@@ -402,7 +423,21 @@
       ctx.restore();
     });
 
-    // Generation rings around Jev, for the selected question.
+    // Jev: the core grows with mean confidence; the crown is the reliability of the current answers.
+    const current = subjectsOf(S.kind).map((s) => s.cur).filter((o) => o && o.confidence !== null && o.confidence !== undefined);
+    const meanConf = current.length ? current.reduce((a, o) => a + o.confidence, 0) / current.length : 0;
+    const coreR = geom.core * (0.65 + (CORE_MAX - 0.65) * meanConf);
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.2);
+    glow.addColorStop(0, p.jev);
+    glow.addColorStop(0.35, p.jev);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(cx, cy, coreR * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    // Generation rings around Jev, for the selected question: drawn over the glow, outside the crown.
     const rings = S.rings.map((ring) => ({ generation: ring.generation, result: ring.results[S.kind] })).filter((ring) => ring.result && ['holdout', 'screen'].includes(ring.result.stage));
     const step = rings.length ? Math.min(9, (geom.ringOut - geom.ringIn) / rings.length) : 0;
     rings.forEach((ring, i) => {
@@ -412,7 +447,7 @@
       if (res.accepted) {
         const gain = res.holdout ? (res.holdout.incumbent.brier - res.holdout.candidate.brier) : 0;
         ctx.strokeStyle = p.gold;
-        ctx.lineWidth = 1.5 + Math.min(4, Math.max(0, gain) * 60);
+        ctx.lineWidth = Math.min(step, 1.5 + Math.min(4, Math.max(0, gain) * 60));
         ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
       } else if (res.stage === 'holdout') {
         ctx.strokeStyle = p.decline;
@@ -428,25 +463,12 @@
       ctx.restore();
     });
 
-    // Jev: the core grows with mean confidence; the crown is the reliability of the current answers.
-    const current = subjectsOf(S.kind).map((s) => s.cur).filter((o) => o && o.confidence !== null && o.confidence !== undefined);
-    const meanConf = current.length ? current.reduce((a, o) => a + o.confidence, 0) / current.length : 0;
-    const coreR = geom.core * (0.65 + 0.55 * meanConf);
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3.2);
-    glow.addColorStop(0, p.jev);
-    glow.addColorStop(0.35, p.jev);
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save();
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = glow;
-    ctx.beginPath(); ctx.arc(cx, cy, coreR * 3.2, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
     const binsData = reliability(current);
     const arc = (Math.PI * 2) / binsData.length;
     binsData.forEach((bin, i) => {
       const start = -Math.PI / 2 + i * arc + 0.06;
       const span = arc - 0.12;
-      const r = coreR * 1.75;
+      const r = coreR * CROWN;
       ctx.save();
       ctx.lineCap = 'round';
       ctx.strokeStyle = p.grid;
@@ -522,7 +544,7 @@
       ctx.globalAlpha = 0.25 + 0.35 * pulse;
       ctx.fillStyle = p.claude;
       ctx.beginPath(); ctx.arc(mx, my, moonR * 2.2, 0, Math.PI * 2); ctx.fill();
-      busy = true;
+      if (animated()) busy = true;
     }
     ctx.globalAlpha = 1;
     ctx.fillStyle = p.claude;
@@ -536,26 +558,27 @@
     ctx.restore();
 
     // Comets: one per proposal. The tail has one bead per changed option; the ending is the decision.
-    S.comets = S.comets.filter((comet) => !comet.done || now - comet.endT < 1600);
+    // Without motion each comet is drawn once at its ending and stays until the next one replaces it.
+    const still = !animated();
+    const lastComet = S.comets[S.comets.length - 1];
+    S.comets = S.comets.filter((comet) => !comet.done || (still ? comet === lastComet : now - comet.endT < 1600));
     for (const comet of S.comets) {
       const target = comet.fate === 'accepted' ? [cx, cy]
         : comet.fate === 'holdout' ? [cx + (comet.sx - cx) * 0.15, cy + geom.rMin * 0.9]
         : comet.fate === 'screen' ? [cx + (comet.sx - cx) * 0.55, cy + (comet.sy - cy) * 0.55]
-        : comet.fate === 'invalid' ? [comet.sx, comet.sy]
+        : comet.fate === 'invalid' || comet.fate === 'unchanged' ? [comet.sx, comet.sy]
         : [cx + (comet.sx - cx) * 0.4, cy + (comet.sy - cy) * 0.4];
-      const travel = animated() ? Math.min(1, (now - comet.t0) / 1400) : 1;
+      const travel = still ? 1 : Math.min(1, (now - comet.t0) / 1400);
       if (travel < 1) busy = true;
       const hx = comet.sx + (target[0] - comet.sx) * ease(travel);
       const hy = comet.sy + (target[1] - comet.sy) * ease(travel);
-      const fade = comet.done ? Math.max(0, 1 - (now - comet.endT) / 1600) : 1;
-      if (comet.done && fade > 0) busy = true;
-      if (!comet.done && animated()) busy = true;
+      const fade = comet.done && !still ? Math.max(0, Math.min(1, 1 - (now - comet.endT) / 1600)) : 1;
+      if (!still && (!comet.done || fade > 0)) busy = true;
       ctx.save();
       ctx.globalAlpha = fade;
       const color = comet.fate === 'accepted' ? p.gold : comet.fate && comet.fate !== 'pending' ? p.decline : p.claude;
-      const beads = Math.max(1, comet.beads);
-      for (let i = 0; i < beads; i++) {
-        const back = (i + 1) / (beads + 1);
+      for (let i = 0; i < comet.beads; i++) {
+        const back = (i + 1) / (comet.beads + 1);
         const bx = hx + (comet.sx - hx) * back * 0.6;
         const by = hy + (comet.sy - hy) * back * 0.6;
         ctx.fillStyle = color;
@@ -563,8 +586,16 @@
         ctx.beginPath(); ctx.arc(bx, by, 2, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = fade;
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(hx, hy, comet.fate === 'invalid' ? 3 + 6 * (1 - fade) : 3.5, 0, Math.PI * 2); ctx.fill();
+      if (comet.fate === 'unchanged') {
+        // Nothing to judge: a hollow ring that never leaves the moon.
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.fillStyle = color;
+        const burst = comet.fate === 'invalid' ? (still ? 6 : 3 + 6 * (1 - fade)) : 3.5;
+        ctx.beginPath(); ctx.arc(hx, hy, burst, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.restore();
     }
 
@@ -689,11 +720,16 @@
     li.scrollIntoView({ block: 'nearest' });
   }
 
-  function announce(text) { $('#announce').textContent = text; }
+  // Events up to this id are history replayed on (re)connect: redrawn, never read out again.
+  let replayUntil = 0;
+  let replaying = false;
+  function announce(text) { if (!replaying) $('#announce').textContent = text; }
 
   const handlers = {
     hello(d) {
       resetRun();
+      S.motes = []; // the backlog replays every Ask Jev question of this server session
+      replayUntil = d.replay_until || 0;
       $('#log').replaceChildren();
       applyStatus(d.status);
     },
@@ -703,7 +739,8 @@
       S.run = d;
       S.running = true;
       S.phase = 'incumbent';
-      S.looks = (d.epoch && d.epoch.looks) || {};
+      S.looks = { ...((d.epoch && d.epoch.looks) || {}) };
+      if (d.epoch && d.epoch.cap) S.lookCap = d.epoch.cap;
       logLine(`Run ${d.run_id}: ${d.cases} labelled cases, ${d.split.train.length} training and ${d.split.holdout.length} held out. Claude: ${d.proposer}.`);
     },
     parity(d) {
@@ -808,6 +845,7 @@
     run_done(d) {
       S.running = false;
       S.phase = 'idle';
+      endPendingComets();
       S.lastSummary = d;
       logLine(`Run finished: ${d.accepted} rewrite(s) kept in ${d.generations} generation(s). Stopped: ${d.stopped}.`, d.accepted ? 'accepted' : '');
       announce('Run finished: ' + d.stopped);
@@ -816,30 +854,43 @@
     run_failed(d) {
       S.running = false;
       S.phase = 'idle';
+      endPendingComets();
       logLine('Run failed: ' + d.error, 'failed');
       announce('Run failed');
       refreshStatus();
     },
     sandbox(d) {
-      S.motes.push({ confidence: d.confidence, request_id: d.request_id, verdict: null });
+      S.motes.push({ confidence: d.confidence, ask_id: d.ask_id, question_id: d.question_id, verdict: null });
       if (S.motes.length > 400) S.motes.shift();
     },
     feedback(d) {
-      const mote = S.motes.find((m) => m.request_id === d.request_id && m.verdict === null);
+      const mote = S.motes.find((m) => m.ask_id === d.ask_id && m.question_id === d.question_id);
       if (mote) mote.verdict = d.verdict;
     },
   };
+
+  // A run that ends between a proposal and its judgement leaves that comet with no ending: it burst.
+  function endPendingComets() {
+    for (const comet of S.comets) {
+      if (comet.done) continue;
+      comet.done = true;
+      comet.fate = 'invalid';
+      comet.t0 = performance.now();
+      comet.endT = performance.now();
+    }
+  }
 
   function setCurrent(s, obs) {
     if (s.cur && geom) { s.fromR = radiusFor(s.cur); s.t0 = performance.now(); }
     s.cur = obs;
   }
 
-  function dispatch(event, data) {
+  function dispatch(event, data, id) {
     const handler = handlers[event];
     if (!handler) return;
     S.lastEventAt = performance.now();
-    handler(data);
+    replaying = event !== 'hello' && id > 0 && id <= replayUntil;
+    try { handler(data); } finally { replaying = false; }
     updateNow();
     updateCaption();
     requestDraw();
@@ -864,13 +915,15 @@
           const chunk = buffer.slice(0, cut);
           buffer = buffer.slice(cut + 2);
           let event = 'message';
+          let id = 0;
           const data = [];
           for (const line of chunk.split('\n')) {
             if (line.startsWith('event: ')) event = line.slice(7);
+            else if (line.startsWith('id: ')) id = parseInt(line.slice(4), 10) || 0;
             else if (line.startsWith('data: ')) data.push(line.slice(6));
           }
           if (data.length) {
-            try { dispatch(event, JSON.parse(data.join('\n'))); } catch (e) { /* a malformed event is skipped */ }
+            try { dispatch(event, JSON.parse(data.join('\n')), id); } catch (e) { /* a malformed event is skipped */ }
           }
         }
       }
@@ -885,11 +938,19 @@
     if (!status) return;
     S.status = status;
     S.running = status.loop.running;
+    // split.json is the truth for held-out wear; a run's own events take over only while it runs.
+    if (status.epoch) {
+      S.lookCap = status.epoch.cap || S.lookCap;
+      if (!S.running) S.looks = { ...(status.epoch.looks || {}) };
+    }
     const fake = status.mode === 'fake';
     const pillJev = $('#pill-jev');
     pillJev.className = 'pill ' + (fake ? 'fake' : 'live');
     pillJev.textContent = fake ? 'Jev: OFFLINE FAKE' : `Jev: live, ${status.jev.model}`;
     $('#fake-banner').hidden = !fake;
+    // Header check: say whose wording "Lab incumbent" is (production's version, or a lab rewrite) and who judged it.
+    const incumbent = status.incumbents && status.incumbents.header_mapping;
+    if (incumbent) $('#hdr-wording').options[0].textContent = `Lab incumbent: ${incumbent.label}${fake ? ' (offline fake ledger)' : ''}`;
     $('#pill-claude').textContent = 'Claude: ' + status.proposer.backend + (status.proposer.backend === 'offline' ? ' (heuristic)' : '');
     $('#pill-budget').textContent = `Requests: ${status.jev.sent}/${status.jev.max_requests}` + (status.jev.cache_hits ? ` · ${status.jev.cache_hits} cached` : '');
     const select = $('#loop-proposer');
@@ -966,7 +1027,7 @@
   function updateGauges() {
     if (!S.status) return;
     updateEstimate();
-    const cap = (S.run && S.run.epoch && S.run.epoch.cap) || 12;
+    const cap = S.lookCap;
     const fs = S.foresight;
     $('#gauges').replaceChildren(
       gauge('Jev requests sent', S.status.jev.sent, S.status.jev.max_requests, S.status.jev.cache_hits + ' answered from cache'),
@@ -1123,7 +1184,9 @@
       case: s.case_id + s.subject, split: s.split, conf: -(s.cur && s.cur.confidence !== null ? s.cur.confidence : -1), right: s.cur && s.cur.correct ? 1 : 0,
     }[key]);
     list.sort((a, b) => { const va = value(a, sortKey); const vb = value(b, sortKey); return va < vb ? -1 : va > vb ? 1 : 0; });
-    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? 'ascending' : 'none' }, el('button', { type: 'button', text: label, onclick: () => { sortKey = key; renderTable(); } }));
+    // Confidence sorts highest first (its key is negated); every other column sorts ascending.
+    const direction = (key) => (key === 'conf' ? 'descending' : 'ascending');
+    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? direction(key) : 'none' }, el('button', { type: 'button', text: label, onclick: () => { sortKey = key; renderTable(); } }));
     const head = el('tr', {}, sortBtn('case', 'Case · subject'), sortBtn('split', 'Split'), el('th', { text: 'Expected' }), el('th', { text: 'Jev' }), sortBtn('conf', 'Confidence'), sortBtn('right', 'Right?'), el('th', { text: 'Order check' }));
     const rows = list.map((s) => {
       const o = s.cur || {};
@@ -1225,8 +1288,14 @@
     }));
   }
 
+  // How sure Jev was of the answer it gave (a confident "no" is as sure as a confident "yes").
+  function answerConfidence(answer) {
+    if (answer.type === 'noul' && typeof answer.probability_yes === 'number') return Math.max(answer.probability_yes, 1 - answer.probability_yes);
+    return typeof answer.confidence === 'number' ? answer.confidence : null;
+  }
+
   async function sendFeedback(report, questionId, answer, verdict, buttons) {
-    const r = await api('/api/adhoc-feedback', { method: 'POST', body: { request_id: report.request_id, question_id: questionId, type: answer.type, confidence: answer.confidence ?? answer.probability_yes ?? null, verdict } });
+    const r = await api('/api/adhoc-feedback', { method: 'POST', body: { request_id: report.request_id, ask_id: report.ask_id, question_id: questionId, type: answer.type, confidence: answerConfidence(answer), verdict } });
     for (const b of buttons) b.disabled = true;
     if (!r.ok) announce('Feedback not saved: ' + errorText(r));
     else announce('Saved: Jev was ' + verdict);
@@ -1343,14 +1412,19 @@
       const kept = (row.accepted || []).map((k) => KIND_NAMES[k]).join(', ');
       const btn = el('button', { type: 'button', class: 'ghost', text: `${row.at} · run ${row.run_id} · g${row.generation} · ${row.outcome}${kept ? ' (' + kept + ')' : ''}` });
       btn.addEventListener('click', () => showGeneration(row));
-      return el('li', {}, btn);
+      return el('li', {}, btn, judgedByFake(row) ? el('span', { class: 'chip fake', text: 'OFFLINE FAKE' }) : null);
     });
     box.replaceChildren(el('ul', { class: 'log' }, items));
   }
 
+  // Rows judged by the offline fake are word overlap, not Jev: never a candidate for promotion.
+  function judgedByFake(row) { return row.mode === 'fake' || Boolean(row.jev && row.jev.mode === 'fake'); }
+
   async function showGeneration(row) {
     const box = $('#ledger-detail');
+    const fake = judgedByFake(row);
     const parts = [el('h3', { text: `Run ${row.run_id}, generation ${row.generation}: ${row.outcome}` })];
+    if (fake) parts.push(el('p', { class: 'small', text: 'Judged by the OFFLINE FAKE (word overlap), not Jev. Not for promotion: run it again against live Jev.' }));
     if (row.reason) parts.push(el('p', { text: row.reason }));
     if (row.proposal) parts.push(el('p', { class: 'small', text: `${row.proposal.backend}${row.proposal.model ? ', ' + row.proposal.model : ''}: ${row.proposal.rationale}` }));
     if (row.foresight && row.foresight.predicted) parts.push(el('p', { class: 'small', text: `Foresight: ${row.foresight.came_true} of ${row.foresight.predicted} predicted fixes came true; ${row.foresight.breaks} right answers broke.` }));
@@ -1377,7 +1451,9 @@
         btn.addEventListener('click', async () => {
           const d = await api('/api/question-sets/' + digest + '/diff');
           if (!d.ok) { holder.replaceChildren(el('p', { class: 'error', text: errorText(d) })); return; }
-          const blocks = [el('p', { class: 'small' }, `Against production ${d.data.baseline}. Export: `, el('code', { text: `venv/bin/python scripts/jev_lab export ${digest}` }))];
+          const blocks = [fake
+            ? el('p', { class: 'small', text: `Against production ${d.data.baseline}. Judged by the offline fake, so there is nothing to export.` })
+            : el('p', { class: 'small' }, `Against production ${d.data.baseline}. Export: `, el('code', { text: `venv/bin/python scripts/jev_lab export ${digest}` }))];
           for (const ch of d.data.changes) {
             blocks.push(el('div', {}, el('b', { text: ch.name })), el('div', { class: 'old', text: JSON.stringify(ch.production, null, 1) }), el('div', { class: 'new', text: JSON.stringify(ch.candidate, null, 1) }));
           }

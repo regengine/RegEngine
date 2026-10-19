@@ -143,6 +143,18 @@ def test_status_says_fake_and_never_carries_the_key(client, lab):
     assert data["estimate"]["jev_requests_max"] > 0
 
 
+def test_status_reports_held_out_wear_from_the_split_file(client, lab):
+    salt = lab.ledger.epoch()["salt"]
+    lab.ledger.record_holdout_look("header_mapping", salt=salt)
+    lab.ledger.record_holdout_look("header_mapping", salt=salt)
+
+    epoch = client.get("/api/status", headers=AUTH).json()["epoch"]
+    assert epoch["looks"]["header_mapping"] == 2 and epoch["cap"] == ledger.MAX_HOLDOUT_LOOKS
+
+    client.post("/api/ledger/rotate", headers=POST, json={})
+    assert client.get("/api/status", headers=AUTH).json()["epoch"]["looks"] == {"header_mapping": 0, "file_cte": 0}
+
+
 # ---------------------------------------------------------------------------
 # Sandbox
 # ---------------------------------------------------------------------------
@@ -174,6 +186,30 @@ def test_ask_answers_typed_questions(client, lab):
     assert data["answers"]["cte"]["choice"] == "shipping"
     assert "cte [choice]: shipping" in data["text"]
     assert lab.decider.stats()["sent"] == 1
+
+
+def test_ask_publishes_one_mote_per_question_with_the_answer_s_own_confidence(client, lab):
+    noul = {"type": "noul", "instructions": "Does one of the headers name a traceability lot code column?"}
+    response = client.post(
+        "/api/ask",
+        headers=POST,
+        json={"state": {"headers": ["Ship Dte", "Lot No."]}, "questions": {"cte": CTE_QUESTION, "has_lot": noul}},
+    )
+
+    data = response.json()
+    motes = [item["data"] for item in lab.hub._buffer if item["event"] == "sandbox"]
+    assert [m["question_id"] for m in motes] == ["cte", "has_lot"]
+    assert {m["ask_id"] for m in motes} == {data["ask_id"]}
+    assert motes[0]["confidence"] == pytest.approx(data["answers"]["cte"]["confidence"])
+    p_yes = data["answers"]["has_lot"]["probability_yes"]
+    assert motes[1]["confidence"] == pytest.approx(max(p_yes, 1 - p_yes))
+
+
+def test_answer_confidence_treats_a_confident_no_like_a_confident_yes():
+    assert server.answer_confidence({"type": "noul", "probability_yes": 0.03}) == pytest.approx(0.97)
+    assert server.answer_confidence({"type": "noul", "probability_yes": 0.9}) == pytest.approx(0.9)
+    assert server.answer_confidence({"type": "choice", "confidence": 0.6}) == 0.6
+    assert server.answer_confidence({"missing": True}) is None
 
 
 def test_ask_refuses_secrets_and_never_echoes_them(client, lab):
@@ -210,12 +246,22 @@ def test_sandbox_feedback_is_recorded_without_the_question(client, lab):
     response = client.post(
         "/api/adhoc-feedback",
         headers=POST,
-        json={"request_id": "fake_1", "question_id": "cte", "type": "choice", "confidence": 0.8, "verdict": "wrong"},
+        json={
+            "request_id": "fake_1",
+            "ask_id": "a1b2c3",
+            "question_id": "cte",
+            "type": "choice",
+            "confidence": 0.8,
+            "verdict": "wrong",
+        },
     )
 
     assert response.status_code == 200
     row = [r for r in lab.ledger.rows() if r["type"] == "adhoc_feedback"][-1]
     assert row["verdict"] == "wrong" and row["confidence"] == 0.8 and row["mode"] == "fake"
+    # The page colours the mote of exactly this question of this ask.
+    event = [item["data"] for item in lab.hub._buffer if item["event"] == "feedback"][-1]
+    assert event == {"ask_id": "a1b2c3", "question_id": "cte", "verdict": "wrong"}
     assert client.post("/api/adhoc-feedback", headers=POST, json={"verdict": "maybe"}).status_code == 400
 
 
@@ -391,3 +437,54 @@ def test_event_hub_replays_the_current_run_to_late_joiners():
     assert [item["event"] for item in backlog] == ["run_started", "observation"]
     assert live["event"] == "run_done"
     assert server._sse("x", {"a": 1}, 3) == b'id: 3\nevent: x\ndata: {"a": 1}\n\n'
+
+
+def test_event_hub_keeps_ask_jev_events_across_runs():
+    hub = server.EventHub()
+    hub.publish("sandbox", {"ask_id": "a", "question_id": "q"})
+    hub.publish("observation", {"n": 0})
+    hub.publish("feedback", {"ask_id": "a", "question_id": "q", "verdict": "right"})
+    hub.publish("run_started", {"run_id": "r"})
+
+    assert [item["event"] for item in hub._buffer] == ["sandbox", "feedback", "run_started"]
+
+
+def test_event_stream_hello_marks_where_the_replay_ends(lab):
+    lab.hub.publish("sandbox", {"ask_id": "a", "question_id": "q", "confidence": 0.9})
+    lab.hub.publish("run_started", {"run_id": "r"})
+    last = lab.hub._buffer[-1]["seq"]
+
+    async def first_events():
+        app = server.create_app(lab)
+        messages = []
+        sent = asyncio.Event()
+
+        async def receive():
+            await sent.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            messages.append(message)
+            if b"run_started" in message.get("body", b""):
+                sent.set()
+
+        scope = {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/api/events",
+            "raw_path": b"/api/events",
+            "query_string": b"",
+            "root_path": "",
+            "scheme": "http",
+            "server": ("127.0.0.1", PORT),
+            "client": ("127.0.0.1", 50000),
+            "headers": [(b"host", f"127.0.0.1:{PORT}".encode()), (b"authorization", f"Bearer {TOKEN}".encode())],
+        }
+        await asyncio.wait_for(app(scope, receive, send), 10)
+        return b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
+
+    body = asyncio.run(first_events()).decode()
+    hello = json.loads(body.split("event: hello\ndata: ", 1)[1].split("\n", 1)[0])
+    assert hello["replay_until"] == last and hello["backlog"] == 2
+    assert body.index("event: sandbox") < body.index("event: run_started")

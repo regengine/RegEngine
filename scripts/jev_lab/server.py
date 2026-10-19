@@ -35,7 +35,7 @@ from shared.jev import JevUnavailable, header_mapping as hm
 
 from . import load_script, privacy
 from .jev_access import LabDecider
-from .ledger import Ledger
+from .ledger import MAX_HOLDOUT_LOOKS, Ledger
 from .loop import LoopConfig, confirm, epoch_split, every_case, header_key, run_estimate, run_loop, validate_cases
 from .proposer import BACKENDS, build_proposer
 from .questions import FILE_CTE, HEADER_MAPPING, KINDS, baseline, changed_options
@@ -51,6 +51,9 @@ MAX_REQUEST_JSON = 60_000
 MAX_HEADERS = 200
 MAX_GENERATIONS = 25
 MAX_BODY_BYTES = 256_000
+# Ask Jev events outlive a run's events in the replay buffer, so a reconnecting page redraws every mote.
+SESSION_EVENTS = frozenset({"sandbox", "feedback"})
+MAX_SESSION_EVENTS = 800
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
@@ -79,7 +82,10 @@ class EventHub:
             self._seq += 1
             item = {"seq": self._seq, "event": event, "data": json.loads(json.dumps(data, default=str))}
             if event == "run_started":
+                # A new run replaces the last one's events; Ask Jev's motes belong to the session, not a run.
+                kept = [old for old in self._buffer if old["event"] in SESSION_EVENTS][-MAX_SESSION_EVENTS:]
                 self._buffer.clear()
+                self._buffer.extend(kept)
             self._buffer.append(item)
             subscribers = list(self._subscribers)
         for loop, queue in subscribers:
@@ -169,8 +175,10 @@ class Lab:
 
     def status(self) -> dict[str, Any]:
         _, split, every = epoch_split(self.ledger)
+        epoch = self.ledger.epoch()
         return {
             "mode": self.decider.mode,
+            "epoch": {"created": epoch.get("created"), "looks": dict(epoch.get("looks", {})), "cap": MAX_HOLDOUT_LOOKS},
             "jev": {**self.decider.settings.public_summary(), **self.decider.stats()},
             "auto_apply_confidence": self.decider.settings.auto_apply_confidence,
             "review_confidence": self.decider.settings.review_confidence,
@@ -188,6 +196,15 @@ class Lab:
             "vocabulary": {kind: list(baseline(kind).criteria) for kind in (HEADER_MAPPING, FILE_CTE)},
             "home": str(self.ledger.home),
         }
+
+
+def answer_confidence(answer: Mapping[str, Any]) -> float | None:
+    """How sure Jev was of the answer it gave: a confident "no" is as sure as a confident "yes"."""
+    if answer.get("type") == "noul" and isinstance(answer.get("probability_yes"), (int, float)):
+        p = float(answer["probability_yes"])
+        return max(p, 1.0 - p)
+    confidence = answer.get("confidence")
+    return float(confidence) if isinstance(confidence, (int, float)) else None
 
 
 def _refuse(reasons: list[str]) -> JSONResponse:
@@ -266,17 +283,14 @@ def create_app(lab: Lab) -> FastAPI:
         except JevUnavailable as exc:
             return JSONResponse(status_code=503, content={"unavailable": exc.reason})
         report = jev_ask.answers_report(answers, questions)
-        confidences = [a.get("confidence", a.get("probability_yes")) for a in report["answers"].values()]
-        known = [c for c in confidences if isinstance(c, (int, float))]
-        lab.hub.publish(
-            "sandbox",
-            {
-                "request_id": report["request_id"],
-                "confidence": max(known) if known else None,
-                "questions": len(questions),
-            },
-        )
-        return {**report, "text": jev_ask.render_text(report), "mode": lab.decider.mode}
+        # The page's own handle on this ask: Jev's request id can be absent, and must not collide.
+        ask_id = secrets.token_hex(6)
+        for question_id, answer in report["answers"].items():
+            lab.hub.publish(
+                "sandbox",
+                {"ask_id": ask_id, "question_id": question_id, "confidence": answer_confidence(answer)},
+            )
+        return {**report, "ask_id": ask_id, "text": jev_ask.render_text(report), "mode": lab.decider.mode}
 
     @app.post("/api/adhoc-feedback")
     def adhoc_feedback(body: dict[str, Any] = Body(...)) -> Any:
@@ -294,7 +308,8 @@ def create_app(lab: Lab) -> FastAPI:
             "mode": lab.decider.mode,
         }
         lab.ledger.append(row)
-        lab.hub.publish("feedback", {"request_id": row["request_id"], "verdict": verdict})
+        ask_id = str(body.get("ask_id") or "")[:32]
+        lab.hub.publish("feedback", {"ask_id": ask_id, "question_id": row["question_id"], "verdict": verdict})
         return {"saved": True}
 
     @app.post("/api/headers")
@@ -452,7 +467,9 @@ def create_app(lab: Lab) -> FastAPI:
 
         async def stream() -> AsyncIterator[bytes]:
             try:
-                yield _sse("hello", {"status": lab.status(), "backlog": len(backlog)}, 0)
+                # replay_until: events up to this id are history the page redraws but does not announce.
+                replay_until = backlog[-1]["seq"] if backlog else 0
+                yield _sse("hello", {"status": lab.status(), "backlog": len(backlog), "replay_until": replay_until}, 0)
                 for item in backlog:
                     yield _sse(item["event"], item["data"], item["seq"])
                 while not await request.is_disconnected():

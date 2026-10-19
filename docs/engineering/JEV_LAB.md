@@ -102,11 +102,12 @@ Every mark is one datum:
 | Line from a star | Where the current rewrite moves that subject (teal: fixed, red: broken) |
 | Gold crown around Jev | Reliability per confidence bin: the arc is accuracy, the tick is mean confidence |
 | Rings around Jev | Generations: gold kept, dashed rejected on held-out, dotted failed on training |
-| Moon and comets | Claude. It moves one step per generation, and each comet is a proposal. A comet reaching Jev with a flash was kept. One falling to the veil failed the held-out check. One fading midway failed on training. One bursting at the moon was invalid. |
-| Dots along the top | One per Ask Jev question this session; colour is your verdict |
+| Moon and comets | Claude. It moves one step per generation, and each comet is a proposal, with one bead in its tail per changed option. A comet reaching Jev with a flash was kept. One falling to the veil failed the held-out check. One fading midway failed on training. One bursting at the moon was invalid, or its run ended before Jev judged it. A hollow ring left at the moon changed nothing. |
+| Dots along the top | One per Ask Jev question since the server started. Brightness is how sure Jev was of the answer it gave (a confident "no" is as bright as a confident "yes"); colour is your verdict |
 
-"Pause motion" and the system reduced-motion setting stop all animation. The
-theme follows the system unless you pick one.
+"Pause motion" and the system reduced-motion setting stop all animation: each
+comet is drawn once at its ending, and nothing redraws until new data arrives.
+The theme follows the system unless you pick one.
 
 ## The loop
 
