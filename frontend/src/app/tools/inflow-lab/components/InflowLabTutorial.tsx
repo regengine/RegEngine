@@ -32,7 +32,7 @@ export function buildInflowLabTutorialSteps({
             target: '[data-testid="inflow-evidence-chain"]',
             title: "What Inflow Lab is",
             content:
-                "A sandbox for supplier traceability data. This is one lot's chain of custody, harvest through receiving — a solid link is a record we have, a broken one is a record that never arrived. The gate at the end is what a missing link costs you. Nothing here writes to production exports.",
+                "A sandbox for supplier traceability data. This is one lot's chain of custody, harvest through receiving. A solid link is a record we have; a broken one is a record that never arrived. The gate at the end is what a missing link costs you. Nothing here writes to production exports.",
             position: "bottom",
         },
         {
@@ -46,7 +46,7 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-guided-proof"]',
             title: "Run your first test",
             content:
-                "This evaluates the built-in sample end to end — the highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
+                "This evaluates the built-in sample end to end. The highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
             position: "bottom",
             action: "Run trace",
             onAction: runGuidedProof,
@@ -62,14 +62,14 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-readiness"]',
             title: "Check the Data Preflight Score",
             content:
-                "Five factors roll up into one readiness score. The “biggest gap” badge marks the factor holding you back — that is always the next thing to fix.",
+                "Five factors roll up into one readiness score. The “biggest gap” badge marks the factor holding you back. That is always the next thing to fix.",
             position: "right",
         },
         {
             target: '[data-tutorial="inflow-exceptions"]',
             title: "Clear exceptions by pattern",
             content:
-                "Blocked lots are grouped by shared root cause — handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The sample data passes cleanly, so this list is empty until your own data brings real exceptions.",
+                "Blocked lots are grouped by shared root cause: handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The sample data passes cleanly, so this list is empty until your own data brings real exceptions.",
             position: "top",
         },
         {
@@ -98,7 +98,7 @@ export function buildInflowLabClientTutorialSteps({
             target: 'section[aria-label="Inflow Lab environment boundary"]',
             title: "What Inflow Lab is",
             content:
-                "A mock environment for supplier traceability data. Everything here uses test or uploaded records only — formal production records start after signed-in import, so you can experiment freely.",
+                "A mock environment for supplier traceability data. Everything here uses test or uploaded records only. Formal production records start after signed-in import, so you can experiment freely.",
             position: "bottom",
         },
         {
@@ -122,7 +122,7 @@ export function buildInflowLabClientTutorialSteps({
             target: '[data-tutorial="lab-workspace"]',
             title: "Read the results",
             content:
-                "Pipeline results land here — connection status, lot counts, and delivery outcomes on the overview, with the full detail one tab away. Reopen this guide any time from “How to use” in the header.",
+                "Pipeline results land here: connection status, lot counts, and delivery outcomes on the overview, with the full detail one tab away. Reopen this guide any time from “How to use” in the header.",
             position: "top",
         },
     ];

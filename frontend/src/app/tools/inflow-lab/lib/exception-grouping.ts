@@ -55,7 +55,7 @@ export function groupExceptionsByPattern<TLot extends LotForGrouping>(
         {
             id: "handoff",
             label: "Missing handoff evidence",
-            description: "Initial packing, shipping, DC receiving — handoff fields absent.",
+            description: "Handoff fields absent for initial packing, shipping, and DC receiving.",
             owner: "Shipping / receiving source",
             bulkActionable: handoff.length > 0,
             lots: handoff,

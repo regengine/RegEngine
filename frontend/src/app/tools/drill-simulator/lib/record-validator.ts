@@ -387,7 +387,7 @@ export function validateRecords(records: ParsedRecord[], startTime: Date): Valid
       severity: 'critical',
       category: 'CTE Coverage',
       message: `Missing critical CTE types: ${!cteBreakdown.ship ? 'Ship' : ''} ${!cteBreakdown.receive ? 'Receive' : ''}. Complete traceability requires both ship and receive events.`,
-      citation: '21 CFR 1.1342 - CTEs required',
+      citation: '21 CFR 1.1342: CTEs required',
       affectedRows: records
         .filter((r) => !['ship', 'receive'].includes(normalizeEventType(r.eventType)))
         .map((r) => r.rowIndex),

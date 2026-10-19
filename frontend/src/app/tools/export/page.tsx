@@ -58,7 +58,7 @@ const HASH_STEPS = [
   {
     n: '1',
     title: 'Hash Each Event',
-    body: 'Each CTE event (harvesting, initial packing, shipping, receiving, transformation) is converted to a deterministic SHA-256 hash. Same data always produces same hash.',
+    body: 'Each Critical Tracking Event (CTE), such as harvesting, initial packing, shipping, receiving, or transformation, is converted to a deterministic SHA-256 hash. Same data always produces same hash.',
     formula: 'event_data → SHA-256 → hash',
   },
   {
