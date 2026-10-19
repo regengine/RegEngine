@@ -20,7 +20,8 @@ import {
   startEmailChallenge,
 } from '@/lib/passwordless-auth';
 
-const GENERIC_OTP_MESSAGE = 'If this address is eligible, a sign-in code is on its way.';
+const INVITED_ACCOUNT_CODE_MESSAGE =
+  'A sign-in code is sent only if the email has an invited account.';
 
 // Never forward back to the pages that read `next` (a /login or /auth/verify
 // target would loop).
@@ -74,7 +75,7 @@ export default function PasswordlessEntryClient() {
         challengeId: response.challenge_id ?? null,
         createdAt: Date.now(),
       });
-      setStatusMessage(response.detail || response.message || GENERIC_OTP_MESSAGE);
+      setStatusMessage(INVITED_ACCOUNT_CODE_MESSAGE);
       router.push('/auth/verify');
     } catch (err: unknown) {
       const apiError = err as { response?: { status?: number }; message?: string };
@@ -209,6 +210,16 @@ export default function PasswordlessEntryClient() {
           )}
         </Button>
       </form>
+
+      <p className="mt-4 text-small text-re-text-secondary">
+        New to RegEngine?{' '}
+        <Link
+          href="/signup"
+          className="font-medium text-re-text-primary underline-offset-[3px] hover:underline"
+        >
+          Request access
+        </Link>
+      </p>
 
       <div className="my-5 flex items-center gap-3 text-label uppercase text-re-text-muted">
         <div className="h-px flex-1 bg-re-border-subtle" />

@@ -41,6 +41,7 @@ const CHROMELESS_EXACT_ROUTES = new Set([
   "/mobile/capture",
   "/fsma/field-capture",
   "/login",
+  "/signup",
   "/accept-invite",
   "/auth/verify",
   "/auth/sso/mock",

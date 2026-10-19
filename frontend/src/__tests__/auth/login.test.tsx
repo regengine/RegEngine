@@ -201,6 +201,7 @@ describe('passwordless login', () => {
     expect(screen.getByRole('button', { name: /sign in with passkey/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /create an account/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /request access/i })).toHaveAttribute('href', '/signup');
   });
 
   it('starts an OTP challenge and routes to the verification screen', async () => {
@@ -219,6 +220,10 @@ describe('passwordless login', () => {
       });
       expect(mocks.routerPush).toHaveBeenCalledWith('/auth/verify');
     });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /a sign-in code is sent only if the email has an invited account/i,
+    );
+    expect(screen.queryByText(/if this address is eligible/i)).not.toBeInTheDocument();
   });
 
   it('does not honor identity-revealing redirect fields in a challenge response', async () => {
@@ -278,6 +283,8 @@ describe('OTP verification', () => {
         initialChallengeId="11111111-1111-4111-8111-111111111111"
       />,
     );
+
+    expect(screen.getByText(/sent only if the email has an invited account/i)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/verification code/i), '123');
     await user.click(screen.getByRole('button', { name: /verify and continue/i }));
