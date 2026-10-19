@@ -1069,7 +1069,10 @@
     $('#loop-start').disabled = S.running;
     $('#loop-score').disabled = S.running;
     stop.hidden = !S.running;
-    if (!S.status) { text.textContent = S.unusable || 'Connecting to the lab…'; primary.disabled = Boolean(S.unusable); return; }
+    // A refusal or a lab-file message wins over everything else, also after a status was loaded:
+    // the file may be edited while the page is open, and the next poll is what reports it.
+    if (S.unusable) { text.textContent = S.unusable; primary.hidden = false; primary.disabled = true; return; }
+    if (!S.status) { text.textContent = 'Connecting to the lab…'; return; }
     const left = S.status.jev.max_requests - S.status.jev.sent;
     if (S.running) {
       primary.hidden = true;
