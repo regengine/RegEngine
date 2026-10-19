@@ -74,6 +74,10 @@ APPROVED_GLOBAL_ADMIN_ARMS = {
         "update_organization_sso_policy",
     ): ("global-human", 1),
     (
+        "services/admin/app/admin/organizations_router.py",
+        "update_organization",
+    ): ("global-human", 1),
+    (
         "services/admin/app/tenant_settings_routes.py",
         "update_partner_status",
     ): ("global-human", 1),

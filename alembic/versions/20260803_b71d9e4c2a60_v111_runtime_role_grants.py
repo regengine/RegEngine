@@ -787,7 +787,10 @@ REGENGINE_SYSADMIN_COLUMN_GRANTS = {
         )
     },
     "public.audit_log_buffer": {"UPDATE": ("replayed_at", "replay_attempts")},
-    "public.tenants": {"UPDATE": ("settings", "updated_at")},
+    # ``name`` lets PATCH /admin/organizations/{org_id} rename the tenant that
+    # shares the organization's ID. v133 applies the same grant to databases
+    # already past v111; this inventory keeps it across the cutover rerun.
+    "public.tenants": {"UPDATE": ("name", "settings", "updated_at")},
 }
 
 REGENGINE_SYSADMIN_SEQUENCE_GRANTS = {
