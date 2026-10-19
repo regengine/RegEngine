@@ -3,12 +3,10 @@
  *
  * Behaviour:
  *   1. Validate payload (name, email, message required; email regex-checked).
- *   2. Require CONTACT_WEBHOOK_URL and forward without following redirects.
+ *   2. Deliver in order: CONTACT_WEBHOOK_URL (no redirect following), then
+ *      Resend email to chris@regengine.co when RESEND_API_KEY is set.
  *   3. Log only a generated event ID and non-PII delivery metadata.
  *   4. Return 200 only after the configured provider accepts the submission.
- *
- * TODO: wire to a real email provider (Resend most likely — already listed
- * as a subprocessor in /dpa). Target inbox: chris@regengine.co.
  */
 import { NextResponse } from 'next/server';
 
@@ -38,6 +36,42 @@ function utmValue(value: unknown): string | null {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const DESTINATION = 'chris@regengine.co';
+const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
+const RESEND_TIMEOUT_MS = 10_000;
+const SUBJECT_MAX_CHARS = 150;
+const DEFAULT_RESEND_FROM = 'RegEngine <onboarding@regengine.co>';
+
+function requestSubject(company: string, name: string): string {
+  return `RegEngine request: ${company || name}`
+    .replace(/[\r\n]/g, '')
+    .slice(0, SUBJECT_MAX_CHARS);
+}
+
+function submissionText(submission: {
+  submission_id: string;
+  source: string;
+  received_at: string;
+  name: string;
+  email: string;
+  company: string;
+  message: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+}): string {
+  return [
+    `submission_id: ${submission.submission_id}`,
+    `source: ${submission.source}`,
+    `received_at: ${submission.received_at}`,
+    `name: ${submission.name}`,
+    `email: ${submission.email}`,
+    `company: ${submission.company}`,
+    `utm_source: ${submission.utm_source ?? ''}`,
+    `utm_medium: ${submission.utm_medium ?? ''}`,
+    `utm_campaign: ${submission.utm_campaign ?? ''}`,
+    `message: ${submission.message}`,
+  ].join('\n');
+}
 
 // Best-effort in-memory per-IP throttle. On serverless this is per-instance
 // (not shared across Vercel function instances), so it dampens bursts rather
@@ -125,10 +159,46 @@ export async function POST(request: Request) {
   });
 
   const webhook = process.env.CONTACT_WEBHOOK_URL;
-  if (!webhook) {
+  if (webhook) {
+    try {
+      const res = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submission),
+        redirect: 'manual',
+      });
+      if (res.status >= 300 && res.status < 400) {
+        console.error('[contact] delivery_refused', {
+          submissionId: submission.submission_id,
+          provider: 'webhook',
+          reason: 'redirect',
+        });
+        return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
+      }
+      if (!res.ok) {
+        console.error('[contact] delivery_refused', {
+          submissionId: submission.submission_id,
+          provider: 'webhook',
+          status: res.status,
+        });
+        return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
+      }
+    } catch (error) {
+      console.error('[contact] delivery_unavailable', {
+        submissionId: submission.submission_id,
+        provider: 'webhook',
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+      });
+      return NextResponse.json({ error: 'contact_service_unavailable' }, { status: 503 });
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!process.env.RESEND_API_KEY) {
     console.error('[contact] delivery_unavailable', {
       submissionId: submission.submission_id,
-      reason: 'webhook_not_configured',
+      reason: 'no_delivery_provider_configured',
     });
     return NextResponse.json(
       { error: 'contact_service_unavailable' },
@@ -137,22 +207,26 @@ export async function POST(request: Request) {
   }
 
   try {
-    const res = await fetch(webhook, {
+    const res = await fetch(RESEND_EMAILS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(submission),
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
       redirect: 'manual',
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM_EMAIL || DEFAULT_RESEND_FROM,
+        to: [DESTINATION],
+        reply_to: email,
+        subject: requestSubject(company, name),
+        text: submissionText(submission),
+      }),
     });
-    if (res.status >= 300 && res.status < 400) {
-      console.error('[contact] delivery_refused', {
-        submissionId: submission.submission_id,
-        reason: 'redirect',
-      });
-      return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
-    }
     if (!res.ok) {
       console.error('[contact] delivery_refused', {
         submissionId: submission.submission_id,
+        provider: 'resend',
         status: res.status,
       });
       return NextResponse.json({ error: 'contact_delivery_failed' }, { status: 502 });
@@ -160,10 +234,15 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[contact] delivery_unavailable', {
       submissionId: submission.submission_id,
+      provider: 'resend',
       errorClass: error instanceof Error ? error.name : 'UnknownError',
     });
     return NextResponse.json({ error: 'contact_service_unavailable' }, { status: 503 });
   }
 
+  console.warn('[contact] delivered', {
+    submissionId: submission.submission_id,
+    provider: 'resend',
+  });
   return NextResponse.json({ ok: true });
 }
