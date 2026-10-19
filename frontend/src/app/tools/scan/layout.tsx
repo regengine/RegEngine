@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         canonical: 'https://regengine.co/tools/scan',
     },
     openGraph: {
-        title: 'GS1 Barcode Scanner — RegEngine',
+        title: 'GS1 Barcode Scanner | RegEngine',
         description: 'Decode GS1 barcodes into FSMA 204-compatible traceability records. Free barcode scanner tool.',
         type: 'website',
         url: 'https://regengine.co/tools/scan',
@@ -28,7 +28,7 @@ const jsonLd = {
 };
 
 const relatedTools = [
-    { href: '/tools/label-scanner', title: 'AI Label Scanner', description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 KDEs automatically.' },
+    { href: '/tools/label-scanner', title: 'AI Label Scanner', description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 Key Data Element (KDE) fields automatically.' },
     { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data from CSV files, IoT temperature logs, or webhook API.' },
     { href: '/tools/tlc-validator', title: 'TLC Format Check', description: 'Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format.' },
 ];

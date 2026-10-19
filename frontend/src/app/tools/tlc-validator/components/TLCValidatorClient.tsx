@@ -29,7 +29,7 @@ const TLC_VALIDATOR_CONFIG: ToolConfig = {
         ],
         leadGate: {
             title: 'Unlock Your Validation Results',
-            description: 'See the full in-browser analysis of your TLC structure — GS1 compatibility, entropy, and parseability checks — with guidance on making your lot codes defensible.',
+            description: 'See the full in-browser analysis of your TLC structure, including GS1 compatibility, entropy, and parseability checks, with guidance on making your lot codes defensible.',
             cta: 'Show Results'
         }
     }
@@ -47,7 +47,7 @@ export function TLCValidatorClient() {
 
         // 1. GS1 Compatibility Check
         if (tlc.includes('(10)') || tlc.startsWith('10')) {
-            findings.push({ severity: 'LOW', label: "Starts with '10' — may be a GS1 AI (10) batch/lot prefix; verify against your GS1 spec.", icon: CheckCircle2 });
+            findings.push({ severity: 'LOW', label: "Starts with '10'. This may be a GS1 AI (10) batch/lot prefix; verify against your GS1 spec.", icon: CheckCircle2 });
             score += 5; // Bonus for standard alignment
         } else if (!/^[A-Z0-9]+$/.test(tlc)) {
             findings.push({ severity: 'MEDIUM', label: 'Non-alphanumeric chars detected (GS1 preference is clean alphanumeric)', icon: Search });
@@ -101,7 +101,7 @@ export function TLCValidatorClient() {
                     <div className="space-y-3">
                         {findings.length === 0 ? (
                             <Callout tone="success" icon={CheckCircle2}>
-                                No structural concerns detected by the heuristic checks. This is not a uniqueness promise — uniqueness must be enforced by your assignment system.
+                                No structural concerns detected by the heuristic checks. This is not a uniqueness promise. Uniqueness must be enforced by your assignment system.
                             </Callout>
                         ) : (
                             findings.map((f, i) => (

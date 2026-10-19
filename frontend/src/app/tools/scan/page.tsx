@@ -246,7 +246,7 @@ export default function ScanPage() {
                     isCompatible ? styles.badgeSuccess : styles.badgeError
                   }`}
                 >
-                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete KDE set'}
+                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete Key Data Element (KDE) set'}
                 </span>
               </div>
 
@@ -307,7 +307,7 @@ export default function ScanPage() {
               {/* CTE Form Preview */}
               <div className={styles.section}>
                 <h3 className={styles.sectionTitle}>
-                  Auto-filled CTE Form Preview
+                  Auto-filled Critical Tracking Event (CTE) Form Preview
                 </h3>
 
                 <div className={styles.formGroup}>
@@ -321,13 +321,13 @@ export default function ScanPage() {
                     <option>Harvesting (§1.1325)</option>
                     <option>Cooling (§1.1325)</option>
                     <option>Initial Packing (§1.1330)</option>
-                    <option>First Land-Based Receiving — Seafood (§1.1335)</option>
+                    <option>First Land-Based Receiving for seafood (§1.1335)</option>
                     <option>Shipping (§1.1340)</option>
                     <option>Receiving (§1.1345)</option>
                     <option>Transformation (§1.1350)</option>
                   </select>
                   <p className="mt-1 text-label text-re-text-tertiary">
-                    Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments — confirm your role first.
+                    Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments. Confirm your role first.
                   </p>
                 </div>
 

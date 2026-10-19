@@ -410,17 +410,17 @@ function AskPageContent() {
         outcome = 'success';
       } else if (response.status === 503) {
         // NLP service not configured — fall back to local stub with a notice.
-        setNlpError('NLP service not configured — showing simulated results.');
+        setNlpError('NLP service not configured. Showing simulated results.');
         setResult(parseQuery(finalQuery));
         outcome = 'success';
       } else {
         const errData = await response.json().catch(() => ({}));
-        setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'} — showing simulated results.`);
+        setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'}. Showing simulated results.`);
         setResult(parseQuery(finalQuery));
         outcome = 'success';
       }
     } catch (err) {
-      setNlpError(`Could not reach NLP service: ${String(err)} — showing simulated results.`);
+      setNlpError(`Could not reach NLP service: ${String(err)}. Showing simulated results.`);
       setResult(parseQuery(finalQuery));
       outcome = 'success';
     } finally {
