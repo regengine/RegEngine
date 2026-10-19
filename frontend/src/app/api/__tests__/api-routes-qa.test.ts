@@ -356,6 +356,7 @@ describe('frontend api route hardening', () => {
 
     it('returns 503 when no webhook is configured', async () => {
       delete process.env.CONTACT_WEBHOOK_URL;
+      delete process.env.RESEND_API_KEY;
       const response = await contactPost(new Request('https://regengine.test/api/contact', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
