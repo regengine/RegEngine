@@ -264,7 +264,17 @@ def _cmd_serve(args: argparse.Namespace, decider: Any, ledger: Any) -> int:
     print("The token in that link is this session's key to the page. Ctrl-C stops the lab.")
     if not args.no_open:
         _open_without_exposing(url, ledger)
-    uvicorn.run(create_app(lab), host="127.0.0.1", port=args.port, log_level="warning", access_log=False)
+    config = uvicorn.Config(
+        create_app(lab),
+        host="127.0.0.1",
+        port=args.port,
+        log_level="warning",
+        access_log=False,
+        timeout_graceful_shutdown=3,
+    )
+    server = uvicorn.Server(config)
+    lab.shutting_down = lambda: server.should_exit  # open pages' event streams end on Ctrl-C
+    server.run()
     return EXIT_OK
 
 

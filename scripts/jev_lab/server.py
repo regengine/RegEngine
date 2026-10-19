@@ -19,12 +19,13 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import contextlib
 import hashlib
 import json
 import re
 import secrets
 import threading
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -54,6 +55,8 @@ MAX_BODY_BYTES = 256_000
 # Ask Jev events outlive a run's events in the replay buffer, so a reconnecting page redraws every mote.
 SESSION_EVENTS = frozenset({"sandbox", "feedback"})
 MAX_SESSION_EVENTS = 800
+STREAM_POLL_SECONDS = 1.0  # how often an idle event stream checks for shutdown
+KEEP_ALIVE_SECONDS = 15.0
 CSP = (
     "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
@@ -138,6 +141,8 @@ class Lab:
         self._starting = threading.Lock()
         self.last_summary: dict[str, Any] | None = None
         self.loop_error: str | None = None
+        # Set by the CLI to uvicorn's exit flag: an open event stream must not hold Ctrl-C hostage.
+        self.shutting_down: Callable[[], bool] = lambda: False
 
     @property
     def running(self) -> bool:
@@ -234,7 +239,12 @@ def _validated_questions(raw: Any) -> dict[str, dict[str, Any]]:
 
 
 def create_app(lab: Lab) -> FastAPI:
-    app = FastAPI(title="Jev Lab", docs_url=None, redoc_url=None, openapi_url=None)
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        lab.stop_loop()  # a run stops with the server, never keeps spending Jev or Claude requests
+
+    app = FastAPI(title="Jev Lab", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Response:
@@ -474,12 +484,17 @@ def create_app(lab: Lab) -> FastAPI:
                 yield _sse("hello", {"status": lab.status(), "backlog": len(backlog), "replay_until": replay_until}, 0)
                 for item in backlog:
                     yield _sse(item["event"], item["data"], item["seq"])
-                while not await request.is_disconnected():
+                idle = 0.0
+                while not lab.shutting_down() and not await request.is_disconnected():
                     try:
-                        item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                        item = await asyncio.wait_for(queue.get(), timeout=STREAM_POLL_SECONDS)
                     except asyncio.TimeoutError:
-                        yield b": keep-alive\n\n"
+                        idle += STREAM_POLL_SECONDS
+                        if idle >= KEEP_ALIVE_SECONDS:
+                            idle = 0.0
+                            yield b": keep-alive\n\n"
                         continue
+                    idle = 0.0
                     yield _sse(item["event"], item["data"], item["seq"])
             finally:
                 lab.hub.unsubscribe(queue)

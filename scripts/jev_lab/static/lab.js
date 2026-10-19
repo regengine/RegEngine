@@ -10,7 +10,7 @@
   const BINS = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 1.0];
   const CORE_MAX = 1.2; // Jev's core at mean confidence 1, as a multiple of geom.core
   const CROWN = 1.75; // the reliability crown's radius, as a multiple of the core's
-  const STAR_REACH = 14; // px a confidence-1 star's marks reach toward Jev (the twin dot: about 2.7 x size 5)
+  const STAR_REACH = 15; // px a confidence-1 star's marks reach toward Jev (the twin dot: about 2.7 x size 5, plus 1)
   const MIN_RING_BAND = 16; // px between the crown and the stars kept for generation rings
   const MIN_RING_STEP = 2; // px per ring; past that only the latest rings that fit are drawn
 
@@ -431,7 +431,7 @@
     const band = geom.ringOut - geom.ringIn;
     const rings = S.rings.map((ring) => ({ generation: ring.generation, result: ring.results[S.kind] }))
       .filter((ring) => ring.result && ['holdout', 'screen'].includes(ring.result.stage))
-      .slice(-Math.max(1, Math.floor(band / MIN_RING_STEP)));
+      .slice(-Math.max(1, Math.floor(band / MIN_RING_STEP + 1e-9)));
     const step = rings.length ? Math.min(9, band / rings.length) : 0;
     rings.forEach((ring, i) => {
       const r = geom.ringIn + step * (i + 0.5);
@@ -629,7 +629,10 @@
   // sky) and before Jev's crown; otherwise the short form.
   function drawAxisLabels(p) {
     const { w, cx, cy } = geom;
-    const thresholds = [[autoApply(), 'auto-apply ≥ ' + autoApply().toFixed(2), -5], [reviewAt(), 'review ≥ ' + reviewAt().toFixed(2), 14]];
+    const thresholds = [
+      [autoApply(), ['auto-apply ≥ ', 'auto ≥ ', '≥ '].map((t) => t + autoApply().toFixed(2)), -5],
+      [reviewAt(), ['review ≥ ', '≥ '].map((t) => t + reviewAt().toFixed(2)), 14],
+    ];
     const splits = [['▲ Training: Claude sees these misses', '▲ Training', -8], ['▼ Held out: Claude never sees this half', '▼ Held out', 18]];
     const label = (text, x, y) => { ctx.strokeText(text, x, y); ctx.fillText(text, x, y); };
     ctx.save();
@@ -638,9 +641,11 @@
     ctx.lineWidth = 3;
     ctx.strokeStyle = p.sky0;
     ctx.fillStyle = p.muted;
-    thresholds.forEach(([conf, text, dy], i) => {
+    thresholds.forEach(([conf, forms, dy], i) => {
       ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
       const r = geom.rMin + (1 - conf) * (geom.rMax - geom.rMin);
+      // The longest form that fits beside its circle; only the shortest is ever pulled back inside.
+      const text = forms.find((t) => cx + r + 4 + ctx.measureText(t).width <= w - 4) || forms[forms.length - 1];
       const x = Math.min(cx + r + 4, w - 4 - ctx.measureText(text).width);
       label(text, x, cy + dy);
       const [full, short, sdy] = splits[i];
@@ -760,8 +765,9 @@
   // connection that is everything before the page loaded (hello's replay_until); on a reconnect,
   // only what this page already dispatched (lastSeenId), so results missed while disconnected are
   // still announced. Messages that arrive together (a run's last generation and its end) are
-  // joined, never overwritten; at most the latest three are read.
+  // joined, never overwritten; of a longer burst the first and the last two are read, with a count.
   let lastSeenId = 0;
+  let connectedBefore = false;
   let quietUntil = 0;
   let replaying = false;
   let pendingAnnouncements = [];
@@ -771,7 +777,9 @@
     pendingAnnouncements.push(text);
     clearTimeout(announceTimer);
     announceTimer = setTimeout(() => {
-      $('#announce').textContent = pendingAnnouncements.slice(-3).join(' ');
+      const all = pendingAnnouncements;
+      const read = all.length > 3 ? [all[0], `${all.length - 3} more result(s) are in the log.`, ...all.slice(-2)] : all;
+      $('#announce').textContent = read.join(' ');
       pendingAnnouncements = [];
     }, 150);
   }
@@ -781,8 +789,10 @@
       resetRun();
       S.motes = []; // the backlog replays every Ask Jev question of this server session
       const until = d.replay_until || 0;
-      if (until < lastSeenId) lastSeenId = 0; // the server restarted and its ids began again
-      quietUntil = lastSeenId || until;
+      const restarted = until < lastSeenId; // the server restarted and its ids began again
+      if (restarted) lastSeenId = 0;
+      quietUntil = connectedBefore && !restarted ? lastSeenId : until;
+      connectedBefore = true;
       $('#log').replaceChildren();
       applyStatus(d.status);
     },
@@ -889,7 +899,7 @@
         return `${KIND_NAMES[k]} ${head}${why}`;
       }).filter(Boolean);
       const text = d.reason ? `Generation ${d.generation}: ${d.reason}` : `Generation ${d.generation}: ${parts.join('. ')}.`;
-      logLine(text, accepted.length ? 'accepted' : d.outcome === 'no_proposal' ? 'failed' : 'rejected');
+      logLine(text, accepted.length ? 'accepted' : d.outcome === 'no_proposal' || d.outcome === 'jev_unavailable' ? 'failed' : 'rejected');
       announce(text);
       renderMetrics();
       drawTide();
