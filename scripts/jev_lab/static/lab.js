@@ -114,6 +114,7 @@
     pinned: null,
     answersSoFar: 0,
     lastEventAt: 0,
+    unusable: null,
   };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const animated = () => S.motion && !reducedMotion.matches;
@@ -1009,6 +1010,7 @@
   // ---------------------------------------------------------------- status, now card, gauges
   function applyStatus(status) {
     if (!status) return;
+    S.unusable = null;
     S.status = status;
     S.running = status.loop.running;
     // split.json is the truth for held-out wear; a run's own events take over only while it runs.
@@ -1049,8 +1051,8 @@
   // The lab refuses to run on a labelled row that must not leave, or on a lab file that no longer
   // says what it recorded: the message names the file and the case, and nothing is sent.
   function showUnusable(message) {
-    $('#now-text').textContent = message;
-    $('#now-primary').disabled = true;
+    S.unusable = message;
+    updateNow();
   }
 
   async function refreshStatus() {
@@ -1067,7 +1069,7 @@
     $('#loop-start').disabled = S.running;
     $('#loop-score').disabled = S.running;
     stop.hidden = !S.running;
-    if (!S.status) { text.textContent = 'Connecting to the lab…'; return; }
+    if (!S.status) { text.textContent = S.unusable || 'Connecting to the lab…'; primary.disabled = Boolean(S.unusable); return; }
     const left = S.status.jev.max_requests - S.status.jev.sent;
     if (S.running) {
       primary.hidden = true;
@@ -1442,8 +1444,25 @@
   // One header row, read as the ingestion route's csv reader reads it: a field that starts with a
   // quote may hold the delimiter, and a doubled quote inside it is one quote. Blank headers are
   // dropped, as production drops them before it asks anything about a row.
+  function unquotedHas(text, wanted) {
+    let quoted = false;
+    let atStart = true;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') { if (text[i + 1] === '"') i++; else quoted = false; }
+        continue;
+      }
+      if (ch === '"' && atStart) { quoted = true; atStart = false; continue; }
+      if (ch === wanted) return true;
+      atStart = ch === ',' || ch === '\t';
+    }
+    return false;
+  }
+
   function parseRow(text) {
-    const sep = text.includes('\t') ? '\t' : ',';
+    // A tab is the delimiter only when one sits outside quotes; inside a quoted comma field it is text.
+    const sep = unquotedHas(text, '\t') ? '\t' : ',';
     const cells = [];
     let cell = '';
     let quoted = false;

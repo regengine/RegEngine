@@ -457,7 +457,7 @@ def main(
 ) -> int:
     """Run one command. ``env``, ``transport`` and ``read_key`` exist for offline tests."""
     from . import privacy
-    from .ledger import Ledger
+    from .ledger import LabStateError, Ledger
 
     try:
         args = _parser().parse_args(list(argv) if argv is not None else (sys.argv[1:] or ["serve"]))
@@ -476,7 +476,7 @@ def main(
     ledger = Ledger(args.home, mode="fake" if args.fake else "live")
     try:
         return _dispatch(args, ledger, env=env, transport=transport, read_key=read_key)
-    except (privacy.Refused, RuntimeError) as exc:
+    except (privacy.Refused, LabStateError) as exc:
         # A labelled row that must not leave, or a lab file that no longer says what it recorded:
         # the message names the file and the case, never the content. Nothing was sent.
         print(f"{PROG}: error: {exc}", file=sys.stderr)

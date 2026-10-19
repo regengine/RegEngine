@@ -55,7 +55,7 @@ from shared.jev import JevUnavailable
 
 from . import load_script, privacy
 from .jev_access import Uncached
-from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, Ledger
+from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, LabStateError, Ledger
 from .proposer import ProposerError, brief_case_ids, build_brief
 from .questions import KINDS, QuestionSet, apply_patch, baseline, changed_options, normalize_phrase, validate
 from .scoring import (
@@ -94,11 +94,15 @@ class LoopConfig:
 # ---------------------------------------------------------------------------
 
 
-def validate_cases(ledger: Ledger, raw: Sequence[Mapping[str, Any]]) -> list[jev_eval.Case]:
+def validate_cases(
+    ledger: Ledger, raw: Sequence[Mapping[str, Any]], *, source: str | None = None
+) -> list[jev_eval.Case]:
     """``raw`` case objects validated exactly as ``jev_eval.load_cases`` validates a cases file.
 
     Each call uses its own temporary file, so concurrent callers (the page's
-    status polls, a run, a confirm) never read each other's rows.
+    status polls, a run, a confirm) never read each other's rows. With
+    ``source`` (the file the rows came from), a row that fails validation is
+    a :class:`LabStateError` naming that file and the row, to fix or delete.
     """
     rows = [{key: case[key] for key in ("id", "headers", "cte", "mappings") if key in case} for case in raw]
     if not rows:
@@ -110,7 +114,13 @@ def validate_cases(ledger: Ledger, raw: Sequence[Mapping[str, Any]]) -> list[jev
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             json.dump({"cases": rows}, stream)
-        return jev_eval.load_cases(path, templates=False)
+        try:
+            return jev_eval.load_cases(path, templates=False)
+        except jev_eval._UsageError as exc:
+            if source is None:
+                raise
+            detail = str(exc).replace(str(path), source).replace(path.name, source)
+            raise LabStateError(f"{detail}: fix or delete the row") from None
     finally:
         path.unlink(missing_ok=True)
 
@@ -149,7 +159,8 @@ def every_case(ledger: Ledger, *, templates: bool = True) -> list[jev_eval.Case]
     cases = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=templates)
     seen = {header_key(case.headers) for case in cases}
     known = {case.id for case in cases}
-    for case in validate_cases(ledger, [c for c in ledger.local_cases() if c.get("id") not in known]):
+    local = [c for c in ledger.local_cases() if c.get("id") not in known]
+    for case in validate_cases(ledger, local, source=ledger.cases_path.name):
         if header_key(case.headers) not in seen:
             seen.add(header_key(case.headers))
             cases.append(case)

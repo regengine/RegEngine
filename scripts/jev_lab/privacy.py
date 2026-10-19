@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -62,17 +62,25 @@ _CUSTOMER_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
-def strings(value: Any, path: str = "$") -> Iterable[tuple[str, str]]:
-    """Every string in a JSON-like value, keys included, with a JSONPath-ish location."""
+def strings(
+    value: Any, path: str = "$", *, name_key: Callable[[str], bool] = lambda key: True
+) -> Iterable[tuple[str, str]]:
+    """Every string in a JSON-like value, keys included, with a JSONPath-ish location.
+
+    A key appears in a location only when ``name_key`` allows it; otherwise
+    the location gives the key's position, so a key that must not leave
+    (a labelled header that holds a secret) is never repeated by the reason.
+    """
     if isinstance(value, str):
         yield path, value
     elif isinstance(value, dict):
-        for key, item in value.items():
-            yield f"{path}.{key}", str(key)
-            yield from strings(item, f"{path}.{key}")
+        for index, (key, item) in enumerate(value.items(), start=1):
+            shown = f"{path}.{key}" if name_key(str(key)) else f"{path}.<key {index}>"
+            yield shown, str(key)
+            yield from strings(item, shown, name_key=name_key)
     elif isinstance(value, (list, tuple)):
         for index, item in enumerate(value):
-            yield from strings(item, f"{path}[{index}]")
+            yield from strings(item, f"{path}[{index}]", name_key=name_key)
     elif isinstance(value, bool) or value is None:
         return
     elif isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
@@ -131,24 +139,35 @@ def data_row_findings(headers: Sequence[str]) -> list[str]:
     return [f"cell(s) {listed} look like values (dates, numbers or codes), not column names: paste only the header row"]
 
 
-def findings(value: Any, *, environ: Mapping[str, str] | None = None) -> list[str]:
-    """``"<kind> at <location>"`` for everything in ``value`` that must not leave. Empty: it may."""
+def _kinds(text: str, secrets_in_env: Sequence[tuple[str, str]]) -> list[str]:
+    """What in ``text`` must not leave, by kind. Empty: nothing."""
     found: list[str] = []
+    for name, secret in secrets_in_env:
+        if secret in text:
+            found.append(f"the value of {name}")
+    for kind, pattern in _SECRET_PATTERNS:
+        if pattern.search(text):
+            found.append(kind)
+    if _looks_opaque(text):
+        found.append("key-like token")
+    if _personal(text):
+        found.append("personal data (email, phone, SSN or street address)")
+    for kind, pattern in _CUSTOMER_PATTERNS:
+        if pattern.search(text):
+            found.append(kind)
+    return found
+
+
+def findings(value: Any, *, environ: Mapping[str, str] | None = None) -> list[str]:
+    """``"<kind> at <location>"`` for everything in ``value`` that must not leave. Empty: it may.
+
+    A location never repeats content that must not leave: a key with a
+    finding of its own is given by position (``$.mappings.<key 2>``).
+    """
     secrets_in_env = _secret_env_values(environ)
-    for location, text in strings(value):
-        for name, secret in secrets_in_env:
-            if secret in text:
-                found.append(f"the value of {name} at {location}")
-        for kind, pattern in _SECRET_PATTERNS:
-            if pattern.search(text):
-                found.append(f"{kind} at {location}")
-        if _looks_opaque(text):
-            found.append(f"key-like token at {location}")
-        if _personal(text):
-            found.append(f"personal data (email, phone, SSN or street address) at {location}")
-        for kind, pattern in _CUSTOMER_PATTERNS:
-            if pattern.search(text):
-                found.append(f"{kind} at {location}")
+    found: list[str] = []
+    for location, text in strings(value, name_key=lambda key: not _kinds(key, secrets_in_env)):
+        found += [f"{kind} at {location}" for kind in _kinds(text, secrets_in_env)]
     return list(dict.fromkeys(found))
 
 

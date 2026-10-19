@@ -60,7 +60,11 @@ LIVE = "live"
 FAKE = "fake"
 
 
-class EpochChanged(RuntimeError):
+class LabStateError(RuntimeError):
+    """A lab file no longer says what it recorded, or the split moved under a run. The message names the file."""
+
+
+class EpochChanged(LabStateError):
     """The split was rotated while a run was using it: the run must stop."""
 
 
@@ -158,20 +162,29 @@ class Ledger:
         digest = qs.digest
         path = self.sets_dir / f"{digest}.json"
         if not path.exists():
-            self.ensure()
-            path.write_text(json.dumps(qs.to_dict(), indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+            with self._exclusive():  # atomic and serialised: a reader never sees a half-written file
+                if not path.exists():
+                    self._write(qs.to_dict(), path)
         return digest
 
     def load_set(self, digest: str) -> QuestionSet | None:
+        """The wording behind ``digest``; ``None`` when there is no such file.
+
+        The file names the wording Jev judged. One that no longer parses, or
+        whose wording no longer computes to that digest, is refused with the
+        file named: edited or corrupted, it is not that wording any more.
+        """
         if not all(ch in "0123456789abcdef" for ch in digest) or len(digest) != 64:
             return None
         path = self.sets_dir / f"{digest}.json"
-        if not path.exists():
+        try:
+            loaded = QuestionSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        except FileNotFoundError:
             return None
-        loaded = QuestionSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
-        if loaded.digest != digest:
-            # The file names the wording Jev judged. Edited or corrupted, it is no longer that wording.
-            raise RuntimeError(f"{path} does not match its digest: delete it, or restore it from a backup")
+        except (ValueError, KeyError, TypeError, AttributeError):
+            raise LabStateError(f"{path} is unreadable: delete it, or restore it from a backup") from None
+        if loaded.digest != digest or loaded.kind not in KINDS:
+            raise LabStateError(f"{path} does not match its digest: delete it, or restore it from a backup")
         return loaded
 
     # -- split epoch -----------------------------------------------------------------
@@ -185,7 +198,7 @@ class Ledger:
         except ValueError:
             data = None
         if not isinstance(data, dict) or not isinstance(data.get("salt"), str) or not data["salt"]:
-            raise RuntimeError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
+            raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
         data.setdefault("looks", {})
         return data
 
@@ -250,6 +263,7 @@ class Ledger:
         epoch = self.epoch()["salt"]
         rows = self.rows()
         trusted = self.live_runs(rows) if self.mode == LIVE else None
+        winners: dict[str, str] = {}
         for row in rows:
             if row.get("type") != "incumbent" or row.get("kind") not in current:
                 continue
@@ -257,9 +271,18 @@ class Ledger:
                 continue
             if trusted is not None and row.get("run_id") not in trusted:
                 continue
-            loaded = self.load_set(str(row.get("digest", "")))
-            if loaded is not None:
-                current[row["kind"]] = loaded
+            winners[row["kind"]] = str(row.get("digest", ""))
+        # Only the winning file per kind is read: a superseded one that was edited later never stops the lab.
+        for kind, digest in winners.items():
+            loaded = self.load_set(digest)
+            if loaded is None:
+                continue
+            if loaded.kind != kind:
+                raise LabStateError(
+                    f"{self.sets_dir / (digest + '.json')} records {loaded.kind} wording but the ledger names it "
+                    f"the {kind} incumbent: delete it, or restore it from a backup"
+                )
+            current[kind] = loaded
         return current
 
     def live_runs(self, rows: list[dict[str, Any]] | None = None) -> set[str]:
@@ -338,7 +361,12 @@ class Ledger:
     def local_cases(self) -> list[dict[str, Any]]:
         if not self.cases_path.exists():
             return []
-        data = json.loads(self.cases_path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(self.cases_path.read_text(encoding="utf-8"))
+        except ValueError:
+            raise LabStateError(f"{self.cases_path} is not JSON: fix it, or delete it") from None
+        if not isinstance(data, dict) or not isinstance(data.get("cases", []), list):
+            raise LabStateError(f"{self.cases_path} is not a cases file: fix it, or delete it")
         return list(data.get("cases") or [])
 
     def add_case(self, case: Mapping[str, Any]) -> None:
