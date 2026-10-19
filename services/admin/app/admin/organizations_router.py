@@ -17,7 +17,7 @@ from ..privileged_auth import (
     audit_privileged_action,
     require_sysadmin_high_assurance,
 )
-from ..sqlalchemy_models import OrganizationModel
+from ..sqlalchemy_models import OrganizationModel, TenantModel
 
 logger = structlog.get_logger("admin.organizations")
 router = APIRouter(prefix="/admin/organizations", tags=["admin-organizations"])
@@ -205,6 +205,11 @@ async def update_organization(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
 
     organization.name = payload.name
+    # The organization shares its ID with the tenant it was created from, and
+    # tenant-facing views read TenantModel.name, so rename both in one commit.
+    tenant = db.get(TenantModel, org_id)
+    if tenant is not None:
+        tenant.name = payload.name
 
     try:
         db.commit()

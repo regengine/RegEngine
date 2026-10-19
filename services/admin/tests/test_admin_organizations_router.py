@@ -14,7 +14,7 @@ from starlette.testclient import TestClient
 from services.admin.app.admin import organizations_router as org_router
 from services.admin.app.admin.organizations_router import OrganizationSsoPolicyUpdate
 from services.admin.app.auth.session_auth import AUTH_SESSION_COOKIE
-from services.admin.app.sqlalchemy_models import OrganizationModel
+from services.admin.app.sqlalchemy_models import OrganizationModel, TenantModel
 
 
 def _client_with_db(db):
@@ -575,3 +575,35 @@ def test_patch_organization_returns_503_when_commit_fails():
 
     assert response.status_code == 503
     db.rollback.assert_called_once()
+
+
+def test_patch_organization_also_renames_matching_tenant_row():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    organization = _organization(org_id)
+    tenant = TenantModel(id=org_id, name="Enterprise Foods", slug="enterprise-foods")
+    db = _sysadmin_webauthn_db(organization)
+    db.get.side_effect = lambda model, _id: {OrganizationModel: organization, TenantModel: tenant}[model]
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": "Renamed Foods"})
+
+    assert response.status_code == 200
+    assert organization.name == "Renamed Foods"
+    assert tenant.name == "Renamed Foods"
+    db.commit.assert_called_once()
+
+
+def test_patch_organization_succeeds_when_no_tenant_row_shares_the_id():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    organization = _organization(org_id)
+    db = _sysadmin_webauthn_db(organization)
+    db.get.side_effect = lambda model, _id: organization if model is OrganizationModel else None
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": "Renamed Foods"})
+
+    assert response.status_code == 200
+    assert organization.name == "Renamed Foods"
+    db.commit.assert_called_once()
