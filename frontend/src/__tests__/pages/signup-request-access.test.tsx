@@ -53,6 +53,7 @@ describe('/signup request access', () => {
       email: 'ada@example.com',
       company: 'Analytical Engines',
       website: '',
+      source: 'signup',
     });
     expect(body.message).toContain('Need FSMA 204 exports.');
     expect(body.message).toContain('Requested plan: base (annual).');

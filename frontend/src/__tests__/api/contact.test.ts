@@ -149,6 +149,35 @@ describe('POST /api/contact abuse controls', () => {
         expect(JSON.stringify(warn.mock.calls)).not.toContain('ada@example.com');
     });
 
+    it('tags signup deliveries and keeps every other source on the contact page', async () => {
+        const signup = await POST(makeRequest({ ...valid, source: 'signup' }, '198.51.100.220'));
+        expect(signup.status).toBe(200);
+        const signupPayload = JSON.parse(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body as string);
+        expect(signupPayload.source).toBe('regengine.co/signup');
+
+        const missing = await POST(makeRequest(valid, '198.51.100.221'));
+        expect(missing.status).toBe(200);
+        const missingPayload = JSON.parse(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body as string);
+        expect(missingPayload.source).toBe('regengine.co/contact');
+
+        const unknown = await POST(makeRequest({
+            ...valid,
+            source: 'https://evil.example/signup',
+        }, '198.51.100.222'));
+        expect(unknown.status).toBe(200);
+        const unknownPayload = JSON.parse(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body as string);
+        expect(unknownPayload.source).toBe('regengine.co/contact');
+        expect(JSON.stringify(unknownPayload)).not.toContain('evil.example');
+
+        delete process.env.CONTACT_WEBHOOK_URL;
+        process.env.RESEND_API_KEY = 'test-resend-key'; // pragma: allowlist secret
+        const emailed = await POST(makeRequest({ ...valid, source: 'signup' }, '198.51.100.223'));
+        expect(emailed.status).toBe(200);
+        const email = JSON.parse(vi.mocked(fetch).mock.calls.at(-1)?.[1]?.body as string);
+        expect(email.text).toContain('source: regengine.co/signup');
+        expect(email.text).not.toContain('evil.example');
+    });
+
     it('returns 502 when Resend refuses the email', async () => {
         delete process.env.CONTACT_WEBHOOK_URL;
         process.env.RESEND_API_KEY = 'test-resend-key'; // pragma: allowlist secret

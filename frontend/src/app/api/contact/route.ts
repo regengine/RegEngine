@@ -24,6 +24,11 @@ interface ContactPayload {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  source?: string;
+}
+
+function submissionSource(value: unknown): string {
+  return value === 'signup' ? 'regengine.co/signup' : 'regengine.co/contact';
 }
 
 function utmValue(value: unknown): string | null {
@@ -138,7 +143,7 @@ export async function POST(request: Request) {
 
   const submission = {
     submission_id: crypto.randomUUID(),
-    source: 'regengine.co/contact',
+    source: submissionSource(payload.source),
     destination: DESTINATION,
     received_at: new Date().toISOString(),
     name,
