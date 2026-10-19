@@ -169,19 +169,17 @@ def redact_proposal(proposal: Proposal) -> tuple[Proposal, dict[str, list[str]]]
     never refuses a question set it wrote itself. A rationale or note holding
     such text is dropped the same way.
     """
-    shown = proposal.to_dict()  # only what the lab shows, saves or sends; a model id is bookkeeping
-    found = privacy.findings({key: shown[key] for key in ("patches", "rationale", "notes", "predicted_fixes")})
-    if not found:
+    # Each patch is scanned on its own, so a kind is refused by what its patch holds and never by
+    # reading a location back out of a reason. Bookkeeping (backend, model, cost) is not scanned.
+    shown = proposal.to_dict()
+    refused = {
+        kind: found
+        for kind, patch in shown["patches"].items()
+        if patch and (found := privacy.findings({"patches": {kind: patch}}))
+    }
+    elsewhere = privacy.findings({key: shown[key] for key in ("rationale", "notes", "predicted_fixes")})
+    if not refused and not elsewhere:
         return proposal, {}
-    refused: dict[str, list[str]] = {}
-    elsewhere: list[str] = []
-    for reason in found:
-        location = reason.rsplit(" at ", 1)[-1]
-        kind = next((k for k in KINDS if location.startswith(f"$.patches.{k}.")), None)
-        if kind is None:
-            elsewhere.append(reason)
-        else:
-            refused.setdefault(kind, []).append(reason)
     redacted = replace(
         proposal,
         patches={kind: None if kind in refused else patch for kind, patch in proposal.patches.items()},

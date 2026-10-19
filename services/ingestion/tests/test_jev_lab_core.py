@@ -644,6 +644,20 @@ def test_a_rewrite_that_holds_what_must_not_leave_is_invalid_and_never_saved_or_
     assert (
         refused == {} and redacted.rationale.startswith("refused: personal data") and "jane" not in redacted.rationale
     )
+    # A kind is refused by what its patch holds, never by reading a location back out of a reason.
+    sly = proposer.Proposal(
+        {HM: {"task": None, "guidance": None, "criteria": [{"option": "lot", "look at this": "00012345678905"}]}},
+        "x",
+        "scripted",
+    )
+    redacted, refused = loop.redact_proposal(sly)
+    assert redacted.patches[HM] is None and list(refused) == [HM] and "00012345678905" not in json.dumps(refused)
+    parsed = proposer.parse_proposal(
+        {HM: {"criteria": [{"option": "lot", "look at this": "x"}]}, "rationale": "r"},
+        backend="scripted",
+        max_changes=5,
+    )
+    assert parsed.patches[HM]["criteria"] == [{"option": "lot", "what": None, "not_for": None, "examples": None}]
     # Bookkeeping is not scanned: a long model id never blanks a clean rationale.
     long_model = proposer.Proposal({HM: None}, "shorten the guidance", "anthropic-sdk", model="claude-x9-" + "a1" * 16)
     assert loop.redact_proposal(long_model) == (long_model, {})
