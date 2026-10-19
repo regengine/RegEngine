@@ -75,11 +75,26 @@ def _is_record(row: Any) -> bool:
     """A ledger line of the shapes the lab writes, so every reader can index it without a traceback."""
     if not isinstance(row, dict):
         return False
-    # ``accepted`` is the list of kinds kept on a generation row and a kept count on a run row.
-    containers = {"candidates": dict, "decisions": dict, "accepted": (list, int), "metrics": dict}
-    return all(
-        row.get(key) is None or isinstance(row[key], kind) for key, kind in {"run_id": str, **containers}.items()
-    )
+    shapes = {
+        "type": str,
+        "run_id": str,
+        "kind": str,
+        "digest": str,
+        "candidates": dict,
+        "decisions": dict,
+        "metrics": dict,
+    }
+    if not all(row.get(key) is None or isinstance(row[key], kind) for key, kind in shapes.items()):
+        return False
+    if not all(isinstance(decision, dict) for decision in (row.get("decisions") or {}).values()):
+        return False
+    accepted = row.get("accepted")
+    if accepted is None:
+        return True
+    # The list of kinds kept on a generation row; the kept count on a run summary row.
+    if row.get("type") == "run":
+        return isinstance(accepted, int) and not isinstance(accepted, bool)
+    return isinstance(accepted, list)
 
 
 class LabStateError(RuntimeError):

@@ -48,7 +48,7 @@ import tempfile
 import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,7 @@ from shared.jev import JevUnavailable
 from . import load_script, privacy
 from .jev_access import Uncached
 from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, LabStateError, Ledger
-from .proposer import ProposerError, brief_case_ids, build_brief
+from .proposer import Proposal, ProposerError, brief_case_ids, build_brief
 from .questions import KINDS, QuestionSet, apply_patch, baseline, changed_options, normalize_phrase, validate
 from .scoring import (
     DEFAULT_MARGIN,
@@ -158,6 +158,37 @@ def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> N
         reasons += [f"{source} {where}: {reason}" for reason in found]
     if reasons:
         raise privacy.Refused(reasons)
+
+
+def redact_proposal(proposal: Proposal) -> tuple[Proposal, dict[str, list[str]]]:
+    """``proposal`` with anything that must not leave replaced by its refusal, and the refused kinds.
+
+    Claude answers a brief the guard has checked, but it can still write an
+    example that reads as a GTIN or an address. Such a patch is never shown,
+    saved or asked: it is recorded as invalid, by kind and location, so the lab
+    never refuses a question set it wrote itself. A rationale or note holding
+    such text is dropped the same way.
+    """
+    found = privacy.findings(proposal.to_dict())
+    if not found:
+        return proposal, {}
+    refused: dict[str, list[str]] = {}
+    elsewhere: list[str] = []
+    for reason in found:
+        location = reason.rsplit(" at ", 1)[-1]
+        kind = next((k for k in KINDS if location.startswith(f"$.patches.{k}.")), None)
+        if kind is None:
+            elsewhere.append(reason)
+        else:
+            refused.setdefault(kind, []).append(reason)
+    redacted = replace(
+        proposal,
+        patches={kind: None if kind in refused else patch for kind, patch in proposal.patches.items()},
+        rationale=proposal.rationale if not elsewhere else "refused: " + "; ".join(elsewhere),
+        notes=proposal.notes if not elsewhere else (),
+        predicted_fixes=proposal.predicted_fixes if not elsewhere else (),
+    )
+    return redacted, refused
 
 
 def header_key(headers: Sequence[str]) -> tuple[str, ...]:
@@ -561,11 +592,15 @@ def run_loop(
             state["stopped"] = reason
             break
         claude_cost += float(proposal.cost_usd or 0.0)
+        proposal, refused = redact_proposal(proposal)
         emit("proposal", {"generation": generation, **proposal.to_dict()})
 
         candidates: dict[str, QuestionSet] = {}
         results: dict[str, dict[str, Any]] = {}
         for kind in KINDS:
+            if kind in refused:
+                results[kind] = {"accepted": False, "stage": "invalid", "reasons": refused[kind]}
+                continue
             patch = proposal.patches.get(kind) if kind in open_kinds else None
             if not patch:
                 results[kind] = {"accepted": False, "stage": "unchanged", "reasons": ["unchanged"]}

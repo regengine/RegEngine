@@ -607,6 +607,45 @@ def test_invalid_wording_and_proposer_failures_are_recorded_not_raised(tmp_path,
     assert sum(lab.epoch()["looks"].values()) == 0
 
 
+def test_a_rewrite_that_holds_what_must_not_leave_is_invalid_and_never_saved_or_asked(tmp_path, fake):
+    """A proposer may write an example that reads as a GTIN; it is refused when proposed, not after it was accepted."""
+    lab = _home(tmp_path)
+    base = questions.baseline(HM)
+    tainted = proposer.Proposal(
+        {
+            HM: {
+                "task": None,
+                "guidance": base.guidance + " A GTIN is a 14-digit number such as 00012345678905.",
+                "criteria": None,
+            }
+        },
+        "add an example",
+        "scripted",
+    )
+    events: list = []
+
+    summary = loop.run_loop(
+        ledger=lab,
+        decider=fake,
+        proposer=_Scripted(tainted),
+        config=loop.LoopConfig(generations=1),
+        emit=lambda name, data: events.append((name, data)),
+    )
+
+    decision = lab.generations()[0]["decisions"][HM]
+    assert decision["stage"] == "invalid"
+    assert decision["reasons"] == ["GLN or GTIN number at $.patches.header_mapping.guidance"]
+    assert "00012345678905" not in json.dumps(lab.generations()) + json.dumps(events)
+    assert not [path for path in lab.sets_dir.glob("*.json") if "lab-" in path.read_text()]  # never saved
+    assert summary["accepted"] == 0 and lab.incumbents()[HM] == base  # and every later read still works
+    # A rationale that holds such text is dropped, not repeated; a clean patch is not punished for it.
+    chatty = proposer.Proposal({HM: None}, "call jane.doe@example.com about it", "scripted")
+    redacted, refused = loop.redact_proposal(chatty)
+    assert (
+        refused == {} and redacted.rationale.startswith("refused: personal data") and "jane" not in redacted.rationale
+    )
+
+
 def test_loop_stops_at_the_held_out_cap_and_on_request(tmp_path, fake):
     capped = _home(tmp_path / "a", looks={kind: ledger.MAX_HOLDOUT_LOOKS for kind in questions.KINDS})
     summary = loop.run_loop(ledger=capped, decider=fake, proposer=proposer.OfflineProposer())
@@ -937,6 +976,10 @@ def test_a_ledger_line_that_is_not_a_record_is_skipped(tmp_path):
     with lab.path.open("a", encoding="utf-8") as stream:
         stream.write('"a bare string"\n[1, 2]\n42\n')
         stream.write('{"type": "generation", "run_id": ["x"]}\n{"type": "generation", "candidates": []}\n')
+        stream.write('{"type": "generation", "run_id": "r1", "accepted": 3}\n{"type": "run", "accepted": ["x"]}\n')
+        stream.write(
+            '{"type": "incumbent", "kind": ["x"]}\n{"type": "generation", "decisions": {"header_mapping": []}}\n'
+        )
 
     assert [row["type"] for row in lab.rows()] == ["noise", "run", "generation"]  # every shape the lab writes
     assert [row["run_id"] for row in lab.generations()] == ["r1"] and lab.incumbents()
