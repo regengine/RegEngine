@@ -644,6 +644,9 @@ def test_a_rewrite_that_holds_what_must_not_leave_is_invalid_and_never_saved_or_
     assert (
         refused == {} and redacted.rationale.startswith("refused: personal data") and "jane" not in redacted.rationale
     )
+    # Bookkeeping is not scanned: a long model id never blanks a clean rationale.
+    long_model = proposer.Proposal({HM: None}, "shorten the guidance", "anthropic-sdk", model="claude-x9-" + "a1" * 16)
+    assert loop.redact_proposal(long_model) == (long_model, {})
 
 
 def test_loop_stops_at_the_held_out_cap_and_on_request(tmp_path, fake):
