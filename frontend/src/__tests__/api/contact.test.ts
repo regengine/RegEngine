@@ -133,7 +133,7 @@ describe('POST /api/contact abuse controls', () => {
         }));
         expect(options?.signal).toBeInstanceOf(AbortSignal);
         const body = JSON.parse(options?.body as string);
-        expect(body.to).toEqual(['chris@regengine.co']);
+        expect(body.to).toEqual(['christopher@regengine.co']);
         expect(body.reply_to).toBe('ada@example.com');
         expect(body.from).toBe('RegEngine <onboarding@regengine.co>');
         expect(body.subject).toBe('RegEngine request: LineBreak Co');

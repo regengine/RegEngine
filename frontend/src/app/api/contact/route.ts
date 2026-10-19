@@ -4,7 +4,7 @@
  * Behaviour:
  *   1. Validate payload (name, email, message required; email regex-checked).
  *   2. Deliver in order: CONTACT_WEBHOOK_URL (no redirect following), then
- *      Resend email to chris@regengine.co when RESEND_API_KEY is set.
+ *      Resend email to christopher@regengine.co when RESEND_API_KEY is set.
  *   3. Log only a generated event ID and non-PII delivery metadata.
  *   4. Return 200 only after the configured provider accepts the submission.
  */
@@ -35,7 +35,7 @@ function utmValue(value: unknown): string | null {
 // looks plausible. Final delivery is the real validator.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const DESTINATION = 'chris@regengine.co';
+const DESTINATION = 'christopher@regengine.co';
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
 const RESEND_TIMEOUT_MS = 10_000;
 const SUBJECT_MAX_CHARS = 150;
