@@ -29,6 +29,8 @@ export type ContactRequestFormProps = {
    */
   messageAttachment?: string;
   showDirectEmail?: boolean;
+  /** Page that rendered the form. The API maps this to a fixed source tag. */
+  source?: 'contact' | 'signup';
 };
 
 export function ContactRequestForm({
@@ -38,6 +40,7 @@ export function ContactRequestForm({
   initialMessage = '',
   messageAttachment = '',
   showDirectEmail = true,
+  source = 'contact',
 }: ContactRequestFormProps) {
   const [form, setForm] = useState({
     name: '',
@@ -67,6 +70,7 @@ export function ContactRequestForm({
           ...form,
           message: submittedMessage,
           ...getConversionAttribution(),
+          source,
         }),
       });
       if (!res.ok) {
@@ -164,8 +168,8 @@ export function ContactRequestForm({
       {showDirectEmail && (
         <p className="text-small text-re-text-muted">
           Or email us directly at{' '}
-          <a href="mailto:chris@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
-            chris@regengine.co
+          <a href="mailto:christopher@regengine.co" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">
+            christopher@regengine.co
           </a>
         </p>
       )}

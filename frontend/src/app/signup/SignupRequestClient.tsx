@@ -51,6 +51,7 @@ export default function SignupRequestClient() {
         initialMessage={note}
         messageAttachment={note}
         showDirectEmail={false}
+        source="signup"
       />
     </AuthShell>
   );
