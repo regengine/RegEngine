@@ -199,15 +199,25 @@ def test_answers_convert_to_plain_results_with_evidence():
     assert dumped["scores"]["severity"]["legend"] == {"0": "low", "1": "medium", "2": "high"}
 
 
-def test_versioned_model_mismatch_is_unavailable():
+def test_versioned_model_mismatch_is_unavailable_and_logged():
     def handler(request):
         body = json.loads(json.dumps(GOOD_BODY))
         body["model"] = "jev-1.13.0"
-        return httpx2.Response(200, json=body)
+        return httpx2.Response(200, headers={"x-typesafe-request-id": "req_mismatch"}, json=body)
 
-    with pytest.raises(JevUnavailable) as error:
-        _decider(handler).ask(STATE, QUESTIONS, purpose="header_mapping")
+    with structlog.testing.capture_logs() as records:
+        with pytest.raises(JevUnavailable) as error:
+            _decider(handler).ask(STATE, QUESTIONS, purpose="header_mapping")
+
     assert error.value.reason == "invalid_response"
+    assert error.value.request_id == "req_mismatch"
+    (warning,) = [record for record in records if record["event"] == "jev.unavailable"]
+    assert warning["log_level"] == "warning"
+    assert warning["reason"] == "invalid_response"
+    assert warning["requested_model"] == "jev-1.14.0"
+    assert warning["response_model"] == "jev-1.13.0"
+    assert warning["request_id"] == "req_mismatch"
+    assert "jev.answered" not in {record["event"] for record in records}
 
 
 def test_out_of_range_confidences_and_probabilities_are_clamped():
