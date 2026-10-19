@@ -507,3 +507,71 @@ def test_unknown_organization_emits_failed_audit_event(monkeypatch):
     assert [event["outcome"] for event in events] == ["attempted", "failed"]
     assert events[-1]["reason"] == "organization_not_found"
     assert events[-1]["target"] == str(org_id)
+
+
+def _patch_org(client, org_id, payload):
+    return client.patch(f"/admin/organizations/{org_id}", json=payload)
+
+
+def test_patch_organization_requires_session_cookie():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = MagicMock()
+    response = _patch_org(_client_with_db(db), org_id, {"name": "New Name"})
+
+    assert response.status_code == 401
+    db.get.assert_not_called()
+    db.commit.assert_not_called()
+
+
+def test_patch_organization_updates_trimmed_name():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    organization = _organization(org_id)
+    db = _sysadmin_webauthn_db(organization)
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": "  Renamed Foods  "})
+
+    assert response.status_code == 200
+    assert response.json() == {"id": str(org_id), "name": "Renamed Foods"}
+    assert organization.name == "Renamed Foods"
+    db.commit.assert_called_once()
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 256])
+def test_patch_organization_rejects_invalid_name(name):
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = _sysadmin_webauthn_db(_organization(org_id))
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": name})
+
+    assert response.status_code == 422
+    db.get.assert_not_called()
+    db.commit.assert_not_called()
+
+
+def test_patch_organization_returns_404_for_unknown_organization():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = _sysadmin_webauthn_db(None)
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": "New Name"})
+
+    assert response.status_code == 404
+    db.commit.assert_not_called()
+
+
+def test_patch_organization_returns_503_when_commit_fails():
+    org_id = uuid.UUID("55555555-5555-4555-8555-555555555555")
+    db = _sysadmin_webauthn_db(_organization(org_id))
+    db.commit.side_effect = OperationalError("COMMIT", {}, Exception("connection down"))
+    client = _client_with_db(db)
+    client.cookies.set(AUTH_SESSION_COOKIE, "session-token")
+
+    response = _patch_org(client, org_id, {"name": "New Name"})
+
+    assert response.status_code == 503
+    db.rollback.assert_called_once()

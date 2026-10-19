@@ -54,6 +54,23 @@ class OrganizationSsoPolicyUpdate(BaseModel):
         return normalized
 
 
+class OrganizationUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("name must not be blank")
+        return normalized
+
+
+class OrganizationResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
 class OrganizationSsoPolicyResponse(BaseModel):
     id: uuid.UUID
     domain_name: str
@@ -157,3 +174,61 @@ async def update_organization_sso_policy(
         domain_verified=bool(organization.domain_verified),
         enforced_auth_policy=organization.enforced_auth_policy,
     )
+
+
+@router.patch("/{org_id}", response_model=OrganizationResponse)
+async def update_organization(
+    org_id: uuid.UUID,
+    payload: OrganizationUpdate,
+    request: Request,
+    actor: PrivilegedActor = Depends(require_super_admin),
+    db: Session = Depends(get_session),
+) -> OrganizationResponse:
+    audit_privileged_action(
+        request,
+        action="organization.update",
+        outcome="attempted",
+        actor=actor,
+        target=str(org_id),
+    )
+    arm_global_admin_context(db)
+    organization = db.get(OrganizationModel, org_id)
+    if organization is None:
+        audit_privileged_action(
+            request,
+            action="organization.update",
+            outcome="failed",
+            actor=actor,
+            target=str(org_id),
+            reason="organization_not_found",
+        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found.")
+
+    organization.name = payload.name
+
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("organization_update_failed", organization_id=str(org_id), error=str(exc))
+        audit_privileged_action(
+            request,
+            action="organization.update",
+            outcome="failed",
+            actor=actor,
+            target=str(org_id),
+            reason="database_unavailable",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Organization update temporarily unavailable.",
+        ) from exc
+
+    audit_privileged_action(
+        request,
+        action="organization.update",
+        outcome="succeeded",
+        actor=actor,
+        target=str(org_id),
+    )
+    return OrganizationResponse(id=organization.id, name=organization.name)
