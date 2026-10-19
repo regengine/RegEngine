@@ -28,7 +28,7 @@ const jsonLd = {
     "name": "Records Request Checklist",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "Self-reported checklist for §1.1455 records-request readiness. Not a 24-hour capability test, not a recall-readiness score, and not legal advice.",
+    "description": "Self reported checklist for §1.1455 records request readiness. Not a 24 hour capability test, not a recall readiness score, and not legal advice.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -64,8 +64,8 @@ export default function RecordsRequestChecklistPage() {
             </div>
             <RelatedTools tools={[
                 { href: "/tools/ftl-checker", title: "FTL List Checker", description: "Look at the Food Traceability List. This page does not decide if you are a covered person." },
-                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain must document." },
-                { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether CTE/KDE fields are present for each FTL product and CTE type." },
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Event (CTE) types your supply chain must document." },
+                { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether Key Data Element (KDE) fields are present for each FTL product and CTE type." },
             ]} />
         </>
     );

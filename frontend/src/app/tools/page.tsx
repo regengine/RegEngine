@@ -5,10 +5,10 @@ import { JSONLD } from "@/components/seo/json-ld";
 
 export const metadata: Metadata = {
     title: "Free FSMA 204 Tools | RegEngine",
-    description: "Free FTL List Checker, CTE Mapper, KDE checklist, and TLC format check. Self reported lists do not score readiness. FDA date: July 20, 2028.",
+    description: "Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.",
     openGraph: {
         title: "Free FSMA 204 Tools | RegEngine",
-        description: "Free FTL List Checker, CTE Mapper, KDE checklist, and TLC format check. Self reported lists do not score readiness. FDA date: July 20, 2028.",
+        description: "Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.",
         type: "website",
         url: "https://regengine.co/tools",
     },

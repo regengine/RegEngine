@@ -239,7 +239,7 @@ export function DrillSimulatorClient() {
             scenarios.find((s) => s.id === state.selectedScenario)?.title ||
             'Drill';
 
-        const report = `FDA RECALL DRILL SIMULATOR - FULL REPORT
+        const report = `FDA RECALL DRILL SIMULATOR: FULL REPORT
 Generated: ${new Date().toISOString()}
 
 SCENARIO: ${scenarioName}
@@ -247,11 +247,11 @@ RECORDS ANALYZED: ${result.totalRecords}
 OVERALL SCORE: ${result.scores.overallScore.toFixed(1)}/100 (${result.scores.grade})
 
 COMPLIANCE BREAKDOWN:
-- Complete Traceability Events (CTE): ${result.scores.cteCompleteness.toFixed(1)}/100
-- Key Data Elements (KDE): ${result.scores.kdeCompleteness.toFixed(1)}/100
-- Chain of Custody: ${result.scores.chainIntegrity.toFixed(1)}/100
-- Timeline Integrity: ${result.scores.timelineCoverage.toFixed(1)}/100
-- Data Quality: ${result.scores.dataQuality.toFixed(1)}/100
+• Critical Tracking Event (CTE) Coverage: ${result.scores.cteCompleteness.toFixed(1)}/100
+• Key Data Element (KDE) Completeness: ${result.scores.kdeCompleteness.toFixed(1)}/100
+• Chain of Custody: ${result.scores.chainIntegrity.toFixed(1)}/100
+• Timeline Integrity: ${result.scores.timelineCoverage.toFixed(1)}/100
+• Data Quality: ${result.scores.dataQuality.toFixed(1)}/100
 
 FINDINGS (${result.findings.length} total):
 ${result.findings
@@ -280,14 +280,13 @@ ${idx + 1}. Gap: ${g.gapType}
     )
     .join('')}
 
-SELF-CHECK RESULT: ${result.scores.overallScore >= 70 ? 'No gaps indicated by this check' : 'Gaps indicated — review below'}
+SELF-CHECK RESULT: ${result.scores.overallScore >= 70 ? 'No gaps indicated by this check' : 'Gaps indicated. Review below'}
 STATUS: ${
             result.scores.overallScore >= 70
                 ? 'Self-check found no gaps in the dimensions evaluated below. This is a self-reported indicator based on the columns you uploaded; it is not an FDA determination and does not evaluate all §1.1455 KDEs or CTEs.'
-                : 'Self-reported gaps in the dimensions evaluated below. Review the items, then verify against the full §1.1455 record set.'
+                : 'Self reported gaps in the dimensions evaluated below. Review the items, then verify against the full §1.1455 record set.'
         }
 
----
 100% Client-Side Analysis · No data transmitted · RegEngine Audit Trail
 `;
 
@@ -340,8 +339,8 @@ STATUS: ${
                     Rehearse Your FSMA 204 Records-on-Request Workflow
                 </h2>
                 <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">
-                    Upload your traceability records. The drill checks file shape and column-level completeness
-                    against a subset of FSMA 204 dimensions — no data leaves your browser. This is a self-paced
+                    Upload your traceability records. The drill checks file shape, column-level completeness,
+                    Critical Tracking Event (CTE) coverage, and Key Data Element (KDE) completeness. No data leaves your browser. This is a self-paced
                     rehearsal, not an FDA simulation or compliance determination.
                 </p>
             </div>
@@ -373,7 +372,7 @@ STATUS: ${
 
             <div className="mb-8 flex flex-col justify-center gap-4 sm:flex-row">
                 <Button size="lg" leadingIcon={<Play size={18} strokeWidth={1.75} aria-hidden="true" />}>
-                    Start Drill — Upload Your Records
+                    Start Drill: Upload Your Records
                 </Button>
                 <Button
                     size="lg"
@@ -590,7 +589,7 @@ STATUS: ${
                             </div>
                             <Badge tone="info">{gapSummary}</Badge>
                             <p className="mt-2 text-small text-re-text-tertiary">
-                                Self-check on synthetic drill data — not a compliance verdict.
+                                Self-check on synthetic drill data. Not a compliance verdict.
                             </p>
                         </div>
                     </Card>
@@ -668,13 +667,13 @@ STATUS: ${
                                 <ScoreCircle score={result.scores.overallScore} />
                                 <Badge tone="info" className="mt-3">{gapSummary}</Badge>
                                 <p className="mt-2 text-center text-small text-re-text-tertiary">
-                                    Self-check on synthetic drill data — not a compliance verdict.
+                                    Self-check on synthetic drill data. Not a compliance verdict.
                                 </p>
                             </div>
                             <div className="space-y-4">
                                 {[
-                                    { label: 'Complete Traceability Events (CTE)', score: result.scores.cteCompleteness },
-                                    { label: 'Key Data Elements (KDE)', score: result.scores.kdeCompleteness },
+                                    { label: 'Critical Tracking Event (CTE) Coverage', score: result.scores.cteCompleteness },
+                                    { label: 'Key Data Element (KDE) Completeness', score: result.scores.kdeCompleteness },
                                     { label: 'Chain of Custody', score: result.scores.chainIntegrity },
                                     { label: 'Timeline Integrity', score: result.scores.timelineCoverage },
                                     { label: 'Data Quality', score: result.scores.dataQuality },
@@ -908,7 +907,7 @@ STATUS: ${
 
     return (
         <FreeToolPageShell
-            title="24-Hour Drill Simulator"
+            title="24 Hour Drill Simulator"
             subtitle="Self-paced rehearsal for your §1.1455(c) records-on-request workflow"
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >

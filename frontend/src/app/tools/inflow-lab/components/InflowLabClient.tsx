@@ -1590,7 +1590,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <span className="text-sm font-semibold text-slate-950">{activeDataBoundary}</span>
                             </div>
                             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-600">
-                                {boundaryStateDetail} The lab checks traceability handoffs (CTEs) and required data fields (KDEs), but it cannot create formal production records. Your operation remains responsible for compliance.
+                                {boundaryStateDetail} The lab checks Critical Tracking Event (CTE) handoffs and required Key Data Element (KDE) fields, but it cannot create formal production records. Your operation remains responsible for compliance.
                             </p>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -2327,7 +2327,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                             </div>
                                                             <p className="mt-3 break-words font-mono text-[11px] font-semibold leading-5 text-slate-950">{lot.lotCode}</p>
                                                             <p className="mt-2 text-xs text-slate-500">
-                                                                {lot.completeCount}/{lot.totalCount} CTEs captured - delivery {lot.readiness.deliveryLabel}
+                                                                {lot.completeCount}/{lot.totalCount} CTEs captured; delivery {lot.readiness.deliveryLabel}
                                                             </p>
                                                         </button>
                                                     ))}

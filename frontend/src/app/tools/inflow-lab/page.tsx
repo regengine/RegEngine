@@ -6,7 +6,7 @@ import { isExperimentalToolEnabled } from "@/lib/experimental-features";
 export const metadata: Metadata = {
     title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
     description:
-        "Preflight supplier traceability data, validate FSMA 204 CTE/KDE coverage, generate fix queues, replay scenarios, and gate production evidence commits.",
+        "Preflight supplier traceability data, validate FSMA 204 Critical Tracking Event (CTE) and Key Data Element (KDE) coverage, generate fix queues, replay scenarios, and gate production evidence commits.",
     openGraph: {
         title: "RegEngine Inflow Lab | Supplier Data Preflight Workbench",
         description: "Inflow prepares supplier data before the Engine commits validated, tenant-scoped FSMA 204 evidence.",

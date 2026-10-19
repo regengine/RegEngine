@@ -352,7 +352,7 @@ const FTL_CATEGORIES = [
         category: 'Dairy',
         icon: Milk,
         examples: 'Brie, camembert, monterey jack, muenster, havarti, oaxaca, feta (per FTL definition; verify your specific cheese)',
-        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., aged cheddar, parmesan, asiago, aged gouda) are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39% — confirm the FDA classification for your cheese.',
+        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., aged cheddar, parmesan, asiago, aged gouda) are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39%. Confirm the FDA classification for your cheese.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Receiving', 'Transformation', 'Shipping'],
@@ -636,7 +636,7 @@ export function FTLCheckerClient() {
             await generateBrandedPDF({
                 title: 'FTL Coverage Report',
                 subtitle: `${results.totalSelected} categor${results.totalSelected === 1 ? 'y' : 'ies'} analyzed`,
-                reportType: 'FDA FSMA 204 - Food Traceability List',
+                reportType: 'FDA FSMA 204: Food Traceability List',
                 sections: [
                     { type: 'heading', text: 'Summary', level: 2 },
                     {
@@ -1055,7 +1055,7 @@ export function FTLCheckerClient() {
                                                         <a href={ecfrUrl(e.citation)} target="_blank" rel="noopener noreferrer" className="font-mono font-medium text-re-brand no-underline">{e.citation}</a>
                                                     </div>
                                                 ))}
-                                                {results.exemptionStatus === 'NOT_EXEMPT' && <p className="text-small">Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination — confirm with counsel and the FDA Exemptions &amp; Exclusions Tool before relying on it.</p>}
+                                                {results.exemptionStatus === 'NOT_EXEMPT' && <p className="text-small">Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination. Confirm with counsel and the FDA Exemptions &amp; Exclusions Tool before relying on it.</p>}
                                             </Callout>
                                         )}
 
@@ -1090,7 +1090,7 @@ export function FTLCheckerClient() {
                                                                 <Badge tone="danger" size="sm" className="h-auto whitespace-normal py-1 text-left">Higher Outbreak Frequency</Badge>
                                                             )}
                                                             <Badge tone={category.covered ? 'success' : 'neutral'} size="sm" className="h-auto whitespace-normal py-1 text-left">
-                                                                {category.covered ? 'Listed grouping — verify' : 'Not listed — verify'}
+                                                                {category.covered ? 'Listed grouping. Verify' : 'Not listed. Verify'}
                                                             </Badge>
                                                         </div>
                                                     </div>
@@ -1100,7 +1100,7 @@ export function FTLCheckerClient() {
                                                             <div className="grid grid-cols-1 gap-4">
                                                                 <div>
                                                                     <div className="mb-1.5 font-mono uppercase text-label text-re-text-muted">
-                                                                        CTEs Required
+                                                                        Critical Tracking Event (CTE) Types Required
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-1">
                                                                         {category.ctes.map(cte => (
@@ -1110,7 +1110,7 @@ export function FTLCheckerClient() {
                                                                 </div>
                                                                 <div>
                                                                     <div className="mb-1.5 font-mono uppercase text-label text-re-text-muted">
-                                                                        KDEs per Event
+                                                                        Key Data Element (KDE) Fields per Event
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-1">
                                                                         {category.kdes.map(kde => (
@@ -1146,8 +1146,8 @@ export function FTLCheckerClient() {
                                             <>
                                                 <AlertTriangle size={20} strokeWidth={1.75} aria-hidden="true" className="mb-3 text-re-text-tertiary" />
                                                 <h3 className="mb-3 text-heading text-re-text-primary">Action Required</h3>
-                                                <p className="mb-2 text-ui text-re-text-secondary">Based on your selections, <strong className="font-medium text-re-text-primary">{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
-                                                <p className="mb-5 text-small text-re-text-tertiary">Some major retailers have announced their own traceability programs — check your buyers&apos; requirements.</p>
+                                                <p className="mb-2 text-ui text-re-text-secondary">Based on your selections, <strong className="font-medium text-re-text-primary">{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. This is not a regulatory determination. Verify each product against the FDA FTL.</p>
+                                                <p className="mb-5 text-small text-re-text-tertiary">Some major retailers have announced their own traceability programs. Check your buyers&apos; requirements.</p>
                                                 {!emailSubmitted ? (
                                                     <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
                                                         <p className="text-ui font-medium text-re-text-primary">Request a Follow-Up Review</p>
@@ -1199,8 +1199,8 @@ export function FTLCheckerClient() {
                                         <h3 className="mb-6 text-heading text-re-text-primary">What You Need to Know</h3>
                                         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                                             {[
-                                                { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325–§1.1350' },
-                                                { num: 2, title: '24-Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
+                                                { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325 to §1.1350' },
+                                                { num: 2, title: '24 Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
                                                 { num: 3, title: 'Traceability Lot Codes (TLCs)', desc: 'Each lot must have a unique code that links all events across your supply chain.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320', cfrLabel: '§1.1320' },
                                             ].map(item => (
                                                 <div key={item.num}>
@@ -1227,11 +1227,11 @@ export function FTLCheckerClient() {
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            21 CFR Part 1 Subpart S — Full Rule Text
+                                            21 CFR Part 1 Subpart S: Full Rule Text
                                         </a>
                                         <a href="https://www.federalregister.gov/documents/2022/11/21/2022-24417/requirements-for-additional-traceability-records-for-certain-foods" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            Final Rule — 87 FR 70910 (Nov 21, 2022)
+                                            Final Rule: 87 FR 70910 (Nov 21, 2022)
                                         </a>
                                         <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
@@ -1239,7 +1239,7 @@ export function FTLCheckerClient() {
                                         </a>
                                         <a href="https://www.federalregister.gov/documents/2025/08/07/2025-14967/requirements-for-additional-traceability-records-for-certain-foods-compliance-date-extension" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            Compliance Date Extension — 90 FR 38084
+                                            Compliance Date Extension: 90 FR 38084
                                         </a>
                                         <a href="https://www.fda.gov/files/food/published/FSMA%20Rule%20for%20Food%20Traceability%20-%202024-0520-CTEs-KDEs.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
