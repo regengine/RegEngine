@@ -401,8 +401,6 @@
     ctx.beginPath(); ctx.moveTo(cx - geom.orbit, cy); ctx.lineTo(cx - geom.rMin, cy); ctx.moveTo(cx + geom.rMin, cy); ctx.lineTo(cx + geom.orbit, cy); ctx.stroke();
     ctx.restore();
 
-    drawAxisLabels(p);
-
     // Milky Way: one mote per sandbox question this session.
     S.motes.forEach((m, i) => {
       const x = 14 + (i % 40) * ((w - 28) / 40);
@@ -493,6 +491,9 @@
     ctx.fillStyle = p.ink;
     ctx.fillText('Jev', cx, cy + coreR * 2.4 + 12);
     ctx.restore();
+
+    // Over Jev's glow and the rings, under the stars.
+    drawAxisLabels(p);
 
     // Stars.
     const twinkle = animated() && (S.running || now - S.lastEventAt < 10000) ? now / 1000 : 0;
