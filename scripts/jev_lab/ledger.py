@@ -64,6 +64,11 @@ class EpochChanged(RuntimeError):
     """The split was rotated while a run was using it: the run must stop."""
 
 
+def _judged_by_fake(row: Mapping[str, Any]) -> bool:
+    jev = row.get("jev")
+    return row.get("mode") == FAKE or (isinstance(jev, Mapping) and jev.get("mode") == FAKE)
+
+
 def default_home() -> Path:
     raw = os.environ.get(HOME_ENV, "").strip()
     return Path(raw).expanduser() if raw else DEFAULT_HOME
@@ -218,14 +223,24 @@ class Ledger:
 
         A recorded incumbent built on a production wording that has since
         changed is ignored, so the lab never keeps optimising stale text, and
-        one judged on another epoch's held-out split is ignored too.
+        one judged on another epoch's held-out split is ignored too. A live
+        ledger also ignores wording the offline fake picked: a home written
+        before fake runs moved to ``<home>/fake`` can hold such rows.
         """
         current = {kind: baseline(kind) for kind in KINDS}
         epoch = self.epoch()["salt"]
-        for row in self.rows():
+        rows = self.rows()
+        fake_runs = (
+            {row["run_id"] for row in rows if row.get("run_id") and _judged_by_fake(row)}
+            if self.mode == LIVE
+            else set()
+        )
+        for row in rows:
             if row.get("type") != "incumbent" or row.get("kind") not in current:
                 continue
             if row.get("baseline_digest") != baseline(row["kind"]).digest or row.get("epoch") != epoch:
+                continue
+            if self.mode == LIVE and (_judged_by_fake(row) or row.get("run_id") in fake_runs):
                 continue
             loaded = self.load_set(str(row.get("digest", "")))
             if loaded is not None:

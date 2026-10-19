@@ -144,8 +144,10 @@
         <button id="ledger-reset" class="ghost" type="button">Start again from production</button>
         <button id="ledger-rotate" class="ghost" type="button">Rotate the split</button>
       </div>
-      <p class="small">Promotion is a pull request a person reviews: run <code>venv/bin/python scripts/jev_lab export &lt;digest&gt;</code>
+      <p id="ledger-promote" class="small">Promotion is a pull request a person reviews: run <code>venv/bin/python scripts/jev_lab export &lt;digest&gt;</code>
         and ask Claude Code to apply it to the production question set (and bump its <code>QUESTIONS_VERSION</code>).</p>
+      <p id="ledger-promote-fake" class="small" hidden>This ledger was judged by the offline fake (word overlap), not Jev:
+        nothing here is a candidate for production. Run the loop against live Jev to get one.</p>
       <div id="ledger-list"></div>
       <div id="ledger-detail"></div>
     </div>

@@ -738,6 +738,45 @@ def test_fake_and_live_ledgers_never_mix(tmp_path, fake):
     assert live.cases_path == ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).cases_path
 
 
+def test_a_live_ledger_ignores_fake_wording_left_by_an_older_lab(tmp_path):
+    """Before fake runs moved to <home>/fake they wrote to <home>/ledger.jsonl, rows without ``mode``."""
+    live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
+    live.ensure()
+    live.split_path.write_text(json.dumps({"salt": "old-salt", "created": "2026-01-01T00:00:00Z", "looks": {}}))
+    base = questions.baseline(questions.HEADER_MAPPING)
+    rewrite = questions.apply_patch(base, {"guidance": "A rewrite the offline fake kept."})
+    rewrite = rewrite.with_label("lab-old-g1-header_mapping", parent=base.digest)
+    legacy = [
+        {
+            "type": "generation",
+            "run_id": "old",
+            "generation": 1,
+            "jev": {"mode": "fake"},
+            "accepted": ["header_mapping"],
+        },
+        {
+            "type": "incumbent",
+            "kind": "header_mapping",
+            "digest": live.save_set(rewrite),
+            "label": rewrite.label,
+            "generation": 1,
+            "run_id": "old",
+            "baseline_digest": questions.baseline(questions.HEADER_MAPPING).digest,
+            "epoch": "old-salt",
+        },
+    ]
+    live.path.write_text("".join(json.dumps(row) + "\n" for row in legacy))
+
+    assert live.incumbents()[questions.HEADER_MAPPING].label == questions.baseline(questions.HEADER_MAPPING).label
+    # The same rows, read as the fake ledger they were, still count there.
+    fake_view = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
+    fake_view.ensure()
+    fake_view.path.write_text(live.path.read_text())
+    fake_view.split_path.write_text(live.split_path.read_text())
+    fake_view.save_set(rewrite)
+    assert fake_view.incumbents()[questions.HEADER_MAPPING].label == "lab-old-g1-header_mapping"
+
+
 # ---------------------------------------------------------------------------
 # Budget and cache
 # ---------------------------------------------------------------------------

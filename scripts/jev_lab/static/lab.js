@@ -948,9 +948,15 @@
     pillJev.className = 'pill ' + (fake ? 'fake' : 'live');
     pillJev.textContent = fake ? 'Jev: OFFLINE FAKE' : `Jev: live, ${status.jev.model}`;
     $('#fake-banner').hidden = !fake;
-    // Header check: say whose wording "Lab incumbent" is (production's version, or a lab rewrite) and who judged it.
-    const incumbent = status.incumbents && status.incumbents.header_mapping;
-    if (incumbent) $('#hdr-wording').options[0].textContent = `Lab incumbent: ${incumbent.label}${fake ? ' (offline fake ledger)' : ''}`;
+    // Header check asks both questions: say whose wording each one gets (a production version or a
+    // lab rewrite) and who judged it.
+    if (status.incumbents) {
+      const label = (kind) => (status.incumbents[kind] ? status.incumbents[kind].label : 'production');
+      $('#hdr-wording').options[0].textContent = `Lab incumbent: header fields ${label('header_mapping')}, file CTE ${label('file_cte')}${fake ? ' (offline fake ledger)' : ''}`;
+    }
+    // Promotion only ever starts from wording live Jev judged.
+    $('#ledger-promote').hidden = fake;
+    $('#ledger-promote-fake').hidden = !fake;
     $('#pill-claude').textContent = 'Claude: ' + status.proposer.backend + (status.proposer.backend === 'offline' ? ' (heuristic)' : '');
     $('#pill-budget').textContent = `Requests: ${status.jev.sent}/${status.jev.max_requests}` + (status.jev.cache_hits ? ` · ${status.jev.cache_hits} cached` : '');
     const select = $('#loop-proposer');
