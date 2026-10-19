@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import stat
 import threading
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -69,7 +70,7 @@ class Ledger:
     def ensure(self) -> None:
         self.sets_dir.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(self.home, 0o700)
+            os.chmod(self.home, stat.S_IRWXU)  # owner only: the ledger names labelled headers
         except OSError:
             pass
 
