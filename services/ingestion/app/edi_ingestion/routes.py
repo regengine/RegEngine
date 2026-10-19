@@ -188,39 +188,39 @@ def _legacy_856_placeholder_errors(
             }
         )
 
-    # #2974: read the aggregate the extractor actually persists rather
-    # than re-reading the FIRST SN1 segment. The guard used to validate a
-    # different line than the one that was kept, so an ASN whose first
-    # line was valid and whose last line was zero slipped through and
-    # persisted a fabricated quantity.
-    raw_quantity = extracted.get("quantity")
-    if quantity_override is None and _positive_float_or_none(raw_quantity) is None:
-        _add(
-            "quantity",
-            "1.0",
-            "EDI 856 is missing a positive SN1 quantity; refusing to synthesize quantity=1.0.",
-        )
+    # Each SN1 is its own CTE. A zero or non-numeric line must fail here
+    # even when a sibling line is valid, or the route would synthesize 1.0
+    # for that line alone.
+    lines = extracted.get("line_items") or [{}]
+    for line in lines:
+        raw_quantity = line.get("quantity")
+        if quantity_override is None and _positive_float_or_none(raw_quantity) is None:
+            _add(
+                "quantity",
+                "1.0",
+                "EDI 856 is missing a positive SN1 quantity; refusing to synthesize quantity=1.0.",
+            )
 
-    raw_unit = extracted.get("unit_of_measure")
-    unit_candidate = unit_override if unit_override is not None else raw_unit
-    if _valid_unit_or_none(unit_candidate) is None:
-        unit_message = (
-            "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'."
-            if not (unit_candidate and str(unit_candidate).strip())
-            else ("EDI 856 has an invalid unit of measure; refusing to synthesize unit_of_measure='units'.")
-        )
-        _add(
-            "unit_of_measure",
-            "units",
-            unit_message,
-        )
+        raw_unit = line.get("unit_of_measure")
+        unit_candidate = unit_override if unit_override is not None else raw_unit
+        if _valid_unit_or_none(unit_candidate) is None:
+            unit_message = (
+                "EDI 856 is missing SN1 unit of measure; refusing to synthesize unit_of_measure='units'."
+                if not (unit_candidate and str(unit_candidate).strip())
+                else ("EDI 856 has an invalid unit of measure; refusing to synthesize unit_of_measure='units'.")
+            )
+            _add(
+                "unit_of_measure",
+                "units",
+                unit_message,
+            )
 
-    if not (product_description_override or extracted.get("product_description")):
-        _add(
-            "product_description",
-            "EDI 856 Shipment",
-            "EDI 856 is missing product identification/description; refusing to synthesize a generic product.",
-        )
+        if not (product_description_override or line.get("product_description")):
+            _add(
+                "product_description",
+                "EDI 856 Shipment",
+                "EDI 856 is missing product identification/description; refusing to synthesize a generic product.",
+            )
 
     if not (ship_from_override or extracted.get("ship_from_name")):
         _add(
@@ -540,6 +540,30 @@ async def ingest_edi_856(
     # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
     _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
 
+    lines = extracted.get("line_items") or []
+    if len(lines) > 1:
+        supplied_overrides = [
+            name
+            for name, value in (
+                ("product_description", product_description),
+                ("quantity_override", quantity_override),
+                ("unit_of_measure_override", unit_of_measure_override),
+                ("ship_from_location_override", ship_from_location_override),
+                ("ship_to_location_override", ship_to_location_override),
+            )
+            if value is not None
+        ]
+        if supplied_overrides:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "edi_overrides_with_multiple_line_items",
+                    "message": "Field overrides cannot apply to multiple ASN lines. Resubmit without overrides.",
+                    "overrides": supplied_overrides,
+                    "event_count": len(lines),
+                },
+            )
+
     placeholder_errors = _legacy_856_placeholder_errors(
         extracted=extracted,
         product_description_override=product_description,
@@ -563,58 +587,65 @@ async def ingest_edi_856(
         extracted.get("ship_time_raw"),
     )
 
-    quantity = quantity_override if quantity_override is not None else extracted.get("quantity")
-    resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
-    resolved_unit = _normalize_unit(unit_of_measure_override or extracted.get("unit_of_measure"))
-
     ship_from_name = ship_from_location_override or extracted.get("ship_from_name") or "Unknown ship-from"
     ship_to_name = ship_to_location_override or extracted.get("ship_to_name") or "Unknown ship-to"
-
-    product_name = product_description or extracted.get("product_description") or "EDI 856 Shipment"
 
     ship_from_gln_raw = extracted.get("ship_from_gln")
     ship_to_gln_raw = extracted.get("ship_to_gln")
     ship_from_gln = _valid_gln_or_none(ship_from_gln_raw)
     ship_to_gln = _valid_gln_or_none(ship_to_gln_raw)
 
-    kdes: dict[str, Any] = {
-        "ship_date": ship_date,
-        "ship_from_location": ship_from_name,
-        "ship_to_location": ship_to_name,
-        "ship_from_gln": ship_from_gln or ship_from_gln_raw,
-        "ship_to_gln": ship_to_gln or ship_to_gln_raw,
-        "reference_document_number": extracted.get("reference_document_number"),
-        "carrier": extracted.get("carrier"),
-        "asn_number": extracted.get("asn_number"),
-        "edi_transaction_set": "856",
-        "edi_control_number": extracted.get("control_number"),
-        # Canonical trading-partner id (GS first, ISA fallback) per #1160.
-        "edi_sender_id": extracted.get("sender_id"),
-        "edi_receiver_id": extracted.get("receiver_id"),
-        # Raw envelope values for audit traceability.
-        "edi_isa_sender_id": extracted.get("isa_sender_id"),
-        "edi_gs_sender_id": extracted.get("gs_sender_id"),
-        "edi_isa13": extracted.get("isa13"),
-        "edi_gs_control_number": extracted.get("gs_control_number"),
-        "partner_id": x_partner_id,
-        "immediate_previous_source": ship_from_name,
-    }
-
-    event = IngestEvent(
-        cte_type=WebhookCTEType.SHIPPING,
-        traceability_lot_code=traceability_lot_code,
-        product_description=product_name,
-        quantity=resolved_quantity,
-        unit_of_measure=resolved_unit,
-        location_gln=ship_from_gln,
-        location_name=ship_from_name,
-        timestamp=timestamp,
-        kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
-    )
+    if not lines:
+        lines = [{}]
+    events: list[IngestEvent] = []
+    for line_index, line in enumerate(lines, start=1):
+        quantity = quantity_override if quantity_override is not None else line.get("quantity")
+        resolved_quantity = _safe_float(str(quantity) if quantity is not None else None, fallback=1.0)
+        resolved_unit = _normalize_unit(unit_of_measure_override or line.get("unit_of_measure"))
+        product_name = product_description or line.get("product_description") or "EDI 856 Shipment"
+        lot = line.get("lot_number")
+        line_tlc = lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code
+        kdes: dict[str, Any] = {
+            "ship_date": ship_date,
+            "ship_from_location": ship_from_name,
+            "ship_to_location": ship_to_name,
+            "ship_from_gln": ship_from_gln or ship_from_gln_raw,
+            "ship_to_gln": ship_to_gln or ship_to_gln_raw,
+            "reference_document_number": extracted.get("reference_document_number"),
+            "carrier": extracted.get("carrier"),
+            "asn_number": extracted.get("asn_number"),
+            "edi_transaction_set": "856",
+            "edi_control_number": extracted.get("control_number"),
+            "edi_line_index": line_index,
+            "lot_number": lot.strip() if isinstance(lot, str) and lot.strip() else None,
+            # Canonical trading-partner id (GS first, ISA fallback) per #1160.
+            "edi_sender_id": extracted.get("sender_id"),
+            "edi_receiver_id": extracted.get("receiver_id"),
+            # Raw envelope values for audit traceability.
+            "edi_isa_sender_id": extracted.get("isa_sender_id"),
+            "edi_gs_sender_id": extracted.get("gs_sender_id"),
+            "edi_isa13": extracted.get("isa13"),
+            "edi_gs_control_number": extracted.get("gs_control_number"),
+            "partner_id": x_partner_id,
+            "immediate_previous_source": ship_from_name,
+        }
+        events.append(
+            IngestEvent(
+                cte_type=WebhookCTEType.SHIPPING,
+                traceability_lot_code=line_tlc,
+                product_description=product_name,
+                quantity=resolved_quantity,
+                unit_of_measure=resolved_unit,
+                location_gln=ship_from_gln,
+                location_name=ship_from_name,
+                timestamp=timestamp,
+                kdes={k: v for k, v in kdes.items() if v is not None and v != ""},
+            )
+        )
 
     payload = WebhookPayload(
         source=source,
-        events=[event],
+        events=events,
         tenant_id=sender_tenant_id,
     )
     ingestion_result = await ingest_events(
@@ -626,14 +657,15 @@ async def ingest_edi_856(
     return EDIIngestResponse(
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
-        traceability_lot_code=traceability_lot_code,
+        traceability_lot_code=events[0].traceability_lot_code,
         extracted={
             "asn_number": extracted.get("asn_number"),
-            "quantity": resolved_quantity,
-            "unit_of_measure": resolved_unit,
+            "quantity": events[0].quantity,
+            "unit_of_measure": events[0].unit_of_measure,
             "ship_from_location": ship_from_name,
             "ship_to_location": ship_to_name,
             "reference_document_number": extracted.get("reference_document_number"),
+            "event_count": len(events),
         },
         ingestion_result=ingestion_result,
     )
@@ -787,6 +819,8 @@ def _build_ingest_event_for_set(
                 "ship_to_gln": extracted.get("ship_to_gln"),
                 "carrier": extracted.get("carrier"),
                 "asn_number": extracted.get("asn_number"),
+                "lot_number": extracted.get("lot_number"),
+                "edi_line_index": extracted.get("edi_line_index"),
             }
         )
     elif transaction_set == "850":
@@ -819,6 +853,8 @@ def _build_ingest_event_for_set(
                 "receiving_location": extracted.get("receiving_location_name"),
                 "receiving_location_gln": extracted.get("receiving_location_gln"),
                 "condition_code": extracted.get("condition_code"),
+                "lot_number": extracted.get("lot_number"),
+                "edi_line_index": extracted.get("edi_line_index"),
             }
         )
     elif transaction_set == "944":
@@ -1053,40 +1089,39 @@ async def ingest_edi_document(
     # document, before validating any transaction set or warehouse line.
     _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
 
-    # Warehouse transaction sets carry one CTE per W07/W12 line. Keep
-    # ST/SE extraction and envelope handling at document scope, then copy
-    # the shared fields onto each line before validation or persistence.
+    # 856 SN1, 861 RCD, and warehouse W07/W12 lines are each one CTE.
+    # ST/SE extraction and envelope handling stay at document scope, then
+    # the shared header is copied onto each line.
     event_inputs: list[tuple[str, dict[str, Any], list[list[str]]]] = []
     first_event_indexes: list[int] = []
     for slice_set, slice_extracted, slice_segments in zip(slice_sets, extractions, set_slices):
         first_event_indexes.append(len(event_inputs))
-        if slice_set in ("944", "945"):
+        if slice_set in ("856", "861", "944", "945"):
             header = {key: value for key, value in slice_extracted.items() if key != "line_items"}
-            header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
-            date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
-            header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(header.get(date_field), None)
+            if slice_set in ("944", "945"):
+                header["tlc_source_reference"] = tlc_source_reference.strip() if tlc_source_reference else None
+                date_field = "receive_date_raw" if slice_set == "944" else "ship_date_raw"
+                header["_event_timestamp"], header["_event_date"] = _ship_timestamp_and_date(
+                    header.get(date_field), None
+                )
             # A header with no item segment still follows the same FSMA
             # validation/rejection path as a line missing its quantity.
             lines = slice_extracted["line_items"] or [{"quantity": None, "lot_number": None}]
             for line in lines:
-                event_inputs.append(
-                    (
-                        slice_set,
-                        {
-                            **header,
-                            **line,
-                            "edi_line_index": len(event_inputs) + 1,
-                            # LT identifies one lot, so a header LT cannot
-                            # be copied as a reference for unrelated lines.
-                            "reference_numbers": {
-                                key: value
-                                for key, value in header["reference_numbers"].items()
-                                if key != "LT" or value == line.get("lot_number")
-                            },
-                        },
-                        slice_segments,
-                    )
-                )
+                merged = {
+                    **header,
+                    **line,
+                    "edi_line_index": len(event_inputs) + 1,
+                }
+                if slice_set in ("944", "945"):
+                    # LT identifies one lot, so a header LT cannot be
+                    # copied as a reference for unrelated lines.
+                    merged["reference_numbers"] = {
+                        key: value
+                        for key, value in header["reference_numbers"].items()
+                        if key != "LT" or value == line.get("lot_number")
+                    }
+                event_inputs.append((slice_set, merged, slice_segments))
         else:
             event_inputs.append((slice_set, slice_extracted, slice_segments))
 
@@ -1113,11 +1148,11 @@ async def ingest_edi_document(
                 traceability_lot_code,
                 sender_tenant_id,
             )
-            if slice_set in ("944", "945"):
+            if slice_set in ("856", "861", "944", "945"):
                 slice_extracted["traceability_lot_code"] = validated["tlc"]
             slice_extracted["fsma_validation_status"] = "passed"
         except ValidationError as ve:
-            errors = ve.errors(include_context=False) if slice_set in ("944", "945") else ve.errors()
+            errors = ve.errors(include_context=False) if slice_set in ("856", "861", "944", "945") else ve.errors()
             strict_effective = strict and _edi_strict_mode()
             if strict_effective:
                 logger.warning(
@@ -1188,11 +1223,14 @@ async def ingest_edi_document(
             "reference_document_number": slice_extracted.get("reference_document_number"),
             "fsma_validation_status": slice_extracted.get("fsma_validation_status"),
         }
-        if slice_set in ("944", "945"):
+        if slice_set in ("856", "861", "944", "945"):
             summary.update(
                 line_index=slice_extracted.get("edi_line_index"),
                 traceability_lot_code=slice_extracted.get("traceability_lot_code"),
                 lot_number=slice_extracted.get("lot_number"),
+            )
+        if slice_set in ("944", "945"):
+            summary.update(
                 gtin=slice_extracted.get("gtin"),
                 upc=slice_extracted.get("upc"),
             )
@@ -1207,7 +1245,7 @@ async def ingest_edi_document(
     extracted_summary: dict[str, Any] = dict(summaries[0])
     extracted_summary["transaction_set_count"] = len(slice_sets)
     extracted_summary["transaction_sets"] = [summaries[index] for index in first_event_indexes]
-    if transaction_set in ("944", "945"):
+    if transaction_set in ("856", "861", "944", "945"):
         extracted_summary["event_count"] = len(summaries)
         extracted_summary["events"] = summaries
         extracted_summary["submitted_traceability_lot_code"] = traceability_lot_code
@@ -1275,7 +1313,7 @@ async def ingest_edi_document(
                 },
             )
 
-    if transaction_set in ("944", "945") and len(event_inputs) > len(slice_sets):
+    if transaction_set in ("856", "861", "944", "945") and len(event_inputs) > len(slice_sets):
         supplied_overrides = [
             name
             for name, value in (
@@ -1326,7 +1364,11 @@ async def ingest_edi_document(
         document_type=f"X12_{transaction_set}",
         sender_tenant_id=sender_tenant_id,
         partner_id=x_partner_id,
-        traceability_lot_code=events[0].traceability_lot_code if transaction_set in ("944", "945") else traceability_lot_code,
+        traceability_lot_code=(
+            events[0].traceability_lot_code
+            if transaction_set in ("856", "861", "944", "945")
+            else traceability_lot_code
+        ),
         extracted=extracted_summary,
         ingestion_result=ingestion_result,
     )
