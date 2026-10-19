@@ -62,6 +62,12 @@ It reports what it found by kind and location, never by value. It catches
 mistakes. It does not prove that nothing sensitive remains, so paste header
 rows and synthetic examples, not exports.
 
+Rows in `cases.local.json` are checked again every time they are loaded,
+not only when they were labelled, because the file can be edited by hand or
+restored from an older copy. A row that fails stops the lab with a message
+naming the case and the kind of content; nothing is sent until the row is
+fixed or removed.
+
 ## The page
 
 - **Ask Jev.** Typed questions (which of these, is this true, how much) about
@@ -215,7 +221,7 @@ become the live incumbent or use the live held-out split. `ledger`,
 | File | Contents |
 | --- | --- |
 | `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts |
-| `question_sets/<digest>.json` | The wording behind each digest |
+| `question_sets/<digest>.json` | The wording behind each digest. A file that no longer matches its digest (edited or corrupted) is refused, with a message naming the file |
 | `split.json` | The split salt, each case's pinned side, held-out looks per question |
 | `cases.local.json` | Rows labelled in Header check (headers and labels, with the first `labelled_at`); shared by both modes |
 | `jev-cache.jsonl` | Jev answers keyed by a SHA-256 of the request; the request itself is not stored |

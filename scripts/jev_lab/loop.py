@@ -55,7 +55,7 @@ from shared.jev import JevUnavailable
 
 from . import load_script, privacy
 from .jev_access import Uncached
-from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, Ledger
+from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, LabStateError, Ledger
 from .proposer import ProposerError, brief_case_ids, build_brief
 from .questions import KINDS, QuestionSet, apply_patch, baseline, changed_options, normalize_phrase, validate
 from .scoring import (
@@ -94,24 +94,55 @@ class LoopConfig:
 # ---------------------------------------------------------------------------
 
 
-def validate_cases(ledger: Ledger, raw: Sequence[Mapping[str, Any]]) -> list[jev_eval.Case]:
+def validate_cases(
+    ledger: Ledger, raw: Sequence[Mapping[str, Any]], *, source: str | None = None
+) -> list[jev_eval.Case]:
     """``raw`` case objects validated exactly as ``jev_eval.load_cases`` validates a cases file.
 
     Each call uses its own temporary file, so concurrent callers (the page's
-    status polls, a run, a confirm) never read each other's rows.
+    status polls, a run, a confirm) never read each other's rows. With
+    ``source`` (the file the rows came from), a row that fails validation is
+    a :class:`LabStateError` naming that file and the row, to fix or delete.
     """
     rows = [{key: case[key] for key in ("id", "headers", "cte", "mappings") if key in case} for case in raw]
     if not rows:
         return []
+    refuse_tainted_cases(rows, source=ledger.cases_path.name)
     ledger.ensure()
     handle, name = tempfile.mkstemp(dir=ledger.state_dir, prefix=".cases-", suffix=".json")
     path = Path(name)
     try:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             json.dump({"cases": rows}, stream)
-        return jev_eval.load_cases(path, templates=False)
+        try:
+            return jev_eval.load_cases(path, templates=False)
+        except jev_eval._UsageError as exc:
+            if source is None:
+                raise
+            detail = str(exc).replace(str(path), source).replace(path.name, source)
+            raise LabStateError(f"{detail}: fix or delete the row") from None
     finally:
         path.unlink(missing_ok=True)
+
+
+def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> None:
+    """Refuse a labelled row that must not leave the machine, before anything is asked about it.
+
+    The sandbox checks a row when it is labelled, but ``cases.local.json`` can
+    be edited by hand or restored from an older copy. Every row is checked
+    again each time it is loaded, so a secret, a person's details or a row of
+    values in that file never reaches Jev or Claude. The reasons name the case
+    and the kind of content, never the content.
+    """
+    reasons: list[str] = []
+    for row in rows:
+        headers = row.get("headers")
+        found = privacy.findings({"headers": headers, "mappings": row.get("mappings")})
+        if isinstance(headers, list) and all(isinstance(h, str) for h in headers):
+            found += privacy.data_row_findings(headers)
+        reasons += [f"{source} case {row.get('id')!r}: {reason}" for reason in found]
+    if reasons:
+        raise privacy.Refused(reasons)
 
 
 def header_key(headers: Sequence[str]) -> tuple[str, ...]:
@@ -128,7 +159,8 @@ def every_case(ledger: Ledger, *, templates: bool = True) -> list[jev_eval.Case]
     cases = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=templates)
     seen = {header_key(case.headers) for case in cases}
     known = {case.id for case in cases}
-    for case in validate_cases(ledger, [c for c in ledger.local_cases() if c.get("id") not in known]):
+    local = [c for c in ledger.local_cases() if c.get("id") not in known]
+    for case in validate_cases(ledger, local, source=ledger.cases_path.name):
         if header_key(case.headers) not in seen:
             seen.add(header_key(case.headers))
             cases.append(case)

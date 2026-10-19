@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -145,6 +146,66 @@ def test_status_says_fake_and_never_carries_the_key(client, lab):
     assert jev_access.FAKE_KEY not in response.text
     assert data["vocabulary"]["header_mapping"][0] == "traceability_lot_code"
     assert data["estimate"]["jev_requests_max"] > 0
+
+
+def test_a_tainted_labelled_row_makes_the_lab_refuse_and_say_which(client, lab):
+    lab.ledger.add_case({"id": "local-bad", "headers": ["Ship Dte", "jane@example.com"], "cte": None, "mappings": {}})
+
+    response = client.get("/api/status", headers=AUTH)
+    assert response.status_code == 422
+    reasons = response.json()["refused"]
+    assert any("case 'local-bad'" in r and "personal data" in r for r in reasons)
+    assert "jane" not in response.text
+    # The loop and confirm go through the same gate and send nothing.
+    start = client.post("/api/loop/start", headers=POST, json={"generations": 1, "proposer": "offline"})
+    _wait_idle(lab)
+    assert start.status_code in (200, 422) and lab.decider.stats()["sent"] == 0
+
+
+def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab):
+    lab.ledger.add_case({"id": "local-bogus", "headers": ["Ship Dte", "Lot No."], "cte": "bogus", "mappings": {}})
+
+    response = client.get("/api/status", headers=AUTH)
+    assert response.status_code == 500
+    assert "cases.local.json" in response.json()["error"] and "local-bogus" in response.json()["error"]
+    # A run in progress still answers 409, not the state handler.
+    assert "a run is already in progress" not in response.text
+
+
+PARSE_ROW_FIXTURES = [
+    ('"Product, Description",Lot', ","),
+    ("Lot,,Ship Date", ","),
+    ('"He said ""hi""",x', ","),
+    ("Ship Dte\tCust Name\tLot No.", "\t"),
+    (" a , b ,c ", ","),
+    ('"a\tb",c', ","),
+    ('x"y,z', ","),
+    ('"unterminated,abc', ","),
+    ("Prod\u00fcct,Lot \u2116,Qty", ","),
+    ("Ship Dte, Cust Name, Lot No., Qty Shpd, Freight Co.", ","),
+]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="needs node to run the page's parser")
+def test_parse_row_reads_a_header_row_as_the_csv_reader_does():
+    """The page's parseRow matches csv.reader on quoted delimiters, doubled quotes, tabs and blanks."""
+    import csv
+    import re
+    import subprocess
+
+    source = (PACKAGE / "static" / "lab.js").read_text(encoding="utf-8")
+    functions = "".join(
+        re.search(rf"  function {name}\(.*?\n  \}}\n", source, re.S).group(0) for name in ("unquotedHas", "parseRow")
+    )
+    script = functions + "\nprocess.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).map(parseRow)));"
+    rows = [row for row, _ in PARSE_ROW_FIXTURES]
+    result = subprocess.run(["node", "-e", script, json.dumps(rows)], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    got = json.loads(result.stdout)
+
+    for (row, delimiter), cells in zip(PARSE_ROW_FIXTURES, got):
+        expected = [h.strip() for h in next(csv.reader([row], delimiter=delimiter)) if h.strip()]
+        assert cells == expected, row
 
 
 def test_status_reports_held_out_wear_from_the_split_file(client, lab):

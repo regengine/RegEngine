@@ -191,6 +191,16 @@ def test_an_older_labs_fake_rows_in_the_live_ledger_are_marked_and_never_promote
     assert code == 0 and "Judged by the OFFLINE FAKE Jev" in out and "grep -rn" not in out
 
 
+def test_a_tainted_labelled_row_exits_1_without_naming_its_content(capsys, home):
+    home.add_case({"id": "local-bad", "headers": ["Ship Dte", "jane@example.com"], "cte": None, "mappings": {}})
+    seen: list = []
+
+    code, out, err = _run(capsys, ["score", "--home", str(home.home)], env=LIVE_ENV, transport=_counting(seen))
+
+    assert code == 1 and "case 'local-bad'" in err and "personal data" in err
+    assert "jane" not in out + err and not seen
+
+
 def test_confirm_reports_insufficient_fresh_data(capsys, home):
     code, out, _ = _run(capsys, ["export", "incumbent", "--home", str(home.home)])
     assert code == 0 and "differs from production csv-header-mapping.v3 in: nothing" in out

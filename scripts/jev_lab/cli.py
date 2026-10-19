@@ -456,7 +456,8 @@ def main(
     read_key: Callable[[str], str] = getpass.getpass,
 ) -> int:
     """Run one command. ``env``, ``transport`` and ``read_key`` exist for offline tests."""
-    from .ledger import Ledger
+    from . import privacy
+    from .ledger import LabStateError, Ledger
 
     try:
         args = _parser().parse_args(list(argv) if argv is not None else (sys.argv[1:] or ["serve"]))
@@ -473,6 +474,23 @@ def main(
         return EXIT_USAGE
 
     ledger = Ledger(args.home, mode="fake" if args.fake else "live")
+    try:
+        return _dispatch(args, ledger, env=env, transport=transport, read_key=read_key)
+    except (privacy.Refused, LabStateError) as exc:
+        # A labelled row that must not leave, or a lab file that no longer says what it recorded:
+        # the message names the file and the case, never the content. Nothing was sent.
+        print(f"{PROG}: error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+
+def _dispatch(
+    args: argparse.Namespace,
+    ledger: Any,
+    *,
+    env: Mapping[str, str] | None,
+    transport: Any | None,
+    read_key: Callable[[str], str],
+) -> int:
     if args.command == "ledger":
         return _cmd_ledger(args, ledger)
     if args.command == "export":

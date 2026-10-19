@@ -114,6 +114,7 @@
     pinned: null,
     answersSoFar: 0,
     lastEventAt: 0,
+    unusable: null,
   };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const animated = () => S.motion && !reducedMotion.matches;
@@ -794,7 +795,8 @@
       quietUntil = connectedBefore && !restarted ? lastSeenId : until;
       connectedBefore = true;
       $('#log').replaceChildren();
-      applyStatus(d.status);
+      if (d.error) showUnusable(d.error);
+      else applyStatus(d.status);
     },
     run_started(d) {
       resetRun();
@@ -1008,6 +1010,7 @@
   // ---------------------------------------------------------------- status, now card, gauges
   function applyStatus(status) {
     if (!status) return;
+    S.unusable = null;
     S.status = status;
     S.running = status.loop.running;
     // split.json is the truth for held-out wear; a run's own events take over only while it runs.
@@ -1045,9 +1048,17 @@
     $('#now-primary').disabled = false;
   }
 
+  // The lab refuses to run on a labelled row that must not leave, or on a lab file that no longer
+  // says what it recorded: the message names the file and the case, and nothing is sent.
+  function showUnusable(message) {
+    S.unusable = message;
+    updateNow();
+  }
+
   async function refreshStatus() {
     const r = await api('/api/status');
     if (r.ok) applyStatus(r.data);
+    else if (r.data && (r.data.refused || r.data.error)) showUnusable(errorText(r));
   }
 
   function updateNow() {
@@ -1058,6 +1069,9 @@
     $('#loop-start').disabled = S.running;
     $('#loop-score').disabled = S.running;
     stop.hidden = !S.running;
+    // A refusal or a lab-file message wins over everything else, also after a status was loaded:
+    // the file may be edited while the page is open, and the next poll is what reports it.
+    if (S.unusable) { text.textContent = S.unusable; primary.hidden = false; primary.disabled = true; return; }
     if (!S.status) { text.textContent = 'Connecting to the lab…'; return; }
     const left = S.status.jev.max_requests - S.status.jev.sent;
     if (S.running) {
@@ -1430,9 +1444,49 @@
   });
 
   // ---------------------------------------------------------------- Header check
+  // One header row, read as the ingestion route's csv reader reads it: a field that starts with a
+  // quote may hold the delimiter, and a doubled quote inside it is one quote. Blank headers are
+  // dropped, as production drops them before it asks anything about a row.
+  function unquotedHas(text, wanted) {
+    let quoted = false;
+    let atStart = true;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"') { if (text[i + 1] === '"') i++; else quoted = false; }
+        continue;
+      }
+      if (ch === '"' && atStart) { quoted = true; atStart = false; continue; }
+      if (ch === wanted) return true;
+      atStart = ch === ',' || ch === '\t';
+    }
+    return false;
+  }
+
   function parseRow(text) {
-    const sep = text.includes('\t') ? '\t' : ',';
-    return text.split(sep).map((h) => h.trim()).filter(Boolean);
+    // A tab is the delimiter only when one sits outside quotes; inside a quoted comma field it is text.
+    const sep = unquotedHas(text, '\t') ? '\t' : ',';
+    const cells = [];
+    let cell = '';
+    let quoted = false;
+    let atStart = true;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch !== '"') cell += ch;
+        else if (text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = false;
+      } else if (ch === '"' && atStart) {
+        quoted = true;
+      } else if (ch === sep) {
+        cells.push(cell); cell = ''; atStart = true; continue;
+      } else if (ch !== '\r' && ch !== '\n') {
+        cell += ch;
+      }
+      atStart = false;
+    }
+    cells.push(cell);
+    return cells.map((h) => h.trim()).filter(Boolean);
   }
 
   $('#hdr-send').addEventListener('click', async () => {

@@ -738,6 +738,128 @@ def test_fake_and_live_ledgers_never_mix(tmp_path, fake):
     assert live.cases_path == ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).cases_path
 
 
+def test_a_tainted_labelled_row_is_refused_before_anything_is_sent(tmp_path, fake):
+    """cases.local.json can be edited by hand: a row that must not leave is refused on every load."""
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    lab.add_case({"id": "local-bad", "headers": ["Ship Dte", "jane@example.com"], "cte": None, "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "cases.local.json case 'local-bad'" in message and "personal data" in message
+    assert "jane" not in message and "example.com" not in message
+    with pytest.raises(privacy.Refused):
+        loop.run_loop(ledger=lab, decider=fake, proposer=proposer.OfflineProposer())
+    assert fake.stats()["sent"] == 0
+
+    # A row of values, or a secret in a label, is refused the same way.
+    lab.add_case({"id": "local-bad", "headers": ["2024-04-23", "LOT-R-0423", "240"], "cte": None, "mappings": {}})
+    with pytest.raises(privacy.Refused, match="look like values"):
+        loop.every_case(lab)
+
+
+def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    digest = lab.save_set(base)
+    assert lab.load_set(digest).digest == digest  # the file round-trips to the digest that names it
+
+    path = lab.sets_dir / f"{digest}.json"
+    data = json.loads(path.read_text())
+    data["guidance"] = (data.get("guidance") or "") + " Edited by hand."
+    path.write_text(json.dumps(data))
+    with pytest.raises(RuntimeError, match="does not match its digest"):
+        lab.load_set(digest)
+
+
+def test_labelled_rows_are_locked_on_the_shared_file_in_both_modes(tmp_path):
+    live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
+    fake_view = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
+    assert live.cases_lock == fake_view.cases_lock == tmp_path / "lab" / ".cases.lock"
+    assert live.cases_lock.parent == live.cases_path.parent
+
+    fake_view.add_case({"id": "local-a", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    live.add_case({"id": "local-b", "headers": ["Recv Dte", "Lot No."], "cte": "receiving", "mappings": {}})
+    assert live.cases_lock.exists()
+    assert {c["id"] for c in live.local_cases()} == {"local-a", "local-b"}
+
+
+def test_a_refusal_never_repeats_a_key_that_must_not_leave():
+    """A labelled header is a mapping key: a secret or an address in it is given by position, not text."""
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    reasons = privacy.findings({"mappings": {"Ship Dte": "ship_date", token: "quantity", "jane.doe@example.com": "x"}})
+    joined = " ".join(reasons)
+    assert "key-like token at $.mappings.<key 2>" in reasons
+    assert any(r.startswith("personal data") and r.endswith("at $.mappings.<key 3>") for r in reasons)
+    assert token not in joined and "jane" not in joined and "example.com" not in joined
+    # A clean key is still named, so a reason stays readable.
+    assert privacy.findings({"gln": "1234567890128"}) == ["GLN or GTIN number at $.gln"]
+
+
+def test_an_edited_superseded_question_set_never_blocks_the_lab(tmp_path):
+    lab = _home(tmp_path)
+    salt = lab.epoch()["salt"]
+    base = questions.baseline(questions.HEADER_MAPPING)
+    first = questions.apply_patch(base, {"guidance": "First rewrite."}).with_label("g1", parent=base.digest)
+    second = questions.apply_patch(base, {"guidance": "Second rewrite."}).with_label("g2", parent=base.digest)
+    lab.record_incumbent(first, generation=1, run_id="r", salt=salt)
+    lab.record_incumbent(second, generation=2, run_id="r", salt=salt)
+
+    old = lab.sets_dir / f"{first.digest}.json"
+    data = json.loads(old.read_text())
+    data["guidance"] = "Edited by hand."
+    old.write_text(json.dumps(data))
+
+    assert lab.incumbents()[questions.HEADER_MAPPING].label == "g2"  # the winner is the only file read
+    lab.reset()
+    assert lab.incumbents()[questions.HEADER_MAPPING].label == base.label
+
+
+def test_an_unreadable_or_misfiled_question_set_is_refused_by_name(tmp_path):
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    digest = lab.save_set(base)
+    path = lab.sets_dir / f"{digest}.json"
+    assert not list(lab.sets_dir.glob("*.tmp"))  # written atomically, nothing half-done left behind
+
+    for broken in ("", "{", "[]", json.dumps({"task": "x"})):
+        path.write_text(broken)
+        with pytest.raises(ledger.LabStateError, match="is unreadable") as raised:
+            lab.load_set(digest)
+        assert str(path) in str(raised.value)
+
+    # The kind is outside the digest: a file whose kind was edited is caught where the ledger names its kind.
+    lab.record_incumbent(base, generation=1, run_id="r", salt=lab.epoch()["salt"])
+    data = base.to_dict()
+    data["kind"] = "file_cte"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ledger.LabStateError, match="names it the header_mapping incumbent"):
+        lab.incumbents()
+    data["kind"] = "not-a-kind"
+    path.write_text(json.dumps(data))
+    with pytest.raises(ledger.LabStateError, match="does not match its digest"):
+        lab.load_set(digest)
+
+    path.unlink()
+    assert lab.load_set(digest) is None  # deleted, as the message advises: no such set
+
+
+def test_a_hand_edited_row_that_fails_validation_names_the_cases_file(tmp_path):
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-bogus", "headers": ["Ship Dte", "Lot No."], "cte": "bogus", "mappings": {}})
+
+    with pytest.raises(ledger.LabStateError) as raised:
+        loop.every_case(lab)
+    message = str(raised.value)
+    assert "cases.local.json" in message and "local-bogus" in message and ".cases-" not in message
+    assert message.endswith("fix or delete the row")
+
+    lab.cases_path.write_text("{not json")
+    with pytest.raises(ledger.LabStateError, match="is not JSON"):
+        loop.every_case(lab)
+
+
 def test_a_live_ledger_ignores_fake_wording_left_by_an_older_lab(tmp_path):
     """Before fake runs moved to <home>/fake they wrote to <home>/ledger.jsonl, rows without ``mode``."""
     live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)

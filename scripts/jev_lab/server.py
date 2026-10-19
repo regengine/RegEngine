@@ -36,7 +36,7 @@ from shared.jev import JevUnavailable, header_mapping as hm
 
 from . import load_script, privacy
 from .jev_access import LabDecider
-from .ledger import MAX_HOLDOUT_LOOKS, Ledger
+from .ledger import MAX_HOLDOUT_LOOKS, LabStateError, Ledger
 from .loop import LoopConfig, confirm, epoch_split, every_case, header_key, run_estimate, run_loop, validate_cases
 from .proposer import BACKENDS, build_proposer
 from .questions import FILE_CTE, HEADER_MAPPING, KINDS, baseline, changed_options
@@ -245,6 +245,16 @@ def create_app(lab: Lab) -> FastAPI:
         lab.stop_loop()  # a run stops with the server, never keeps spending Jev or Claude requests
 
     app = FastAPI(title="Jev Lab", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+
+    @app.exception_handler(privacy.Refused)
+    async def refused(_request: Request, exc: privacy.Refused) -> JSONResponse:
+        # A labelled row in cases.local.json that must not leave: nothing was sent, the reasons name no content.
+        return _refuse(exc.reasons)
+
+    @app.exception_handler(LabStateError)
+    async def unusable_state(_request: Request, exc: LabStateError) -> JSONResponse:
+        # A lab file that no longer says what it recorded (split.json, a question set, cases.local.json): say which.
+        return JSONResponse(status_code=500, content={"error": str(exc)})
 
     @app.middleware("http")
     async def guard(request: Request, call_next: Any) -> Response:
@@ -481,7 +491,13 @@ def create_app(lab: Lab) -> FastAPI:
             try:
                 # replay_until: events up to this id are history the page redraws but does not announce.
                 replay_until = backlog[-1]["seq"] if backlog else 0
-                yield _sse("hello", {"status": lab.status(), "backlog": len(backlog), "replay_until": replay_until}, 0)
+                try:
+                    hello: dict[str, Any] = {"status": lab.status()}
+                except privacy.Refused as exc:  # worded as the page words a refused /api/status
+                    hello = {"status": None, "error": "Refused, nothing was sent: " + "; ".join(exc.reasons)}
+                except LabStateError as exc:
+                    hello = {"status": None, "error": str(exc)}
+                yield _sse("hello", {**hello, "backlog": len(backlog), "replay_until": replay_until}, 0)
                 for item in backlog:
                     yield _sse(item["event"], item["data"], item["seq"])
                 idle = 0.0
