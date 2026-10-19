@@ -9,7 +9,7 @@ export const metadata: Metadata = {
         canonical: 'https://regengine.co/tools/export',
     },
     openGraph: {
-        title: 'FDA Export Package Generator — RegEngine',
+        title: 'FDA Export Package Generator | RegEngine',
         description: 'Generate verifiable FSMA 204 records packages with SHA-256 chain verification to support record-availability workflows. Free.',
         type: 'website',
         url: 'https://regengine.co/tools/export',

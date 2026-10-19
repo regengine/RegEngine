@@ -15,7 +15,7 @@ export function KnowledgeGraphClient() {
     return (
         <FreeToolPageShell
             title="Supply Chain Knowledge Graph"
-            subtitle="Map and trace your FSMA 204 supply chain with our interactive visual builder."
+            subtitle="Map your FSMA 204 supply chain and explore Critical Tracking Event (CTE) and Key Data Element (KDE) coverage."
             relatedToolIds={['fsma-unified', 'ftl-checker', 'cte-mapper']}
         >
             <LeadGate
