@@ -24,15 +24,10 @@
 
 Each has a recommended default. Reply "defaults" to accept all, or override per item.
 
-- **D1. Legal entity (blocks PR-6).** Repo evidence says incorporation was an
-  unverified TODO (`launch_orchestrator/DEPLOYMENT_READINESS.md`). Confirm
-  against real documents: does an entity exist, exact name, state?
-  Terms say "RegEngine Inc. / Los Angeles, CA"; DPA says "RegEngine, Inc. /
-  Wilmington, Delaware"; LICENSE/footer/READMEs say "RegEngine Inc.";
-  `pyproject.toml` uses `admin@regengine.io` (wrong domain). If NO entity
-  exists yet, all of these are misstatements — the fix is "RegEngine"
-  (unincorporated d/b/a) or incorporating for real. **No default — only you
-  know this.**
+- **D1. Legal entity (blocks PR-6) — RESOLVED per SEL-317.** Entity confirmed:
+  RegEngine LLC (California single-member LLC). Terms, DPA, LICENSE, footer,
+  READMEs, and the design-partner template now say "RegEngine LLC".
+  `pyproject.toml` uses `admin@regengine.io` (wrong domain — still open).
 - **D2. Support response promise.** Status page says "first response within
   24 hours"; LeadGate says founder reviews "within 24 hours"; retailer
   assessment promises "&lt; 24hr turnaround"; trust pages say no windows are
