@@ -42,6 +42,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import statistics
 import tempfile
 import threading
@@ -125,6 +126,10 @@ def validate_cases(
         path.unlink(missing_ok=True)
 
 
+# The id the page gives a labelled row: a hash of its headers, which holds digits by design.
+PAGE_ID = re.compile(r"local-[0-9a-f]{12}")
+
+
 def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> None:
     """Refuse a labelled row that must not leave the machine, before anything is asked about it.
 
@@ -145,7 +150,8 @@ def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> N
         # A label, a mapping or an id that reads as a row value (a lot code, an SSCC, a date) is
         # refused too: jev_eval would otherwise repeat it as an unknown label or a missing header.
         found += privacy.value_findings({"cte": checked["cte"], "mappings": checked["mappings"]})
-        found += privacy.value_findings({"id": checked["id"]}, codes=False)
+        page_id = isinstance(checked["id"], str) and bool(PAGE_ID.fullmatch(checked["id"]))
+        found += privacy.value_findings({"id": checked["id"]}, codes=not page_id)
         # A reason names the case by its id, unless the id is itself a finding: then by position.
         clean_id = isinstance(checked["id"], str) and not any(reason.endswith(" at $.id") for reason in found)
         where = f"case {checked['id']!r}" if clean_id else f"case <row {index}>"

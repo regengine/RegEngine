@@ -861,10 +861,66 @@ def test_an_edited_question_set_label_parent_or_notes_is_refused_by_shape_not_va
     assert "jane" not in str(raised.value)
 
 
+def test_edited_wording_or_a_value_like_label_in_a_question_set_is_refused(tmp_path):
+    """The digest proves the wording is the one the file names, not that it is clean: it is scanned too."""
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    data = base.to_dict()
+    data["guidance"] = data["guidance"] + " Ask jane.doe@example.com when unsure."
+    edited = questions.QuestionSet.from_dict(data)
+    (lab.sets_dir / f"{edited.digest}.json").write_text(json.dumps(edited.to_dict()))
+    with pytest.raises(
+        ledger.LabStateError, match=r"must not leave \(personal data .* at \$\.wording\.guidance\)"
+    ) as raised:
+        lab.load_set(edited.digest)
+    assert "jane" not in str(raised.value)
+
+    digest = lab.save_set(
+        questions.apply_patch(base, {"guidance": "Shorter."}).with_label("LOT-R-0423", parent=base.digest)
+    )
+    with pytest.raises(ledger.LabStateError, match=r"looks like a value .* at \$\.label") as raised:
+        lab.load_set(digest)
+    assert "LOT-R-0423" not in str(raised.value)
+    for kind in questions.KINDS:  # the production wording and labels pass
+        assert lab.load_set(lab.save_set(questions.baseline(kind))) == questions.baseline(kind)
+
+
+def test_a_hand_written_id_is_held_to_the_code_heuristic_but_the_page_s_own_ids_pass(tmp_path):
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-123456abcdef", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    assert [case.id for case in loop.every_case(lab) if case.id.startswith("local-")] == ["local-123456abcdef"]
+    lab.add_case({"id": "LOT-R-0423", "headers": ["Pick Dt", "Grower"], "cte": "harvesting", "mappings": {}})
+    with pytest.raises(privacy.Refused, match=r"case <row 2>: looks like a value .* at \$\.id") as refused:
+        loop.every_case(lab)
+    assert "LOT-R-0423" not in str(refused.value)
+
+
+def test_a_cached_jev_answer_row_edited_by_hand_is_skipped_at_load(tmp_path):
+    cache = tmp_path / "cache.jsonl"
+    decider = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE, cache_path=cache)
+    state = {"csv_headers": ["Distinctive Header Name"]}
+    questions_ = {"q": {"type": "noul", "instructions": "Is it a date?"}}
+    decider.ask(state, questions_, purpose="t")
+    row = json.loads(cache.read_text().splitlines()[0])
+    row["answers"]["evidence"]["jane.doe@example.com"] = 1
+    cache.write_text(json.dumps(row) + "\n")
+
+    reloaded = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE, cache_path=cache)
+    reloaded.ask(state, questions_, purpose="t")  # the edited row is not a cache hit, and never a TypeError
+    assert reloaded.stats()["sent"] == 1 and reloaded.stats()["cache_hits"] == 0
+
+
 def test_an_unreadable_split_epoch_is_refused_without_repeating_it(tmp_path):
     token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
     lab = _home(tmp_path)
-    for broken in ({"looks": {"header_mapping": token}}, {"looks": [1]}, {"assignment": {"c1": ["train"]}}):
+    for broken in (
+        {"looks": {"header_mapping": token}},
+        {"looks": [1]},
+        {"looks": {token: 1}},
+        {"assignment": {"c1": ["train"]}},
+        {"assignment": {"c1": "elsewhere"}},
+        {"created": {"at": token}},
+    ):
         lab.split_path.write_text(json.dumps({"salt": "s", "created": "2026-01-01T00:00:00Z", "looks": {}, **broken}))
         with pytest.raises(ledger.LabStateError, match="split.json is unreadable") as raised:
             lab.epoch()
@@ -876,6 +932,7 @@ def test_a_ledger_line_that_is_not_a_record_is_skipped(tmp_path):
     lab.append({"type": "noise"})
     with lab.path.open("a", encoding="utf-8") as stream:
         stream.write('"a bare string"\n[1, 2]\n42\n')
+        stream.write('{"type": "generation", "run_id": ["x"]}\n{"type": "generation", "candidates": []}\n')
 
     assert [row["type"] for row in lab.rows()] == ["noise"]
     assert lab.generations() == [] and lab.incumbents()

@@ -204,6 +204,7 @@ def test_a_tainted_labelled_row_exits_1_without_naming_its_content(capsys, home)
 def test_ledger_tolerates_a_hand_edited_generation_row(capsys, home):
     with home.path.open("a", encoding="utf-8") as stream:
         stream.write('{"type": "generation", "mode": "live", "candidates": {"header_mapping": 7}}\n"a bare string"\n')
+        stream.write('{"type": "generation", "mode": "live", "run_id": ["x"], "decisions": []}\n')
 
     code, out, err = _run(capsys, ["ledger", "--home", str(home.home)])
 

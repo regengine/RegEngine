@@ -104,8 +104,9 @@ class LabDecider:
             for line in cache_path.read_text(encoding="utf-8").splitlines():
                 try:
                     row = json.loads(line)
+                    answers_from_dict(row["answers"])  # a hand-edited row is skipped here, never mid-run
                     self._cache[row["key"]] = row["answers"]
-                except (ValueError, KeyError, TypeError):
+                except (ValueError, KeyError, TypeError, AttributeError):
                     continue
 
     @property

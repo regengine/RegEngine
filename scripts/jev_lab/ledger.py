@@ -67,6 +67,18 @@ FAKE = "fake"
 _LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}")
 _LAB_LABEL = re.compile(r"lab-[0-9a-f]{12}-g\d{1,3}-(?:" + "|".join(re.escape(kind) for kind in KINDS) + r")")
 _DIGEST = re.compile(r"[0-9a-f]{64}")
+# The two sides of a split (scoring.TRAIN / scoring.HOLDOUT); a case pinned to anything else is never asked.
+_SIDES = ("train", "holdout")
+
+
+def _is_record(row: Any) -> bool:
+    """A ledger line of the shapes the lab writes, so every reader can index it without a traceback."""
+    if not isinstance(row, dict):
+        return False
+    containers = {"candidates": dict, "decisions": dict, "accepted": list, "metrics": dict}
+    return all(
+        row.get(key) is None or isinstance(row[key], kind) for key, kind in {"run_id": str, **containers}.items()
+    )
 
 
 class LabStateError(RuntimeError):
@@ -153,7 +165,7 @@ class Ledger:
                 row = json.loads(line)
             except ValueError:
                 continue
-            if isinstance(row, dict):  # a hand-edited line that is not a record is skipped like a torn one
+            if _is_record(row):  # a hand-edited line that is not a record is skipped like a torn one
                 rows.append(row)
         return rows
 
@@ -204,13 +216,13 @@ class Ledger:
             raise LabStateError(
                 f"{path} has a label or parent of the wrong shape: delete it, or restore it from a backup"
             )
-        # A run's own label is long enough to read as a token; any other label is scanned like a note.
-        scanned = (
-            {"notes": list(loaded.notes)}
-            if _LAB_LABEL.fullmatch(loaded.label)
-            else {"label": loaded.label, "notes": list(loaded.notes)}
-        )
-        found = privacy.findings(scanned)
+        # A run's own label holds a hex run id, which reads as a token or a code, so it is exempt from
+        # the scans; any other label is scanned like a note. The wording is scanned too: it is what is
+        # sent to Jev, and the digest only proves it is the wording the file names, not that it is clean.
+        scanned = {"notes": list(loaded.notes)}
+        if not _LAB_LABEL.fullmatch(loaded.label):
+            scanned["label"] = loaded.label
+        found = privacy.findings({**scanned, "wording": loaded.wording()}) + privacy.value_findings(scanned)
         if found:
             raise LabStateError(
                 f"{path} holds content that must not leave ({'; '.join(found)}): delete it, or restore it"
@@ -232,13 +244,13 @@ class Ledger:
         looks = data.setdefault("looks", {})
         assignment = data.get("assignment")
         counts_ok = isinstance(looks, dict) and all(
-            isinstance(n, int) and not isinstance(n, bool) for n in looks.values()
+            kind in KINDS and isinstance(n, int) and not isinstance(n, bool) for kind, n in looks.items()
         )
         sides_ok = assignment is None or (
-            isinstance(assignment, dict)
-            and all(isinstance(k, str) and isinstance(v, str) for k, v in assignment.items())
+            isinstance(assignment, dict) and all(isinstance(k, str) and v in _SIDES for k, v in assignment.items())
         )
-        if not counts_ok or not sides_ok:  # a value here would otherwise be repeated by a ValueError
+        created_ok = "created" not in data or isinstance(data["created"], str)
+        if not counts_ok or not sides_ok or not created_ok:  # a value here would otherwise be repeated
             raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
         return data
 

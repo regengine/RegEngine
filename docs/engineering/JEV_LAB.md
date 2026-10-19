@@ -228,8 +228,8 @@ become the live incumbent or use the live held-out split. `ledger`,
 
 | File | Contents |
 | --- | --- |
-| `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts |
-| `question_sets/<digest>.json` | The wording behind each digest. A file that no longer matches its digest (edited or corrupted) is refused, with a message naming the file; its label and parent are held to the lab's shapes and its notes to the privacy guard, since they sit outside the digest |
+| `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts. The lab's own record: a line that is not a record is skipped, the rest is shown as written |
+| `question_sets/<digest>.json` | The wording behind each digest. A file that no longer matches its digest (edited or corrupted) is refused, with a message naming the file; its label and parent are held to the lab's shapes, its notes and label to the privacy guard (they sit outside the digest), and its wording to the privacy guard before it is used |
 | `split.json` | The split salt, each case's pinned side, held-out looks per question |
 | `cases.local.json` | Rows labelled in Header check (headers and labels, with the first `labelled_at`); shared by both modes |
 | `jev-cache.jsonl` | Jev answers keyed by a SHA-256 of the request; the request itself is not stored |

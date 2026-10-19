@@ -789,6 +789,7 @@
 
   const handlers = {
     hello(d) {
+      S.statusSeq += 1; // the hello is the freshest status: a poll still in flight is stale
       resetRun();
       S.motes = []; // the backlog replays every Ask Jev question of this server session
       const until = d.replay_until || 0;
@@ -1637,7 +1638,8 @@
   applyTheme(theme);
   syncMotionButton();
   setKind(S.kind);
-  const savedTab = $('#' + (store.get('jevLabTab') || 'tab-ask'));
+  const storedTab = store.get('jevLabTab');
+  const savedTab = $('#' + (/^tab-[a-z]+$/.test(storedTab || '') ? storedTab : 'tab-ask'));
   if (savedTab && savedTab.getAttribute('role') === 'tab') selectTab(savedTab);
   if (!TOKEN) showGate();
   else {
