@@ -9,11 +9,14 @@ must degrade to the default rather than block an upload.
 Environment variables
 ---------------------
 ``TYPESAFE_API_KEY``                    Vendor credential (also read natively by the SDK).
-``TYPESAFE_DEFAULT_MODEL``              Model name. RegEngine pins ``jev-1.13.0`` by default
+``TYPESAFE_DEFAULT_MODEL``              Model name. RegEngine pins ``jev-1.14.0`` by default
                                         rather than the floating ``jev-latest`` alias so the
                                         confidence thresholds below stay calibrated against a
-                                        known model; the response's concrete model name is
-                                        recorded in evidence either way.
+                                        known model (``scripts/jev_eval.py``, 2026-10-19: 94/97
+                                        header mappings and 20/21 file CTEs correct, nothing
+                                        wrong at 0.90); the response's concrete model name is
+                                        recorded in evidence either way. Re-run the eval before
+                                        changing the pin.
 ``TYPESAFE_BASE_URL``                   API root override (gateways, proxies).
 ``REGENGINE_JEV_ENABLED``               ``0``/``false`` disables the integration even with a key.
 ``REGENGINE_JEV_TIMEOUT_SECONDS``       Per-HTTP-attempt timeout (default 5s).
@@ -50,7 +53,7 @@ from .routing import ConfidenceThresholds
 
 logger = structlog.get_logger("jev.settings")
 
-DEFAULT_MODEL = "jev-1.13.0"
+DEFAULT_MODEL = "jev-1.14.0"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 DEFAULT_MAX_RETRIES = 1
 DEFAULT_AUTO_APPLY_CONFIDENCE = 0.90

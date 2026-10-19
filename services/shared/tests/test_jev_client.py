@@ -45,7 +45,7 @@ QUESTIONS = {
     "severity": {"type": "score", "instructions": "How severe?", "criteria": ["low", "medium", "high"]},
 }
 GOOD_BODY = {
-    "model": "jev-1.13.0",
+    "model": "jev-1.14.0",
     "answers": {
         "field": {
             "type": "choice",
@@ -140,12 +140,12 @@ def test_request_carries_state_model_and_questions():
         seen["body"] = json.loads(request.content)
         return _ok(request)
 
-    _decider(handler, model="jev-1.13.0").ask(STATE, QUESTIONS, purpose="header_mapping")
+    _decider(handler, model="jev-1.14.0").ask(STATE, QUESTIONS, purpose="header_mapping")
 
     assert seen["url"] == "https://api.typesafe.ai/v1/systemone"
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["state"] == STATE
-    assert seen["body"]["model"] == "jev-1.13.0"
+    assert seen["body"]["model"] == "jev-1.14.0"
     assert seen["body"]["questions"]["field"] == {
         "type": "choice",
         "instructions": "Which canonical field?",
@@ -183,8 +183,8 @@ def test_answers_convert_to_plain_results_with_evidence():
     assert evidence.provider == "typesafe"
     assert evidence.purpose == "header_mapping"
     assert evidence.questions_version == "2"
-    assert evidence.requested_model == "jev-1.13.0"
-    assert evidence.model == "jev-1.13.0"
+    assert evidence.requested_model == "jev-1.14.0"
+    assert evidence.model == "jev-1.14.0"
     assert evidence.request_id == "req_abc"
     assert evidence.question_ids == ("field", "is_date", "severity")
     assert evidence.input_tokens == 57
@@ -197,6 +197,27 @@ def test_answers_convert_to_plain_results_with_evidence():
     assert dumped["evidence"]["request_id"] == "req_abc"
     assert dumped["choices"]["field"]["choice"] == "lot_code"
     assert dumped["scores"]["severity"]["legend"] == {"0": "low", "1": "medium", "2": "high"}
+
+
+def test_versioned_model_mismatch_is_unavailable_and_logged():
+    def handler(request):
+        body = json.loads(json.dumps(GOOD_BODY))
+        body["model"] = "jev-1.13.0"
+        return httpx2.Response(200, headers={"x-typesafe-request-id": "req_mismatch"}, json=body)
+
+    with structlog.testing.capture_logs() as records:
+        with pytest.raises(JevUnavailable) as error:
+            _decider(handler).ask(STATE, QUESTIONS, purpose="header_mapping")
+
+    assert error.value.reason == "invalid_response"
+    assert error.value.request_id == "req_mismatch"
+    (warning,) = [record for record in records if record["event"] == "jev.unavailable"]
+    assert warning["log_level"] == "warning"
+    assert warning["reason"] == "invalid_response"
+    assert warning["requested_model"] == "jev-1.14.0"
+    assert warning["response_model"] == "jev-1.13.0"
+    assert warning["request_id"] == "req_mismatch"
+    assert "jev.answered" not in {record["event"] for record in records}
 
 
 def test_out_of_range_confidences_and_probabilities_are_clamped():
@@ -345,7 +366,7 @@ def test_answered_calls_leave_a_stdlib_line_that_production_keeps(caplog):
     assert len(lines) == 1
     (line,) = lines
     assert "purpose=header_mapping" in line
-    assert "model=jev-1.13.0" in line
+    assert "model=jev-1.14.0" in line
     assert "request_id=req_abc" in line
     assert "questions=3" in line
     assert "input_tokens=57 output_tokens=3" in line
@@ -380,7 +401,7 @@ def test_settings_defaults_pin_model_and_short_timeouts():
     settings = JevSettings.from_env({})
     assert settings.api_key is None
     assert settings.enabled is False
-    assert settings.model == jev_settings.DEFAULT_MODEL == "jev-1.13.0"
+    assert settings.model == jev_settings.DEFAULT_MODEL == "jev-1.14.0"
     assert settings.timeout_seconds == 5.0
     assert settings.max_retries == 1
     assert settings.retry_budget_seconds == pytest.approx(11.0)
@@ -417,7 +438,7 @@ def test_public_summary_says_whether_a_key_is_set_never_the_key():
         "enabled": True,
         "key_present": True,
         "kill_switch": False,
-        "model": "jev-1.13.0",
+        "model": "jev-1.14.0",
         "apply_header_mappings": False,
         "apply_file_cte_type": True,
         "header_sample_values": 0,

@@ -347,7 +347,7 @@ def _offline_jev_decider():
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_pg_regression"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 1, "output_tokens": 1}},
         )
 
     settings = JevSettings(api_key="offline-synthetic", max_retries=0, timeout_seconds=1.0)

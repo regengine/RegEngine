@@ -129,7 +129,7 @@ def test_fake_speaks_the_wire_format_through_the_real_client():
     first = decider.ask({"headers": ["Ship Date", "Lot"]}, questions_, purpose="test")
     second = decider.ask({"headers": ["Ship Date", "Lot"]}, questions_, purpose="test")
 
-    assert first.evidence.model == fake_jev.MODEL != "jev-1.13.0"
+    assert first.evidence.model == fake_jev.MODEL != "jev-1.14.0"
     assert first.evidence.request_id.startswith("fake_")
     assert first.choices["cte"].choice == "shipping"
     assert 0.0 < first.choices["cte"].confidence <= 1.0

@@ -95,7 +95,7 @@ def _transport(seen: dict, status: int = 200) -> httpx2.MockTransport:
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_preview"},
-            json={"model": "jev-1.13.0", "answers": answered, "usage": {"input_tokens": 90, "output_tokens": 2}},
+            json={"model": "jev-1.14.0", "answers": answered, "usage": {"input_tokens": 90, "output_tokens": 2}},
         )
 
     return httpx2.MockTransport(handler)
@@ -143,7 +143,7 @@ def test_table_output_sends_only_the_header_row(script, capsys, tmp_path):
     assert request.headers["authorization"] == f"Bearer {FAKE_KEY}"
 
     assert "Status:  ok" in out
-    assert "model jev-1.13.0 (requested jev-1.13.0), request id req_preview, latency" in out
+    assert "model jev-1.14.0 (requested jev-1.14.0), request id req_preview, latency" in out
     assert "apply to rows: off" in out
     header = next(line for line in out.splitlines() if line.startswith("column"))
     assert header.split() == ["column", "suggested_field", "confidence", "band", "would_apply", "blocked_reason"]
@@ -163,7 +163,7 @@ def test_json_output_and_simulated_apply(script, capsys, tmp_path, simulate):
     assert code == 0, err
     report = json.loads(out)
     assert report["status"] == "ok" and report["exit_code"] == 0 and report["hint"] is None
-    assert report["engine"]["model"] == "jev-1.13.0"
+    assert report["engine"]["model"] == "jev-1.14.0"
     assert report["engine"]["request_id"] == "req_preview"
     assert isinstance(report["engine"]["latency_ms"], int)
     assert report["engine"]["questions_version"] == "csv-header-mapping.v3"
@@ -647,7 +647,7 @@ def _file_cte_transport(seen: dict, file_cte: Optional[dict], status: int = 200)
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_file_cte"},
-            json={"model": "jev-1.13.0", "answers": answered, "usage": {"input_tokens": 60, "output_tokens": 1}},
+            json={"model": "jev-1.14.0", "answers": answered, "usage": {"input_tokens": 60, "output_tokens": 1}},
         )
 
     return httpx2.MockTransport(handler)
