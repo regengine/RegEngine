@@ -382,21 +382,13 @@
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, w, h);
 
-    // Threshold circles: where the auto-apply and review bands begin. Their labels sit in the
-    // starless gap along the horizontal axis on the right, one above it and one below, so they
-    // never share a line with each other or with the split labels on the left.
-    const autoR = geom.rMin + (1 - autoApply()) * (geom.rMax - geom.rMin);
+    // Threshold circles: where the auto-apply and review bands begin.
     ctx.save();
-    ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
-    for (const [conf, label, dy] of [[autoApply(), 'auto-apply ≥ ' + autoApply().toFixed(2), -5], [reviewAt(), 'review ≥ ' + reviewAt().toFixed(2), 14]]) {
+    for (const conf of [autoApply(), reviewAt()]) {
       const r = geom.rMin + (1 - conf) * (geom.rMax - geom.rMin);
       ctx.strokeStyle = p.grid;
       ctx.setLineDash([4, 6]);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = p.muted;
-      ctx.textAlign = 'left';
-      ctx.fillText(label, Math.min(cx + r + 4, w - 4 - ctx.measureText(label).width), cy + dy);
     }
     ctx.restore();
 
@@ -407,14 +399,6 @@
     ctx.fill();
     ctx.strokeStyle = p.veilEdge;
     ctx.beginPath(); ctx.moveTo(cx - geom.orbit, cy); ctx.lineTo(cx - geom.rMin, cy); ctx.moveTo(cx + geom.rMin, cy); ctx.lineTo(cx + geom.orbit, cy); ctx.stroke();
-    ctx.fillStyle = p.muted;
-    ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    // The long labels only where they end before the threshold labels begin (narrow skies get the short ones).
-    const room = cx + autoR - 4 - 10;
-    for (const [full, short, y] of [['▲ Training: Claude sees these misses', '▲ Training', cy - 8], ['▼ Held out: Claude never sees this half', '▼ Held out', cy + 18]]) {
-      ctx.fillText(ctx.measureText(full).width <= room ? full : short, 10, y);
-    }
     ctx.restore();
 
     // Milky Way: one mote per sandbox question this session.
@@ -547,6 +531,8 @@
       }
     }
 
+    drawAxisLabels(p);
+
     // Claude: a moon on the outer orbit that advances one step per generation.
     const moonA = moonAngle(S.generation);
     const mx = cx + Math.cos(moonA) * geom.orbit;
@@ -632,6 +618,35 @@
     // Twinkle (uncertainty) only while something is happening, so an idle tab costs no CPU.
     const lively = S.running || now - S.lastEventAt < 10000;
     if (busy || (animated() && lively && subjectsOf(S.kind).length)) requestDraw();
+  }
+
+  // The four labels along the horizontal axis, drawn over the stars with a sky-coloured halo.
+  // Right of Jev: the threshold labels, auto-apply above the axis and review below it. Left: the
+  // split labels on the same two lines. A split label is written out in full only when it ends
+  // before the threshold label on its line (where that is actually drawn, after clamping to the
+  // sky) and before Jev's crown; otherwise the short form.
+  function drawAxisLabels(p) {
+    const { w, cx, cy } = geom;
+    const thresholds = [[autoApply(), 'auto-apply ≥ ' + autoApply().toFixed(2), -5], [reviewAt(), 'review ≥ ' + reviewAt().toFixed(2), 14]];
+    const splits = [['▲ Training: Claude sees these misses', '▲ Training', -8], ['▼ Held out: Claude never sees this half', '▼ Held out', 18]];
+    const label = (text, x, y) => { ctx.strokeText(text, x, y); ctx.fillText(text, x, y); };
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = p.sky0;
+    ctx.fillStyle = p.muted;
+    thresholds.forEach(([conf, text, dy], i) => {
+      ctx.font = '11px ui-sans-serif, system-ui, sans-serif';
+      const r = geom.rMin + (1 - conf) * (geom.rMax - geom.rMin);
+      const x = Math.min(cx + r + 4, w - 4 - ctx.measureText(text).width);
+      label(text, x, cy + dy);
+      const [full, short, sdy] = splits[i];
+      ctx.font = '12px ui-sans-serif, system-ui, sans-serif';
+      const end = Math.min(x - 10, cx - geom.crownMax - 8);
+      label(10 + ctx.measureText(full).width <= end ? full : short, 10, cy + sdy);
+    });
+    ctx.restore();
   }
 
   // Claude walks down the right-hand arc of its orbit, one step per generation.
@@ -736,16 +751,33 @@
     li.scrollIntoView({ block: 'nearest' });
   }
 
-  // Events up to this id are history replayed on (re)connect: redrawn, never read out again.
-  let replayUntil = 0;
+  // Screen-reader announcements. History is redrawn but never read out again: on the first
+  // connection that is everything before the page loaded (hello's replay_until); on a reconnect,
+  // only what this page already dispatched (lastSeenId), so results missed while disconnected are
+  // still announced. Messages that arrive together (a run's last generation and its end) are
+  // joined, never overwritten; at most the latest three are read.
+  let lastSeenId = 0;
+  let quietUntil = 0;
   let replaying = false;
-  function announce(text) { if (!replaying) $('#announce').textContent = text; }
+  let pendingAnnouncements = [];
+  let announceTimer = null;
+  function announce(text) {
+    if (replaying) return;
+    pendingAnnouncements.push(text);
+    clearTimeout(announceTimer);
+    announceTimer = setTimeout(() => {
+      $('#announce').textContent = pendingAnnouncements.slice(-3).join(' ');
+      pendingAnnouncements = [];
+    }, 150);
+  }
 
   const handlers = {
     hello(d) {
       resetRun();
       S.motes = []; // the backlog replays every Ask Jev question of this server session
-      replayUntil = d.replay_until || 0;
+      const until = d.replay_until || 0;
+      if (until < lastSeenId) lastSeenId = 0; // the server restarted and its ids began again
+      quietUntil = lastSeenId || until;
       $('#log').replaceChildren();
       applyStatus(d.status);
     },
@@ -864,8 +896,9 @@
       S.phase = 'idle';
       endPendingComets();
       S.lastSummary = d;
-      logLine(`Run finished: ${d.accepted} rewrite(s) kept in ${d.generations} generation(s). Stopped: ${d.stopped}.`, d.accepted ? 'accepted' : '');
-      announce('Run finished: ' + d.stopped);
+      const summary = `Run finished: ${d.accepted} rewrite(s) kept in ${d.generations} generation(s). Stopped: ${d.stopped}.`;
+      logLine(summary, d.accepted ? 'accepted' : '');
+      announce(summary);
       refreshStatus();
     },
     run_failed(d) {
@@ -906,8 +939,9 @@
     const handler = handlers[event];
     if (!handler) return;
     S.lastEventAt = performance.now();
-    replaying = event !== 'hello' && id > 0 && id <= replayUntil;
+    replaying = event !== 'hello' && id > 0 && id <= quietUntil;
     try { handler(data); } finally { replaying = false; }
+    if (id > lastSeenId) lastSeenId = id;
     updateNow();
     updateCaption();
     requestDraw();
