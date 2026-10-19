@@ -35,6 +35,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import secrets
 import stat
 import threading
@@ -43,6 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import privacy
 from .questions import KINDS, QuestionSet, baseline
 
 try:  # POSIX: serialise split.json updates across processes (a CLI run next to the page).
@@ -58,6 +60,13 @@ MAX_HOLDOUT_LOOKS = 12
 DEFAULT_HOME = Path.home() / ".regengine" / "jev-lab"
 LIVE = "live"
 FAKE = "fake"
+
+
+# A question set's label (``baseline``, ``csv-header-mapping.v3``, ``lab-<run>-g<n>-<kind>``) and its
+# parent (a digest) as the lab writes them; a hand-edited file is held to the same shapes.
+_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}")
+_LAB_LABEL = re.compile(r"lab-[0-9a-f]{12}-g\d{1,3}-(?:" + "|".join(re.escape(kind) for kind in KINDS) + r")")
+_DIGEST = re.compile(r"[0-9a-f]{64}")
 
 
 class LabStateError(RuntimeError):
@@ -141,9 +150,11 @@ class Ledger:
         rows = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except ValueError:
                 continue
+            if isinstance(row, dict):  # a hand-edited line that is not a record is skipped like a torn one
+                rows.append(row)
         return rows
 
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]:
@@ -167,7 +178,7 @@ class Ledger:
                     self._write(qs.to_dict(), path)
         return digest
 
-    def load_set(self, digest: str) -> QuestionSet | None:
+    def load_set(self, digest: str) -> QuestionSet | None:  # noqa: C901 - one check per field, in order
         """The wording behind ``digest``; ``None`` when there is no such file.
 
         The file names the wording Jev judged. One that no longer parses, or
@@ -185,6 +196,25 @@ class Ledger:
             raise LabStateError(f"{path} is unreadable: delete it, or restore it from a backup") from None
         if loaded.digest != digest or loaded.kind not in KINDS:
             raise LabStateError(f"{path} does not match its digest: delete it, or restore it from a backup")
+        # The label, parent and notes sit outside the digest, so an edited file passes the check above.
+        # They are held to the lab's own shapes, and the notes to the privacy guard, before the page,
+        # the ledger or the CLI repeats them; a message names the file, never what was in it.
+        parent_ok = loaded.parent is None or (isinstance(loaded.parent, str) and _DIGEST.fullmatch(loaded.parent))
+        if not _LABEL.fullmatch(loaded.label) or not parent_ok:
+            raise LabStateError(
+                f"{path} has a label or parent of the wrong shape: delete it, or restore it from a backup"
+            )
+        # A run's own label is long enough to read as a token; any other label is scanned like a note.
+        scanned = (
+            {"notes": list(loaded.notes)}
+            if _LAB_LABEL.fullmatch(loaded.label)
+            else {"label": loaded.label, "notes": list(loaded.notes)}
+        )
+        found = privacy.findings(scanned)
+        if found:
+            raise LabStateError(
+                f"{path} holds content that must not leave ({'; '.join(found)}): delete it, or restore it"
+            )
         return loaded
 
     # -- split epoch -----------------------------------------------------------------
@@ -199,7 +229,17 @@ class Ledger:
             data = None
         if not isinstance(data, dict) or not isinstance(data.get("salt"), str) or not data["salt"]:
             raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
-        data.setdefault("looks", {})
+        looks = data.setdefault("looks", {})
+        assignment = data.get("assignment")
+        counts_ok = isinstance(looks, dict) and all(
+            isinstance(n, int) and not isinstance(n, bool) for n in looks.values()
+        )
+        sides_ok = assignment is None or (
+            isinstance(assignment, dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in assignment.items())
+        )
+        if not counts_ok or not sides_ok:  # a value here would otherwise be repeated by a ValueError
+            raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
         return data
 
     def _write(self, data: Mapping[str, Any], path: Path | None = None) -> None:

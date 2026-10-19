@@ -168,6 +168,12 @@ def test_a_label_that_holds_a_secret_is_refused_by_location_and_never_saved(clie
 
     assert response.status_code == 422 and "key-like token at $.cte" in response.json()["refused"]
     assert token not in response.text and lab.ledger.local_cases() == []
+    # A label or mapping that reads as a row value is refused the same way, by location only.
+    lot = client.post("/api/labels", headers=POST, json={"headers": ["Ship Dte", "Lot No."], "cte": "LOT-R-0423"})
+    assert lot.status_code == 422 and lot.json()["refused"] == [
+        "looks like a value (date, number or code), not a label at $.cte"
+    ]
+    assert "LOT-R-0423" not in lot.text and "cases.local.json" not in lot.text and lab.ledger.local_cases() == []
 
 
 def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab, monkeypatch):

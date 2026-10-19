@@ -201,6 +201,15 @@ def test_a_tainted_labelled_row_exits_1_without_naming_its_content(capsys, home)
     assert "jane" not in out + err and not seen
 
 
+def test_ledger_tolerates_a_hand_edited_generation_row(capsys, home):
+    with home.path.open("a", encoding="utf-8") as stream:
+        stream.write('{"type": "generation", "mode": "live", "candidates": {"header_mapping": 7}}\n"a bare string"\n')
+
+    code, out, err = _run(capsys, ["ledger", "--home", str(home.home)])
+
+    assert code == 0 and "run -  g-" in out and "Traceback" not in err
+
+
 def test_confirm_reports_insufficient_fresh_data(capsys, home):
     code, out, _ = _run(capsys, ["export", "incumbent", "--home", str(home.home)])
     assert code == 0 and "differs from production csv-header-mapping.v3 in: nothing" in out

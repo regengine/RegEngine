@@ -829,6 +829,58 @@ def test_a_refusal_counts_rows_as_the_file_does(tmp_path):
         loop.every_case(lab)
 
 
+def test_an_edited_question_set_label_parent_or_notes_is_refused_by_shape_not_value(tmp_path):
+    """Label, parent and notes sit outside the digest: a hand-edited file is held to the lab's shapes."""
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    rewrite = questions.apply_patch(base, {"guidance": "A rewrite."})
+    ours = rewrite.with_label(
+        "lab-3f9a8b7c6d5e-g1-header_mapping", parent=base.digest, notes=("header_mapping:guidance:shorter",)
+    )
+    digest = lab.save_set(ours)
+    assert lab.load_set(digest) == ours  # the lab's own label, parent and notes pass
+    lab.record_incumbent(ours, generation=1, run_id="r", salt=lab.epoch()["salt"])
+    path = lab.sets_dir / f"{digest}.json"
+    good = json.loads(path.read_text())
+
+    for field, bad, why in (
+        ("label", token, r"must not leave \(key-like token at \$\.label\)"),
+        ("label", "jane.doe@example.com", "wrong shape"),
+        ("parent", {"owner": "jane.doe@example.com"}, "wrong shape"),
+    ):
+        path.write_text(json.dumps({**good, field: bad}))
+        with pytest.raises(ledger.LabStateError, match=why) as raised:
+            lab.load_set(digest)
+        assert path.name in str(raised.value) and token not in str(raised.value) and "jane" not in str(raised.value)
+        with pytest.raises(ledger.LabStateError):
+            lab.incumbents()
+    path.write_text(json.dumps({**good, "notes": ["header_mapping:guidance:shorter", "mailto jane.doe@example.com"]}))
+    with pytest.raises(ledger.LabStateError, match=r"must not leave \(personal data .* at \$\.notes\[1\]\)") as raised:
+        lab.load_set(digest)
+    assert "jane" not in str(raised.value)
+
+
+def test_an_unreadable_split_epoch_is_refused_without_repeating_it(tmp_path):
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    for broken in ({"looks": {"header_mapping": token}}, {"looks": [1]}, {"assignment": {"c1": ["train"]}}):
+        lab.split_path.write_text(json.dumps({"salt": "s", "created": "2026-01-01T00:00:00Z", "looks": {}, **broken}))
+        with pytest.raises(ledger.LabStateError, match="split.json is unreadable") as raised:
+            lab.epoch()
+        assert token not in str(raised.value)
+
+
+def test_a_ledger_line_that_is_not_a_record_is_skipped(tmp_path):
+    lab = _home(tmp_path)
+    lab.append({"type": "noise"})
+    with lab.path.open("a", encoding="utf-8") as stream:
+        stream.write('"a bare string"\n[1, 2]\n42\n')
+
+    assert [row["type"] for row in lab.rows()] == ["noise"]
+    assert lab.generations() == [] and lab.incumbents()
+
+
 def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):
     lab = _home(tmp_path)
     base = questions.baseline(questions.HEADER_MAPPING)

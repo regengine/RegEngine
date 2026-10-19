@@ -367,7 +367,7 @@ def create_app(lab: Lab) -> FastAPI:
         mappings = body.get("mappings") or {}
         cte_label = body.get("cte")
         reasons = privacy.findings({"headers": row, "cte": cte_label, "mappings": mappings})
-        reasons += privacy.data_row_findings(row)
+        reasons += privacy.data_row_findings(row) + privacy.value_findings({"cte": cte_label, "mappings": mappings})
         if reasons:
             return _refuse(reasons)
         case_id = "local-" + hashlib.sha256("\x1f".join(row).encode("utf-8")).hexdigest()[:12]
