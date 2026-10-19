@@ -377,12 +377,8 @@ def test_2978_unmapped_unit_warns_and_fails_closed_on_document_route(
 def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
     client: TestClient, captured_payload: dict
 ) -> None:
-    """Repeated SN1 lines in one 856 must accumulate the way PO1/IT1/RCD
-    already do, rather than the last line overwriting all the others.
-
-    The 850 corpus fixture already asserts the summed 200.0 across two
-    PO1 lines; the 856 handler was the sole outlier, so a 12-line pallet
-    shipment persisted only its final line's quantity.
+    """Repeated SN1 lines each become a CTE. Last-line-wins and summing
+    both drop a lot from the recall record.
     """
     raw_856 = _interchange(
         [
@@ -398,15 +394,14 @@ def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
     )
 
     extracted = _extract_fields_for_set("856", _parse_x12_segments(raw_856.decode("utf-8")))
-    assert extracted["quantity"] == 200.0, (
-        f"#2974: two SN1 lines of 120 + 80 must extract 200.0, got {extracted['quantity']} "
-        "(last-segment-wins discards every line but the last)"
-    )
-    assert extracted["unit_of_measure"] == "CA"
+    assert [(line["quantity"], line["unit_of_measure"]) for line in extracted["line_items"]] == [
+        (120.0, "CA"),
+        (80.0, "CA"),
+    ]
 
     response = _post(client, raw_856, name="multi-sn1.edi")
     assert response.status_code == 201, response.text
-    assert captured_payload["payload"].events[0].quantity == 200.0
+    assert [event.quantity for event in captured_payload["payload"].events] == [120.0, 80.0]
 
     # A zero line can no longer synthesize the 1.0 SN1 fallback.
     raw_zero = _interchange(
@@ -422,14 +417,13 @@ def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
         isa13="000029742",
     )
     zero_extracted = _extract_fields_for_set("856", _parse_x12_segments(raw_zero.decode("utf-8")))
-    assert zero_extracted["quantity"] is None, "#2974: SN1**0*CA must not fabricate a quantity of 1.0"
+    assert zero_extracted["line_items"][0]["quantity"] is None, (
+        "#2974: SN1**0*CA must not fabricate a quantity of 1.0"
+    )
 
 
-def test_2974_sn1_lines_disagreeing_on_unit_are_rejected(client: TestClient, captured_payload: dict) -> None:
-    """Summing SN1 lines that carry different UOM codes would pair a
-    total with an arbitrary unit, so the document must be rejected.
-
-    120 cases + 80 pounds is not 200 of anything.
+def test_sn1_lines_with_different_units_stay_separate_events(client: TestClient, captured_payload: dict) -> None:
+    """120 cases and 80 pounds are two CTEs. They are not 200 of either unit.
     """
     raw = _interchange(
         [
@@ -445,11 +439,12 @@ def test_2974_sn1_lines_disagreeing_on_unit_are_rejected(client: TestClient, cap
     )
 
     response = _post(client, raw, name="mixed-uom.edi")
-    assert response.status_code == 422, response.text
-    detail = response.json()["detail"]
-    assert detail["error"] == "edi_856_mixed_units_of_measure"
-    assert sorted(detail["units"]) == ["CA", "LB"]
-    assert "payload" not in captured_payload
+    assert response.status_code == 201, response.text
+    events = captured_payload["payload"].events
+    assert [(event.quantity, event.unit_of_measure) for event in events] == [
+        (120.0, "cases"),
+        (80.0, "lbs"),
+    ]
 
 
 def test_2976_legacy_856_endpoint_refuses_a_batched_interchange(
@@ -534,13 +529,8 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
 # Both are consequences of features this PR introduced, caught in review.
 
 
-def test_sn1_equivalent_unit_codes_are_not_falsely_rejected():
-    """CA and CS both resolve to "cases" (constants.py:20-21), so an 856
-    whose SN1 lines use both genuinely agrees on the unit and must sum.
-
-    The guard originally compared raw element-355 codes, which made this a
-    422. This PR is what added CS to the map, so raw comparison would have
-    created the false rejection it is now guarded against.
+def test_sn1_equivalent_unit_codes_stay_on_their_own_lines():
+    """CA and CS both mean cases, and each SN1 still keeps its own quantity.
     """
     from app.edi_ingestion.extractors import _extract_856_fields
     from app.edi_ingestion.parser import _parse_x12_segments
@@ -549,40 +539,36 @@ def test_sn1_equivalent_unit_codes_are_not_falsely_rejected():
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "CS").decode())
     data = _extract_856_fields(segments)
 
-    assert data["quantity"] == 200.0, "equivalent unit codes must still sum"
-    # The extractor keeps the raw element-355 code; normalization to the
-    # FSMA vocabulary happens downstream. What matters here is that both
-    # codes resolve to the same unit, which is why the sum is legitimate.
-    assert data["unit_of_measure"] == "CA"
+    assert [(line["quantity"], line["unit_of_measure"]) for line in data["line_items"]] == [
+        (120.0, "CA"),
+        (80.0, "CS"),
+    ]
     assert _resolve_unit_code("CA") == _resolve_unit_code("CS") == "cases"
 
 
-def test_sn1_genuinely_different_units_are_still_rejected():
-    """The relaxation must not weaken the real guard: cases vs pounds is
-    still not 200 of anything."""
-    from fastapi import HTTPException
-
+def test_sn1_different_units_are_not_summed():
+    """Cases and pounds stay on the lines that declared them."""
     from app.edi_ingestion.extractors import _extract_856_fields
     from app.edi_ingestion.parser import _parse_x12_segments
 
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("CA", "LB").decode())
-    with pytest.raises(HTTPException) as exc:
-        _extract_856_fields(segments)
-    assert exc.value.detail["error"] == "edi_856_mixed_units_of_measure"
+    data = _extract_856_fields(segments)
+    assert [(line["quantity"], line["unit_of_measure"]) for line in data["line_items"]] == [
+        (120.0, "CA"),
+        (80.0, "LB"),
+    ]
 
 
-def test_two_unmappable_but_different_codes_still_refuse():
-    """A code resolving to nothing keeps its raw form, so two different
-    unmappable codes must not silently collapse into one unit."""
-    from fastapi import HTTPException
-
+def test_two_unmappable_unit_codes_stay_on_their_lines():
+    """Unmapped units are not collapsed into one line. The route rejects
+    each of them later as edi_unmapped_unit_of_measure.
+    """
     from app.edi_ingestion.extractors import _extract_856_fields
     from app.edi_ingestion.parser import _parse_x12_segments
 
     segments = _parse_x12_segments(_interchange_856_two_sn1_units("QQ", "ZZ").decode())
-    with pytest.raises(HTTPException) as exc:
-        _extract_856_fields(segments)
-    assert exc.value.detail["error"] == "edi_856_mixed_units_of_measure"
+    data = _extract_856_fields(segments)
+    assert [line["unit_of_measure"] for line in data["line_items"]] == ["QQ", "ZZ"]
 
 
 def test_scalar_overrides_are_refused_for_a_batched_interchange(
