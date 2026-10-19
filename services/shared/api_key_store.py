@@ -764,10 +764,17 @@ class DatabaseAPIKeyStore:
         if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
-        # Extract key_id
+        # Extract key_id. Keys minted by create_key() always carry the
+        # ``rge_{key_id}.{secret}`` shape; a value without a dot (e.g. a
+        # hand-inserted ``rge_inflowlab_XXX`` row value) can never validate.
+        # Log the shape explicitly instead of failing silent. Only the
+        # 8-char prefix is logged — never the presented credential.
         try:
-            key_id, _ = raw_key.split(".", 1)
+            key_id, secret = raw_key.split(".", 1)
         except ValueError:
+            key_id, secret = raw_key, ""
+        if not key_id or not secret:
+            logger.warning("malformed_key_format", key_prefix=raw_key[:8])
             return None
 
         key_hashes = api_key_hash_candidates(raw_key)
