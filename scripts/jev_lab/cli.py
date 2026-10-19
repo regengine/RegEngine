@@ -20,6 +20,7 @@ nothing sent; 3 Jev unavailable.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import dataclasses
 import getpass
 import json
@@ -274,7 +275,9 @@ def _cmd_serve(args: argparse.Namespace, decider: Any, ledger: Any) -> int:
     )
     server = uvicorn.Server(config)
     lab.shutting_down = lambda: server.should_exit  # open pages' event streams end on Ctrl-C
-    server.run()
+    # Server.run() re-raises the Ctrl-C it handled; uvicorn.run() swallows it the same way.
+    with contextlib.suppress(KeyboardInterrupt):
+        server.run()
     return EXIT_OK
 
 

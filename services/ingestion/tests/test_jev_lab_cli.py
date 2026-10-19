@@ -240,3 +240,50 @@ def test_runs_as_a_script_without_putting_scripts_on_sys_path(tmp_path):
 
     assert result.returncode == 0, result.stderr[-2000:]
     assert "serve" in result.stdout and "confirm" in result.stdout
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX signals")
+def test_ctrl_c_stops_serve_cleanly_with_a_page_holding_the_event_stream(tmp_path):
+    """Ctrl-C is how the lab is stopped: exit 0, no traceback, even while a page holds /api/events."""
+    import http.client
+    import os
+    import re
+    import signal
+    import time
+
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("TYPESAFE_", "REGENGINE_JEV_"))}
+    env["PYTHONUNBUFFERED"] = "1"
+    proc = subprocess.Popen(
+        [sys.executable, str(PACKAGE), "serve", "--fake", "--no-open", "--port", "0", "--home", str(tmp_path / "lab")],
+        cwd=ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        seen = ""
+        deadline = time.monotonic() + 60
+        while "Open:" not in seen and time.monotonic() < deadline:
+            seen += proc.stdout.readline()
+        found = re.search(r"http://127\.0\.0\.1:(\d+)/#token=([A-Za-z0-9_-]+)", seen)
+        assert found, seen
+        port, token = int(found.group(1)), found.group(2)
+        page = None
+        for _ in range(50):  # the banner prints just before uvicorn binds
+            try:
+                page = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+                page.request("GET", "/api/events", headers={"Authorization": f"Bearer {token}"})
+                break
+            except ConnectionRefusedError:
+                time.sleep(0.1)
+        stream = page.getresponse()
+        assert stream.status == 200 and b"event: hello" in stream.read1(65536)
+
+        proc.send_signal(signal.SIGINT)
+        rest, _ = proc.communicate(timeout=20)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert proc.returncode == 0, rest
+    assert "Traceback" not in seen + rest

@@ -1267,13 +1267,7 @@
     list.sort((a, b) => { const va = value(a, sortKey); const vb = value(b, sortKey); return va < vb ? -1 : va > vb ? 1 : 0; });
     // Confidence sorts highest first (its key is negated); every other column sorts ascending.
     const direction = (key) => (key === 'conf' ? 'descending' : 'ascending');
-    // Re-rendering replaces the buttons: keep keyboard focus on the one that was pressed.
-    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? direction(key) : 'none', 'data-key': key }, el('button', { type: 'button', text: label, onclick: () => {
-      sortKey = key;
-      renderTable();
-      const again = $(`#subject-table th[data-key="${key}"] button`);
-      if (again) again.focus();
-    } }));
+    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? direction(key) : 'none', 'data-key': key }, el('button', { type: 'button', text: label, onclick: () => { sortKey = key; renderTable(); } }));
     const head = el('tr', {}, sortBtn('case', 'Case · subject'), sortBtn('split', 'Split'), el('th', { text: 'Expected' }), el('th', { text: 'Jev' }), sortBtn('conf', 'Confidence'), sortBtn('right', 'Right?'), el('th', { text: 'Order check' }));
     const rows = list.map((s) => {
       const o = s.cur || {};
@@ -1287,7 +1281,15 @@
         el('td', { text: o.order_consistent === false ? 'changed' : o.order_consistent === true ? 'held' : '–' }),
       );
     });
+    // Every render replaces the sort buttons (a run re-renders on each answer): keep keyboard focus on
+    // the one that had it, so a keyboard or screen-reader user never loses their place.
+    const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('#subject-table th[data-key]');
+    const focusKey = focused ? focused.dataset.key : null;
     box.replaceChildren(el('table', {}, el('thead', {}, head), el('tbody', {}, rows)));
+    if (focusKey) {
+      const again = $(`#subject-table th[data-key="${focusKey}"] button`);
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   // ---------------------------------------------------------------- Ask Jev (sandbox)
