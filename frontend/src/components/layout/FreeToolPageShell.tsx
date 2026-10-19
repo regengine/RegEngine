@@ -28,12 +28,12 @@ interface FreeToolPageShellProps {
  * Shell for every free tool page — SPEC §6 "Free tool" template.
  *
  * The grey hero band and the separately boxed title block collapse into one
- * `PageHeader`: breadcrumb, H1, lede, and the "Free Tool — No Login Required"
+ * `PageHeader`: breadcrumb, H1, lede, and the "Free Tool. No Login Required"
  * badge in the meta slot. The header is never boxed and carries no shadow; the
  * hairline under it is the only rule.
  *
  * Prop API and every string are unchanged — "RegEngine • {title}",
- * "Free Tool — No Login Required", "Educational Tool" and the disclaimer are
+ * "Free Tool. No Login Required", "Educational Tool" and the disclaimer are
  * all asserted copy.
  */
 export function FreeToolPageShell({
@@ -65,7 +65,7 @@ export function FreeToolPageShell({
                     meta={
                         <Badge tone="brand" className="whitespace-nowrap">
                             <Zap aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.75} />
-                            Free Tool — No Login Required
+                            Free Tool. No Login Required
                         </Badge>
                     }
                 />
