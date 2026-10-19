@@ -42,12 +42,13 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import statistics
 import tempfile
 import threading
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +57,7 @@ from shared.jev import JevUnavailable
 from . import load_script, privacy
 from .jev_access import Uncached
 from .ledger import MAX_HOLDOUT_LOOKS, EpochChanged, LabStateError, Ledger
-from .proposer import ProposerError, brief_case_ids, build_brief
+from .proposer import Proposal, ProposerError, brief_case_ids, build_brief
 from .questions import KINDS, QuestionSet, apply_patch, baseline, changed_options, normalize_phrase, validate
 from .scoring import (
     DEFAULT_MARGIN,
@@ -125,24 +126,68 @@ def validate_cases(
         path.unlink(missing_ok=True)
 
 
+# The id the page gives a labelled row: a hash of its headers, which holds digits by design.
+PAGE_ID = re.compile(r"local-[0-9a-f]{12}")
+
+
 def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> None:
     """Refuse a labelled row that must not leave the machine, before anything is asked about it.
 
     The sandbox checks a row when it is labelled, but ``cases.local.json`` can
-    be edited by hand or restored from an older copy. Every row is checked
-    again each time it is loaded, so a secret, a person's details or a row of
-    values in that file never reaches Jev or Claude. The reasons name the case
-    and the kind of content, never the content.
+    be edited by hand or restored from an older copy. Every field of every row
+    (the id and the label too, which a validation message would repeat) is
+    checked again each time it is loaded, so a secret, a person's details or a
+    row of values in that file never reaches Jev, Claude, a log or the page.
+    The reasons name the case and the kind of content, never the content.
     """
     reasons: list[str] = []
-    for row in rows:
-        headers = row.get("headers")
-        found = privacy.findings({"headers": headers, "mappings": row.get("mappings")})
+    for index, row in enumerate(rows, start=1):
+        checked = {key: row.get(key) for key in ("id", "headers", "cte", "mappings")}
+        found = privacy.findings(checked)
+        headers = checked["headers"]
         if isinstance(headers, list) and all(isinstance(h, str) for h in headers):
             found += privacy.data_row_findings(headers)
-        reasons += [f"{source} case {row.get('id')!r}: {reason}" for reason in found]
+        # A label, a mapping or an id that reads as a row value (a lot code, an SSCC, a date) is
+        # refused too: jev_eval would otherwise repeat it as an unknown label or a missing header.
+        found += privacy.value_findings({"cte": checked["cte"], "mappings": checked["mappings"]})
+        page_id = isinstance(checked["id"], str) and bool(PAGE_ID.fullmatch(checked["id"]))
+        found += privacy.value_findings({"id": checked["id"]}, codes=not page_id)
+        # A reason names the case by its id, unless the id is itself a finding: then by position.
+        clean_id = isinstance(checked["id"], str) and not any(reason.endswith(" at $.id") for reason in found)
+        where = f"case {checked['id']!r}" if clean_id else f"case <row {index}>"
+        reasons += [f"{source} {where}: {reason}" for reason in found]
     if reasons:
         raise privacy.Refused(reasons)
+
+
+def redact_proposal(proposal: Proposal) -> tuple[Proposal, dict[str, list[str]]]:
+    """``proposal`` with anything that must not leave replaced by its refusal, and the refused kinds.
+
+    Claude answers a brief the guard has checked, but it can still write an
+    example that reads as a GTIN or an address. Such a patch is never shown,
+    saved or asked: it is recorded as invalid, by kind and location, so the lab
+    never refuses a question set it wrote itself. A rationale or note holding
+    such text is dropped the same way.
+    """
+    # Each patch is scanned on its own, so a kind is refused by what its patch holds and never by
+    # reading a location back out of a reason. Bookkeeping (backend, model, cost) is not scanned.
+    shown = proposal.to_dict()
+    refused = {
+        kind: found
+        for kind, patch in shown["patches"].items()
+        if patch and (found := privacy.findings({"patches": {kind: patch}}))
+    }
+    elsewhere = privacy.findings({key: shown[key] for key in ("rationale", "notes", "predicted_fixes")})
+    if not refused and not elsewhere:
+        return proposal, {}
+    redacted = replace(
+        proposal,
+        patches={kind: None if kind in refused else patch for kind, patch in proposal.patches.items()},
+        rationale=proposal.rationale if not elsewhere else "refused: " + "; ".join(elsewhere),
+        notes=proposal.notes if not elsewhere else (),
+        predicted_fixes=proposal.predicted_fixes if not elsewhere else (),
+    )
+    return redacted, refused
 
 
 def header_key(headers: Sequence[str]) -> tuple[str, ...]:
@@ -159,7 +204,10 @@ def every_case(ledger: Ledger, *, templates: bool = True) -> list[jev_eval.Case]
     cases = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=templates)
     seen = {header_key(case.headers) for case in cases}
     known = {case.id for case in cases}
-    local = [c for c in ledger.local_cases() if c.get("id") not in known]
+    rows = ledger.local_cases()  # each an object with a string id, or the ledger has refused the file
+    # Checked before any row is dropped, so a position in a reason is the row's position in the file.
+    refuse_tainted_cases(rows, source=ledger.cases_path.name)
+    local = [c for c in rows if c["id"] not in known]
     for case in validate_cases(ledger, local, source=ledger.cases_path.name):
         if header_key(case.headers) not in seen:
             seen.add(header_key(case.headers))
@@ -543,11 +591,15 @@ def run_loop(
             state["stopped"] = reason
             break
         claude_cost += float(proposal.cost_usd or 0.0)
+        proposal, refused = redact_proposal(proposal)
         emit("proposal", {"generation": generation, **proposal.to_dict()})
 
         candidates: dict[str, QuestionSet] = {}
         results: dict[str, dict[str, Any]] = {}
         for kind in KINDS:
+            if kind in refused:
+                results[kind] = {"accepted": False, "stage": "invalid", "reasons": refused[kind]}
+                continue
             patch = proposal.patches.get(kind) if kind in open_kinds else None
             if not patch:
                 results[kind] = {"accepted": False, "stage": "unchanged", "reasons": ["unchanged"]}

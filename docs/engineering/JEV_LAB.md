@@ -64,9 +64,17 @@ rows and synthetic examples, not exports.
 
 Rows in `cases.local.json` are checked again every time they are loaded,
 not only when they were labelled, because the file can be edited by hand or
-restored from an older copy. A row that fails stops the lab with a message
-naming the case and the kind of content; nothing is sent until the row is
-fixed or removed.
+restored from an older copy. Every field of a row the lab reads is checked,
+the id and the label included, since a validation message would otherwise
+repeat them; a
+label, mapping or id that reads as a row value (a date, a number, or one
+token holding three digits in a row, such as a lot code) is refused the same
+way, so name a hand-written row `case-7` rather than `case-007` (the page's
+own `local-<12 hex>` ids are exempt), and a row that is not a case object is
+named by its position in the file. A
+row that fails stops the lab with a message naming the case (by position,
+when the id is itself the problem) and the kind of content; nothing is sent,
+and a run is refused before it starts, until the row is fixed or removed.
 
 ## The page
 
@@ -126,7 +134,9 @@ The theme follows the system unless you pick one.
    held-out sets, stratified by label so a rare label lands on both sides,
    and pins each case's side in `split.json`. A case added later is *fresh*:
    the loop leaves it out until you rotate the split, and `confirm` uses it.
-   A labelled row with the same headers as an existing case is refused.
+   A labelled row with the same headers as an existing case is refused when
+   you save it in Header check; one already in `cases.local.json` is left
+   out of the run.
 2. **Parity tripwire.** On the offline fake, the lab must score the
    production wording exactly as `scripts/jev_eval.py` does: same answers and
    same request bodies. Otherwise the run stops.
@@ -220,11 +230,11 @@ become the live incumbent or use the live held-out split. `ledger`,
 
 | File | Contents |
 | --- | --- |
-| `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts |
-| `question_sets/<digest>.json` | The wording behind each digest. A file that no longer matches its digest (edited or corrupted) is refused, with a message naming the file |
-| `split.json` | The split salt, each case's pinned side, held-out looks per question |
+| `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts. The lab's own record: a line that is not a record is skipped, the rest is shown as written |
+| `question_sets/<digest>.json` | The wording behind each digest. A file that no longer matches its digest (edited or corrupted) is refused, with a message naming the file; its label and parent are held to the lab's shapes, its notes and label to the privacy guard and the value-shape rule (they sit outside the digest), and its wording to the privacy guard's kinds (secrets, personal data, GLN/GTIN numbers, UUIDs) before it is used; a date or a lot code in an example is not refused. A rewrite the loop proposes is scanned the same way before it is saved or asked |
+| `split.json` | The split salt, each case's pinned side, held-out looks per question. Held to the lab's shapes; `created` is shown as written |
 | `cases.local.json` | Rows labelled in Header check (headers and labels, with the first `labelled_at`); shared by both modes |
-| `jev-cache.jsonl` | Jev answers keyed by a SHA-256 of the request; the request itself is not stored |
+| `jev-cache.jsonl` | Jev answers keyed by a SHA-256 of the request; the request itself is not stored. A row that no longer reads as an answer is skipped and the request asked again; the rest is used as written |
 
 Never written: API keys, the page token, row values, Claude's transcript.
 
