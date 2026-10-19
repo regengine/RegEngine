@@ -35,7 +35,7 @@ export default function ErrorBoundary({
                     </h2>
                     <p className="text-sm text-muted-foreground">
                         {isBackendError
-                            ? 'The RegEngine backend is starting up or temporarily unavailable. This usually resolves in 30-60 seconds.'
+                            ? 'The RegEngine backend is starting up or temporarily unavailable. This usually resolves in 30 to 60 seconds.'
                             : 'An unexpected error occurred while loading this page.'}
                     </p>
                 </div>

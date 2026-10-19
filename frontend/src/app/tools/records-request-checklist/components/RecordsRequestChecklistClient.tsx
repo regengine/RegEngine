@@ -19,7 +19,7 @@ import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit 
 const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
     id: 'records-request-checklist',
     title: 'Records Request Checklist',
-    description: '§1.1455 is the FDA records-request rule. Teams often keep a sortable electronic spreadsheet so they can answer a records request. This page is a self-reported checklist. It is not a 24-hour capability test, not a recall-readiness score, and not legal advice.',
+    description: '§1.1455 is the FDA records request rule. Teams often keep a sortable electronic spreadsheet so they can answer a records request. This page is a self reported checklist. It is not a 24 hour capability test, not a recall readiness score, and not legal advice.',
     icon: 'Shield',
     stages: {
         questions: [
@@ -27,7 +27,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
                 id: 'pull_records',
                 text: 'Can you provide all required traceability records to the FDA when requested?',
                 type: 'select',
-                hint: '§1.1455 is the FDA records-request rule. This checklist does not test whether you can meet the 24-hour clock.',
+                hint: '§1.1455 is the FDA records request rule. This checklist does not test whether you can meet the 24 hour clock.',
                 options: [
                     { label: 'Yes, systematically', value: 'yes', weight: 20 },
                     { label: 'Mostly (delayed)', value: 'mostly', weight: 10 },
@@ -36,7 +36,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
             },
             {
                 id: 'sortable_spreadsheet',
-                text: 'Can you produce an electronic sortable spreadsheet of requested KDEs?',
+                text: 'Can you produce an electronic sortable spreadsheet of requested Key Data Element (KDE) fields?',
                 type: 'select',
                 hint: 'Teams often keep a sortable electronic spreadsheet.',
                 options: [
@@ -68,7 +68,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
             },
             {
                 id: 'cte_coverage',
-                text: 'Do you capture all applicable Critical Tracking Events (CTEs) for your supply chain role?',
+                text: 'Do you capture all applicable Critical Tracking Event (CTE) types for your supply chain role?',
                 type: 'select',
                 options: [
                     { label: 'Full CTE coverage', value: 'yes', weight: 10 },
@@ -211,7 +211,7 @@ export function RecordsRequestChecklistClient() {
                         <div className="mb-6 text-center">
                             <h3 className="text-heading text-re-text-primary">What You Reported</h3>
                             <p className="mt-1 text-ui text-re-text-tertiary">
-                                Summary of your self-reported answers. Not a readiness score, not a regulatory determination.
+                                Summary of your self reported answers. Not a readiness score, not a regulatory determination.
                             </p>
                             <div className="mx-auto mt-4 max-w-[70ch] text-ui text-re-text-tertiary">
                                 <p>The federal Food Traceability Rule compliance date is <strong className="font-medium text-re-text-secondary">July 20, 2028</strong>.</p>
@@ -219,18 +219,18 @@ export function RecordsRequestChecklistClient() {
                         </div>
 
                         <div className="mb-8 grid gap-4 md:grid-cols-2">
-                            <StatTile label="Self-Reported Points" value={score} />
+                            <StatTile label="Self Reported Points" value={score} />
                             <Card variant="inset">
                                 <CardContent>
                                     <h4 className="mb-2 text-subheading text-re-text-primary">What This Is Not</h4>
                                     <ul className="space-y-1 text-ui text-re-text-tertiary">
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
-                                            <span>Not a 24-hour capability test</span>
+                                            <span>Not a 24 hour capability test</span>
                                         </li>
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
-                                            <span>Not a recall-readiness score</span>
+                                            <span>Not a recall readiness score</span>
                                         </li>
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
