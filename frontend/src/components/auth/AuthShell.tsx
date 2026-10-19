@@ -16,7 +16,7 @@ import { RegEngineWordmark } from "@/components/layout/regengine-wordmark";
  */
 type AuthShellProps = {
   title: string;
-  description: string;
+  description: ReactNode;
   /**
    * Kept for API compatibility with existing call sites. The template no
    * longer renders an icon tile: SPEC §0 rule 8 forbids an icon before an H1,
