@@ -290,7 +290,9 @@ def test_score_only_and_offline_loop_runs_land_in_the_ledger(client, lab):
     "body,detail",
     [
         ({"generations": 26}, "generations must be"),
+        ({"generations": "many"}, "generations must be"),
         ({"margin": 0.9}, "margin must be"),
+        ({"margin": "wide"}, "margin must be"),
         ({"proposer": "gpt"}, "proposer must be"),
     ],
 )

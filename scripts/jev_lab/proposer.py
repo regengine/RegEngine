@@ -32,7 +32,7 @@ from typing import Any
 
 from . import privacy
 from .fake_jev import tokens
-from .questions import FILE_CTE, HEADER_MAPPING, KINDS, MAX_EXAMPLES, QuestionSet
+from .questions import FILE_CTE, HEADER_MAPPING, KINDS, MAX_EXAMPLES, MAX_GROWTH, MAX_TASK_CHARS, QuestionSet, baseline
 from .scoring import TRAIN, Observation, by_split, metrics
 
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -199,6 +199,13 @@ def build_brief(
         summary = metrics(train, auto_apply=auto_apply)
         kinds[kind] = {
             "wording": qs.wording(),
+            "sizes": {
+                "task_chars": len(qs.task),
+                "guidance_chars": len(qs.guidance),
+                "max_task_or_guidance_chars": MAX_TASK_CHARS,
+                "wording_chars": len(json.dumps(qs.wording())),
+                "max_wording_chars": int(len(json.dumps(baseline(kind).wording())) * MAX_GROWTH),
+            },
             "training_metrics": {key: summary[key] for key in ("subjects", "accuracy", "brier", "wrong_at_auto_apply")},
             "misses": [_item(o, case_headers[o.case_id]) for o in misses[:MAX_BRIEF_ITEMS]],
             "uncertain": [_item(o, case_headers[o.case_id]) for o in uncertain[:MAX_BRIEF_ITEMS]],

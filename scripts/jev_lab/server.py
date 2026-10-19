@@ -343,10 +343,17 @@ def create_app(lab: Lab) -> FastAPI:
         if backend not in BACKENDS:
             raise HTTPException(400, f"proposer must be one of {', '.join(BACKENDS)}")
         raw_generations = body.get("generations")
-        generations = 5 if raw_generations is None else int(raw_generations)
+        raw_margin = body.get("margin")
+        try:
+            generations = 5 if raw_generations is None else int(raw_generations)
+        except (TypeError, ValueError):
+            generations = -1
         if not 0 <= generations <= MAX_GENERATIONS:
             raise HTTPException(400, f"generations must be 0 (score only) to {MAX_GENERATIONS}")
-        margin = float(body.get("margin") if body.get("margin") is not None else 0.01)
+        try:
+            margin = 0.01 if raw_margin is None else float(raw_margin)
+        except (TypeError, ValueError):
+            margin = -1.0
         if not 0.0 <= margin <= 0.5:
             raise HTTPException(400, "margin must be between 0 and 0.5")
         try:

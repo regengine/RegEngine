@@ -107,6 +107,7 @@
     hover: null,
     pinned: null,
     answersSoFar: 0,
+    lastEventAt: 0,
   };
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const animated = () => S.motion && !reducedMotion.matches;
@@ -472,7 +473,7 @@
     ctx.restore();
 
     // Stars.
-    const twinkle = animated() ? now / 1000 : 0;
+    const twinkle = animated() && (S.running || now - S.lastEventAt < 10000) ? now / 1000 : 0;
     for (const s of subjectsOf(S.kind)) {
       const r = starRadius(s, now);
       if (s.fromR !== undefined) busy = true;
@@ -482,7 +483,7 @@
       const obs = s.cur;
       const conf = obs && obs.confidence !== null && obs.confidence !== undefined ? obs.confidence : 0;
       const size = 1.8 + 3.2 * Math.sqrt(conf);
-      const shimmer = animated() ? 0.18 * (1 - conf) * Math.sin(twinkle * 2.1 + s.angle * 7) : 0;
+      const shimmer = twinkle ? 0.18 * (1 - conf) * Math.sin(twinkle * 2.1 + s.angle * 7) : 0;
       // Candidate trail: from today's answer to the rewrite's answer for the same subject.
       if (s.cand && obs) {
         const cr = radiusFor(s.cand);
@@ -581,7 +582,9 @@
       ctx.restore();
     }
 
-    if (busy || (animated() && subjectsOf(S.kind).length)) requestDraw();
+    // Twinkle (uncertainty) only while something is happening, so an idle tab costs no CPU.
+    const lively = S.running || now - S.lastEventAt < 10000;
+    if (busy || (animated() && lively && subjectsOf(S.kind).length)) requestDraw();
   }
 
   // Claude walks down the right-hand arc of its orbit, one step per generation.
@@ -746,6 +749,7 @@
       logLine(`Generation ${d.generation}: Claude is reading the training misses.`);
     },
     proposal(d) {
+      if (!geom) resize();
       S.phase = 'evaluating';
       S.claudeCost += d.cost_usd || 0;
       const changes = KINDS.reduce((n, k) => n + (d.patches[k] ? (d.patches[k].criteria || []).length + (d.patches[k].task ? 1 : 0) + (d.patches[k].guidance ? 1 : 0) : 0), 0);
@@ -834,6 +838,7 @@
   function dispatch(event, data) {
     const handler = handlers[event];
     if (!handler) return;
+    S.lastEventAt = performance.now();
     handler(data);
     updateNow();
     updateCaption();
