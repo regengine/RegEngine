@@ -132,6 +132,19 @@ class TestValidateKey:
         # Starts with rge_ but has no `.` — ValueError path.
         assert store.validate_key("rge_nopunctuation") is None
 
+    def test_no_separator_logs_malformed_format(self, store: APIKeyStore):
+        """SEL-10: a key without the ``.`` separator logs malformed_key_format."""
+        from structlog.testing import capture_logs
+
+        presented = "rge_nopunctuation"
+        with capture_logs() as logs:
+            assert store.validate_key(presented) is None
+        malformed = [entry for entry in logs if entry.get("event") == "malformed_key_format"]
+        assert len(malformed) == 1
+        assert malformed[0]["log_level"] == "warning"
+        assert malformed[0]["key_prefix"] == presented[:8]
+        assert presented not in repr(malformed[0])
+
     def test_rejects_unknown_key_id(self, store: APIKeyStore):
         assert store.validate_key("rge_bogusid.bogussecret") is None
 
