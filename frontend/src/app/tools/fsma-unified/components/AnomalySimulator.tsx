@@ -55,7 +55,7 @@ function stddev(arr: number[]) {
     const m = mean(arr);
     return Math.sqrt(arr.reduce((a, b) => a + (b - m) ** 2, 0) / (arr.length - 1));
 }
-function fmt(n: number, d = 2) { return Number.isFinite(n) ? n.toFixed(d) : "—"; }
+function fmt(n: number, d = 2) { return Number.isFinite(n) ? n.toFixed(d) : "N/A"; }
 function isoHourLabel(ts: number) { return new Date(ts).toISOString().slice(0, 13) + ":00"; }
 
 type TempPoint = { t: number; hour: string; tempF: number; injectedAnomaly: boolean; dayIdx: number; hourOfDay: number };

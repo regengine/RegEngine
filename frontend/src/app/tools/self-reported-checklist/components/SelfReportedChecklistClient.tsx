@@ -10,7 +10,7 @@ export function SelfReportedChecklistClient() {
         <FreeToolPageShell
             title="Self Reported Checklist"
             heading="Self Reported Checklist"
-            subtitle="You answer. We echo what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455. The federal Food Traceability Rule compliance date is July 20, 2028."
+            subtitle="You answer. It echoes what you reported. Topics include Critical Tracking Event (CTE) and Key Data Element (KDE) fields. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455. The federal Food Traceability Rule compliance date is July 20, 2028."
             relatedToolIds={['ftl-checker', 'kde-checker', 'cte-mapper']}
         >
             <LeadGate
@@ -23,7 +23,7 @@ export function SelfReportedChecklistClient() {
                         <div className="text-4xl mb-3">📋</div>
                         <p className="text-lg font-semibold text-[var(--re-text-primary)]">Self Reported Checklist</p>
                         <p className="text-sm text-[var(--re-text-muted)] mt-2">
-                            You answer. We echo what you reported. Sections: Product list overlap; CTE fields; KDE fields; Export file. 
+                            You answer. It echoes what you reported. Sections: Product list overlap; Critical Tracking Event (CTE) fields; Key Data Element (KDE) fields; Export file.
                             We do NOT ask "within 24 hours" and we do NOT claim you can meet §1.1455.
                         </p>
                         <p className="text-xs text-[var(--re-text-muted)] mt-4">
