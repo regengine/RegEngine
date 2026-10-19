@@ -738,6 +738,53 @@ def test_fake_and_live_ledgers_never_mix(tmp_path, fake):
     assert live.cases_path == ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).cases_path
 
 
+def test_a_tainted_labelled_row_is_refused_before_anything_is_sent(tmp_path, fake):
+    """cases.local.json can be edited by hand: a row that must not leave is refused on every load."""
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    lab.add_case({"id": "local-bad", "headers": ["Ship Dte", "jane@example.com"], "cte": None, "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "cases.local.json case 'local-bad'" in message and "personal data" in message
+    assert "jane" not in message and "example.com" not in message
+    with pytest.raises(privacy.Refused):
+        loop.run_loop(ledger=lab, decider=fake, proposer=proposer.OfflineProposer())
+    assert fake.stats()["sent"] == 0
+
+    # A row of values, or a secret in a label, is refused the same way.
+    lab.add_case({"id": "local-bad", "headers": ["2024-04-23", "LOT-R-0423", "240"], "cte": None, "mappings": {}})
+    with pytest.raises(privacy.Refused, match="look like values"):
+        loop.every_case(lab)
+
+
+def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    digest = lab.save_set(base)
+    assert lab.load_set(digest).digest == digest  # the file round-trips to the digest that names it
+
+    path = lab.sets_dir / f"{digest}.json"
+    data = json.loads(path.read_text())
+    data["guidance"] = (data.get("guidance") or "") + " Edited by hand."
+    path.write_text(json.dumps(data))
+    with pytest.raises(RuntimeError, match="does not match its digest"):
+        lab.load_set(digest)
+
+
+def test_labelled_rows_are_locked_on_the_shared_file_in_both_modes(tmp_path):
+    live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
+    fake_view = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
+    assert live.cases_lock == fake_view.cases_lock == tmp_path / "lab" / ".cases.lock"
+    assert live.cases_lock.parent == live.cases_path.parent
+
+    fake_view.add_case({"id": "local-a", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    live.add_case({"id": "local-b", "headers": ["Recv Dte", "Lot No."], "cte": "receiving", "mappings": {}})
+    assert live.cases_lock.exists()
+    assert {c["id"] for c in live.local_cases()} == {"local-a", "local-b"}
+
+
 def test_a_live_ledger_ignores_fake_wording_left_by_an_older_lab(tmp_path):
     """Before fake runs moved to <home>/fake they wrote to <home>/ledger.jsonl, rows without ``mode``."""
     live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)

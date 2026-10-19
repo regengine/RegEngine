@@ -147,6 +147,20 @@ def test_status_says_fake_and_never_carries_the_key(client, lab):
     assert data["estimate"]["jev_requests_max"] > 0
 
 
+def test_a_tainted_labelled_row_makes_the_lab_refuse_and_say_which(client, lab):
+    lab.ledger.add_case({"id": "local-bad", "headers": ["Ship Dte", "jane@example.com"], "cte": None, "mappings": {}})
+
+    response = client.get("/api/status", headers=AUTH)
+    assert response.status_code == 422
+    reasons = response.json()["refused"]
+    assert any("case 'local-bad'" in r and "personal data" in r for r in reasons)
+    assert "jane" not in response.text
+    # The loop and confirm go through the same gate and send nothing.
+    start = client.post("/api/loop/start", headers=POST, json={"generations": 1, "proposer": "offline"})
+    _wait_idle(lab)
+    assert start.status_code in (200, 422) and lab.decider.stats()["sent"] == 0
+
+
 def test_status_reports_held_out_wear_from_the_split_file(client, lab):
     salt = lab.ledger.epoch()["salt"]
     lab.ledger.record_holdout_look("header_mapping", salt=salt)

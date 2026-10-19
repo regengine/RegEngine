@@ -794,7 +794,8 @@
       quietUntil = connectedBefore && !restarted ? lastSeenId : until;
       connectedBefore = true;
       $('#log').replaceChildren();
-      applyStatus(d.status);
+      if (d.error) showUnusable(d.error);
+      else applyStatus(d.status);
     },
     run_started(d) {
       resetRun();
@@ -1045,9 +1046,17 @@
     $('#now-primary').disabled = false;
   }
 
+  // The lab refuses to run on a labelled row that must not leave, or on a lab file that no longer
+  // says what it recorded: the message names the file and the case, and nothing is sent.
+  function showUnusable(message) {
+    $('#now-text').textContent = message;
+    $('#now-primary').disabled = true;
+  }
+
   async function refreshStatus() {
     const r = await api('/api/status');
     if (r.ok) applyStatus(r.data);
+    else if (r.data && (r.data.refused || r.data.error)) showUnusable(errorText(r));
   }
 
   function updateNow() {
@@ -1430,9 +1439,32 @@
   });
 
   // ---------------------------------------------------------------- Header check
+  // One header row, read as the ingestion route's csv reader reads it: a field that starts with a
+  // quote may hold the delimiter, and a doubled quote inside it is one quote. Blank headers are
+  // dropped, as production drops them before it asks anything about a row.
   function parseRow(text) {
     const sep = text.includes('\t') ? '\t' : ',';
-    return text.split(sep).map((h) => h.trim()).filter(Boolean);
+    const cells = [];
+    let cell = '';
+    let quoted = false;
+    let atStart = true;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch !== '"') cell += ch;
+        else if (text[i + 1] === '"') { cell += '"'; i++; }
+        else quoted = false;
+      } else if (ch === '"' && atStart) {
+        quoted = true;
+      } else if (ch === sep) {
+        cells.push(cell); cell = ''; atStart = true; continue;
+      } else if (ch !== '\r' && ch !== '\n') {
+        cell += ch;
+      }
+      atStart = false;
+    }
+    cells.push(cell);
+    return cells.map((h) => h.trim()).filter(Boolean);
   }
 
   $('#hdr-send').addEventListener('click', async () => {

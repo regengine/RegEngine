@@ -105,15 +105,24 @@ class Ledger:
             except OSError:
                 pass
 
+    @property
+    def cases_lock(self) -> Path:
+        """The lock for ``cases.local.json``: in ``home``, shared by both modes like the file itself."""
+        return self.home / ".cases.lock"
+
     @contextlib.contextmanager
-    def _exclusive(self) -> Iterator[None]:
-        """This process's lock plus, where the OS has one, a lock file other processes respect."""
+    def _exclusive(self, lock: Path | None = None) -> Iterator[None]:
+        """This process's lock plus, where the OS has one, a lock file other processes respect.
+
+        The default lock file lives in this mode's state directory. Writes to
+        a file both modes share must pass the lock beside that file.
+        """
         with self._lock:
             self.ensure()
             if fcntl is None:
                 yield
                 return
-            with (self.state_dir / ".lock").open("a") as handle:
+            with (lock or self.state_dir / ".lock").open("a") as handle:
                 fcntl.flock(handle, fcntl.LOCK_EX)
                 try:
                     yield
@@ -159,7 +168,11 @@ class Ledger:
         path = self.sets_dir / f"{digest}.json"
         if not path.exists():
             return None
-        return QuestionSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        loaded = QuestionSet.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        if loaded.digest != digest:
+            # The file names the wording Jev judged. Edited or corrupted, it is no longer that wording.
+            raise RuntimeError(f"{path} does not match its digest: delete it, or restore it from a backup")
+        return loaded
 
     # -- split epoch -----------------------------------------------------------------
 
@@ -330,7 +343,7 @@ class Ledger:
 
     def add_case(self, case: Mapping[str, Any]) -> None:
         """Save a labelled row. Relabelling keeps the row's first ``labelled_at``."""
-        with self._exclusive():
+        with self._exclusive(self.cases_lock):
             existing = {c.get("id"): c for c in self.local_cases()}
             first = (existing.get(case["id"]) or {}).get("labelled_at") or now_iso()
             cases = [c for c in existing.values() if c.get("id") != case["id"]]

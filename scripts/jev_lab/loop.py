@@ -103,6 +103,7 @@ def validate_cases(ledger: Ledger, raw: Sequence[Mapping[str, Any]]) -> list[jev
     rows = [{key: case[key] for key in ("id", "headers", "cte", "mappings") if key in case} for case in raw]
     if not rows:
         return []
+    refuse_tainted_cases(rows, source=ledger.cases_path.name)
     ledger.ensure()
     handle, name = tempfile.mkstemp(dir=ledger.state_dir, prefix=".cases-", suffix=".json")
     path = Path(name)
@@ -112,6 +113,26 @@ def validate_cases(ledger: Ledger, raw: Sequence[Mapping[str, Any]]) -> list[jev
         return jev_eval.load_cases(path, templates=False)
     finally:
         path.unlink(missing_ok=True)
+
+
+def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> None:
+    """Refuse a labelled row that must not leave the machine, before anything is asked about it.
+
+    The sandbox checks a row when it is labelled, but ``cases.local.json`` can
+    be edited by hand or restored from an older copy. Every row is checked
+    again each time it is loaded, so a secret, a person's details or a row of
+    values in that file never reaches Jev or Claude. The reasons name the case
+    and the kind of content, never the content.
+    """
+    reasons: list[str] = []
+    for row in rows:
+        headers = row.get("headers")
+        found = privacy.findings({"headers": headers, "mappings": row.get("mappings")})
+        if isinstance(headers, list) and all(isinstance(h, str) for h in headers):
+            found += privacy.data_row_findings(headers)
+        reasons += [f"{source} case {row.get('id')!r}: {reason}" for reason in found]
+    if reasons:
+        raise privacy.Refused(reasons)
 
 
 def header_key(headers: Sequence[str]) -> tuple[str, ...]:
