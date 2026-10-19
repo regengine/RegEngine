@@ -1,0 +1,114 @@
+UTC: 2026-10-03T03:16:03.576886+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat /Users/sellers/.agents/skills/synced/f39d0c09-f607-4b9c-bde5-dbea41e3781a_816383df-c749-4c89-9d32-137316881240/regengine-service-runner/SKILL.md
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+---
+name: regengine-service-runner
+description: |
+  Use this skill for ANY local development question involving running RegEngine. This includes:
+  running, starting, or launching the app (the consolidated monolith, or legacy per-service
+  entrypoints: admin, ingestion, compliance, graph, nlp, scheduler, frontend); asking about ports,
+  uvicorn/gunicorn commands, or startup scripts; CORS or proxy errors; ModuleNotFoundError or
+  import issues; setting up dependencies like Postgres, Redis, or Neo4j; health checks;
+  docker-compose; reading logs; or diagnosing why something crashes or won't start. If the user
+  mentions a RegEngine service or module and needs to run it, configure it, debug it, or
+  understand how it works locally — use this skill.
+---
+
+# RegEngine Runner & Debug
+
+> Verified against `main` @ `a655670` (2026-07-14). RegEngine is a **consolidated FastAPI
+> monolith** (`server/main.py`) + Next.js 16 frontend. The old 6-microservice runtime described in
+> earlier versions of this skill no longer exists in production. Former service directories remain
+> as code seams; their `main.py` entrypoints are debug-only.
+
+## Running the app
+
+```bash
+# From project root — THE production-shaped way to run RegEngine locally:
+export PYTHONPATH=$(pwd):$PYTHONPATH
+uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Production-equivalent (what the container runs):
+bash scripts/run-migrations.sh && \
+gunicorn server.main:app --worker-class uvicorn.workers.UvicornWorker \
+  --workers ${WEB_CONCURRENCY:-4} --bind 0.0.0.0:${PORT:-8000}
+
+# Frontend:
+cd frontend && npm run dev   # port 3000, proxies backend via /api/proxy
+```
+
+Legacy per-service entrypoints (`services/<name>/main.py`) still start standalone apps for
+focused debugging, but routes/behavior can differ from the monolith mount — prefer
+`server.main:app` unless you specifically need isolation.
+
+## Environment
+
+`.env.example` at repo root documents **55** vars. Minimum for local dev:
+
+```
+DATABASE_URL=postgresql://[REDACTED]@localhost:5432/regengine
+JWT_SECRET=[REDACTED]
+SUPABASE_URL=http://localhost:54321
+SUPABASE_KEY=<local-anon-key>
+```
+
+Optional (graceful degradation — readiness never fails on these): `REDIS_URL`, `NEO4J_URI`/
+`NEO4J_USER`/`NEO4J_PASSWORD` (graph mirror; graph routers are experimental and OFF in prod),
+`OBJECT_STORAGE_ENDPOINT_URL`/`..._ACCESS_KEY_ID`/`..._SECRET_ACCESS_KEY` (S3-compatible;
+checked via `services/ingestion/app/s3_utils.is_object_storage_configured`).
+
+## Router surface (which endpoints exist)
+
+`server/main.py` mounts: always-on core (`/health`, `/readiness`, `/metrics`, status, document
+ingestion, **webhooks**, FSMA-readiness compat) + every feature router unless disabled.
+
+- `DISABLED_ROUTERS=name1,name2` — disable by name (typos are logged as warnings).
+- `_EXPERIMENTAL_ROUTERS` (auto-OFF in production unless `ENABLE_EXPERIMENTAL_ROUTERS=true`):
+  scraping, discovery, sources, sandbox, sensitech, audit, sop, export, qr_decoder, label_vision,
+  exchange, recall_simulations, graph, nlp.
+- Reference: `docs/engineering/ROUTER_SURFACE.md`.
+
+Key production-default feature routers: csv, edi, epcis_ingestion, inflow_workbench, fda_export,
+proof_verify, score, portal, billing, alerts, onboarding, recall, supplier_mgmt, audit_log,
+product_catalog, team_mgmt, settings, integration.
+
+## Health checks
+
+```bash
+curl -s localhost:8000/health | python -m json.tool      # liveness
+curl -s localhost:8000/readiness | python -m json.tool   # deep probe
+```
+
+`/readiness`: **Postgres required (503 if down)**; Redis probed but non-fatal; Neo4j probed only
+when the graph subsystem is mounted, else reported `not_probed`.
+
+## Background work
+
+In-process: `server/workers/embedded_scheduler.py` + `task_processor.py`; pg_notify-based task
+queue (no Kafka in the deployed path). Scheduler status: `/v1/scheduler/status` and
+`server/routes_scheduler_status.py`.
+
+## Docker Compose
+
+`docker-compose.dev.yml` is the checked-in dev stack. Check the file before assuming which
+dependencies it starts.
+
+## Common startup failures
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `ModuleNotFoundError: shared` / `services` | PYTHONPATH not set | `export PYTHONPATH=$(pwd):$PYTHONPATH` from repo root |
+| `ConnectionRefusedError` on 5432 | Postgres not running | start Postgres (compose or local) |
+| `/readiness` 503 | DB down or migrations missing | `bash scripts/run-migrations.sh` |
+| Router missing in prod | it's in `_EXPERIMENTAL_ROUTERS` | set `ENABLE_EXPERIMENTAL_ROUTERS=true` (non-prod) |
+| `DISABLED_ROUTERS` typo warning | name doesn't match a router | check names in `server/main.py` |
+| `address already in use` | port conflict | `lsof -i :8000` |
+
+## Middleware stack (per request)
+
+Request ID → security headers → rate limiting (`RateLimitHeadersMiddleware`) → observability
+(OpenTelemetry) → CORS → request safety. Logs are structlog JSON — pipe through `jq` to read.

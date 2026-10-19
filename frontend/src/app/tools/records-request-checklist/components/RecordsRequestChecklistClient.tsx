@@ -10,15 +10,16 @@ import { Callout } from '@/components/ui/callout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { StatTile } from '@/components/ui/stat-tile';
-import Link from 'next/link';
+import { BookCallLink } from '@/components/conversion/BookCallLink';
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 import { submitAssessment, AssessmentFormData } from '@/app/actions/submit-assessment';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit } from '@/lib/conversion-events';
 
 const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
     id: 'records-request-checklist',
-    title: 'Records-Request Checklist',
-    description: '§1.1455 is the FDA records-request rule. Teams often keep a sortable electronic spreadsheet so they can answer a records request. This page is a self-reported checklist. It is not a 24-hour capability test, not a recall-readiness score, and not legal advice.',
+    title: 'Records Request Checklist',
+    description: '§1.1455 is the FDA records request rule. Teams often keep a sortable electronic spreadsheet so they can answer a records request. This page is a self reported checklist. It is not a 24 hour capability test, not a recall readiness score, and not legal advice.',
     icon: 'Shield',
     stages: {
         questions: [
@@ -26,7 +27,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
                 id: 'pull_records',
                 text: 'Can you provide all required traceability records to the FDA when requested?',
                 type: 'select',
-                hint: '§1.1455 is the FDA records-request rule. This checklist does not test whether you can meet the 24-hour clock.',
+                hint: '§1.1455 is the FDA records request rule. This checklist does not test whether you can meet the 24 hour clock.',
                 options: [
                     { label: 'Yes, systematically', value: 'yes', weight: 20 },
                     { label: 'Mostly (delayed)', value: 'mostly', weight: 10 },
@@ -35,7 +36,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
             },
             {
                 id: 'sortable_spreadsheet',
-                text: 'Can you produce an electronic sortable spreadsheet of requested KDEs?',
+                text: 'Can you produce an electronic sortable spreadsheet of requested Key Data Element (KDE) fields?',
                 type: 'select',
                 hint: 'Teams often keep a sortable electronic spreadsheet.',
                 options: [
@@ -67,7 +68,7 @@ const RECORDS_REQUEST_TOOL_CONFIG: ToolConfig = {
             },
             {
                 id: 'cte_coverage',
-                text: 'Do you capture all applicable Critical Tracking Events (CTEs) for your supply chain role?',
+                text: 'Do you capture all applicable Critical Tracking Event (CTE) types for your supply chain role?',
                 type: 'select',
                 options: [
                     { label: 'Full CTE coverage', value: 'yes', weight: 10 },
@@ -156,6 +157,7 @@ export function RecordsRequestChecklistClient() {
         setSubmitting(true);
         setSubmitError('');
         const formData = new FormData(e.currentTarget);
+        const attribution = getConversionAttribution();
         const data: AssessmentFormData = {
             name: formData.get('name') as string,
             email: formData.get('email') as string,
@@ -163,19 +165,34 @@ export function RecordsRequestChecklistClient() {
             role: formData.get('role') as string || 'Unknown',
             phone: formData.get('phone') as string || '',
             source: 'records-request-checklist',
+            utmSource: attribution.utm_source,
+            utmMedium: attribution.utm_medium,
+            utmCampaign: attribution.utm_campaign,
+            referrer: getReferrerHostname(),
             toolInputs: {
                 score: lastScore.score,
                 grade: lastScore.grade,
                 answers: lastAnswers
             }
         };
-        const result = await submitAssessment(data);
-        if (result.success) {
-            setLeadSubmitted(true);
-        } else {
-            setSubmitError(result.error || 'Submission failed. Please try again.');
+        try {
+            const result = await submitAssessment(data);
+            if (result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'success' });
+                setLeadSubmitted(true);
+            } else {
+                trackEmailCaptureSubmit({
+                    form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'error',
+                    error_code: result.error?.includes('valid email') ? 'validation' : 'server',
+                });
+                setSubmitError(result.error || 'Submission failed. Please try again.');
+            }
+        } catch {
+            trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'records-request-checklist', outcome: 'error', error_code: 'server' });
+            setSubmitError('Submission failed. Please try again.');
+        } finally {
+            setSubmitting(false);
         }
-        setSubmitting(false);
     };
 
     const renderResults = (answers: Record<string, any>) => {
@@ -194,7 +211,7 @@ export function RecordsRequestChecklistClient() {
                         <div className="mb-6 text-center">
                             <h3 className="text-heading text-re-text-primary">What You Reported</h3>
                             <p className="mt-1 text-ui text-re-text-tertiary">
-                                Summary of your self-reported answers. Not a readiness score, not a regulatory determination.
+                                Summary of your self reported answers. Not a readiness score, not a regulatory determination.
                             </p>
                             <div className="mx-auto mt-4 max-w-[70ch] text-ui text-re-text-tertiary">
                                 <p>The federal Food Traceability Rule compliance date is <strong className="font-medium text-re-text-secondary">July 20, 2028</strong>.</p>
@@ -202,18 +219,18 @@ export function RecordsRequestChecklistClient() {
                         </div>
 
                         <div className="mb-8 grid gap-4 md:grid-cols-2">
-                            <StatTile label="Self-Reported Points" value={score} />
+                            <StatTile label="Self Reported Points" value={score} />
                             <Card variant="inset">
                                 <CardContent>
                                     <h4 className="mb-2 text-subheading text-re-text-primary">What This Is Not</h4>
                                     <ul className="space-y-1 text-ui text-re-text-tertiary">
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
-                                            <span>Not a 24-hour capability test</span>
+                                            <span>Not a 24 hour capability test</span>
                                         </li>
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
-                                            <span>Not a recall-readiness score</span>
+                                            <span>Not a recall readiness score</span>
                                         </li>
                                         <li className="flex items-start gap-2">
                                             <AlertCircle aria-hidden="true" size={16} strokeWidth={1.75} className="mt-0.5 flex-shrink-0" />
@@ -253,10 +270,10 @@ export function RecordsRequestChecklistClient() {
                             </p>
                             <div className="mt-4">
                                 <Button asChild variant="secondary" size="sm">
-                                    <Link href="/contact">
+                                    <BookCallLink href="/contact" placement="records_request_checklist" tool="records-request-checklist">
                                         Book a 30-min Call
                                         <ArrowRight aria-hidden="true" size={16} strokeWidth={1.75} className="ml-2" />
-                                    </Link>
+                                    </BookCallLink>
                                 </Button>
                             </div>
                         </Callout>

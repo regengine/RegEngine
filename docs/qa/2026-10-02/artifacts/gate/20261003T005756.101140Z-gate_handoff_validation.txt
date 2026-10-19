@@ -1,0 +1,11 @@
+UTC: 2026-10-03T00:57:56.101140+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 docs/qa/2026-10-02/scripts/validate_handoff.py
+Exit: 0
+Duration: 0.09s
+Timeout: False
+
+Counts: Critical=0 High=3 Medium=10 Low=2
+Groups: {'Backend': 6, 'Frontend': 4, 'UX': 5}
+PASS: mandatory docs, group reports/logs, findings, branch and 361 allowed files
+PR/CI remain orchestrator-owned; this check does not establish remote status.

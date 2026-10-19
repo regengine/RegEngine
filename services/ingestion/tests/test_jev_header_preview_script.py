@@ -166,7 +166,7 @@ def test_json_output_and_simulated_apply(script, capsys, tmp_path, simulate):
     assert report["engine"]["model"] == "jev-1.14.0"
     assert report["engine"]["request_id"] == "req_preview"
     assert isinstance(report["engine"]["latency_ms"], int)
-    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v3"
     assert report["request"]["file_cte_type"] is None
     assert report["request"]["file_cte_type_dropped"] is None
     assert report["policy"] == {
@@ -233,7 +233,7 @@ def test_cte_type_is_normalised_like_the_route_and_sent_as_context(script, capsy
     report = json.loads(out)
     assert report["request"]["file_cte_type"] == "harvesting"
     assert report["request"]["file_cte_type_dropped"] is None
-    assert report["engine"]["questions_version"] == "csv-header-mapping.v2"
+    assert report["engine"]["questions_version"] == "csv-header-mapping.v3"
     _assert_key_hidden(out, err, logs)
 
 
@@ -639,7 +639,7 @@ def _file_cte_transport(seen: dict, file_cte: Optional[dict], status: int = 200)
             return httpx2.Response(status, json={"error": "down"})
         answered = {}
         for question_id in body["questions"]:
-            if question_id == "file_cte":
+            if question_id in ("file_cte", "file_cte_reversed"):
                 answered[question_id] = file_cte
             else:
                 index = int(question_id.split("_")[1])
@@ -671,7 +671,7 @@ def test_file_cte_asks_the_template_question_and_reports_it(script, capsys, tmp_
     report = json.loads(out)
     # Every column is known, so only the file-CTE question left: one request, header row only.
     (body,) = seen["bodies"]
-    assert list(body["questions"]) == ["file_cte"]
+    assert list(body["questions"]) == ["file_cte", "file_cte_reversed"]
     assert body["state"] == {"csv_headers": TEMPLATE_CSV_TEXT.splitlines()[0].split(",")}
     assert "TLC-001" not in json.dumps(body)
     assert report["status"] == "no_unrecognized_headers"
@@ -682,7 +682,7 @@ def test_file_cte_asks_the_template_question_and_reports_it(script, capsys, tmp_
     assert file_cte["band"] == "auto_apply"
     assert file_cte["would_apply"] is False and file_cte["blocked_reason"] == "apply_disabled"
     assert file_cte["request_id"] == "req_file_cte"
-    assert file_cte["questions_version"] == "csv-file-cte.v1"
+    assert file_cte["questions_version"] == "csv-file-cte.v2"
     _assert_key_hidden(out, err, logs)
 
 
@@ -707,7 +707,10 @@ def test_file_cte_runs_beside_the_header_mapping(script, capsys, tmp_path):
 
     assert code == 0, err
     report = json.loads(out)
-    assert sorted(list(b["questions"]) for b in seen["bodies"]) == [["col_0", "col_1"], ["file_cte"]]
+    assert sorted(list(b["questions"]) for b in seen["bodies"]) == [
+        ["col_0", "col_1"],
+        ["file_cte", "file_cte_reversed"],
+    ]
     assert report["status"] == "ok" and len(report["suggestions"]) == 2
     assert report["file_cte"]["band"] == "review"
     assert report["file_cte"]["blocked_reason"] == "below_auto_apply_threshold"

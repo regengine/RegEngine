@@ -5,6 +5,7 @@ RegEngine API Client
 import logging
 import time
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 import httpx
 
@@ -33,7 +34,7 @@ class RegEngineClient:
 
     Args:
         api_key: Your RegEngine API key (format: rge_xxx)
-        base_url: API base URL (default: https://api.regengine.co)
+        base_url: API base URL (default: https://regengine.co)
         tenant_id: Optional tenant ID for multi-tenant isolation
         timeout: Request timeout in seconds (default: 30)
 
@@ -51,8 +52,19 @@ class RegEngineClient:
     absent from the production route table.
     """
 
-    DEFAULT_BASE_URL = "https://api.regengine.co"
+    DEFAULT_BASE_URL = "https://regengine.co"
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503}
+
+    @staticmethod
+    def _encode_segment(value: str) -> str:
+        """Percent-encode one URL path segment.
+
+        Lot codes can contain spaces, slashes and other reserved
+        characters; embedding them raw would split one segment into
+        several or change the request target, so every caller that
+        interpolates user input into a path must go through here.
+        """
+        return quote(value, safe="")
 
     # Client methods whose backing routes exist only when the experimental
     # graph routers are mounted (not in production). Kept in exact sync with
@@ -86,7 +98,7 @@ class RegEngineClient:
         """
         Args:
             api_key: Your RegEngine API key (format: rge_xxx)
-            base_url: API base URL (default: https://api.regengine.co)
+            base_url: API base URL (default: https://regengine.co)
             tenant_id: Optional tenant ID for multi-tenant isolation
             timeout: Overall request timeout in seconds (default: 30). Ignored if connect_timeout/read_timeout are set.
             connect_timeout: Connection timeout in seconds (default: 30)
@@ -348,7 +360,11 @@ class RegEngineClient:
             "max_depth": max_depth,
             "enforce_time_arrow": enforce_time_arrow,
         }
-        data = self._request("GET", f"/api/v1/fsma/traceability/trace/forward/{tlc}", params=params)
+        data = self._request(
+            "GET",
+            f"/api/v1/fsma/traceability/trace/forward/{self._encode_segment(tlc)}",
+            params=params,
+        )
         return TraceResult(**data)
 
     def trace_backward(
@@ -367,7 +383,11 @@ class RegEngineClient:
             TraceResult with source lots and facilities
         """
         params = {"max_depth": max_depth}
-        data = self._request("GET", f"/api/v1/fsma/traceability/trace/backward/{tlc}", params=params)
+        data = self._request(
+            "GET",
+            f"/api/v1/fsma/traceability/trace/backward/{self._encode_segment(tlc)}",
+            params=params,
+        )
         return TraceResult(**data)
 
     def get_timeline(self, tlc: str) -> List[TimelineEvent]:
@@ -380,7 +400,7 @@ class RegEngineClient:
         Returns:
             List of TimelineEvent objects in chronological order
         """
-        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{tlc}")
+        data = self._request("GET", f"/api/v1/fsma/traceability/timeline/{self._encode_segment(tlc)}")
         return [TimelineEvent.from_api(e) for e in data.get("events", [])]
 
     # =========================================================================

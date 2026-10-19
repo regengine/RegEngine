@@ -305,7 +305,7 @@ class ExceptionQueueService:
             rule_category - exact category match
         """
         self.set_tenant_context(tenant_id)
-        clauses = ["tenant_id = :tenant_id"]
+        clauses: List[str] = []
         params: Dict[str, Any] = {"tenant_id": tenant_id, "limit": limit, "offset": offset}
 
         if severity is not None:
@@ -332,7 +332,7 @@ class ExceptionQueueService:
             clauses.append("rule_category = :rule_category")
             params["rule_category"] = rule_category
 
-        where = " AND ".join(clauses)
+        extra = "".join(f" AND {c}" for c in clauses)
 
         rows = self.session.execute(
             text(f"""
@@ -344,7 +344,7 @@ class ExceptionQueueService:
                        waiver_reason, waiver_approved_by, waiver_approved_at,
                        request_case_id, created_at, updated_at, resolved_at
                 FROM fsma.exception_cases
-                WHERE {where}
+                WHERE tenant_id = :tenant_id{extra}
                 ORDER BY
                     CASE severity
                         WHEN 'critical' THEN 1

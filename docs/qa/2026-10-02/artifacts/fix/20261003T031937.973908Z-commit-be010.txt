@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:19:37.973908+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git commit -m 'fix(BE-010): enforce request limits on actual ASGI bytes' -m 'Root cause: the global request limiter trusted Content-Length and let streamed or underreported bodies reach handlers without an actual byte cap.
+
+Fix: use bounded ASGI pre-read and replay, rejecting each oversized chunk before retention or handler dispatch. Preserve header early rejection, exemptions, disconnect and timeout behavior. Convert the QA expected failure and add deceptive-length, exact-limit, parser, multipart and streaming-response controls.
+
+Proving test: tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length. Before: 1 failed, 2 passed. Final focused suite: 62 passed. Locked-framework gate: 60 passed before two added compatibility controls. Related middleware suite: 46 passed, 5 pre-existing guarded Redis failures, reproduced with original middleware. Ruff and focused mypy pass. Independent gate accepted.'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+[qa/2026-10-02-fixes dbdacb67] fix(BE-010): enforce request limits on actual ASGI bytes
+ 2 files changed, 279 insertions(+), 36 deletions(-)

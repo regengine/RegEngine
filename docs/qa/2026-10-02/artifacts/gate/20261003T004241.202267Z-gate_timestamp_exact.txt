@@ -1,0 +1,53 @@
+UTC: 2026-10-03T00:42:41.202267+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -C 5 'validate_timestamp|timedelta|timezone|tzinfo' services/ingestion/app/webhook_models.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+9-from __future__ import annotations
+10-
+11-import logging
+12-import os
+13-import re
+14:from datetime import datetime, timedelta, timezone
+15-from enum import Enum
+16-from typing import Any, Dict, List, Optional
+17-from uuid import uuid4
+18-
+19-from pydantic import BaseModel, Field, field_validator, model_validator
+--
+193-        ),
+194-    )
+195-
+196-    @field_validator("timestamp")
+197-    @classmethod
+198:    def validate_timestamp(cls, v: str) -> str:
+199-        """Ensure timestamp is parseable and within reasonable bounds."""
+200-        try:
+201-            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+202-        except (ValueError, AttributeError):
+203-            raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
+204-
+205:        now = datetime.now(timezone.utc)
+206-        # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.
+207-        # Events older than 90 days are accepted but flagged via _historical_warning.
+208-        # Reject events more than 24 hours in the future (clock skew)
+209:        if dt > now + timedelta(hours=24):
+210-            raise ValueError(f"Event timestamp {v} is more than 24 hours in the future.")
+211-        return v
+212-
+213-    @field_validator("location_gln")
+214-    @classmethod
+--
+316-
+317-    accepted: int = 0
+318-    rejected: int = 0
+319-    total: int = 0
+320-    events: List[EventResult] = Field(default_factory=list)
+321:    ingestion_timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+322-    ingestion_run_id: Optional[str] = Field(
+323-        None,
+324-        description=(
+325-            "fsma.ingestion_runs id when the upload was retained as an ingestion run (file uploads): "
+326-            "the receipt that ties every accepted event back to the verbatim source file and its SHA-256."

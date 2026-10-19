@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Cookie, X } from 'lucide-react';
@@ -12,10 +12,28 @@ import {
   type ConsentValue,
 } from '@/lib/cookie-consent';
 import { shouldHideMarketingChrome } from '@/lib/app-routes';
+import {
+  filterConversionAnalyticsEvent,
+  getConversionAttribution,
+  isInternalAnalyticsSession,
+  setConversionAnalyticsEnabled,
+} from '@/lib/conversion-events';
 
 interface CookieBannerProps {
   /** Only render Vercel Analytics + SpeedInsights when this is true (env gate). */
   enableAnalytics: boolean;
+}
+
+function ConversionURLObserver() {
+  const pathname = usePathname();
+  const search = useSearchParams()?.toString();
+
+  useEffect(() => {
+    isInternalAnalyticsSession();
+    getConversionAttribution();
+  }, [pathname, search]);
+
+  return null;
 }
 
 /**
@@ -42,6 +60,11 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
       if (stored === null) setVisible(true);
     });
   }, []);
+
+  useEffect(() => {
+    setConversionAnalyticsEnabled(enableAnalytics && consent === 'accepted');
+    return () => setConversionAnalyticsEnabled(false);
+  }, [enableAnalytics, consent]);
 
   // Listen for the "reopen preferences" event dispatched by the footer link
   useEffect(() => {
@@ -82,10 +105,13 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
 
   return (
     <>
+      <Suspense fallback={null}>
+        <ConversionURLObserver />
+      </Suspense>
       {/* ── Analytics — only after explicit acceptance ── */}
       {enableAnalytics && consent === 'accepted' && (
         <>
-          <Analytics />
+          <Analytics beforeSend={filterConversionAnalyticsEvent} />
           <SpeedInsights />
         </>
       )}

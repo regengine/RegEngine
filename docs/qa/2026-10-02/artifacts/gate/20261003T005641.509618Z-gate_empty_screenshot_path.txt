@@ -1,0 +1,9 @@
+UTC: 2026-10-03T00:56:41.509618+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/ux"); print([f.name for f in p.glob("*.jpg")]); q=Path("docs/qa/2026-10-02/UX-REPORT.md"); print("REPORT",q.exists())'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+['ux-002-verifier-invisible-focus.jpg', 'mobile-home-390-frame.jpg', 'desktop-login-error.jpg', 'desktop-contact-error.jpg', 'ux-004-demo-status-copy.jpg', 'ux-003-verifier-scroll-regions-320.jpg', 'desktop-home.jpg', 'ftl-empty-search-390.jpg', 'ux-001-mobile-menu-open.jpg']
+REPORT True

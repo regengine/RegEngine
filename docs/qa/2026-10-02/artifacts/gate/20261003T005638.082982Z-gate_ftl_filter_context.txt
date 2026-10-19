@@ -1,0 +1,154 @@
+UTC: 2026-10-03T00:56:38.082982+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx"); print("\n".join(f"{i}: {x}" for i,x in enumerate(p.read_text().splitlines(),1) if 666<=i<=811)); print("SHOTS",[f.name for f in Path("docs/qa/2026-10-02/artifacts/ux").glob("*005*")])'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+666:         }
+667:     };
+668: 
+669:     const results = getResults();
+670:     const coveragePercent = results.totalSelected > 0 ? Math.round((results.coveredCount / results.totalSelected) * 100) : 0;
+671: 
+672:     return (
+673:         <div className="min-h-screen bg-re-surface-base">
+674:             <Container width="tool" className="pt-6">
+675:                 <Breadcrumbs
+676:                     items={[
+677:                         { label: "Free Tools", href: "/tools" },
+678:                         { label: "FTL Checker" }
+679:                     ]}
+680:                 />
+681:             </Container>
+682: 
+683:             {/* Hero */}
+684:             <section className="border-b border-re-border-subtle">
+685:                 <Container width="tool" className="py-10 text-center sm:py-16">
+686:                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+687:                         <Badge tone="neutral" className="mb-4">
+688:                             Free tool · no login · not a determination
+689:                         </Badge>
+690:                         <h1 className="font-display text-display text-re-text-primary">
+691:                             FTL List Checker
+692:                         </h1>
+693:                         <p className="mx-auto mt-4 max-w-[68ch] text-body text-re-text-secondary">
+694:                             The Food Traceability List is the list of foods. Who must keep Subpart S records is a separate question. This page does not decide either one. Verify every grouping against the current FDA FTL.
+695:                         </p>
+696:                         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-small text-re-text-tertiary">
+697:                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> No account required</span>
+698:                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> FDA date: July 20, 2028</span>
+699:                         </div>
+700:                     </motion.div>
+701:                 </Container>
+702:             </section>
+703: 
+704:             <Container width="tool" className="py-10 sm:py-12">
+705:                 {/* Step Progress */}
+706:                 {currentStep !== 'categories' && (
+707:                     <nav aria-label="Progress" className="mb-8 flex flex-wrap items-center justify-center gap-4">
+708:                         {[{ num: 1, label: 'Categories', step: 'categories' }, { num: 2, label: 'Exemptions', step: 'exemptions' }, { num: 3, label: 'Results', step: 'results' }].map((s, i) => (
+709:                             <div key={s.step} className="flex items-center gap-2">
+710:                                 {i > 0 && <span className="h-px w-8 bg-re-border" aria-hidden="true" />}
+711:                                 <div
+712:                                     className={cn('flex items-center gap-2', currentStep === s.step ? 'text-re-text-primary' : 'text-re-text-tertiary')}
+713:                                     aria-current={currentStep === s.step ? 'step' : undefined}
+714:                                 >
+715:                                     <span
+716:                                         className={cn(
+717:                                             'flex h-6 w-6 items-center justify-center rounded-full border font-mono uppercase text-label',
+718:                                             currentStep === s.step
+719:                                                 ? 'border-re-border-strong bg-re-surface-inset text-re-text-primary'
+720:                                                 : 'border-re-border bg-re-surface-card text-re-text-tertiary'
+721:                                         )}
+722:                                     >
+723:                                         {s.num}
+724:                                     </span>
+725:                                     <span className={cn('text-small', currentStep === s.step && 'font-medium')}>{s.label}</span>
+726:                                 </div>
+727:                             </div>
+728:                         ))}
+729:                     </nav>
+730:                 )}
+731: 
+732:                 <AnimatePresence mode="wait">
+733:                     {/* Step 1: Category Selection */}
+734:                     {currentStep === 'categories' && (
+735:                         <motion.div key="selector" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+736:                             <Card padding="spacious" className="mb-6">
+737:                                 <div className="mb-6 space-y-4">
+738:                                     <div className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-center">
+739:                                         <div>
+740:                                             <h2 className="flex items-center gap-2.5 text-heading text-re-text-primary">
+741:                                                 <Search size={20} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> Select Your Product Categories
+742:                                             </h2>
+743:                                             <p className="mt-1 text-ui text-re-text-secondary">Choose all the food categories your company handles</p>
+744:                                         </div>
+745:                                         <div className="w-full md:w-64">
+746:                                             <Field label="Search products (e.g. shrimp)" htmlFor="ftl-search" className="[&>label]:sr-only">
+747:                                                 <Input
+748:                                                     type="text"
+749:                                                     placeholder="Search products (e.g. shrimp)"
+750:                                                     value={searchTerm}
+751:                                                     onChange={(e) => setSearchTerm(e.target.value)}
+752:                                                     leadingIcon={<Search strokeWidth={1.75} />}
+753:                                                 />
+754:                                             </Field>
+755:                                         </div>
+756:                                     </div>
+757: 
+758:                                     {/* Filter Chips */}
+759:                                     <div className="flex flex-wrap gap-2">
+760:                                         {(['All', 'Seafood', 'Produce', 'Dairy', 'Eggs', 'Other'] as const).map(f => {
+761:                                             const FilterIcon = FILTER_ICONS[f];
+762:                                             return (
+763:                                                 <Button
+764:                                                     key={f}
+765:                                                     variant="secondary"
+766:                                                     size="sm"
+767:                                                     aria-pressed={activeFilter === f}
+768:                                                     onClick={() => setActiveFilter(f)}
+769:                                                     className={cn(activeFilter === f && 'bg-re-surface-inset font-semibold text-re-text-primary')}
+770:                                                     leadingIcon={FilterIcon ? <FilterIcon strokeWidth={1.75} aria-hidden="true" /> : undefined}
+771:                                                 >
+772:                                                     {f}
+773:                                                 </Button>
+774:                                             );
+775:                                         })}
+776:                                     </div>
+777:                                 </div>
+778: 
+779:                                 <div className="re-scrollbar grid max-h-[500px] grid-cols-1 gap-3 overflow-y-auto pr-2 sm:grid-cols-2">
+780:                                     {FTL_CATEGORIES
+781:                                         .filter(c => {
+782:                                             const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+783:                                                 c.examples.toLowerCase().includes(searchTerm.toLowerCase());
+784:                                             const matchesFilter = activeFilter === 'All' || c.category === activeFilter;
+785:                                             return matchesSearch && matchesFilter;
+786:                                         })
+787:                                         .map(category => {
+788:                                             const Icon = category.icon;
+789:                                             const isSelected = selectedCategories.includes(category.id);
+790:                                             return (
+791:                                                 <button
+792:                                                     key={category.id}
+793:                                                     type="button"
+794:                                                     aria-pressed={isSelected}
+795:                                                     onClick={() => toggleCategory(category.id)}
+796:                                                     className={pickClasses(isSelected)}
+797:                                                 >
+798:                                                     <div className="flex items-start gap-3">
+799:                                                         <span
+800:                                                             className={cn(
+801:                                                                 'mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border',
+802:                                                                 isSelected ? 'border-re-border-strong bg-re-surface-card' : 'border-re-border'
+803:                                                             )}
+804:                                                             aria-hidden="true"
+805:                                                         >
+806:                                                             {isSelected && <CheckCircle2 size={12} strokeWidth={1.75} className="text-re-text-primary" />}
+807:                                                         </span>
+808:                                                         <div className="min-w-0 flex-1">
+809:                                                             <div className="flex flex-wrap items-center gap-2">
+810:                                                                 <Icon size={14} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-re-text-tertiary" />
+811:                                                                 <span className="text-ui font-medium text-re-text-primary">{category.name}</span>
+SHOTS ['20261003T005401.143186Z-cooperative-cleanup.txt', '20261003T005308.615187Z-empty-search-source-lines.txt', '20261003T005234.958253Z-final-evidence-summary.txt', '20261003T005344.621513Z-redirect-guard-unit-probe.txt', 'chrome-axe_demo-390-005044980842.json', 'chrome-axe_contact-1728-005025461082.json', 'chrome-axe_verify-320-005144063706.json', '20261003T005102.929390Z-narrow-verifier-axe-evidence.txt', '20261003T003758.900557Z-browsers-and-axe-setup-retry.txt', '20261003T005406.952529Z-listener-cleanup-check.txt', 'chrome-axe_tools_ftl-checker-390-005144797436.json', 'chrome-axe_login-320-005126883759.json', '20261003T005258.767183Z-empty-search-source.txt', '20261003T005056.866742Z-demo-status-source.txt', '20261003T005632.167121Z-final-log-inspection.txt', 'chrome-axe_contact-390-005121708715.json']

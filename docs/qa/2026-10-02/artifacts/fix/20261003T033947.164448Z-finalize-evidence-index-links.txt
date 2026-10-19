@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:39:47.164448+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text(); s=s.replace("[Frontend result index](artifacts/fix/frontend-final-summary.json) preserves", "[Backend result index](artifacts/fix/backend-final-summary.json) records the full/focused runs and paired original-code controls; [exact failure identities](artifacts/fix/backend-failure-identities.json) retain the comparison. [Frontend result index](artifacts/fix/frontend-final-summary.json) preserves"); s=s.replace("The orchestrator owns remote review, push and PR creation.", "Large new raw logs are stored as lossless .txt.gz archives, with the original .txt paths retaining metadata, final excerpts and SHA-256 pointers. [Compression index](artifacts/fix/compressed-log-index.json) records byte counts and verified hashes; no original sweep artifact was altered.\n\nThe orchestrator owns remote review, push and PR creation."); p.write_text(s); print("Final evidence links added"); assert "Pending" not in s; assert "pending final" not in s'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Final evidence links added

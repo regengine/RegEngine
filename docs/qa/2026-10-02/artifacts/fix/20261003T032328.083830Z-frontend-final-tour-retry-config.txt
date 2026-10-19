@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:23:28.083830+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;p=Path("/private/tmp/regengine-fix-existing-e2e.config.cjs");s=p.read_text().replace("frontend-final-existing-e2e.json","frontend-final-tour-retry.json").replace("regengine-fix-existing-e2e-details","regengine-fix-tour-retry-details");Path("/private/tmp/regengine-fix-tour-retry.config.cjs").write_text(s);print("Separate retry config created; original full-run artifacts retained unchanged")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Separate retry config created; original full-run artifacts retained unchanged

@@ -1,0 +1,75 @@
+UTC: 2026-10-03T00:56:34.744781+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'filtered|results|searchQuery|searchTerm|No |map\(|filter\(' frontend/src/app/tools/ftl-checker -g '*.tsx'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+frontend/src/app/tools/ftl-checker/page.tsx:62:                    {Array.from({ length: 6 }).map((_, i) => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:452:    const [currentStep, setCurrentStep] = useState<'categories' | 'exemptions' | 'results'>('categories');
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:460:    const [searchTerm, setSearchTerm] = useState('');
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:469:            const categoryIds = cats.split(',').filter(id => FTL_CATEGORIES.some(c => c.id === id));
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:472:                // If there's exemption status in URL, go straight to results
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:474:                    setCurrentStep('results');
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:510:        setSelectedCategories(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:518:        const qualifyingExemptions = EXEMPTION_QUESTIONS.filter(q => exemptionAnswers[q.id] === true);
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:526:        const selected = FTL_CATEGORIES.filter(c => selectedCategories.includes(c.id));
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:530:            coveredCount: selected.filter(c => c.covered).length,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:531:            notCoveredCount: selected.filter(c => !c.covered).length,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:532:            highOutbreakCount: selected.filter(c => c.outbreakFrequency === 'HIGH').length,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:541:            const hasCoveredCategories = FTL_CATEGORIES.filter(c => selectedCategories.includes(c.id)).some(c => c.covered);
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:545:                setCurrentStep('results');
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:551:    const handleSkipExemptions = () => { setCurrentStep('results'); setShowResults(true); };
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:552:    const handleFinishExemptions = () => { setCurrentStep('results'); setShowResults(true); };
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:561:            const results = getResults();
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:567:                covered_count: results.coveredCount,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:568:                risk_level: results.coveredCount > 0 ? 'HIGH' : 'LOW'
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:582:                    coveredCount: results.coveredCount,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:583:                    riskLevel: results.coveredCount > 0 ? 'HIGH' : 'LOW',
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:596:            const results = getResults();
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:599:                results.exemptionStatus === 'EXEMPT'
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:601:                    : results.exemptionStatus === 'NOT_EXEMPT'
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:607:                subtitle: `${results.totalSelected} categor${results.totalSelected === 1 ? 'y' : 'ies'} analyzed`,
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:614:                            { key: 'Total Categories', value: String(results.totalSelected) },
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:615:                            { key: 'On FTL', value: String(results.coveredCount), status: 'success' },
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:618:                                value: String(results.notCoveredCount),
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:619:                                status: results.notCoveredCount > 0 ? 'danger' : 'neutral',
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:623:                                value: String(results.highOutbreakCount),
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:624:                                status: results.highOutbreakCount > 0 ? 'warning' : 'neutral',
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:638:                        rows: results.categories.map((category) => [
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:643:                    ...(results.exemptionStatus === 'EXEMPT' && results.qualifyingExemptions.length > 0
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:650:                                rows: results.qualifyingExemptions.map((exemption) => [exemption.citation]),
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:669:    const results = getResults();
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:670:    const coveragePercent = results.totalSelected > 0 ? Math.round((results.coveredCount / results.totalSelected) * 100) : 0;
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:697:                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> No account required</span>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:708:                        {[{ num: 1, label: 'Categories', step: 'categories' }, { num: 2, label: 'Exemptions', step: 'exemptions' }, { num: 3, label: 'Results', step: 'results' }].map((s, i) => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:750:                                                    value={searchTerm}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:760:                                        {(['All', 'Seafood', 'Produce', 'Dairy', 'Eggs', 'Other'] as const).map(f => {
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:781:                                        .filter(c => {
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:782:                                            const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:783:                                                c.examples.toLowerCase().includes(searchTerm.toLowerCase());
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:787:                                        .map(category => {
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:851:                                    {EXEMPTION_QUESTIONS.map((q, index) => {
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:945:                    {currentStep === 'results' && (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:946:                        <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:950:                                subheadline="See detailed category-by-category results, exemption analysis, and compliance action items."
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:952:                                toolContext={{ toolInputs: { coveredCount: results.coveredCount, totalSelected: results.totalSelected, coveragePercent } }}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:957:                                        <p className="text-ui text-re-text-secondary">{results.coveredCount} of {results.totalSelected} selected categories on the FTL</p>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:999:                                                <div className="text-title tabular-nums text-re-text-primary">{results.coveredCount}</div>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1003:                                                <div className="text-title tabular-nums text-re-text-primary">{results.notCoveredCount}</div>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1007:                                                <div className="text-title tabular-nums text-re-text-primary">{results.highOutbreakCount}</div>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1013:                                        {results.coveredCount > 0 && (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1016:                                                tone={results.exemptionStatus === 'EXEMPT' ? 'success' : results.exemptionStatus === 'NOT_EXEMPT' ? 'warning' : 'neutral'}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1018:                                                icon={results.exemptionStatus === 'EXEMPT' ? ShieldCheck : results.exemptionStatus === 'NOT_EXEMPT' ? AlertTriangle : HelpCircle}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1019:                                                title={results.exemptionStatus === 'EXEMPT' ? 'You May Be Exempt from FSMA 204!' : results.exemptionStatus === 'NOT_EXEMPT' ? 'Full FSMA 204 Requirements Apply' : 'Exemption Status Unknown'}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1021:                                                {results.exemptionStatus === 'EXEMPT' && results.qualifyingExemptions.map(e => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1027:                                                {results.exemptionStatus === 'NOT_EXEMPT' && <p className="text-small">Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination — confirm with counsel and the FDA Exemptions &amp; Exclusions Tool before relying on it.</p>}
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1032:                                        {results.coveredCount > 0 && results.exemptionStatus !== 'EXEMPT' && (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1048:                                            {results.categories.map(category => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1075:                                                                        {category.ctes.map(cte => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1085:                                                                        {category.kdes.map(kde => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1114:                                        {results.coveredCount > 0 ? (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1118:                                                <p className="mb-2 text-ui text-re-text-secondary">Based on your selections, <strong className="font-medium text-re-text-primary">{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1166:                                {results.coveredCount > 0 && (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1174:                                            ].map(item => (
+frontend/src/app/tools/ftl-checker/components/FTLCheckerClient.tsx:1236:                    tools={FREE_TOOLS.filter(t => ['cte-mapper', 'kde-checker'].includes(t.id))}

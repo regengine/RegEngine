@@ -1,0 +1,11 @@
+UTC: 2026-10-03T03:16:28.388858+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'RequestSizeLimit|request_safety|timeout.*504|content.length' tests/unit/test_request_safety.py tests/test_request_safety.py docs/qa/2026-10-02/BACKEND-REPORT.md docs/qa/2026-10-02/scripts/run_logged.py
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: tests/unit/test_request_safety.py: No such file or directory (os error 2)
+rg: tests/test_request_safety.py: No such file or directory (os error 2)
+docs/qa/2026-10-02/BACKEND-REPORT.md:37:BE-010 witness: `tests/qa_sweep_20261002/test_request_safety.py` sends 10 chunked bytes through an 8-byte limiter without Content-Length; actual 200 with `bytes_read=10`, expected 413. Declared oversized and exact-boundary controls pass. No large payload or real network is used.
+docs/qa/2026-10-02/BACKEND-REPORT.md:56:| Focused mypy on csv_templates/webhook_models/request_safety | One existing error: Optional header passed to `len` at csv_templates.py:784 | [mypy](artifacts/backend/20261003T004115.045419Z-typecheck-focus.txt) |

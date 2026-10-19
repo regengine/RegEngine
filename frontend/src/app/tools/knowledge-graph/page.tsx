@@ -12,13 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "Supply Chain Knowledge Graph | FSMA 204 Network Mapper | RegEngine",
-    description: "Build an interactive visual map of your FSMA 204 supply chain. Connect growers, coolers, packhouses, and distributors to identify CTE and KDE coverage gaps. Free.",
+    description: "Build an interactive visual map of your FSMA 204 supply chain. Connect growers, coolers, packhouses, and distributors to identify Critical Tracking Event (CTE) and Key Data Element (KDE) coverage gaps. Free.",
     alternates: {
         canonical: "https://regengine.co/tools/knowledge-graph",
     },
     openGraph: {
-        title: "Supply Chain Knowledge Graph — RegEngine",
-        description: "Interactively map your FSMA 204 supply chain nodes and identify CTE and KDE coverage gaps. Free tool.",
+        title: "Supply Chain Knowledge Graph | RegEngine",
+        description: "Interactively map your FSMA 204 supply chain nodes and identify Critical Tracking Event (CTE) and Key Data Element (KDE) coverage gaps. Free tool.",
         type: "website",
         url: "https://regengine.co/tools/knowledge-graph",
     },
@@ -31,11 +31,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Interactive visual builder for designing FSMA 204 compliant supply chain networks.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -48,7 +43,7 @@ function KnowledgeGraphFallback() {
             <Container width="tool">
                 <div className="border-b border-re-border-subtle pb-5">
                     <h1 className="text-title text-re-text-primary">Supply Chain Knowledge Graph</h1>
-                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">Interactively map your FSMA 204 supply chain nodes — growers, coolers, packhouses, distributors, retailers — and visualize which Critical Tracking Events and Key Data Elements each link requires. Identify coverage gaps before they become compliance gaps.</p>
+                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">Interactively map your FSMA 204 supply chain nodes, including growers, coolers, packhouses, distributors, and retailers, and visualize which Critical Tracking Event (CTE) and Key Data Element (KDE) requirements each link has. Identify coverage gaps before they become compliance gaps.</p>
                 </div>
                 <h2 className="mt-6 text-heading text-re-text-primary">Node Types You Can Map</h2>
                 <div className="mt-4 flex flex-wrap gap-2">

@@ -1,0 +1,28 @@
+UTC: 2026-10-03T03:24:07.884465+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: ruff check services/ingestion/app/csv_templates.py services/ingestion/app/webhook_models.py services/shared/error_handling.py services/ingestion/tests/test_qa_sweep_20261002_contract.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_webhook_models.py services/shared/tests/test_error_handling.py
+Exit: 1
+Duration: 0.04s
+Timeout: False
+
+I001 [*] Import block is un-sorted or un-formatted
+  --> services/ingestion/tests/test_csv_input_quantities.py:10:1
+   |
+ 8 |   """
+ 9 |
+10 | / from __future__ import annotations
+11 | |
+12 | | import csv
+13 | | import io
+14 | |
+15 | | import pytest
+16 | |
+17 | | from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
+   | |_________________________________________________________________________________^
+18 |
+19 |   HEADER = (
+   |
+help: Organize imports
+
+Found 1 error.
+[*] 1 fixable with the `--fix` option.

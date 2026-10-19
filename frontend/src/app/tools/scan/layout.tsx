@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         canonical: 'https://regengine.co/tools/scan',
     },
     openGraph: {
-        title: 'GS1 Barcode Scanner — RegEngine',
+        title: 'GS1 Barcode Scanner | RegEngine',
         description: 'Decode GS1 barcodes into FSMA 204-compatible traceability records. Free barcode scanner tool.',
         type: 'website',
         url: 'https://regengine.co/tools/scan',
@@ -24,14 +24,13 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Scan or paste GS1 barcodes to extract FSMA 204-compatible traceability data including GTIN, lot code, and expiry date.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 
 const relatedTools = [
-    { href: '/tools/label-scanner', title: 'AI Label Scanner', description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 KDEs automatically.' },
+    { href: '/tools/label-scanner', title: 'AI Label Scanner', description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 Key Data Element (KDE) fields automatically.' },
     { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data from CSV files, IoT temperature logs, or webhook API.' },
-    { href: '/tools/tlc-validator', title: 'TLC Validator', description: 'Validate your Traceability Lot Code format against GS1 and FDA FSMA 204 requirements.' },
+    { href: '/tools/tlc-validator', title: 'TLC Format Check', description: 'Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format.' },
 ];
 
 export default function ScanLayout({ children }: { children: React.ReactNode }) {

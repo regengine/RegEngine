@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:16:43.621327+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'print("BE-010 intermediate targeted run: 52 passed, 1 failed. The new incomplete-upload test exposed BaseHTTPMiddleware raising ClientDisconnect during outer timeout cleanup. Replacing only RequestSizeLimitMiddleware with a pure ASGI bounded receive/replay loop removes that cleanup error and handles real disconnects without dispatching incomplete bodies. The initial request_safety baseline remains 1 expected product failure and 2 passing controls.")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+BE-010 intermediate targeted run: 52 passed, 1 failed. The new incomplete-upload test exposed BaseHTTPMiddleware raising ClientDisconnect during outer timeout cleanup. Replacing only RequestSizeLimitMiddleware with a pure ASGI bounded receive/replay loop removes that cleanup error and handles real disconnects without dispatching incomplete bodies. The initial request_safety baseline remains 1 expected product failure and 2 passing controls.

@@ -1,0 +1,182 @@
+UTC: 2026-10-03T03:15:14.004383+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat tests/qa_sweep_20261002/test_request_safety.py frontend/src/__tests__/lib/qa-sweep-gs1.test.ts frontend/src/lib/gs1-parser.test.ts
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+"""Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from shared.request_safety import RequestSizeLimitMiddleware
+
+
+@pytest.fixture
+def body_client():
+    app = FastAPI()
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+
+    @app.post("/consume")
+    async def consume(request: Request):
+        return {"bytes_read": len(await request.body())}
+
+    with TestClient(app) as client:
+        yield client
+
+
+def test_declared_oversized_body_rejected(body_client):
+    assert body_client.post("/consume", content=b"123456789").status_code == 413
+
+
+def test_body_at_limit_accepted(body_client):
+    response = body_client.post("/consume", content=b"12345678")
+    assert response.status_code == 200
+    assert response.json() == {"bytes_read": 8}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies",
+)
+def test_streamed_body_is_limited_without_content_length(body_client):
+    response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+    if "content-length" in response.request.headers:
+        pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+    assert response.status_code == 413, response.text
+import { describe, expect, it } from 'vitest';
+import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+
+describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+    it('keeps Digital Link lot values intact across encoded delimiters', () => {
+        for (const lot of ['LOT-10', 'LOT-21', 'LOT/ALPHA', 'LOT%PERCENT', 'LOT A']) {
+            const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+            expect(parsed.tlc).toBe(lot);
+            expect(parsed.isValidGTIN).toBe(true);
+        }
+    });
+
+    it('checks every possible check digit for 100 generated GTIN bodies', () => {
+        for (let index = 0; index < 100; index += 1) {
+            const body = String(950600010000 + index).padStart(13, '0');
+            const weightedSum = [...body].reduce(
+                (total, digit, position) => total + Number(digit) * (position % 2 === 0 ? 3 : 1),
+                0,
+            );
+            const expected = (10 - weightedSum % 10) % 10;
+            for (let candidate = 0; candidate < 10; candidate += 1) {
+                expect(isValidGTINCheckDigit(`${body}${candidate}`)).toBe(candidate === expected);
+            }
+        }
+    });
+
+    it.each(['260230', '260431', '261300', '260000'])('rejects impossible calendar date %s', (value) => {
+        expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+    });
+
+    // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+    // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
+    it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+        const input = `010950600013435210${lot}\x1d17260930`;
+        const parsed = parseGS1(input);
+        expect(parsed.tlc).toBe(lot);
+        expect(parsed.expiryDate).toBe('2026-09-30');
+    });
+
+    // FE-002: invalid percent encodings must become a rejected scan, not an
+    // uncaught URIError in receiving, field capture, or the public scanner.
+    it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+        expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+    });
+});
+import { describe, it, expect } from 'vitest';
+import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+
+describe('GS1-128 Parser', () => {
+    it('should parse a standard GS1-128 with brackets', () => {
+        const raw = "(01)10614141000019(10)TLC-3489";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("TLC-3489");
+        expect(result.sourceFormat).toBe("gs1_ai");
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should parse a literal GS1-128 without brackets', () => {
+        const raw = "011061414100001910LOT-BETA-77";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("LOT-BETA-77");
+    });
+
+    it('should handle barcodes with only GTIN', () => {
+        const raw = "0110614141000019";
+        const result = parseGS1(raw);
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBeUndefined();
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should handle barcodes with only TLC (fallback match)', () => {
+        const raw = "10TLC-9999";
+        const result = parseGS1(raw);
+        expect(result.tlc).toBe("TLC-9999");
+    });
+
+    it('should parse AI 17 (expiry), AI 13 (pack date), and AI 21 (serial)', () => {
+        const raw = "(01)10614141000019(17)260930(13)260801(21)SN-4458";
+        const result = parseGS1(raw);
+
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.packDate).toBe("2026-08-01");
+        expect(result.serial).toBe("SN-4458");
+    });
+
+    it('should parse AI fields separated by GS separator characters', () => {
+        const raw = `011061414100001910LOT-99${String.fromCharCode(29)}1726093021SER-9`;
+        const result = parseGS1(raw);
+
+        expect(result.gtin).toBe("10614141000019");
+        expect(result.tlc).toBe("LOT-99");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.serial).toBe("SER-9");
+    });
+
+    it('should parse GS1 Digital Link URLs', () => {
+        const raw = "https://id.example.com/01/09506000134352/10/LOT-2026-44/21/SER-778/17/260930";
+        const result = parseGS1(raw);
+
+        expect(result.sourceFormat).toBe("digital_link");
+        expect(result.gtin).toBe("09506000134352");
+        expect(result.tlc).toBe("LOT-2026-44");
+        expect(result.serial).toBe("SER-778");
+        expect(result.expiryDate).toBe("2026-09-30");
+        expect(result.isValidGTIN).toBe(true);
+    });
+
+    it('should parse GS1 Digital Link path-only payloads', () => {
+        const raw = "/01/09506000134352/10/LOT%2FALPHA/21/SN-001";
+        const result = parseGS1(raw);
+
+        expect(result.sourceFormat).toBe("digital_link");
+        expect(result.gtin).toBe("09506000134352");
+        expect(result.tlc).toBe("LOT/ALPHA");
+        expect(result.serial).toBe("SN-001");
+    });
+});
+
+describe('GTIN check digit validation', () => {
+    it('accepts valid GTIN-14 values', () => {
+        expect(isValidGTINCheckDigit("09506000134352")).toBe(true);
+        expect(isValidGTINCheckDigit("10614141000019")).toBe(true);
+    });
+
+    it('rejects invalid GTIN-14 values', () => {
+        expect(isValidGTINCheckDigit("09506000134359")).toBe(false);
+        expect(isValidGTINCheckDigit("10614141000011")).toBe(false);
+        expect(isValidGTINCheckDigit("ABC9506000134352")).toBe(false);
+    });
+});

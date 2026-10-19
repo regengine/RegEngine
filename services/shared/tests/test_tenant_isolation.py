@@ -5,40 +5,6 @@ This module tests the TenantValidator and TenantContextMiddleware
 to ensure proper multi-tenant data isolation.
 """
 
-import importlib.util
-import sys
-from pathlib import Path
-
-# ---- Direct-load services/shared packages to avoid repo-root 'shared/' collision ----
-_shared_dir = Path(__file__).resolve().parent.parent
-
-
-def _load_module(name, filepath):
-    """Load a module from an absolute file path."""
-    spec = importlib.util.spec_from_file_location(name, filepath)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-# Pre-load the validators and middleware subpackages
-_validators_init = _shared_dir / "validators" / "__init__.py"
-_middleware_init = _shared_dir / "middleware" / "__init__.py"
-
-# We need to load the concrete modules first, then the __init__ packages
-_tenant_validator_mod = _load_module(
-    "shared.validators.tenant_validator",
-    _shared_dir / "validators" / "tenant_validator.py",
-)
-_validators_pkg = _load_module("shared.validators", _validators_init)
-
-_tenant_context_mod = _load_module(
-    "shared.middleware.tenant_context",
-    _shared_dir / "middleware" / "tenant_context.py",
-)
-_middleware_pkg = _load_module("shared.middleware", _middleware_init)
-
 import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock

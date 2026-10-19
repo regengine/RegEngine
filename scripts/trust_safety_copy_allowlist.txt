@@ -1,2 +1,5 @@
 # One relative path per line. Keep exceptions narrow and explain why they exist.
 frontend/src/__tests__/components/sandbox-diagnosis.test.ts  # negative assertion pins banned outcome-promise phrases remain absent from UI copy
+docs/qa/2026-10-02/artifacts/fix/20261003T031343.496249Z-protected-scope-symbols.txt  # raw `git show` capture; hit is the test name test_backend_status_gate_* (status_ga), not copy
+docs/qa/2026-10-02/artifacts/meta/20261002T234605.182552Z-guides.txt  # raw capture of AGENTS.md/ARCHITECTURE.md naming legacy Redpanda code as drift, not a product claim
+docs/qa/2026-10-02/artifacts/security/20261003T003615.339517Z-guidance-and-resume.txt  # raw capture of third-party security-guidance docs ("ensure ... security"), not RegEngine copy

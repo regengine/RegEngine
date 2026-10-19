@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:20:18.743835+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'def normalize_csv_header|def _file_cte_type_for_jev|def.*header|decode\(' services/ingestion/app/csv_templates.py services/shared/jev/header_mapping.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/csv_templates.py:921:def _read_header_row(reader: csv.DictReader) -> tuple[list[str], Optional[str]]:
+services/ingestion/app/csv_templates.py:936:def _csv_headers_and_samples(text: str, sample_limit: int) -> tuple[list[str], dict[str, list[str]], Optional[str]]:
+services/ingestion/app/csv_templates.py:953:def _per_row_cte_column(headers: Sequence[Optional[str]]) -> Optional[str]:
+services/ingestion/app/csv_templates.py:967:def _file_cte_type_for_jev(text: str, cte_type: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+services/ingestion/app/csv_templates.py:1060:async def _suggest_header_mappings_for_upload(
+services/ingestion/app/csv_templates.py:1111:def _record_header_mapping_evidence(
+services/ingestion/app/csv_templates.py:1163:def _header_mapping_suggestion_results(result: HeaderMappingResult) -> list[HeaderMappingSuggestionResult]:
+services/ingestion/app/csv_templates.py:1179:def _header_mapping_engine_result(
+services/ingestion/app/csv_templates.py:1371:    text = content.decode("utf-8-sig")  # Handle BOM
+services/shared/jev/header_mapping.py:252:def normalize_csv_header(header: str | None) -> str:
+services/shared/jev/header_mapping.py:257:def malformed_header_reason(headers: Iterable[str | None]) -> str | None:
+services/shared/jev/header_mapping.py:274:def unrecognized_headers(headers: Iterable[str | None], recognized: Collection[str]) -> list[str]:
+services/shared/jev/header_mapping.py:536:def suggest_header_mappings(

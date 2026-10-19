@@ -167,6 +167,18 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("jev_config_probe_failed", error=str(exc))
 
+    # Same for LlamaIndex Extract (document extraction on the bulk-upload PDF
+    # path). Never the key: public_summary() reports key_present only.
+    try:
+        from shared.document_extract import DocumentExtractSettings
+
+        summary = DocumentExtractSettings.from_env().public_summary()
+        logging.getLogger("document_extract").info(
+            "document_extract_configured %s", " ".join(f"{name}={value}" for name, value in summary.items())
+        )
+    except Exception as exc:
+        logger.warning("document_extract_config_probe_failed", error=str(exc))
+
     # Runtime DB-role gate. Production always fails closed if either role is
     # unknown, unexpected, SUPERUSER/BYPASSRLS, or connected to a different
     # PostgreSQL database. REGENGINE_REQUIRE_RLS_ENFORCEMENT=1 keeps the same
@@ -311,6 +323,14 @@ app = FastAPI(
 # CORS is handled by add_security() via shared middleware (single source of truth).
 add_security(app)
 add_rate_limiting(app)
+# slowapi raises RateLimitExceeded when a @limiter.limit decorator
+# trips. Without this handler the monolith catch-all returns 500, so
+# register the standard 429 handler (covers rate limited routers such
+# as integration webhooks when they are enabled).
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 add_observability(app, service_name="regengine")
 
 from shared.middleware import RequestIDMiddleware, TenantContextMiddleware
@@ -382,6 +402,22 @@ install_exception_handlers(app)
 from shared.auth import validate_auth_config
 
 validate_auth_config()
+
+# Fail fast in production when required credentials are missing or still
+# set to insecure placeholders. Startup requires DATABASE_URL always, plus
+# KAFKA_BOOTSTRAP_SERVERS only when EVENT_BACKBONE=kafka; unset optional
+# subsystem values (Neo4j, object storage) stay unset so those paths degrade
+# (no-op or 503) instead of aborting boot. This gate does not change the
+# credential getters, which keep their own fail-closed-on-use contract:
+# they raise in production when their variables are missing instead of
+# returning the localhost defaults they use for local development.
+from shared.secrets_manager import (
+    require_secure_secrets_in_production,
+    validate_production_secrets,
+)
+
+require_secure_secrets_in_production()
+validate_production_secrets()
 
 # #1325: mount Prometheus RED metrics on /metrics for the monolith. add_security/
 # add_observability above wire CORS + OTel tracing but NOT the Prometheus

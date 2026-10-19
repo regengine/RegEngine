@@ -1,0 +1,11 @@
+UTC: 2026-10-03T03:16:14.632406+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'typesafe-sdk|httpx2|uv pip|truststore' docs/qa/2026-10-02/BACKEND-SESSION-LOG.md
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+26:- **2026-10-03T00:37:17.222373+00:00** `install-missing-sdk` — `uv pip install --target /private/tmp/regengine-qa-backend-deps --no-deps typesafe-sdk==0.7.2`; cwd `.`; exit 2, 0.01s. [Output](artifacts/backend/20261003T003717.222373Z-install-missing-sdk.txt).
+28:- **2026-10-03T00:37:20.738684+00:00** `install-missing-sdk-retry` — `uv --cache-dir /private/tmp/regengine-qa-uv-cache pip install --target /private/tmp/regengine-qa-backend-deps --no-deps typesafe-sdk==0.7.2`; cwd `.`; exit 0, 0.23s. [Output](artifacts/backend/20261003T003720.738684Z-install-missing-sdk-retry.txt).
+34:- **2026-10-03T00:37:43.864053+00:00** `sdk-dependencies` — `python3 -c 'from pathlib import Path; print("\n".join(l for l in Path("/private/tmp/regengine-qa-backend-deps/typesafe_sdk-0.7.2.dist-info/METADATA").read_text().splitlines() if l.startswith("Requires-Dist"))); import subprocess; subprocess.run(["rg","-n","^(httpx2|httpcore2|truststore|brotli|brotlicffi|pydantic|typing-extensions|sniffio|anyio|certifi|h11)==","requirements.lock"],check=False)'`; cwd `.`; exit 0, 0.04s. [Output](artifacts/backend/20261003T003743.864053Z-sdk-dependencies.txt).
+36:- **2026-10-03T00:37:49.412998+00:00** `install-sdk-transitives` — `uv --cache-dir /private/tmp/regengine-qa-uv-cache pip install --target /private/tmp/regengine-qa-backend-deps --no-deps httpx2==2.12.0 httpcore2==2.12.0 truststore==0.10.4`; cwd `.`; exit 0, 0.20s. [Output](artifacts/backend/20261003T003749.412998Z-install-sdk-transitives.txt).

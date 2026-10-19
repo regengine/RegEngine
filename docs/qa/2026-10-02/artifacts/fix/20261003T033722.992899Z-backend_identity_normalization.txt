@@ -1,0 +1,25 @@
+UTC: 2026-10-03T03:37:22.992899+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; from collections import Counter; import json; import re; p=Path("docs/qa/2026-10-02/artifacts/fix/backend-failure-identities.json"); d=json.loads(p.read_text()); uuid=r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"; norm=lambda n: re.sub(uuid,"<random-uuid>",n); b={norm(n):v for n,v in d["before_bad_identities"].items()}; a={norm(n):v for n,v in d["after_bad_identities"].items()}; new=sorted(a.keys()-b.keys()); print("UUID-normalized new bad identities",len(new));
+for n in new: print(n,a[n]["detail"])
+print("Baseline collection-module coverage for new Jev identities");
+for n in new:
+ module=n.split("::")[0]; print(module,d["before_bad_identities"].get(module,"no prior collection error"))
+print("All unchanged normalized bad identities",len(a.keys() & b.keys())); d["uuid_normalized_new_bad_nodeids"]=new; d["random_uuid_only_new_nodeids"]=[n for n in d["new_bad_nodeids"] if norm(n) in b]; p.write_text(json.dumps(d,indent=2)+"\n")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+UUID-normalized new bad identities 5
+services/ingestion/tests/test_jev_ask_script.py::test_missing_package_says_how_to_run_it RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+services/ingestion/tests/test_jev_header_preview_script.py::test_connection_failure_logs_to_stderr_and_exits_3 RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+services/ingestion/tests/test_jev_header_preview_script.py::test_script_runs_from_repo_root_without_pythonpath RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+services/ingestion/tests/test_jev_header_preview_script.py::test_unexpected_error_never_prints_the_key_and_keeps_stdout_json RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+services/shared/tests/test_jev_client.py::test_state_never_reaches_regengine_logs AssertionError: assert 'jev.answered' in set()
+Baseline collection-module coverage for new Jev identities
+services/ingestion/tests/test_jev_ask_script.py {'outcome': 'ERROR', 'detail': ''}
+services/ingestion/tests/test_jev_header_preview_script.py {'outcome': 'ERROR', 'detail': ''}
+services/ingestion/tests/test_jev_header_preview_script.py {'outcome': 'ERROR', 'detail': ''}
+services/ingestion/tests/test_jev_header_preview_script.py {'outcome': 'ERROR', 'detail': ''}
+services/shared/tests/test_jev_client.py {'outcome': 'ERROR', 'detail': ''}
+All unchanged normalized bad identities 590

@@ -1,0 +1,243 @@
+UTC: 2026-10-03T03:16:03.574605+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["docs/qa/2026-10-02/scripts/existing-e2e.config.cjs","docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs","docs/qa/2026-10-02/scripts/existing-e2e-proxy.py","docs/qa/2026-10-02/scripts/existing-e2e-summarize.cjs"]; [print("\nFILE "+p+"\n"+Path(p).read_text()) for p in files]'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+
+FILE docs/qa/2026-10-02/scripts/existing-e2e.config.cjs
+// Runs original specs unchanged against an isolated local frontend.
+require('./existing-e2e-safety.cjs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '../../../..');
+const { defineConfig, devices } = require(path.join(root, 'frontend/node_modules/@playwright/test'));
+const suffix = process.env.QA_E2E_RUN || 'fallback';
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3115';
+if (baseURL !== 'http://127.0.0.1:3115') throw new Error('QA E2E requires the per-hop loopback proxy on port 3115');
+const projects = [
+  { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+  { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+  { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+];
+
+module.exports = defineConfig({
+  testDir: path.join(root, 'frontend/tests/e2e'),
+  testIgnore: '**/qa-2026-10-02/**',
+  globalSetup: path.join(root, 'frontend/tests/e2e/global-setup.ts'),
+  timeout: 45000,
+  expect: { timeout: 15000 },
+  workers: 3,
+  retries: 0,
+  fullyParallel: true,
+  outputDir: path.join(root, `docs/qa/2026-10-02/artifacts/browser/existing-e2e-${suffix}-details`),
+  reporter: [['list'], ['json', { outputFile: path.join(root, `docs/qa/2026-10-02/artifacts/browser/existing-e2e-${suffix}.json`) }]],
+  use: {
+    baseURL,
+    serviceWorkers: 'block',
+    screenshot: 'only-on-failure',
+    trace: 'off',
+  },
+  projects,
+});
+
+
+FILE docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs
+// QA-only safety envelope for the unchanged browser suite. Never loads dotenv.
+require('./node-isolation.cjs');
+const childProcess = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const { syncBuiltinESMExports } = require('node:module');
+const root = path.resolve(__dirname, '../../../..');
+
+for (const method of ['execFileSync', 'spawn', 'spawnSync', 'exec', 'execSync']) {
+  const original = childProcess[method];
+  childProcess[method] = function (...args) {
+    if (args.slice(0, 2).flat().some(value => /seed_passwordless_e2e_user|start-e2e-backend|sqlite|alembic/.test(String(value)))) {
+      throw new Error('QA environment restriction: database/bootstrap helper is outside browser-only scope');
+    }
+    return original.apply(this, args);
+  };
+}
+const rmSync = fs.rmSync;
+fs.rmSync = function (file, ...args) {
+  if (String(file).includes('regengine-playwright-email-outbox')) {
+    throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');
+  }
+  return rmSync.call(this, file, ...args);
+};
+syncBuiltinESMExports();
+
+const playwright = require(path.join(root, 'frontend/node_modules/@playwright/test'));
+playwright.test = playwright.test.extend({
+  _qaSafety: [async ({ browser }, use) => {
+    const newContext = browser.newContext.bind(browser);
+    browser.newContext = async (...args) => {
+      const context = await newContext(...args);
+      await context.route('**/*', async route => {
+        const url = new URL(route.request().url());
+        if (url.origin !== 'http://127.0.0.1:3115') {
+          return route.abort('blockedbyclient');
+        }
+        // Playwright only routes the first URL in a redirect chain. The proxy
+        // validates every upstream Location and sanitizes every final HTML.
+        return route.continue();
+      });
+      return context;
+    };
+    await use();
+    browser.newContext = newContext;
+  }, { auto: true }],
+});
+
+
+FILE docs/qa/2026-10-02/scripts/existing-e2e-proxy.py
+"""Local-only QA proxy. Each redirect hop is checked before the browser sees it."""
+from http.client import HTTPConnection
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import re
+import threading
+from urllib.parse import urljoin, urlsplit, urlunsplit
+
+UPSTREAM = "http://127.0.0.1:3114"
+PUBLIC = "http://127.0.0.1:3115"
+CSP = "default-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+DROP_HEADERS = {"content-length", "transfer-encoding", "connection", "content-encoding", "content-security-policy", "x-dns-prefetch-control", "link", "refresh"}
+
+
+def rewrite_location(location, request_path):
+    target = urlsplit(urljoin(UPSTREAM + request_path, location))
+    if (target.scheme, target.hostname, target.port) != ("http", "127.0.0.1", 3114) or target.username or target.password:
+        [REDACTED] ValueError("QA off-origin redirect blocked")
+    return PUBLIC + urlunsplit(("", "", target.path, target.query, target.fragment))
+
+
+class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):
+        pass
+
+    def send(self, status, body, headers):
+        self.send_response(status)
+        for key, value in headers:
+            if key.lower() not in DROP_HEADERS:
+                self.send_header(key, value)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Security-Policy", CSP)
+        self.send_header("X-DNS-Prefetch-Control", "off")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
+
+    def proxy(self):
+        if self.path == "/__qa_proxy_stop" and self.command == "POST":
+            self.send(200, b"stopping", [("Content-Type", "text/plain")])
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
+        if not self.path.startswith("/") or self.path.startswith("//"):
+            return self.send(400, b"Local paths only", [])
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 30000000:
+            return self.send(413, b"QA payload limit", [])
+        body = self.rfile.read(length) if length else None
+        headers = {key: value for key, value in self.headers.items()
+                   if key.lower() not in {"host", "connection", "transfer-encoding", "content-length", "accept-encoding"}}
+        headers["Accept-Encoding"] = "identity"
+        connection = HTTPConnection("127.0.0.1", 3114, timeout=40)
+        try:
+            # HTTPConnection never follows redirects. There is exactly one
+            # fixed loopback upstream request for every browser request.
+            connection.request(self.command, self.path, body=body, headers=headers)
+            response = connection.getresponse()
+            outgoing = []
+            for key, value in response.getheaders():
+                if key.lower() == "location":
+                    try:
+                        value = rewrite_location(value, self.path)
+                    except ValueError:
+                        print(json.dumps({"event": "blocked_redirect", "path": self.path}), flush=True)
+                        return self.send(502, b"QA off-origin redirect blocked", [("Content-Type", "text/plain")])
+                outgoing.append((key, value))
+            data = response.read()
+            if "text/html" in response.getheader("Content-Type", ""):
+                html = data.decode("utf-8")
+                html = re.sub(r"<link\b[^>]*rel=[\"'](?:preconnect|dns-prefetch)[\"'][^>]*>", "", html, flags=re.I)
+                data = html.encode("utf-8")
+            self.send(response.status, data, outgoing)
+        except (OSError, ValueError) as error:
+            self.send(502, str(type(error).__name__).encode(), [("Content-Type", "text/plain")])
+        finally:
+            connection.close()
+
+    do_GET = do_HEAD = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = proxy
+
+
+if __name__ == "__main__":
+    server = ThreadingHTTPServer(("127.0.0.1", 3115), Handler)
+    print(json.dumps({"event": "started", "public": PUBLIC, "upstream": UPSTREAM}), flush=True)
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+        print(json.dumps({"event": "stopped"}), flush=True)
+
+
+FILE docs/qa/2026-10-02/scripts/existing-e2e-summarize.cjs
+// Produce per-engine counts without treating skipped or blocked tests as passes.
+const fs = require('node:fs');
+const path = require('node:path');
+const root = path.resolve(__dirname, '../../../..');
+const artifacts = path.join(root, 'docs/qa/2026-10-02/artifacts/browser');
+const input = process.argv[2] || 'existing-e2e-proxy-local-browser.json';
+const report = JSON.parse(fs.readFileSync(path.join(artifacts, input), 'utf8'));
+const rows = [];
+function visit(suite) {
+  for (const spec of suite.specs || []) for (const test of spec.tests) {
+    const result = test.results.at(-1);
+    const messages = (result.errors || []).map(error => error.message || '').join('\n');
+    let classification = result.status;
+    if (test.status === 'unexpected') {
+      if (messages.includes('QA environment restriction')) classification = 'environment: prohibited database/OTP setup';
+      else if (messages.includes('ECONNREFUSED')) classification = 'environment: unavailable local service or wrong local port';
+      else if (messages.includes('Cannot fulfill with redirect status')) classification = 'harness: WebKit redirect interception (corrected in final run)';
+      else if (spec.title === 'sample FTL CSV evaluates and renders a diagnosis') classification = 'environment: local evaluator backend unavailable';
+      else if (spec.title === 'Error pages do not expose sensitive information') classification = 'harness: config matches configured inside Next script text';
+      else if (spec.title === 'Unauthenticated users are redirected to login') classification = 'harness: stale Password button expectation on OTP login';
+      else if (spec.title === 'challenge network failure keeps the form filled and shows a clear error') classification = 'harness: browser-specific network error wording';
+      else if (spec.title === 'login form has proper accessibility and autofill-friendly controls' && test.projectName === 'webkit') classification = 'environment: macOS WebKit keyboard focus preference (plain HTML control confirms)';
+      else if (spec.file === 'inflow-lab-tour.spec.ts') classification = 'product UX-008: WebKit guided-tour tooltip extends below viewport (settling probe confirmed)';
+      else classification = 'untriaged failure';
+    }
+    rows.push({ project: test.projectName, file: spec.file, line: spec.line, title: spec.title,
+      status: result.status, expectedStatus: test.expectedStatus, classification,
+      annotations: test.annotations, durationMs: result.duration,
+      error: messages.replace(/\u001b\[[0-9;]*m/g, '').split('\n').slice(0, 8).join('\n') });
+  }
+  for (const child of suite.suites || []) visit(child);
+}
+visit(report);
+const projects = [...new Set(rows.map(row => row.project))].map(project => {
+  const tests = rows.filter(row => row.project === project);
+  const counts = { discovered: tests.length, passed: 0, failed: 0, skipped: 0, timedOut: 0, interrupted: 0 };
+  const failureClasses = {};
+  const skipReasons = {};
+  for (const test of tests) {
+    if (test.status === 'passed' || test.status === 'skipped') counts[test.status] += 1;
+    else {
+      counts.failed += 1;
+      if (test.status === 'timedOut' || test.status === 'interrupted') counts[test.status] += 1;
+      failureClasses[test.classification] = (failureClasses[test.classification] || 0) + 1;
+    }
+    if (test.status === 'skipped') {
+      const reason = (test.annotations || []).filter(annotation => annotation.type === 'skip').map(annotation => annotation.description).join(' | ') || 'unannotated skip';
+      skipReasons[reason] = (skipReasons[reason] || 0) + 1;
+    }
+  }
+  return { project, ...counts, failureClasses, skipReasons };
+});
+const summary = { input, capturedAt: new Date().toISOString(), localFrontend: input.includes('-proxy-') ? 'http://127.0.0.1:3115' : 'http://127.0.0.1:3114',
+  noAuthenticatedBackend: true, projects, tests: rows };
+const output = input.replace(/\.json$/, '-summary.json');
+fs.writeFileSync(path.join(artifacts, output), JSON.stringify(summary, null, 2) + '\n');
+console.log(JSON.stringify({ output, projects }, null, 2));

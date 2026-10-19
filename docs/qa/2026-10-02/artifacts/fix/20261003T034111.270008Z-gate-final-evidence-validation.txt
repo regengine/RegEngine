@@ -1,0 +1,25 @@
+UTC: 2026-10-03T03:41:11.270008+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import gzip, hashlib, json, re, subprocess; root=Path.cwd(); base=root/"docs/qa/2026-10-02"; count=0; missing=[]
+for filename in ("compressed-log-index.json", "compressed-screenshot-index.json"):
+ for entry in json.loads((base/"artifacts/fix"/filename).read_text()):
+  archive=root/entry["archive"]; raw=gzip.decompress(archive.read_bytes()); assert len(raw)==entry["raw_bytes"]; assert hashlib.sha256(raw).hexdigest()==entry["raw_sha256"]; assert archive.stat().st_size==entry["gzip_bytes"]; assert archive.stat().st_size<=1000*1024; count+=1
+  if "summary" in entry: assert entry["raw_sha256"] in (root/entry["summary"]).read_text()
+  if "local_original" in entry: assert (Path(entry["local_original"]).read_bytes())==raw
+for filename in ("FIXES.md", "FIX-SESSION-LOG.md"):
+ text=(base/filename).read_text()
+ for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+  if "://" in target or target.startswith("#"): continue
+  path=base/target.split("#",1)[0]
+  if not path.exists(): missing.append((filename,target))
+assert not missing, missing
+fixes=(base/"FIXES.md").read_text(); assert fixes.count("FixCounts: fixed=2 partial=0 deferred=1")==1; assert "Pending" not in fixes
+for finding in ("BE-011","FE-001","BE-010","BE-003","BE-002","BE-001","BE-004","FE-002"): assert len(re.findall(r"^\| "+finding+r" \|", fixes,re.M))==1
+original=subprocess.check_output(["git","show","b5dd065e:docs/qa/2026-10-02/SUMMARY.md"]); assert (base/"SUMMARY.md").read_bytes()==original+b"\nFix pass: see FIXES.md\n"
+changed=subprocess.check_output(["git","diff","--name-only","b5dd065e","--","docs/qa/2026-10-02"]).decode().splitlines(); assert changed==["docs/qa/2026-10-02/SUMMARY.md"], changed
+print(f"Verified {count} lossless archive hashes, byte counts, size limits, log hash pointers and screenshot originals. FIXES/SESSION markdown links resolve. All eight finding rows and exact High-only counts verified. SUMMARY is exactly one append; original QA findings/artifacts unchanged. Final source/docs/evidence gate accepted; full backend/browser suites remain red with limitations reported.")'
+Exit: 0
+Duration: 0.08s
+Timeout: False
+
+Verified 5 lossless archive hashes, byte counts, size limits, log hash pointers and screenshot originals. FIXES/SESSION markdown links resolve. All eight finding rows and exact High-only counts verified. SUMMARY is exactly one append; original QA findings/artifacts unchanged. Final source/docs/evidence gate accepted; full backend/browser suites remain red with limitations reported.

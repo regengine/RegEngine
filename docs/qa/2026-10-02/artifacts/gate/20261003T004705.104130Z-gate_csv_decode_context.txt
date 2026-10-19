@@ -1,0 +1,61 @@
+UTC: 2026-10-03T00:47:05.104130+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("services/ingestion/app/csv_templates.py"); print("\n".join(f"{i}: {x}" for i,x in enumerate(p.read_text().splitlines(),1) if 1335<=i<=1388))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+1335:     )
+1336: 
+1337: 
+1338: @router.post(
+1339:     "/ingest/csv",
+1340:     response_model=CsvIngestResponse,
+1341:     summary="Upload and ingest a CSV file",
+1342:     description=(
+1343:         "Parse a CSV file, validate rows, and persist CTE events to the database. "
+1344:         "Supports single-type files (pass cte_type) or mixed-type files with a "
+1345:         "cte_type/event_type column per row."
+1346:     ),
+1347: )
+1348: async def ingest_csv(
+1349:     file: UploadFile = File(..., description="CSV file to ingest"),
+1350:     cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
+1351:     source: str = Form("csv_upload", description="Source identifier"),
+1352:     tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+1353:     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+1354:     x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+1355:     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+1356: ):
+1357:     """Ingest a CSV file of CTE events (single-type or mixed-type)."""
+1358: 
+1359:     # Normalize the fallback cte_type if provided
+1360:     fallback_cte = None
+1361:     if cte_type:
+1362:         fallback_cte = _CTE_TYPE_ALIASES.get(cte_type.strip().lower().replace(" ", "_"))
+1363:         if not fallback_cte:
+1364:             valid = ", ".join(sorted(set(_CTE_TYPE_ALIASES.values())))
+1365:             raise HTTPException(status_code=400, detail=f"Unknown CTE type '{cte_type}'. Valid: {valid}")
+1366: 
+1367:     tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+1368: 
+1369:     # Read and parse CSV
+1370:     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+1371:     text = content.decode("utf-8-sig")  # Handle BOM
+1372:     file_cte: Optional[CteClassificationResult] = None
+1373:     if fallback_cte is None:
+1374:         # Independent questions over the same upload: ask both at once.
+1375:         header_mapping, file_cte = await asyncio.gather(
+1376:             _suggest_header_mappings_for_upload(text), _suggest_file_cte_for_upload(text)
+1377:         )
+1378:     else:
+1379:         header_mapping = await _suggest_header_mappings_for_upload(text, cte_type=fallback_cte)
+1380:     if file_cte is not None and file_cte.applied_cte_type:
+1381:         fallback_cte = file_cte.applied_cte_type
+1382:         logger.info(
+1383:             "csv_file_cte_applied cte_type=%s confidence=%.3f",
+1384:             fallback_cte,
+1385:             file_cte.suggestion.confidence if file_cte.suggestion else 0.0,
+1386:         )
+1387:     if header_mapping.applied_mapping:
+1388:         logger.info(

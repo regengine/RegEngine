@@ -169,10 +169,15 @@ def _query_required_kde_coverage(db_session, tenant_id: str) -> dict:
         text("""
             /* required_kde_presence */
             WITH ev AS (
-                SELECT id, event_type, traceability_lot_code, product_description,
-                       quantity, unit_of_measure, location_name
-                FROM fsma.cte_events
-                WHERE tenant_id = :tid
+                SELECT ce.id, ce.event_type, ce.traceability_lot_code, ce.product_description,
+                       ce.quantity, ce.unit_of_measure, ce.location_name
+                FROM fsma.cte_events ce
+                WHERE ce.tenant_id = :tid
+            ),
+            kd AS (
+                SELECT k.cte_event_id, k.kde_key, k.kde_value
+                FROM fsma.cte_kdes k
+                WHERE k.tenant_id = :tid
             ),
             present AS (
                 SELECT id, event_type, 'traceability_lot_code' AS field FROM ev
@@ -191,7 +196,7 @@ def _query_required_kde_coverage(db_session, tenant_id: str) -> dict:
                     WHERE NULLIF(BTRIM(location_name), '') IS NOT NULL
                 UNION ALL
                 SELECT e.id, e.event_type, k.kde_key
-                FROM fsma.cte_kdes k
+                FROM kd k
                 JOIN ev e ON e.id = k.cte_event_id
                 WHERE NULLIF(BTRIM(k.kde_value #>> '{}'), '') IS NOT NULL
             )
@@ -300,7 +305,7 @@ def _query_scoring_data(db_session, tenant_id: str) -> dict:
                 )                                          AS filled_kdes
             FROM fsma.cte_kdes k
             JOIN fsma.cte_events e ON e.id = k.cte_event_id
-            WHERE e.tenant_id = :tid
+            WHERE e.tenant_id = :tid AND k.tenant_id = :tid
         """),
         {"tid": tenant_id},
     ).fetchone()
@@ -1148,7 +1153,10 @@ async def get_pending_reviews(
             or 0
         )
 
-        # 4. Events with failed critical rule evaluations (unresolved)
+        # 4. Events with failed critical rule evaluations (unresolved).
+        # linked_event_ids is UUID[] and event_id is UUID: compare them
+        # uncast. A ::text[] cast here has no uuid[] @> text[] operator,
+        # so Postgres rejects the statement and the endpoint returns 503.
         critical_failures = (
             db_session.execute(
                 text("""
@@ -1161,8 +1169,8 @@ async def get_pending_reviews(
                   AND rd.severity = 'critical'
                   AND NOT EXISTS (
                       SELECT 1 FROM fsma.exception_cases ec
-                      WHERE ec.tenant_id = re.tenant_id
-                        AND ec.linked_event_ids @> ARRAY[re.event_id]::text[]
+                      WHERE ec.tenant_id = :tid
+                        AND ec.linked_event_ids @> ARRAY[re.event_id]
                         AND ec.status IN ('resolved', 'waived')
                   )
             """),

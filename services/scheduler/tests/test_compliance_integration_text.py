@@ -89,7 +89,7 @@ def test_find_matching_tenants_executes_against_real_session(sqlite_session, mon
     item = _make_item()
 
     # Use our pre-seeded SQLite session directly.
-    matches = integration._find_matching_tenants(sqlite_session, item)
+    matches = integration._find_matching_tenants(sqlite_session, item, tenant_id=str(uuid4()))
 
     # The interesting assertion is that this RETURNED at all (no swallowed
     # ObjectNotExecutableError on the Tier-2/3 query). The empty fixture
@@ -134,7 +134,7 @@ def test_find_matching_tenants_tier1_query_uses_text(sqlite_session, monkeypatch
 
     with patch.object(sqlite_session, "execute", side_effect=_capturing_execute):
         try:
-            integration._find_matching_tenants(sqlite_session, item)
+            integration._find_matching_tenants(sqlite_session, item, tenant_id=str(uuid4()))
         except Exception:  # noqa: BLE001 - SQLite missing-table is fine
             pass
 

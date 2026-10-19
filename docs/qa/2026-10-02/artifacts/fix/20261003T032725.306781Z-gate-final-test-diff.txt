@@ -1,0 +1,585 @@
+UTC: 2026-10-03T03:27:25.306781+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff b5dd065e..HEAD -- frontend/src/__tests__/lib/qa-sweep-gs1.test.ts frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts services/ingestion/tests services/shared/tests/test_error_handling.py tests/qa_sweep_20261002/test_request_safety.py
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/frontend/src/__tests__/lib/qa-sweep-gs1.test.ts b/frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+index 6b5ab857..16f726ef 100644
+--- a/frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
++++ b/frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+@@ -29,14 +29,42 @@ describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+     });
+
+     // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+-    // Existing parser wrongly treats AI-like digits inside the lot as a new AI.
+-    it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
++    it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+         const input = `010950600013435210${lot}\x1d17260930`;
+         const parsed = parseGS1(input);
+         expect(parsed.tlc).toBe(lot);
+         expect(parsed.expiryDate).toBe('2026-09-30');
+     });
+
++    it.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves final lot %s without inferring another AI', (lot) => {
++        const parsed = parseGS1(`010950600013435210${lot}`);
++        expect(parsed.tlc).toBe(lot);
++        expect(parsed.serial).toBeUndefined();
++        expect(parsed.expiryDate).toBeUndefined();
++    });
++
++    it('FE-001 preserves parenthesized boundaries after variable-length fields', () => {
++        const parsed = parseGS1('(01)09506000134352(10)LOT-21-ABC(21)SER-10-ABC(17)260930');
++        expect(parsed.tlc).toBe('LOT-21-ABC');
++        expect(parsed.serial).toBe('SER-10-ABC');
++        expect(parsed.expiryDate).toBe('2026-09-30');
++    });
++
++    it('FE-001 preserves scanner FNC1 surrogate boundaries after variable-length fields', () => {
++        const parsed = parseGS1('010950600013435210LOT-10-ABCñ21SER-17-ABCñ17260930');
++        expect(parsed.tlc).toBe('LOT-10-ABC');
++        expect(parsed.serial).toBe('SER-17-ABC');
++        expect(parsed.expiryDate).toBe('2026-09-30');
++    });
++
++    it('FE-001 preserves a maximum-length lot and parses the explicitly separated date', () => {
++        const lot = '10172101131710172101';
++        expect(lot).toHaveLength(20);
++        const parsed = parseGS1(`010950600013435210${lot}\x1d17260930`);
++        expect(parsed.tlc).toBe(lot);
++        expect(parsed.expiryDate).toBe('2026-09-30');
++    });
++
+     // FE-002: invalid percent encodings must become a rejected scan, not an
+     // uncaught URIError in receiving, field capture, or the public scanner.
+     it.fails.each(['%', '%ZZ', '%E0%A4'])('FE-002 handles malformed Digital Link escape %s without throwing', (lot) => {
+diff --git a/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts b/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+index 98c1bde3..9cca60c4 100644
+--- a/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
++++ b/frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts
+@@ -47,7 +47,5 @@ test('FE-001 preserves complete GS1 lot identifiers in the real scanner form', a
+   });
+   await page.screenshot({ path: screenshot, fullPage: true });
+
+-  // Setup/controls/evidence are outside expected failure; only defect assertion is marked.
+-  test.fail(true, 'FE-001: variable-length GS1 lot is truncated at AI-like digits.');
+   expect(observations.map(value => value.actualLot)).toEqual(observations.map(value => value.expectedLot));
+ });
+diff --git a/services/ingestion/tests/test_csv_input_quantities.py b/services/ingestion/tests/test_csv_input_quantities.py
+index 6ca7c472..79762ab8 100644
+--- a/services/ingestion/tests/test_csv_input_quantities.py
++++ b/services/ingestion/tests/test_csv_input_quantities.py
+@@ -12,6 +12,7 @@ from __future__ import annotations
+ import csv
+ import io
+
++import pytest
+ from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
+
+ HEADER = (
+@@ -98,3 +99,17 @@ def test_initial_packing_inputs_are_optional_and_silent_when_absent():
+     assert errors == []
+     assert events[0].kdes["input_lot_codes"] == ["FIELD-LOT-1"]
+     assert not any("input_quantities" in w for w in warnings)
++
++
++@pytest.mark.parametrize("quantity", ["0", "0.25", "1000000"])
++def test_finite_nonnegative_input_quantities_remain_accepted(quantity):
++    # BE-002 preserves the existing input domain, including zero.
++    events, errors, _ = _parse(f"NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,{quantity},cases\n")
++    assert errors == []
++    assert events[0].kdes["inputs"][0]["quantity"] == float(quantity)
++
++
++def test_negative_input_quantity_remains_rejected():
++    events, errors, _ = _parse("NEW1,Mix,100,bags,2026-04-17,Plant A,REF,LOT1,-1,cases\n")
++    assert events == []
++    assert "is negative" in errors[0]
+diff --git a/services/ingestion/tests/test_csv_jev_header_mapping.py b/services/ingestion/tests/test_csv_jev_header_mapping.py
+index b1fcd8de..c366c5a0 100644
+--- a/services/ingestion/tests/test_csv_jev_header_mapping.py
++++ b/services/ingestion/tests/test_csv_jev_header_mapping.py
+@@ -570,13 +570,12 @@ def test_scan_reads_at_most_max_csv_rows(monkeypatch):
+ @pytest.mark.parametrize(
+     "text,withheld",
+     [
+-        # {normalize(k): v} keeps the first key's slot but the last same-named
+-        # key's value: "TLC-1" is tested, so this is not a comment row.
+-        ("Lot,lot,Activity\n# x,TLC-1,receiving\n", True),
+-        # ...and here the tested value is "# x": a comment row, skipped.
+-        ("lot,Lot,Activity\nTLC-1,# x,receiving\n", False),
++        # Only the first column marks a comment; a later hash-prefixed
++        # value must not hide a data row from either the scan or parser.
++        ("Lot,Notes,Activity\nTLC-1,# x,receiving\n", True),
++        ("Lot,Notes,Activity\n# x,TLC-1,receiving\n", False),
+     ],
+-    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
++    ids=["first-column-is-data", "first-column-is-comment"],
+ )
+ def test_comment_rows_are_the_ones_the_parser_skips(text, withheld):
+     events, errors, _ = ct.parse_csv_rows(text, "shipping")
+diff --git a/services/ingestion/tests/test_csv_malformed_input.py b/services/ingestion/tests/test_csv_malformed_input.py
+index 9a04d257..0cf5ca43 100644
+--- a/services/ingestion/tests/test_csv_malformed_input.py
++++ b/services/ingestion/tests/test_csv_malformed_input.py
+@@ -141,6 +141,20 @@ def test_blank_header_row_is_a_400(upload, text):
+     assert captured == {}
+
+
++@pytest.mark.parametrize("duplicate", ["quantity", " Quantity ", "reference document"])
++def test_duplicate_normalized_headers_are_rejected_before_reading_data(monkeypatch, duplicate):
++    # BE-003: reject the ambiguous header before DictReader can overwrite data.
++    def unexpected_row_read(_reader):
++        pytest.fail("Duplicate headers reached row dictionary construction")
++
++    monkeypatch.setattr(csv.DictReader, "__next__", unexpected_row_read)
++    events, errors, warnings = ct.parse_csv_rows(f"{HEADER},{duplicate}\n{ROW},999\n", "harvesting")
++    assert events == [] and warnings == []
++    assert len(errors) == 1
++    assert "duplicate column" in errors[0]
++    assert ct.normalize_csv_header(duplicate) in errors[0]
++
++
+ def test_empty_file_keeps_its_existing_400(upload):
+     post, _ = upload
+     resp = post("")
+diff --git a/services/ingestion/tests/test_qa_sweep_20261002_contract.py b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+index 70e2d053..1f754f37 100644
+--- a/services/ingestion/tests/test_qa_sweep_20261002_contract.py
++++ b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+@@ -8,7 +8,9 @@ from __future__ import annotations
+
+ import csv
+ import io
++import json
+ import math
++from unittest.mock import AsyncMock
+
+ import pytest
+ from app import csv_templates as ct
+@@ -19,6 +21,7 @@ from app.webhook_router_v2 import routes
+ from fastapi import FastAPI
+ from fastapi.testclient import TestClient
+ from hypothesis import given, settings, strategies as st
++from shared.error_handling import install_exception_handlers
+
+ HEADER = [
+     "traceability_lot_code",
+@@ -78,6 +81,7 @@ def csv_upload(monkeypatch):
+ def webhook_client():
+     app = FastAPI()
+     app.include_router(routes.router)
++    install_exception_handlers(app)
+     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+         key_id="qa-only-key-id", scopes=["*"], tenant_id="11111111-1111-1111-1111-111111111111"
+     )
+@@ -129,9 +133,7 @@ def test_webhook_naive_timestamp_is_a_validation_response(webhook_client, timest
+     assert response.status_code == 422, response.text
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-002: CSV accepts nonfinite output quantity into persistence boundary"
+-)
++# BE-002: quantities reaching persistence must be finite.
+ @pytest.mark.parametrize("quantity", ["inf", "Infinity", "1e309"])
+ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+     upload, captured = csv_upload
+@@ -142,9 +144,7 @@ def test_csv_rejects_nonfinite_output_quantity(csv_upload, quantity):
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-002: transformation input quantity accepts NaN/infinity"
+-)
++# BE-002: quantities reaching persistence must be finite.
+ @pytest.mark.parametrize("quantity", ["nan", "inf", "1e309"])
+ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+     upload, captured = csv_upload
+@@ -155,9 +155,26 @@ def test_csv_rejects_nonfinite_input_quantity(csv_upload, quantity):
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
+-)
++@pytest.mark.parametrize("raw_quantity", ["1e309", "-1e309", "NaN"])
++def test_webhook_nonfinite_quantity_returns_validation_error_before_ingest(webhook_client, monkeypatch, raw_quantity):
++    # BE-002: numeric overflow in valid JSON must retain the structured 422.
++    enter_ingest = AsyncMock(side_effect=AssertionError("Invalid quantity reached ingestion"))
++    monkeypatch.setattr(routes._pkg, "resolve_tenant_context", enter_ingest)
++    raw = json.dumps(_payload("2026-04-17T12:00:00Z")).replace('"quantity": 10', f'"quantity": {raw_quantity}')
++    response = webhook_client.post(
++        "/api/v1/webhooks/ingest",
++        content=raw,
++        headers={"Content-Type": "application/json", "Idempotency-Key": "qa-nonfinite-quantity"},
++    )
++    assert response.status_code == 422, response.text
++    [error] = response.json()["error"]["details"]
++    assert error["type"] == "finite_number"
++    assert error["loc"] == ["body", "events", 0, "quantity"]
++    assert isinstance(error["input"], str)
++    enter_ingest.assert_not_called()
++
++
++# BE-003: ambiguous columns must be rejected before quantities can be overwritten.
+ @pytest.mark.parametrize("duplicate_header", ["quantity", " Quantity "])
+ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header):
+     upload, captured = csv_upload
+@@ -165,6 +182,8 @@ def test_csv_rejects_conflicting_duplicate_headers(csv_upload, duplicate_header)
+     assert response.status_code == 400, (
+         f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
+     )
++    [error] = response.json()["detail"]["errors"]
++    assert "duplicate column" in error and "quantity" in error and "3 and 8" in error
+     assert not captured
+
+
+@@ -178,18 +197,15 @@ def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quan
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True,
+-    raises=AssertionError,
+-    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+-)
++# BE-004: unsupported encodings get actionable client feedback before persistence.
+ @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
+ def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+     upload, captured = csv_upload
+     response = upload(raw)
+     if captured:
+         pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
+-    assert response.status_code in (400, 415, 422), response.text
++    assert response.status_code == 400, response.text
++    assert "UTF-8 CSV" in response.json()["detail"]
+
+
+ def test_csv_utf8_bom_is_accepted(csv_upload):
+@@ -199,6 +215,15 @@ def test_csv_utf8_bom_is_accepted(csv_upload):
+     assert len(captured) == 1
+
+
++def test_csv_utf8_non_ascii_product_is_accepted(csv_upload):
++    upload, captured = csv_upload
++    row = list(ROW)
++    row[1] = "Café kale"
++    response = upload(_csv(HEADER, row))
++    assert response.status_code == 200
++    assert captured[0].product_description == row[1]
++
++
+ @given(st.integers(min_value=1, max_value=1_000_000))
+ @settings(max_examples=60, derandomize=True, deadline=None, database=None)
+ def test_positive_finite_csv_quantities_round_trip(quantity):
+diff --git a/services/ingestion/tests/test_webhook_models.py b/services/ingestion/tests/test_webhook_models.py
+index c0ad2593..a2cd8d4c 100644
+--- a/services/ingestion/tests/test_webhook_models.py
++++ b/services/ingestion/tests/test_webhook_models.py
+@@ -95,6 +95,23 @@ class TestIngestEvent:
+         assert event.cte_type == WebhookCTEType.SHIPPING
+         assert event.quantity == 100.0
+
++    @pytest.mark.parametrize("quantity", [float("inf"), float("-inf"), float("nan"), "Infinity", "1e309"])
++    def test_rejects_nonfinite_quantity(self, quantity):
++        # BE-002: enforce finite output quantities for every model caller.
++        with pytest.raises(ValidationError) as exc_info:
++            IngestEvent(**_valid_event_kwargs(quantity=quantity))
++        assert exc_info.value.errors()[0]["type"] == "finite_number"
++
++    @pytest.mark.parametrize("quantity", [0.001, 1, 1_000_000])
++    def test_accepts_positive_finite_quantity(self, quantity):
++        assert IngestEvent(**_valid_event_kwargs(quantity=quantity)).quantity == quantity
++
++    @pytest.mark.parametrize("quantity", [0, -1])
++    def test_still_rejects_nonpositive_quantity(self, quantity):
++        with pytest.raises(ValidationError) as exc_info:
++            IngestEvent(**_valid_event_kwargs(quantity=quantity))
++        assert exc_info.value.errors()[0]["type"] == "greater_than"
++
+     def test_rejects_future_timestamp(self):
+         future = datetime.now(timezone.utc) + timedelta(hours=48)
+         with pytest.raises(ValidationError) as exc_info:
+diff --git a/services/shared/tests/test_error_handling.py b/services/shared/tests/test_error_handling.py
+index 3244da8d..07c381d1 100644
+--- a/services/shared/tests/test_error_handling.py
++++ b/services/shared/tests/test_error_handling.py
+@@ -1,6 +1,8 @@
++import math
++
+ from fastapi import FastAPI, HTTPException
+ from fastapi.testclient import TestClient
+-from shared.error_handling import ClientSafeValueError, install_exception_handlers
++from shared.error_handling import ClientSafeValueError, _json_safe, install_exception_handlers
+
+
+ def _client() -> TestClient:
+@@ -106,3 +108,9 @@ def test_unhandled_exception_remains_generic() -> None:
+     assert body["error"]["type"] == "internal_error"
+     assert body["error"]["message"] == "An internal error occurred"
+     _assert_no_internal_details(body)
++
++
++def test_validation_details_are_json_safe_for_nonfinite_numbers() -> None:
++    # BE-002: validation errors may retain numeric JSON overflow as input.
++    details = {"input": [math.inf, -math.inf, math.nan], "context": (1.25, 2, True, None)}
++    assert _json_safe(details) == {"input": ["inf", "-inf", "nan"], "context": [1.25, 2, True, None]}
+diff --git a/tests/qa_sweep_20261002/test_request_safety.py b/tests/qa_sweep_20261002/test_request_safety.py
+index f0ad8920..c12f46ca 100644
+--- a/tests/qa_sweep_20261002/test_request_safety.py
++++ b/tests/qa_sweep_20261002/test_request_safety.py
+@@ -1,20 +1,43 @@
+ """Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+
+ import pytest
+-from fastapi import FastAPI, Request
++from fastapi import FastAPI, Request, UploadFile
+ from fastapi.testclient import TestClient
+-from shared.request_safety import RequestSizeLimitMiddleware
++from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
++from starlette.responses import JSONResponse, StreamingResponse
+
+
+ @pytest.fixture
+ def body_client():
+     app = FastAPI()
+     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
++    app.state.handled = False
+
+     @app.post("/consume")
+     async def consume(request: Request):
++        app.state.handled = True
+         return {"bytes_read": len(await request.body())}
+
++    @app.post("/parse")
++    async def parse(payload: dict):
++        app.state.handled = True
++        return payload
++
++    @app.post("/ignore")
++    async def ignore():
++        app.state.handled = True
++        return {"ok": True}
++
++    @app.post("/respond-stream")
++    async def respond_stream(request: Request):
++        body = await request.body()
++
++        async def chunks():
++            yield body[:4]
++            yield body[4:]
++
++        return StreamingResponse(chunks())
++
+     with TestClient(app) as client:
+         yield client
+
+@@ -29,13 +52,202 @@ def test_body_at_limit_accepted(body_client):
+     assert response.json() == {"bytes_read": 8}
+
+
+-@pytest.mark.xfail(
+-    strict=True,
+-    raises=AssertionError,
+-    reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies",
+-)
+ def test_streamed_body_is_limited_without_content_length(body_client):
+     response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+     if "content-length" in response.request.headers:
+         pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+     assert response.status_code == 413, response.text
++    assert body_client.app.state.handled is False
++
++
++@pytest.mark.parametrize("path", ["/consume", "/parse", "/ignore"])
++@pytest.mark.parametrize("declared_length", ["-1", "0", "1", "8"])
++def test_deceptive_content_length_rejected_before_handler(body_client, path, declared_length):
++    """BE-010: parsers and handlers must never see an oversized request."""
++    response = body_client.post(
++        path,
++        content=b'{"x":123}',
++        headers={"Content-Length": declared_length, "Content-Type": "application/json"},
++    )
++    assert response.status_code == 413
++    assert response.json()["error"] == "payload_too_large"
++    assert body_client.app.state.handled is False
++
++
++def test_valid_json_body_replayed_to_parser(body_client):
++    response = body_client.post("/parse", content=b'{"x":1}', headers={"Content-Type": "application/json"})
++    assert response.status_code == 200
++    assert response.json() == {"x": 1}
++
++
++def test_negative_content_length_preserves_existing_acceptance_under_limit(body_client):
++    response = body_client.post("/consume", content=b"1234", headers={"Content-Length": "-1"})
++    assert response.status_code == 200
++    assert response.json() == {"bytes_read": 4}
++
++
++def test_accepted_body_can_produce_streaming_response(body_client):
++    response = body_client.post("/respond-stream", content=iter([b"1234", b"5678"]))
++    assert response.status_code == 200
++    assert response.content == b"12345678"
++
++
++def test_accepted_multipart_upload_preserved():
++    app = FastAPI()
++    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=1024)
++
++    @app.post("/upload")
++    async def upload(file: UploadFile):
++        return {"filename": file.filename, "content": (await file.read()).decode()}
++
++    with TestClient(app) as client:
++        response = client.post("/upload", files={"file": ("test.txt", b"12345678", "text/plain")})
++    assert response.status_code == 200
++    assert response.json() == {"filename": "test.txt", "content": "12345678"}
++
++
++def _http_scope(headers=(), path="/consume"):
++    return {
++        "type": "http",
++        "asgi": {"version": "3.0", "spec_version": "2.4"},
++        "method": "POST",
++        "path": path,
++        "query_string": b"",
++        "headers": list(headers),
++    }
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("declared_length", [None, b"0", b"8"])
++async def test_actual_asgi_chunks_stop_at_limit_before_dispatch(declared_length):
++    """TestClient may combine chunks; assert real receive-message boundaries."""
++    received = []
++    sent = []
++    messages = iter(
++        [
++            {"type": "http.request", "body": b"12345", "more_body": True},
++            {"type": "http.request", "body": b"6789", "more_body": True},
++        ]
++    )
++
++    async def receive():
++        message = next(messages)  # No third receive is allowed after the limit.
++        received.append(message)
++        return message
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Oversized request reached the handler")
++
++    headers = [] if declared_length is None else [(b"content-length", declared_length)]
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(headers), receive, send)
++    assert len(received) == 2
++    assert sent[0]["status"] == 413
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("chunks", [[b""], [b"1234", b"", b"5678"]])
++async def test_actual_asgi_chunks_replayed_exactly(chunks):
++    sent = []
++    messages = iter(
++        {"type": "http.request", "body": chunk, "more_body": index < len(chunks) - 1}
++        for index, chunk in enumerate(chunks)
++    )
++
++    async def receive():
++        return next(messages)
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        request = Request(scope, receive)
++        assert await request.body() == b"".join(chunks)
++        await JSONResponse({"ok": True})(scope, receive, send)
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
++    assert sent[0]["status"] == 200
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("content_length, status", [(b"9", 413), (b"invalid", 400)])
++async def test_invalid_or_oversized_header_rejected_without_receiving(content_length, status):
++    sent = []
++
++    async def receive():
++        pytest.fail("Rejected header must not wait for the request body")
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Rejected header reached the handler")
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(
++        _http_scope([(b"content-length", content_length)]), receive, send
++    )
++    assert sent[0]["status"] == status
++
++
++@pytest.mark.asyncio
++async def test_disconnected_upload_never_reaches_handler():
++    messages = iter(
++        [
++            {"type": "http.request", "body": b"1234", "more_body": True},
++            {"type": "http.disconnect"},
++        ]
++    )
++
++    async def receive():
++        return next(messages)
++
++    async def send(message):
++        pytest.fail("Disconnected upload must not produce a response")
++
++    async def handler(scope, receive, send):
++        pytest.fail("Incomplete upload reached the handler")
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(_http_scope(), receive, send)
++
++
++@pytest.mark.asyncio
++async def test_incomplete_upload_remains_subject_to_request_timeout():
++    import asyncio
++
++    sent = []
++
++    async def receive():
++        await asyncio.Event().wait()
++
++    async def send(message):
++        sent.append(message)
++
++    async def handler(scope, receive, send):
++        pytest.fail("Incomplete upload reached the handler")
++
++    app = RequestTimeoutMiddleware(
++        RequestSizeLimitMiddleware(handler, max_bytes=8), timeout_seconds=0.01
++    )
++    await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
++    assert sent[0]["status"] == 504
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("scope", [{"type": "websocket"}, _http_scope(path="/health")])
++async def test_non_http_and_exempt_requests_pass_through_without_reading(scope):
++    handled = []
++
++    async def receive():
++        pytest.fail("Passthrough must not read a body")
++
++    async def send(message):
++        pass
++
++    async def handler(inner_scope, inner_receive, inner_send):
++        assert (inner_scope, inner_receive, inner_send) == (scope, receive, send)
++        handled.append(True)
++
++    await RequestSizeLimitMiddleware(handler, max_bytes=8)(scope, receive, send)
++    assert handled == [True]

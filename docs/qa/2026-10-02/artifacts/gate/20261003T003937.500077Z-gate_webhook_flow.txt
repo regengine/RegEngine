@@ -1,0 +1,164 @@
+UTC: 2026-10-03T00:39:37.500077+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'kdes|canonical|persist|def ingest_events|event_payload|model_dump' services/ingestion/app/webhook_compat.py services/shared/canonical_event.py services/ingestion/app/webhook_models.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/app/webhook_models.py:29:    Delegates the GS1 mod-10 check-digit math to the shared canonical helper so
+services/ingestion/app/webhook_models.py:44:    The 7 canonical FSMA 204 CTEs (per 21 CFR 1.1310) are: harvesting,
+services/ingestion/app/webhook_models.py:184:    kdes: Dict[str, Any] = Field(
+services/ingestion/app/webhook_models.py:274:                self.kdes.get(k) for k in kde_locations if self.kdes.get(k) and str(self.kdes[k]).strip()
+services/ingestion/app/webhook_models.py:335:    ``canonical_field`` for this upload (see ``shared.jev.header_mapping``);
+services/ingestion/app/webhook_models.py:341:    canonical_field: Optional[str] = Field(None, description="Suggested canonical FSMA 204 field; null for no match.")
+services/shared/canonical_event.py:6:EDI message) normalizes into this model before persistence.
+services/shared/canonical_event.py:19:    from shared.canonical_event import TraceabilityEvent, normalize_webhook_event
+services/shared/canonical_event.py:21:    canonical = normalize_webhook_event(webhook_event, tenant_id, source="webhook_api")
+services/shared/canonical_event.py:22:    # canonical is now a TraceabilityEvent ready for persistence
+services/shared/canonical_event.py:36:logger = logging.getLogger("canonical-event")
+services/shared/canonical_event.py:44:# would block the persist transaction, bloat backups, and — combined
+services/shared/canonical_event.py:61:# Oversized payloads raise ``ValueError`` at ``prepare_for_persistence``
+services/shared/canonical_event.py:147:    """Lifecycle status of a canonical event."""
+services/shared/canonical_event.py:200:    Structured provenance for a canonical event.
+services/shared/canonical_event.py:216:        return self.model_dump(exclude_none=True)
+services/shared/canonical_event.py:254:# canonical TraceabilityEvent envelope. It is NOT a semver string — it is
+services/shared/canonical_event.py:295:    The canonical traceability event — RegEngine's single internal truth model.
+services/shared/canonical_event.py:341:    # and must round-trip through the canonical store. The old gt=0
+services/shared/canonical_event.py:345:    # try/except). FDA exports run off the canonical store, so a zero
+services/shared/canonical_event.py:346:    # event that vanished from canonical was a regulator-visible gap.
+services/shared/canonical_event.py:360:    kdes: Dict[str, Any] = Field(default_factory=dict)
+services/shared/canonical_event.py:376:    # Integrity (computed during persistence)
+services/shared/canonical_event.py:399:        ``"1.0.0"`` persisted to ``fsma.traceability_events.schema_version``
+services/shared/canonical_event.py:465:        """Compute SHA-256 of canonical form for integrity verification."""
+services/shared/canonical_event.py:466:        canonical = "|".join(
+services/shared/canonical_event.py:477:                json.dumps(self.kdes, sort_keys=True, default=str),
+services/shared/canonical_event.py:480:        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+services/shared/canonical_event.py:487:        in ``shared.cte_persistence.hashing`` does (#1313): a KDE
+services/shared/canonical_event.py:492:        tracked with the cte_persistence retirement work (#1335).
+services/shared/canonical_event.py:495:        ``cte_persistence.hashing.compute_idempotency_key`` by using
+services/shared/canonical_event.py:498:        therefore DIFFERENT: the same real-world event persisted via
+services/shared/canonical_event.py:505:        canonical = json.dumps(
+services/shared/canonical_event.py:513:                "kdes": self.kdes,
+services/shared/canonical_event.py:519:        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+services/shared/canonical_event.py:538:            "kdes": self.kdes,
+services/shared/canonical_event.py:542:    def prepare_for_persistence(self) -> "TraceabilityEvent":
+services/shared/canonical_event.py:552:        blocking the persist transaction, and (b) stored XSS in any
+services/shared/canonical_event.py:566:        Without a hint in kdes, the rules engine skips the event with
+services/shared/canonical_event.py:571:          both cover kdes, and chain verification recomputes from the
+services/shared/canonical_event.py:572:          stored kdes, so the hash must be taken over the enriched dict.
+services/shared/canonical_event.py:574:          (kdes.ftl_covered / kdes.ftl_category, in any casing of intent —
+services/shared/canonical_event.py:584:        if event_has_ftl_hint({"kdes": self.kdes}):
+services/shared/canonical_event.py:586:        category = infer_ftl_category_from_text(self.product_reference or self.kdes.get("product_description"))
+services/shared/canonical_event.py:588:            self.kdes["ftl_category"] = category
+services/shared/canonical_event.py:589:            self.kdes["ftl_covered"] = True
+services/shared/canonical_event.py:595:        uses, so the size we check is the size we'd actually persist.
+services/shared/canonical_event.py:616:# a latency window between a producer bumping the canonical schema and
+services/shared/canonical_event.py:645:    """Dispatch parse for a canonical ``TraceabilityEvent`` payload (#1197).
+services/shared/canonical_event.py:680:            raise ValueError(f"traceability_event_payload_not_json: {exc}") from exc
+services/shared/canonical_event.py:685:            raise ValueError(f"traceability_event_payload_not_json: {exc}") from exc
+services/shared/canonical_event.py:692:        raise ValueError(f"traceability_event_payload_not_object: got {type(raw).__name__}")
+services/shared/canonical_event.py:717:    """Source document linked to a canonical event for evidentiary chain."""
+services/shared/canonical_event.py:752:    Normalize a webhook IngestEvent into a canonical TraceabilityEvent.
+services/shared/canonical_event.py:755:    and the canonical model. The raw webhook payload is preserved verbatim.
+services/shared/canonical_event.py:769:            "kdes": event.kdes,
+services/shared/canonical_event.py:775:    kdes = dict(event.kdes) if event.kdes else {}
+services/shared/canonical_event.py:776:    kdes.setdefault("ingest_source", source)
+services/shared/canonical_event.py:778:    # Promote input_traceability_lot_codes into kdes so _create_transformation_links()
+services/shared/canonical_event.py:780:    # this as a top-level field; canonical persistence looks inside kdes.
+services/shared/canonical_event.py:782:        kdes.setdefault("input_lot_codes", event.input_traceability_lot_codes)
+services/shared/canonical_event.py:784:        event.location_gln or kdes.get("ship_from_gln") or kdes.get("ship_from_location") or event.location_name
+services/shared/canonical_event.py:786:    to_facility = kdes.get("ship_to_gln") or kdes.get("ship_to_location") or kdes.get("receiving_location")
+services/shared/canonical_event.py:803:    canonical = TraceabilityEvent(
+services/shared/canonical_event.py:817:        from_entity_reference=kdes.get("ship_from_entity") or kdes.get("harvester_business_name"),
+services/shared/canonical_event.py:818:        to_entity_reference=kdes.get("ship_to_entity") or kdes.get("immediate_previous_source"),
+services/shared/canonical_event.py:819:        transport_reference=kdes.get("carrier") or kdes.get("transport_reference"),
+services/shared/canonical_event.py:820:        kdes=kdes,
+services/shared/canonical_event.py:825:    return canonical.prepare_for_persistence()
+services/shared/canonical_event.py:922:    Callers that need a definitive numeric quantity (the canonical
+services/shared/canonical_event.py:929:            "EPCIS event has no numeric quantity — cannot emit canonical "
+services/shared/canonical_event.py:937:    """Raised when an EPCIS ``bizStep`` has no canonical CTE mapping.
+services/shared/canonical_event.py:946:# #2815 — EPCIS bizStep -> canonical CTEType
+services/shared/canonical_event.py:953:# (``epcis/persistence.py`` writes the legacy ``fsma.cte_events`` row from
+services/shared/canonical_event.py:954:# ``_normalize_epcis_to_cte`` and the canonical ``fsma.traceability_events``
+services/shared/canonical_event.py:955:# row from ``normalize_epcis_event``). Until #2815 the canonical side used a
+services/shared/canonical_event.py:958:# landing in the canonical table (the table FDA exports read) as
+services/shared/canonical_event.py:968:# ``_EVENT_TYPE_MAP`` directly. It cannot: ``shared.canonical_event`` is
+services/shared/canonical_event.py:973:# module 'shared.canonical_event'". ``shared`` is also imported by admin /
+services/shared/canonical_event.py:975:# DIFFERENT service entirely. So the canonical map is defined HERE (the
+services/shared/canonical_event.py:982:# ``None`` values mean "recognized bizStep, but no canonical CTEType": FSMA
+services/shared/canonical_event.py:986:# (V043__canonical_traceability_events.sql). Those raise rather than get
+services/shared/canonical_event.py:996:    "urn:epcglobal:cbv:bizstep:planting": None,  # "growing" -- not a canonical CTE
+services/shared/canonical_event.py:1000:    "urn:fsma:traceability:growing": None,  # not a canonical CTE
+services/shared/canonical_event.py:1012:    """Resolve an EPCIS ``bizStep`` to a canonical :class:`CTEType`.
+services/shared/canonical_event.py:1021:      3. A bare canonical CTE token, e.g. ``"shipping"`` -- the
+services/shared/canonical_event.py:1046:                "rejected by the canonical traceability_events event_type "
+services/shared/canonical_event.py:1048:                "persisting it as a neighbouring CTE. (#2815)"
+services/shared/canonical_event.py:1052:    # Bare canonical CTE token ("shipping", "receiving", ...).
+services/shared/canonical_event.py:1061:        f"({', '.join(sorted(BIZSTEP_TO_CTE_TYPE))}) or a bare canonical CTE type "
+services/shared/canonical_event.py:1189:    Normalize an EPCIS 2.0 event dict into a canonical TraceabilityEvent.
+services/shared/canonical_event.py:1191:    Maps EPCIS vocabulary (bizStep, readPoint, bizLocation) to canonical fields.
+services/shared/canonical_event.py:1201:        updated canonical constraint).
+services/shared/canonical_event.py:1228:        # identifier the partner sent. The canonical model requires three
+services/shared/canonical_event.py:1237:    kdes: Dict[str, Any] = {}
+services/shared/canonical_event.py:1239:        kdes["gtin"] = gtin
+services/shared/canonical_event.py:1243:        kdes[k] = v
+services/shared/canonical_event.py:1247:    # inputEPCList. Feeds fsma.transformation_links via kdes.inputs and the
+services/shared/canonical_event.py:1248:    # lot-linkage rule via kdes.input_lot_codes.
+services/shared/canonical_event.py:1252:            kdes["inputs"] = inputs
+services/shared/canonical_event.py:1253:            kdes.setdefault("input_lot_codes", [entry["traceability_lot_code"] for entry in inputs])
+services/shared/canonical_event.py:1262:    canonical = TraceabilityEvent(
+services/shared/canonical_event.py:1270:        product_reference=epcis_data.get("productDescription", kdes.get("gtin", "")),
+services/shared/canonical_event.py:1275:        # than silently producing a 1.0-quantity canonical row.
+services/shared/canonical_event.py:1284:        kdes=kdes,
+services/shared/canonical_event.py:1292:    return canonical.prepare_for_persistence()
+services/shared/canonical_event.py:1298:    The canonical normalizer never invents a value for a missing field. A
+services/shared/canonical_event.py:1345:    Normalize a CSV/XLSX row dict into a canonical TraceabilityEvent.
+services/shared/canonical_event.py:1347:    column_mapping maps source column names to canonical field names.
+services/shared/canonical_event.py:1348:    Unmapped columns are stored in kdes.
+services/shared/canonical_event.py:1359:    kdes: Dict[str, Any] = {}
+services/shared/canonical_event.py:1366:                kdes[src_col] = value
+services/shared/canonical_event.py:1434:    canonical = TraceabilityEvent(
+services/shared/canonical_event.py:1453:        kdes=kdes,
+services/shared/canonical_event.py:1459:    return canonical.prepare_for_persistence()
+services/ingestion/app/webhook_compat.py:5:canonical auth path for every RegEngine service.
+services/ingestion/app/webhook_compat.py:14:using the same internal helpers and persistence layer.
+services/ingestion/app/webhook_compat.py:36:    _validate_event_kdes,
+services/ingestion/app/webhook_compat.py:97:    from shared.canonical_event import IngestionSource
+services/ingestion/app/webhook_compat.py:114:    from shared.canonical_event import IngestionRun
+services/ingestion/app/webhook_compat.py:115:    from shared.canonical_persistence import CanonicalEventStore
+services/ingestion/app/webhook_compat.py:165:    from shared.canonical_persistence import CanonicalEventStore
+services/ingestion/app/webhook_compat.py:172:                    "stage": "persist",
+services/ingestion/app/webhook_compat.py:186:async def ingest_events(
+services/ingestion/app/webhook_compat.py:209:    on every canonical event, and closes the run with counts covering every
+services/ingestion/app/webhook_compat.py:240:        from shared.cte_persistence import CTEPersistence
+services/ingestion/app/webhook_compat.py:242:        persistence = CTEPersistence(db_session)
+services/ingestion/app/webhook_compat.py:276:            errors = _validate_event_kdes(event)
+services/ingestion/app/webhook_compat.py:292:            # event (storage, canonical write, or rule evaluation)
+services/ingestion/app/webhook_compat.py:296:                store_result = persistence.store_event(
+services/ingestion/app/webhook_compat.py:307:                    kdes=event.kdes,
+services/ingestion/app/webhook_compat.py:321:                    from shared.canonical_event import normalize_webhook_event
+services/ingestion/app/webhook_compat.py:322:                    from shared.canonical_persistence import CanonicalEventStore
+services/ingestion/app/webhook_compat.py:324:                    canonical = normalize_webhook_event(event, tenant_id, ingestion_run_id=run_id)
+services/ingestion/app/webhook_compat.py:325:                    canonical_store = CanonicalEventStore(db_session, dual_write=False)
+services/ingestion/app/webhook_compat.py:326:                    canonical_store.persist_event(canonical)
+services/ingestion/app/webhook_compat.py:331:                        "event_id": str(canonical.event_id),
+services/ingestion/app/webhook_compat.py:332:                        "event_type": canonical.event_type.value,
+services/ingestion/app/webhook_compat.py:333:                        "traceability_lot_code": canonical.traceability_lot_code,
+services/ingestion/app/webhook_compat.py:334:                        "product_reference": canonical.product_reference,
+services/ingestion/app/webhook_compat.py:335:                        "quantity": canonical.quantity,
+services/ingestion/app/webhook_compat.py:336:                        "unit_of_measure": canonical.unit_of_measure,
+services/ingestion/app/webhook_compat.py:337:                        "from_facility_reference": canonical.from_facility_reference,
+services/ingestion/app/webhook_compat.py:338:                        "to_facility_reference": canonical.to_facility_reference,
+services/ingestion/app/webhook_compat.py:339:                        "from_entity_reference": canonical.from_entity_reference,
+services/ingestion/app/webhook_compat.py:340:                        "to_entity_reference": canonical.to_entity_reference,
+services/ingestion/app/webhook_compat.py:341:                        "kdes": canonical.kdes,
+services/ingestion/app/webhook_compat.py:343:                    summary = engine.evaluate_event(event_data, persist=True, tenant_id=tenant_id)
+services/ingestion/app/webhook_compat.py:349:                    # a canonical/rules crash must not silently accept.
+services/ingestion/app/webhook_compat.py:356:                    logger.warning("compat_canonical_write_skipped: %s", str(canon_err))
+services/ingestion/app/webhook_compat.py:360:                # savepoint (undoes primary CTE + committed canonical +
+services/ingestion/app/webhook_compat.py:361:                # persisted eval rows) and emit a rejected result.
+services/ingestion/app/webhook_compat.py:362:                # Summary=None (canonical/rules skipped) never rejects —
+services/ingestion/app/webhook_compat.py:384:                            # above committed, so ``canonical`` is bound.
+services/ingestion/app/webhook_compat.py:387:                                _canon_event_id = str(canonical.event_id)
+services/ingestion/app/webhook_compat.py:434:                # unwind the accepted CTE persist.
+services/ingestion/app/webhook_compat.py:453:                    "compat_persistence_failed correlation_id=%s error_type=%s error=%s",

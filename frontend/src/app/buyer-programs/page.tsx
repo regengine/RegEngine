@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
 import { ArrowRight, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
@@ -50,10 +51,10 @@ export default function BuyerProgramsPage() {
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild size="lg">
-            <Link href="/contact" className="no-underline">
+            <BookCallLink href="/contact" placement="buyer_programs" className="no-underline">
               Book a 30-min call
               <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
+            </BookCallLink>
           </Button>
           <Button asChild variant="secondary" size="lg">
             <Link href="/verify" className="no-underline">
@@ -191,12 +192,13 @@ export default function BuyerProgramsPage() {
       <section className="border-t border-re-border-subtle bg-re-surface-inset">
         <Container width="tool" className="py-10 text-center sm:py-14">
           <div className="flex flex-wrap justify-center gap-x-6 gap-y-3">
-            <Link
+            <BookCallLink
               href="/contact"
+              placement="buyer_programs"
               className="inline-flex items-center gap-1.5 text-ui text-re-brand underline underline-offset-[3px] decoration-re-border-strong transition-colors duration-120 hover:decoration-re-brand motion-reduce:transition-none"
             >
               Book a 30-min call <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
+            </BookCallLink>
             <Link
               href="/verify"
               className="inline-flex items-center gap-1.5 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"

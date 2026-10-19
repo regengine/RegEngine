@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Non-interactive bootstrap for Claude Code sessions.
-# Idempotent: safe to run on every SessionStart (startup / resume / clear).
+# Non-interactive bootstrap for Claude Code on the web sessions, whose
+# containers start without dependencies. Runs on every SessionStart
+# (startup / resume / clear). Local sessions skip it: see the guard below.
 # For interactive local onboarding, use scripts/setup_dev.sh instead.
 
 set -euo pipefail
@@ -13,6 +14,16 @@ set -euo pipefail
 # never needs dependencies installed, so bail out early.
 if [ -n "${GITHUB_ACTIONS:-}" ] || [ "${REGENGINE_SKIP_SESSION_BOOTSTRAP:-0}" = "1" ]; then
     echo "==> RegEngine session bootstrap skipped (CI / REGENGINE_SKIP_SESSION_BOOTSTRAP=1)"
+    exit 0
+fi
+
+# Local guard: Claude Code sets CLAUDE_CODE_REMOTE=true only in web (cloud)
+# sessions. On a developer machine this hook would rerun `npm ci`, which
+# deletes frontend/node_modules (and breaks a running `next dev`), on every
+# session start, resume and /clear in every worktree. Set up once with
+# scripts/setup_dev.sh, or opt in with REGENGINE_LOCAL_SESSION_BOOTSTRAP=1.
+if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ "${REGENGINE_LOCAL_SESSION_BOOTSTRAP:-0}" != "1" ]; then
+    echo "==> RegEngine session bootstrap skipped (local session; run scripts/setup_dev.sh once, or set REGENGINE_LOCAL_SESSION_BOOTSTRAP=1)"
     exit 0
 fi
 
@@ -37,10 +48,10 @@ pip install --quiet --require-hashes -r requirements.lock
 # --- Frontend ---
 if [ -d "frontend" ] && [ -f "frontend/package-lock.json" ]; then
     echo "  [web] installing frontend node_modules"
-    if ! (cd frontend && npm ci --no-audit --no-fund --silent); then
-        echo "  [web] npm ci failed (lockfile drift?); falling back to npm install"
-        (cd frontend && npm install --no-audit --no-fund --silent)
-    fi
+    # No fallback from locked (npm ci) to unlocked (npm install): an
+    # unlocked install can pull dependency versions nobody reviewed.
+    # Fail loudly so lockfile drift gets fixed instead of papered over.
+    (cd frontend && npm ci --no-audit --no-fund --silent)
 fi
 
 # --- .env scaffold ---

@@ -36,6 +36,7 @@ import {
     type ColumnSuggestion,
 } from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
+import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -157,12 +158,14 @@ export function DataImportClient() {
     // mounted and clickable for a moment after a click: state alone cannot stop
     // a second click from storing the same file twice.
     const uploadInFlightRef = useRef(false);
+    const sampleInFlightRef = useRef(false);
 
     // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
     // confirming the CTE Jev suggested for a file the server rejected.
     const handleUpload = useCallback(async (cteType?: string) => {
         if (!selectedFile || uploadInFlightRef.current) return;
         uploadInFlightRef.current = true;
+        trackToolRunStarted('data-import');
         setUploadState('uploading');
         setUploadResult(null);
         try {
@@ -170,6 +173,7 @@ export function DataImportClient() {
             const result = await apiClient.ingestFile(effectiveKey, selectedFile, 'data_import_hub', cteType);
             setUploadResult({ data: result });
             setUploadState(result.accepted === 0 ? 'error' : result.rejected > 0 ? 'partial' : 'success');
+            trackToolRunCompleted('data-import', result.accepted === 0 ? 'error' : 'success');
         } catch (err: unknown) {
             setUploadResult({
                 error: err instanceof Error ? err.message : 'Upload failed',
@@ -178,6 +182,7 @@ export function DataImportClient() {
                 columnSuggestions: columnSuggestionsFromUploadError(err),
             });
             setUploadState('error');
+            trackToolRunCompleted('data-import', 'error');
         } finally {
             uploadInFlightRef.current = false;
         }
@@ -191,6 +196,9 @@ export function DataImportClient() {
     }, [handleFileChange]);
 
     const handleLoadSample = useCallback(async () => {
+        if (sampleInFlightRef.current) return;
+        sampleInFlightRef.current = true;
+        trackToolRunStarted('data-import');
         setSampleState('running');
         setSampleSteps([]);
 
@@ -227,7 +235,7 @@ export function DataImportClient() {
             // Show individual step results
             for (const evt of SAMPLE_EVENTS) {
                 addStep(
-                    `${evt.event_type} — ${evt.location_identifier.split(',')[0]}`,
+                    `${evt.event_type}: ${evt.location_identifier.split(',')[0]}`,
                     true,
                     `TLC ${evt.tlc} · ${evt.event_date}${evt.quantity ? ` · ${evt.quantity} ${evt.uom}` : ''}`,
                 );
@@ -240,11 +248,15 @@ export function DataImportClient() {
             );
 
             setSampleState(result.accepted > 0 ? 'done' : 'error');
+            trackToolRunCompleted('data-import', result.accepted > 0 ? 'success' : 'error');
         } catch (err: unknown) {
             const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
             const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Webhook ingest failed';
             addStep('Batch ingest', false, msg);
             setSampleState('error');
+            trackToolRunCompleted('data-import', 'error');
+        } finally {
+            sampleInFlightRef.current = false;
         }
     }, [apiKey]);
 
@@ -257,7 +269,7 @@ export function DataImportClient() {
     return (
         <FreeToolPageShell
             title="Data Import Hub"
-            subtitle="Get your traceability data into RegEngine — upload CSV, import IoT logs, or connect via API."
+            subtitle="Get your traceability data into RegEngine. Upload CSV, import IoT logs, or connect via API."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <LeadGate
@@ -269,7 +281,7 @@ export function DataImportClient() {
                     <Card padding="spacious" className="text-center">
                         <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                         <p className="text-subheading text-re-text-primary">Three Ways to Import</p>
-                        <p className="mt-2 text-ui text-re-text-secondary">CSV Upload with templates for every CTE type, IoT Sensitech TempTale import, and a full REST webhook API.</p>
+                        <p className="mt-2 text-ui text-re-text-secondary">CSV Upload with templates for every Critical Tracking Event (CTE) type, IoT Sensitech TempTale import, and a full REST webhook API.</p>
                     </Card>
                 }
             >
@@ -369,7 +381,7 @@ export function DataImportClient() {
                                             <CheckCircle2 className="mx-auto mb-4 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                             <div className="mb-1 text-ui font-medium text-re-text-primary">{selectedFile.name}</div>
                                             <div className="text-small text-re-text-tertiary">
-                                                {(selectedFile.size / 1024).toFixed(1)} KB — click to change
+                                                {(selectedFile.size / 1024).toFixed(1)} KB. Click to change
                                             </div>
                                         </>
                                     ) : (
@@ -465,7 +477,7 @@ export function DataImportClient() {
                                         <div>
                                             <CardTitle>Load Sample Dataset</CardTitle>
                                             <CardDescription>
-                                                Push a synthetic Romaine Lettuce supply chain (TLC1001) through the full pipeline — 9 CTE events from farm to retailer.
+                                                Push a synthetic Romaine Lettuce supply chain (TLC1001) through the full pipeline with 9 CTE events from farm to retailer.
                                             </CardDescription>
                                         </div>
                                     </div>
@@ -508,7 +520,7 @@ export function DataImportClient() {
                                                 animate={{ opacity: 1 }}
                                                 className="pt-2 text-center text-small text-re-text-tertiary"
                                             >
-                                                Dataset loaded — run a recall drill from the Mock Audit Drill tool to trace TLC1001.
+                                                Dataset loaded. Run a recall drill from the Mock Audit Drill tool to trace TLC1001.
                                             </motion.div>
                                         )}
                                     </div>
@@ -568,7 +580,7 @@ export function DataImportClient() {
                                         Upload Sensitech TempTale CSV
                                     </div>
                                     <div className="break-words font-mono text-[0.8125rem] text-re-text-tertiary">
-                                        POST /api/v1/ingest/iot/sensitech — available now via API
+                                        POST /api/v1/ingest/iot/sensitech. Available now via API
                                     </div>
                                     <div className="mt-4">
                                         <Badge tone="neutral" size="sm" mono>
@@ -634,7 +646,7 @@ export function DataImportClient() {
                                                 <li key={cte.id} className="flex flex-wrap items-center gap-2 text-small text-re-text-secondary">
                                                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                                     <code className="font-mono text-re-text-primary">{cte.id}</code>
-                                                    <span className="text-re-text-tertiary">— {cte.description}</span>
+                                                    <span className="text-re-text-tertiary">{cte.description}</span>
                                                 </li>
                                             ))}
                                         </ul>
@@ -643,7 +655,7 @@ export function DataImportClient() {
                                         <h4 className="mb-3 text-subheading text-re-text-primary">What Happens on Ingest</h4>
                                         <ul className="space-y-2">
                                             {[
-                                                'KDE validation per CTE type (§1.1325–§1.1350)',
+                                                'Key Data Element (KDE) validation per CTE type (§1.1325 to §1.1350)',
                                                 'SHA-256 hash computed for each event',
                                                 'Hash chained to previous event (audit trail)',
                                                 'Response includes event_id + chain_hash',

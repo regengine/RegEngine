@@ -176,7 +176,7 @@ class IngestEvent(BaseModel):
     cte_type: WebhookCTEType = Field(..., description="Critical Tracking Event type")
     traceability_lot_code: str = Field(..., description="Traceability Lot Code (TLC)", min_length=3)
     product_description: str = Field(..., description="Human-readable product name", min_length=1, max_length=500)
-    quantity: float = Field(..., description="Numeric quantity", gt=0)
+    quantity: float = Field(..., description="Numeric quantity", gt=0, allow_inf_nan=False)
     unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets, etc.)")
     location_gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
     location_name: Optional[str] = Field(None, description="Human-readable location name")
@@ -201,6 +201,13 @@ class IngestEvent(BaseModel):
             dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
             raise ValueError(f"Invalid ISO 8601 timestamp: {v}")
+
+        if dt.tzinfo is None:
+            # Naive timestamps are assumed UTC, mirroring the ingest
+            # replay-window check (webhook_router_v2/security.py). Without
+            # this the aware/naive comparison below raises a bare TypeError
+            # (HTTP 500) instead of a 422 validation error.
+            dt = dt.replace(tzinfo=timezone.utc)
 
         now = datetime.now(timezone.utc)
         # Allow historical events for FSMA 204 §1.1455(d) 2-year retention backfill.

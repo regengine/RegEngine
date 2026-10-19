@@ -6,6 +6,7 @@ import { Lock } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 import type { GS1ParsedData } from '@/lib/gs1-parser';
 import styles from './scan.module.css';
 
@@ -23,11 +24,25 @@ export default function ScanPage() {
 
   const scannerRef = useRef<HTMLDivElement>(null);
   const qrCodeRef = useRef<any>(null);
+  const cameraRunPending = useRef(false);
+  const lastCameraBarcode = useRef<string | null>(null);
 
-  const handleParse = (barcode: string): void => {
+  const handleParse = (barcode: string, fromCamera = false): void => {
     if (!barcode.trim()) return;
+    if (fromCamera && lastCameraBarcode.current === barcode) return;
 
-    const result = parseGS1(barcode);
+    if (!fromCamera || !cameraRunPending.current) trackToolRunStarted('scan');
+    if (fromCamera) {
+      cameraRunPending.current = false;
+      lastCameraBarcode.current = barcode;
+    }
+    let result: GS1ParsedData;
+    try {
+      result = parseGS1(barcode);
+    } catch (error) {
+      trackToolRunCompleted('scan', 'error');
+      throw error;
+    }
     setParsed(result);
     setRawBarcode(barcode);
     setManualInput('');
@@ -37,11 +52,15 @@ export default function ScanPage() {
       const updated = [barcode, ...prev].slice(0, 5);
       return updated;
     });
+    trackToolRunCompleted('scan', 'success');
   };
 
   const startCamera = async (): Promise<void> => {
     if (!scannerRef.current) return;
 
+    trackToolRunStarted('scan');
+    cameraRunPending.current = true;
+    lastCameraBarcode.current = null;
     try {
       setCameraError(null);
       const { Html5Qrcode } = await import('html5-qrcode');
@@ -53,7 +72,7 @@ export default function ScanPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText: string) => {
-          handleParse(decodedText);
+          handleParse(decodedText, true);
         },
         () => {}
       );
@@ -64,6 +83,8 @@ export default function ScanPage() {
         err instanceof Error ? err.message : 'Camera access denied or unavailable';
       setCameraError(errorMsg);
       setIsScanning(false);
+      if (cameraRunPending.current) trackToolRunCompleted('scan', 'error');
+      cameraRunPending.current = false;
     }
   };
 
@@ -78,6 +99,7 @@ export default function ScanPage() {
       qrCodeRef.current = null;
     }
     setIsScanning(false);
+    cameraRunPending.current = false;
   };
 
   useEffect(() => {
@@ -224,7 +246,7 @@ export default function ScanPage() {
                     isCompatible ? styles.badgeSuccess : styles.badgeError
                   }`}
                 >
-                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete KDE set'}
+                  {isCompatible ? '✓ Likely FSMA-relevant fields detected' : '✗ Insufficient FSMA fields for a complete Key Data Element (KDE) set'}
                 </span>
               </div>
 
@@ -285,7 +307,7 @@ export default function ScanPage() {
               {/* CTE Form Preview */}
               <div className={styles.section}>
                 <h3 className={styles.sectionTitle}>
-                  Auto-filled CTE Form Preview
+                  Auto-filled Critical Tracking Event (CTE) Form Preview
                 </h3>
 
                 <div className={styles.formGroup}>
@@ -299,13 +321,13 @@ export default function ScanPage() {
                     <option>Harvesting (§1.1325)</option>
                     <option>Cooling (§1.1325)</option>
                     <option>Initial Packing (§1.1330)</option>
-                    <option>First Land-Based Receiving — Seafood (§1.1335)</option>
+                    <option>First Land-Based Receiving for seafood (§1.1335)</option>
                     <option>Shipping (§1.1340)</option>
                     <option>Receiving (§1.1345)</option>
                     <option>Transformation (§1.1350)</option>
                   </select>
                   <p className="mt-1 text-label text-re-text-tertiary">
-                    Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments — confirm your role first.
+                    Selecting Receiving? §1.1305(j) may exempt restaurants and retail food establishments. Confirm your role first.
                   </p>
                 </div>
 

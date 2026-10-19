@@ -1,0 +1,49 @@
+UTC: 2026-10-03T03:35:53.291751+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; from collections import Counter; import json; root=Path("docs/qa/2026-10-02/artifacts/fix"); before=root/"20261003T031410.637052Z-backend_full_baseline.txt"; after=root/"20261003T032657.821224Z-backend_full_after.txt";
+def entries(path):
+ result={}
+ for line in path.read_text().splitlines():
+  if line.startswith(("FAILED ","ERROR ")):
+   head,_,detail=line.partition(" - "); outcome,node=head.split(" ",1); result[node]={"outcome":outcome,"detail":detail}
+ return result
+b=entries(before); a=entries(after); added=sorted(a.keys()-b.keys()); removed=sorted(b.keys()-a.keys()); changed=sorted(n for n in a.keys() & b.keys() if a[n]["outcome"]!=b[n]["outcome"]); print("before_bad_identities",len(b),"after_bad_identities",len(a),"new",len(added),"absent_after",len(removed),"status_changed",len(changed)); print("NEW FAILURES AND ERRORS");
+for n in added: print(a[n]["outcome"],n,"-",a[n]["detail"])
+print("STATUS CHANGES");
+for n in changed: print(n,b[n]["outcome"],"->",a[n]["outcome"],a[n]["detail"])
+print("NEW IDENTITY MODULE COUNTS",Counter(n.split("::")[0] for n in added)); print("AFTER GUARD COUNTS",Counter(label for v in a.values() for label in ["database connection","socket.getaddrinfo","subprocess.Popen","credential/environment file access"] if "QA safety guard denied "+label in v["detail"])); out={"before_log":str(before),"after_log":str(after),"before_bad_identities":b,"after_bad_identities":a,"new_bad_nodeids":added,"absent_after_nodeids":removed,"changed_bad_outcome_nodeids":changed}; (root/"backend-failure-identities.json").write_text(json.dumps(out,indent=2)+"\n")'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+before_bad_identities 726 after_bad_identities 595 new 15 absent_after 146 status_changed 11
+NEW FAILURES AND ERRORS
+ERROR services/compliance/tests/test_tenant_isolation.py::test_compliance_result_not_visible_across_tenants[0352900b-e48c-4806-9b14-fac05344fcb9-be3f00a6-e912-4442-a558-df041863aa05] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation.py::test_multiple_tenants_same_regulation_are_separate[0352900b-e48c-4806-9b14-fac05344fcb9-be3f00a6-e912-4442-a558-df041863aa05] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation.py::test_tenant_a_can_read_own_results[0352900b-e48c-4806-9b14-fac05344fcb9-be3f00a6-e912-4442-a558-df041863aa05] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation_1130.py::test_compliance_record_invisible_to_other_tenant[c2b4330a-5a50-4dc2-8fca-b82a26957e40-44f3615e-0239-40b3-b24a-271028bba7d6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation_1130.py::test_compliance_record_visible_to_owner[c2b4330a-5a50-4dc2-8fca-b82a26957e40-44f3615e-0239-40b3-b24a-271028bba7d6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation_1130.py::test_nlp_extraction_invisible_to_other_tenant[c2b4330a-5a50-4dc2-8fca-b82a26957e40-44f3615e-0239-40b3-b24a-271028bba7d6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/compliance/tests/test_tenant_isolation_1130.py::test_same_regulation_both_tenants_isolated[c2b4330a-5a50-4dc2-8fca-b82a26957e40-44f3615e-0239-40b3-b24a-271028bba7d6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/ingestion/tests/test_jev_ask_script.py::test_missing_package_says_how_to_run_it - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/ingestion/tests/test_jev_header_preview_script.py::test_connection_failure_logs_to_stderr_and_exits_3 - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/ingestion/tests/test_jev_header_preview_script.py::test_script_runs_from_repo_root_without_pythonpath - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+FAILED services/ingestion/tests/test_jev_header_preview_script.py::test_unexpected_error_never_prints_the_key_and_keeps_stdout_json - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+ERROR services/nlp/tests/test_tenant_isolation.py::test_extraction_not_visible_across_tenants[44a9a995-0cf8-47a9-bbfc-c24b7303c17e-1d453f37-b7da-44fe-8d4b-f6cfc36139b6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/nlp/tests/test_tenant_isolation.py::test_same_document_id_different_tenants_are_separate[44a9a995-0cf8-47a9-bbfc-c24b7303c17e-1d453f37-b7da-44fe-8d4b-f6cfc36139b6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+ERROR services/nlp/tests/test_tenant_isolation.py::test_tenant_a_can_see_own_extractions[44a9a995-0cf8-47a9-bbfc-c24b7303c17e-1d453f37-b7da-44fe-8d4b-f6cfc36139b6] - RuntimeError: QA safety guard denied database connection; use an in-process mock
+FAILED services/shared/tests/test_jev_client.py::test_state_never_reaches_regengine_logs - AssertionError: assert 'jev.answered' in set()
+STATUS CHANGES
+tests/data_integrity/test_fsma_204_verification_phase2b.py::TestIngestionPipelineContract::test_job_status_is_tenant_scoped ERROR -> FAILED RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+tests/data_integrity/test_fsma_204_verification_phase2b.py::TestIngestionPipelineContract::test_unknown_job_status_is_not_found ERROR -> FAILED AssertionError: Unknown job id must read as 404, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+tests/ingestion/test_ingest_url.py::TestIngestUrlEndpoint::test_ingest_url_rejects_private_ip_addresses ERROR -> FAILED RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+tests/ingestion/test_ingest_url.py::TestIngestUrlEndpoint::test_ingest_url_validates_source_system_required ERROR -> FAILED RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+tests/security/test_route_security_manifest.py::test_checked_in_manifest_matches_live_route_and_dependency_graph ERROR -> FAILED AssertionError: assert {'always_moun...n', ...], ...} == {'always_moun...n', ...], ...}
+tests/security/test_route_security_manifest.py::test_every_omitted_router_path_returns_exact_404 ERROR -> FAILED AssertionError: assert 179 == 180
+tests/security/test_security_audit_fixes.py::TestInputValidationAndSanitization::test_malicious_path_segments_handled_safely[%2500%250a%250d] ERROR -> FAILED AssertionError: Expected 404 for malicious path segment, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+tests/security/test_security_audit_fixes.py::TestK8sAuthBypassGuard::test_bypass_token_authenticates_in_test_env ERROR -> FAILED AssertionError: Bypass token should authenticate in test env, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job' UNION SELECT * FROM secret_data; --] ERROR -> FAILED AssertionError: Expected 404 for malicious job id, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job'; DROP TABLE events; --] ERROR -> FAILED AssertionError: Expected 404 for malicious job id, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+tests/security/test_security_audit_fixes.py::TestSQLInjectionPrevention::test_malicious_job_id_path_param_is_handled_safely[job` OR `1`=`1] ERROR -> FAILED AssertionError: Expected 404 for malicious job id, got 500: {"error":{"type":"internal_error","message":"An internal error occurred"}}
+NEW IDENTITY MODULE COUNTS Counter({'services/compliance/tests/test_tenant_isolation_1130.py': 4, 'services/compliance/tests/test_tenant_isolation.py': 3, 'services/ingestion/tests/test_jev_header_preview_script.py': 3, 'services/nlp/tests/test_tenant_isolation.py': 3, 'services/ingestion/tests/test_jev_ask_script.py': 1, 'services/shared/tests/test_jev_client.py': 1})
+AFTER GUARD COUNTS Counter({'database connection': 354, 'subprocess.Popen': 117, 'socket.getaddrinfo': 66, 'credential/environment file access': 6})

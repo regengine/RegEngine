@@ -122,7 +122,7 @@ async def compliance_metrics(
             )) / 3600.0 AS median_hours
             FROM fsma.response_packages rp
             JOIN fsma.request_cases rc ON rc.request_case_id = rp.request_case_id
-            WHERE rc.tenant_id = :tid AND rp.version_number = 1
+            WHERE rc.tenant_id = :tid AND rp.tenant_id = :tid AND rp.version_number = 1
         """),
         {"tid": tid},
     ).scalar()

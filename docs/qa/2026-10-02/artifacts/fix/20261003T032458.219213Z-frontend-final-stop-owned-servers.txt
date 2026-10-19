@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:24:58.219213+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;from http.client import HTTPConnection;import socket,time,json;stop=Path("/private/tmp/regengine-browser-followup-uysbu5wg/stop");stop.write_text("QA fix final validation completed\n");con=HTTPConnection("127.0.0.1",3115,timeout=3);con.request("POST","/__qa_proxy_stop",body=b"");res=con.getresponse();print("proxy_stop_status",res.status);res.read();con.close();time.sleep(1);states={};
+for port in [3114,3115]:
+ s=socket.socket();s.settimeout(1);states[str(port)]=("closed" if s.connect_ex(("127.0.0.1",port)) else "listening");s.close()
+print(json.dumps(states));assert all(v=="closed" for v in states.values());Path("docs/qa/2026-10-02/artifacts/fix/frontend-final-server-cleanup.json").write_text(json.dumps({"stop_file":str(stop),"loopback_ports":states},indent=2)+"\n")'
+Exit: 0
+Duration: 1.06s
+Timeout: False
+
+proxy_stop_status 200
+{"3114": "closed", "3115": "closed"}

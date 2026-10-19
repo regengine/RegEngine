@@ -153,6 +153,9 @@ Rules:
 ## Related
 
 - `scripts/jev_ask.py`: this command.
+- `scripts/jev_lab/`: a local page for asking Jev anything, and a loop in
+  which Claude rewrites the question wording from Jev's misses
+  (`docs/engineering/JEV_LAB.md`).
 - `services/shared/jev/`: the client. Its logs carry only metadata (purpose
   `agent_sidecar`, model, request id, latency), never the state.
 - `docs/engineering/JEV_HEADER_MAPPING.md`: Jev inside CSV ingestion.

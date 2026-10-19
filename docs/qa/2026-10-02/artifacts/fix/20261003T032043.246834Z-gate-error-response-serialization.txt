@@ -1,0 +1,227 @@
+UTC: 2026-10-03T03:20:43.246834+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n -A 55 -B 8 'RequestValidationError|validation_exception|def install_exception' services/shared/error_handling.py
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+10-"""
+11-
+12-from __future__ import annotations
+13-
+14-import os
+15-
+16-import structlog
+17-from fastapi import FastAPI, Request
+18:from fastapi.exceptions import RequestValidationError
+19-from fastapi.responses import JSONResponse
+20-from starlette.exceptions import HTTPException as StarletteHTTPException
+21-
+22-try:
+23-    import sentry_sdk
+24-    from sentry_sdk.integrations.fastapi import FastApiIntegration
+25-    from sentry_sdk.integrations.starlette import StarletteIntegration
+26-
+27-    _HAS_SENTRY = True
+28-except ImportError:
+29-    _HAS_SENTRY = False
+30-
+31-logger = structlog.get_logger("error_handler")
+32-
+33-GENERIC_INTERNAL_ERROR_MESSAGE = "An internal error occurred"
+34-GENERIC_BAD_REQUEST_MESSAGE = "Invalid request"
+35-_CLIENT_SAFE_KEYS = ("client_safe", "safe_for_client")
+36-
+37-
+38-class ClientSafeValueError(ValueError):
+39-    """ValueError whose message is intentionally safe for API clients."""
+40-
+41-    client_safe = True
+42-
+43-
+44-def _is_server_error_status(status_code: int) -> bool:
+45-    return 500 <= status_code <= 599
+46-
+47-
+48-def _is_client_safe_detail(detail: object) -> bool:
+49-    if any(bool(getattr(detail, key, False)) for key in _CLIENT_SAFE_KEYS):
+50-        return True
+51-    if isinstance(detail, dict):
+52-        return any(detail.get(key) is True for key in _CLIENT_SAFE_KEYS)
+53-    return False
+54-
+55-
+56-def _is_client_safe_exception(exc: Exception) -> bool:
+57-    return any(bool(getattr(exc, key, False)) for key in _CLIENT_SAFE_KEYS)
+58-
+59-
+60-def _detail_message(detail: object, fallback: str) -> str:
+61-    if isinstance(detail, dict):
+62-        message = detail.get("message")
+63-        return message if isinstance(message, str) and message else fallback
+64-    if isinstance(detail, str) and detail:
+65-        return detail
+66-    return fallback
+67-
+68-
+69-def _safe_http_error_content(status_code: int, detail: object) -> dict:
+70-    if _is_server_error_status(status_code):
+71-        message = (
+72-            _detail_message(detail, GENERIC_INTERNAL_ERROR_MESSAGE)
+73-            if _is_client_safe_detail(detail)
+--
+81-
+82-
+83-def _normalized_dict_detail(status_code: int, detail: dict) -> dict:
+84-    """Give every client-error envelope a ``type`` and a ``message`` (#2863).
+85-
+86-    ``HTTPException(detail={...})`` used to be forwarded verbatim, so the
+87-    ~70 call sites that pass a dict each defined their own envelope. Three
+88-    incompatible shapes reached clients: ``{"type", "message", "details"}``
+89:    from the RequestValidationError handler, ``{"type", "message"}`` from a
+90-    string detail, and the raw dict from a dict detail — which commonly
+91-    carries ``code`` where the others carry ``type``. A client could not use
+92-    one code path for all errors, and the published spec matched none of them.
+93-
+94-    Every original key is preserved, so callers reading ``code``, ``errors``
+95-    or any bespoke field keep working; this only guarantees that ``type`` and
+96-    ``message`` are also present. ``type`` prefers an explicit ``type``, then
+97-    ``code`` (the common alternative spelling), then ``http_<status>``.
+98-    """
+99-    normalized = {
+100-        "type": _dict_detail_type(status_code, detail),
+101-        "message": _detail_message(detail, f"HTTP {status_code}"),
+102-    }
+103-    # Preserve every original field, including `code`, so existing consumers
+104-    # of the bespoke shapes are unaffected.
+105-    for key, value in detail.items():
+106-        normalized.setdefault(key, value)
+107-    return normalized
+108-
+109-
+110-def _dict_detail_type(status_code: int, detail: dict) -> str:
+111-    for key in ("type", "code"):
+112-        value = detail.get(key)
+113-        if isinstance(value, str) and value:
+114-            return value
+115-    return f"http_{status_code}"
+116-
+117-
+118-def _json_safe(value: object) -> object:
+119-    if isinstance(value, dict):
+120-        return {str(key): _json_safe(item) for key, item in value.items()}
+121-    if isinstance(value, (list, tuple)):
+122-        return [_json_safe(item) for item in value]
+123-    if isinstance(value, (str, int, float, bool)) or value is None:
+124-        return value
+125-    return str(value)
+126-
+127-
+128-def _sentry_before_send(event, hint):
+129-    """Sentry before_send hook — stamp tenant_id / correlation_id on every event.
+130-
+131-    Runs synchronously for every event Sentry is about to transmit. We read
+132-    the current contextvar state (set by CorrelationIdMiddleware +
+133-    TenantContextMiddleware) and attach:
+134-
+135-    * ``tags.tenant_id`` — indexable in Sentry so operators can filter
+136-      errors per tenant.
+137-    * ``tags.correlation_id`` — join key back to structured logs in Datadog
+138-      / Loki.
+139-    * ``tags.request_id`` — joins the Sentry event to a specific HTTP
+140-      request for in-app grep.
+141-
+142-    The hook is tolerant of missing context (background jobs, bootstrap) —
+143-    it returns the event unchanged rather than raising. (#1320)
+144-    """
+--
+242-            path=str(request.url.path),
+243-        )
+244-    return JSONResponse(
+245-        status_code=exc.status_code,
+246-        content={"error": _safe_http_error_content(exc.status_code, exc.detail)},
+247-    )
+248-
+249-
+250:async def _validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+251-    """Handle request validation errors with structured JSON response."""
+252-    return JSONResponse(
+253-        status_code=422,
+254-        content={
+255-            "error": {
+256-                "type": "validation_error",
+257-                "message": "Request validation failed",
+258-                "details": _json_safe(exc.errors()),
+259-            }
+260-        },
+261-    )
+262-
+263-
+264-async def _value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+265-    """Handle ValueError as a 400 Bad Request."""
+266-    logger.warning("value_error", detail=str(exc), path=str(request.url.path))
+267-    message = str(exc) if _is_client_safe_exception(exc) else GENERIC_BAD_REQUEST_MESSAGE
+268-    return JSONResponse(
+269-        status_code=400,
+270-        content={"error": {"type": "bad_request", "message": message}},
+271-    )
+272-
+273-
+274-async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+275-    """Catch-all handler for unhandled exceptions.
+276-
+277-    Includes ``correlation_id`` and ``request_id`` in the JSON error body so
+278-    users can quote an identifier when they report the error and support
+279-    can join it back to logs / Sentry events (#1320).
+280-    """
+281-    logger.exception("Unhandled exception")
+282-
+283-    error_body: dict = {
+284-        "type": "internal_error",
+285-        "message": GENERIC_INTERNAL_ERROR_MESSAGE,
+286-    }
+287-
+288-    # Best-effort: include correlation + request IDs so users can reference
+289-    # them in support tickets. Reads the contextvars (not request.state) so
+290-    # it still works if the crash happens before middleware seeds state.
+291-    try:
+292-        from shared.observability.correlation import get_correlation_id
+293-
+294-        cid = get_correlation_id()
+295-        if cid:
+296-            error_body["correlation_id"] = cid
+297-    except Exception:
+298-        pass
+299-
+300-    try:
+301-        from structlog.contextvars import get_contextvars
+302-
+303-        ctx = get_contextvars()
+304-        rid = ctx.get("request_id")
+305-        if rid:
+--
+308-        pass
+309-
+310-    return JSONResponse(
+311-        status_code=500,
+312-        content={"error": error_body},
+313-    )
+314-
+315-
+316:def install_exception_handlers(app: FastAPI) -> None:
+317-    """
+318-    Install global exception handlers on a FastAPI application.
+319-
+320-    Registers handlers for:
+321-    - StarletteHTTPException → structured JSON with {error: {type, message}}
+322:    - RequestValidationError → 422 with {error: {type, message, details}}
+323-    - ValueError → 400 with {error: {type, message}}
+324-    - Exception (catch-all) → 500 with {error: {type, message}}
+325-
+326-    Args:
+327-        app: The FastAPI application instance.
+328-    """
+329-    app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
+330:    app.add_exception_handler(RequestValidationError, _validation_exception_handler)
+331-    app.add_exception_handler(ValueError, _value_error_handler)
+332-    app.add_exception_handler(Exception, _unhandled_exception_handler)

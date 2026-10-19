@@ -1104,6 +1104,8 @@ def export_fda_spreadsheet_v2(
             request_id=identity["request_id"],
             user_agent=identity["user_agent"],
             source_ip=identity["source_ip"],
+            include_pii=include_pii,
+            event_type=event_type,
         )
 
         timestamp = make_timestamp()

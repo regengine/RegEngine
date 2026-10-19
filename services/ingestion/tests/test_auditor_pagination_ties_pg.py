@@ -27,10 +27,13 @@ runs everywhere. This module proves the behaviour against a real cluster:
 it is the test that would have caught the defect without knowing to look
 at the ORDER BY clause.
 
-Runs in ``backend-ci.yml``'s ``ingestion-full-suite`` job against the
-alembic-head ``remediation_test`` database. Skips cleanly when no migrated
-Postgres is reachable, except under ``REGENGINE_REQUIRE_DB=1`` where an
-unreachable database fails rather than turning the gate green (#2530).
+Runs in ``backend-ci.yml``'s ``ingestion-full-suite`` job, in the step
+"Run ingestion live-Postgres tests against alembic head", against the
+alembic-head ``remediation_test`` database with ``REGENGINE_REQUIRE_DB=1``:
+there an unreachable database fails rather than turning the gate green
+(#2530). The job's main xdist step also collects this module, but sets no
+``REMEDIATION_TEST_SUPERUSER_DSN``, so it skips there by design — as it
+does locally when no migrated Postgres is reachable.
 """
 
 from __future__ import annotations
@@ -95,9 +98,7 @@ def _schema_ready(dsn: str) -> bool:
 _DB_READY = _schema_ready(DSN)
 
 if not _DB_READY and os.environ.get("REGENGINE_REQUIRE_DB") == "1":
-    raise RuntimeError(
-        f"REGENGINE_REQUIRE_DB=1 but no migrated Postgres is reachable at {DSN!r} — refusing to skip."
-    )
+    raise RuntimeError(f"REGENGINE_REQUIRE_DB=1 but no migrated Postgres is reachable at {DSN!r} — refusing to skip.")
 
 pytestmark = [
     pytest.mark.integration,
@@ -174,9 +175,7 @@ def _paginate(engine, tenant_id: str) -> list[str]:
         for offset in range(0, TIED_ROWS, PAGE):
             response = client.get(f"/api/v1/audit/events?limit={PAGE}&offset={offset}")
             assert response.status_code == 200, response.text
-            collected.extend(
-                event["traceability_lot_code"] for event in response.json()["events"]
-            )
+            collected.extend(event["traceability_lot_code"] for event in response.json()["events"])
     finally:
         session.close()
     return collected

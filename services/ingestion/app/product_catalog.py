@@ -164,8 +164,8 @@ def _derive_products_from_events(db, tenant_id: str, category: str | None = None
             text(
                 "SELECT product_reference, "
                 "       COUNT(*) AS cte_count, "
-                "       MAX(event_time) AS last_cte, "
-                "       MIN(event_time) AS first_seen, "
+                "       MAX(event_timestamp) AS last_cte, "
+                "       MIN(event_timestamp) AS first_seen, "
                 "       array_agg(DISTINCT traceability_lot_code) "
                 "           FILTER (WHERE traceability_lot_code IS NOT NULL) AS lot_codes "
                 "FROM fsma.traceability_events "

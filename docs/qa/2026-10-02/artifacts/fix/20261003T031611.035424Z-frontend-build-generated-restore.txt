@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:16:11.035424+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; p=Path("frontend/next-env.d.ts"); p.write_bytes(subprocess.check_output(["git","show","HEAD:frontend/next-env.d.ts"])); print("Restored build-generated next-env.d.ts to existing baseline bytes")'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+Restored build-generated next-env.d.ts to existing baseline bytes

@@ -1,0 +1,16 @@
+UTC: 2026-10-03T03:25:15.136244+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-locked-deps:/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_csv_input_quantities.py services/shared/tests/test_error_handling.py --no-cov
+Exit: 0
+Duration: 2.57s
+Timeout: False
+
+.xxx................xxx................................................  [100%]
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xd8\xff\xe0] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[column\nCaf\xe9\n] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error[\xff\xfec\x00o\x00l\x00] - BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500
+65 passed, 6 xfailed in 2.05s

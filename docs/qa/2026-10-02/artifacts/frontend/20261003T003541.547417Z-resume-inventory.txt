@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:35:41.547417+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: pwd
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine

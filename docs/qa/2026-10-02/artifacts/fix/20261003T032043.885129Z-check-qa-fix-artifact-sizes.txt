@@ -1,0 +1,10 @@
+UTC: 2026-10-03T03:20:43.885129+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; root=Path("docs/qa/2026-10-02/artifacts/fix"); files=list(root.rglob("*")); sizes=sorted(((p.stat().st_size,str(p)) for p in files if p.is_file()),reverse=True); print("files",len(sizes),"bytes",sum(x[0] for x in sizes)); print("largest",sizes[:5]); print("Frontend pending edits", __import__("subprocess").check_output(["git","diff","--name-only","--","frontend"],text=True))'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+files 189 bytes 3788712
+largest [(942664, 'docs/qa/2026-10-02/artifacts/fix/20261003T031326.579604Z-protected-scope-search.txt'), (519217, 'docs/qa/2026-10-02/artifacts/fix/frontend-final-vitest.json'), (471001, 'docs/qa/2026-10-02/artifacts/fix/20261003T031719.211824Z-be010-old-stack-baseline.txt'), (450801, 'docs/qa/2026-10-02/artifacts/fix/20261003T031657.653622Z-be010-stack-tests.txt'), (123350, 'docs/qa/2026-10-02/artifacts/fix/20261003T031346.345723Z-frontend-file-inventory.txt')]
+Frontend pending edits

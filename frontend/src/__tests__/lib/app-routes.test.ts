@@ -19,6 +19,8 @@ describe('app route ownership', () => {
         expect(shouldHideMarketingChrome('/reports/abc123')).toBe(true);
         expect(shouldHideMarketingChrome('/settings/security')).toBe(true);
         expect(shouldHideMarketingChrome('/mobile/capture')).toBe(true);
+        expect(shouldHideMarketingChrome('/signup')).toBe(true);
+        expect(shouldHideMarketingChrome('/login')).toBe(true);
     });
 
     it('hides marketing chrome inside the developer portal shell but not on /developers marketing pages', () => {

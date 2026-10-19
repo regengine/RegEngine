@@ -10,7 +10,7 @@ export const metadata: Metadata = {
         canonical: 'https://regengine.co/tools/ask',
     },
     openGraph: {
-        title: 'Traceability Query Engine — RegEngine',
+        title: 'Traceability Query Engine | RegEngine',
         description: 'Ask natural language questions about your supply chain and get FSMA 204-traced answers with cryptographic evidence. Free.',
         type: 'website',
         url: 'https://regengine.co/tools/ask',
@@ -24,12 +24,11 @@ const jsonLd = {
     operatingSystem: 'All',
     applicationCategory: 'BusinessApplication',
     description: 'Natural language query tool for FSMA 204 supply chain traceability data with cryptographic evidence and confidence scores.',
-    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     publisher: { '@type': 'Organization', name: 'RegEngine' },
 };
 
 const relatedTools = [
-    { href: '/tools/knowledge-graph', title: 'Knowledge Graph', description: 'Visually map your FSMA 204 supply chain nodes and identify CTE and KDE coverage gaps.' },
+    { href: '/tools/knowledge-graph', title: 'Knowledge Graph', description: 'Visually map your FSMA 204 supply chain nodes and identify Critical Tracking Event (CTE) and Key Data Element (KDE) coverage gaps.' },
     { href: '/tools/export', title: 'FDA-Oriented Export Generator', description: 'Generate a verifiable records package from your traceability records.' },
     { href: '/tools/ftl-checker', title: 'FTL Checker', description: 'Check which food products in your supply chain are on the FDA Traceability List.' },
 ];

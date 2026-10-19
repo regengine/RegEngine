@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:23:34.372798+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend
+Command: env CI= NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3821/ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3115 node node_modules/playwright/cli.js test --config=/private/tmp/regengine-fix-tour-retry.config.cjs --project=chromium --grep 'guided tours \(desktop\).*dashboard preview: every step' --repeat-each=3 --workers=1
+Exit: 0
+Duration: 21.96s
+Timeout: False
+
+[globalSetup] JWT_SIGNING_KEY (or AUTH_SECRET_KEY) is not set.
+  The Next.js middleware needs this to verify tokens from the admin service.
+  Without it, authenticated routes redirect to /login?error=session_expired.
+  Local run: authenticated specs will be skipped; unauthenticated specs can still run.
+  CI run: add JWT_SIGNING_KEY to GitHub Secrets (must match Railway's value).
+
+Running 3 tests using 1 worker
+
+  ✓  1 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (6.9s)
+  ✓  2 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (6.9s)
+  ✓  3 [chromium] › tests/e2e/inflow-lab-tour.spec.ts:105:17 › guided tours (desktop) › dashboard preview: every step keeps the tooltip on-screen and the spotlight on target (7.0s)
+
+  3 passed (21.7s)

@@ -283,6 +283,108 @@ class TestValidation:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_validate_no_separator_logs_malformed_format(self):
+        """SEL-10: hand-inserted dot-less keys log malformed_key_format, not silent None."""
+        from structlog.testing import capture_logs
+
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        presented = "rge_inflowlab_XXX"
+        with capture_logs() as logs:
+            result = await store.validate_key(presented)
+        assert result is None
+        malformed = [entry for entry in logs if entry.get("event") == "malformed_key_format"]
+        assert len(malformed) == 1
+        assert malformed[0]["log_level"] == "warning"
+        assert malformed[0]["key_prefix"] == presented[:8]
+        assert presented not in repr(malformed[0])
+
+    @pytest.mark.asyncio
+    async def test_validate_naive_past_expiry_rejected_not_raised(self):
+        """A naive expires_at in the past must deny, not raise TypeError.
+
+        Regression: the comparison against an aware now used to raise,
+        which surfaced as a 500 instead of an auth decision. Naive
+        values are treated as UTC, matching APIKeyStore.validate_key.
+        """
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
+
+        raw_key = "rge_naive_past.secretvalue123"
+        key_id = raw_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Naive Past Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1),
+            total_requests=0,
+        )
+        assert model.expires_at.tzinfo is None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_validate_naive_future_expiry_accepted(self):
+        """A naive expires_at in the future must validate, not raise."""
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
+
+        raw_key = "rge_naive_future.secretvalue123"
+        key_id = raw_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Naive Future Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1),
+            total_requests=0,
+        )
+        assert model.expires_at.tzinfo is None
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await store.validate_key(raw_key)
+
+        assert result is not None
+        assert result.key_id == key_id
+
+    @pytest.mark.asyncio
     async def test_runtime_validate_accepts_legacy_hash_without_rewriting_credential(self, monkeypatch):
         """Runtime validation accepts legacy SHA-256 without mutating key material."""
         from shared.api_key_store import (
@@ -333,9 +435,7 @@ class TestValidation:
         assert model.key_hash == legacy_hash_api_key(raw_key)
         assert model.key_hash != hash_api_key(raw_key)
         usage_updates = [
-            call
-            for call in mock_session.execute.call_args_list
-            if call.args and "UPDATE api_keys" in str(call.args[0])
+            call for call in mock_session.execute.call_args_list if call.args and "UPDATE api_keys" in str(call.args[0])
         ]
         assert len(usage_updates) == 1
         assert "key_hash" not in str(usage_updates[0].args[0])
@@ -608,16 +708,109 @@ class TestSecurityFeatures:
         fields = APIKeyResponse.model_fields
         assert "key_hash" not in fields
 
-    def test_constant_time_comparison_used(self):
-        """Validation should use hmac.compare_digest."""
-        import hmac
+    @pytest.mark.asyncio
+    async def test_validate_uses_constant_time_comparison(self):
+        """validate_key must compare hashes with hmac.compare_digest.
 
-        # This is tested by code inspection - the actual function uses hmac.compare_digest
-        # We verify the hash comparison is used by checking it's imported
+        Spies on the real compare_digest (behavior preserved): if the
+        implementation is ever swapped for ``==``, the spy records no
+        calls and this test fails.
+        """
         import shared.api_key_store as module
-        from shared.api_key_store import DatabaseAPIKeyStore
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
 
-        assert hasattr(module, "hmac")
+        raw_key = "rge_ctt_live.real-secret"
+        key_id = raw_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(raw_key),
+            key_prefix=raw_key[:12],
+            name="Timing Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            total_requests=0,
+        )
+
+        def _mock_session_for(model_row):
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none = MagicMock(return_value=model_row)
+            mock_session = AsyncMock()
+            mock_session.execute = AsyncMock(return_value=mock_result)
+            mock_session.flush = AsyncMock()
+            mock_session.commit = AsyncMock()
+            mock_session.rollback = AsyncMock()
+            mock_session.close = AsyncMock()
+            return mock_session
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=_mock_session_for(model))
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with patch.object(module.hmac, "compare_digest", wraps=module.hmac.compare_digest) as spy:
+                result = await store.validate_key(raw_key)
+
+        assert result is not None
+        assert result.key_id == key_id
+        assert spy.call_count >= 1, (
+            "validate_key did not call hmac.compare_digest. Hash comparison is not constant-time"
+        )
+
+    @pytest.mark.asyncio
+    async def test_validate_wrong_secret_fails_constant_time_check(self):
+        """A correct key_id with a wrong secret must not validate.
+
+        Guards the other half of the timing-attack surface: an attacker
+        who learns a key_id must not match the stored hash, and the
+        rejection must still go through hmac.compare_digest.
+        """
+        import shared.api_key_store as module
+        from shared.api_key_store import APIKeyModel, DatabaseAPIKeyStore, hash_api_key
+
+        real_key = "rge_ctt_live.real-secret"
+        forged_key = "rge_ctt_live.forged-secret"
+        key_id = real_key.split(".", 1)[0]
+        model = APIKeyModel(
+            key_id=key_id,
+            key_hash=hash_api_key(real_key),
+            key_prefix=real_key[:12],
+            name="Timing Key",
+            tenant_id="00000000-0000-0000-0000-000000000000",
+            allowed_jurisdictions=["US"],
+            scopes=["read"],
+            rate_limit_per_minute=60,
+            rate_limit_per_hour=1000,
+            rate_limit_per_day=10000,
+            enabled=True,
+            created_at=datetime.now(timezone.utc),
+            total_requests=0,
+        )
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=model)
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.flush = AsyncMock()
+        mock_session.commit = AsyncMock()
+        mock_session.rollback = AsyncMock()
+        mock_session.close = AsyncMock()
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        with patch.object(store, "_session") as mock_ctx:
+            mock_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_ctx.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            with patch.object(module.hmac, "compare_digest", wraps=module.hmac.compare_digest) as spy:
+                result = await store.validate_key(forged_key)
+
+        assert result is None
+        assert spy.call_count >= 1, "rejected key did not go through hmac.compare_digest"
 
 
 class TestAuditFields:

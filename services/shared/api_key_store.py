@@ -24,11 +24,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, AsyncGenerator, ClassVar, Optional, Sequence
 
 # Imported only for annotations — breaks the runtime circular dep with
@@ -116,7 +117,9 @@ def set_api_key_lookup_context(session: Any, raw_key: str) -> tuple[str, tuple[s
     Callers receive the digest tuple for their parameterized lookup; raw key
     material is never placed in a GUC.
     """
-    if not raw_key or not raw_key.startswith("rge_"):
+    # Fail closed on helper misuse: a non-string credential is not a key,
+    # never a 500 from str methods on the wrong type.
+    if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
         return None
     try:
         key_id, secret = raw_key.split(".", 1)
@@ -309,6 +312,24 @@ class APIKeyCreateResponse(APIKeyResponse):
     raw_key: str  # Only included once, at creation time
 
 
+# Longest window ``check_rate_limit`` accepts. The counter key lives for twice the
+# window, so anything above a day is a configuration mistake, and EXPIRE rejects
+# values far beyond it.
+_MAX_RATE_LIMIT_WINDOW_SECONDS = 86_400
+
+# Every per-key quota window, evaluated in order. Each entry pairs the window
+# length in seconds with the ``APIKeyResponse`` attribute holding that window's
+# recorded limit. Historically only the minute window was enforced at request
+# time while the hour and day caps were stored but never checked (Pattern 2:
+# limits recorded but not enforced). ``check_all_rate_limits`` enforces all of
+# them; add new windows here, not at individual call sites.
+_RATE_LIMIT_WINDOWS: tuple[tuple[int, str], ...] = (
+    (60, "rate_limit_per_minute"),
+    (3600, "rate_limit_per_hour"),
+    (86_400, "rate_limit_per_day"),
+)
+
+
 class RateLimitInfo(BaseModel):
     """Rate limit information for a request."""
 
@@ -485,9 +506,7 @@ class DatabaseAPIKeyStore:
                 "PostgreSQL role regengine_sysadmin; "
                 f"connected as {role!r}"
             )
-        await session.execute(
-            text("SELECT set_config('regengine.is_sysadmin', 'true', true)")
-        )
+        await session.execute(text("SELECT set_config('regengine.is_sysadmin', 'true', true)"))
 
     @staticmethod
     async def _set_key_lookup_context(
@@ -584,7 +603,7 @@ class DatabaseAPIKeyStore:
 
         try:
             uuid.UUID(uuid_str)
-        except ValueError:
+        except (ValueError, AttributeError, TypeError):
             raise ValueError(f"Invalid UUID: {uuid_str}")
 
     async def _set_context(self, session: AsyncSession, tenant_id: Optional[str]) -> None:
@@ -740,13 +759,22 @@ class DatabaseAPIKeyStore:
         Returns:
             APIKeyResponse if valid, None otherwise
         """
-        if not raw_key or not raw_key.startswith("rge_"):
+        # Fail closed on helper misuse: a non-string credential is an
+        # invalid key, never a 500 from str methods on the wrong type.
+        if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
-        # Extract key_id
+        # Extract key_id. Keys minted by create_key() always carry the
+        # ``rge_{key_id}.{secret}`` shape; a value without a dot (e.g. a
+        # hand-inserted ``rge_inflowlab_XXX`` row value) can never validate.
+        # Log the shape explicitly instead of failing silent. Only the
+        # 8-char prefix is logged — never the presented credential.
         try:
-            key_id, _ = raw_key.split(".", 1)
+            key_id, secret = raw_key.split(".", 1)
         except ValueError:
+            key_id, secret = raw_key, ""
+        if not key_id or not secret:
+            logger.warning("malformed_key_format", key_prefix=raw_key[:8])
             return None
 
         key_hashes = api_key_hash_candidates(raw_key)
@@ -776,10 +804,18 @@ class DatabaseAPIKeyStore:
                 logger.warning("api_key_disabled", key_id=key_id)
                 return None
 
-            # Check if expired
-            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
-                logger.warning("api_key_expired", key_id=key_id)
-                return None
+            # Check if expired. Naive datetimes (no tzinfo) can arrive
+            # from hand-built rows or drivers that drop the offset; assume
+            # UTC so the comparison never raises TypeError (which would
+            # surface as a 500 instead of an auth decision). This matches
+            # the in-memory APIKeyStore.validate_key guard.
+            if api_key.expires_at:
+                expires_at = api_key.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at < datetime.now(timezone.utc):
+                    logger.warning("api_key_expired", key_id=key_id)
+                    return None
 
             # Check if revoked
             if api_key.revoked_at:
@@ -801,8 +837,39 @@ class DatabaseAPIKeyStore:
             # _record_key_usage). Build the response from the row as loaded;
             # the buffered counter flush does not need to round-trip back here.
             response = APIKeyResponse.model_validate(api_key)
-            await self._record_key_usage(key_id, session)
+            # Usage accounting must never break authentication: a failed
+            # usage UPDATE turns a valid key into a 500 otherwise.
+            try:
+                await self._record_key_usage(key_id, session)
+            except Exception as exc:
+                logger.warning("api_key_usage_record_failed", key_id=key_id, error=str(exc))
             return response
+
+    async def get_tenant_status(self, tenant_id: Optional[str]) -> Optional[str]:
+        """Return the live ``tenants.status`` for one key-bound tenant.
+
+        The caller passes only the cryptographically validated API key's
+        ``tenant_id``; request-supplied tenant values are never accepted
+        here. ``tenants`` is FORCE RLS, so the key's tenant is bound first
+        (same primitive as the admin API-key path). One indexed primary-key
+        read, no writes, so the per-request cost stays small.
+
+        Returns the status string, or None when the tenant row is missing.
+        Raises on lookup failure so the caller can fail closed (503): a
+        status that cannot be read must never authenticate.
+        """
+        if not tenant_id:
+            return None
+        async with self._session() as session:
+            await self._set_context(session, str(tenant_id))
+            result = await session.execute(
+                text("SELECT status FROM tenants WHERE id = CAST(:tid AS uuid)"),
+                {"tid": str(tenant_id)},
+            )
+            row = result.fetchone()
+            if row is None:
+                return None
+            return row[0]
 
     async def check_rate_limit(
         self,
@@ -812,26 +879,72 @@ class DatabaseAPIKeyStore:
     ) -> RateLimitInfo:
         """Check if a key has exceeded its rate limit.
 
-        Uses Redis if available for distributed rate limiting,
-        otherwise falls back to a simple in-memory counter.
+        Fixed-window counter in Redis. Each request is counted under
+        ``ratelimit:{key_id}:{window_seconds}:{bucket}`` where
+        ``bucket = int(now // window_seconds)`` on the wall clock, so every key
+        starts a fresh count at each window boundary, however steadily it sends.
+        The earlier counter had one key per (key_id, window) and re-applied
+        EXPIRE on every request: a client that never paused for a full window was
+        never reset, so a steady client below its limit eventually crossed it
+        and stayed blocked until it paused.
+
+        INCR and EXPIRE (twice the window, long enough to outlive its bucket)
+        share one pipeline, which redis-py runs as a single MULTI/EXEC round
+        trip: a counter cannot be created without its TTL, and no Redis version
+        beyond plain INCR/EXPIRE is assumed.
+
+        Known trade-offs of a fixed window:
+
+        * When every worker reads the same time, a client can spend ``limit``
+          requests at the end of one bucket and ``limit`` more at the start of
+          the next: up to ``2 * limit`` within one window length straddling the
+          edge, never more than ``limit`` inside a bucket.
+        * Bucket edges come from each worker's wall clock, so workers whose clocks
+          disagree put the same instant in different buckets. Every bucket still
+          admits at most ``limit``, but a client can now reach three buckets
+          within one window length: up to ``3 * limit`` when the clocks differ by
+          less than a window, more when they differ by a window or more. A clock
+          that steps backwards behaves like skew. Keep the hosts that serve this
+          limiter NTP-synced. Taking the time from Redis ``TIME`` would remove
+          the skew but costs a second round trip or a Lua script, which this
+          limiter avoids.
+        * Requests rejected for being over the limit still increment the counter,
+          which is harmless: the next bucket starts from zero.
+
+        Without Redis there is no distributed rate limiting, so the request is
+        denied (fail closed). A Redis error propagates and is never converted to
+        an allow.
 
         Args:
             key_id: The API key identifier
             limit: Maximum requests allowed in the window
-            window_seconds: Time window in seconds (default: 60)
+            window_seconds: Window length in whole seconds, 1 to 86400 (default: 60)
 
         Returns:
-            RateLimitInfo with allowed status and remaining quota
+            RateLimitInfo with allowed status and remaining quota. When denied,
+            ``retry_after`` is the whole seconds until the current bucket ends
+            (rounded up, never below 1) and ``reset_at`` is that instant.
+
+        Raises:
+            ValueError: ``window_seconds`` is not an int in 1..86400. Zero or a
+                negative TTL would make Redis delete the counter and silently
+                allow everything.
         """
+        if not isinstance(window_seconds, int) or not 1 <= window_seconds <= _MAX_RATE_LIMIT_WINDOW_SECONDS:
+            raise ValueError(f"window_seconds must be an int between 1 and {_MAX_RATE_LIMIT_WINDOW_SECONDS}")
+
         now = datetime.now(timezone.utc)
-        window_key = f"ratelimit:{key_id}:{window_seconds}"
+        epoch = now.timestamp()
+        bucket = int(epoch // window_seconds)
+        bucket_end = (bucket + 1) * window_seconds
 
         if self._redis:
             # Use Redis for distributed rate limiting
+            window_key = f"ratelimit:{key_id}:{window_seconds}:{bucket}"
             pipe = self._redis.pipeline()
             # AIORedis pipeline methods are sync, they just buffer commands
             pipe.incr(window_key)
-            pipe.expire(window_key, window_seconds)
+            pipe.expire(window_key, 2 * window_seconds)
             results = await pipe.execute()
             current_count = results[0]
         else:
@@ -852,15 +965,14 @@ class DatabaseAPIKeyStore:
 
         allowed = current_count <= limit
         remaining = max(0, limit - current_count)
-        # Start of next minute (next rate-limit bucket boundary).
-        # Use ``timedelta`` arithmetic rather than ``.replace(minute=minute+1)``
-        # because Python rejects ``minute=60`` with ``ValueError: minute must
-        # be in 0..59`` — so at XX:59 the old code raised and the global
-        # value_error handler returned HTTP 400 for every authenticated
-        # ingest request during that minute (#1887). ``timedelta`` correctly
-        # rolls minute/hour/day boundaries.
-        reset_at = now.replace(second=0, microsecond=0) + timedelta(minutes=1)
-        retry_after = None if allowed else window_seconds
+        # The bucket boundary is the reset instant. Retry-After is the whole
+        # seconds until then, rounded up so a client that waits that long lands
+        # in the next bucket, and never 0 (Retry-After: 0 invites an immediate
+        # retry, and callers replace a falsy value with their own default).
+        # The boundary is computed from the epoch, not with
+        # ``now.replace(minute=minute + 1)``, which raised at :59 (#1887).
+        reset_at = datetime.fromtimestamp(bucket_end, tz=timezone.utc)
+        retry_after = None if allowed else max(1, math.ceil(bucket_end - epoch))
 
         if not allowed:
             logger.warning(
@@ -877,6 +989,47 @@ class DatabaseAPIKeyStore:
             reset_at=reset_at,
             retry_after=retry_after,
         )
+
+    async def check_all_rate_limits(self, api_key: APIKeyResponse) -> RateLimitInfo:
+        """Enforce every recorded per-key quota window (minute, hour, day).
+
+        Each window in ``_RATE_LIMIT_WINDOWS`` gets its own fixed-window
+        counter via :meth:`check_rate_limit`, so one shared helper owns all
+        quota enforcement and call sites never pick windows individually.
+
+        Deny by default: a missing limit cannot be evaluated, so it denies
+        rather than allowing unbounded traffic. The first denial wins, in
+        window order, so its ``retry_after`` stays the shortest applicable
+        wait. When every window allows, the minute window's info is returned.
+        """
+        key_id = api_key.key_id
+        minute_info: Optional[RateLimitInfo] = None
+        for window_seconds, attribute in _RATE_LIMIT_WINDOWS:
+            limit = getattr(api_key, attribute, None)
+            if limit is None:
+                logger.warning(
+                    "rate_limit_unknown",
+                    key_id=key_id,
+                    window_seconds=window_seconds,
+                    missing_attribute=attribute,
+                )
+                now = datetime.now(timezone.utc)
+                return RateLimitInfo(
+                    allowed=False,
+                    limit=0,
+                    remaining=0,
+                    reset_at=now,
+                    retry_after=window_seconds,
+                )
+            info = await self.check_rate_limit(key_id, limit, window_seconds=window_seconds)
+            if window_seconds == 60:
+                minute_info = info
+            if not info.allowed:
+                return info
+        # All windows allowed. ``minute_info`` is always set: the windows table
+        # starts with the 60-second window by construction.
+        assert minute_info is not None
+        return minute_info
 
     async def revoke_key(
         self,

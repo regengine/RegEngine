@@ -20,6 +20,18 @@ if TYPE_CHECKING:  # pragma: no cover — annotation-only imports
     from .models import ChainVerification, MerkleVerification
 
 
+def _short_hash(value: object) -> str:
+    """First 16 characters of a hash, or ``missing`` when the value is empty.
+
+    A corrupt or truncated chain can store NULL in ``previous_chain_hash`` or
+    ``chain_hash``. Slicing that NULL raised TypeError and the verification
+    job recorded a crash instead of an invalid chain.
+    """
+    if not isinstance(value, str) or not value:
+        return "missing"
+    return value[:16]
+
+
 class ChainVerificationMixin:
     """Chain / Merkle verification — mixed into :class:`core.CTEPersistence`."""
 
@@ -57,11 +69,14 @@ class ChainVerificationMixin:
         # per-row checks below still work left-to-right.
         rows = self.session.execute(
             text("""
+                WITH ce AS (
+                    SELECT c.id, c.tenant_id FROM fsma.cte_events c WHERE c.tenant_id = :tid
+                )
                 SELECT hc.sequence_num, hc.event_hash,
                        hc.previous_chain_hash, hc.chain_hash,
                        hc.cte_event_id, ce.id AS matched_event_id
                 FROM fsma.hash_chain hc
-                LEFT JOIN fsma.cte_events ce
+                LEFT JOIN ce
                     ON ce.id = hc.cte_event_id
                    AND ce.tenant_id = hc.tenant_id
                 WHERE hc.tenant_id = :tid
@@ -137,7 +152,7 @@ class ChainVerificationMixin:
                 if stored_prev != expected_prev:
                     errors.append(
                         f"Chain break at seq={seq}: stored prev "
-                        f"{stored_prev[:16]}... != expected {expected_prev[:16]}..."
+                        f"{_short_hash(stored_prev)}... != expected {_short_hash(expected_prev)}..."
                     )
 
             # Recompute chain_hash and compare
@@ -145,7 +160,7 @@ class ChainVerificationMixin:
             if recomputed != stored_chain:
                 errors.append(
                     f"Tamper detected at seq={seq}: recomputed chain_hash "
-                    f"{recomputed[:16]}... != stored {stored_chain[:16]}..."
+                    f"{_short_hash(recomputed)}... != stored {_short_hash(stored_chain)}..."
                 )
 
             # #1314: orphan chain row — cte_event_id has no match in
@@ -154,10 +169,15 @@ class ChainVerificationMixin:
             # a bogus id (code bug). Either way the chain no longer
             # proves what it claims to prove.
             if matched_event_id is None:
-                orphan_chain_rows.append(int(seq))
-                errors.append(
-                    f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} has no matching fsma.cte_events row"
-                )
+                try:
+                    orphan_chain_rows.append(int(seq))
+                except (TypeError, ValueError):
+                    errors.append(f"Orphan chain row with unreadable sequence_num={seq!r}")
+                else:
+                    errors.append(
+                        f"Orphan chain row at seq={seq}: cte_event_id={cte_event_id} "
+                        "has no matching fsma.cte_events row"
+                    )
 
         # #1314: cross-check the row counts. chain rows should equal
         # non-rejected event count. A mismatch means an event was
@@ -197,12 +217,12 @@ class ChainVerificationMixin:
             text("""
                 SELECT ce.id::text
                 FROM fsma.cte_events ce
-                LEFT JOIN fsma.hash_chain hc
-                    ON hc.cte_event_id = ce.id
-                   AND hc.tenant_id = ce.tenant_id
                 WHERE ce.tenant_id = :tid
                   AND ce.validation_status != 'rejected'
-                  AND hc.id IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM fsma.hash_chain hc
+                      WHERE hc.cte_event_id = ce.id AND hc.tenant_id = :tid
+                  )
                 ORDER BY ce.ingested_at
                 LIMIT 1000
             """),

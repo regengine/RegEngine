@@ -1,0 +1,23 @@
+UTC: 2026-10-03T00:41:30.248988+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'startup|CSRF_SECRET|JWT_SIGNING|production|assert' frontend/src/instrumentation.ts frontend/src/lib/startup-assertions.ts
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: frontend/src/lib/startup-assertions.ts: No such file or directory (os error 2)
+frontend/src/instrumentation.ts:13: * Production startup assertion: CSRF_SECRET must be set and must not collide
+frontend/src/instrumentation.ts:17: * owns `JWTKeyRegistry` and is the sole authority. JWT_SIGNING_KEY and
+frontend/src/instrumentation.ts:19: * key the frontend still uses is CSRF_SECRET. The collision checks below
+frontend/src/instrumentation.ts:23:function assertSecretSeparation(): void {
+frontend/src/instrumentation.ts:24:    if (process.env.NODE_ENV !== "production") return;
+frontend/src/instrumentation.ts:26:    const csrf = process.env.CSRF_SECRET;
+frontend/src/instrumentation.ts:27:    const jwt = process.env.JWT_SIGNING_KEY;
+frontend/src/instrumentation.ts:31:    if (!csrf) errors.push("CSRF_SECRET must be set in production");
+frontend/src/instrumentation.ts:33:        errors.push("CSRF_SECRET must not equal legacy JWT_SIGNING_KEY material");
+frontend/src/instrumentation.ts:36:        errors.push("CSRF_SECRET must not equal legacy AUTH_SECRET_KEY");
+frontend/src/instrumentation.ts:40:        for (const e of errors) console.error(`[startup-assertion] ${e}`);
+frontend/src/instrumentation.ts:41:        throw new Error(`Startup assertions failed:\n  - ${errors.join("\n  - ")}`);
+frontend/src/instrumentation.ts:46:    assertSecretSeparation();
+frontend/src/instrumentation.ts:58:                tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+frontend/src/instrumentation.ts:73:                tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,

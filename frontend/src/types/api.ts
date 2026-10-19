@@ -171,6 +171,46 @@ export interface IngestCSVResponse {
     header_mapping_suggestions?: HeaderMappingSuggestion[];
 }
 
+// EPCIS 2.0 ingestion (services/ingestion/app/epcis/router.py).
+// The batch, single-event and XML endpoints all return per-event results;
+// field names differ by mode (created/failed vs accepted/rejected), so the
+// frontend normalizes them with normalizeEpcisIngestResult().
+export interface EpcisIngestResultItem {
+    index?: number;
+    status_code?: number;
+    event_id?: string | null;
+    cte_id?: string | null;
+    status?: string | number;
+    detail?: unknown;
+    errors?: unknown;
+    message?: string;
+}
+
+export interface EpcisIngestResponse {
+    total: number;
+    created?: number;
+    failed?: number;
+    accepted?: number;
+    rejected?: number;
+    results?: EpcisIngestResultItem[];
+    errors?: Array<{ index?: number; detail?: unknown }>;
+    mode?: string;
+    format?: string;
+}
+
+export interface EpcisValidateResponse {
+    valid: boolean;
+    errors: string[];
+    normalized_cte?: Record<string, unknown> | null;
+}
+
+export interface NormalizedEpcisResult {
+    total: number;
+    accepted: number;
+    rejected: number;
+    errorMessages: string[];
+}
+
 // Compliance
 export interface ComplianceChecklist {
     id: string;
@@ -502,6 +542,8 @@ export interface SupplierBulkUploadParseResponse {
     tlcs: number;
     events: number;
     warnings: string[];
+    /** Set when a table-less PDF was read by LlamaIndex Extract: job evidence, confidence summary, citations. */
+    extraction?: Record<string, unknown> | null;
 }
 
 export interface SupplierBulkUploadValidationError {
@@ -537,6 +579,8 @@ export interface SupplierBulkUploadCommitSummary {
     last_merkle_hash: string | null;
     sync_warning_count: number;
     sync_warnings: string[];
+    validation_warning_count?: number;
+    validation_warnings?: string[];
 }
 
 export interface SupplierBulkUploadCommitResponse {

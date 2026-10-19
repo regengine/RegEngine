@@ -1,0 +1,19 @@
+UTC: 2026-10-03T00:59:24.911422+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; subprocess.run(["python3","docs/qa/2026-10-02/scripts/validate_handoff.py"],check=True); subprocess.run(["git","diff","--check"],check=True); s=Path("docs/qa/2026-10-02/FINDINGS.md").read_text(); assert "\n\n| UX-001" not in s; print("Markdown findings table contiguous; diff whitespace clean"); print(subprocess.check_output(["git","status","--short","--branch"],text=True))'
+Exit: 0
+Duration: 0.22s
+Timeout: False
+
+Counts: Critical=0 High=3 Medium=10 Low=2
+Groups: {'Backend': 6, 'Frontend': 4, 'UX': 5}
+PASS: mandatory docs, group reports/logs, findings, branch and 364 allowed files
+PR/CI remain orchestrator-owned; this check does not establish remote status.
+Markdown findings table contiguous; diff whitespace clean
+## qa/2026-10-02-sweep
+ M frontend/src/__tests__/hooks/useSync.test.tsx
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/
+

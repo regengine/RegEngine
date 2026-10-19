@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:19:59.681878+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 630,850p services/ingestion/app/routers/csv_templates.py
+Exit: 1
+Duration: 0.00s
+Timeout: False
+
+sed: services/ingestion/app/routers/csv_templates.py: No such file or directory

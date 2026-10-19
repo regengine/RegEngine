@@ -52,7 +52,6 @@ class ExportRecord(BaseModel):
     sha256_hash: Optional[str] = None
     created_at: Optional[str] = None
     traceability_lot_code: Optional[str] = None
-    format: Optional[str] = None
 
 
 class ExportAuditResponse(BaseModel):
@@ -132,24 +131,24 @@ def _query_exports(
 
         db = SessionLocal()
         try:
-            conditions = ["tenant_id = :tid"]
+            conditions: list[str] = []
             params: dict = {"tid": tenant_id, "lim": limit}
 
             if start_date:
-                conditions.append("created_at >= :start")
+                conditions.append("generated_at >= :start")
                 params["start"] = start_date
             if end_date:
-                conditions.append("created_at <= :end")
+                conditions.append("generated_at <= :end")
                 params["end"] = end_date
 
-            where_clause = " AND ".join(conditions)
+            extra = "".join(f" AND {c}" for c in conditions)
             rows = db.execute(
                 text(f"""
                     SELECT id, tenant_id, export_type, record_count,
-                           sha256_hash, created_at, traceability_lot_code, format
+                           export_hash, generated_at, query_tlc
                     FROM fsma.fda_export_log
-                    WHERE {where_clause}
-                    ORDER BY created_at DESC
+                    WHERE tenant_id = :tid{extra}
+                    ORDER BY generated_at DESC
                     LIMIT :lim
                 """),
                 params,
@@ -158,7 +157,7 @@ def _query_exports(
             return [
                 {
                     "id": str(row[0]),
-                    "tenant_id": row[1],
+                    "tenant_id": str(row[1]),
                     "export_type": row[2],
                     "record_count": row[3] or 0,
                     "sha256_hash": row[4],
@@ -168,7 +167,6 @@ def _query_exports(
                     if row[5]
                     else None,
                     "traceability_lot_code": row[6],
-                    "format": row[7],
                 }
                 for row in rows
             ]
@@ -395,7 +393,6 @@ async def get_activity_feed(
                     "timestamp": exp.get("created_at") or "",
                     "details": {
                         "sha256_hash": exp.get("sha256_hash"),
-                        "format": exp.get("format"),
                         "traceability_lot_code": exp.get("traceability_lot_code"),
                     },
                 }

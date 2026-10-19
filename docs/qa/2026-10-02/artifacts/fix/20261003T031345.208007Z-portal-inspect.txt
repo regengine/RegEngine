@@ -1,0 +1,647 @@
+UTC: 2026-10-03T03:13:45.208007+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'sed -n "400,550p" services/ingestion/app/supplier_portal.py && sed -n "600,750p" services/ingestion/app/supplier_portal.py && sed -n "850,1050p" services/ingestion/app/supplier_portal.py && cat tests/qa_sweep_20261002/test_portal_export_disclosure.py && sed -n "190,320p" services/ingestion/app/fda_export_service.py'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+            if row:
+                return {
+                    "profile_id": row[0],
+                    "display_name": row[1],
+                    "source_type": row[2],
+                    "default_cte_type": row[3],
+                    "status": row[4],
+                    "confidence": float(row[5] or 0),
+                    "supplier_name": row[6],
+                }
+        except Exception as exc:
+            logger.warning("portal_profile_summary_failed portal_profile=%s error=%s", profile_id, str(exc))
+        finally:
+            db.close()
+
+    if not _allow_memory_fallback():
+        return None
+
+    try:
+        from .integration_router import _memory_get_profile
+
+        profile = _memory_get_profile(tenant_id, profile_id)
+        if not profile:
+            return None
+        return {
+            "profile_id": profile.profile_id,
+            "display_name": profile.display_name,
+            "source_type": profile.source_type,
+            "default_cte_type": profile.default_cte_type,
+            "status": profile.status,
+            "confidence": float(profile.confidence or 0),
+            "supplier_name": profile.supplier_name,
+        }
+    except Exception as exc:
+        logger.warning("portal_profile_summary_memory_failed portal_profile=%s error=%s", profile_id, str(exc))
+        return None
+
+
+class CreatePortalLinkRequest(BaseModel):
+    """Request to create a supplier portal link."""
+
+    tenant_id: str = Field(..., description="Customer's tenant ID")
+    supplier_name: str = Field(..., description="Supplier business name")
+    supplier_email: Optional[str] = Field(None, description="Supplier contact email")
+    allowed_cte_types: list[str] = Field(
+        default=["shipping"], description="CTE types the supplier can submit (default: shipping only)"
+    )
+    integration_profile_id: Optional[str] = Field(
+        default=None,
+        description="Optional saved integration profile to attach to this supplier link",
+    )
+    expires_days: int = Field(default=90, ge=1, le=365, description="Link expiry in days")
+
+
+class PortalLinkResponse(BaseModel):
+    """Response with the generated portal link."""
+
+    portal_id: str
+    portal_url: str
+    supplier_name: str
+    tenant_id: str
+    expires_at: str
+    allowed_cte_types: list[str]
+    integration_profile_id: Optional[str] = None
+
+
+class SupplierSubmission(BaseModel):
+    """Data submitted by a supplier through the portal."""
+
+    traceability_lot_code: str = Field(..., description="TLC for shipped product", min_length=3)
+    product_description: str = Field(..., description="Product name/description", min_length=1)
+    quantity: float = Field(..., description="Quantity shipped", gt=0)
+    unit_of_measure: str = Field(..., description="Unit (cases, lbs, kg, pallets)")
+    ship_date: str = Field(..., description="Ship date (YYYY-MM-DD)")
+    ship_from_location: str = Field(..., description="Origin facility name")
+    ship_from_gln: Optional[str] = Field(None, description="Origin GLN (optional)")
+    ship_to_location: str = Field(..., description="Destination facility name")
+    ship_to_gln: Optional[str] = Field(None, description="Destination GLN (optional)")
+    carrier_name: Optional[str] = Field(None, description="Carrier/logistics company")
+    po_number: Optional[str] = Field(None, description="Purchase order number")
+    temperature_celsius: Optional[float] = Field(None, description="Temperature at shipping (°C)")
+    notes: Optional[str] = Field(None, description="Additional notes")
+
+
+class SubmissionResult(BaseModel):
+    """Result of a supplier submission."""
+
+    status: str  # "accepted" or "error"
+    event_id: Optional[str] = None
+    sha256_hash: Optional[str] = None
+    message: str
+    supplier_name: str
+    submitted_at: str
+
+
+class SupplierPreflightResult(BaseModel):
+    """Validate supplier-submitted data before committing it."""
+
+    status: str
+    message: str
+    supplier_name: str
+    result: SandboxResponse
+    readiness: ReadinessSummary
+    commit_gate: CommitGateDecision
+
+
+def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+    kdes: dict = {
+        "ship_date": submission.ship_date,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "supplier_name": link["supplier_name"],
+        "submission_source": "supplier_portal",
+        "portal_id": portal_id,
+    }
+    if submission.carrier_name:
+        kdes["carrier_name"] = submission.carrier_name
+    if submission.po_number:
+        kdes["po_number"] = submission.po_number
+    kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+    kdes["tlc_source_reference"] = link["supplier_name"]
+    kdes["ftl_covered"] = True
+    if submission.temperature_celsius is not None:
+        kdes["temperature_celsius"] = submission.temperature_celsius
+    if submission.notes:
+        kdes["notes"] = submission.notes
+
+    return {
+        "cte_type": "shipping",
+        "traceability_lot_code": submission.traceability_lot_code,
+        "product_description": submission.product_description,
+        "quantity": submission.quantity,
+        "unit_of_measure": submission.unit_of_measure,
+        "location_gln": submission.ship_from_gln,
+        "location_name": submission.ship_from_location,
+        "ship_from_location": submission.ship_from_location,
+        "ship_to_location": submission.ship_to_location,
+        "reference_document": kdes["reference_document"],
+        "tlc_source_reference": kdes["tlc_source_reference"],
+        "timestamp": f"{submission.ship_date}T00:00:00Z",
+        "kdes": kdes,
+    }
+
+
+def _build_supplier_preflight(portal_id: str, link: dict, submission: SupplierSubmission) -> SupplierPreflightResult:
+    raw_event = _submission_event_dict(portal_id, link, submission)
+    canonical = _normalize_for_rules(raw_event)
+    kde_errors = _validate_kdes(raw_event)
+    summary = _evaluate_event_stateless(canonical, include_custom=False)
+
+    blocking: list[RuleResultResponse] = []
+                        why_failed=rule.why_failed,
+                        citation=rule.citation_reference,
+                        remediation=rule.remediation_suggestion,
+                        category=rule.category,
+                        evidence=rule.evidence_fields_inspected or None,
+                    )
+                    for rule in summary.results
+                ],
+            )
+        ],
+    )
+    readiness = build_readiness_summary(sandbox_result)
+    commit_gate = decide_commit_gate(
+        CommitGateRequest(
+            mode="preflight",
+            tenant_id=link["tenant_id"],
+            result=sandbox_result,
+            authenticated=True,
+            persisted=False,
+            provenance_attached=True,
+        )
+    )
+    status = "ready" if not sandbox_result.submission_blocked else "blocked"
+    message = (
+        "Supplier record passed preflight and can be submitted."
+        if status == "ready"
+        else "Supplier record is blocked. Correct the listed KDE/rule issues before submission."
+    )
+    return SupplierPreflightResult(
+        status=status,
+        message=message,
+        supplier_name=link["supplier_name"],
+        result=sandbox_result,
+        readiness=readiness,
+        commit_gate=commit_gate,
+    )
+
+
+@router.post(
+    "/links",
+    response_model=PortalLinkResponse,
+    summary="Create a supplier portal link",
+    description="Generate a unique, expiring link that a supplier can use to submit shipping data.",
+)
+async def create_portal_link(
+    request: CreatePortalLinkRequest,
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+) -> PortalLinkResponse:
+    """Create a supplier portal link."""
+    tenant_id = resolve_principal_tenant_id(request.tenant_id, x_tenant_id, principal.tenant_id)
+    portal_id = secrets.token_urlsafe(16)
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(days=request.expires_days)).isoformat()
+
+    link_data = {
+        "tenant_id": tenant_id,
+        "supplier_name": request.supplier_name,
+        "supplier_email": request.supplier_email,
+        "allowed_cte_types": request.allowed_cte_types,
+        "integration_profile_id": request.integration_profile_id,
+        "expires_at": expires_at,
+        "created_at": now.isoformat(),
+    }
+
+    # Try DB first, fall back to in-memory
+    db_success = _db_store_portal_link(portal_id, link_data)
+    if not db_success:
+        if not _allow_memory_fallback():
+            raise HTTPException(status_code=503, detail="Portal link persistence unavailable")
+        logger.info("db_store_fallback using in-memory for portal_id=%s", portal_id)
+    # Always store in-memory as well for supplemental fields (supplier_email, allowed_cte_types)
+    _portal_links[portal_id] = link_data
+
+    logger.info(
+        "portal_link_created",
+        extra={
+            "portal_id": portal_id,
+            "tenant_id": tenant_id,
+            "supplier_name": request.supplier_name,
+        },
+    )
+
+    return PortalLinkResponse(
+        portal_id=portal_id,
+        portal_url=f"https://regengine.co/portal/{portal_id}",
+        supplier_name=request.supplier_name,
+        tenant_id=tenant_id,
+        expires_at=expires_at,
+        allowed_cte_types=request.allowed_cte_types,
+        integration_profile_id=request.integration_profile_id,
+    )
+
+
+@router.get(
+    "/links/list",
+    summary="List portal links for a tenant",
+    description="Returns all portal links for the authenticated tenant.",
+)
+async def list_portal_links(
+    tenant_id: Optional[str] = None,
+    pagination: PaginationParams = Depends(),
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+):
+    """List all portal links for a tenant."""
+    tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
+    links: list[dict] = []
+
+    # Try DB first
+    db = get_db_safe()
+    if db:
+        try:
+            _set_tenant_context(db, tenant_id)
+            try:
+                rows = db.execute(
+                    # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                    text("""
+                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at,
+                               integration_profile_id
+                        FROM fsma.tenant_portal_links
+                        WHERE tenant_id = :tenant_id
+                        ORDER BY created_at DESC
+                    """),
+                    {"tenant_id": tenant_id},
+                ).fetchall()
+            except Exception as exc:
+                if "integration_profile_id" not in str(exc):
+                    raise
+                rows = db.execute(
+                    # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+                    text("""
+                        SELECT id, tenant_id, supplier_name, link_token, status, created_at, expires_at
+                        FROM fsma.tenant_portal_links
+                        WHERE tenant_id = :tenant_id
+                        ORDER BY created_at DESC
+                    """),
+                    {"tenant_id": tenant_id},
+                ).fetchall()
+            for row in rows:
+                expires_at = row[6]
+                status = row[4]
+                integration_profile_id = row[7] if len(row) > 7 else None
+                # Auto-expire links past their expiry
+                if status == "active" and expires_at and expires_at <= datetime.now(timezone.utc):
+                    status = "expired"
+                links.append(
+                    {
+                        "portal_id": row[3],
+                        "portal_url": f"https://regengine.co/portal/{row[3]}",
+                        "supplier_name": row[2],
+        profile = _db_get_integration_profile_summary(link["tenant_id"], link.get("integration_profile_id"))
+
+    return {
+        "portal_id": portal_id,
+        "supplier_name": link["supplier_name"],
+        "allowed_cte_types": link["allowed_cte_types"],
+        "integration_profile_id": link.get("integration_profile_id"),
+        "integration_profile": profile,
+        "status": "active",
+    }
+
+
+@router.post(
+    "/{portal_id}/preflight",
+    response_model=SupplierPreflightResult,
+    summary="Preflight supplier data",
+    description="Validate supplier-submitted shipment data before creating a persisted event.",
+)
+async def preflight_supplier_data(
+    portal_id: str,
+    submission: SupplierSubmission,
+) -> SupplierPreflightResult:
+    """Run the supplier submission through the Workbench validation gate."""
+    link = _get_active_portal_link(portal_id)
+    # #2461: public route — scope to the link's tenant (see get_portal_details).
+    with tenant_scope(link["tenant_id"]):
+        # Issue #2508 — per-link throttle for CPU-heavy sandbox validation, scoped
+        # to the portal link so it cannot be driven at the full per-IP ceiling.
+        _enforce_portal_rate_limit(
+            portal_id,
+            link["tenant_id"],
+            scope="preflight",
+            limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
+        )
+        return _build_supplier_preflight(portal_id, link, submission)
+
+
+@router.post(
+    "/{portal_id}/submit",
+    response_model=SubmissionResult,
+    summary="Submit supplier data",
+    description=(
+        "Supplier submits shipping/receiving data through the portal. "
+        "Data is validated, SHA-256 hashed, and ingested into the customer's tenant."
+    ),
+)
+async def submit_supplier_data(
+    portal_id: str,
+    submission: SupplierSubmission,
+) -> SubmissionResult:
+    """Process a supplier submission — no auth required (link-based access)."""
+    link = _get_active_portal_link(portal_id)
+
+    # #2461: public route — the portal-link row binds the token to exactly
+    # one tenant; scope the remainder of the handler (including the
+    # awaited ingest_events persistence) to it so the Engine begin-hook
+    # applies app.tenant_id on every transaction.
+    with tenant_scope(link["tenant_id"]):
+        return await _submit_supplier_data_inner(portal_id, link, submission)
+
+
+async def _submit_supplier_data_inner(
+    portal_id: str,
+    link: dict,
+    submission: SupplierSubmission,
+) -> SubmissionResult:
+    """Body of submit_supplier_data — runs inside tenant_scope(link tenant)."""
+    # Issue #2508 — per-link submission cap. Scoped to the portal link, not the
+    # victim tenant's general ingest budget, and enforced BEFORE any persisted
+    # write so abuse past the cap never reaches ``ingest_events``.
+    _enforce_portal_rate_limit(
+        portal_id,
+        link["tenant_id"],
+        scope="submit",
+        limit=_PORTAL_SUBMIT_RATE_LIMIT_RPM,
+    )
+
+    # Issue #2508 — gate persisted writes on the owning tenant's subscription.
+    # The portal has no authenticated principal, so we check the link's tenant
+    # directly. ``None`` means subscription checking is not configured for this
+    # deploy (no Redis) and the gate is skipped.
+    if _portal_subscription_active(link["tenant_id"]) is False:
+        return SubmissionResult(
+            status="error",
+            message="Submission rejected: the receiving organization does not have an active subscription.",
+            supplier_name=link["supplier_name"],
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    preflight = _build_supplier_preflight(portal_id, link, submission)
+    if preflight.status == "blocked":
+        return SubmissionResult(
+            status="error",
+            message=f"Submission blocked by preflight: {'; '.join(preflight.result.blocking_reasons)}",
+            supplier_name=link["supplier_name"],
+            submitted_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+    # Build KDEs
+    event_data = _submission_event_dict(portal_id, link, submission)
+    kdes: dict = event_data["kdes"]
+
+    # Create event
+    event = IngestEvent(
+        cte_type=WebhookCTEType.SHIPPING,
+        traceability_lot_code=submission.traceability_lot_code,
+        product_description=submission.product_description,
+        quantity=submission.quantity,
+        unit_of_measure=submission.unit_of_measure,
+        location_gln=submission.ship_from_gln,
+        location_name=submission.ship_from_location,
+        timestamp=event_data["timestamp"],
+        kdes=kdes,
+    )
+
+    # Ingest into customer's tenant. The portal link record IS the
+    # authenticated context here — the supplier's identity is verified
+    # via the portal token, and the link binds that token to exactly
+    # one customer tenant. Passing link["tenant_id"] as principal makes
+    # the symmetric verification trivially pass while keeping the
+    # contract enforceable for any future caller.
+    payload = WebhookPayload(
+        source="supplier_portal",
+        events=[event],
+        tenant_id=link["tenant_id"],
+    )
+    result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
+
+    submitted_at = datetime.now(timezone.utc).isoformat()
+
+    if result.accepted > 0:
+        event_result = result.events[0]
+        logger.info(
+            "supplier_submission_accepted",
+            extra={
+                "portal_id": portal_id,
+                "tenant_id": link["tenant_id"],
+                "supplier": link["supplier_name"],
+                "tlc": submission.traceability_lot_code,
+            },
+        )
+        return SubmissionResult(
+            status="accepted",
+            event_id=event_result.event_id,
+            sha256_hash=event_result.sha256_hash,
+            message=f"Shipment data received and verified. Event ID: {event_result.event_id}",
+            supplier_name=link["supplier_name"],
+            submitted_at=submitted_at,
+        )
+    else:
+        errors = result.events[0].errors if result.events else ["Unknown error"]
+        return SubmissionResult(
+            status="error",
+            message=f"Submission rejected: {'; '.join(errors)}",
+            supplier_name=link["supplier_name"],
+            submitted_at=submitted_at,
+        )
+"""QA BE-011: exported evidence must not disclose a portal bearer capability.
+
+Uses an invalid synthetic identifier only. No portal link is created and no
+storage, provider, or network operation is called.
+"""
+
+import csv
+import io
+
+import pytest
+
+_SYNTHETIC_CAPABILITY = "qa-only-invalid-portal-capability"
+
+
+def _exported_portal_event_csv():
+    from services.ingestion.app.fda_export_service import _generate_csv
+    from services.ingestion.app.supplier_portal import SupplierSubmission, _submission_event_dict
+
+    submission = SupplierSubmission(
+        traceability_lot_code="QA-LOT-001",
+        product_description="QA lettuce",
+        quantity=2,
+        unit_of_measure="cases",
+        ship_date="2026-10-02",
+        ship_from_location="QA origin",
+        ship_to_location="QA destination",
+    )
+    event = _submission_event_dict(_SYNTHETIC_CAPABILITY, {"supplier_name": "QA supplier"}, submission)
+    # Match the persisted event field names consumed by the FDA formatter.
+    event["event_type"] = event["cte_type"]
+    event["event_timestamp"] = event["timestamp"]
+    return _generate_csv([event], include_pii=False)
+
+
+def test_portal_export_keeps_lot_and_redacts_location():
+    """Positive control: the sample is an otherwise valid redacted FDA row."""
+    row = next(csv.DictReader(io.StringIO(_exported_portal_event_csv())))
+    assert row["Traceability Lot Code (TLC)"] == "QA-LOT-001"
+    assert row["Location Name"] == "[REDACTED]"
+    assert "QA origin" not in row["Additional KDEs (JSON)"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="BE-011: supplier portal bearer capability is disclosed in exported KDEs",
+)
+def test_redacted_fda_export_does_not_disclose_portal_capability():
+    exported = _exported_portal_event_csv()
+    assert _SYNTHETIC_CAPABILITY not in exported
+    timestamp = event.get("event_timestamp", "")
+
+    # Split timestamp into date and time
+    event_date = ""
+    event_time = ""
+    if timestamp:
+        try:
+            ts = str(timestamp)
+            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            event_date = dt.strftime("%Y-%m-%d")
+            event_time = dt.strftime("%H:%M:%S %Z")
+        except (ValueError, AttributeError):
+            event_date = str(timestamp)[:10]
+
+    # Sanitize first, then apply PII redaction. Order matters:
+    # sanitize_cell neutralizes spreadsheet-formula prefixes on the raw
+    # tenant value, and _redact_location_value then replaces the whole
+    # sanitized string with the placeholder when include_pii=False.
+    row = {
+        "Traceability Lot Code (TLC)": sanitize_cell(event.get("traceability_lot_code", "")),
+        "Product Description": sanitize_cell(event.get("product_description", "")),
+        "Quantity": sanitize_cell(event.get("quantity", "")),
+        "Unit of Measure": sanitize_cell(event.get("unit_of_measure", "")),
+        "Event Type (CTE)": sanitize_cell(event.get("event_type", "")),
+        "Event Date": sanitize_cell(event_date),
+        "Event Time": sanitize_cell(event_time),
+        "Location GLN": sanitize_cell(event.get("location_gln", "") or ""),
+        "Location Name": _redact_location_value(
+            sanitize_cell(event.get("location_name", "") or ""),
+            "Location Name",
+            include_pii,
+        ),
+        "Ship From GLN": sanitize_cell(kdes.get("ship_from_gln", "") or ""),
+        "Ship From Name": _redact_location_value(
+            sanitize_cell(kdes.get("ship_from_location", "") or ""),
+            "Ship From Name",
+            include_pii,
+        ),
+        "Ship To GLN": sanitize_cell(kdes.get("ship_to_gln", "") or ""),
+        "Ship To Name": _redact_location_value(
+            sanitize_cell(kdes.get("ship_to_location", kdes.get("receiving_location", "")) or ""),
+            "Ship To Name",
+            include_pii,
+        ),
+        "Immediate Previous Source": _redact_location_value(
+            sanitize_cell(kdes.get("immediate_previous_source", "") or ""),
+            "Immediate Previous Source",
+            include_pii,
+        ),
+        "TLC Source GLN": sanitize_cell(kdes.get("tlc_source_gln", "") or ""),
+        "TLC Source FDA Registration": sanitize_cell(kdes.get("tlc_source_fda_reg", "") or ""),
+        "Source Document": sanitize_cell(event.get("source", "")),
+        "Record Hash (SHA-256)": sanitize_cell(event.get("sha256_hash", "")),
+        "Chain Hash": sanitize_cell(event.get("chain_hash", "")),
+    }
+
+    # Map named KDE columns. Apply PII redaction on the named columns
+    # that land in _PII_LOCATION_COLUMNS (e.g. "Receiving Location").
+    for kde_key, col_name in _NAMED_KDE_COLUMNS.items():
+        raw = kdes.get(kde_key)
+        sanitized = sanitize_cell(raw) if raw else ""
+        row[col_name] = _redact_location_value(sanitized, col_name, include_pii)
+
+    # Remaining KDEs not in named columns → JSON blob.
+    # A JSON-encoded string can still begin with ``=`` once a spreadsheet
+    # renders it into a cell, so sanitize the whole blob as well.
+    #
+    # Exclude both:
+    #   • keys already surfaced via ``_NAMED_KDE_COLUMNS`` (explicit map
+    #     of KDE → named column), AND
+    #   • keys surfaced via the literal dict block above (Ship From/To
+    #     Name, Immediate Previous Source, TLC Source GLN/FDA Reg, etc.).
+    # Without the second filter, those PII-bearing KDEs would leak into
+    # the extras blob as a back-channel even after we redacted the named
+    # columns (issue #1219).
+    #
+    # PII redaction for the JSON blob: the "extras" map can carry arbitrary
+    # customer-supplied keys, some of which (``facility_address``,
+    # ``receiver_address``, ``origin_address``) are PII. When
+    # ``include_pii=False`` we strip any key whose name contains a PII
+    # signal (``address``, ``street``, ``location``, ``phone``,
+    # ``contact``) before encoding. This is a defensive default — the
+    # primary PII columns are already redacted above; this catches the
+    # long tail of unknown-shape KDE data.
+    extra_kdes = {k: v for k, v in kdes.items() if k not in _NAMED_KDE_COLUMNS and k not in _LITERAL_CONSUMED_KDES}
+    if extra_kdes and not include_pii:
+        extra_kdes = _redact_extra_kde_pii(extra_kdes)
+    row["Additional KDEs (JSON)"] = sanitize_cell(json.dumps(extra_kdes)) if extra_kdes else ""
+
+    # FSMA 204 requires "system entry timestamp" — when the record was entered
+    # into the traceability system (distinct from when the physical event occurred).
+    # This maps to the ingested_at column which defaults to NOW() on INSERT.
+    row["System Entry Timestamp"] = sanitize_cell(event.get("ingested_at", "") or "")
+
+    return row
+
+
+# KDE-key substrings that signal PII in the freeform "Additional KDEs
+# (JSON)" bucket. Case-insensitive substring match because upstream
+# parsers normalize key casing inconsistently.
+_PII_EXTRA_KDE_SUBSTRINGS = (
+    "address",
+    "street",
+    "location_name",
+    "facility_name",
+    "contact",
+    "phone",
+    "email",
+    "owner_name",
+    "operator_name",
+    "driver_name",
+    "receiver_name",
+    "consignee_name",
+)
+
+
+def _redact_extra_kde_pii(extra_kdes: dict) -> dict:
+    """Replace PII values in the extras JSON blob with the placeholder.
+
+    Preserves the key (so auditors see "this field existed but was
+    redacted") and the surrounding structure; only the string value is
+    replaced. Non-string values (numbers, dates) pass through unchanged
+    because numeric PII is unusual in KDE data and the round-trip would
+    be lossy.
+    """
+    redacted = {}
+    for key, value in extra_kdes.items():
+        key_lower = str(key).lower()
+        is_pii = any(marker in key_lower for marker in _PII_EXTRA_KDE_SUBSTRINGS)
+        if is_pii and isinstance(value, str) and value:
+            redacted[key] = PII_REDACTION_PLACEHOLDER

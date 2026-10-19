@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:21:41.490868+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git commit -m 'fix(BE-003): reject duplicate normalized CSV headers' -m 'Root cause: DictReader and normalized header maps silently retained the last duplicate value, replacing a legitimate quantity.
+
+Fix: inspect normalized header names before constructing row dictionaries and reject duplicate columns with their names and positions. Preserve the existing comment-row test intent using distinct headers and prove duplicate rejection occurs before row reads.
+
+Proving test: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_conflicting_duplicate_headers. Before: 2 failed, showing HTTP 200 and quantity 999 replacing 10. After QA, malformed-input, header-mapping and CSV parser suites: 258 passed, 12 unrelated expected failures. Scoped Ruff and diff checks pass. Independent local gate accepted.'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+[qa/2026-10-02-fixes 21a6e6cc] fix(BE-003): reject duplicate normalized CSV headers
+ 4 files changed, 36 insertions(+), 9 deletions(-)

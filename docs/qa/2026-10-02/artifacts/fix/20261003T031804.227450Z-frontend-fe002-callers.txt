@@ -1,0 +1,170 @@
+UTC: 2026-10-03T03:18:04.227450+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=[("frontend/src/app/tools/scan/page.tsx",20,55),("frontend/src/app/tools/scan/page.tsx",240,290),("frontend/src/app/dashboard/receiving/page.tsx",150,180),("frontend/src/components/mobile/FieldCaptureClient.tsx",180,220)]; [(print("FILE: "+f+":"+str(start)), print("\n".join(Path(f).read_text().splitlines()[start-1:end]))) for f,start,end in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE: frontend/src/app/tools/scan/page.tsx:20
+  const [quantity, setQuantity] = useState<string>('');
+  const [uom, setUom] = useState<string>('cases');
+  const [locationGLN, setLocationGLN] = useState<string>('');
+
+  const scannerRef = useRef<HTMLDivElement>(null);
+  const qrCodeRef = useRef<any>(null);
+
+  const handleParse = (barcode: string): void => {
+    if (!barcode.trim()) return;
+
+    const result = parseGS1(barcode);
+    setParsed(result);
+    setRawBarcode(barcode);
+    setManualInput('');
+    setCameraError(null);
+
+    setScanHistory((prev) => {
+      const updated = [barcode, ...prev].slice(0, 5);
+      return updated;
+    });
+  };
+
+  const startCamera = async (): Promise<void> => {
+    if (!scannerRef.current) return;
+
+    try {
+      setCameraError(null);
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const html5qrcode = new Html5Qrcode('scanner-container');
+
+      qrCodeRef.current = html5qrcode;
+
+      await html5qrcode.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText: string) => {
+FILE: frontend/src/app/tools/scan/page.tsx:240
+                        <span
+                          className={
+                            parsed.isValidGTIN
+                              ? styles.validIndicator
+                              : styles.invalidIndicator
+                          }
+                        >
+                          {parsed.isValidGTIN ? ' ✓' : ' ✗'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>
+                      Traceability Lot Code (TLC)
+                    </span>
+                    <div className={styles.fieldValue}>
+                      {parsed.tlc || 'Not found'}
+                    </div>
+                  </div>
+
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>Serial Number</span>
+                    <div className={styles.fieldValue}>
+                      {parsed.serial || 'Not found'}
+                    </div>
+                  </div>
+
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>Pack Date</span>
+                    <div className={styles.fieldValue}>
+                      {formatDate(parsed.packDate)}
+                    </div>
+                  </div>
+
+                  <div className={styles.field}>
+                    <span className={styles.fieldLabel}>Expiry Date</span>
+                    <div className={styles.fieldValue}>
+                      {formatDate(parsed.expiryDate)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTE Form Preview */}
+              <div className={styles.section}>
+                <h3 className={styles.sectionTitle}>
+                  Auto-filled CTE Form Preview
+                </h3>
+
+FILE: frontend/src/app/dashboard/receiving/page.tsx:150
+        setSession({ ...session, expectedItems: [...session.expectedItems, item] });
+        setManualGtin(''); setManualLot(''); setManualProduct(''); setManualQty('1');
+        setShowAddExpected(false);
+    }, [session, manualGtin, manualLot, manualProduct, manualQty]);
+
+    /* ─── Handle scan (keyboard wedge or manual) ─── */
+    const handleScan = useCallback((raw: string) => {
+        if (!session) return;
+        const parsed = parseGS1(raw);
+        const scannedGtin = parsed.gtin || '';
+        const scannedLot = parsed.tlc || '';
+        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+        // extracts values from AI-encoded / Digital Link strings — so a user
+        // typing exactly what the Expected Items list displays never matched
+        // and every scan landed in Unexpected Items. scanMatchesItem also
+        // compares the raw string directly (matrix unit-tested in
+        // lib/scan-match.test.ts).
+        const scanCandidate = { gtin: parsed.gtin, lot: parsed.tlc, raw };
+        const now = new Date().toISOString();
+
+        // Try to match against expected items
+        const updated = { ...session };
+        let matched = false;
+
+        for (const item of updated.expectedItems) {
+            if (item.status !== 'pending') continue;
+            if (scanMatchesItem(item, scanCandidate)) {
+                item.status = 'scanned';
+                item.scannedAt = now;
+                if (parsed.expiryDate) item.expiryDate = parsed.expiryDate;
+                matched = true;
+FILE: frontend/src/components/mobile/FieldCaptureClient.tsx:180
+                body: JSON.stringify(eventPayload),
+            });
+
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(detail || `Ingest failed with status ${response.status}`);
+            }
+        },
+        [effectiveTenantId],
+    );
+
+    const handleScan = async (rawScan: string) => {
+        const parsed = parseGS1(rawScan);
+        const productDescription = resolveProductDescription(parsed, catalogByGtin);
+
+        const parsedState: ParsedScanState = {
+            cteType: selectedCTEType,
+            raw: rawScan,
+            gtin: parsed.gtin,
+            traceabilityLotCode: parsed.tlc,
+            serial: parsed.serial,
+            expiryDate: parsed.expiryDate,
+            packDate: parsed.packDate,
+            productDescription,
+            validGTIN: parsed.isValidGTIN,
+        };
+        setLastParsedScan(parsedState);
+
+        const timestamp = new Date().toLocaleTimeString();
+        setScannedData((prev) => [`[${timestamp}] ${cteLabel}: ${rawScan}`, ...prev]);
+
+        // Build the ingest payload so we can replay it offline
+        const traceabilityLotCode =
+            parsedState.traceabilityLotCode ||
+            parsedState.serial ||
+            parsedState.gtin ||
+            `SCAN-${Date.now()}`;
+
+        const offlinePayload = {
+            source: 'mobile_scanner_pwa',
+            tenant_id: effectiveTenantId,

@@ -9,8 +9,26 @@
   "isa13": "000000005",
   "isa_receiver_id": "RECEIVERID",
   "isa_sender_id": "SENDERID",
-  "product_description": "ROMAINE-12CT",
-  "quantity": 240.0,
+  "line_items": [
+    {
+      "lot_number": null,
+      "product_description": "ROMAINE-12CT",
+      "quantity": 120.0,
+      "unit_of_measure": "CT"
+    },
+    {
+      "lot_number": null,
+      "product_description": "ROMAINE-12CT",
+      "quantity": 80.0,
+      "unit_of_measure": "CT"
+    },
+    {
+      "lot_number": null,
+      "product_description": "ROMAINE-12CT",
+      "quantity": 40.0,
+      "unit_of_measure": "CT"
+    }
+  ],
   "receiver_id": "RECEIVERID",
   "reference_document_number": "BOL-22001",
   "sender_id": "SENDERID",
@@ -19,6 +37,5 @@
   "ship_from_name": "Valley Fresh Farms",
   "ship_time_raw": "1200",
   "ship_to_gln": "6141410000069",
-  "ship_to_name": "Metro Distribution Center",
-  "unit_of_measure": "CT"
+  "ship_to_name": "Metro Distribution Center"
 }

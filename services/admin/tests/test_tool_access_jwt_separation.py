@@ -18,8 +18,10 @@ After this fix:
   • decode_access_token requires aud=SESSION_AUDIENCE when aud is present.
   • decode_tool_access_token requires aud=TOOL_ACCESS_AUDIENCE when aud is
     present.
-  • Tokens minted before the fix (no aud claim) still verify — signature is
-    always checked. Once they expire the fallback becomes dead code.
+  • Tokens minted before the fix (no aud claim) still verify only when
+    they carry a valid exp — signature is always checked, and no-exp
+    cookies of any vintage are rejected (must reverify). Once legacy
+    tokens expire the fallback becomes dead code.
 """
 
 from __future__ import annotations
@@ -180,15 +182,39 @@ def test_decode_access_token_accepts_legacy_tokens_without_aud():
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Test: LEGACY tool-access tokens (no aud/iss) still decode
+# Test: LEGACY tool-access tokens without exp are REJECTED (must reverify);
+# legacy tokens WITH a valid exp still decode (transitional rollout).
 # ─────────────────────────────────────────────────────────────────────
-def test_decode_tool_access_accepts_legacy_tokens_without_aud(monkeypatch):
+def test_decode_tool_access_rejects_legacy_tokens_without_exp(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "legacy-test-secret")
     _reload_tool_verification_routes()
     from app import tool_verification_routes as tvr
 
-    legacy = pyjwt.encode(
+    legacy_no_exp = pyjwt.encode(
         {"email": "u@example.com", "domain": "example.com"},
+        tvr.TOOL_ACCESS_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(pyjwt.exceptions.MissingRequiredClaimError, match="exp"):
+        tvr.decode_tool_access_token(legacy_no_exp)
+
+
+def test_decode_tool_access_accepts_legacy_tokens_with_exp(monkeypatch):
+    monkeypatch.setenv("TOOL_ACCESS_SECRET", "legacy-test-secret")
+    _reload_tool_verification_routes()
+    from datetime import datetime, timedelta, timezone
+
+    from app import tool_verification_routes as tvr
+
+    now = datetime.now(timezone.utc)
+    legacy = pyjwt.encode(
+        {
+            "email": "u@example.com",
+            "domain": "example.com",
+            "iat": now,
+            "exp": now + timedelta(hours=24),
+        },
         tvr.TOOL_ACCESS_SECRET,
         algorithm="HS256",
     )
@@ -222,7 +248,8 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
     # prove the audience defense, we re-encode the same claims under the
     # tool-access key: worst case — attacker controls both keys — the token
     # STILL must be rejected because its aud is SESSION_AUDIENCE.
-    session_claims = pyjwt.decode(session_token, options={"verify_signature": False})  # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode
+    # nosemgrep: python.jwt.security.unverified-jwt-decode.unverified-jwt-decode -- reads test claims only
+    session_claims = pyjwt.decode(session_token, options={"verify_signature": False})
     assert session_claims["aud"] == SESSION_AUDIENCE
     assert session_claims["iss"] == SESSION_ISSUER
 
@@ -242,9 +269,12 @@ def test_decode_tool_access_rejects_session_jwt(monkeypatch):
 def test_tool_access_token_roundtrip(monkeypatch):
     monkeypatch.setenv("TOOL_ACCESS_SECRET", "roundtrip-secret")
     _reload_tool_verification_routes()
+    from datetime import datetime, timedelta, timezone
+
     from app import tool_verification_routes as tvr
     from app.auth_utils import SESSION_ISSUER, TOOL_ACCESS_AUDIENCE
 
+    now = datetime.now(timezone.utc)
     tok = pyjwt.encode(
         {
             "email": "lead@example.com",
@@ -252,6 +282,8 @@ def test_tool_access_token_roundtrip(monkeypatch):
             "type": "tool_access",
             "aud": TOOL_ACCESS_AUDIENCE,
             "iss": SESSION_ISSUER,
+            "iat": now,
+            "exp": now + timedelta(hours=24),
         },
         tvr.TOOL_ACCESS_SECRET,
         algorithm="HS256",

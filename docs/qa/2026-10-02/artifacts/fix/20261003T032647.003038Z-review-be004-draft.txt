@@ -1,0 +1,68 @@
+UTC: 2026-10-03T03:26:47.003038+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff -- services/ingestion/app/csv_templates.py services/ingestion/tests/test_qa_sweep_20261002_contract.py
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+diff --git a/services/ingestion/app/csv_templates.py b/services/ingestion/app/csv_templates.py
+index 55ec0b71..b4e8a07e 100644
+--- a/services/ingestion/app/csv_templates.py
++++ b/services/ingestion/app/csv_templates.py
+@@ -1385,7 +1385,13 @@ async def ingest_csv(
+
+     # Read and parse CSV
+     content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
+-    text = content.decode("utf-8-sig")  # Handle BOM
++    try:
++        text = content.decode("utf-8-sig")  # Handle BOM
++    except UnicodeDecodeError as exc:
++        raise HTTPException(
++            status_code=400,
++            detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
++        ) from exc
+     file_cte: Optional[CteClassificationResult] = None
+     if fallback_cte is None:
+         # Independent questions over the same upload: ask both at once.
+diff --git a/services/ingestion/tests/test_qa_sweep_20261002_contract.py b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+index 5cb0903f..1f754f37 100644
+--- a/services/ingestion/tests/test_qa_sweep_20261002_contract.py
++++ b/services/ingestion/tests/test_qa_sweep_20261002_contract.py
+@@ -197,18 +197,15 @@ def test_csv_invalid_output_quantity_does_not_reach_persistence(csv_upload, quan
+     assert not captured
+
+
+-@pytest.mark.xfail(
+-    strict=True,
+-    raises=AssertionError,
+-    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",
+-)
++# BE-004: unsupported encodings get actionable client feedback before persistence.
+ @pytest.mark.parametrize("raw", [b"\xff\xd8\xff\xe0", b"column\nCaf\xe9\n", b"\xff\xfec\x00o\x00l\x00"])
+ def test_csv_non_utf8_upload_returns_client_error(csv_upload, raw):
+     upload, captured = csv_upload
+     response = upload(raw)
+     if captured:
+         pytest.fail("Invalid encoding reached persistence; encoding-error reproduction no longer applies")
+-    assert response.status_code in (400, 415, 422), response.text
++    assert response.status_code == 400, response.text
++    assert "UTF-8 CSV" in response.json()["detail"]
+
+
+ def test_csv_utf8_bom_is_accepted(csv_upload):
+@@ -218,6 +215,15 @@ def test_csv_utf8_bom_is_accepted(csv_upload):
+     assert len(captured) == 1
+
+
++def test_csv_utf8_non_ascii_product_is_accepted(csv_upload):
++    upload, captured = csv_upload
++    row = list(ROW)
++    row[1] = "Café kale"
++    response = upload(_csv(HEADER, row))
++    assert response.status_code == 200
++    assert captured[0].product_description == row[1]
++
++
+ @given(st.integers(min_value=1, max_value=1_000_000))
+ @settings(max_examples=60, derandomize=True, deadline=None, database=None)
+ def test_positive_finite_csv_quantities_round_trip(quantity):

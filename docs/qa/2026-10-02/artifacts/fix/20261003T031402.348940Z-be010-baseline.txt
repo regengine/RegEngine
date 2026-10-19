@@ -1,0 +1,33 @@
+UTC: 2026-10-03T03:14:02.348940+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py tests/qa_sweep_20261002/test_request_safety.py --runxfail --no-cov
+Exit: 1
+Duration: 1.25s
+Timeout: False
+
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+_____________ test_streamed_body_is_limited_without_content_length _____________
+
+body_client = <starlette.testclient.TestClient object at 0x10cbae2d0>
+
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="BE-010: body limit trusts Content-Length and permits oversized chunked bodies",
+    )
+    def test_streamed_body_is_limited_without_content_length(body_client):
+        response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+        if "content-length" in response.request.headers:
+            pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+>       assert response.status_code == 413, response.text
+E       AssertionError: {"bytes_read":10}
+E       assert 200 == 413
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/qa_sweep_20261002/test_request_safety.py:41: AssertionError
+=========================== short test summary info ============================
+FAILED tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length - AssertionError: {"bytes_read":10}
+assert 200 == 413
+ +  where 200 = <Response [200 OK]>.status_code
+1 failed, 2 passed in 0.40s

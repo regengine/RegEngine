@@ -21,6 +21,99 @@ describe('public OpenAPI spec', () => {
     );
   });
 
+  it('documents GET /records for the key-bound workspace', () => {
+    const records = publicOpenApiSpec.paths['/api/v1/records'].get;
+
+    expect(records.operationId).toBe('listRecords');
+    const params = records.parameters.map((p) => p.name);
+    expect(params).toEqual(
+      expect.arrayContaining(['tlc', 'event_type', 'status', 'source_system', 'start_date', 'end_date', 'limit', 'offset']),
+    );
+    // The workspace comes from the key: no tenant parameter on this route.
+    expect(params).not.toContain('tenant_id');
+    expect(records.responses['200'].content['application/json'].schema.$ref).toBe('#/components/schemas/RecordsResponse');
+
+    const response = publicOpenApiSpec.components.schemas.RecordsResponse;
+    expect(response.required).toEqual(['tenant_id', 'events', 'total']);
+  });
+
+  it('requires the X-Webhook-Signature and Idempotency-Key headers on ingest', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    const refs = ingest.parameters.map((p) => p.$ref);
+
+    expect(refs).toContain('#/components/parameters/WebhookSignature');
+    expect(refs).toContain('#/components/parameters/IdempotencyKey');
+    // X-Tenant-ID is not part of the documented ingest call.
+    expect(refs).not.toContain('#/components/parameters/TenantHeader');
+
+    const signature = publicOpenApiSpec.components.parameters.WebhookSignature;
+    expect(signature.name).toBe('X-Webhook-Signature');
+    expect(signature.in).toBe('header');
+    expect(signature.required).toBe(true);
+    expect(signature.description).toMatch(/HMAC-SHA256/);
+  });
+
+  it('describes the timestamp window and the 422 a future event causes', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    const timestamp = publicOpenApiSpec.components.schemas.IngestEvent.properties.timestamp.description;
+
+    expect(ingest.responses['422'].$ref).toBe('#/components/responses/ValidationFailed');
+    expect(publicOpenApiSpec.components.responses.ValidationFailed.description).toMatch(/nothing is stored/i);
+    expect(timestamp).toMatch(/older than 90 days[^.]*rejected/);
+    expect(timestamp).toMatch(/24 hours ahead[^.]*422/);
+    expect(timestamp).not.toMatch(/24 hours ahead[^.]*rejected/);
+  });
+
+  it('documents the idempotency 409 with the flat body the middleware returns', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    const conflict = publicOpenApiSpec.components.responses.IdempotencyConflict;
+    const schema = conflict.content['application/json'].schema;
+
+    expect(ingest.responses['409'].$ref).toBe('#/components/responses/IdempotencyConflict');
+    // services/shared/idempotency.py _error() returns json.dumps({"error": code}): flat, not nested.
+    expect(schema.type).toBe('object');
+    expect(schema.required).toEqual(['error']);
+    expect(schema.properties.error.type).toBe('string');
+    expect(schema.properties.error.enum).toEqual(['idempotency_key_conflict', 'idempotency_request_in_progress']);
+  });
+
+  it('documents 402 and 403 and ties each operation to a scope', () => {
+    const ingest = publicOpenApiSpec.paths['/api/v1/webhooks/ingest'].post;
+    expect(ingest.responses['402'].$ref).toBe('#/components/responses/PaymentRequired');
+    expect(ingest.responses['403'].$ref).toBe('#/components/responses/Forbidden');
+    expect(publicOpenApiSpec.paths['/api/v1/fda/export/all'].get.responses['402']).toBeDefined();
+
+    const scopes = {
+      '/api/v1/webhooks/ingest': ['post', 'webhooks.ingest'],
+      '/api/v1/webhooks/recent': ['get', 'webhooks.read'],
+      '/api/v1/webhooks/chain/verify': ['get', 'webhooks.read'],
+      '/api/v1/records': ['get', 'records.read'],
+      '/api/v1/records/ingestion-runs': ['get', 'records.read'],
+      '/api/v1/fda/export/all': ['get', 'fda.export'],
+    } as const;
+    const paths = publicOpenApiSpec.paths as Record<string, Record<string, Record<string, unknown>>>;
+    for (const [path, [method, scope]] of Object.entries(scopes)) {
+      expect(paths[path][method]['x-required-scope'], `${method} ${path}`).toBe(scope);
+      expect(JSON.stringify(paths[path][method].responses), `${method} ${path} responses`).toContain('Forbidden');
+    }
+
+    // Every public operation declares a scope; none is left implied.
+    for (const [path, operations] of Object.entries(paths)) {
+      for (const [method, operation] of Object.entries(operations)) {
+        expect(operation['x-required-scope'], `${method} ${path}`).toBeTruthy();
+      }
+    }
+  });
+
+  it('does not publish numeric rate limits or promise headers on a 429', () => {
+    const spec = publicOpenApiSpec;
+    const limitHeader = spec.paths['/api/v1/webhooks/ingest'].post.responses['200'].headers['X-RateLimit-Limit'];
+
+    expect(limitHeader.schema).not.toHaveProperty('example');
+    expect(spec.components.responses.RateLimited).not.toHaveProperty('headers');
+    expect(spec.components.responses.RateLimited.description).toMatch(/not reliably sent/i);
+  });
+
   it('does not expose internal service routes in the public spec', () => {
     const serialized = JSON.stringify(publicOpenApiSpec);
 
@@ -29,6 +122,23 @@ describe('public OpenAPI spec', () => {
     expect(Object.keys(publicOpenApiSpec.paths).every((path) => path.startsWith('/api/v1/'))).toBe(true);
     expect(publicOpenApiSpec.components.parameters.TenantHeader.required).toBe(false);
     expect(publicOpenApiSpec.components.parameters.TenantHeader.description).toMatch(/optional tenant assertion/i);
+  });
+
+  it('documents the runtime nested error envelope without dropping bespoke fields', () => {
+    const schema = publicOpenApiSpec.components.schemas.ErrorResponse;
+    expect(schema.required).toEqual(['error']);
+    expect(schema.properties.error.type).toBe('object');
+    expect(schema.properties.error.required).toEqual(['type', 'message']);
+    expect(schema.properties.error.additionalProperties).toBe(true);
+    expect(schema.properties).not.toHaveProperty('detail');
+    for (const [name, response] of Object.entries(publicOpenApiSpec.components.responses)) {
+      // The idempotency middleware answers before the error handlers and returns a flat
+      // {"error": code}; its shape is pinned by its own test above. Every other error
+      // response must keep the nested envelope.
+      if (name === 'IdempotencyConflict') continue;
+      const schema = response.content['application/json'].schema as { $ref?: string };
+      expect(schema.$ref).toBe('#/components/schemas/ErrorResponse');
+    }
   });
 
   it('serves one identical spec from both public URLs', async () => {

@@ -12,6 +12,11 @@ import { Field } from '@/components/ui/field';
 import { fieldControlClasses } from '@/components/ui/field-control';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit } from '@/lib/conversion-events';
+
+function leadErrorCode(error?: string): 'validation' | 'server' {
+    return error?.includes('required') || error?.includes('valid email') ? 'validation' : 'server';
+}
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Props                                                        */
@@ -52,7 +57,7 @@ const selectClass = cn(fieldControlClasses, 'pr-2');
 export function LeadGate({
     source,
     headline = 'Unlock Your Full Results',
-    subheadline = 'The founder personally reviews every submission — typically within one business day.',
+    subheadline = 'The founder personally reviews every submission, typically within one business day.',
     ctaText = 'Unlock Full Results',
     toolContext,
     teaser,
@@ -74,13 +79,13 @@ export function LeadGate({
     // render without breaking SSR.
     useEffect(() => {
         if (typeof window === 'undefined') return;
-        const params = new URLSearchParams(window.location.search);
+        const attribution = getConversionAttribution();
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setUtmParams({
-            utmSource: params.get('utm_source') || '',
-            utmMedium: params.get('utm_medium') || '',
-            utmCampaign: params.get('utm_campaign') || '',
-            referrer: document.referrer || '',
+            utmSource: attribution.utm_source || '',
+            utmMedium: attribution.utm_medium || '',
+            utmCampaign: attribution.utm_campaign || '',
+            referrer: getReferrerHostname(),
         });
     }, []);
 
@@ -122,14 +127,24 @@ export function LeadGate({
                 ...utmParams,
             };
 
-            const result = await submitAssessment(data);
+            let result;
+            try {
+                result = await submitAssessment(data);
+            } catch {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'error', error_code: 'server' });
+                setError('Something went wrong.');
+                setSubmitting(false);
+                return;
+            }
             setSubmitting(false);
 
             if (!result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'error', error_code: leadErrorCode(result.error) });
                 setError(result.error || 'Something went wrong.');
                 return;
             }
 
+            trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: source, outcome: 'success' });
             // Persist a non-PII flag so returning visitors bypass the gate
             try { localStorage.setItem('re_lead_captured', '1'); } catch {}
             setGateData(data);
@@ -156,12 +171,26 @@ export function LeadGate({
                 productCategories: fd.get('productCategories') as string,
             };
 
-            await submitAssessment(enrichData);
+            let result;
+            try {
+                result = await submitAssessment(enrichData);
+            } catch {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'error', error_code: 'server' });
+                setSubmitting(false);
+                setStep('done');
+                onUnlock?.();
+                return;
+            }
+            if (result.success) {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'success' });
+            } else {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'enrich', tool: source, outcome: 'error', error_code: leadErrorCode(result.error) });
+            }
             setSubmitting(false);
             setStep('done');
             onUnlock?.();
         },
-        [gateData, onUnlock],
+        [gateData, onUnlock, source],
     );
 
     const skipEnrichment = useCallback(() => {
@@ -192,7 +221,7 @@ export function LeadGate({
                 <Card padding="spacious">
                     <div className="mb-5 text-center">
                         <Badge tone="brand" className="mb-3">
-                            <Lock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> Free — No Credit Card
+                            <Lock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> Free. No Credit Card
                         </Badge>
                         <h3 className="text-subheading text-re-text-primary">{headline}</h3>
                         <p className="mt-1 text-ui text-re-text-secondary">{subheadline}</p>
@@ -254,7 +283,7 @@ export function LeadGate({
                         </Badge>
                         <h3 className="text-subheading text-re-text-primary">Help us personalize your report</h3>
                         <p className="mt-1 text-ui text-re-text-secondary">
-                            Optional — these details help our founder tailor recommendations to your situation.
+                            Optional. These details help our founder tailor recommendations to your situation.
                         </p>
                     </div>
                     <form onSubmit={handleEnrichSubmit} className="space-y-3">
@@ -263,8 +292,8 @@ export function LeadGate({
                                 <select id="lead-gate-facility-count" name="facilityCount" className={selectClass}>
                                     <option value="">Number of Facilities</option>
                                     <option value="1">1 facility</option>
-                                    <option value="2-5">2–5 facilities</option>
-                                    <option value="6-20">6–20 facilities</option>
+                                    <option value="2-5">2 to 5 facilities</option>
+                                    <option value="6-20">6 to 20 facilities</option>
                                     <option value="20+">20+ facilities</option>
                                 </select>
                             </Field>
@@ -272,9 +301,9 @@ export function LeadGate({
                                 <select id="lead-gate-annual-revenue" name="annualRevenue" className={selectClass}>
                                     <option value="">Annual Revenue Range</option>
                                     <option value="under-1m">Under $1M</option>
-                                    <option value="1m-5m">$1M – $5M</option>
-                                    <option value="5m-25m">$5M – $25M</option>
-                                    <option value="25m-100m">$25M – $100M</option>
+                                    <option value="1m-5m">$1M to $5M</option>
+                                    <option value="5m-25m">$5M to $25M</option>
+                                    <option value="25m-100m">$25M to $100M</option>
                                     <option value="100m+">$100M+</option>
                                 </select>
                             </Field>
@@ -303,7 +332,7 @@ export function LeadGate({
                                     <option value="publix">Publix</option>
                                     <option value="aldi">ALDI</option>
                                     <option value="other">Other</option>
-                                    <option value="none">No retail — B2B only</option>
+                                    <option value="none">No retail, B2B only</option>
                                 </select>
                             </Field>
                         </div>
@@ -311,8 +340,8 @@ export function LeadGate({
                             <Field label="FSMA 204 Deadline Awareness" htmlFor="lead-gate-compliance-deadline">
                                 <select id="lead-gate-compliance-deadline" name="complianceDeadline" className={selectClass}>
                                     <option value="">FSMA 204 Deadline Awareness</option>
-                                    <option value="aware-on-track">Aware — working on it</option>
-                                    <option value="aware-behind">Aware — behind schedule</option>
+                                    <option value="aware-on-track">Aware, working on it</option>
+                                    <option value="aware-behind">Aware, behind schedule</option>
                                     <option value="unaware">Not sure about timeline</option>
                                     <option value="not-applicable">Don&apos;t think it applies to us</option>
                                 </select>
@@ -320,8 +349,8 @@ export function LeadGate({
                             <Field label="Recent FDA Inspection?" htmlFor="lead-gate-recent-fda-inspection">
                                 <select id="lead-gate-recent-fda-inspection" name="recentFdaInspection" className={selectClass}>
                                     <option value="">Recent FDA Inspection?</option>
-                                    <option value="yes-12mo">Yes — within 12 months</option>
-                                    <option value="yes-older">Yes — more than 12 months ago</option>
+                                    <option value="yes-12mo">Yes, within 12 months</option>
+                                    <option value="yes-older">Yes, more than 12 months ago</option>
                                     <option value="no">No</option>
                                     <option value="unsure">Not sure</option>
                                 </select>

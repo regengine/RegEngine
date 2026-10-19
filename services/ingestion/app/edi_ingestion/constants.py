@@ -57,12 +57,16 @@ _REQUIRED_856_SEGMENTS = {"ISA", "GS", "ST", "BSN", "HL", "SE", "GE", "IEA"}
 _REQUIRED_850_SEGMENTS = {"ISA", "GS", "ST", "BEG", "SE", "GE", "IEA"}
 _REQUIRED_810_SEGMENTS = {"ISA", "GS", "ST", "BIG", "SE", "GE", "IEA"}
 _REQUIRED_861_SEGMENTS = {"ISA", "GS", "ST", "BRA", "SE", "GE", "IEA"}
+_REQUIRED_944_SEGMENTS = {"ISA", "GS", "ST", "W17", "SE", "GE", "IEA"}
+_REQUIRED_945_SEGMENTS = {"ISA", "GS", "ST", "W06", "SE", "GE", "IEA"}
 
 _REQUIRED_SEGMENTS_BY_SET: dict[str, set[str]] = {
     "856": _REQUIRED_856_SEGMENTS,
     "850": _REQUIRED_850_SEGMENTS,
     "810": _REQUIRED_810_SEGMENTS,
     "861": _REQUIRED_861_SEGMENTS,
+    "944": _REQUIRED_944_SEGMENTS,
+    "945": _REQUIRED_945_SEGMENTS,
 }
 
 _CTE_TYPE_BY_SET: dict[str, WebhookCTEType] = {
@@ -70,6 +74,8 @@ _CTE_TYPE_BY_SET: dict[str, WebhookCTEType] = {
     "850": WebhookCTEType.SHIPPING,
     "810": WebhookCTEType.SHIPPING,
     "861": WebhookCTEType.RECEIVING,
+    "944": WebhookCTEType.RECEIVING,
+    "945": WebhookCTEType.SHIPPING,
 }
 
 # Line-item segment carrying the quantity element for each supported set.
@@ -81,4 +87,19 @@ _QUANTITY_SEGMENT_BY_SET: dict[str, str] = {
     "850": "PO1",
     "810": "IT1",
     "861": "RCD",
+    "944": "W07",
+    "945": "W12",
+}
+
+# Index of the quantity element inside that line-item segment.
+# 856/850/810/861 all carry quantity at element 02 (index 2).
+# 944 W0701 is quantity received (index 1). 945 W1203 is units shipped
+# (index 3). W1202 is quantity ordered and must not be read as shipped.
+_QUANTITY_ELEMENT_INDEX_BY_SET: dict[str, int] = {
+    "856": 2,
+    "850": 2,
+    "810": 2,
+    "861": 2,
+    "944": 1,
+    "945": 3,
 }

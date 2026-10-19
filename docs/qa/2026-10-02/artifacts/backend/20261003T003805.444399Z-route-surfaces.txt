@@ -1,0 +1,508 @@
+UTC: 2026-10-03T00:38:05.444399+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["services/ingestion/app/webhook_compat.py","services/ingestion/tests/test_webhook_router_v2_idor_f1.py","services/ingestion/tests/test_webhook_models.py"]; [(print("FILE",p),print(Path(p).read_text()[:6000])) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE services/ingestion/app/webhook_compat.py
+"""Compatibility helpers for webhook auth and ingestion.
+
+This module is the stable import surface for non-router ingestion modules.
+All auth logic delegates to ``shared.auth.require_api_key`` — the single
+canonical auth path for every RegEngine service.
+
+Legacy ``webhook_router.py`` has been retired; ``webhook_router_v2.py``
+remains the mounted HTTP router.
+
+Note: ``ingest_events()`` here does NOT call the v2 router endpoint
+directly because that function depends on FastAPI DI params
+(``principal``, ``_auth``, ``db_session``) that are unavailable
+outside HTTP context.  Instead it performs the core ingestion logic
+using the same internal helpers and persistence layer.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Union
+
+from fastapi import Depends, Header, HTTPException, Request
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, require_api_key
+from shared.database import get_db_session as _get_db_session
+from shared.tenant_context import TenantContext, resolve_tenant_context
+
+from .webhook_models import EventResult, IngestResponse, WebhookPayload
+from .webhook_router_v2 import (
+    _check_rate_limit,
+    _generate_alerts,
+    _publish_graph_sync,
+    _validate_event_kdes,
+    _verify_api_key as _verify_api_key_sync,
+)
+
+logger = logging.getLogger("webhook-compat")
+
+
+async def _verify_api_key(
+    request: Request,
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+) -> Union[APIKey, APIKeyResponse]:
+    """Auth gate — delegates to shared.auth.require_api_key.
+
+    This is the stable import surface for ingestion sub-routers.
+    All auth logic (preshared key, scoped keys, test bypass) lives
+    in ``shared/auth.py``. The accepted key is stored on ``request.state``
+    and resolved through the shared tenant context so legacy routers cannot
+    use path/query/header tenant claims to pivot across tenants.
+    """
+    api_key = [REDACTED] require_api_key(
+        request=request,
+        x_regengine_api_key=[REDACTED],
+    )
+    request.state.tenant_context = await resolve_tenant_context(request)
+    return api_key
+
+
+async def require_tenant_context(
+    request: Request,
+    _api_key: [REDACTED], APIKeyResponse] = Depends(_verify_api_key),
+) -> TenantContext:
+    """Return the authenticated tenant context for legacy route handlers."""
+    ctx = getattr(request.state, "tenant_context", None)
+    if ctx is None:
+        ctx = await resolve_tenant_context(request)
+        request.state.tenant_context = ctx
+    return ctx
+
+
+@dataclass
+class SourceFileReceipt:
+    """The uploaded file an ingestion run retains verbatim (fsma.manifest_blobs).
+
+    ``record_count`` counts the file's data rows including ones the parser
+    rejected; ``parse_errors`` are those rejections, recorded on the run so
+    the receipt accounts for every row, not only the ones that became events.
+    """
+
+    filename: str
+    raw_bytes: bytes
+    content_type: Optional[str] = None
+    initiated_by: Optional[str] = None
+    record_count: int = 0
+    parse_errors: List[str] = field(default_factory=list)
+
+    @property
+    def sha256(self) -> str:
+        return hashlib.sha256(self.raw_bytes).hexdigest()
+
+
+def _run_source_system(source: str):
+    from shared.canonical_event import IngestionSource
+
+    try:
+        return IngestionSource(source)
+    except ValueError:
+        return IngestionSource.CSV_UPLOAD
+
+
+def _open_ingestion_run(db_session, tenant_id: str, source: str, receipt: SourceFileReceipt) -> str:
+    """Record the upload before any row is processed.
+
+    Writes the fsma.ingestion_runs row (file name, SHA-256, size, row count)
+    and the verbatim bytes to fsma.manifest_blobs, the same retention the
+    supplier-remediation path uses. Runs in the caller's transaction: if the
+    receipt cannot be written the upload fails, because events without a
+    retained source are exactly what the receipt exists to prevent.
+    """
+    from shared.canonical_event import IngestionRun
+    from shared.canonical_persistence import CanonicalEventStore
+    from sqlalchemy import text
+
+    store = CanonicalEventStore(db_session, dual_write=False)
+    run = IngestionRun(
+        tenant_id=tenant_id,
+        source_system=_run_source_system(source),
+        source_file_name=receipt.filename,
+        source_file_hash=receipt.sha256,
+        source_file_size=len(receipt.raw_bytes),
+        record_count=receipt.record_count,
+        initiated_by=receipt.initiated_by,
+    )
+    run_id = store.create_ingestion_run(run)
+    db_session.execute(
+        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
+        text(
+            """
+            INSERT INTO fsma.manifest_blobs
+                (ingestion_run_id, tenant_id, raw_bytes, sha256,
+                 original_filename, content_type, uploaded_by)
+            VALUES
+                (CAST(:run_id AS uuid), CAST(:tenant_id AS uuid), :raw_bytes,
+                 :sha256, :filename, :content_type, :uploaded_by)
+            """
+        ),
+        {
+            "run_id": run_id,
+            "tenant_id": tenant_id,
+            "raw_bytes": receipt.raw_bytes,
+            "sha256": receipt.sha256,
+            "filename": receipt.filename,
+            "content_type": receipt.content_type,
+            "uploaded_by": receipt.initiated_by,
+        },
+    )
+    return run_id
+
+
+def _close_ingestion_run(
+    db_session,
+    run_id: str,
+    tenant_id: str,
+    *,
+    accepted: int,
+    rejected: int,
+    results: List[EventResult],
+    receipt: SourceFileReceipt,
+) -> None:
+    """Close the run with counts that cover every row of the file."""
+    from shared.canonical_persistence import CanonicalEventStore
+
+    errors: List[Dict[str, Any]] = [{"stage": "parse", "error": err} for err in receipt.parse_errors]
+    for result in results:
+        if result.status == "rejected":
+            errors.appen
+FILE services/ingestion/tests/test_webhook_router_v2_idor_f1.py
+"""F-1 / F-4 (re-audit): cross-tenant IDOR + read rate-limit on
+``/api/v1/webhooks/recent`` and ``/api/v1/webhooks/chain/verify``.
+
+Before this PR these two routes only required ``Depends(_verify_api_key)``
+— a header-presence gate that does NOT validate the key. Any caller with
+ANY non-empty API key value could pass ``?tenant_id=<victim>`` and read
+recent CTE rows + chain integrity status for any tenant.
+
+Fix mirrors PR #2249 (stripe-portal IDOR): bind the URL ``tenant_id`` to
+the authenticated principal's tenant, return **404** on mismatch (avoid
+tenant-existence oracle), and apply a tighter read-side rate limit.
+"""
+
+from __future__ import annotations
+
+import sys
+import types
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+service_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(service_dir))
+
+pytest.importorskip("fastapi")
+
+import app.webhook_router_v2 as wr  # noqa: E402
+from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.subscription_gate import require_active_subscription  # noqa: E402
+from shared.database import get_db_session  # noqa: E402
+
+TENANT_A = "00000000-0000-0000-0000-0000000000aa"
+TENANT_B = "00000000-0000-0000-0000-0000000000bb"
+
+
+# ---------------------------------------------------------------------------
+# Fakes
+# ---------------------------------------------------------------------------
+
+
+class _FakeExecuteResult:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return list(self._rows)
+
+
+class _FakeSession:
+    def __init__(self, rows=None):
+        self._rows = rows or []
+        self.closed = False
+
+    def execute(self, _stmt, _params=None):
+        return _FakeExecuteResult(self._rows)
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeChainResult:
+    def __init__(self):
+        self.valid = True
+        self.chain_length = 1
+        self.errors: list[str] = []
+        self.checked_at = "2026-05-09T00:00:00+00:00"
+
+
+class _FakePersistence:
+    def __init__(self, _session):
+        pass
+
+    def verify_chain(self, _tenant_id):
+        return _FakeChainResult()
+
+
+# ---------------------------------------------------------------------------
+# App harness
+# ---------------------------------------------------------------------------
+
+
+def _install_db_stubs(monkeypatch):
+    session = _FakeSession(
+        rows=[
+            (
+                "evt-1",
+                "shipping",
+                "TLC-1",
+                "Romaine",
+                10.0,
+                "cases",
+                "Valley Fresh",
+                "test",
+                datetime(2026, 5, 9, 0, 0, 0, tzinfo=timezone.utc),
+            )
+        ]
+    )
+    fake_db = types.ModuleType("shared.database")
+    fake_db.SessionLocal = lambda: _FakeSession(rows=session._rows)
+    fake_db.get_db_session = lambda: iter([session])
+    monkeypatch.setitem(sys.modules, "shared.database", fake_db)
+
+    fake_cte = types.ModuleType("shared.cte_persistence")
+    fake_cte.CTEPersistence = _FakePersistence
+    monkeypatch.setitem(sys.modules, "shared.cte_persistence", fake_cte)
+    return session
+
+
+def _build_app(*, principal: Optional[IngestionPrincipal]) -> FastAPI:
+    app = FastAPI()
+    app.include_router(wr.router)
+    if principal is not None:
+        app.dependency_overrides[get_ingestion_principal] = lambda: principal
+    # Header-presence gate is covered separately; bypass it here so we
+    # exercise the principal binding logic.
+    app.dependency_overrides[wr._verify_api_key_present] = lambda: None
+    app.dependency_overrides[wr._verify_api_key] = lambda: None
+    app.dependency_overrides[require_active_subscription] = lambda: None
+    return app
+
+
+def _client(monkeypatch, *, principal, allow_rate_limit: bool = True):
+    _install_db_stubs(monkeypatch)
+    if allow_rate_limit:
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
+    monkeypatch.delenv("API_KEY", raising=False)
+    monkeypatch.delenv("REGENGINE_API_KEY", raising=False)
+    monkeypatch.delenv("WEBHOOK_HMAC_SECRET", raising=False)
+    return TestClient(_build_app(principal=principal))
+
+
+def _scoped_principal(tenant_id: str) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id="key-scoped",
+        scopes=["webhooks.read"],
+        tenant_id=tenant_id,
+        auth_mode="test",
+    )
+
+
+# ---------------------------------------------------------------------------
+# F-1: tenant binding
+# ---------------------------------------------------------------------------
+
+
+class TestRecentTenantBinding:
+    def test_recent_rejects_cross_tenant_read(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_B},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 404, resp.text
+        # Must NOT leak victim tenant data.
+        assert "events" not in resp.json() or resp.json().get("events") in (None, [])
+
+    def test_recent_succeeds_for_own_tenant(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/recent",
+            params={"tenant_id": TENANT_A, "limit": 5},
+            headers={"X-RegEngine-API-Key": "any"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["tenant_id"] == TENANT_A
+        assert isinstance(body["events"], list)
+
+
+class TestChainVerifyTenantBinding:
+    def test_chain_verify_rejects_cross_tenant(self, monkeypatch):
+        client = _client(monkeypatch, principal=_scoped_principal(TENANT_A))
+        resp = client.get(
+            "/api/v1/webhooks/chain/verify",
+            params={"tenant_id": TENANT_B},
+   
+FILE services/ingestion/tests/test_webhook_models.py
+"""Unit tests for webhook ingestion models (app/webhook_models.py)."""
+
+import sys
+from pathlib import Path
+
+_ingestion_dir = Path(__file__).resolve().parent.parent
+if str(_ingestion_dir) not in sys.path:
+    sys.path.insert(0, str(_ingestion_dir))
+
+_services_dir = _ingestion_dir.parent
+if str(_services_dir) not in sys.path:
+    sys.path.insert(0, str(_services_dir))
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+from app.webhook_models import IngestEvent, WebhookCTEType, validate_gln
+from pydantic import ValidationError
+
+
+def _valid_event_kwargs(**overrides):
+    """Return a minimal valid IngestEvent dict, with optional overrides."""
+    now = datetime.now(timezone.utc)
+    base = {
+        "cte_type": "shipping",
+        "traceability_lot_code": "LOT-001",
+        "product_description": "Roma Tomatoes",
+        "quantity": 100.0,
+        "unit_of_measure": "cases",
+        "location_name": "Warehouse A",
+        "timestamp": now.isoformat(),
+    }
+    base.update(overrides)
+    return base
+
+
+class TestValidateGln:
+    """Tests for the standalone validate_gln helper."""
+
+    def test_valid_gln(self):
+        # 0614141000036 is a well-known GS1 example GLN
+        is_valid, err = validate_gln("0614141000036")
+        assert is_valid is True
+        assert err is None
+
+    def test_wrong_check_digit(self):
+        # Change last digit from 6 to 0
+        is_valid, err = validate_gln("0614141000030")
+        assert is_valid is False
+        assert "check digit" in err.lower()
+
+    def test_wrong_length_short(self):
+        is_valid, err = validate_gln("061414")
+        assert is_valid is False
+        assert "13 digits" in err
+
+    def test_wrong_length_long(self):
+        is_valid, err = validate_gln("06141410000361")
+        assert is_valid is False
+        assert "13 digits" in err
+
+    def test_strips_non_digit_characters(self):
+        # validate_gln strips non-digits; "0614-1410-0003-6" has 13 digits
+        is_valid, err = validate_gln("0614-1410-0003-6")
+        assert is_valid is True
+
+
+class TestWebhookCTEType:
+    """Tests for WebhookCTEType enum."""
+
+    def test_has_all_cte_types(self):
+        # 7 canonical FSMA 204 CTEs + "growing" (legacy/internal, not an FDA CTE)
+        assert len(WebhookCTEType) == 8
+
+    def test_expected_members(self):
+        expected = {
+            "growing",  # legacy/internal — normalizes to farm metadata
+            "harvesting",
+            "cooling",
+            "initial_packing",
+            "first_land_based_receiving",
+            "shipping",
+            "receiving",
+            "transformation",
+        }
+        actual = {m.value for m in WebhookCTEType}
+        assert actual == expected
+
+
+class TestIngestEvent:
+    """Tests for IngestEvent Pydantic model."""
+
+    def test_accepts_valid_event(self):
+        event = IngestEvent(**_valid_event_kwargs())
+        assert event.cte_type == WebhookCTEType.SHIPPING
+        assert event.quantity == 100.0
+
+    def test_rejects_future_timestamp(self):
+        future = datetime.now(timezone.utc) + timedelta(hours=48)
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(**_valid_event_kwargs(timestamp=future.isoformat()))
+        errors = exc_info.value.errors()
+        assert any("future" in str(e["msg"]).lower() for e in errors)
+
+    def test_accepts_unknown_unit_of_measure_with_normalization(self):
+        """Unknown units are accepted (warning-only) and lowercased."""
+        event = IngestEvent(**_valid_event_kwargs(unit_of_measure="bushels_of_fun"))
+        assert event.unit_of_measure == "bushels_of_fun"
+
+    def test_accepts_valid_units(self):
+        for unit in ["lbs", "kg", "cases", "pallets", "each"]:
+            event = IngestEvent(**_valid_event_kwargs(unit_of_measure=unit))
+            assert event.unit_of_measure == unit
+
+    def test_requires_location_gln_or_name(self):
+        """FSMA 204 requires at least one location identifier."""
+        with pytest.raises(ValidationError) as exc_info:
+            IngestEvent(
+                **_valid_event_kwargs(
+                    location_name=None,
+                    location_gln=None,
+                )
+            )
+        errors = exc_info.value.errors()
+        assert any("location" in str(e["msg"]).lower() for e in errors)
+
+    def test_location_kde_satisfies_requirement(self):
+        """A location KDE (e.g. ship_from_location) should satisfy the location check."""
+        event = IngestEvent(
+            **_valid_event_kwargs(
+                location_name=None,
+                location_gln=None,
+                kdes={"ship_from_location": "Some Warehouse"},
+            )
+        )
+        assert event.location_name is None
+        assert event.kdes["ship_from_location"] == "Some Warehouse"
+
+    def test_accepts_historical_timestamp(self):
+        past = datetime.now(timezone.utc) - timedelta(days=180)
+        event = IngestEvent(**_valid_event_kwargs(timestamp=past.isoformat()))
+        assert event.timestamp == past.isoformat()
+
+    def test_rejects_invalid_iso_timestamp(self):
+        with pytest.raises(ValidationError):
+            IngestEvent(**_valid_event_kwargs(timestamp="not-a-date"))
+

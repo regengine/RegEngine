@@ -14,6 +14,7 @@ import dataclasses
 import io
 import itertools
 import logging
+import math
 import re
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
@@ -49,8 +50,10 @@ from shared.tenant_context import set_tenant_guc
 
 from .authz import IngestionPrincipal, require_permission
 from .config import get_settings
+from .shared.csv_safety import sanitize_cell
 from .shared.tenant_resolution import resolve_principal_tenant_id
 from .shared.upload_limits import MAX_CSV_FILE_SIZE_BYTES, read_upload_with_limit
+from .shared.xlsx_rows import is_xlsx_upload, reject_unsupported_excel, xlsx_to_csv_text
 from .webhook_compat import SourceFileReceipt, ingest_events
 from .webhook_models import (
     REQUIRED_KDES_BY_CTE,
@@ -216,8 +219,10 @@ def _generate_csv_template(cte_type: str) -> str:
     # Row 1: Column headers
     writer.writerow([col[0] for col in columns])
 
-    # Row 2: Example data
-    writer.writerow([col[1] for col in columns])
+    # Row 2: Example data. Sanitized with the same sanitize_cell the FDA
+    # export uses: an example such as "+1-202-555-0100" would otherwise open
+    # in Excel as a live formula instead of sample text.
+    writer.writerow([sanitize_cell(col[1]) for col in columns])
 
     # Row 3: Descriptions (commented)
     writer.writerow([f"# {col[2]}" for col in columns])
@@ -322,7 +327,9 @@ _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 # Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
 # yields after the header. DictReader skips completely blank lines, so they
 # do not count; comment rows and all-empty rows do. The next row is an error
-# and parsing stops. _file_cte_type_for_jev scans exactly these rows.
+# and parsing stops; rows past it are counted (not stored) and reported as
+# skipped so the caller knows exactly what was dropped.
+# _file_cte_type_for_jev scans exactly these rows.
 MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
@@ -696,6 +703,8 @@ def _parse_input_quantities(
             quantity = float(quantity_text)
         except ValueError:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is not a number", None
+        if not math.isfinite(quantity):
+            return [], f"input quantity {quantity_text!r} for input lot {lot} must be finite", None
         if quantity < 0:
             return [], f"input quantity {quantity_text!r} for input lot {lot} is negative", None
         if not unit_text:
@@ -740,12 +749,37 @@ def parse_csv_rows(
     # endings, a field over csv.field_size_limit(), usually from an unclosed
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
+    skipped_overflow = 0
     try:
         header = reader.fieldnames
+        if header and any(name.strip() for name in header):
+            seen_columns: dict[str, int] = {}
+            for position, name in enumerate(header, start=1):
+                normalized = normalize_csv_header(name)
+                if normalized in seen_columns:
+                    return (
+                        [],
+                        [
+                            f"CSV has duplicate column {normalized!r} at positions "
+                            f"{seen_columns[normalized]} and {position}; column names must be unique"
+                        ],
+                        [],
+                    )
+                seen_columns[normalized] = position
         for record in reader:
             records.append(record)
             if len(records) > MAX_CSV_ROWS:
                 break
+        if len(records) > MAX_CSV_ROWS:
+            # The cap below rejects the first over-limit record, but the
+            # file may hold many more rows the reader never reached. Count
+            # them (without storing them) so the caller learns exactly what
+            # was dropped instead of silently losing data.
+            try:
+                skipped_overflow = sum(1 for _ in reader)
+            except csv.Error:
+                # A malformed tail must not break the rows already read.
+                skipped_overflow = 0
     except csv.Error as exc:
         line = reader.reader.line_num
         logger.warning("csv_unreadable line=%s error=%s", line, exc)
@@ -763,6 +797,10 @@ def parse_csv_rows(
     for row_num, row in enumerate(records, start=2):
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
         if row_num - 1 > MAX_CSV_ROWS:
+            if skipped_overflow:
+                parse_errors.append(
+                    f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
+                )
             parse_errors.append(f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}")
             break
         # DictReader files values past the last header column under the None
@@ -827,6 +865,15 @@ def parse_csv_rows(
                 quantity = float(quantity_raw)
             except ValueError:
                 parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' is not a number")
+                continue
+            # IngestEvent requires a finite quantity greater than 0. Reject
+            # here with a row-specific message instead of falling through to
+            # the generic "could not be parsed" handler below.
+            if not math.isfinite(quantity):
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be a finite number")
+                continue
+            if quantity <= 0:
+                parse_errors.append(f"Row {row_num}: quantity '{quantity_raw}' must be greater than 0")
                 continue
 
             # Lot code: extract and run integrity checks
@@ -1342,7 +1389,8 @@ def _cte_type_suggestion_result(
     description=(
         "Parse a CSV file, validate rows, and persist CTE events to the database. "
         "Supports single-type files (pass cte_type) or mixed-type files with a "
-        "cte_type/event_type column per row."
+        "cte_type/event_type column per row. An Excel .xlsx workbook is also "
+        "accepted and read like the same data saved as CSV (first sheet, or sheet_name)."
     ),
 )
 async def ingest_csv(
@@ -1350,6 +1398,7 @@ async def ingest_csv(
     cte_type: Optional[str] = Form(None, description="CTE type (optional if CSV has cte_type column)"),
     source: str = Form("csv_upload", description="Source identifier"),
     tenant_id: Optional[str] = Form(None, description="Optional tenant assertion; must match the credential"),
+    sheet_name: Optional[str] = Form(None, description="Worksheet to read from an .xlsx upload (default: first sheet)"),
     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
@@ -1366,9 +1415,29 @@ async def ingest_csv(
 
     tenant_id = resolve_principal_tenant_id(tenant_id, x_tenant_id, principal.tenant_id)
 
-    # Read and parse CSV
-    content = await read_upload_with_limit(file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="CSV file")
-    text = content.decode("utf-8-sig")  # Handle BOM
+    # Read and parse CSV. An .xlsx workbook is converted to the same CSV
+    # text first, so everything below treats both formats alike.
+    reject_unsupported_excel(file.filename, file.content_type)
+    is_xlsx_name = is_xlsx_upload(file.filename, None)
+    content = await read_upload_with_limit(
+        file, max_bytes=MAX_CSV_FILE_SIZE_BYTES, label="Excel file" if is_xlsx_name else "CSV file"
+    )
+    xlsx_warnings: list[str] = []
+    if is_xlsx_upload(file.filename, file.content_type, content):
+        text, xlsx_warnings = await run_in_threadpool(
+            xlsx_to_csv_text, content, sheet_name=sheet_name, max_data_rows=MAX_CSV_ROWS
+        )
+        if source == "csv_upload":
+            # Record the real format in the ingestion run's source_system.
+            source = "xlsx_upload"
+    else:
+        try:
+            text = content.decode("utf-8-sig")  # Handle BOM
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="CSV file must be UTF-8 encoded. Export the file as UTF-8 CSV and try again.",
+            ) from exc
     file_cte: Optional[CteClassificationResult] = None
     if fallback_cte is None:
         # Independent questions over the same upload: ask both at once.
@@ -1393,9 +1462,13 @@ async def ingest_csv(
     events, parse_errors, kde_warnings = parse_csv_rows(
         text, fallback_cte, header_mapping=header_mapping.applied_mapping
     )
+    kde_warnings.extend(xlsx_warnings)
 
     if not events and parse_errors:
         detail: dict = {"message": "No valid rows found", "errors": parse_errors}
+        if xlsx_warnings:
+            detail["kde_warnings"] = kde_warnings
+            detail["kde_warning_count"] = len(kde_warnings)
         suggestion = _cte_type_suggestion_result(file_cte)
         if suggestion is not None:
             # The uploader can re-upload with this CTE in one step.
@@ -1408,6 +1481,15 @@ async def ingest_csv(
             ]
         raise HTTPException(status_code=400, detail=detail)
     if not events:
+        if xlsx_warnings:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "CSV contained no data rows",
+                    "kde_warnings": kde_warnings,
+                    "kde_warning_count": len(kde_warnings),
+                },
+            )
         raise HTTPException(status_code=400, detail="CSV contained no data rows")
 
     payload = WebhookPayload(source=source, events=events, tenant_id=tenant_id)
@@ -1462,7 +1544,7 @@ async def ingest_csv(
 
     if kde_warnings:
         logger.warning(
-            "csv_ingest_kde_warnings: %d events with missing KDEs: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
+            "csv_ingest_kde_warnings: %d warnings: %s", len(kde_warnings), "; ".join(kde_warnings[:5])
         )
 
     logger.info(

@@ -1,0 +1,48 @@
+UTC: 2026-10-03T03:21:37.348984+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py --collect-only --no-cov --continue-on-collection-errors --tb=short
+Exit: 1
+Duration: 67.27s
+Timeout: False
+
+Full redacted command output is retained losslessly in 20261003T032137.348984Z-backend_full_collect_overlay.txt.gz.
+Raw UTF-8 bytes: 1430284
+Raw SHA-256: 525776eb7794e0e6f3cb444f5161092ddd44c5962b07cc15e25f0f8ca2be9ce5
+Compression: gzip, verified byte-for-byte round trip.
+
+Final output excerpt:
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/httpcore/_sync/connection.py:124: in _connect
+    stream = self._network_backend.connect_tcp(**kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/httpcore/_backends/sync.py:208: in connect_tcp
+    sock = socket.create_connection(
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:839: in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/socket.py:974: in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+________ ERROR collecting tests/scripts/test_backup_postgres_format.py _________
+tests/scripts/test_backup_postgres_format.py:204: in <module>
+    @pytest.mark.skipif(not _server_reachable(), reason="no reachable PostgreSQL server for round trip")
+                            ^^^^^^^^^^^^^^^^^^^
+tests/scripts/test_backup_postgres_format.py:201: in _server_reachable
+    return subprocess.run(["pg_isready"], capture_output=True, timeout=15).returncode == 0
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:548: in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1026: in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/subprocess.py:1823: in _execute_child
+    sys.audit("subprocess.Popen", executable, args, cwd, env)
+docs/qa/2026-10-02/scripts/backend_pytest.py:37: in deny_external_io
+    raise RuntimeError(f"QA safety guard denied {event}; use an in-process mock")
+E   RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+=========================== short test summary info ============================
+ERROR tests/e2e/test_ingestion_flow.py - RuntimeError: QA safety guard denied socket.getaddrinfo; use an in-process mock
+ERROR tests/scripts/test_backup_postgres_format.py - RuntimeError: QA safety guard denied subprocess.Popen; use an in-process mock
+12524 tests collected, 2 errors in 64.54s (0:01:04)

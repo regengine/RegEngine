@@ -1,0 +1,95 @@
+UTC: 2026-10-03T00:44:08.378690+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;ranges={"frontend/src/lib/api-client.ts":(260,295),"frontend/src/lib/api-client.ts ":(415,445),"frontend/src/hooks/use-api.ts":(177,194)};[(print("FILE",p.strip()),print("\n".join(f"{i}: {s}" for i,s in enumerate(Path(p.strip()).read_text().splitlines(),1) if lo<=i<=hi))) for p,(lo,hi) in ranges.items()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE frontend/src/lib/api-client.ts
+260:         Object.assign(headers, getCsrfHeaders());
+261:       }
+262: 
+263:       let body: BodyInit | undefined;
+264:       if (data !== undefined && data !== null) {
+265:         if (isBodyInit(data)) {
+266:           body = data;
+267:         } else {
+268:           body = JSON.stringify(data);
+269:           if (!headers['Content-Type']) {
+270:             headers['Content-Type'] = 'application/json';
+271:           }
+272:         }
+273:       }
+274: 
+275:       const controller = new AbortController();
+276:       const timeoutMs = config.timeout ?? 30000;
+277:       const timeoutId = timeoutMs > 0
+278:         ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+279:         : undefined;
+280: 
+281:       try {
+282:         const response = await fetch(url, {
+283:           method,
+284:           headers,
+285:           body,
+286:           credentials: 'include',
+287:           signal: controller.signal,
+288:         });
+289:         const responseHeaders: Record<string, string> = {};
+290:         response.headers.forEach((value, key) => {
+291:           responseHeaders[key.toLowerCase()] = value;
+292:         });
+293: 
+294:         const responseData = config.responseType === 'blob'
+295:           ? await response.blob()
+FILE frontend/src/lib/api-client.ts
+415:       {
+416:         headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+417:         timeout: 30000
+418:       }
+419:     );
+420:     return response.data;
+421:   }
+422: 
+423: 
+424:   async ingestFile(apiKey: [REDACTED] | null | undefined, file: File, sourceSystem: string = 'csv_upload', cteType?: string): Promise<IngestCSVResponse> {
+425:     const formData = new FormData();
+426:     formData.append('file', file);
+427:     formData.append('source', sourceSystem);
+428:     // cte_type is optional — the backend auto-detects from a cte_type/event_type column
+429:     if (cteType) {
+430:       formData.append('cte_type', cteType);
+431:     }
+432: 
+433:     try {
+434:       const response = await this.ingestionClient.post<IngestCSVResponse>(
+435:         '/api/v1/ingest/csv',
+436:         formData,
+437:         {
+438:           headers: credentialHeader('X-RegEngine-API-Key', apiKey),
+439:           timeout: 300000 // Longer timeout for large files (5 minutes)
+440:         }
+441:       );
+442:       const result = response.data;
+443:       const countsAreValid = result
+444:         && [result.total, result.accepted, result.rejected].every(
+445:           value => Number.isInteger(value) && value >= 0,
+FILE frontend/src/hooks/use-api.ts
+177:       apiClient.ingestURL(apiKey, url, sourceSystem),
+178:   });
+179: };
+180: 
+181: export const useIngestFile = () => {
+182:   return useMutation({
+183:     mutationFn: ({ apiKey, file, sourceSystem, cteType }: {
+184:       apiKey?: string | null;
+185:       file: File;
+186:       sourceSystem?: string;
+187:       cteType?: string;
+188:     }) => apiClient.ingestFile(apiKey, file, sourceSystem, cteType),
+189:   });
+190: };
+191: 
+192: export const useCreateTenant = () => {
+193:   return useMutation({
+194:     mutationFn: ({ name }: { name: string }) => apiClient.createTenant(name),

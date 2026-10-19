@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 
 from .authz import IngestionPrincipal, require_permission
@@ -160,6 +160,13 @@ class ReadinessSummary(BaseModel):
     components: list[ReadinessComponent]
 
 
+def _validate_nonnegative_issue_counts(result: SandboxResponse) -> SandboxResponse:
+    for field in ("total_kde_errors", "total_rule_failures", "non_compliant_events"):
+        if getattr(result, field) < 0:
+            raise ValueError(f"{field} must be greater than or equal to 0")
+    return result
+
+
 class CommitGateRequest(BaseModel):
     mode: CommitMode
     tenant_id: Optional[str] = None
@@ -167,7 +174,12 @@ class CommitGateRequest(BaseModel):
     authenticated: bool = False
     persisted: bool = False
     provenance_attached: bool = False
-    unresolved_fix_count: int = 0
+    unresolved_fix_count: int = Field(default=0, ge=0)
+
+    @field_validator("result")
+    @classmethod
+    def validate_result_issue_counts(cls, result: Optional[SandboxResponse]) -> Optional[SandboxResponse]:
+        return _validate_nonnegative_issue_counts(result) if result is not None else None
 
 
 class CommitGateDecision(BaseModel):
@@ -183,6 +195,11 @@ class SaveRunRequest(BaseModel):
     source: str = Field(default="inflow-lab")
     csv: str = Field(default="")
     result: SandboxResponse
+
+    @field_validator("result")
+    @classmethod
+    def validate_result_issue_counts(cls, result: SandboxResponse) -> SandboxResponse:
+        return _validate_nonnegative_issue_counts(result)
 
 
 class WorkbenchRun(BaseModel):
@@ -604,19 +621,25 @@ def _db_get_run(run_id: str, tenant_id: str) -> Optional[WorkbenchRun]:
             db.execute(
                 text(
                     """
-                SELECT run_id, tenant_id::text AS tenant_id, source, csv_text,
-                       result_payload, readiness_payload, commit_gate_payload,
-                       input_hash, result_hash, saved_at,
+                WITH run AS (
+                    SELECT r.run_id, r.tenant_id, r.source, r.csv_text,
+                           r.result_payload, r.readiness_payload, r.commit_gate_payload,
+                           r.input_hash, r.result_hash, r.saved_at
+                    FROM fsma.inflow_workbench_runs r
+                    WHERE r.tenant_id = CAST(:tenant_id AS uuid) AND r.run_id = :run_id
+                )
+                SELECT run.run_id, run.tenant_id::text AS tenant_id, run.source, run.csv_text,
+                       run.result_payload, run.readiness_payload, run.commit_gate_payload,
+                       run.input_hash, run.result_hash, run.saved_at,
                        (
-                           SELECT decision_id
+                           SELECT d.decision_id
                            FROM fsma.inflow_workbench_commit_decisions d
-                           WHERE d.tenant_id = fsma.inflow_workbench_runs.tenant_id
-                             AND d.run_id = fsma.inflow_workbench_runs.run_id
+                           WHERE d.tenant_id = CAST(:tenant_id AS uuid)
+                             AND d.run_id = run.run_id
                            ORDER BY d.created_at DESC
                            LIMIT 1
                        ) AS commit_decision_id
-                FROM fsma.inflow_workbench_runs
-                WHERE tenant_id = CAST(:tenant_id AS uuid) AND run_id = :run_id
+                FROM run
                 """
                 ),
                 {"run_id": run_id, "tenant_id": tenant_uuid},
@@ -991,7 +1014,7 @@ def decide_commit_gate(payload: CommitGateRequest) -> CommitGateDecision:
         )
 
     if payload.mode == "staging":
-        allowed = unresolved == 0
+        allowed = unresolved == 0 and not reasons
         return CommitGateDecision(
             mode=payload.mode,
             allowed=allowed,

@@ -1,0 +1,75 @@
+UTC: 2026-10-03T00:44:44.531161+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FRONTEND-REPORT.md"); print(p.read_text())'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+# Frontend QA pass
+
+PR: opened by orchestrator
+
+CI status: pending at time of writing
+
+## Scope and outcome
+
+Verified checkout, branch `qa/2026-10-02-sweep`, origin and worktree before edits. Resumed prior inventory on 2026-10-03 at 00:35:41 UTC. No product behavior, dependencies, lockfiles or configuration were changed. The only frontend addition is `src/__tests__/lib/qa-sweep-gs1.test.ts`.
+
+The locked install, lint, production build/TypeScript check and complete Vitest unit/component suite pass locally. Two new GS1 parser defects are reproduced with six strict expected-failure cases. Camera access is also denied by the configured global response policy; browser confirmation is coordinated with the UX pass.
+
+The review-pr skill was applied to prioritize executable correctness and data-integrity evidence. FE-C1 covered build/dependency reproducibility; FE-C2 focused on traceability input boundaries and the existing auth/session/API contract suites. FE-C3 browser execution is shared with the UX group, which owns isolated local server, browser/network control, screenshots and performance artifacts. See [UX-REPORT.md](UX-REPORT.md).
+
+## Executed checks
+
+| Check | Outcome | Evidence |
+| --- | --- | --- |
+| Locked `npm ci --ignore-scripts --no-audit --no-fund` | Pass; 793 packages, 6.95s; package files unchanged | [Install](artifacts/frontend/20261003T003557.257409Z-locked-install.txt) |
+| `npm run lint` | Pass; 0 errors, 41 existing warnings; design-lint clean across 676 files | [Lint](artifacts/frontend/20261003T003655.183617Z-frontend-lint.txt) |
+| `npm run build` on local Node 26.7.0 | Pass; optimized build, TypeScript and all 187 static pages generated | [Build](artifacts/frontend/20261003T003655.185291Z-frontend-build.txt) |
+| CI-family Node 20.20.2 production build | Pass; same package lock and product sources; Node 20 matches `.nvmrc` major version | [Node 20 build](artifacts/frontend/20261003T003946.746162Z-node20-build.txt) |
+| Baseline full Vitest/coverage, Node 20 | 136 files passed; **1027 passed, 2 skipped**; configured coverage thresholds passed | [Before](artifacts/frontend/20261003T003945.430584Z-node20-baseline-coverage.txt) |
+| Added traceability boundary tests | **6 passed, 6 expected fail**; includes 1,000 generated GTIN check-digit checks | [New tests](artifacts/frontend/20261003T003816.353936Z-fe-c2-gs1-regressions.txt) |
+| Full Vitest/coverage after addition, Node 20 | 137 files passed; **1033 passed, 6 expected fail, 2 skipped**; configured coverage thresholds passed | [After](artifacts/frontend/20261003T004030.008573Z-node20-after-coverage.txt) |
+| ESLint on added test | Pass | [Focused lint](artifacts/frontend/20261003T004050.444244Z-added-test-lint-correct-cwd.txt) |
+
+The test pyramid is appropriate here: the existing suite exercises the client/server proxy contracts and form state cheaply, while browser checks cover browser-only headers, keyboard behavior and rendering. Added bounded generation avoids an extra dependency: 100 independent GTIN bodies each test all ten candidate check digits; equivalence classes cover encoded lot delimiters and invalid calendar dates. Expected failures assert the intended behavior and will fail on an unexpected pass, prompting their conversion into ordinary regression tests after a product fix.
+
+Existing passing security/contract suites include `enforce-tenant-match.test.ts` (13), `compliance-proxy-auth-boundary.test.ts` (11), `review-id-validation.test.ts` (18), `inflow-workbench-read-proxy.test.ts` (9), `public-openapi.test.ts` (4), RBAC tests (10), and the CSRF/session/auth suites. These isolated tests do not establish live backend authorization or database isolation.
+
+## Findings
+
+| ID | Severity | Group | Title | Exact reproduction | Expected vs actual | Evidence | Suggested fix |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| FE-001 | High | Frontend | Scanning valid lot codes silently truncates the lot identifier | Execute `qa-sweep-gs1.test.ts`, cases named `FE-001`; pass `010950600013435210LOT-10-ABC\x1d17260930` to `parseGS1`, where `\x1d` is the ASCII group separator. Repeat with `LOT-21-ABC` and `LOT-17260930`. | Expected lot preserved through its explicit group separator. Actual `tlc` is `LOT-`; `LOT-21-ABC` also invents serial `-ABC`. Field capture copies the truncated identifier into the ingest payload. Persistence was not exercised. | `frontend/src/lib/gs1-parser.ts:75` and `:179`; `frontend/src/components/mobile/FieldCaptureClient.tsx:192` and `:224`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:33`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Respect variable-length AI boundaries: explicit FNC1/group separator, preserved parenthesized AI delimiters, end-of-input and the field's maximum length; do not treat ordinary AI-like digits within lot text as delimiters. |
+| FE-002 | Medium | Frontend | Malformed Digital Link encoding throws out of scan handlers | Execute the three `FE-002` cases; parse `/01/09506000134352/10/%`, then `%ZZ` and `%E0%A4`. These can be pasted into the public scanner or supplied to receiving/field capture handlers. | Expected rejected input with recoverable feedback. Actual uncaught `URIError: URI malformed` from `decodeURIComponent`; the callers invoke the parser without a catch. | `frontend/src/lib/gs1-parser.ts:107`; `frontend/src/app/tools/scan/page.tsx:30`; `frontend/src/app/dashboard/receiving/page.tsx:158`; test `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:42`; [actual results](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt) | Catch malformed URI decoding at the parser boundary and return an explicit invalid-scan result; display a recoverable validation error in callers. |
+| FE-003 | Medium | Frontend | Global Permissions-Policy disables the camera scanner | Evaluate exported `next.config.js.headers()` or inspect the response header on local `/tools/scan`; it emits `camera=()` for `/(.*)`. The scanner calls `Html5Qrcode.start` with `facingMode: environment`. | Expected scanner pages can request same-origin camera permission. Actual site policy denies camera regardless of a user's permission choice. Physical camera capture is not tested. | `frontend/next.config.js:52`; `frontend/src/app/tools/scan/page.tsx:42`; [configuration execution](artifacts/frontend/20261003T004007.254000Z-fe-c2-camera-policy-evidence.txt); browser evidence in UX pass | Permit `camera=(self)` on the narrow set of camera-scanner routes, while retaining denial elsewhere and keeping microphone/geolocation restrictions. |
+
+FE-001 is prioritized over UI polish because it can produce an incorrect traceability identifier before submission. No bug fix was applied.
+
+## Coverage and gaps
+
+The authoritative comparison uses **Node 20.20.2 for both runs**, the identical 196 instrumented product files, the existing coverage exclusions, and unchanged coverage thresholds. Before excludes only the newly added QA test; after adds it. Summary JSON includes per-file denominators, so the measurement is auditable.
+
+| Metric | Before covered/total | Before | After covered/total | After |
+| --- | ---: | ---: | ---: | ---: |
+| Statements | 6215/9184 | 67.67% | 6218/9184 | 67.70% |
+| Branches | 4664/7755 | 60.14% | 4667/7755 | 60.18% |
+| Functions | 1285/2142 | 59.99% | 1285/2142 | 59.99% |
+| Lines | 5825/8327 | 69.95% | 5827/8327 | 69.97% |
+
+GS1 parser lines improve **92/96 → 94/96** (95.83% → 97.91%), statements **108/120 → 112/120**, and branches **82/99 → 86/99**. The full-suite delta also includes one fewer covered statement/branch in the unchanged developer-key route between runs; this small variation is not attributed to the GS1 tests. See [comparison](artifacts/frontend/coverage-comparison.json), [changed files](artifacts/frontend/coverage-changed-files.json), [before per-file summary](artifacts/frontend/coverage-node20-before-summary.json), and [after per-file summary](artifacts/frontend/coverage-node20-after-summary.json).
+
+These percentages describe Vitest's collected files, **not the entire frontend**. The source inventory found 672 TS/TSX files excluding test files and declarations, including type-only files; many public routes, loading/error boundaries, camera components, auth-provider integrations and helper modules are absent from this coverage report. Weak measured areas include dashboard heartbeat (2% lines), alerts (10.76%), hooks `use-api` (25.97%), `use-fsma` (32.35%), and API-client lines (52.73%). Those are residual risks, not newly proven defects.
+
+Full HTML coverage reports created by this pass were moved to `/private/tmp`; compact totals/per-file summaries and complete redacted console reports are retained in the QA artifact directory. Earlier interrupted artifacts were preserved.
+
+## Execution limitations and dead ends
+
+- All service and provider effects were stubbed/disabled. No deployed app, production database, credentials, billing or actual provider was exercised. Advisory-network calls are outside this task's allowed network use, so no claim of a clean dependency vulnerability audit is made here; the backend security report documents audit limits.
+- Browser flows and screenshots are recorded by UX; native camera devices, actual assistive-technology speech, authenticated backend persistence and production performance remain outside this frontend pass.
+- Initial lint/build/coverage used local Node 26.7.0; build and full before/after coverage were repeated on the CI-family Node 20.20.2 with the corrected Node isolation guard. CI itself remains pending. Node 20 build prints an upstream Supabase deprecation warning; it still passes.
+- Gate review found a normalized-argument-array gap in the first QA-only socket guard. It was fixed immediately and six call shapes were validated using a fake socket spy, without making a network request. The authoritative Node 20 runs use the fixed guard. [Guard evidence](artifacts/frontend/20261003T003858.351825Z-network-guard-safe-spy.txt).
+- The first public dependency install used scrubbed environment variables but inherited `HOME`; ordinary npm user-config discovery was not independently excluded for that initial install. No credentials were directly read or displayed. The shared logger was subsequently hardened to disable user/global npm config discovery for future installs.
+- One focused ESLint invocation was nested inside a source-index command run from the repository root. ESLint could not locate the frontend config; the wrapper's outer command exited zero, but this inner lint check failed. The correction runs from `frontend/` and passes. Both outputs are retained.
+- Next builds regenerate `frontend/next-env.d.ts`; both generated changes were inspected and restored to the exact baseline bytes. No product diff remains from build execution.
+

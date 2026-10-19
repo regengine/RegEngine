@@ -20,6 +20,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CodeBlock } from '@/components/ui/code-block';
 import { API_BASE } from '@/lib/api-base';
+import {
+  INGEST_CURL_SAMPLE,
+  INGEST_JS_SAMPLE,
+  INGEST_PYTHON_SAMPLE,
+  INGEST_RESPONSE_SAMPLE,
+} from '@/lib/api-samples/ingest-samples';
 
 export const metadata: Metadata = {
   title: 'API Documentation | RegEngine',
@@ -42,43 +48,43 @@ const endpoints = [
     method: 'POST' as const,
     path: '/webhooks/ingest',
     title: 'Ingest Records',
-    description: 'Ingest traceability records with CTE/KDE data. Each record is hash-chained so you can detect tampering between ingest and export.',
+    description: 'Ingest traceability records with CTE/KDE data. Needs a signed body and an Idempotency-Key. Each record is hash-chained so you can detect tampering between ingest and export.',
   },
   {
     method: 'GET' as const,
     path: '/records',
     title: 'Query Records',
-    description: 'Query canonical records with filters by CTE type, lot code, date range, and location.',
-  },
-  {
-    method: 'POST' as const,
-    path: '/compliance/evaluate',
-    title: 'Evaluate Compliance',
-    description: 'Run FSMA 204 rule evaluation against your records. Returns advisory findings with CFR citations; informational and does not block ingestion.',
+    description: 'Query canonical records, filtered by lot code, event type, source system, status, and date range. Pages with limit and offset.',
   },
   {
     method: 'GET' as const,
-    path: '/fda-export/{request_id}',
+    path: '/records/{event_id}',
+    title: 'Record Detail',
+    description: 'One record with its provenance, rule evaluations, exception cases, and amendment chain.',
+  },
+  {
+    method: 'GET' as const,
+    path: '/fda/export',
     title: 'FDA Export',
-    description: 'Export an audit package formatted to the §1.1455(c) sortable spreadsheet structure for a specific request, including supporting records.',
+    description: 'Export FDA-oriented sortable records for a lot code as a package, CSV, or PDF. Needs tenant_id, the fda.export scope, and an active subscription.',
   },
   {
     method: 'GET' as const,
-    path: '/readiness/assessment',
-    title: 'Readiness Score',
-    description: 'Get your current compliance readiness score with a breakdown by CTE coverage and KDE completeness.',
+    path: '/fda/trace/{tlc}',
+    title: 'Lot Trace',
+    description: 'Trace the transformation graph around a traceability lot code: upstream sources and downstream products. Needs tenant_id and the fda.read scope.',
   },
 ];
 
 const subPages = [
   { title: 'Quickstart', href: '/docs/quickstart', icon: Zap, description: 'Your first API call in about 5 minutes' },
-  { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'API keys, tenant headers, and security' },
+  { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'The key header, scopes, and what a key can reach' },
   { title: 'API Reference', href: '/docs/api', icon: Code2, description: 'Full endpoint reference with schemas' },
-  { title: 'Webhook ingestion', href: '/docs/webhooks', icon: Webhook, description: 'Send events into RegEngine' },
+  { title: 'Outbound webhooks (planned)', href: '/docs/webhooks', icon: Webhook, description: 'Notifications from RegEngine. To send events in, use POST /webhooks/ingest.' },
   { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Preflight, readiness scoring, fix queue, and commit gates' },
   { title: 'Error Codes', href: '/docs/errors', icon: AlertTriangle, description: 'Error responses and troubleshooting' },
-  { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'Request limits and throttling policies' },
-  { title: 'SDKs', href: '/docs/sdks', icon: Package, description: 'Client libraries for Python, Node.js, and more' },
+  { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'What to do when you get a 429' },
+  { title: 'SDKs', href: '/docs/sdks', icon: Package, description: 'Client libraries are planned. Use REST and the OpenAPI spec today.' },
   { title: 'FSMA 204 Guide', href: '/docs/fsma-204', icon: FileText, description: 'FSMA 204 regulation reference and implementation' },
 ];
 
@@ -91,106 +97,12 @@ const quickStartSteps = [
 const SECTION_LABEL = 'mb-5 font-mono text-label uppercase text-re-text-muted';
 
 /* ─── Code Samples ─────────────────────────────────────────── */
-
-const curlSample = `curl -X POST ${API_BASE}/webhooks/ingest \\
-  -H "X-RegEngine-API-Key: rge_live_abc123..." \\
-  -H "Idempotency-Key: $(uuidgen)" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "source": "erp",
-    "events": [{
-      "cte_type": "receiving",
-      "traceability_lot_code": "00012345678901-LOT-2026-001",
-      "product_description": "Romaine Lettuce",
-      "quantity": 500,
-      "unit_of_measure": "cases",
-      "location_name": "Distribution Center #4",
-      "timestamp": "2026-02-05T08:30:00Z",
-      "kdes": {
-        "receive_date": "2026-02-05",
-        "receiving_location": "Distribution Center #4"
-      }
-    }]
-  }'`;
-
-const pythonSample = `import uuid
-
-import requests
-
-resp = requests.post(
-    "${API_BASE}/webhooks/ingest",
-    headers={
-        "X-RegEngine-API-Key": "rge_live_abc123...",
-        "Idempotency-Key": str(uuid.uuid4()),
-        "Content-Type": "application/json",
-    },
-    json={
-        "source": "erp",
-        "events": [{
-            "cte_type": "receiving",
-            "traceability_lot_code": "00012345678901-LOT-2026-001",
-            "product_description": "Romaine Lettuce",
-            "quantity": 500,
-            "unit_of_measure": "cases",
-            "location_name": "Distribution Center #4",
-            "timestamp": "2026-02-05T08:30:00Z",
-            "kdes": {
-                "receive_date": "2026-02-05",
-                "receiving_location": "Distribution Center #4",
-            },
-        }],
-    },
-)
-print(resp.json())`;
-
-const jsSample = `const resp = await fetch(
-  "${API_BASE}/webhooks/ingest",
-  {
-    method: "POST",
-    headers: {
-      "X-RegEngine-API-Key": "rge_live_abc123...",
-      "Idempotency-Key": crypto.randomUUID(),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      source: "erp",
-      events: [{
-        cte_type: "receiving",
-        traceability_lot_code: "00012345678901-LOT-2026-001",
-        product_description: "Romaine Lettuce",
-        quantity: 500,
-        unit_of_measure: "cases",
-        location_name: "Distribution Center #4",
-        timestamp: "2026-02-05T08:30:00Z",
-        kdes: {
-          receive_date: "2026-02-05",
-          receiving_location: "Distribution Center #4",
-        },
-      }],
-    }),
-  }
-);
-const data = await resp.json();
-console.log(data);`;
-
-const responseSample = `{
-  "accepted": 1,
-  "rejected": 0,
-  "total": 1,
-  "events": [{
-    "traceability_lot_code": "00012345678901-LOT-2026-001",
-    "cte_type": "receiving",
-    "status": "accepted",
-    "event_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-    "sha256_hash": "a3f2b891c4d5e6f7...",
-    "chain_hash": "7f6e5d4c3b2a1908..."
-  }]
-}`;
+/* Rendered from one payload: src/lib/api-samples/ingest-receiving.json. */
 
 const codeTabs = [
-  { label: 'cURL', lang: 'bash', code: curlSample },
-  { label: 'Python', lang: 'python', code: pythonSample },
-  { label: 'JavaScript', lang: 'javascript', code: jsSample },
+  { label: 'cURL', lang: 'bash', code: INGEST_CURL_SAMPLE },
+  { label: 'Python', lang: 'python', code: INGEST_PYTHON_SAMPLE },
+  { label: 'JavaScript', lang: 'javascript', code: INGEST_JS_SAMPLE },
 ];
 
 /* ─── Page ─────────────────────────────────────────────────── */
@@ -286,12 +198,26 @@ export default function DocsHomePage() {
         {/* ── Code Samples ──────────────────────────────────── */}
         <section className="mb-14">
           <h2 className="mb-2 font-mono text-label uppercase text-re-text-muted">Ingest Your First Record</h2>
-          <p className="mb-5 text-ui text-re-text-secondary">
+          <p className="mb-2 text-ui text-re-text-secondary">
             Send a traceability event to the{' '}
             <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
               POST /webhooks/ingest
             </code>{' '}
-            endpoint.
+            endpoint. Set <code className="font-mono text-[0.8125rem] text-re-text-primary">REGENGINE_API_KEY</code> and{' '}
+            <code className="font-mono text-[0.8125rem] text-re-text-primary">REGENGINE_SIGNING_SECRET</code> to the values
+            RegEngine issues to you.
+          </p>
+          <p className="mb-5 text-ui text-re-text-secondary">
+            This call writes a permanent record and can be billed. Use a test workspace and keep the{' '}
+            <code className="font-mono text-[0.8125rem] text-re-text-primary">TEST-</code> lot prefix. To check your key first
+            with a read, follow the{' '}
+            <Link
+              href="/docs/quickstart"
+              className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand"
+            >
+              Quickstart
+            </Link>
+            .
           </p>
 
           {/* Tab bar (static, no JS needed -- all samples shown with labels) */}
@@ -310,10 +236,10 @@ export default function DocsHomePage() {
           {/* Response */}
           <div className="mt-6 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <Badge tone="success" size="sm" mono>201 Created</Badge>
+              <Badge tone="success" size="sm" mono>200 OK</Badge>
               <span className="font-mono text-label uppercase text-re-text-muted">response</span>
             </div>
-            <CodeBlock code={responseSample} />
+            <CodeBlock code={INGEST_RESPONSE_SAMPLE} />
           </div>
         </section>
 
@@ -380,7 +306,7 @@ export default function DocsHomePage() {
         <footer className="flex flex-col items-start justify-between gap-4 border-t border-re-border-subtle pt-8 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-4">
             <code className="rounded-md border border-re-border-subtle bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-secondary">
-              python verify_chain.py --audit
+              python verify_chain.py audit-bundle.zip
             </code>
             <span className="text-ui text-re-text-tertiary">
               Don&apos;t trust, verify.

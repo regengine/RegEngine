@@ -1,0 +1,60 @@
+UTC: 2026-10-03T00:46:56.435309+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess; p=Path("docs/qa/2026-10-02"); print("REPORTS",[(f.name,f.stat().st_size) for f in p.glob("*.md")]); print(subprocess.check_output(["git","status","--short"],text=True)); print("GUARDS",Path("docs/qa/2026-10-02/scripts/backend_pytest.py").read_text()[1750:3350]); q=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); print("BE004_LINES",[(i,x) for i,x in enumerate(q.read_text().splitlines(),1) if "UTF" in x or "BE-004" in x or "invalid_encoding" in x])'
+Exit: 0
+Duration: 0.09s
+Timeout: False
+
+REPORTS [('BACKEND-SESSION-LOG.md', 28294), ('FRONTEND-SESSION-LOG.md', 32176), ('FRONTEND-REPORT.md', 13726), ('GATE-SESSION-LOG.md', 13843), ('SECURITY-SESSION-LOG.md', 16874), ('SECURITY-REPORT.md', 14646), ('META-SESSION-LOG.md', 7426), ('PLAN.md', 8991), ('UX-SESSION-LOG.md', 16143), ('SESSION-LOG.md', 5658), ('GATE-REPORT.md', 7073)]
+ M frontend/src/__tests__/hooks/useSync.test.tsx
+?? docs/qa/2026-10-02/
+?? frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+?? services/ingestion/tests/test_qa_sweep_20261002_contract.py
+?? tests/qa_sweep_20261002/
+
+GUARDS eny_database_connect(*args, **kwargs):
+    raise RuntimeError("QA safety guard denied database connection; use an in-process mock")
+
+
+# Native DB drivers can bypass Python socket audit events. Block their public
+# connection boundaries as well as SQLAlchemy's engine before test collection.
+import importlib
+
+from sqlalchemy.engine import Engine
+
+Engine.connect = deny_database_connect
+Engine.raw_connection = deny_database_connect
+for driver in ("psycopg", "psycopg2", "asyncpg"):
+    try:
+        module = importlib.import_module(driver)
+    except ImportError:
+        continue
+    module.connect = deny_database_connect
+    if driver == "psycopg":
+        module.Connection.connect = classmethod(deny_database_connect)
+        module.AsyncConnection.connect = classmethod(deny_database_connect)
+
+import sqlite3
+
+_coverage_sqlite_connect = sqlite3.connect
+
+
+def coverage_only_sqlite_connect(database, *args, **kwargs):
+    path = Path(database).resolve()
+    if path.parent != ROOT or not path.name.startswith(".coverage"):
+        return deny_database_connect()
+    return _coverage_sqlite_connect(database, *args, **kwargs)
+
+
+sqlite3.connect = coverage_only_sqlite_connect
+sqlite3.dbapi2.connect = coverage_only_sqlite_connect
+
+import pytest
+
+raise SystemExit(
+    pytest.main(
+        ["-p", "pytest_cov.plugin", "-p", "pytest_asyncio.plugin", "-p", "hypothesis.extra.pytestplugin", *sys.argv[1:]]
+    )
+)
+
+BE004_LINES [(183, '    reason="BE-004: non-UTF8 upload raises UnicodeDecodeError and returns HTTP 500",')]

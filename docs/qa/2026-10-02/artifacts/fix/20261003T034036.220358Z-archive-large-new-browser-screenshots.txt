@@ -1,0 +1,30 @@
+UTC: 2026-10-03T03:40:36.220358+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import gzip,hashlib,json,subprocess,datetime; preserved=Path("/private/tmp/regengine-fix-large-screenshots"); preserved.mkdir(exist_ok=True); records=[]
+for name in subprocess.check_output(["git","ls-files","--others","--exclude-standard"],text=True).splitlines():
+ p=Path(name)
+ if p.parent!=Path("docs/qa/2026-10-02/artifacts/browser") or p.suffix!=".png" or p.stat().st_size<=1000*1024: continue
+ data=p.read_bytes(); archive=p.with_suffix(".png.gz"); archive.write_bytes(gzip.compress(data,compresslevel=9,mtime=0)); assert gzip.decompress(archive.read_bytes())==data; digest=hashlib.sha256(data).hexdigest(); local=preserved/p.name; assert not local.exists(); p.rename(local); records.append({"original_output_path":str(p),"archive":str(archive),"raw_bytes":len(data),"gzip_bytes":archive.stat().st_size,"raw_sha256":digest,"local_original":str(local)})
+Path("docs/qa/2026-10-02/artifacts/fix/compressed-screenshot-index.json").write_text(json.dumps(records,indent=2)+"\n"); now=datetime.datetime.now(datetime.timezone.utc).isoformat(); Path("docs/qa/2026-10-02/FIX-SESSION-LOG.md").open("a").write("\n- **"+now+"** Two newly generated WebKit PNGs narrowly exceeded repository 1000-KB artifact policy. Their PNG bytes were preserved as verified lossless .png.gz archives under the same browser artifact directory, with original files moved to temporary local storage. No image pixels edited; original sweep evidence unchanged. Historical command paths map to archives in artifacts/fix/compressed-screenshot-index.json.\n"); print(json.dumps(records,indent=2))'
+Exit: 0
+Duration: 0.13s
+Timeout: False
+
+[
+  {
+    "original_output_path": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png",
+    "archive": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png.gz",
+    "raw_bytes": 1040515,
+    "gzip_bytes": 775582,
+    "raw_sha256": "53ab9b219172655b0afdb00b37462e279b9fa1f774f6b7aeed2df68dbbcd7632",
+    "local_original": "/private/tmp/regengine-fix-large-screenshots/fe-001-webkit-2026-10-03T03-16-25-413Z.png"
+  },
+  {
+    "original_output_path": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.png",
+    "archive": "docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-22-23-231Z.png.gz",
+    "raw_bytes": 1039565,
+    "gzip_bytes": 775186,
+    "raw_sha256": "ec673a3caa020284ba66098b36bee1e17f40fc995196d06b0af59719780ede38",
+    "local_original": "/private/tmp/regengine-fix-large-screenshots/fe-001-webkit-2026-10-03T03-22-23-231Z.png"
+  }
+]

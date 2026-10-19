@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
 import {
   ArrowRight,
@@ -29,16 +30,16 @@ import { Card } from "@/components/ui/card";
 import { StatTile } from "@/components/ui/stat-tile";
 
 export const metadata: Metadata = {
-  title: "RegEngine — FSMA 204 traceability evidence layer",
+  title: "FSMA 204 Recordkeeping Software | RegEngine",
   description:
-    "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets. Early-stage. Design-partner. Pre-revenue. Not an FDA endorsement.",
+    "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.",
   openGraph: {
-    title: "RegEngine — FSMA 204 traceability evidence layer",
+    title: "FSMA 204 Recordkeeping Software | RegEngine",
     description:
-      "Ingest CTE/KDE records, check coverage and completeness, commit append-only after checks you configure, export FDA-oriented and buyer-oriented spreadsheets.",
+      "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.",
     url: "https://regengine.co",
     type: "website",
-    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 traceability evidence layer" }],
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 recordkeeping software" }],
   },
 };
 
@@ -200,7 +201,7 @@ export default function HomePage() {
             FSMA 204 evidence layer · design-partner · pre-revenue
           </p>
           <h1 className="max-w-[720px] font-display text-display text-re-text-primary">
-            FSMA 204 traceability evidence layer.
+            FSMA 204 recordkeeping for the Food Traceability Rule.
           </h1>
           <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
             Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
@@ -218,7 +219,7 @@ export default function HomePage() {
               </Link>
             </Button>
             <Button asChild variant="secondary" size="lg">
-              <Link href="/contact">Book a 30-min call</Link>
+              <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
             </Button>
           </div>
           <MetricRail />

@@ -1,0 +1,68 @@
+UTC: 2026-10-03T03:20:36.419701+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+p=Path("services/ingestion/app/csv_templates.py")
+s=p.read_text(); old="        header = reader.fieldnames\n        for record in reader:\n"; new="""        header = reader.fieldnames
+        if header and any(name.strip() for name in header):
+            seen_columns: dict[str, int] = {}
+            for position, name in enumerate(header, start=1):
+                normalized = normalize_csv_header(name)
+                if normalized in seen_columns:
+                    return (
+                        [],
+                        [
+                            f"CSV has duplicate column {normalized!r} at positions "
+                            f"{seen_columns[normalized]} and {position}; column names must be unique"
+                        ],
+                        [],
+                    )
+                seen_columns[normalized] = position
+        for record in reader:
+"""; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/tests/test_qa_sweep_20261002_contract.py"); s=p.read_text(); old="""@pytest.mark.xfail(
+    strict=True, raises=AssertionError, reason="BE-003: duplicate CSV columns silently discard an original quantity"
+)
+"""; assert s.count(old)==1; s=s.replace(old,"# BE-003: ambiguous columns must be rejected before quantities can be overwritten.\n"); old="""        f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
+    )
+    assert not captured
+"""; new="""        f"status={response.status_code}; ingested_quantities={[e.quantity for e in captured]}"
+    )
+    [error] = response.json()["detail"]["errors"]
+    assert "duplicate column" in error and "quantity" in error and "3 and 8" in error
+    assert not captured
+"""; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/tests/test_csv_jev_header_mapping.py"); s=p.read_text(); old="""        # {normalize(k): v} keeps the first key\x27s slot but the last same-named
+        # key\x27s value: "TLC-1" is tested, so this is not a comment row.
+        ("Lot,lot,Activity\\n# x,TLC-1,receiving\\n", True),
+        # ...and here the tested value is "# x": a comment row, skipped.
+        ("lot,Lot,Activity\\nTLC-1,# x,receiving\\n", False),
+    ],
+    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
+"""; new="""        # Only the first column marks a comment; a later hash-prefixed
+        # value must not hide a data row from either the scan or parser.
+        ("Lot,Notes,Activity\\nTLC-1,# x,receiving\\n", True),
+        ("Lot,Notes,Activity\\n# x,TLC-1,receiving\\n", False),
+    ],
+    ids=["first-column-is-data", "first-column-is-comment"],
+"""; assert s.count(old)==1; p.write_text(s.replace(old,new))
+p=Path("services/ingestion/tests/test_csv_malformed_input.py"); s=p.read_text(); anchor="\ndef test_empty_file_keeps_its_existing_400(upload):\n"; addition="""
+@pytest.mark.parametrize("duplicate", ["quantity", " Quantity ", "reference document"])
+def test_duplicate_normalized_headers_are_rejected_before_reading_data(monkeypatch, duplicate):
+    # BE-003: reject the ambiguous header before DictReader can overwrite data.
+    def unexpected_row_read(_reader):
+        pytest.fail("Duplicate headers reached row dictionary construction")
+
+    monkeypatch.setattr(csv.DictReader, "__next__", unexpected_row_read)
+    events, errors, warnings = ct.parse_csv_rows(f"{HEADER},{duplicate}\\n{ROW},999\\n", "harvesting")
+    assert events == [] and warnings == []
+    assert len(errors) == 1
+    assert "duplicate column" in errors[0]
+    assert ct.normalize_csv_header(duplicate) in errors[0]
+
+"""; assert s.count(anchor)==1; p.write_text(s.replace(anchor,"\n"+addition+anchor))
+print("BE-003 implemented: reject normalized duplicates before row iteration, convert two route witnesses, add three parser boundary cases, preserve comment scanning with distinct headers.")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+BE-003 implemented: reject normalized duplicates before row iteration, convert two route witnesses, add three parser boundary cases, preserve comment scanning with distinct headers.

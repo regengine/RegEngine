@@ -556,11 +556,15 @@ class HallucinationTracker:
         tenant_id: Optional[str] = None,
         limit: int = 50,
         cursor: Optional[str] = None,
+        offset: int = 0,
     ) -> Dict[str, Any]:
-        """List hallucinations with cursor-based pagination.
+        """List hallucinations with cursor-based pagination plus an offset skip.
 
         Returns:
-            Dict with 'items', 'next_cursor', and 'has_more' keys.
+            Dict with 'items', 'next_cursor', 'has_more', and 'total' keys.
+            'total' is the count of rows matching the status/tenant/cursor
+            filters before offset/limit are applied, so callers can render
+            honest page counts. 'offset' is applied after the cursor filter.
         """
         with self._session_scope() as session:
             query = session.query(ReviewItemModel)
@@ -584,11 +588,18 @@ class HallucinationTracker:
                     logger.warning("invalid_pagination_cursor", cursor=cursor, error=str(exc))
 
             clamped_limit = max(1, min(limit, 500))
+            try:
+                clamped_offset = max(0, int(offset or 0))
+            except (TypeError, ValueError):
+                clamped_offset = 0
+            # Total before pagination so callers can render page counts.
+            total = query.order_by(None).count()
             items = (
                 query.order_by(
                     ReviewItemModel.created_at.desc(),
                     ReviewItemModel.id.desc(),
                 )
+                .offset(clamped_offset)
                 .limit(clamped_limit + 1)  # fetch one extra to check for more
                 .all()
             )
@@ -609,13 +620,34 @@ class HallucinationTracker:
                 "items": [self._serialize_list_item(item) for item in items],
                 "next_cursor": next_cursor,
                 "has_more": has_more,
+                "total": total,
             }
 
-    def get_hallucination(self, review_id: str) -> Dict[str, Any]:
+    def get_hallucination(self, review_id: str, *, tenant_id: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch one review item by id, tenant-scoped like ``resolve_hallucination`` (#1360).
+
+        When ``tenant_id`` is passed it MUST match the row; mismatch raises
+        ``LookupError`` (mapped to 404 upstream) so a guessed/leaked UUID
+        from another tenant is not readable. Callers that omit it get the
+        legacy unscoped lookup.
+        """
         with self._session_scope() as session:
             item = session.get(ReviewItemModel, UUID(review_id))
             if item is None:
                 raise LookupError("review_item_not_found")
+            if tenant_id is not None:
+                try:
+                    caller_tenant_uuid = UUID(str(tenant_id))
+                except (ValueError, TypeError) as exc:
+                    raise LookupError("review_item_not_found") from exc
+                if item.tenant_id != caller_tenant_uuid:
+                    logger.warning(
+                        "review_cross_tenant_attempt_blocked",
+                        review_id=review_id,
+                        caller_tenant=str(caller_tenant_uuid),
+                        item_tenant=str(item.tenant_id),
+                    )
+                    raise LookupError("review_item_not_found")
             return self._serialize(item)
 
     def resolve_hallucination(

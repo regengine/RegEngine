@@ -1,0 +1,867 @@
+UTC: 2026-10-02T23:46:05.182552+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+# RegEngine Agent Guide
+
+## Mission
+
+RegEngine is a pre-production FSMA 204 traceability application. Agent work should strengthen the production spine:
+
+```text
+ingest -> normalize -> validate -> persist evidence -> export
+```
+
+If a change does not protect or improve that spine, mark it as experimental, docs-only, or out of scope.
+
+## Workspace Map
+
+- `repo/` (`~/Projects/RegEngine/repo`) is the production RegEngine application
+  repository and the default target for all work.
+- The directories beside it under `~/Projects/RegEngine/` are **git worktrees off
+  this same repo**, plus `_archive/` (snapshots and backups, reference only) and
+  `docs/` (founder/investor material). Many live worktrees exist across five
+  locations. Read `~/Projects/RegEngine/AGENTS.md` for the map, and run
+  `git worktree list` before editing so you know which checkout you are in.
+- The Inflow Lab simulator lives at `~/inflow-lab` (github.com/regengine/inflow-lab),
+  **not** beside this repo. A second checkout sits at
+  `~/Projects/conductor/repos/inflow-lab`. Do not mix Inflow Lab code into
+  `repo/` unless the task explicitly asks for an integration.
+
+## Source Of Truth
+
+Read these before large changes:
+
+- `README.md`
+- `REPO_PURPOSE.md`
+- `ARCHITECTURE.md`
+- `CANONICAL_OWNERSHIP.md`
+- `docs/specs/FSMA_204_MVP_SPEC.md`
+- `frontend/package.json` for frontend commands
+- `.github/copilot-instructions.md` for editor-agent guidance
+
+## Agent Roles
+
+Only three agent roles are supported:
+
+- `planner`: read-only research, path checks, and implementation plans.
+- `implementer`: small scoped code or documentation changes.
+- `security_review`: review for auth, tenant isolation, secrets, database fallback, logging, and deploy risk.
+
+Use plain work lanes such as backend, frontend, security, QA, infra, or docs when triaging tasks. These are labels, not bot identities.
+
+## Working Rules
+
+- Verify files and commands before acting. Do not follow stale paths from old audit docs.
+- Do not invent `.agent/` or `.agents/` directories to satisfy old instructions. Current agent specs live in `.github/agents/`.
+- Do not run the legacy `regengine.swarm` autonomous runtime unless a task explicitly approves `REGENGINE_ENABLE_LEGACY_SWARM=1`.
+- Prefer existing patterns from nearby service/frontend code.
+- Keep diffs small and tied to the assigned lane.
+- Preserve tenant isolation, audit evidence, and schema validation on ingestion paths.
+- Use `python3`, not `python`, in local commands unless a virtual environment explicitly provides `python`.
+- Use `npm` in `frontend/`; `package-lock.json` is checked in.
+- The repo has no `Makefile`, so do not suggest `make` commands.
+- Agents do not decide product direction. They execute scoped engineering tasks against the FSMA production spine.
+
+## Jev Sidecar
+
+Consult TypeSafe Jev alongside the user's requests.
+
+- When a request contains a judgment (which of these, is this true, how much), run `scripts/jev_ask.py` and report Jev's answer and confidence next to your own.
+- Run it with a Python that has `requirements.lock` installed. In Claude Code sessions that is `venv/bin/python`.
+- Follow `.claude/skills/jev-sidecar/SKILL.md` for when to ask, what never to send, and how to report.
+- It needs `TYPESAFE_API_KEY` in the environment. Without the key the script exits 2 and sends nothing: say so once and continue.
+
+## Secrets
+
+- Never ask the user to paste a key, token or password into chat, and never print, log or commit one.
+- To put a secret on Railway (RegEngine production or staging), send the user the RegEngine Key Drop page: https://claude.ai/artifact/83mnC2gozimcQ87KJFLAFt. It writes from their browser to Railway through their own Railway connector, so the agent never receives the value. The Railway dashboard (Variables → New Variable) is the other direct path.
+- After a secret is on Railway, ask the user to seal it (Variables → ⋯ → Seal). A sealed value reaches the app but cannot be read back through the UI or the API.
+- Keys for agent sessions (for example `TYPESAFE_API_KEY` for `scripts/jev_ask.py`) go in the claude.ai cloud environment settings: the environment menu in the session title bar → Edit → Environment variables. A new session picks them up.
+- Use one key per place (production, staging, agent sessions) so each can be revoked alone. A key that appeared in chat, a log or git history is exposed: revoke it and issue a new one.
+- Verify a secret by its name or its effect, never by reading its value. For Jev, that is the `jev_configured ... key_present=` line in the deploy log.
+
+## Verification
+
+Choose the smallest useful verification for the changed surface:
+
+```bash
+python3 -m pytest tests/swarm -q
+python3 -m pytest services/ingestion/tests -q --no-cov
+python3 -m pytest services/admin/tests -q --no-cov
+cd frontend && npm run lint
+cd frontend && npm run test:run
+cd frontend && npm run build
+```
+
+`frontend/` has no `typecheck` script. Use `npm run lint` (eslint + design-lint)
+and `npm run build` for type errors. Full script list is in
+`frontend/package.json`.
+
+Some integration tests require PostgreSQL, Redis, Neo4j, Docker, or live services. If a command is blocked by local infrastructure or secrets, say so explicitly.
+{
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}
+[project]
+name = "regengine"
+version = "0.4.0"
+description = "API-first FSMA 204 food traceability, validation, tamper-evident audit evidence, and FDA-oriented exports"
+keywords = ["fsma-204", "food-traceability", "cte", "kde", "epcis", "audit-evidence", "supply-chain"]
+authors = [{ name = "RegEngine Engineering", email = "admin@regengine.co" }]
+license = { text = "Proprietary" }
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+
+# NOTE: Runtime/dev dependencies are NOT declared here. The single source of
+# truth is requirements.in (human-edited loose spec) compiled to
+# requirements.lock (fully pinned + hashed via pip-tools). Docker and CI install
+# exclusively from requirements.lock. This [project] table exists only for
+# package metadata and tool configuration ([tool.ruff], [tool.mypy],
+# [tool.pytest]); the root package is never built or installed (only the
+# separate regengine/ SDK is, via its own setup.py).
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["__pycache__", ".venv", "venv", "build", "dist"]
+
+[tool.ruff.lint]
+# Import sorting (isort replacement) lives here. The CI per-service "bug gate"
+# (see backend-ci.yml) runs ruff with an explicit narrow select
+# (E9,F63,F7,F82) and does not depend on this config.
+select = ["I"]
+
+[tool.ruff.lint.isort]
+# Match the previous isort profile = "black" behavior.
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+ignore_missing_imports = true
+# Non-blocking: mypy is available for local use but is not yet a CI gate.
+# Tighten incrementally (e.g. disallow_untyped_defs) per-module via overrides.
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q --asyncio-mode=auto --import-mode=importlib"
+# Only the repo root + services package dir are globally on pythonpath.
+# Per-service ``app/`` resolution is handled by the root conftest.py hook
+# which switches sys.path to the active service before each test collector
+# runs. Listing multiple ``services/<svc>`` here would cause ``app`` to
+# permanently resolve against whichever service sorted first.
+pythonpath = [".", "services"]
+testpaths = [
+    "tests",
+    "regengine/tests",
+    "services/admin/tests",
+    "services/compliance/tests",
+    "services/graph/tests",
+    "services/ingestion/tests",
+    "services/nlp/tests",
+    "services/scheduler/tests",
+    # #2923: omitted until now, so the repo-root --collect-only import guard
+    # in test-suite-check.yml — the check whose stated job is to stop "N test
+    # files silently fail to import" — could not see these 53 files, and a
+    # bare `pytest` from the repo root skipped them.
+    "services/shared/tests",
+]
+asyncio_mode = "auto"
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+markers = [
+    "integration: tests requiring docker/testcontainers or other live external services. Auto-skipped in services/graph/tests unless ``--run-integration`` is passed; opt in elsewhere via ``pytest -m integration``.",
+]
+
+[tool.coverage.run]
+# #2891: the coverage denominator must be PRODUCT code only.
+#
+# The `shared` matrix leg runs `--cov=.` from services/shared, and with no
+# omit configuration pytest's own test modules landed in the denominator.
+# They are fully executed by definition, so they entered the report at
+# ~86% covered and pulled the total up: 5,460 of 16,747 measured statements
+# (33%) were test code. The "~44% locally" note the 35% floor was set from
+# rested on that inflated basis.
+#
+# CI passes --cov-config=<repo root>/pyproject.toml because the matrix step
+# `cd`s into services/<svc> and coverage.py only looks for a config file in
+# the current directory — without the explicit flag this section would be
+# silently ignored, which is the same class of defect it exists to fix.
+omit = [
+    "*/tests/*",
+    "*/conftest.py",
+    "*/__pycache__/*",
+]
+---
+name: jev-sidecar
+description: >
+  Consult TypeSafe Jev as a second opinion while answering the user's requests
+  in RegEngine. Use whenever a request, or a step in answering it, contains a
+  judgment Jev can make: which of these (FSMA 204 CTE of a file, canonical field
+  of a CSV header, which option fits a reviewer's ask), is this true (is this CI
+  failure a real regression, does this finding describe reachable behavior, does
+  this header row carry a lot code), or how much (severity, likelihood, risk).
+  Runs scripts/jev_ask.py and reports Jev's answer and confidence next to your own.
+---
+
+# Jev sidecar
+
+Ask Jev next to your own reasoning, then show both. Jev is a second opinion
+with a calibrated confidence. It never replaces verified facts.
+
+## When to ask
+
+Ask on every request that contains one of these judgments:
+
+| Judgment in the request | Question kind | RegEngine examples |
+| --- | --- | --- |
+| Which of these | `--choice` | Which CTE a CSV records. Which canonical field a header is. What made a CI job fail. Which of two fixes matches a reviewer's ask. |
+| Is this true | `--noul` | Does this review finding describe code a request can reach? Does the header row include a traceability lot code column? |
+| How much | `--score` | Severity of a finding (low to critical). How likely a supplier file is rejected as-is. |
+
+Do not ask when:
+
+- the request is mechanical (push, rename, run the tests, open a PR);
+- code or a command answers it exactly: grep, parse, test, count, compare
+  dates, calculate. Jev is unreliable at counting, arithmetic and date order.
+  Do those in code and ask Jev only for the semantic part;
+- the only state that could answer it is something from **Never send** below;
+- you run unattended (a CI job, a scheduled audit, a review bot) with a fixed
+  output format and no person's request to answer.
+
+## Never send
+
+The state leaves this machine for `api.typesafe.ai`. Never put these in it:
+
+- secrets: API keys, tokens, passwords, connection strings, `.env` contents,
+  Railway or cloud variable values, signed URLs;
+- customer data: values from real uploads (lot codes, GLNs, quantities, dates,
+  business names), tenant ids, names, emails, phone numbers, addresses;
+- the user's messages copied word for word. Restate the decision instead.
+
+Header names, synthetic examples, code, and log lines with secrets removed are
+fine. Before sending a log excerpt, check it for tokens and connection strings.
+
+## How to ask
+
+1. Check the key once per session without printing it:
+   `test -n "$TYPESAFE_API_KEY" && echo set || echo unset`.
+   If it is unset, say once in your reply: "Jev sidecar is off in this session:
+   `TYPESAFE_API_KEY` is not set in the environment." Then continue without
+   Jev and do not ask again in this session.
+2. Build the smallest state that holds what the question needs, as JSON with
+   named fields. Unrelated content lowers accuracy.
+3. Put every question for the request into one call. The questions are
+   evaluated in parallel and billed as one request.
+4. Run it with `venv/bin/python` (the session start hook installs
+   `requirements.lock` there):
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"headers": ["Ship Dte", "Cust Name", "Lot No.", "Qty Shpd"]}' \
+  --choice cte "Which FSMA 204 critical tracking event do rows with these CSV headers record?" \
+    "shipping=the sender records goods leaving its location" \
+    "receiving=the recipient records goods arriving at its location" \
+    "transformation=inputs are combined or processed into new lots" \
+    "unclear=the headers do not identify one event" \
+  --noul has_lot "Does one of the headers name a traceability lot code column?"
+```
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"job": "backend-ci / ingestion", "log_excerpt": "..."}' \
+  --choice cause "What made the job fail?" \
+    "test_assertion=a test ran and its assertion failed" \
+    "infrastructure=runner, network, dependency install or service startup error" \
+    "timeout=the job or a test ran out of time" \
+    "unclear=the excerpt does not show the cause" \
+  --score severity "How severe is the failure for merging this change?" low medium high critical
+```
+
+The output has one line per question, in the order asked. For the first
+command it looks like this (the values here are illustrative, not a real
+answer):
+
+```text
+Jev (jev-1.13.0, request req_…, 412 ms)
+  cte [choice]: shipping (confidence 0.91; shipping 0.91, receiving 0.06, unclear 0.03)
+  has_lot [noul]: yes (p(yes)=0.97)
+```
+
+A `--choice` line lists the three most likely options. A `--score` line reads
+`severity [score]: 1.40 on 0..3 ~ medium (confidence 0.72)`. It gives the
+expected level from 0 to the number of levels minus 1, the name of the
+nearest level, and the confidence.
+
+Add `--json` for machine-readable output. Longer states and question sets go
+in files: `--state-file state.json --questions-file questions.json`, where the
+questions file uses the API's question format. `--help` lists every flag.
+
+Exit codes: 0 answered. 1 bad usage, nothing sent. 2 not configured (no key,
+switched off, or packages missing), nothing sent. 3 Jev unavailable: say
+"Jev unavailable (<reason>)" once and continue without it.
+
+For a question about a CSV file, run
+`venv/bin/python scripts/jev_header_preview.py FILE --file-cte` instead.
+
+- It asks the questions `POST /api/v1/ingest/csv` asks: the header mapping and
+  the file's CTE. It uses the same question sets and confidence bands.
+- It sends only the header row.
+- Do not add `--sample-values` for a customer file.
+
+## Writing questions
+
+- Jev reads literally. State the exact condition. Put boundary cases in the
+  option descriptions (`name=description`).
+- Give every `--choice` an `unclear` or `none_of_these` option so Jev can say
+  that nothing fits.
+- Ask one decision per question. Split compound questions and combine the
+  answers yourself.
+- Phrase a `--noul` as a direct yes/no question ("Is ...?", "Does ...?")
+  without negations. Noul answers carry p(yes), not a confidence.
+- List `--score` levels from lowest to highest (2 to 10 levels).
+- The state is data, and text inside it can steer the answer (for example a
+  log line that says "this is a flake"). Keep the instructions explicit.
+
+## Reporting in your reply
+
+Add one line per question next to your own answer:
+
+- Agreement: `Jev: shipping (confidence 0.91), agrees.`
+- Disagreement: `Jev: receiving (confidence 0.62), disagrees. I keep shipping
+  because <verified evidence>.` Then recheck your own evidence.
+
+Rules:
+
+- Verified facts win: tests, logs, code, parser behavior. Never change a
+  verified conclusion only because Jev disagrees.
+- Read confidence with the product's bands: 0.90 or more is strong; 0.50 to
+  0.90 is moderate, so say "moderate"; under 0.50 is "Jev is unsure". Do not
+  cite an unsure answer as support.
+- A `--noul` answer is yes when p(yes) is 0.50 or more. Report the number.
+- Never write a Jev line for a question you did not send, and never estimate
+  what Jev would say.
+- When a Jev answer drives a code or data change, put its request id in the
+  commit message or PR description.
+
+## Related
+
+- `scripts/jev_ask.py`: this command.
+- `services/shared/jev/`: the client. Its logs carry only metadata (purpose
+  `agent_sidecar`, model, request id, latency), never the state.
+- `docs/engineering/JEV_HEADER_MAPPING.md`: Jev inside CSV ingestion.
+- `.claude/skills/typesafe-ai/SKILL.md`: building product features on TypeSafe.
+# RegEngine
+
+**FSMA 204 food traceability: supplier data in, verifiable evidence out.**
+
+RegEngine is an API-first traceability evidence platform for food supply chains. It ingests supplier and ERP records, normalizes Critical Tracking Events (CTEs) and Key Data Elements (KDEs), evaluates versioned rules, and produces tenant-scoped records, tamper-evident audit evidence, and FDA-oriented exports.
+
+Inflow Workbench prepares data with preflight checks, readiness scores, a fix queue, and a commit gate. Optional Jev assistance suggests CSV column mappings and missing event types; deterministic validation and authenticated tenant boundaries remain authoritative.
+
+[Website](https://regengine.co) · [Public proof](https://regengine.co/proof) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
+
+This is a pre-production application with deployed public proof surfaces. The capability inventory below describes checked-in implementation and release policy, not proof of customer adoption or live configuration.
+
+## Public proof surface
+
+You don't have to take our word for any of this — try it yourself:
+
+- [regengine.co/proof](https://regengine.co/proof) — download a synthetic FSMA CSV, EPCIS 2.0 JSON-LD bundle, and audit evidence ZIP.
+- [regengine.co/verify](https://regengine.co/verify) — drop the public audit bundle into the verifier and confirm file-hash and Merkle-root integrity.
+- [regengine.co/proof/recall-drill](https://regengine.co/proof/recall-drill) — call the public recall-drill endpoint against a frozen synthetic dataset and reproduce the case-study metrics.
+
+This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
+
+## Current Status
+
+- Stage: pre-production.
+- Backend deploy target in checked-in Railway config: one consolidated FastAPI app in [server/main.py](server/main.py), built by the repo-root [Dockerfile](Dockerfile).
+- Frontend: Next.js App Router app in [frontend/](frontend/).
+- Database migrations: Alembic at [alembic/versions/](alembic/versions/).
+- Tenant isolation posture: tenant authority is derived from authenticated principal state; caller-supplied tenant IDs are assertions only.
+- Primary domain: FSMA 204 food traceability. Other regulatory, document, NLP, and graph modules exist, but FSMA ingestion and compliance are the best-evidenced product path in this repository.
+
+## What The Product Does
+
+Implemented capabilities in the current tree. Route availability is controlled by [server/router_policy.py](server/router_policy.py); a module or UI page existing does not mean its API is enabled in production.
+
+| Capability | Evidence |
+| --- | --- |
+| API key protected webhook CTE ingest | [services/ingestion/app/webhook_router_v2/routes.py](services/ingestion/app/webhook_router_v2/routes.py) |
+| Canonical tenant context for API-key, JWT, and ingestion RBAC callers | [services/shared/tenant_context.py](services/shared/tenant_context.py) |
+| Legacy ingestion route tenant-context migration inventory | [docs/security/tenant-route-inventory.md](docs/security/tenant-route-inventory.md) |
+| Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
+| CSV template download and CSV CTE ingest | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py) |
+| EPCIS ingest routes | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py) |
+| EDI ingest routes and parser modules | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/) |
+| GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
+| Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
+| Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
+| Supplier portal preflight before persistence | [services/ingestion/app/supplier_portal.py](services/ingestion/app/supplier_portal.py) |
+| Supplier CSV manifest remediation (implemented; excluded from the production router allowlist): byte-exact manifest intake, per-row validation and staging with provenance, exception/remediation cases, case-scoped single-use supplier correction links, revalidation with granular release, deterministic evidence bundles, scheduler-drained correction-link email delivery | [services/ingestion/app/remediation/](services/ingestion/app/remediation/) |
+| Buyer remediation dashboard (requires the remediation API to be enabled; manifest list, per-record case status, release and correction-link actions) | [frontend/src/app/remediation/page.tsx](frontend/src/app/remediation/page.tsx) |
+| CTE persistence, hash-chain storage, and verification (legacy and canonical stores; dual-write retirement mid-cutover) | [services/shared/cte_persistence/core.py](services/shared/cte_persistence/core.py), [services/shared/canonical_persistence/writer.py](services/shared/canonical_persistence/writer.py), [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md) |
+| Compliance score reads from stored FSMA CTE data | [services/ingestion/app/compliance_score.py](services/ingestion/app/compliance_score.py) |
+| FDA-oriented CSV and evidence-bundle export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
+| Request-response cases, scoped evidence package assembly, and auditor workflows | [services/ingestion/app/request_workflow_router.py](services/ingestion/app/request_workflow_router.py), [services/ingestion/app/auditor_router.py](services/ingestion/app/auditor_router.py) |
+| Recall readiness assessments, gap checklists, and recall reports | [services/ingestion/app/readiness_router.py](services/ingestion/app/readiness_router.py), [services/ingestion/app/recall_report.py](services/ingestion/app/recall_report.py) |
+| Public synthetic recall drill and independently verifiable sample bundles | [services/ingestion/app/proof_recall_router.py](services/ingestion/app/proof_recall_router.py), [frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py) |
+| EPCIS JSON-LD export and broader recall simulations (experimental routers; excluded from the production allowlist) | [services/ingestion/app/epcis_export.py](services/ingestion/app/epcis_export.py), [services/ingestion/app/recall_simulations.py](services/ingestion/app/recall_simulations.py) |
+| Subscription-gated access and persisted usage metering; Stripe usage reporting requires an operator call | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py), [DESIGN_metering-billing.md](DESIGN_metering-billing.md) |
+| Tenant/admin/user/API-key management | [services/admin/app/](services/admin/app/) |
+| Persisted admin tenant provisioning | [services/admin/app/routes.py](services/admin/app/routes.py) |
+| Tamper-evident admin audit log hashing | [services/admin/app/audit.py](services/admin/app/audit.py) |
+| Audit-chain verification for admin audit exports | [services/admin/app/audit_integrity.py](services/admin/app/audit_integrity.py) |
+| Passwordless email-OTP and passkey login | [services/admin/app/auth/challenges_router.py](services/admin/app/auth/challenges_router.py), [frontend/src/lib/passwordless-auth.ts](frontend/src/lib/passwordless-auth.ts) |
+| Public email-verification gate for free compliance tools (no-auth lead capture with rate limits, GDPR lead-erasure endpoints) | [services/admin/app/tool_verification_routes.py](services/admin/app/tool_verification_routes.py) |
+| Scheduler jobs (deadline monitor, data archival, outbox drains, scheduled recall drills with persisted mock-audit drill records) and scheduler metrics surface | [services/scheduler/](services/scheduler/) |
+| Frontend dashboard, auth, sandbox, docs, and product pages | [frontend/src/app/](frontend/src/app/) |
+| Inbound email ingestion: Postmark inbound-parse webhook, Basic-Auth + per-tenant sender allowlist, CSV attachments routed through the existing CSV ingest path, claim-then-act idempotent audit trail. Built and unit-tested; **not enabled in production** and has no admin/self-service provisioning UI — see [docs/engineering/EMAIL_INGESTION.md](docs/engineering/EMAIL_INGESTION.md) | [services/ingestion/app/email_ingest/](services/ingestion/app/email_ingest/) |
+
+## Production Spine
+
+```text
+ingest source record
+  -> preflight in Inflow Workbench
+  -> normalize to CTE/KDE shape
+  -> score readiness and route fix queue items
+  -> pass commit gate
+  -> persist tenant-scoped event data
+  -> evaluate rules
+  -> expose compliance/audit/export views
+```
+
+The diagram describes the Workbench workflow. Direct webhook, CSV, EPCIS, and EDI intake has route-specific validation and persistence; it does not universally pass through Workbench. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and read paths have consumer-specific cutover flags. Chain verification defaults to canonical reads; FDA CSV export v1 retains a legacy code default. Historical rollout observations are recorded in the cutover runbook; current deployment flags must be read back separately (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
+
+## Architecture
+
+### Runtime Shape
+
+The repo still contains six service directories:
+
+| Directory | Purpose |
+| --- | --- |
+| [services/admin](services/admin) | tenants, users, roles, MFA, API keys, audit logs, admin routes |
+| [services/ingestion](services/ingestion) | webhook, CSV, EPCIS, EDI, sandbox, export, CTE persistence integration |
+| [services/compliance](services/compliance) | compliance validation routes and FSMA rules JSON |
+| [services/graph](services/graph) | graph and supply-chain query modules |
+| [services/nlp](services/nlp) | regulatory/document extraction modules |
+| [services/scheduler](services/scheduler) | scheduled jobs, job metrics, operational checks |
+
+The repo-root Dockerfile copies all service directories and starts [server/main.py](server/main.py) with Gunicorn/Uvicorn. `server/main.py` mounts routers from the service directories into one FastAPI process.
+
+The old independent service entrypoints still exist, for example [services/ingestion/main.py](services/ingestion/main.py), but the repo-root [railway.toml](railway.toml) points at the root Dockerfile.
+
+### Infrastructure
+
+Verified from checked-in config and code:
+
+- PostgreSQL is required. Production connection is supplied through `DATABASE_URL`.
+- Local development stack in [docker-compose.dev.yml](docker-compose.dev.yml) starts PostgreSQL and Redis (Redis backs the subscription gate, rate limiting, and idempotency caching — without it authenticated ingest fails closed with 503).
+- Redis is used by rate limiting, queues, session/subscription checks, and other runtime paths when configured.
+- Neo4j code and health checks exist, but the default local development stack does not start Neo4j. The deploy-gating `/readiness` probe contacts Neo4j only when the graph subsystem is enabled; with `NEO4J_URI` set but graph routers disabled (the production default) Neo4j is reported `not_probed` and never contacted. Only PostgreSQL failure returns 503 from `/readiness`; Redis/Neo4j errors degrade the payload but still return 200 ([server/main.py](server/main.py)).
+- The frontend is a separate Next.js application with its own package lock and CI workflow.
+
+## Data And Schema
+
+- Alembic is the active schema migration system.
+- Root migration config: [alembic.ini](alembic.ini).
+- Migration files: [alembic/versions/](alembic/versions/).
+- Deploy migration runner: [scripts/run-migrations.sh](scripts/run-migrations.sh).
+- Runtime DDL is fully owned by Alembic as of v098/v099: application boot performs no schema DDL, the boot-time RLS function definitions were dropped in favor of migration-pinned `set_tenant_context` / `set_admin_context`, and the app role can run without `CREATE` privilege (a startup `admin_database_init_skipped` warning is expected under least privilege). One-transaction revoke runbooks: [runbooks/prod-revoke-create-after-v098.sql](runbooks/prod-revoke-create-after-v098.sql), [runbooks/prod-least-privilege-db-role.sql](runbooks/prod-least-privilege-db-role.sql).
+- Legacy Flyway-style SQL migrations under service directories have been removed (meta-issue #2004); [scripts/check_orphan_migrations.py](scripts/check_orphan_migrations.py) is a CI guard that keeps orphan migrations at zero, rejects any reintroduced top-level Flyway tree, and enforces the `alembic/sql` reference contract in both directions: an `alembic/sql` file referenced by no Alembic revision fails CI (archive it under [docs/archive/migrations/](docs/archive/migrations/) instead), and a revision referencing a missing SQL file fails CI. Superseded companion SQL already archived: see [docs/archive/migrations/README.md](docs/archive/migrations/README.md).
+# Repository Purpose
+
+This repository contains the production application for RegEngine.
+
+RegEngine is a pre-production, API-first FSMA 204 food traceability evidence platform. See [the canonical product description](docs/PRODUCT_DESCRIPTION.md) for positioning and capability availability. Its primary job is to ingest supplier and ERP data, normalize it into traceability evidence, validate the evidence against FSMA 204 expectations, and produce audit/export material for regulatory workflows.
+
+## Scope
+
+- Webhook, CSV, EPCIS, and EDI ingestion for FSMA 204
+- Inflow Workbench preflight, readiness, fix queues, and commit gates
+- Optional CSV column and event-type suggestions, subordinate to deterministic validation
+- CTE/KDE canonicalization
+- Compliance validation and readiness scoring
+- Tenant-scoped data model
+- Audit evidence and hash-chain persistence
+- FDA-oriented exports, request-response packages, recall readiness, and public synthetic proof
+- Supplier correction and remediation workflows, subject to router enablement
+- Operator/admin workflows required to manage tenants, users, API keys, and audit logs
+
+## Non-Goals
+
+- Experimental features on the production request path
+- Non-FSMA verticals
+- Demo-only tooling
+- Unbounded generic document or NLP products
+- Integrations that bypass tenant isolation, schema validation, or audit evidence persistence
+
+## Production Standard
+
+Code in this repository should be evaluated against the FSMA pipeline:
+
+```text
+ingest -> canonicalize -> validate -> persist evidence -> export
+```
+
+Changes that do not strengthen or protect that pipeline should be explicitly marked as experimental, archived, or kept outside the production router surface.
+# RegEngine Architecture
+
+Last verified: 2026-07-31 — deployment model, runtime shape, infrastructure,
+dependency management, and the debt table were re-checked against code on
+this date. Sections carry their own dates where a claim was verified
+earlier and not re-checked.
+
+Partial re-verification 2026-08-26 (#2871): only the Alembic schema-head
+claim in **Infrastructure** below was re-checked against
+`alembic/versions/`. Every other section still carries its 2026-07-31
+date and was **not** re-verified on 2026-08-26.
+
+## Deployment Model
+
+RegEngine is deployed as **one consolidated FastAPI app** behind a Next.js
+frontend. The checked-in Railway config builds the repo-root `Dockerfile`, and
+that image starts `server.main:app`.
+
+The repository still keeps six former service directories because they remain
+useful decomposition seams in the codebase:
+
+| Directory | Current role |
+| --- | --- |
+| `services/admin` | tenants, users, roles, MFA, API keys, audit logs, admin routes |
+| `services/ingestion` | webhook, CSV, EPCIS, EDI, sandbox, export, CTE persistence integration |
+| `services/compliance` | compliance validation routes and FSMA rules JSON |
+| `services/graph` | graph and supply-chain query modules |
+| `services/nlp` | regulatory and document extraction modules |
+| `services/scheduler` | scheduled jobs, operational checks, and metrics |
+
+## Current Runtime Shape
+
+- `server/main.py` mounts routers from the service directories into a single
+  FastAPI process.
+- Legacy entrypoints like `services/ingestion/main.py` still exist for local
+  debugging and compatibility, but they are not the checked-in production
+  deploy target.
+- Production can auto-disable experimental routers unless
+  `ENABLE_EXPERIMENTAL_ROUTERS=true`. See
+  `docs/engineering/ROUTER_SURFACE.md` for the current surface audit.
+
+## Infrastructure
+
+- **Backend hosting:** Railway via one monolith container defined by
+  `railway.toml`.
+- **Frontend:** Next.js App Router app in `frontend/` with a separate CI
+  workflow.
+- **Database:** PostgreSQL via `DATABASE_URL`. Schema is owned entirely by
+  Alembic (`alembic/versions/`, head is **v112** —
+  `d8b2056471a7_v112_seed_obligations_security_definer`, which makes
+  `seed_obligations_for_tenant` `SECURITY DEFINER` with a pinned `search_path`
+  and fail-closed behaviour; verified 2026-08-27);
+  the app performs no runtime DDL as of v098/v099. Neither v111 nor v112
+  creates a table, so the newest tables are
+  `fsma.rule_evaluation_deadletter` (v105, durable dead-letter for
+  rule-evaluation persistence, replayed by the
+  `rule_evaluation_deadletter_replay` scheduler job) and
+  `fsma.tenant_seed_state` (v106, per-tenant obligation seed marker so an
+  RLS deny-all empty read is no longer mistaken for an unseeded tenant).
+  The revisions after those add no tables: v107 fixes the CTE-correction
+  `BEFORE UPDATE` trigger to `RETURN NEW`, v108 adds the `result='error'`
+  value plus the v105 marker columns that never shipped, v109 adds a
+  tenant-bound `SECURITY DEFINER` team-roster reader, and v110 adds the
+  RLS INSERT policy letting authenticated users create their own developer
+  profile. v111 then FORCEs RLS on the two regulatory control-plane tables, and
+  v112 hardens the `seed_obligations_for_tenant` function used at onboarding.
+  `fsma.compliance_evidence_snapshots` (v103) and the v102 mock-audit drill
+  records are no longer the newest tables.
+- **Runtime helpers:** Redis is used by rate limiting, session/JWT paths,
+  subscription/entitlement checks, idempotency caching, and task-processing
+  helpers when configured. The local dev stack
+  (`docker-compose.dev.yml`) starts PostgreSQL **and** Redis — without Redis
+  the subscription gate fails closed with 503, so authenticated ingest does
+  not work locally.
+- **Async/event backbone:** the consolidated deploy path uses PostgreSQL-backed
+  task processing via `server/workers/task_processor.py` and
+  `services/shared/task_queue.py`. Legacy Kafka/Redpanda code paths still exist
+  in-tree and should be treated as remediation drift, not the primary deploy
+  contract.
+- **Graph:** Neo4j integration code and health checks exist, but the default
+  local development stack does not start Neo4j.
+- **Edge / gateway:** there is no app-managed nginx layer in production — the
+  Railway container runs `gunicorn server.main:app` directly. The authoritative
+  defense against a client-supplied `X-RegEngine-Tenant-ID` header is the in-app
+  `TenantContextMiddleware` (`services/shared/middleware/tenant_context.py`),
+  which rejects the header unless it carries a valid `REGENGINE_INTERNAL_SECRET`
+  (covered by `tests/security/test_header_remediation.py`). `infra/gateway/nginx.conf`
+  is a reference-only config (with its own test suite) for if a gateway service is
+  ever provisioned; it is not in the production image.
+
+## Current Architecture Direction
+
+- The deployed shape is already consolidated.
+- Current remediation work is about reducing drift between the monolith deploy
+  path and older service-shaped scaffolding in code and docs.
+- The service directories are code-organization boundaries, not proof of six
+  live backend deploys.
+- The production spine remains:
+
+```text
+ingest -> canonicalize -> validate -> persist evidence -> export
+```
+
+## Dependency Management
+
+### Backend (Python)
+
+Backend dependencies are managed at the repository root:
+
+- `requirements.in` is the human-edited dependency spec.
+- `requirements.lock` is the fully pinned, hash-verified install set used by CI
+  and the production Docker build.
+- `pyproject.toml` declares the supported Python version range.
+
+Backend CI and security checks run against the root lockfile. Do not treat old
+service-scoped dependency assumptions as current deploy truth unless a file
+explicitly says it is legacy-only.
+
+### Frontend (Node.js)
+
+Frontend dependencies are locked via `frontend/package-lock.json`. The Next.js
+application is validated in its own workflow.
+
+## Known Technical Debt
+
+### Large Modules
+
+Source modules above 1,000 lines, re-measured 2026-07-31 (`wc -l`,
+excluding tests):
+
+| File | Lines | Area | Likely split direction |
+| --- | ---: | --- | --- |
+| `services/ingestion/app/fda_export/router.py` | 1312 | export API | separate query, bundle assembly, and format writers |
+| `services/scheduler/service.py` | 1268 | scheduler runtime | split scrape orchestration, emission/ack, and job registration |
+| `services/shared/canonical_persistence/writer.py` | 1228 | shared persistence | extract write-path helpers and transaction orchestration |
+| `services/ingestion/app/inflow_workbench.py` | 1216 | ingestion preflight | split preflight, readiness scoring, fix queue, and commit gate |
+| `services/shared/api_key_store.py` | 1180 | shared auth | split storage adapters from validation helpers |
+| `services/ingestion/app/routes_ingest.py` | 1118 | ingestion API | separate route wiring from validation and persistence |
+| `services/graph/app/routers/fsma/compliance.py` | 1094 | graph API | split query builders from response shaping |
+| `server/main.py` | 1088 | app composition | extract router registration and startup checks from lifespan |
+# Canonical Ownership
+
+**Purpose:** For each truth-bearing concept, one obvious answer to
+"what is the canonical representation of X?"
+
+Last updated: 2026-04-14. Topology language corrected 2026-06-10.
+
+> **Topology note:** the "Who writes / Who reads" rows below use pre-consolidation
+> service names (ingestion, admin, compliance, graph...). Production is a **single
+> consolidated FastAPI monolith** (`server/main.py` on Railway); those names refer to
+> router domains and code paths inside that one process, not separate deployments.
+> The data-model content itself is current. See [`ARCHITECTURE.md`](ARCHITECTURE.md)
+> for the project-level view of the consolidated deployment and the service
+> directories' current roles.
+
+---
+
+## Canonical Event
+
+| | |
+|---|---|
+| **Definition** | A normalized supply chain traceability event (CTE) with Key Data Elements (KDEs), provenance metadata, content hash, and chain hash. Represents one discrete action in the food supply chain: harvesting, cooling, packing, receiving, shipping, or transformation. |
+| **Schema** | `TraceabilityEvent` in `services/shared/canonical_event.py`. Key fields: `event_id`, `tenant_id`, `event_type` (CTEType enum), `traceability_lot_code`, `kdes` (JSONB), `sha256_hash`, `chain_hash`, `status` (ACTIVE/SUPERSEDED/REJECTED/DRAFT), `idempotency_key`, `provenance_metadata`. |
+| **Persistence** | `fsma.traceability_events` table (canonical). Legacy: `fsma.cte_events` + `fsma.cte_kdes` (dual-write, to be removed). |
+| **Who writes** | Ingestion service, via `services/shared/canonical_persistence/`. |
+| **Who reads** | Compliance (rule evaluation), graph (visualization), admin (dashboard), export (FDA artifacts). |
+| **Versioning** | Immutable once status=ACTIVE. Amendments create a new event with `supersedes_event_id` pointing to the original, and the original status becomes SUPERSEDED. |
+| **Derived vs Canonical** | **Canonical.** This is the source of truth. `cte_events` is a legacy derived copy (dual-write) that will be removed. |
+
+---
+
+## Canonical Entity
+
+| | |
+|---|---|
+| **Definition** | A resolved real-world entity in the supply chain: a firm, facility, product, lot, or trading relationship. Carries standard identifiers (GLN, GTIN, FDA registration) plus verification status and confidence score. |
+| **Schema** | `CanonicalEntity` in `services/shared/identity_resolution/`. Key fields: `entity_id`, `tenant_id`, `entity_type` (firm/facility/product/lot/trading_relationship), `canonical_name`, `gln`, `gtin`, `fda_registration`, `verification_status` (verified/unverified/pending_review), `confidence_score`. |
+| **Persistence** | `fsma.canonical_entities` (entities), `fsma.entity_aliases` (fuzzy matching aliases), `fsma.entity_merge_history` (merge/split audit trail), `fsma.identity_review_queue` (human review for ambiguous matches). |
+| **Who writes** | Ingestion service (auto-create on new entity references), admin service (manual entity creation/merge), identity resolution module (auto-merge high-confidence matches). |
+| **Who reads** | All services that reference supply chain participants. Graph uses for visualization. Compliance uses for cross-entity rule evaluation. Export uses for FDA column mapping. |
+| **Versioning** | Mutable (updated on merge, verification, correction). History tracked via `fsma.entity_merge_history` (action: merge/split/undo_merge). `is_active` boolean for soft-delete. |
+| **Derived vs Canonical** | **Canonical.** Neo4j graph nodes are derived copies used for visualization/traversal, not the source of truth. |
+
+---
+
+## Rule Definition
+
+| | |
+|---|---|
+| **Definition** | A versioned FSMA compliance rule that defines what to check, when it applies, how severe a violation is, and what the regulatory citation is. |
+| **Schema** | `RuleDefinition` in `services/shared/rules/types.py`. Key fields: `rule_id`, `rule_version`, `title`, `severity` (critical/warning/info), `category`, `applicability_conditions` (which CTE types), `evaluation_logic` (field checks or relational queries), `citation_reference`, `effective_date`, `retired_date`, `failure_reason_template`, `remediation_suggestion`. |
+| **Persistence** | `fsma.rule_definitions` table. |
+| **Who writes** | Admin service (seeded via `services/shared/rules/seeds.py`, can be updated manually). |
+| **Who reads** | Compliance evaluation via `services/shared/rules/engine.py` (loads WHERE retired_date IS NULL AND effective_date <= CURRENT_DATE). |
+| **Versioning** | `rule_version` integer. Old versions retained (retired_date set). Only active rules evaluate. |
+| **Derived vs Canonical** | **Canonical.** The `FSMA_RULE_SEEDS` in code are the initial seed data; the database table is the runtime source of truth. |
+
+---
+
+## Rule Evaluation
+
+| | |
+|---|---|
+| **Definition** | The result of applying one rule to one event. Records pass/fail/warn/skip/error, the evidence fields inspected, and the confidence of evaluation. |
+| **Schema** | `RuleEvaluationResult` in `services/shared/rules/types.py`. Key fields: `evaluation_id`, `rule_id`, `rule_version`, `result` (pass/fail/warn/skip/error), `why_failed`, `evidence_fields_inspected` (list of dicts), `confidence`, `citation_reference`, `remediation_suggestion`. Aggregated into `EvaluationSummary` (total/passed/failed/warned/skipped counts + `compliant` property). |
+| **Persistence** | `fsma.rule_evaluations` table (when `persist=True`). |
+| **Who writes** | Compliance service via `services/shared/rules/engine.py` (evaluate_event, evaluate_events_batch). |
+| **Who reads** | Export (FDA V2 format includes compliance status + rule failures), admin dashboard, monitoring. |
+| **Versioning** | Each evaluation references the rule_version at time of evaluation. Re-evaluation creates new rows, does not overwrite. |
+| **Derived vs Canonical** | **Derived** from rule definitions + canonical events. Can be regenerated by re-running evaluation. However, persisted results are the record of what was assessed at a point in time. |
+
+---
+
+## Audit Record
+
+| | |
+|---|---|
+| **Definition** | A security/compliance audit event recording who did what, when, from where, and with what result. Covers authentication, authorization, data access, data modification, configuration changes, security alerts, and API operations. |
+| **Schema** | Defined in `services/shared/audit_logging/`. Key fields: `event_id`, `tenant_id`, `actor` (AuditActor: actor_id, actor_type, username, IP, user_agent), `event_type` (60+ AuditEventType values), `category` (10 AuditEventCategory values), `severity` (DEBUG/INFO/WARNING/ERROR/CRITICAL), `resource_type`, `resource_id`, `action_details` (JSONB), `result` (success/failure). |
+| **Persistence** | Application-level audit log (structlog/database). Tamper-evidence provided by `fsma.hash_chain` table for compliance-bearing events. |
+| **Who writes** | All services via `services/shared/audit_logging/`. |
+| **Who reads** | Admin service (security dashboard), compliance (audit trail), export (compliance artifacts). |
+| **Versioning** | Append-only. Events are immutable once written. |
+| **Derived vs Canonical** | **Canonical.** The audit record IS the evidence. Cannot be regenerated. |
+
+---
+
+## Export Artifact
+
+| | |
+|---|---|
+| **Definition** | A generated file (spreadsheet) containing traceability events formatted to FDA 204 specifications. Includes 33 columns (V1) or 37 columns (V2 with compliance status). Hashed for integrity verification. |
+| **Schema** | `FDA_COLUMNS` / `FDA_COLUMNS_V2` specs in `services/ingestion/app/fda_export_service.py`. Mapping function: `_event_to_fda_row()`. |
+| **Persistence** | Generated on-demand. Metadata recorded in `fsma.fda_export_log` (export_type, query params, record_count, export_hash SHA-256, generated_by, generated_at). |
+| **Who writes** | Export service (in ingestion) via `fda_export_service.py`. |
+| **Who reads** | Customers (download), FDA (regulatory submission), admin (monitoring via `export_monitoring.py`). |
+| **Versioning** | Each generation is a new artifact with its own hash. Export log tracks all generations. |
+| **Derived vs Canonical** | **Derived** from canonical events + rule evaluations + canonical entities. Can be regenerated, but each generation is logged immutably. The export log entry (hash, timestamp, who) is canonical evidence that an export occurred. |
+
+---

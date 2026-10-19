@@ -1,0 +1,129 @@
+{
+  "captured_at_utc": "2026-10-03T03:25:36.564435+00:00",
+  "frontend_fix_commit": "a7f001fcadc7d44dfeeacde3e05d337a296e48a8",
+  "versions": {
+    "unit_build_lint_typecheck_node": "20.19.4",
+    "sweep_authoritative_unit_build_node": "20.20.2",
+    "browser_runner_node": "26.7.0",
+    "playwright": "1.63.0",
+    "chromium": "153.0.8010.12",
+    "firefox": "155.0",
+    "webkit": "26.6"
+  },
+  "build": {
+    "status": "passed",
+    "build_id": "nbeA56-sCPEIKdGXlL47I",
+    "served_build_id": "nbeA56-sCPEIKdGXlL47I",
+    "log": "20261003T031544.406432Z-frontend-fe001-build.txt",
+    "note": "Reused final FE-001 production build after verifying unchanged frontend and matching served Build ID; FE-002 was deferred without edits. Generated next-env.d.ts restored before validation.",
+    "sweep_baseline_status": "passed"
+  },
+  "unit": {
+    "files": 137,
+    "before": {
+      "passed": 1033,
+      "failed": 0,
+      "expected_failed": 7,
+      "skipped": 2
+    },
+    "after": {
+      "passed": 1042,
+      "failed": 0,
+      "expected_failed": 4,
+      "skipped": 2
+    },
+    "log": "20261003T031858.241893Z-frontend-final-vitest.txt",
+    "report": "frontend-final-vitest.json",
+    "note": "JSON reporter includes expected failures in passed totals; separated figures above come from Vitest CLI. Six added passing FE-001 cases plus three converted expected failures account for the delta. Coverage thresholds passed; raw coverage output retained only in /private/tmp."
+  },
+  "lint": {
+    "status": "passed",
+    "errors": 0,
+    "warnings": 41,
+    "design_lint_files": 676,
+    "sweep_baseline": {
+      "errors": 0,
+      "warnings": 41,
+      "design_lint_files": 676
+    },
+    "log": "20261003T031921.332464Z-frontend-final-lint-corrected.txt"
+  },
+  "typecheck": {
+    "command": "tsc --noEmit --incremental false",
+    "status": "passed",
+    "log": "20261003T031907.622295Z-frontend-final-tsc.txt",
+    "sweep_baseline": "TypeScript passed inside Next production build; separate standalone tsc baseline not recorded."
+  },
+  "existing_e2e": {
+    "identities": 270,
+    "identity_set_unchanged": true,
+    "before": {
+      "passed": 59,
+      "failed": 28,
+      "expected_failed": 0,
+      "skipped": 183
+    },
+    "after": {
+      "passed": 58,
+      "failed": 29,
+      "expected_failed": 0,
+      "skipped": 183
+    },
+    "log": "20261003T031942.418236Z-frontend-final-existing-e2e-node26.txt",
+    "report": "frontend-final-existing-e2e.json",
+    "comparison": "frontend-final-existing-e2e-summary.json",
+    "new_failure": {
+      "project": "chromium",
+      "file": "frontend/tests/e2e/inflow-lab-tour.spec.ts",
+      "line": 105,
+      "describe": "guided tours (desktop)",
+      "test": "dashboard preview: every step keeps the tooltip on-screen and the spotlight on target",
+      "assertion": "tooltip bottom <= 901",
+      "actual": 902.578125,
+      "same_build_isolated_retry": {
+        "passed": 3,
+        "failed": 0,
+        "log": "20261003T032334.372798Z-frontend-final-tour-retry.txt",
+        "report": "frontend-final-tour-retry.json"
+      },
+      "attribution": "Evidence supports an unrelated layout/timing flake: 3/3 same-build isolated retries pass, tour source is unchanged, and parser imports occur only in scanner/field-capture/receiving routes. Full-run counts remain 58/29/183; retry is separate, not used to relabel them.",
+      "scope_evidence": [
+        "20261003T032341.937412Z-frontend-final-parser-imports.txt",
+        "20261003T032352.001103Z-frontend-final-tour-imports.txt"
+      ]
+    },
+    "remaining_failures": "The same other 28 baseline failures remain: prohibited database/OTP setup, unavailable local backend, existing harness expectations and known WebKit tour geometry. Three timeouts are included in the failed count."
+  },
+  "qa_browser_regressions": {
+    "total": 6,
+    "passed": 3,
+    "unexpected_failed": 0,
+    "expected_failed": 2,
+    "skipped": 1,
+    "FE-001": "Normal passing test on Chromium, Firefox and WebKit.",
+    "FE-004": "Expected failure on Chromium and Firefox. WebKit skipped only after native IndexedDB Blob control failed and string control passed.",
+    "log": "20261003T032214.548084Z-frontend-final-qa-regressions.txt",
+    "report": "frontend-final-qa-regressions.json"
+  },
+  "dead_ends": [
+    "npm run lint first stopped because logger sets user/global npm config both to /dev/null; corrected only command environment to separate absent global config path and reran successfully.",
+    "Node20 existing E2E collection stopped at built-in node:sqlite import; reran browser driver with sweep system Node26.7.0, leaving application mirror on Node20.",
+    "Two comparison attempts detected duplicate spec-title identities; corrected identity key to include parent describe blocks and validated all 270 original identities."
+  ],
+  "cleanup": {
+    "owned_local_ports": {
+      "3114": "closed",
+      "3115": "closed"
+    },
+    "log": "20261003T032458.219213Z-frontend-final-stop-owned-servers.txt",
+    "browser_server_3821": "User-provided external Playwright server left running",
+    "frontend_uncommitted_diff": [],
+    "next_env_sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc"
+  },
+  "limitations": [
+    "No real authenticated backend, database persistence, production or remote CI validated.",
+    "Browser requests used original guarded fixed-loopback per-hop proxy, which changes CSP/Host/compression behavior and does not validate production headers.",
+    "Unit/build Node patch differs from sweep:20.19.4 versus20.20.2.",
+    "Existing full browser suite remains red; additional tour fluctuation was isolated and documented without product edits."
+  ]
+}

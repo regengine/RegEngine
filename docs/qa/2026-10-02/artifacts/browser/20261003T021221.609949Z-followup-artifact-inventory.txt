@@ -1,0 +1,15 @@
+UTC: 2026-10-03T02:12:21.609949+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/browser"); f=[x for x in p.rglob("*") if x.is_file()]; print("Files",len(f),"Bytes",sum(x.stat().st_size for x in f)); print("PNG files",sum(x.suffix==".png" for x in f)); print("Largest:"); [(print(x.stat().st_size,x.relative_to(p))) for x in sorted(f,key=lambda x:x.stat().st_size,reverse=True)[:5]]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Files 431 Bytes 57012964
+PNG files 294
+Largest:
+1032320 fe-001-webkit-2026-10-03T02-08-31-476Z.png
+1031248 fe-001-webkit-2026-10-03T02-10-02-779Z.png
+707754 existing-e2e-local-browser.json
+678854 browser-ux-2026-10-03T02-04-48-007Z/webkit-desktop-_verify-full.png
+672463 existing-e2e-final-local-browser.json

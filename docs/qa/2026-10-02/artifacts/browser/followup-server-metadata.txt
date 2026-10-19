@@ -1,0 +1,7 @@
+PID=96905
+Port=3114
+Mirror=/private/tmp/regengine-browser-followup-hz02qdqj/frontend
+StopFile=/private/tmp/regengine-browser-followup-hz02qdqj/stop
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Build ID=B580X7GslEyeoUljQTLuv
+Runtime CSRF value: ephemeral synthetic, not recorded

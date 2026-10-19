@@ -1,0 +1,16 @@
+UTC: 2026-10-03T03:15:29.887106+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files docs/qa/2026-10-02/scripts .venv/lib -g '*.py' -g '*base.py'
+Exit: 2
+Duration: 0.01s
+Timeout: False
+
+rg: .venv/lib: No such file or directory (os error 2)
+docs/qa/2026-10-02/scripts/validate_handoff.py
+docs/qa/2026-10-02/scripts/existing-e2e-proxy-check.py
+docs/qa/2026-10-02/scripts/run_logged.py
+docs/qa/2026-10-02/scripts/ux-local-proxy.py
+docs/qa/2026-10-02/scripts/backend_pytest.py
+docs/qa/2026-10-02/scripts/ux-server.py
+docs/qa/2026-10-02/scripts/browser-followup-server.py
+docs/qa/2026-10-02/scripts/existing-e2e-proxy.py

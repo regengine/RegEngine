@@ -11,8 +11,8 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const CTE_MAPPER_CONFIG: ToolConfig = {
     id: 'cte-mapper',
-    title: 'CTE Coverage Mapper',
-    description: 'Map your supply chain links to see which Critical Tracking Events typically apply at each step under 21 CFR Part 1 Subpart S. Educational only — exemptions under §1.1305 may change which CTEs apply to your specific operation.',
+    title: 'CTE Mapper',
+    description: 'Map your supply chain links to see which Critical Tracking Event (CTE) types typically apply at each step under 21 CFR Part 1 Subpart S. Educational only. Exemptions under §1.1305 may change which CTEs apply to your specific operation.',
     icon: 'Truck',
     stages: {
         questions: [
@@ -107,7 +107,7 @@ const ROLE_TO_CTES: Record<string, { ctes: string[]; note: string }> = {
     },
     restaurant: {
         ctes: ['§1.1345 Receiving (likely exempt under §1.1305(j))'],
-        note: '§1.1305(j) exempts restaurants and retail food establishments from the records requirement for food sold or distributed directly to consumers. Verify scope with counsel — you may still owe §1.1345 records for FTL food received but not sold direct.',
+        note: '§1.1305(j) exempts restaurants and retail food establishments from the records requirement for food sold or distributed directly to consumers. Verify scope with counsel. You may still owe §1.1345 records for FTL food received but not sold direct.',
     },
 };
 
@@ -203,7 +203,7 @@ export function CTEMapperClient() {
                                 <p className="mt-2 text-small text-re-text-tertiary">{ROLE_TO_CTES[user_role].note}</p>
                             </>
                         ) : (
-                            <p className="text-small text-re-text-tertiary">CTE assignment depends on your operation. See the per-event KDE Checklist Builder.</p>
+                            <p className="text-small text-re-text-tertiary">CTE assignment depends on your operation. See the per-event KDE Field Checklist.</p>
                         )}
                     </CardContent>
                 </Card>
@@ -215,7 +215,7 @@ export function CTEMapperClient() {
                                 <Send className="h-3.5 w-3.5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" /> Incoming exchange (informational)
                             </h4>
                             <p className="text-small text-re-text-secondary">
-                                If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, your {getRoleName(source_role)} is generally required to send the Traceability Lot Code and ship-from KDEs under 21 CFR §1.1340. This tool does not determine FTL status or exemptions — use the FTL Checker first.
+                                If this food is on the FDA Food Traceability List and no §1.1305 exemption applies, your {getRoleName(source_role)} is generally required to send the Traceability Lot Code and ship-from Key Data Element (KDE) fields under 21 CFR §1.1340. This tool does not determine FTL status or exemptions. Use the FTL Checker first.
                             </p>
                         </CardContent>
                     </Card>
@@ -243,14 +243,11 @@ export function CTEMapperClient() {
             <FSMAToolShell
                 config={CTE_MAPPER_CONFIG}
                 renderResults={renderResults}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('cte_mapped', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('cte_mapped', {
+                        tool_id: CTE_MAPPER_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 

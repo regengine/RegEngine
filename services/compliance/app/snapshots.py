@@ -309,7 +309,7 @@ def _capture_posture(db: Any, tenant_id: str) -> dict[str, Any]:
                     "SELECT COUNT(*) AS active_count, "
                     "SUM(CASE WHEN lower(severity) IN :critical THEN 1 ELSE 0 END) AS critical_count "
                     "FROM fsma.compliance_alerts "
-                    "WHERE (tenant_id = :tid OR (tenant_id IS NULL AND org_id = :tid)) "
+                    "WHERE tenant_id = :tid "
                     "AND (resolved IS NULL OR resolved = false)"
                 ).bindparams(bindparam("critical", expanding=True)),
                 {"tid": tenant_id, "critical": list(_CRITICAL_SEVERITIES)},
@@ -667,6 +667,14 @@ def attest_snapshot(
     """Record a human attestation on a snapshot."""
     db = _require_db(db)
     row = _fetch_snapshot(db, ctx.tenant_id, snapshot_id)
+    if row["snapshot_state"] == _STATE_SUPERSEDED:
+        # Append-only evidence (#2964): a superseded freeze is history. Its
+        # seal must keep covering the content that was actually frozen, so a
+        # fresh sign-off cannot be attached to it after a refreeze.
+        raise HTTPException(
+            status_code=409,
+            detail="Snapshot has been superseded; attest its successor instead",
+        )
     seal_version = _seal_version(row)
     if seal_version is None:
         # #2966: attesting re-seals the row, so signing a record that already
@@ -759,6 +767,14 @@ def refreeze_snapshot(
     """
     db = _require_db(db)
     row = _fetch_snapshot(db, ctx.tenant_id, snapshot_id)
+    if _seal_version(row) is None:
+        # Same rule as attest: re-freezing copies the stored name and reason
+        # into a new sealed row, so re-freezing a tampered row would launder
+        # attacker text under a fresh valid hash. Refuse, fail closed.
+        raise HTTPException(
+            status_code=409,
+            detail="Snapshot failed integrity verification; refusing to refreeze",
+        )
     if row["snapshot_state"] == _STATE_SUPERSEDED:
         raise HTTPException(
             status_code=409,

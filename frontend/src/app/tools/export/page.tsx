@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
@@ -57,7 +58,7 @@ const HASH_STEPS = [
   {
     n: '1',
     title: 'Hash Each Event',
-    body: 'Each CTE event (harvesting, initial packing, shipping, receiving, transformation) is converted to a deterministic SHA-256 hash. Same data always produces same hash.',
+    body: 'Each Critical Tracking Event (CTE), such as harvesting, initial packing, shipping, receiving, or transformation, is converted to a deterministic SHA-256 hash. Same data always produces same hash.',
     formula: 'event_data → SHA-256 → hash',
   },
   {
@@ -231,26 +232,33 @@ export default function ExportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleGenerateDemo = useCallback(async (): Promise<void> => {
+    trackToolRunStarted('export');
+    let outcome: 'success' | 'error' = 'error';
     setIsGenerating(true);
     setGenerationStep(null);
 
-    const steps = [
-      { label: 'Reading records...', duration: 300 },
-      { label: 'Computing SHA-256 hashes...', duration: 500 },
-      { label: 'Building chain verification...', duration: 400 },
-      { label: 'Generating FDA CSV...', duration: 300 },
-      { label: 'Creating manifest...', duration: 200 },
-    ];
+    try {
+      const steps = [
+        { label: 'Reading records...', duration: 300 },
+        { label: 'Computing SHA-256 hashes...', duration: 500 },
+        { label: 'Building chain verification...', duration: 400 },
+        { label: 'Generating FDA CSV...', duration: 300 },
+        { label: 'Creating manifest...', duration: 200 },
+      ];
 
-    for (const step of steps) {
-      setGenerationStep(step.label);
-      await new Promise((resolve) => setTimeout(resolve, step.duration));
+      for (const step of steps) {
+        setGenerationStep(step.label);
+        await new Promise((resolve) => setTimeout(resolve, step.duration));
+      }
+
+      const pkg = await generatePackage(SAMPLE_RECORDS);
+      setGeneratedPackage(pkg);
+      outcome = 'success';
+    } finally {
+      setGenerationStep(null);
+      setIsGenerating(false);
+      trackToolRunCompleted('export', outcome);
     }
-
-    const pkg = await generatePackage(SAMPLE_RECORDS);
-    setGeneratedPackage(pkg);
-    setGenerationStep(null);
-    setIsGenerating(false);
   }, []);
 
   const handleFileUpload = useCallback(
@@ -258,6 +266,7 @@ export default function ExportPage() {
       const file = event.target.files?.[0];
       if (!file) return;
 
+      trackToolRunStarted('export');
       setIsGenerating(true);
       setGenerationStep(null);
 
@@ -295,9 +304,11 @@ export default function ExportPage() {
         const pkg = await generatePackage(records);
         setGeneratedPackage(pkg);
         setGenerationStep(null);
+        trackToolRunCompleted('export', 'success');
       } catch (error) {
         console.error('Error processing file:', error);
         setGenerationStep(null);
+        trackToolRunCompleted('export', 'error');
       }
 
       setIsGenerating(false);

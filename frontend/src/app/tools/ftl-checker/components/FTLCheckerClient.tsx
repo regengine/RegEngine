@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { usePostHog } from '@/lib/posthog-provider';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -47,6 +47,7 @@ import { Container } from '@/components/layout/container';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { getConversionAttribution, getReferrerHostname, trackEmailCaptureSubmit, trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
 
 /** Selected/unselected row recipe shared by the pick lists (SPEC §4). */
 const pickClasses = (selected: boolean) =>
@@ -87,8 +88,8 @@ const FTL_CATEGORIES = [
         name: 'Leafy Greens (fresh, intact)',
         category: 'Produce',
         icon: Leaf,
-        examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens',
-        exclusions: 'Does not include whole head cabbages (green, red, savoy) or banana/grape/tree leaves. See fresh-cut leafy greens for pre-cut/bagged products.',
+        examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard. Leafy greens listed in 21 CFR 112.2(a)(1), such as collards, are exempt under §1.1305(e).',
+        exclusions: 'Does not include whole head cabbages (green, red, savoy) or banana/grape/tree leaves. Leafy greens listed in 21 CFR 112.2(a)(1), such as collards, are exempt under §1.1305(e). See fresh-cut leafy greens for pre-cut/bagged products.',
         covered: true,
         outbreakFrequency: 'HIGH',
         ctes: ['Harvesting', 'Cooling', 'Initial Packing', 'Shipping', 'Receiving'],
@@ -220,10 +221,10 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-histamine',
-        name: 'Finfish — Scombrotoxin/Histamine-Forming',
+        name: 'Finfish, histamine-producing species',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito',
+        examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito, swordfish',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
         covered: true,
         outbreakFrequency: 'HIGH',
@@ -233,7 +234,7 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-ciguatoxin',
-        name: 'Finfish — Ciguatoxin-Associated',
+        name: 'Finfish, species potentially contaminated with ciguatoxin',
         category: 'Seafood',
         icon: Fish,
         examples: 'Barracuda, grouper, snapper, moray eel (tropical reef species)',
@@ -246,10 +247,10 @@ const FTL_CATEGORIES = [
     },
     {
         id: 'finfish-other',
-        name: 'Finfish — Other (fresh/frozen/previously frozen)',
+        name: 'Finfish, species not associated with histamine or ciguatoxin',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Salmon, cod, halibut, tilapia, trout, bass, swordfish',
+        examples: 'Salmon, cod, halibut, tilapia, trout, bass',
         exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
         covered: true,
         outbreakFrequency: 'HIGH',
@@ -287,8 +288,8 @@ const FTL_CATEGORIES = [
         name: 'Molluscan Shellfish (bivalves)',
         category: 'Seafood',
         icon: Fish,
-        examples: 'Oysters, clams, mussels, scallops',
-        exclusions: 'Except when product consists entirely of shucked adductor muscle. Raw bivalves under NSSP may be exempt per §1.1305(f)',
+        examples: 'Oysters, clams, mussels, scallops. The scallop adductor muscle alone is excluded.',
+        exclusions: 'The scallop adductor muscle alone is excluded. Raw bivalves under NSSP may be exempt per §1.1305(f)',
         covered: true,
         outbreakFrequency: 'HIGH',
         ctes: ['First Land-Based Receiving', 'Shipping', 'Receiving', 'Transformation'],
@@ -312,8 +313,8 @@ const FTL_CATEGORIES = [
         name: 'Shell Eggs',
         category: 'Eggs',
         icon: Egg,
-        examples: 'Shell eggs as defined under the FDA FTL — typically chicken shell eggs from farms with ≥3,000 laying hens',
-        exclusions: 'Farms with fewer than 3,000 laying hens are exempt per §1.1305(a)(2). Other species (duck, quail) may not be on the FTL — verify directly.',
+        examples: 'Shell eggs of the domesticated chicken',
+        exclusions: 'Shell egg means the egg of the domesticated chicken.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Shipping', 'Receiving'],
@@ -351,7 +352,7 @@ const FTL_CATEGORIES = [
         category: 'Dairy',
         icon: Milk,
         examples: 'Brie, camembert, monterey jack, muenster, havarti, oaxaca, feta (per FTL definition; verify your specific cheese)',
-        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., aged cheddar, parmesan, asiago, aged gouda) are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39% — confirm the FDA classification for your cheese.',
+        exclusions: 'Hard cheeses per 21 CFR 133.150 (e.g., aged cheddar, parmesan, asiago, aged gouda) are excluded. Semi-soft classification per FDA guidance includes cheeses with moisture content >39%. Confirm the FDA classification for your cheese.',
         covered: true,
         outbreakFrequency: 'MODERATE',
         ctes: ['Receiving', 'Transformation', 'Shipping'],
@@ -460,6 +461,8 @@ export function FTLCheckerClient() {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState<'All' | 'Seafood' | 'Produce' | 'Dairy' | 'Eggs' | 'Other'>('All');
     const { toast } = useToast();
+    const runStarted = useRef(false);
+    const runCompleted = useRef(false);
 
     // Hydrate state from URL on initial load
     useEffect(() => {
@@ -481,6 +484,13 @@ export function FTLCheckerClient() {
             }
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        if (currentStep === 'results' && runStarted.current && !runCompleted.current) {
+            runCompleted.current = true;
+            trackToolRunCompleted('ftl-checker', 'success');
+        }
+    }, [currentStep]);
 
     // Generate shareable URL
     const getShareableUrl = () => {
@@ -538,6 +548,14 @@ export function FTLCheckerClient() {
 
     const handleCheck = () => {
         if (selectedCategories.length > 0) {
+            if (runCompleted.current) {
+                runStarted.current = false;
+                runCompleted.current = false;
+            }
+            if (!runStarted.current) {
+                runStarted.current = true;
+                trackToolRunStarted('ftl-checker');
+            }
             const hasCoveredCategories = FTL_CATEGORIES.filter(c => selectedCategories.includes(c.id)).some(c => c.covered);
             if (hasCoveredCategories) {
                 setCurrentStep('exemptions');
@@ -551,7 +569,7 @@ export function FTLCheckerClient() {
     const handleSkipExemptions = () => { setCurrentStep('results'); setShowResults(true); };
     const handleFinishExemptions = () => { setCurrentStep('results'); setShowResults(true); };
     const handleBackToCategories = () => { setCurrentStep('categories'); setExemptionAnswers({}); };
-    const handleStartOver = () => { setSelectedCategories([]); setExemptionAnswers({}); setCurrentStep('categories'); setShowResults(false); setEmailSubmitted(false); };
+    const handleStartOver = () => { runStarted.current = false; runCompleted.current = false; setSelectedCategories([]); setExemptionAnswers({}); setCurrentStep('categories'); setShowResults(false); setEmailSubmitted(false); };
 
     const handleEmailSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -562,28 +580,41 @@ export function FTLCheckerClient() {
 
             // PostHog event for funnel analytics
             posthog?.capture('ftl_report_requested', {
-                email: email,
                 categories_selected: selectedCategories,
                 covered_count: results.coveredCount,
                 risk_level: results.coveredCount > 0 ? 'HIGH' : 'LOW'
             });
-            posthog?.identify(email, { email: email });
 
             // Persist lead to assessment_submissions so it survives without PostHog access.
             // Fire-and-forget: UI transitions optimistically, errors logged but not surfaced.
+            const { utm_source, utm_medium, utm_campaign } = getConversionAttribution();
             submitAssessment({
                 name: email.split('@')[0],
                 email,
                 company: 'Unknown (FTL Checker)',
                 role: '',
                 source: 'ftl-checker',
+                utmSource: utm_source,
+                utmMedium: utm_medium,
+                utmCampaign: utm_campaign,
+                referrer: getReferrerHostname(),
                 toolInputs: {
                     selectedCategories,
                     coveredCount: results.coveredCount,
                     riskLevel: results.coveredCount > 0 ? 'HIGH' : 'LOW',
                 },
-            }).catch((err) => {
-                console.error('[ftl-checker] submitAssessment failed:', err);
+            }).then((result) => {
+                if (result.success) {
+                    trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'success' });
+                } else {
+                    trackEmailCaptureSubmit({
+                        form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'error',
+                        error_code: result.error?.includes('valid email') ? 'validation' : 'server',
+                    });
+                }
+            }).catch(() => {
+                trackEmailCaptureSubmit({ form: 'lead_gate', step: 'gate', tool: 'ftl-checker', outcome: 'error', error_code: 'server' });
+                console.error('[ftl-checker] submitAssessment failed');
             });
 
             toast({ title: "Request received", description: "A member of our team may follow up about your FTL coverage." });
@@ -605,7 +636,7 @@ export function FTLCheckerClient() {
             await generateBrandedPDF({
                 title: 'FTL Coverage Report',
                 subtitle: `${results.totalSelected} categor${results.totalSelected === 1 ? 'y' : 'ies'} analyzed`,
-                reportType: 'FDA FSMA 204 - Food Traceability List',
+                reportType: 'FDA FSMA 204: Food Traceability List',
                 sections: [
                     { type: 'heading', text: 'Summary', level: 2 },
                     {
@@ -675,7 +706,7 @@ export function FTLCheckerClient() {
                 <Breadcrumbs
                     items={[
                         { label: "Free Tools", href: "/tools" },
-                        { label: "FTL Checker" }
+                        { label: "FTL List Checker" }
                     ]}
                 />
             </Container>
@@ -695,7 +726,7 @@ export function FTLCheckerClient() {
                         </p>
                         <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-small text-re-text-tertiary">
                             <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> No account required</span>
-                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> FDA date: July 20, 2028</span>
+                            <span className="flex items-center gap-1.5"><CheckCircle2 size={14} strokeWidth={1.75} aria-hidden="true" className="text-re-text-tertiary" /> FDA won't enforce before July 20, 2028</span>
                         </div>
                     </motion.div>
                 </Container>
@@ -1024,7 +1055,7 @@ export function FTLCheckerClient() {
                                                         <a href={ecfrUrl(e.citation)} target="_blank" rel="noopener noreferrer" className="font-mono font-medium text-re-brand no-underline">{e.citation}</a>
                                                     </div>
                                                 ))}
-                                                {results.exemptionStatus === 'NOT_EXEMPT' && <p className="text-small">Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination — confirm with counsel and the FDA Exemptions &amp; Exclusions Tool before relying on it.</p>}
+                                                {results.exemptionStatus === 'NOT_EXEMPT' && <p className="text-small">Based on the categories selected, your operation does not appear to qualify for a §1.1305 exemption. This is not a regulatory determination. Confirm with counsel and the FDA Exemptions &amp; Exclusions Tool before relying on it.</p>}
                                             </Callout>
                                         )}
 
@@ -1059,7 +1090,7 @@ export function FTLCheckerClient() {
                                                                 <Badge tone="danger" size="sm" className="h-auto whitespace-normal py-1 text-left">Higher Outbreak Frequency</Badge>
                                                             )}
                                                             <Badge tone={category.covered ? 'success' : 'neutral'} size="sm" className="h-auto whitespace-normal py-1 text-left">
-                                                                {category.covered ? 'Listed grouping — verify' : 'Not listed — verify'}
+                                                                {category.covered ? 'Listed grouping. Verify' : 'Not listed. Verify'}
                                                             </Badge>
                                                         </div>
                                                     </div>
@@ -1069,7 +1100,7 @@ export function FTLCheckerClient() {
                                                             <div className="grid grid-cols-1 gap-4">
                                                                 <div>
                                                                     <div className="mb-1.5 font-mono uppercase text-label text-re-text-muted">
-                                                                        CTEs Required
+                                                                        Critical Tracking Event (CTE) Types Required
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-1">
                                                                         {category.ctes.map(cte => (
@@ -1079,7 +1110,7 @@ export function FTLCheckerClient() {
                                                                 </div>
                                                                 <div>
                                                                     <div className="mb-1.5 font-mono uppercase text-label text-re-text-muted">
-                                                                        KDEs per Event
+                                                                        Key Data Element (KDE) Fields per Event
                                                                     </div>
                                                                     <div className="flex flex-wrap gap-1">
                                                                         {category.kdes.map(kde => (
@@ -1115,8 +1146,8 @@ export function FTLCheckerClient() {
                                             <>
                                                 <AlertTriangle size={20} strokeWidth={1.75} aria-hidden="true" className="mb-3 text-re-text-tertiary" />
                                                 <h3 className="mb-3 text-heading text-re-text-primary">Action Required</h3>
-                                                <p className="mb-2 text-ui text-re-text-secondary">Based on your selections, <strong className="font-medium text-re-text-primary">{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. This is not a regulatory determination — verify each product against the FDA FTL.</p>
-                                                <p className="mb-5 text-small text-re-text-tertiary">Some major retailers have announced their own traceability programs — check your buyers&apos; requirements.</p>
+                                                <p className="mb-2 text-ui text-re-text-secondary">Based on your selections, <strong className="font-medium text-re-text-primary">{results.coveredCount} categor{results.coveredCount === 1 ? 'y' : 'ies'}</strong> may fall under FSMA 204 by <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. This is not a regulatory determination. Verify each product against the FDA FTL.</p>
+                                                <p className="mb-5 text-small text-re-text-tertiary">Some major retailers have announced their own traceability programs. Check your buyers&apos; requirements.</p>
                                                 {!emailSubmitted ? (
                                                     <form onSubmit={handleEmailSubmit} className="flex flex-col gap-3">
                                                         <p className="text-ui font-medium text-re-text-primary">Request a Follow-Up Review</p>
@@ -1168,8 +1199,8 @@ export function FTLCheckerClient() {
                                         <h3 className="mb-6 text-heading text-re-text-primary">What You Need to Know</h3>
                                         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                                             {[
-                                                { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325–§1.1350' },
-                                                { num: 2, title: '24-Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
+                                                { num: 1, title: 'Critical Tracking Events (CTEs)', desc: 'You must record events for: Harvesting, Cooling, Initial Packing, First Land-Based Receiving, Shipping, Receiving, and Transformation of FTL foods.', cfrLink: 'https://www.ecfr.gov/current/title-21/section-1.1325', cfrLabel: '§1.1325 to §1.1350' },
+                                                { num: 2, title: '24 Hour Response', desc: 'FDA can request your traceability data, and you must provide it in electronic format within 24 hours.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1455#p-1.1455(c)', cfrLabel: '§1.1455(c)' },
                                                 { num: 3, title: 'Traceability Lot Codes (TLCs)', desc: 'Each lot must have a unique code that links all events across your supply chain.', cfrLink: 'https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1320', cfrLabel: '§1.1320' },
                                             ].map(item => (
                                                 <div key={item.num}>
@@ -1196,11 +1227,11 @@ export function FTLCheckerClient() {
                                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         <a href="https://www.ecfr.gov/current/title-21/part-1/subpart-S" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            21 CFR Part 1 Subpart S — Full Rule Text
+                                            21 CFR Part 1 Subpart S: Full Rule Text
                                         </a>
                                         <a href="https://www.federalregister.gov/documents/2022/11/21/2022-24417/requirements-for-additional-traceability-records-for-certain-foods" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            Final Rule — 87 FR 70910 (Nov 21, 2022)
+                                            Final Rule: 87 FR 70910 (Nov 21, 2022)
                                         </a>
                                         <a href="https://www.fda.gov/food/food-safety-modernization-act-fsma/food-traceability-list" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
@@ -1208,7 +1239,7 @@ export function FTLCheckerClient() {
                                         </a>
                                         <a href="https://www.federalregister.gov/documents/2025/08/07/2025-14967/requirements-for-additional-traceability-records-for-certain-foods-compliance-date-extension" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />
-                                            Compliance Date Extension — 90 FR 38084
+                                            Compliance Date Extension: 90 FR 38084
                                         </a>
                                         <a href="https://www.fda.gov/files/food/published/FSMA%20Rule%20for%20Food%20Traceability%20-%202024-0520-CTEs-KDEs.pdf" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-small text-re-brand no-underline">
                                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-brand" aria-hidden="true" />

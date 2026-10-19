@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { inflowErrorMessage } from "@/lib/inflow-error";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -22,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tutorial } from "@/components/ui/tutorial";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { trackToolRunCompleted, trackToolRunStarted } from "@/lib/conversion-events";
 import { useAuth } from "@/lib/auth-context";
 import { hasPermission } from "@/lib/permissions";
 import { useTenant } from "@/lib/tenant-context";
@@ -347,7 +349,7 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     });
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+        throw new Error(inflowErrorMessage(response.status, payload));
     }
     return response.json();
 }
@@ -987,6 +989,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         if (csvOverride !== undefined) {
             setFeederCsv(csvOverride);
         }
+        if (previewMode) trackToolRunStarted("inflow-lab-dashboard-preview");
         setIsFeederEvaluating(true);
         setIsRunning(true);
         setFeederError(null);
@@ -1036,8 +1039,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     /* authenticated readiness preview is best-effort */
                 }
             }
+            if (previewMode) trackToolRunCompleted("inflow-lab-dashboard-preview", "success");
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
+            if (previewMode) trackToolRunCompleted("inflow-lab-dashboard-preview", "error");
         } finally {
             setIsFeederEvaluating(false);
             setIsRunning(false);
@@ -1216,7 +1221,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             </Badge>
                         </div>
                         <p className="mt-1 text-sm text-slate-600">
-                            See exactly why a supplier lot will fail before it reaches production export.
+                            Review each Critical Tracking Event (CTE) and Key Data Element (KDE) to see why a supplier lot may fail before production export.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2" data-tutorial="inflow-load-data">
@@ -1260,7 +1265,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" aria-hidden />
                     <span className="font-medium text-slate-900">Sandbox preview only.</span>
                     <span className="text-slate-600">
-                        Production FDA-oriented exports stay sealed and review-ready — nothing here writes to them.
+                        Production FDA-oriented exports stay sealed and review-ready. Nothing here writes to them.
                     </span>
                     <Link
                         href="/docs/connectors/inflow-lab"
@@ -1377,7 +1382,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                         <FunnelStep
                             id="production"
                             label="Production import"
-                            value="—"
+                            value="Locked"
                             sub="locked until preview passes"
                             tone="locked"
                             locked
@@ -1445,7 +1450,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                             <div className="flex items-center justify-between text-[13px]">
                                                 <span className="text-slate-600">{factor.label}</span>
                                                 <span className="flex items-center gap-1 font-medium text-slate-900">
-                                                    {isLockedFactor ? "—" : `${factor.value}%`}
+                                                    {isLockedFactor ? "Pending" : `${factor.value}%`}
                                                     {isLockedFactor && (
                                                         <Badge
                                                             variant="outline"
@@ -2104,7 +2109,7 @@ function GroupRootCausePanel({
                             Root cause: {Math.max(1, supplierCount)} supplier{supplierCount === 1 ? "" : "s"} aren&apos;t sending harvest/cool timestamps.
                         </div>
                         <div className="mt-0.5 text-slate-600">
-                            Fix at the source — sandbox can&apos;t fabricate KDEs.
+                            Fix at the source. Sandbox can&apos;t fabricate KDEs.
                         </div>
                         {sourceSupplierBreakdown && supplierCount > 0 && (
                             <div className="mt-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
@@ -2170,7 +2175,7 @@ function GroupRootCausePanel({
                                 Upload supplier CSV
                             </Button>
                             <Button asChild variant="ghost" className="h-7 px-2 text-xs text-slate-500">
-                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noreferrer">
+                                <a href={FSMA_204_KDE_REFERENCE_URL} target="_blank" rel="noopener noreferrer">
                                     View FSMA 204 KDE list
                                 </a>
                             </Button>
@@ -2191,7 +2196,7 @@ function GroupRootCausePanel({
                 <div className="flex-1">
                     <div className="font-medium text-slate-900">No single root cause. These need lot-by-lot triage.</div>
                     <div className="mt-0.5 text-slate-600">
-                        Each lot has a different combination of missing KDEs. A bulk fix would either over-match or under-match. Recommend triaging individually — start with the largest case counts.
+                        Each lot has a different combination of missing KDEs. A bulk fix would either over-match or under-match. Recommend triaging individually, starting with the largest case counts.
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Button

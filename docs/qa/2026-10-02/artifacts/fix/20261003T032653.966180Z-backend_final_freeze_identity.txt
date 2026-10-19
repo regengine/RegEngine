@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:26:53.966180+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git log -1 '--format=%H %s'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+b6222b2942cfd1fee2ac1a3fa259857afeb55c67 fix(BE-004): return a client error for non-UTF8 CSV uploads

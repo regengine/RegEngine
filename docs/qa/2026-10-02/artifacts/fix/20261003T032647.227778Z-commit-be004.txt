@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:26:47.227778+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git commit -m 'fix(BE-004): return a client error for non-UTF8 CSV uploads' -m 'Root cause: CSV upload decoded bytes as UTF-8 without handling UnicodeDecodeError, turning unsupported encodings and binary uploads into HTTP 500.
+
+Fix: catch only the decode failure after the existing bounded upload read and return actionable HTTP 400 guidance to export UTF-8 CSV. Preserve MIME behavior, BOM handling and valid Unicode content.
+
+Proving test: services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_non_utf8_upload_returns_client_error. Before: 3 failed with HTTP 500. After QA, malformed-input, upload-limit, streaming-upload and receipt suites: 79 passed, 3 unrelated expected failures. Scoped Ruff and diff checks passed; independent gate accepted.'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+[qa/2026-10-02-fixes b6222b29] fix(BE-004): return a client error for non-UTF8 CSV uploads
+ 2 files changed, 19 insertions(+), 7 deletions(-)

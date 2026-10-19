@@ -36,6 +36,7 @@ import pytest
 
 from tests.integration_requirements import sqlalchemy_session_or_skip
 from tests.migrations.rls_db import guarded_live_database_url
+from tests.rls_probe import _rls_unfiltered_rows
 
 # Skip if no database configured
 DATABASE_URL = guarded_live_database_url()
@@ -300,6 +301,14 @@ class TestTenantIsolationE2E:
                 f"Event {evt['event_id']} has wrong product: {evt['product_reference']}"
             )
 
+        # RLS proof: the query above filters by tenant_id itself, so it
+        # passes whether or not RLS is enforced. Read with NO tenant
+        # predicate as the app role under tenant_a's context: RLS alone
+        # must surface only tenant_a's events.
+        rls_rows = _rls_unfiltered_rows(db_session, "fsma.traceability_events", tenant_a)
+        assert len(rls_rows) >= 2, f"RLS hid tenant_a's own events: saw {len(rls_rows)} unfiltered rows"
+        assert {row[0] for row in rls_rows} == {tenant_a}, "RLS leaked another tenant's events into tenant_a's context"
+
     # ------------------------------------------------------------------
     # Step 5: Tenant B cannot see Tenant A's request case
     # ------------------------------------------------------------------
@@ -345,6 +354,16 @@ class TestTenantIsolationE2E:
         b_product_names = [r[0] for r in b_products]
         assert PRODUCT_A not in b_product_names, "Tenant A product leaked into Tenant B's view"
         assert PRODUCT_B in b_product_names, "Tenant B should see their own product"
+
+        # RLS proof: same check with NO tenant predicate, as the app role
+        # under tenant_b's context. Only RLS stands between tenant_b and
+        # tenant_a's rows here.
+        rls_rows = _rls_unfiltered_rows(db_session, "fsma.traceability_events", tenant_b)
+        assert rls_rows, "RLS hid tenant_b's own events"
+        assert {row[0] for row in rls_rows} == {tenant_b}, "RLS leaked another tenant's events into tenant_b's context"
+        rls_products = {row[1] for row in rls_rows}
+        assert PRODUCT_A not in rls_products, "Tenant A product leaked into Tenant B's RLS view: isolation breach!"
+        assert PRODUCT_B in rls_products, "Tenant B should see their own product through RLS"
 
     # ------------------------------------------------------------------
     # Step 7: Rules evaluated for Tenant A don't leak to Tenant B
@@ -639,17 +658,16 @@ class TestTenantIsolationE2E:
                 assert a_count > 0, f"Tenant A should have data in {table}"
                 assert b_count > 0, f"Tenant B should have data in {table}"
 
-            # Cross-check: verify no data from one tenant leaked to the other
-            # by checking that tenant_a's count + tenant_b's count equals the
-            # total for both tenants combined
-            combined = db_session.execute(
-                text(f"""
-                    SELECT COUNT(*) FROM {table}
-                    WHERE {col} IN (:tid_a, :tid_b)
-                """),
-                {"tid_a": tenant_a, "tid_b": tenant_b},
-            ).scalar()
-
-            assert combined == a_count + b_count, (
-                f"Data integrity issue in {table}: combined({combined}) != a({a_count}) + b({b_count})"
-            )
+            # RLS cross-check: with NO tenant predicate, each tenant's
+            # RLS context must surface exactly its own row count. (The old
+            # check compared tenant_a + tenant_b against a query already
+            # filtered to those two tenants, which is true by construction.)
+            for tid, expected in ((tenant_a, a_count), (tenant_b, b_count)):
+                rls_rows = _rls_unfiltered_rows(db_session, table, tid)
+                assert len(rls_rows) == expected, (
+                    f"RLS mismatch in {table} for tenant {tid[:8]}...: "
+                    f"unfiltered RLS read saw {len(rls_rows)} rows, expected {expected}"
+                )
+                assert {row[0] for row in rls_rows} <= {tid}, (
+                    f"RLS leaked another tenant's {table} rows into tenant {tid[:8]}..."
+                )

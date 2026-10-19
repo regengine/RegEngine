@@ -1,0 +1,61 @@
+UTC: 2026-10-03T00:46:24.441943+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import json;from pathlib import Path;d=json.loads(Path("docs/qa/2026-10-02/artifacts/ux/chrome-axe_-1728-1.json").read_text());print(json.dumps(d["axe"]["violations"],indent=2)[:5000])'
+Exit: 0
+Duration: 0.16s
+Timeout: False
+
+[
+  {
+    "id": "nested-interactive",
+    "impact": "serious",
+    "tags": [
+      "cat.keyboard",
+      "wcag2a",
+      "wcag412",
+      "TTv5",
+      "TT6.a",
+      "EN-301-549",
+      "EN-9.4.1.2",
+      "RGAAv4",
+      "RGAA-7.1.1"
+    ],
+    "description": "Ensure interactive controls are not nested as they are not always announced by screen readers or can cause focus problems for assistive technologies",
+    "help": "Interactive controls must not be nested",
+    "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/nested-interactive?application=axeAPI",
+    "nodes": [
+      {
+        "any": [
+          {
+            "id": "no-focusable-content",
+            "data": null,
+            "relatedNodes": [
+              {
+                "html": "<div class=\"icon-container\" role=\"button\" tabindex=\"0\" aria-label=\"Open AI Assistant\">",
+                "target": [
+                  [
+                    "#aiFabShadowRoot",
+                    ".icon-container"
+                  ]
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has focusable descendants"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<div class=\"acrobat-button \" role=\"button\" aria-label=\"Get summaries and key insights using AI Assistant\">",
+        "target": [
+          [
+            "#aiFabShadowRoot",
+            ".acrobat-button"
+          ]
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has focusable descendants"
+      }
+    ]
+  }
+]

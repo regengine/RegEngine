@@ -9,14 +9,14 @@ import { Container } from "@/components/layout/container";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
-    title: "TLC Validator | Test Your GS1 Traceability Lot Code Format | RegEngine",
-    description: "Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDA uniqueness requirements. Free data integrity checker for FSMA 204 compliance.",
+    title: "TLC Format Check for FSMA 204 | RegEngine",
+    description: "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format. This free check is not a compliance determination.",
     alternates: {
         canonical: "https://regengine.co/tools/tlc-validator",
     },
     openGraph: {
-        title: "TLC Validator — RegEngine",
-        description: "Validate your Traceability Lot Code format against GS1 standards and FDA FSMA 204 requirements. Free.",
+        title: "TLC Format Check for FSMA 204 | RegEngine",
+        description: "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format. This free check is not a compliance determination.",
         type: "website",
         url: "https://regengine.co/tools/tlc-validator",
     },
@@ -25,15 +25,10 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "TLC Validator",
+    "name": "TLC Format Check",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "GS1 compatibility and uniqueness validator for Traceability Lot Codes (TLC).",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
+    "description": "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -49,7 +44,7 @@ export default function TLCValidatorPage() {
                     <Breadcrumbs
                         items={[
                             { label: "Free Tools", href: "/tools" },
-                            { label: "TLC Validator" }
+                            { label: "TLC Format Check" }
                         ]}
                     />
                     <Suspense
@@ -68,7 +63,7 @@ export default function TLCValidatorPage() {
                 </Container>
             </div>
             <RelatedTools tools={[
-                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the full Key Data Element checklist required for your product and CTE type." },
+                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the full Key Data Element (KDE) checklist required for your product and Critical Tracking Event (CTE) type." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Confirm your product is on the FDA Food Traceability List before building lot codes." },
                 { href: "/tools/export", title: "FDA-Oriented Export Generator", description: "Generate a verifiable records package from your traceability records." },
             ]} />

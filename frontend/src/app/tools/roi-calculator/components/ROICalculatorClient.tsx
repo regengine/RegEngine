@@ -3,6 +3,7 @@
 import { FSMAToolShell } from '@/components/fsma/FSMAToolShell';
 import { ROI_CALCULATOR_CONFIG, calculateROI } from '@/lib/roi-calculator-data';
 import { usePostHog } from '@/lib/posthog-provider';
+import { trackBookCallClick } from '@/lib/conversion-events';
 import { Card, CardContent } from '@/components/ui/card';
 import { Callout } from '@/components/ui/callout';
 import { Container } from '@/components/layout/container';
@@ -73,6 +74,7 @@ export function ROICalculatorClient() {
                             href="https://calendly.com/regengine/fsma-strategy-session"
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={() => trackBookCallClick('roi_calculator', 'roi-calculator')}
                             className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand"
                         >
                             Book a call
@@ -87,7 +89,7 @@ export function ROICalculatorClient() {
                         <h5 className="mb-2 text-label text-re-text-muted">Methodology Note</h5>
                         <p className="text-small leading-relaxed text-re-text-tertiary">
                             Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
-                            We don&apos;t have verified customer ROI data yet — early-design partner pricing reflects that.
+                            We don&apos;t have verified customer ROI data yet, and the Founding rate reflects that.
                             Current public FDA posture points to July 20, 2028 as the earliest enforcement date; no public fine schedule exists, so the
                             risk-concentration tile is illustrative only. Actual results depend on your contracts,
                             existing systems, staffing, and data hygiene.
@@ -115,14 +117,11 @@ export function ROICalculatorClient() {
                 <FSMAToolShell
                     config={ROI_CALCULATOR_CONFIG}
                     renderResults={renderResults}
-                    onLeadCapture={(lead) => {
-                        if (lead.email) {
-                            posthog?.capture('roi_calculated', {
-                                email: lead.email,
-                                answers: lead.answers
-                            });
-                            posthog?.identify(lead.email, { email: lead.email });
-                        }
+                    onLeadCapture={() => {
+                        posthog?.capture('roi_calculated', {
+                            tool_id: ROI_CALCULATOR_CONFIG.id,
+                            lead_captured: true
+                        });
                     }}
                 />
 
@@ -130,17 +129,17 @@ export function ROICalculatorClient() {
                     {[
                         {
                             title: 'Labor time avoided',
-                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet — early-design partner pricing reflects that.',
+                            desc: 'Teams typically move record retrieval from hours to minutes. We don\'t have verified customer ROI data yet, and the Founding rate reflects that.',
                             icon: Clock
                         },
                         {
                             title: 'Tamper-evident exports',
-                            desc: 'Signed event records (downstream verification rolling out) give auditors verifiable evidence — they don\'t replace audits.',
+                            desc: 'Signed event records (downstream verification rolling out) give auditors verifiable evidence. They don\'t replace audits.',
                             icon: ShieldAlert
                         },
                         {
                             title: '§1.1455(c) ready',
-                            desc: 'Designed to support the §1.1455(c) 24-hour records-on-request standard once your data is in the system.',
+                            desc: 'Designed to support the §1.1455(c) 24 hour records-on-request standard once your data is in the system.',
                             icon: Zap
                         }
                     ].map((item, i) => (

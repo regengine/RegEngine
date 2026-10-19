@@ -705,6 +705,11 @@ def get_db():
             retry_with_jitter(lambda: circuit_breaker.call(lambda: db.execute(text("SELECT 1"))))
             yield db
         finally:
+            # rollback() is a no-op if no transaction is active; when a prior
+            # query aborted the transaction it clears the InFailedSqlTransaction
+            # state so the next request checking out this pooled connection
+            # does not inherit it. Same fix as admin get_session (PR #1892).
+            db.rollback()
             db.close()
 
 
@@ -717,6 +722,7 @@ async def get_db_async():
             retry_with_jitter(lambda: circuit_breaker.call(lambda: db.execute(text("SELECT 1"))))
             yield db
         finally:
+            db.rollback()
             db.close()
 
 
@@ -753,4 +759,7 @@ def get_db_session():
         db.rollback()
         raise
     finally:
+        # except Exception does not run for BaseException (client disconnect).
+        # rollback() before close() still clears an aborted transaction.
+        db.rollback()
         db.close()

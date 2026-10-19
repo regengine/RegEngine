@@ -1,0 +1,17 @@
+UTC: 2026-10-03T03:16:20.005719+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import http.client; from pathlib import Path; p=sorted(Path("docs/qa/2026-10-02/artifacts/browser").glob("followup-server-*-metadata.txt"))[-1]; print(p.read_text()); c=http.client.HTTPConnection("127.0.0.1",3115,timeout=10); c.request("GET","/tools/scan"); r=c.getresponse(); print("scanner_status",r.status); print("body_bytes",len(r.read())); c.close()'
+Exit: 0
+Duration: 0.19s
+Timeout: False
+
+PID=78684
+Port=3114
+Mirror=/private/tmp/regengine-browser-followup-uysbu5wg/frontend
+StopFile=/private/tmp/regengine-browser-followup-uysbu5wg/stop
+Guard SHA256=174a3d3c3ecf62657b006859926be51490ad90d816b419bb4df69963ffbbd031
+Build ID=nbeA56-sCPEIKdGXlL47I
+Runtime CSRF value: ephemeral synthetic, not recorded
+
+scanner_status 200
+body_bytes 77475

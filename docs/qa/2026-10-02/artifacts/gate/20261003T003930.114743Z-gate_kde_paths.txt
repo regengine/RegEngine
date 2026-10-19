@@ -1,0 +1,60 @@
+UTC: 2026-10-03T00:39:30.114743+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files services -g '*webhook*' -g '*canonical*' -g '*ingestion*'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/shared/canonical_event.py
+services/shared/tests/test_canonical_persistence_meter_usage.py
+services/shared/tests/test_canonical_webhook_source.py
+services/shared/tests/test_canonical_event_schema_version_1197.py
+services/shared/tests/test_canonical_persistence_batch_on_conflict_1266.py
+services/shared/tests/test_canonical_persistence_chain_race_1300.py
+services/shared/webhook_security.py
+services/admin/scripts/drain_webhook_outbox.py
+services/ingestion/scripts/stress_test_ingestion.py
+services/ingestion/scripts/load_test_ingestion.py
+services/graph/tests/test_mobile_ingestion.py
+services/scheduler/tests/test_webhook_retry_1150.py
+services/scheduler/tests/test_webhook_dlq_2510.py
+services/scheduler/tests/test_webhook_ssrf_1084.py
+services/ingestion/app/canonical_router.py
+services/admin/tests/test_webhook_outbox_1408.py
+services/admin/tests/test_webhook_outbox_ssrf.py
+services/ingestion/app/webhook_models.py
+services/ingestion/app/integration_webhook.py
+services/ingestion/app/webhook_compat.py
+services/ingestion/app/stripe_billing/webhooks.py
+services/admin/app/webhook_outbox.py
+services/ingestion/tests/test_webhook_compat_1342.py
+services/ingestion/tests/test_webhook_hmac_and_replay.py
+services/ingestion/tests/test_stripe_webhook_verify_before_ratelimit_2929.py
+services/ingestion/tests/test_stripe_webhook_rate_limit_1198.py
+services/ingestion/tests/test_webhook_router_v2_enforcement.py
+services/ingestion/tests/test_edi_ingestion_api.py
+services/ingestion/tests/test_webhook_compat_enforcement.py
+services/ingestion/tests/test_webhook_verify_api_key_1888.py
+services/ingestion/tests/test_stripe_webhooks_1342.py
+services/ingestion/tests/test_webhook_router_v2_idor_f1.py
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py
+services/ingestion/tests/test_webhook_rate_limit.py
+services/ingestion/tests/test_webhook_replay_metric.py
+services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py
+services/ingestion/tests/test_csv_ingestion_receipt.py
+services/ingestion/tests/test_stripe_webhook_idempotency.py
+services/ingestion/tests/test_webhook_idempotency.py
+services/ingestion/tests/test_integration_webhook_1342.py
+services/ingestion/tests/test_webhook_router_v2_tenant_resolution.py
+services/ingestion/tests/test_epcis_ingestion_api.py
+services/ingestion/tests/test_webhook_funnel_events.py
+services/ingestion/tests/test_webhook_trailing_lows_infos.py
+services/ingestion/tests/test_reader_canonical_migration_2506.py
+services/ingestion/tests/test_regulation_webhook_ssrf.py
+services/ingestion/tests/test_canonical_router.py
+services/ingestion/tests/test_webhook_models.py
+services/ingestion/tests/test_webhook_models_1342.py
+services/ingestion/tests/test_smoke_ingestion.py
+services/ingestion/tests/test_webhook_router_v2_1342.py
+services/ingestion/tests/test_canonical_router_1342.py
+services/ingestion/tests/test_stripe_webhook_missing_handlers_1189.py

@@ -1,0 +1,21 @@
+UTC: 2026-10-03T00:43:38.733675+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/artifacts/backend/20261003T004257.713724Z-admin-auth-matrix.txt"); lines=p.read_text().splitlines(); print("\n".join(l for l in lines if l.lstrip().startswith(("+","-")) and not l.lstrip().startswith(("---","+++")))[:14000])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+  +         },
+  +         {
+  +             'inventory_source': 'development-route-table',
+  +             'method': 'GET',
+  +             'operation': 'graph:GET:/api/v1/provisions/by-request',
+  +             'owner': 'graph',
+  +             'path': '/api/v1/provisions/by-request',
+  +             'probe_method': 'GET',
+  +             'probe_path': '/api/v1/provisions/by-request',
+  -         'disabled_operation_count': 179,
+  +         'disabled_operation_count': 180,
+  -         'disabled_unique_path_count': 162,
+  +         'disabled_unique_path_count': 163,
+ +  where 179 = probe_omitted_paths_exact_404(<fastapi.applications.FastAPI object at 0x11d254990>, {'always_mounted_owners': ['core_ingest', 'features', 'health', 'metrics', 'root', 'scheduler', ...], 'disabled_operat...uter_groups': ['admin', 'audit_export_log', 'auditor', 'billing', 'canonical_records', 'chain_verification', ...], ...})

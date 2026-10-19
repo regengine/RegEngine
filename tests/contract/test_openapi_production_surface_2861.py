@@ -1,29 +1,7 @@
-"""Every published path must be mounted in production — #2861.
+"""The canonical curated public spec must match mounted production routes.
 
-`scripts/generate_openapi.py` used to build the public spec from
-`services/ingestion/main.py`. That entrypoint has no experimental-router gate,
-so the committed spec advertised **9 of its 45 paths that production does not
-mount** — 20% of the public contract returning 404 to every integrator and
-every SDK generated from it.
-
-The `openapi-public-spec` workflow made it worse rather than better: it
-enforces that the committed file matches the generator output, so the drift
-stayed consistent with a generator reading the wrong app, and therefore looked
-verified.
-
-The generator now builds from `server.main` under `REGENGINE_ENV=production`.
-This test is the independent check on that — it does not ask the generator what
-it produced, it asks the production app what it mounts, and compares.
-
-**Why a subprocess.** The production route set depends on module-level state
-evaluated at import (`_is_prod` gates `_router_enabled`). By the time this test
-runs, `server.main` may already be imported under a different environment, and
-re-importing would return the cached module. The env also cannot simply be set
-for the whole session: `services/ingestion/main.py` raises under
-`REGENGINE_ENV=production` via `assert_legacy_entrypoint_not_in_production`, so
-a global switch would break every test that builds the ingestion app. A clean
-child process is the only way to observe the real production mount set without
-disturbing anything else.
+The TypeScript export replaced the retired Python generator/static asset.
+Production routes are independently enumerated in an import-only subprocess.
 """
 
 from __future__ import annotations
@@ -37,13 +15,29 @@ from pathlib import Path
 import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_SPEC = _REPO_ROOT / "frontend" / "public" / "openapi.json"
 
-# Mirrors _IMPORT_ONLY_ENV in scripts/generate_openapi.py. Import-only values:
+
+# Import-only values for production route enumeration:
 # the child builds a route table and exits without serving anything.
+def _synthetic_fernet_key() -> str:
+    """Fresh Fernet key per parent process for the strict-auth MFA gate.
+
+    Generated at runtime so no key material lives in the file. The child
+    boots under production posture, which is always strict, and strict
+    runtimes refuse to boot without a valid MFA_ENCRYPTION_KEY (#3238).
+    """
+    from cryptography.fernet import Fernet
+
+    return Fernet.generate_key().decode()
+
+
 _CHILD_ENV = {
     "REGENGINE_ENV": "production",
     "ENV": "production",
+    "EVENT_BACKBONE": "pg",
+    "REDIS_URL": "redis://127.0.0.1:6379/15",
+    "ACCESS_TOKEN_EXPIRE_MINUTES": "5",
+    "SESSION_STORE_BACKEND": "redis",
     "DATABASE_URL": "sqlite:///:memory:",
     "ADMIN_DATABASE_URL": "sqlite:///:memory:",
     "ADMIN_FALLBACK_SQLITE": "1",
@@ -51,12 +45,20 @@ _CHILD_ENV = {
     "JWT_SECRET": "openapi-contract-test-import-only-not-a-real-jwt-secret-9c7e",
     "REGENGINE_API_KEY": "openapi-contract-test-import-only-not-a-real-key-1a3d",
     "TOOL_ACCESS_SECRET": "openapi-contract-test-import-only-not-a-real-tool-8e5c",
+    "MFA_ENCRYPTION_KEY": _synthetic_fernet_key(),
+    # DATABASE_URL (above) is the only startup credential the production
+    # secret gate requires: optional subsystems stay disabled in the child
+    # (the production router set has no graph; EVENT_BACKBONE is pg),
+    # so no other credential values are seeded here. Never used to
+    # connect anywhere — the child builds a route table and exits.
 }
 
 _CHILD_SCRIPT = """
-import json, sys
+import json, os, sys
 sys.path.insert(0, {repo!r})
 sys.path.insert(0, {services!r})
+from server.router_policy import PRODUCTION_ENABLED_ROUTERS
+os.environ["ENABLED_ROUTERS"] = ",".join(sorted(PRODUCTION_ENABLED_ROUTERS))
 from server.main import app
 from fastapi.routing import APIRoute
 print("@@PATHS@@" + json.dumps(sorted({{r.path for r in app.routes if isinstance(r, APIRoute)}})))
@@ -68,10 +70,22 @@ def production_paths() -> set[str]:
     env = {**os.environ, **_CHILD_ENV}
     env.pop("ENABLE_EXPERIMENTAL_ROUTERS", None)  # default production posture
     env.pop("DISABLED_ROUTERS", None)
-    # Test-only vars the production config validator rejects outright. Inheriting
-    # them from the pytest environment makes the child refuse to start, which
-    # would look like a contract failure rather than an environment one.
-    for _test_only in ("AUTH_TEST_BYPASS_TOKEN", "ALLOW_LEGACY_ENTRYPOINT_IN_PROD"):
+    # Test-only vars the production config validator rejects outright, plus
+    # placeholder storage keys inherited from the pytest environment (other
+    # suites export test-* values) that the secrets gate rejects as insecure
+    # whenever set. Inheriting any of them makes the child refuse to start,
+    # which would look like a contract failure rather than an environment one.
+    for _test_only in (
+        "AUTH_TEST_BYPASS_TOKEN",
+        "ALLOW_LEGACY_ENTRYPOINT_IN_PROD",
+        "ALLOW_INMEMORY_SESSION_STORE",
+        "AUTH_ALLOW_LEGACY_JTI_FREE",
+        "NEO4J_URI",
+        "NEO4J_URL",
+        "NEO4J_PASSWORD",
+        "OBJECT_STORAGE_ACCESS_KEY_ID",
+        "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    ):
         env.pop(_test_only, None)
     script = _CHILD_SCRIPT.format(repo=str(_REPO_ROOT), services=str(_REPO_ROOT / "services"))
     proc = subprocess.run(
@@ -89,12 +103,12 @@ def production_paths() -> set[str]:
             f"exit={proc.returncode}\nstdout tail:\n{proc.stdout[-1500:]}\n"
             f"stderr tail:\n{proc.stderr[-1500:]}"
         )
-    return set(json.loads(marker[-1][len("@@PATHS@@"):]))
+    return set(json.loads(marker[-1][len("@@PATHS@@") :]))
 
 
 @pytest.fixture(scope="module")
-def published_paths() -> set[str]:
-    return set(json.loads(_SPEC.read_text(encoding="utf-8"))["paths"])
+def published_paths(published_spec) -> set[str]:
+    return set(published_spec()["paths"])
 
 
 def test_production_route_table_is_non_trivial(production_paths):
@@ -113,34 +127,11 @@ def test_published_spec_is_non_empty(published_paths):
 def test_every_published_path_is_mounted_in_production(published_paths, production_paths):
     """The #2861 defect itself."""
     dead = sorted(published_paths - production_paths)
-    assert not dead, (
-        f"{len(dead)} path(s) are published in frontend/public/openapi.json but are NOT "
-        f"mounted by the production monolith, so they 404 for every integrator and every "
-        f"SDK generated from the spec:\n  " + "\n  ".join(dead) + "\n\n"
-        f"This is usually an experimental router: server.main auto-disables "
-        f"_EXPERIMENTAL_ROUTERS when REGENGINE_ENV=production. Regenerate with "
-        f"`python scripts/generate_openapi.py`, which now builds from the production "
-        f"app, rather than adding the path to an allowlist (#2861)."
-    )
+    assert not dead, f"{len(dead)} canonical public path(s) are not mounted in production:\n  " + "\n  ".join(dead)
 
 
-class TestGeneratorIsEnvironmentIndependent:
-    """The published spec must not depend on who ran the generator.
-
-    Caught in review on #3025: the generator set the production env but did not
-    strip `ENABLE_EXPERIMENTAL_ROUTERS` / `DISABLED_ROUTERS`. Fixing that
-    surfaced a larger one — it used `os.environ.setdefault`, so an inherited
-    `REGENGINE_ENV` won outright and the generator built the non-production
-    app. The env is now assigned, not defaulted. Both are
-    legitimate per-deploy knobs, and both change the mount set — so a developer
-    or CI job with either exported would regenerate a different contract.
-    `ENABLE_EXPERIMENTAL_ROUTERS=1` put all 9 paths #2861 removed straight back
-    in (37 -> 46), and the drift-check workflow would then enforce that
-    accident as the published spec.
-
-    These run the real generator in a subprocess with the variable set and
-    assert `--check` still passes against the committed file.
-    """
+class TestPublishedSpecIsEnvironmentIndependent:
+    """Per-deploy backend knobs must not change the curated public contract."""
 
     @pytest.mark.parametrize(
         ("name", "value"),
@@ -158,20 +149,6 @@ class TestGeneratorIsEnvironmentIndependent:
             ("ENV", "staging"),
         ],
     )
-    def test_router_overrides_do_not_change_the_published_spec(self, name, value):
-        env = {**os.environ, name: value}
-        proc = subprocess.run(
-            [sys.executable, str(_REPO_ROOT / "scripts" / "generate_openapi.py"), "--check"],
-            capture_output=True,
-            text=True,
-            env=env,
-            cwd=str(_REPO_ROOT),
-            timeout=600,
-        )
-        assert proc.returncode == 0, (
-            f"With {name}={value!r} exported, the generator produces a spec that no longer "
-            f"matches the committed file. The published contract must be the default "
-            f"production posture regardless of per-deploy overrides, or the drift-check "
-            f"workflow will enforce whichever accident was last committed (#2861).\n"
-            f"stdout tail:\n{proc.stdout[-1200:]}\nstderr tail:\n{proc.stderr[-1200:]}"
-        )
+    def test_router_overrides_do_not_change_the_published_spec(self, name, value, published_spec):
+        baseline = published_spec()
+        assert published_spec({**os.environ, name: value}) == baseline

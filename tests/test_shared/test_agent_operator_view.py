@@ -83,6 +83,10 @@ class _FakeSession:
             return _FakeResult(rows=[self.upsert_row] if self.upsert_row else [])
         if "FROM fsma.agent_artifacts aa" in sql and "aa.artifact_id = :artifact_id" in sql:
             return _FakeResult(rows=[self.artifact_lookup_row] if self.artifact_lookup_row else [])
+        if "receipt_scope" in sql:
+            # Operator-view item list: its tenant-scoped CTEs also name
+            # fsma.ingestion_runs, so route it before the run-ledger read.
+            return _FakeResult(rows=self.item_rows)
         if "FROM fsma.ingestion_runs" in sql:
             return _FakeResult(row=self.run_row)
         if "FROM fsma.ingestion_run_receipts" in sql and "ORDER BY sequence_num ASC" in sql:

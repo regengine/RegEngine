@@ -106,7 +106,8 @@ def test_export_simulation_json_and_csv_views(client: TestClient) -> None:
     )
     assert csv_timeline.status_code == 200
     timeline_text = csv_timeline.text
-    assert "timestamp,event,location,status" in timeline_text
+    # Every cell is quoted (csv.QUOTE_ALL, #3311 formula-injection fix).
+    assert '"timestamp","event","location","status"' in timeline_text
     assert "Contaminant introduced at source lot" in timeline_text
 
     csv_contacts = client.get(

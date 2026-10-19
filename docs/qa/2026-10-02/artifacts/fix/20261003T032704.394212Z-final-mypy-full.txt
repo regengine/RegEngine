@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:27:04.394212+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/mypy --python-executable /Users/sellers/Projects/RegEngine/repo/.venv/bin/python --cache-dir /private/tmp/regengine-qa-fix-mypy-full-cache .
+Exit: 2
+Duration: 0.32s
+Timeout: False
+
+regengine/__init__.py: error: Duplicate module named "regengine" (also at "./cli/regengine.py")
+regengine/__init__.py: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#mapping-file-paths-to-modules for more info
+regengine/__init__.py: note: Common resolutions include:
+regengine/__init__.py: note:     a) using `--exclude` to avoid checking one of them,
+regengine/__init__.py: note:     b) adding `__init__.py` somewhere,
+regengine/__init__.py: note:     c) using `--explicit-package-bases` or adjusting `MYPYPATH`
+Found 1 error in 1 file (errors prevented further checking)

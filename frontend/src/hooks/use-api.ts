@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
+import { apiError, isAuthError } from '@/lib/api-error';
 import type { IngestURLRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
 import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
@@ -69,10 +70,25 @@ async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
         credentials: 'include',
         signal: AbortSignal.timeout(4000),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        // A 401/403 here means the session is gone, not that the backend is
+        // down. Tag the status so the caller can surface it instead of
+        // reporting healthy-looking "unhealthy" demo services.
+        if (res.status === 401 || res.status === 403) {
+          throw apiError(res.status, res.statusText);
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
       return { name, ok: true };
     }),
   );
+
+  const authFailure = results
+    .map((result) => (result.status === 'rejected' ? result.reason : null))
+    .find((reason) => isAuthError(reason));
+  if (authFailure) {
+    throw authFailure;
+  }
 
   const services = results.map((result, i) => {
     const name = serviceNames[i];
@@ -102,9 +118,13 @@ export const useSystemStatus = () => {
     refetchInterval: POLL_HEALTH,
     retry: false,
   });
+  // Demo data covers unreachable backends only. Auth failures (401/403) mean
+  // the session expired: surfacing zeros would hide that and leave the user
+  // staring at fake "unhealthy" services instead of logging in again.
+  const hideAuthError = query.error && isAuthError(query.error);
   return {
     ...query,
-    data: query.data ?? (query.error ? DEMO_STATUS : undefined),
+    data: query.data ?? (!hideAuthError && query.error ? DEMO_STATUS : undefined),
   };
 };
 
@@ -115,9 +135,12 @@ export const useSystemMetrics = () => {
     refetchInterval: POLL_METRICS,
     retry: false,
   });
+  // Same rule as useSystemStatus: demo zeros for down backends, real error
+  // for expired or forbidden sessions.
+  const hideAuthError = query.error && isAuthError(query.error);
   return {
     ...query,
-    data: query.data ?? (query.error ? DEMO_METRICS : undefined),
+    data: query.data ?? (!hideAuthError && query.error ? DEMO_METRICS : undefined),
   };
 };
 
@@ -186,6 +209,44 @@ export const useIngestFile = () => {
       sourceSystem?: string;
       cteType?: string;
     }) => apiClient.ingestFile(apiKey, file, sourceSystem, cteType),
+  });
+};
+
+// EPCIS 2.0 ingestion — same mutation pattern as useIngestFile, against the
+// backend routes in services/ingestion/app/epcis/router.py.
+export const useIngestEpcisEvent = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, event }: {
+      apiKey?: string | null;
+      event: Record<string, unknown>;
+    }) => apiClient.ingestEpcisEvent(apiKey, event),
+  });
+};
+
+export const useIngestEpcisBatch = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, events }: {
+      apiKey?: string | null;
+      events: Record<string, unknown>[];
+    }) => apiClient.ingestEpcisBatch(apiKey, events),
+  });
+};
+
+export const useIngestEpcisXml = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, xml }: {
+      apiKey?: string | null;
+      xml: string;
+    }) => apiClient.ingestEpcisXml(apiKey, xml),
+  });
+};
+
+export const useValidateEpcisEvent = () => {
+  return useMutation({
+    mutationFn: ({ apiKey, event }: {
+      apiKey?: string | null;
+      event: Record<string, unknown>;
+    }) => apiClient.validateEpcisEvent(apiKey, event),
   });
 };
 

@@ -19,8 +19,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WorkflowStepper } from '@/components/layout/workflow-stepper';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
-import type { IngestCSVResponse } from '@/types/api';
-import { useIngestURL, useIngestFile } from '@/hooks/use-api';
+import type { IngestCSVResponse, NormalizedEpcisResult } from '@/types/api';
+import {
+  useIngestURL,
+  useIngestFile,
+  useIngestEpcisEvent,
+  useIngestEpcisBatch,
+  useIngestEpcisXml,
+  useValidateEpcisEvent,
+} from '@/hooks/use-api';
+import {
+  parseEpcisJson,
+  normalizeEpcisIngestResult,
+  epcisErrorMessage,
+  type ParsedEpcisJson,
+} from '@/lib/epcis-upload';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 import {
   CheckCircle,
@@ -114,6 +127,14 @@ export default function IngestPage() {
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
+  const [epcisFile, setEpcisFile] = useState<File | null>(null);
+  const [epcisResult, setEpcisResult] = useState<NormalizedEpcisResult | null>(null);
+  const [epcisError, setEpcisError] = useState<string | null>(null);
+  const [epcisValidation, setEpcisValidation] = useState<{
+    checked: number;
+    valid: number;
+    errors: string[];
+  } | null>(null);
   const [cteSuggestion, setCteSuggestion] = useState<ActionableCteSuggestion | null>(null);
   const [errorColumnSuggestions, setErrorColumnSuggestions] = useState<ColumnSuggestion[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -121,7 +142,16 @@ export default function IngestPage() {
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
-  const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending;
+  const ingestEpcisEventMutation = useIngestEpcisEvent();
+  const ingestEpcisBatchMutation = useIngestEpcisBatch();
+  const ingestEpcisXmlMutation = useIngestEpcisXml();
+  const validateEpcisMutation = useValidateEpcisEvent();
+  const epcisPending =
+    ingestEpcisEventMutation.isPending ||
+    ingestEpcisBatchMutation.isPending ||
+    ingestEpcisXmlMutation.isPending ||
+    validateEpcisMutation.isPending;
+  const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending || epcisPending;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -130,6 +160,15 @@ export default function IngestPage() {
       setCsvError(null);
       setCteSuggestion(null);
       setErrorColumnSuggestions([]);
+    }
+  };
+
+  const handleEpcisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setEpcisFile(e.target.files[0]);
+      setEpcisResult(null);
+      setEpcisError(null);
+      setEpcisValidation(null);
     }
   };
 
@@ -163,6 +202,114 @@ export default function IngestPage() {
     return () => window.clearInterval(intervalId);
   }, [jobId]);
 
+  // Shared preamble for every submit path: persist a changed API key so the
+  // browser proxy reads it from the cookie, then clear prior result state.
+  // Returns false when the caller should stop without sending any request.
+  const prepareSubmit = async (): Promise<boolean> => {
+    // Store the API key for future use
+    if (apiKey !== storedApiKey) {
+      // The browser proxy reads the cookie written by setApiKey and ignores
+      // caller-supplied credential headers. Wait for that write before the
+      // upload so a stale key or tenant cannot win the request race.
+      try {
+        await storeApiKey(apiKey);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to save API key';
+        if (activeTab === 'file') setCsvError(message);
+        else if (activeTab === 'epcis') setEpcisError(message);
+        else setStatusError(message);
+        return false;
+      }
+    }
+    setJobId(null);
+    setJobStatus('queued');
+    setStatusError(null);
+    setCsvResult(null);
+    setCsvError(null);
+    setCteSuggestion(null);
+    setErrorColumnSuggestions([]);
+    setEpcisResult(null);
+    setEpcisError(null);
+    setEpcisValidation(null);
+    return true;
+  };
+
+  // EPCIS 2.0 submit path. JSON files are parsed client-side: an
+  // EPCISDocument with epcisBody.eventList or a bare JSON array goes to the
+  // batch endpoint, a single event object goes to the single-event endpoint,
+  // and XML files go to the XML endpoint untouched. Validate-only calls the
+  // validate endpoint per event and never touches an ingest endpoint.
+  const runEpcisSubmit = async (validateOnly: boolean) => {
+    if (!apiKey || !epcisFile) return;
+    if (submitInFlightRef.current) return;
+
+    submitInFlightRef.current = true;
+    setIsSubmitting(true);
+    try {
+      if (!(await prepareSubmit())) return;
+      const selectedFile = epcisFile;
+      const isXmlFile = /\.xml$/i.test(selectedFile.name);
+      if (validateOnly && isXmlFile) {
+        setEpcisError('Validation is only available for JSON files. Upload the XML file to ingest it directly.');
+        return;
+      }
+      if (isXmlFile) {
+        const xml = await selectedFile.text();
+        if (!xml.trim()) {
+          setEpcisError('The XML file is empty.');
+          return;
+        }
+        const data = await ingestEpcisXmlMutation.mutateAsync({ apiKey, xml });
+        const normalized = normalizeEpcisIngestResult(data);
+        setEpcisResult(normalized);
+        if (normalized.accepted > 0) notifyDashboardRefresh();
+        return;
+      }
+      let parsed: ParsedEpcisJson;
+      try {
+        parsed = parseEpcisJson(await selectedFile.text());
+      } catch (error) {
+        setEpcisError(error instanceof Error ? error.message : 'Could not parse the file as JSON.');
+        return;
+      }
+      if (validateOnly) {
+        const events = parsed.kind === 'batch' ? parsed.events : [parsed.event];
+        const errors: string[] = [];
+        let valid = 0;
+        for (let index = 0; index < events.length; index += 1) {
+          try {
+            const result = await validateEpcisMutation.mutateAsync({ apiKey, event: events[index] });
+            if (result && result.valid) {
+              valid += 1;
+            } else {
+              const details = Array.isArray(result?.errors) ? result.errors.join(': ') : '';
+              errors.push(`Event ${index + 1}: ${details || 'invalid'}`);
+            }
+          } catch (error) {
+            errors.push(`Event ${index + 1}: ${epcisErrorMessage(error)}`);
+          }
+        }
+        setEpcisValidation({ checked: events.length, valid, errors });
+        return;
+      }
+      if (parsed.kind === 'batch') {
+        const data = await ingestEpcisBatchMutation.mutateAsync({ apiKey, events: parsed.events });
+        const normalized = normalizeEpcisIngestResult(data);
+        setEpcisResult(normalized);
+        if (normalized.accepted > 0) notifyDashboardRefresh();
+        return;
+      }
+      await ingestEpcisEventMutation.mutateAsync({ apiKey, event: parsed.event });
+      setEpcisResult({ total: 1, accepted: 1, rejected: 0, errorMessages: [] });
+      notifyDashboardRefresh();
+    } catch (error) {
+      setEpcisError(epcisErrorMessage(error));
+    } finally {
+      submitInFlightRef.current = false;
+      setIsSubmitting(false);
+    }
+  };
+
   // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
   // confirming the CTE Jev suggested for a file the server rejected.
   const handleSubmit = async (e?: React.FormEvent, cteType?: string) => {
@@ -170,32 +317,16 @@ export default function IngestPage() {
     if (!apiKey) return;
     if (activeTab === 'url' && !url) return;
     if (activeTab === 'file' && !file) return;
+    if (activeTab === 'epcis') {
+      await runEpcisSubmit(false);
+      return;
+    }
     if (submitInFlightRef.current) return;
 
     submitInFlightRef.current = true;
     setIsSubmitting(true);
     try {
-      // Store the API key for future use
-      if (apiKey !== storedApiKey) {
-        // The browser proxy reads the cookie written by setApiKey and ignores
-        // caller-supplied credential headers. Wait for that write before the
-        // upload so a stale key or tenant cannot win the request race.
-        try {
-          await storeApiKey(apiKey);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unable to save API key';
-          if (activeTab === 'file') setCsvError(message);
-          else setStatusError(message);
-          return;
-        }
-      }
-      setJobId(null);
-      setJobStatus('queued');
-      setStatusError(null);
-      setCsvResult(null);
-      setCsvError(null);
-      setCteSuggestion(null);
-      setErrorColumnSuggestions([]);
+      if (!(await prepareSubmit())) return;
 
       // Demonstration Override for the Sales Demo flow
       if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
@@ -261,6 +392,31 @@ export default function IngestPage() {
       : csvResult.rejected > 0
         ? 'warning'
         : 'success'
+    : 'neutral';
+
+  const epcisTitle = epcisResult
+    ? epcisResult.accepted === 0
+      ? 'No events accepted'
+      : epcisResult.rejected > 0
+        ? 'EPCIS partially accepted'
+        : 'EPCIS processed'
+    : '';
+  const epcisTone = epcisResult
+    ? epcisResult.accepted === 0
+      ? 'danger'
+      : epcisResult.rejected > 0
+        ? 'warning'
+        : 'success'
+    : 'neutral';
+  const epcisValidationTitle = epcisValidation
+    ? epcisValidation.errors.length === 0
+      ? 'All events valid'
+      : 'Validation found issues'
+    : '';
+  const epcisValidationTone = epcisValidation
+    ? epcisValidation.errors.length === 0
+      ? 'success'
+      : 'warning'
     : 'neutral';
 
   const demoBanner = (
@@ -379,13 +535,13 @@ export default function IngestPage() {
             action={
               <Button size="sm" variant="secondary" asChild>
                 <Link href="/developer/portal/keys">
-                  Generate Sandbox Key
+                  How to get a key
                   <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                 </Link>
               </Button>
             }
           >
-            You need an API key to ingest documents. Generate a sandbox key in the developer portal to continue with dev and test ingestion.
+            You need an API key to ingest documents. RegEngine issues live API keys for your workspace; request one and we will send it to you.
           </Callout>
         )}
 
@@ -417,7 +573,7 @@ export default function IngestPage() {
                         className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                       >
                         <span>API Key</span>
-                        <HelpTooltip content="Your RegEngine API key starting with 'rge_'. Get one from the Admin page or setup wizard." />
+                        <HelpTooltip content="Your RegEngine API key, starting with 'rge_'. RegEngine issues live keys for your workspace; the developer portal explains how to request one." />
                       </label>
                       <Input
                         id="ingest-api-key"
@@ -439,6 +595,7 @@ export default function IngestPage() {
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
+                        <TabsTrigger value="epcis">EPCIS 2.0</TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="url" className="space-y-4">
@@ -513,13 +670,58 @@ export default function IngestPage() {
                           </div>
                         </div>
                       </TabsContent>
+
+                      <TabsContent value="epcis" className="space-y-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            htmlFor="epcis-file-upload"
+                            className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
+                          >
+                            <span>Select EPCIS file</span>
+                            <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
+                          </label>
+                          <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-8 text-center transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none">
+                            <Input
+                              type="file"
+                              onChange={handleEpcisFileChange}
+                              disabled={isPending}
+                              className="hidden"
+                              id="epcis-file-upload"
+                              accept=".json,application/json,.xml,application/xml,text/xml"
+                            />
+                            <label htmlFor="epcis-file-upload" className="block cursor-pointer">
+                              <Upload
+                                className="mx-auto mb-4 h-6 w-6 text-re-text-muted"
+                                strokeWidth={1.75}
+                                aria-hidden="true"
+                              />
+                              <div className="text-ui font-medium text-re-text-primary">
+                                {epcisFile ? epcisFile.name : 'Click to select or drag file here'}
+                              </div>
+                              <div className="mt-2 text-small text-re-text-tertiary">
+                                JSON or XML files up to 5MB
+                              </div>
+                            </label>
+                          </div>
+                          <p className="text-small text-re-text-tertiary">
+                            CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.
+                          </p>
+                          <div className="mt-1">
+                            <Button variant="link" size="sm" asChild>
+                              <a href="/samples/sample_epcis_2.0.json" download>
+                                Download a sample EPCIS file
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      </TabsContent>
                     </Tabs>
 
                     <Button
                       type="submit"
                       className="w-full"
                       size="lg"
-                      disabled={!apiKey || (activeTab === 'url' ? !url : !file) || isPending}
+                      disabled={!apiKey || (activeTab === 'url' ? !url : activeTab === 'file' ? !file : !epcisFile) || isPending}
                     >
                       {isPending ? (
                         <>
@@ -530,6 +732,17 @@ export default function IngestPage() {
                         activeTab === 'url' ? 'Ingest Document' : 'Upload & Process'
                       )}
                     </Button>
+                    {activeTab === 'epcis' && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="w-full"
+                        disabled={!apiKey || !epcisFile || isPending}
+                        onClick={() => void runEpcisSubmit(true)}
+                      >
+                        Validate only
+                      </Button>
+                    )}
                   </form>
 
                   {activeTab === 'file' && csvResult && (
@@ -543,6 +756,26 @@ export default function IngestPage() {
                         <p key={index} className="mt-2">{warning}</p>
                       ))}
                       <ColumnSuggestionList suggestions={columnSuggestions(csvResult.header_mapping_suggestions)} />
+                    </Callout>
+                  )}
+
+                  {activeTab === 'epcis' && epcisResult && (
+                    <Callout role="status" tone={epcisTone} className="mt-6">
+                      <h3 className="font-medium text-re-text-primary">{epcisTitle}</h3>
+                      <p className="mt-1">{epcisResult.accepted} of {epcisResult.total} events accepted; {epcisResult.rejected} rejected.</p>
+                      {epcisResult.errorMessages.map((error, index) => (
+                        <p key={index} className="mt-2">{error}</p>
+                      ))}
+                    </Callout>
+                  )}
+
+                  {activeTab === 'epcis' && epcisValidation && (
+                    <Callout role="status" tone={epcisValidationTone} className="mt-6">
+                      <h3 className="font-medium text-re-text-primary">{epcisValidationTitle}</h3>
+                      <p className="mt-1">{epcisValidation.valid} of {epcisValidation.checked} events valid.</p>
+                      {epcisValidation.errors.map((error, index) => (
+                        <p key={index} className="mt-2">{error}</p>
+                      ))}
                     </Callout>
                   )}
 
@@ -602,13 +835,13 @@ export default function IngestPage() {
                     </div>
                   )}
 
-                  {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError)) && (
+                  {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError) || (activeTab === 'epcis' && epcisError)) && (
                     <Callout tone="danger" role="alert" className="mt-4">
                       <h4 className="font-medium text-re-text-primary">
                         Ingestion Failed
                       </h4>
                       <p className="mt-1">
-                        {(activeTab === 'file' ? csvError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
+                        {(activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
                       </p>
                       {activeTab === 'file' && (
                         <ColumnSuggestionList suggestions={errorColumnSuggestions} />
@@ -629,6 +862,11 @@ export default function IngestPage() {
                           <>
                             <li>CSV must include a cte_type or event_type column</li>
                             <li>Upload a CSV file up to 5MB</li>
+                          </>
+                        ) : activeTab === 'epcis' ? (
+                          <>
+                            <li>File must be a GS1 EPCIS 2.0 JSON document or XML file</li>
+                            <li>Upload a .json or .xml file up to 5MB</li>
                           </>
                         ) : (
                           <>
@@ -655,10 +893,18 @@ export default function IngestPage() {
                       onClick={() => {
                         setUrl('');
                         setFile(null);
+                        setEpcisFile(null);
+                        setEpcisResult(null);
+                        setEpcisError(null);
+                        setEpcisValidation(null);
                         setJobId(null);
                         setJobStatus('queued');
                         ingestMutation.reset();
                         ingestFileMutation.reset();
+                        ingestEpcisEventMutation.reset();
+                        ingestEpcisBatchMutation.reset();
+                        ingestEpcisXmlMutation.reset();
+                        validateEpcisMutation.reset();
                       }}
                     >
                       Ingest Another
@@ -682,7 +928,7 @@ export default function IngestPage() {
                     Normal import
                   </div>
                   <p className="mt-2 text-ui text-re-text-secondary">
-                    Use URL ingestion for public documents, or File Upload for CSV traceability events.
+                    Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 for GS1 EPCIS JSON and XML files.
                   </p>
                 </div>
                 {experimentalFeaturesEnabled() && (

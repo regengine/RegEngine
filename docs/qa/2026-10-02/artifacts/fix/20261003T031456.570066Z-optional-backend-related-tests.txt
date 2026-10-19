@@ -1,0 +1,173 @@
+UTC: 2026-10-03T03:14:56.570066+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'timestamp|input_quantities|nonfinite|duplicate|encoding|decode|quantity' services/ingestion/tests/test_csv_ingest_response_model_2892.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_jev_file_cte.py services/ingestion/tests/test_csv_jev_header_mapping.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_safety_1342.py services/ingestion/tests/test_csv_templates.py services/ingestion/tests/test_csv_templates_1342.py services/ingestion/tests/test_webhook_compat_1342.py services/ingestion/tests/test_webhook_compat_enforcement.py services/ingestion/tests/test_webhook_funnel_events.py services/ingestion/tests/test_webhook_hmac_and_replay.py services/ingestion/tests/test_webhook_idempotency.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_rate_limit.py services/ingestion/tests/test_webhook_replay_metric.py services/ingestion/tests/test_webhook_router_v2_1342.py services/ingestion/tests/test_webhook_router_v2_canonical_helper.py services/ingestion/tests/test_webhook_router_v2_enforcement.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_webhook_router_v2_tenant_resolution.py services/ingestion/tests/test_webhook_trailing_lows_infos.py services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py services/ingestion/tests/test_webhook_verify_api_key_1888.py --glob '!**/__pycache__/**'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+services/ingestion/tests/test_webhook_compat_enforcement.py:86:        quantity=1.0,
+services/ingestion/tests/test_webhook_compat_enforcement.py:88:        timestamp="2026-01-01T00:00:00Z",
+services/ingestion/tests/test_webhook_compat_enforcement.py:144:            quantity=event.quantity,
+services/ingestion/tests/test_csv_ingest_response_model_2892.py:33:    "quantity",
+services/ingestion/tests/test_csv_ingest_response_model_2892.py:114:        for field in ("accepted", "rejected", "total", "events", "ingestion_timestamp"):
+services/ingestion/tests/test_csv_ingest_response_model_2892.py:160:        assert isinstance(body["ingestion_timestamp"], str)
+services/ingestion/tests/test_webhook_funnel_events.py:67:        self.quantity = 10
+services/ingestion/tests/test_webhook_funnel_events.py:162:                "quantity": 10,
+services/ingestion/tests/test_webhook_funnel_events.py:165:                "timestamp": datetime.now(timezone.utc).isoformat(),
+services/ingestion/tests/test_csv_jev_file_cte.py:244:    assert sent["state"] == {"csv_headers": RECEIVING_TEMPLATE.decode().splitlines()[0].split(",")}
+services/ingestion/tests/test_csv_ingestion_receipt.py:51:        "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document\n"
+services/ingestion/tests/test_webhook_hmac_and_replay.py:2:event-timestamp replay window enforcement (#1245).
+services/ingestion/tests/test_webhook_hmac_and_replay.py:154:# #1245 — event-timestamp replay window
+services/ingestion/tests/test_webhook_hmac_and_replay.py:162:    assert wr._validate_event_timestamp_window(now) is None
+services/ingestion/tests/test_webhook_hmac_and_replay.py:169:    err = wr._validate_event_timestamp_window(ts_old)
+services/ingestion/tests/test_webhook_hmac_and_replay.py:178:    err = wr._validate_event_timestamp_window(ts_future)
+services/ingestion/tests/test_webhook_hmac_and_replay.py:184:    err = wr._validate_event_timestamp_window("not-a-timestamp")
+services/ingestion/tests/test_webhook_hmac_and_replay.py:193:    err = wr._validate_event_timestamp_window(ts)
+services/ingestion/tests/test_csv_templates_1342.py:225:        assert kdes["quantity"] == "100"
+services/ingestion/tests/test_csv_templates_1342.py:249:    (e.g. quantity=0.0 or location_name=None)."""
+services/ingestion/tests/test_csv_templates_1342.py:254:        "quantity": 100.0,
+services/ingestion/tests/test_csv_templates_1342.py:257:        "timestamp": "2026-04-17T10:00:00Z",
+services/ingestion/tests/test_csv_templates_1342.py:276:        event = _make_event(quantity=0.0)
+services/ingestion/tests/test_csv_templates_1342.py:279:        assert "quantity" in missing
+services/ingestion/tests/test_csv_templates_1342.py:365:    def test_empty_returns_no_timestamp_with_warning(self):
+services/ingestion/tests/test_csv_templates_1342.py:370:    def test_whitespace_returns_no_timestamp(self):
+services/ingestion/tests/test_csv_templates_1342.py:412:    def test_unparseable_returns_no_timestamp(self):
+services/ingestion/tests/test_csv_templates_1342.py:419:    def test_invalid_calendar_date_is_not_a_timestamp(self):
+services/ingestion/tests/test_csv_templates_1342.py:497:            [{"traceability_lot_code": "TLC1", "product_description": "Kale", "quantity": "10"}],
+services/ingestion/tests/test_csv_templates_1342.py:498:            ["traceability_lot_code", "product_description", "quantity"],
+services/ingestion/tests/test_csv_templates_1342.py:527:                    "quantity": "10",
+services/ingestion/tests/test_csv_templates_1342.py:537:                "quantity",
+services/ingestion/tests/test_csv_templates_1342.py:561:                    "quantity": "10",
+services/ingestion/tests/test_csv_templates_1342.py:571:                    "quantity": "20",
+services/ingestion/tests/test_csv_templates_1342.py:583:                "quantity",
+services/ingestion/tests/test_csv_templates_1342.py:611:                    "quantity": "10",
+services/ingestion/tests/test_csv_templates_1342.py:622:                "quantity",
+services/ingestion/tests/test_csv_templates_1342.py:653:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:670:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:686:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:703:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:725:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:752:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:776:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:796:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:830:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:836:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:853:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:869:        # Force IngestEvent construction to fail by making quantity a non-numeric
+services/ingestion/tests/test_csv_templates_1342.py:871:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:890:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:907:            "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_templates_1342.py:1091:    """A missing timestamp, unit or quantity rejects the row with the reason.
+services/ingestion/tests/test_csv_templates_1342.py:1098:    _HEADER = "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name\n"
+services/ingestion/tests/test_csv_templates_1342.py:1121:    def test_missing_quantity_rejects_row(self):
+services/ingestion/tests/test_csv_templates_1342.py:1124:        assert errors == ["Row 2: quantity is required"]
+services/ingestion/tests/test_csv_templates_1342.py:1126:    def test_non_numeric_quantity_rejects_row(self):
+services/ingestion/tests/test_csv_templates_1342.py:1129:        assert errors == ["Row 2: quantity 'ten' is not a number"]
+services/ingestion/tests/test_csv_templates_1342.py:1135:        assert events[0].quantity == 10.0
+services/ingestion/tests/test_csv_templates_1342.py:1137:        assert events[0].timestamp.startswith("2026-04-17")
+services/ingestion/tests/test_webhook_models_1342.py:42:        "quantity": 10,
+services/ingestion/tests/test_webhook_models_1342.py:44:        "timestamp": "2026-04-15T12:00:00Z",
+services/ingestion/tests/test_csv_templates.py:150:            quantity=10.0,
+services/ingestion/tests/test_csv_templates.py:152:            timestamp=now.isoformat(),
+services/ingestion/tests/test_csv_templates.py:172:            "quantity": "10",
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py:112:        self.quantity = event.quantity
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py:177:        quantity=1.0,
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py:179:        timestamp="2026-01-01T00:00:00Z",
+services/ingestion/tests/test_webhook_router_v2_canonical_helper.py:421:        a duplicate row to the shared hash-chain ledger.
+services/ingestion/tests/test_webhook_replay_metric.py:3:The replay-window check itself (``_validate_event_timestamp_window``)
+services/ingestion/tests/test_webhook_replay_metric.py:13:                  the event timestamp is. ``na`` when unparseable.
+services/ingestion/tests/test_webhook_replay_metric.py:64:    "timestamp,expected_reason,expected_bucket",
+services/ingestion/tests/test_webhook_replay_metric.py:72:def test_classify_unparseable_inputs(timestamp, expected_reason, expected_bucket):
+services/ingestion/tests/test_webhook_replay_metric.py:73:    reason, bucket = wr._classify_replay_rejection(timestamp)
+services/ingestion/tests/test_webhook_replay_metric.py:116:    """Calling the recorder with a clearly-stale timestamp must
+services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py:67:        "quantity": 12.5,
+services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py:70:        "timestamp": _now_iso(),
+services/ingestion/tests/test_webhook_v2_alert_persistence_2901_2902.py:226:            self.quantity = 1.0
+services/ingestion/tests/test_webhook_compat_1342.py:102:    timestamp="2026-01-01T00:00:00Z",
+services/ingestion/tests/test_webhook_compat_1342.py:112:        quantity=1.0,
+services/ingestion/tests/test_webhook_compat_1342.py:114:        timestamp=timestamp,
+services/ingestion/tests/test_webhook_compat_1342.py:236:            quantity=event.quantity,
+services/ingestion/tests/test_webhook_compat_1342.py:538:    def test_duplicate_in_batch_rejected(self, monkeypatch):
+services/ingestion/tests/test_webhook_compat_1342.py:540:        e1 = _make_event(tlc="TLC-DUP", timestamp="2026-01-01T00:00:00Z", location_name="X")
+services/ingestion/tests/test_webhook_compat_1342.py:541:        e2 = _make_event(tlc="TLC-DUP", timestamp="2026-01-01T00:00:00Z", location_name="X")
+services/ingestion/tests/test_webhook_compat_1342.py:551:        # store_event invoked only once (duplicate skipped before persistence)
+services/ingestion/tests/test_webhook_compat_1342.py:692:            raw_bytes=b"traceability_lot_code,quantity\nTLC-1,10\n",
+services/ingestion/tests/test_webhook_compat_1342.py:696:            parse_errors=["Row 3: No CTE type", "Row 4: quantity 'x' is not a number"],
+services/ingestion/tests/test_webhook_compat_1342.py:762:        raw = b"traceability_lot_code,quantity\nTLC-1,10\nTLC-2,x\n"
+services/ingestion/tests/test_webhook_compat_1342.py:769:            parse_errors=["Row 3: quantity 'x' is not a number"],
+services/ingestion/tests/test_csv_malformed_input.py:34:    "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document"
+services/ingestion/tests/test_webhook_router_v2_enforcement.py:93:        quantity=1.0,
+services/ingestion/tests/test_webhook_router_v2_enforcement.py:95:        timestamp="2026-01-01T00:00:00Z",
+services/ingestion/tests/test_webhook_router_v2_enforcement.py:113:            quantity=event.quantity,
+services/ingestion/tests/test_webhook_router_v2_enforcement.py:198:                quantity=event.quantity,
+services/ingestion/tests/test_webhook_models.py:28:        "quantity": 100.0,
+services/ingestion/tests/test_webhook_models.py:31:        "timestamp": now.isoformat(),
+services/ingestion/tests/test_webhook_models.py:96:        assert event.quantity == 100.0
+services/ingestion/tests/test_webhook_models.py:98:    def test_rejects_future_timestamp(self):
+services/ingestion/tests/test_webhook_models.py:101:            IngestEvent(**_valid_event_kwargs(timestamp=future.isoformat()))
+services/ingestion/tests/test_webhook_models.py:139:    def test_accepts_historical_timestamp(self):
+services/ingestion/tests/test_webhook_models.py:141:        event = IngestEvent(**_valid_event_kwargs(timestamp=past.isoformat()))
+services/ingestion/tests/test_webhook_models.py:142:        assert event.timestamp == past.isoformat()
+services/ingestion/tests/test_webhook_models.py:144:    def test_rejects_invalid_iso_timestamp(self):
+services/ingestion/tests/test_webhook_models.py:146:            IngestEvent(**_valid_event_kwargs(timestamp="not-a-date"))
+services/ingestion/tests/test_csv_input_quantities.py:3:21 CFR 1.1350(a)(1)(iii) requires the quantity and unit of measure of each
+services/ingestion/tests/test_csv_input_quantities.py:4:input lot. The template gains ``input_quantities`` and
+services/ingestion/tests/test_csv_input_quantities.py:18:    "traceability_lot_code,product_description,quantity,unit_of_measure,"
+services/ingestion/tests/test_csv_input_quantities.py:20:    "input_quantities,input_units_of_measure\n"
+services/ingestion/tests/test_csv_input_quantities.py:32:        assert "input_quantities" in header and "input_units_of_measure" in header, cte
+services/ingestion/tests/test_csv_input_quantities.py:33:        assert by_col["input_quantities"].strip() and by_col["input_units_of_measure"].strip(), cte
+services/ingestion/tests/test_csv_input_quantities.py:34:        # One quantity per input lot in the example row.
+services/ingestion/tests/test_csv_input_quantities.py:36:        assert len(by_col["input_quantities"].split(",")) == len(lots), cte
+services/ingestion/tests/test_csv_input_quantities.py:37:    assert [c[0] for c in CTE_COLUMNS["transformation"]].index("input_quantities") > [
+services/ingestion/tests/test_csv_input_quantities.py:45:    assert not any("input_quantities" in w for w in warnings)
+services/ingestion/tests/test_csv_input_quantities.py:49:        {"traceability_lot_code": "LOT1", "quantity": 600.0, "unit_of_measure": "cases"},
+services/ingestion/tests/test_csv_input_quantities.py:50:        {"traceability_lot_code": "LOT2", "quantity": 400.0, "unit_of_measure": "lbs"},  # alias normalised
+services/ingestion/tests/test_csv_input_quantities.py:53:    assert "input_quantities" not in ev.kdes and "input_units_of_measure" not in ev.kdes
+services/ingestion/tests/test_csv_input_quantities.py:69:def test_non_numeric_quantity_rejects_the_row():
+services/ingestion/tests/test_csv_input_quantities.py:81:def test_transformation_without_input_quantities_ingests_with_a_warning():
+services/ingestion/tests/test_csv_input_quantities.py:86:    assert any("input_quantities missing" in w and "1.1350(a)(1)(iii)" in w for w in warnings)
+services/ingestion/tests/test_csv_input_quantities.py:91:        "traceability_lot_code,product_description,quantity,unit_of_measure,packing_date,location_name,"
+services/ingestion/tests/test_csv_input_quantities.py:100:    assert not any("input_quantities" in w for w in warnings)
+services/ingestion/tests/test_webhook_router_v2_1342.py:53:    timestamp: Optional[str] = None,
+services/ingestion/tests/test_webhook_router_v2_1342.py:61:        "quantity": 12.5,
+services/ingestion/tests/test_webhook_router_v2_1342.py:65:        "timestamp": timestamp or _now_iso(),
+services/ingestion/tests/test_webhook_router_v2_1342.py:261:            self.quantity = 1.0
+services/ingestion/tests/test_webhook_router_v2_1342.py:396:    def test_validate_event_timestamp_window_naive_tz_is_treated_as_utc(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:397:        """A naive (no-tz) timestamp is coerced to UTC and accepted when fresh."""
+services/ingestion/tests/test_webhook_router_v2_1342.py:399:        assert wr._validate_event_timestamp_window(naive_now) is None
+services/ingestion/tests/test_webhook_router_v2_1342.py:408:    def test_unparseable_timestamp_classified(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:409:        assert wr._classify_replay_rejection("not-a-timestamp") == ("unparseable", "na")
+services/ingestion/tests/test_webhook_router_v2_1342.py:447:    def test_classify_naive_timestamp_is_treated_as_utc(self):
+services/ingestion/tests/test_webhook_router_v2_1342.py:455:        wr._record_replay_rejection("not-a-timestamp")  # no raise
+services/ingestion/tests/test_webhook_router_v2_1342.py:470:        wr._record_replay_rejection("not-a-timestamp")
+services/ingestion/tests/test_webhook_router_v2_1342.py:1452:    def test_duplicate_events_in_batch_are_rejected(self, monkeypatch):
+services/ingestion/tests/test_webhook_router_v2_1342.py:1469:        stale = _make_shipping_event(timestamp=stale_ts)
+services/ingestion/tests/test_csv_jev_header_mapping.py:49:    "Lot #,tlc,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document,Notes\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:58:    "Lot #,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document,Notes\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:262:    "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+services/ingestion/tests/test_csv_jev_header_mapping.py:269:    "Qty Shpd": _choice("quantity", 0.93, no_match=0.07),
+services/ingestion/tests/test_csv_jev_header_mapping.py:274:    "cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,event_date,location_name,Notes\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:306:        f"{cte_header},traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+services/ingestion/tests/test_csv_jev_header_mapping.py:337:    "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,"
+services/ingestion/tests/test_csv_jev_header_mapping.py:488:        ("Activity,quantity\nS,1\nship,2\n,3\n", ("shipping", None)),
+services/ingestion/tests/test_csv_jev_header_mapping.py:489:        ("Activity,quantity\nS,1\nH,2\n", (None, "column Activity holds per-row CTE values")),
+services/ingestion/tests/test_csv_jev_header_mapping.py:490:        (" Activity ,quantity\nreceiving,1\n", (None, "column Activity holds per-row CTE values")),
+services/ingestion/tests/test_csv_jev_header_mapping.py:492:        ("Activity,activity,quantity\nreceiving,shipping,1\n", (None, "column Activity holds per-row CTE values")),
+services/ingestion/tests/test_csv_jev_header_mapping.py:493:        ("Activity,quantity\n# receiving,1\nshipping,2\n", ("shipping", None)),
+services/ingestion/tests/test_csv_jev_header_mapping.py:495:            "Activity,quantity\n" + '"' + "x" * 200_000 + '",1\n',
+services/ingestion/tests/test_csv_jev_header_mapping.py:499:    ids=["recognised", "agreeing", "letter-alias", "padded-header", "duplicate-header", "comment", "unreadable"],
+services/ingestion/tests/test_csv_jev_header_mapping.py:579:    ids=["value-of-last-duplicate-is-data", "value-of-last-duplicate-is-comment"],
+services/ingestion/tests/test_csv_jev_header_mapping.py:603:        ct._suggest_header_mappings_for_upload(SHIPPING_CSV_BODY.decode(), decider=decider, cte_type="shipping")
+services/ingestion/tests/test_csv_jev_header_mapping.py:619:        ct._suggest_header_mappings_for_upload(SHIPPING_CSV_BODY.decode(), decider=decider, cte_type="shipping")
+services/ingestion/tests/test_csv_jev_header_mapping.py:643:        f"{header},traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,location_name\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:649:    assert (ct._per_row_cte_column([header, "quantity"]) is not None) is parser_reads_it
+services/ingestion/tests/test_csv_jev_header_mapping.py:769:    "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,"
+services/ingestion/tests/test_csv_jev_header_mapping.py:815:        ('"Ship\nDate",quantity\nA,1\n', "the header row spans 2 lines"),
+services/ingestion/tests/test_csv_jev_header_mapping.py:816:        ('"Ship\rDate",quantity\nA,1\n', "a header contains a line break"),
+services/ingestion/tests/test_csv_jev_header_mapping.py:836:    quoted = '"Lot #","Notes, internal",quantity\nA,B,1\n'  # properly closed quotes on one line
+services/ingestion/tests/test_csv_jev_header_mapping.py:837:    for text in (CSV_BODY.decode(), CSV_BODY.decode().replace("\n", "\r\n"), quoted):
+services/ingestion/tests/test_csv_jev_header_mapping.py:840:    assert ct._csv_headers_and_samples(quoted, 2)[0] == ["Lot #", "Notes, internal", "quantity"]
+services/ingestion/tests/test_csv_jev_header_mapping.py:889:        "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,reference_document\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:923:    text = CSV_BODY.decode()
+services/ingestion/tests/test_csv_jev_header_mapping.py:937:        "Lot #,tlc,product_description,quantity,unit_of_measure,harvest_date,location_name\n"
+services/ingestion/tests/test_csv_jev_header_mapping.py:952:    assert outranked_columns("quantity", ct._COLUMN_PRECEDENCE) == ("qty",)

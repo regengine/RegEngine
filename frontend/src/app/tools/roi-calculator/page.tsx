@@ -10,12 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Savings Estimator | Illustrative ROI | RegEngine",
-    description: "Estimate the rough savings opportunity from automating FSMA 204 compliance. Illustrative only — actual savings depend on your contracts, staffing, and existing systems.",
+    description: "Estimate the rough savings opportunity from automating FSMA 204 compliance. Illustrative only. Actual savings depend on your contracts, staffing, and existing systems.",
     alternates: {
         canonical: "https://regengine.co/tools/roi-calculator",
     },
     openGraph: {
-        title: "FSMA 204 Savings Estimator — RegEngine",
+        title: "FSMA 204 Savings Estimator | RegEngine",
         description: "Estimate the rough savings opportunity from automating FSMA 204 traceability. Illustrative only.",
         type: "website",
         url: "https://regengine.co/tools/roi-calculator",
@@ -29,11 +29,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "financialVariable": "Compliance ROI",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -46,14 +41,14 @@ function ROICalculatorFallback() {
             <Container width="tool">
                 <div className="border-b border-re-border-subtle pb-5">
                     <h2 className="text-title text-re-text-primary">FSMA 204 Savings Estimator</h2>
-                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">Get a rough sense of where automation could pay back. Numbers are illustrative — actual savings depend on your contracts, staffing, and existing systems.</p>
+                    <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">Get a rough sense of where automation could pay back. Numbers are illustrative. Actual savings depend on your contracts, staffing, and existing systems.</p>
                 </div>
                 <h2 className="mt-6 text-heading text-re-text-primary">What This Calculator Measures</h2>
                 <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {[
                         { title: "Labor Cost Reduction", body: "Compare manual spreadsheet-based traceability against automated ingestion, validation, and export." },
-                        { title: "Recall Risk Savings (illustrative)", body: "Rough sense of the cost difference between a §1.1455(c) 24-hour records response and a multi-day manual lookup. Not a forecast." },
-                        { title: "Compliance Efficiency", body: "Measure time-to-export, KDE completeness rates, and CTE coverage across your supply chain." },
+                        { title: "Recall Risk Savings (illustrative)", body: "Rough sense of the cost difference between a §1.1455(c) 24 hour records response and a multi-day manual lookup. Not a forecast." },
+                        { title: "Compliance Efficiency", body: "Measure time-to-export, Key Data Element (KDE) completeness rates, and Critical Tracking Event (CTE) coverage across your supply chain." },
                         { title: "Retailer Readiness", body: "See how quickly you can prepare records to support major-retailer traceability programs. Specific retailer requirements vary by buyer." },
                     ].map((tile) => (
                         <Card key={tile.title} variant="inset">
@@ -84,7 +79,7 @@ export default function ROICalculatorPage() {
                 </EmailGate>
             </Suspense>
             <RelatedTools tools={[
-                { href: "/tools/readiness-assessment", title: "Readiness Assessment", description: "Score your FSMA 204 compliance posture and find where to focus automation efforts." },
+                { href: "/tools/self-reported-checklist", title: "Self Reported Checklist", description: "You answer and the page echoes what you reported. It does not score readiness." },
                 { href: "/tools/sop-generator", title: "SOP Generator", description: "Auto-generate your FSMA 204 Traceability Plan and Standard Operating Procedures." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Confirm which products are covered by FSMA 204 before estimating compliance costs." },
             ]} />

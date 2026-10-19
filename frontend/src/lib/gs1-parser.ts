@@ -37,6 +37,7 @@ function normalizeInput(raw: string): string {
     return raw
         .trim()
         .replace(/\s+/g, '')
+        .replace(/\((01|10|13|17|21)\)/g, `${GROUP_SEPARATOR}$1`)
         .replace(/[()]/g, '')
         .replace(/\u00f1/gi, GROUP_SEPARATOR); // scanner FNC1 surrogate
 }
@@ -63,21 +64,9 @@ function parseYYMMDD(value?: string): string | undefined {
     return `${year}-${mm}-${dd}`;
 }
 
-function maybeKnownAiAt(input: string, index: number): boolean {
-    const ai = input.slice(index, index + 2);
-    if (!AI_SUPPORTED.has(ai)) return false;
-    if (ai in AI_FIXED_LENGTH) {
-        return index + 2 + AI_FIXED_LENGTH[ai] <= input.length;
-    }
-    return index + 2 <= input.length;
-}
-
 function findNextFieldBoundary(input: string, from: number): number {
-    for (let i = from; i < input.length; i += 1) {
-        if (input[i] === GROUP_SEPARATOR) return i;
-        if (maybeKnownAiAt(input, i)) return i;
-    }
-    return input.length;
+    const separator = input.indexOf(GROUP_SEPARATOR, from);
+    return separator === -1 ? input.length : separator;
 }
 
 function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
@@ -104,7 +93,15 @@ function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
     const fields: Partial<GS1ParsedData> = {};
     for (let i = 0; i < segments.length - 1; i += 1) {
         const ai = segments[i];
-        const value = decodeURIComponent(segments[i + 1]);
+        let value: string;
+        try {
+            value = decodeURIComponent(segments[i + 1]);
+        } catch {
+            // A malformed escape in one segment rejects that field, not the
+            // whole scan: decodeURIComponent throws URIError on input like
+            // '%' or '%ZZ', which used to crash the receiving page.
+            continue;
+        }
         if (!value) continue;
 
         if (ai === '01' && !fields.gtin) fields.gtin = value;

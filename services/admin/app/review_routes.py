@@ -157,6 +157,7 @@ async def get_review_queue(
             tenant_id=tenant_id,
             limit=limit,
             cursor=None,
+            offset=offset,
         )
 
         items = []

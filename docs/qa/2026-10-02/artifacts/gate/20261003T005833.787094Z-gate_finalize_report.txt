@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:58:33.787094+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Final independent gate report written: local handoff accepted; residual process and remote verification limits explicit.

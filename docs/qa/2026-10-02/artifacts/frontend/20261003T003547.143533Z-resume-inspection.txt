@@ -1,0 +1,232 @@
+UTC: 2026-10-03T00:35:47.143533+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import pathlib,subprocess; print("BRANCH",subprocess.check_output(["git","branch","--show-current"],text=True)); print("REMOTE",subprocess.check_output(["git","remote","get-url","origin"],text=True)); print("WORKTREES",subprocess.check_output(["git","worktree","list"],text=True)); print("STATUS",subprocess.check_output(["git","status","--short"],text=True)); paths=["frontend/AGENTS.md","docs/qa/2026-10-02/scripts/run_logged.py","frontend/package.json","docs/qa/2026-10-02/META-SESSION-LOG.md"]; [(print("FILE",p),print(pathlib.Path(p).read_text() if pathlib.Path(p).exists() else "MISSING")) for p in paths]'
+Exit: 0
+Duration: 0.09s
+Timeout: False
+
+BRANCH qa/2026-10-02-sweep
+
+REMOTE https://github.com/regengine/RegEngine.git
+
+WORKTREES /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine 0927b85a [qa/2026-10-02-sweep]
+
+STATUS ?? docs/qa/2026-10-02/
+
+FILE frontend/AGENTS.md
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+FILE docs/qa/2026-10-02/scripts/run_logged.py
+#!/usr/bin/env python3
+"""Run an explicitly selected local QA command with UTC timing and redacted output.
+
+Usage: python3 docs/qa/2026-10-02/scripts/run_logged.py GROUP LABEL -- COMMAND ...
+Set QA_TIMEOUT_SECONDS for the time limit (default 900 seconds).
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+from pathlib import Path
+import re
+import shlex
+import signal
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[4]
+QA = ROOT / "docs/qa/2026-10-02"
+
+
+def redact(text: str) -> str:
+    text = re.sub(r"(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,\"']+", r"\1[REDACTED]", text)
+    text = re.sub(r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk_(?:live|test)_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{20,})", "[REDACTED]", text)
+    text = re.sub(r"(?i)((?:api[_-]?key|access[_-]?token|secret|password)\s*[=:]\s*)[^\s,;]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(\w+://)[^/@\s]+:[^/@\s]+@", r"\1[REDACTED]@", text)
+    return text
+
+
+def main() -> int:
+    group, label, *command = sys.argv[1:]
+    if command and command[0] == "--":
+        command.pop(0)
+    if not command or not re.fullmatch(r"[a-z0-9_-]+", group + label):
+        raise SystemExit("Expected GROUP LABEL -- COMMAND, using lowercase safe labels")
+    now = dt.datetime.now(dt.timezone.utc)
+    stamp = now.strftime("%Y%m%dT%H%M%S.%fZ")
+    artifacts = QA / "artifacts" / group
+    artifacts.mkdir(parents=True, exist_ok=True)
+    report = artifacts / f"{stamp}-{label}.txt"
+    log = QA / f"{group.upper()}-SESSION-LOG.md"
+    env = {k: v for k, v in os.environ.items() if k in {
+        "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "TERM", "SHELL",
+        "SYSTEMROOT", "WINDIR", "COMSPEC",
+    }}
+    env.update({"PYTHON_DOTENV_DISABLED": "1", "NEXT_TELEMETRY_DISABLED": "1",
+                "DO_NOT_TRACK": "1", "CI": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1"})
+    started = time.monotonic()
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               env=env, start_new_session=True)
+    timed_out = False
+    try:
+        output, _ = process.communicate(timeout=int(os.environ.get("QA_TIMEOUT_SECONDS", "900")))
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            output, _ = process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            output, _ = process.communicate()
+    result = 124 if timed_out else process.returncode
+    safe = redact(output.decode("utf-8", errors="replace"))
+    cmd = redact(shlex.join(command))
+    duration = time.monotonic() - started
+    header = (f"UTC: {now.isoformat()}\nCWD: {Path.cwd()}\nCommand: {cmd}\n"
+              f"Exit: {result}\nDuration: {duration:.2f}s\nTimeout: {timed_out}\n\n")
+    report.write_text(header + safe)
+    with log.open("a") as handle:
+        handle.write(f"\n- **{now.isoformat()}** `{label}` — `{cmd}`; "
+                     f"cwd `{Path.cwd().relative_to(ROOT) if Path.cwd().is_relative_to(ROOT) else Path.cwd()}`; "
+                     f"exit {result}, {duration:.2f}s. "
+                     f"[Output]({report.relative_to(QA)}).\n")
+    print(header + safe[-20000:])
+    print(f"Full redacted report: {report.relative_to(ROOT)}")
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+FILE frontend/package.json
+{
+  "name": "regengine-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . && node scripts/design-lint.mjs",
+    "design:lint": "node scripts/design-lint.mjs",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "promise:audit": "node scripts/promise-audit.mjs",
+    "readiness:production": "node scripts/production-readiness.mjs",
+    "security-gate:audit": "node scripts/security-release-gate-audit.mjs",
+    "verify:ssr": "node scripts/verify-public-ssr.mjs",
+    "test:e2e": "env -u NO_COLOR playwright test",
+    "test:e2e:authenticated-core": "env -u NO_COLOR playwright test authenticated-core-journeys.spec.ts --project=chromium --reporter=list --retries=2",
+    "test:demo-smoke": "env -u NO_COLOR playwright test --config=playwright.demo-smoke.config.ts"
+  },
+  "knip": {
+    "entry": [
+      "playwright.demo-smoke.config.ts",
+      "scripts/design-lint.mjs"
+    ]
+  },
+  "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
+  "dependencies": {
+    "@radix-ui/react-checkbox": "^1.3.11",
+    "@radix-ui/react-dialog": "^1.1.23",
+    "@radix-ui/react-dropdown-menu": "^2.1.24",
+    "@radix-ui/react-label": "^2.1.15",
+    "@radix-ui/react-progress": "^1.1.16",
+    "@radix-ui/react-scroll-area": "^1.2.18",
+    "@radix-ui/react-select": "^2.3.7",
+    "@radix-ui/react-slot": "^1.3.3",
+    "@radix-ui/react-tabs": "^1.1.21",
+    "@radix-ui/react-toast": "^1.2.23",
+    "@sentry/nextjs": "10.75.1",
+    "@supabase/ssr": "~0.12.7",
+    "@supabase/supabase-js": "2.116.0",
+    "@tanstack/react-query": "~5.103.2",
+    "@tanstack/react-table": "^9.2.4",
+    "@types/qrcode": "^1.5.6",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "axios": "~1.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "dexie": "^4.4.6",
+    "framer-motion": "~13.4.0",
+    "html5-qrcode": "^2.3.8",
+    "jose": "^6.2.12",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "lucide-react": "^1.47.0",
+    "next": "16.3.5",
+    "next-themes": "^0.4.6",
+    "posthog-js": "^1.434.5",
+    "qrcode": "^1.5.4",
+    "react": "~18.3.0",
+    "react-dom": "~18.3.0",
+    "recharts": "^3.10.1",
+    "sharp": "^0.35.4",
+    "tailwind-merge": "^3.7.0",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.2",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "autoprefixer": "^10.6.1",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.5",
+    "jsdom": "29.1.1",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^5.7.3",
+    "vite": "^8.3.0",
+    "vitest": "^4.1.4"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.63.4",
+    "@rollup/rollup-linux-x64-musl": "4.63.4"
+  },
+  "overrides": {
+    "tar": ">=7.5.10",
+    "rollup": "4.59.0",
+    "esbuild": "0.27.3",
+    "fast-uri": "^3.1.5",
+    "minimatch": ">=3.1.3",
+    "postcss": "^8.5.18",
+    "serialize-javascript": "7.0.3",
+    "workbox-build": {
+      "rollup": "2.79.2"
+    },
+    "yauzl": ">=2.10.1",
+    "next": {
+      "sharp": ">=0.35.0"
+    },
+    "brace-expansion": "^5.0.9"
+  }
+}
+
+FILE docs/qa/2026-10-02/META-SESSION-LOG.md
+
+- **2026-10-02T23:46:05.036682+00:00** `inventory` — `sh -c 'git ls-files "*AGENTS.md"; rg --files -g "!**/.env*" -g "!**/package-lock.json" -g "!**/requirements.lock" -g "!*lock*" -g "!**/node_modules/**" -g "!**/.git/**" | rg "(^README.md$|^REPO_PURPOSE.md$|^ARCHITECTURE.md$|^CANONICAL_OWNERSHIP.md$|conftest.py$|pytest|pyproject|requirements|playwright|vitest|package.json$|crabbox|^server/|^tests/qa)"; for p in .venv/bin/python venv/bin/python frontend/node_modules/.bin/next frontend/node_modules/.bin/playwright; do test ! -e "$p" || ls -ld "$p"; done; git ls-files --others --exclude-standard'`; cwd `.`; exit 0, 0.07s. [Output](artifacts/meta/20261002T234605.036682Z-inventory.txt).
+
+- **2026-10-02T23:46:05.182552+00:00** `guides` — `sh -c 'cat AGENTS.md; cat frontend/package.json; cat pyproject.toml; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,120p" README.md; sed -n "1,120p" REPO_PURPOSE.md; sed -n "1,140p" ARCHITECTURE.md; sed -n "1,100p" CANONICAL_OWNERSHIP.md'`; cwd `.`; exit 0, 0.02s. [Output](artifacts/meta/20261002T234605.182552Z-guides.txt).
+
+- **2026-10-03T00:35:16.224243+00:00** `resume-inspection` — `sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'`; cwd `.`; exit 0, 0.03s. [Output](artifacts/meta/20261003T003516.224243Z-resume-inspection.txt).
+

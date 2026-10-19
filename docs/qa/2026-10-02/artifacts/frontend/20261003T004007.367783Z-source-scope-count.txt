@@ -1,0 +1,157 @@
+UTC: 2026-10-03T00:40:07.367783+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import json; root=Path("frontend/src"); sources=[p for p in root.rglob("*") if p.suffix in {".ts",".tsx"} and "__tests__" not in p.parts and "test" not in p.parts and not p.name.endswith((".test.ts",".test.tsx",".spec.ts",".spec.tsx",".d.ts"))]; report=json.loads(Path("docs/qa/2026-10-02/artifacts/frontend/coverage-before-summary.json").read_text());print(json.dumps({"typescript_source_files_excluding_tests_and_declarations":len(sources),"coverage_report_files":len(report["files"]),"gs1_baseline":report["files"].get("frontend/src/lib/gs1-parser.ts")},indent=2)); print("\n".join(str(p) for p in sources if str(p) not in report["files"])[:5000])'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+{
+  "typescript_source_files_excluding_tests_and_declarations": 672,
+  "coverage_report_files": 196,
+  "gs1_baseline": {
+    "lines": {
+      "total": 96,
+      "covered": 92,
+      "skipped": 0,
+      "pct": 95.83
+    },
+    "functions": {
+      "total": 9,
+      "covered": 8,
+      "skipped": 0,
+      "pct": 88.88
+    },
+    "statements": {
+      "total": 120,
+      "covered": 108,
+      "skipped": 0,
+      "pct": 90
+    },
+    "branches": {
+      "total": 99,
+      "covered": 82,
+      "skipped": 0,
+      "pct": 82.82
+    }
+  }
+}
+frontend/src/instrumentation-client.ts
+frontend/src/types/fsma-tools.ts
+frontend/src/types/api.ts
+frontend/src/types/review.ts
+frontend/src/types/fsma.ts
+frontend/src/types/agent-review.ts
+frontend/src/types/labels.ts
+frontend/src/app/error.tsx
+frontend/src/app/global-error.tsx
+frontend/src/app/not-found.tsx
+frontend/src/hooks/use-remediation.ts
+frontend/src/hooks/use-dashboard-refresh.ts
+frontend/src/hooks/use-billing.ts
+frontend/src/hooks/use-sla.ts
+frontend/src/lib/validation.ts
+frontend/src/lib/cookie-consent.ts
+frontend/src/lib/passwordless-auth.ts
+frontend/src/lib/mock-tenants.ts
+frontend/src/lib/analytics.ts
+frontend/src/lib/og-image.tsx
+frontend/src/lib/ftl-data.ts
+frontend/src/lib/roi-calculator-data.ts
+frontend/src/lib/client-session-profile.ts
+frontend/src/lib/pdf-report.ts
+frontend/src/lib/trust-subprocessors.ts
+frontend/src/lib/doc-pages.ts
+frontend/src/lib/mock-dashboard-data.ts
+frontend/src/lib/blog-jsonld.ts
+frontend/src/lib/fsma-tools-data.ts
+frontend/src/lib/supabase/client.ts
+frontend/src/lib/supabase/config.ts
+frontend/src/lib/supabase/server.ts
+frontend/src/lib/supabase/route-client.ts
+frontend/src/components/ui/toaster.tsx
+frontend/src/components/ui/alert.tsx
+frontend/src/components/ui/toast.tsx
+frontend/src/components/ui/checkbox.tsx
+frontend/src/components/ui/icon.ts
+frontend/src/components/developer/DeveloperPortalShell.tsx
+frontend/src/components/developer/DocSidebar.tsx
+frontend/src/components/developer/DocPrevNext.tsx
+frontend/src/components/developer/CodeBlock.tsx
+frontend/src/components/tools/RelatedTools.tsx
+frontend/src/components/layout/regengine-wordmark.tsx
+frontend/src/components/layout/workflow-stepper.tsx
+frontend/src/components/layout/marketing-nav.ts
+frontend/src/components/layout/container.tsx
+frontend/src/components/layout/section.tsx
+frontend/src/components/layout/breadcrumbs.tsx
+frontend/src/components/layout/auth-aware-footer.tsx
+frontend/src/components/layout/page-container.tsx
+frontend/src/components/layout/FreeToolPageShell.tsx
+frontend/src/components/layout/page-header.tsx
+frontend/src/components/layout/marketing-footer.tsx
+frontend/src/components/layout/theme-toggle.tsx
+frontend/src/components/layout/marketing-header.tsx
+frontend/src/components/layout/related-tools.tsx
+frontend/src/components/labels/LabelPdfDownloadSection.tsx
+frontend/src/components/dashboard/breadcrumb.tsx
+frontend/src/components/dashboard/alert-detail-dialog.tsx
+frontend/src/components/dashboard/compliance-status-widget.tsx
+frontend/src/components/mobile/BarcodeScanner.tsx
+frontend/src/components/mobile/ImageCapture.tsx
+frontend/src/components/cookie-consent/CookieBanner.tsx
+frontend/src/components/lead-gate/LeadGate.tsx
+frontend/src/components/accessibility/AccessibilityWidget.tsx
+frontend/src/components/fsma/readiness-assessment.tsx
+frontend/src/components/fsma/supply-chain-graph.tsx
+frontend/src/components/fsma/recall-timer.tsx
+frontend/src/components/fsma/phase-gates.tsx
+frontend/src/components/fsma/compliance-readiness.tsx
+frontend/src/components/fsma/FSMAToolShell.tsx
+frontend/src/components/fsma/mass-balance-widget.tsx
+frontend/src/components/pricing/PricingPageClient.tsx
+frontend/src/components/onboarding/StepIndicator.tsx
+frontend/src/components/layout/header/MobileMenuCTA.tsx
+frontend/src/components/layout/header/MobileHamburger.tsx
+frontend/src/components/layout/header/DesktopNav.tsx
+frontend/src/components/layout/header/NavDropdown.tsx
+frontend/src/components/layout/header/types.ts
+frontend/src/components/layout/header/index.ts
+frontend/src/components/layout/header/MobileMenu.tsx
+frontend/src/app/demo/opengraph-image.tsx
+frontend/src/app/demo/layout.tsx
+frontend/src/app/demo/page.tsx
+frontend/src/app/settings/layout.tsx
+frontend/src/app/settings/error.tsx
+frontend/src/app/settings/loading.tsx
+frontend/src/app/settings/page.tsx
+frontend/src/app/proof/opengraph-image.tsx
+frontend/src/app/contact/opengraph-image.tsx
+frontend/src/app/contact/layout.tsx
+frontend/src/app/contact/error.tsx
+frontend/src/app/contact/page.tsx
+frontend/src/app/records/layout.tsx
+frontend/src/app/records/error.tsx
+frontend/src/app/records/page.tsx
+frontend/src/app/why-regengine/opengraph-image.tsx
+frontend/src/app/why-regengine/page.tsx
+frontend/src/app/tools/opengraph-image.tsx
+frontend/src/app/tools/error.tsx
+frontend/src/app/tools/loading.tsx
+frontend/src/app/tools/page.tsx
+frontend/src/app/trace/layout.tsx
+frontend/src/app/trace/error.tsx
+frontend/src/app/privacy/opengraph-image.tsx
+frontend/src/app/privacy/error.tsx
+frontend/src/app/privacy/page.tsx
+frontend/src/app/identity/layout.tsx
+frontend/src/app/identity/error.tsx
+frontend/src/app/verify/error.tsx
+frontend/src/app/security/opengraph-image.tsx
+frontend/src/app/security/error.tsx
+frontend/src/app/security/page.tsx
+frontend/src/app/signup/page.tsx
+frontend/src/app/ingest/layout.tsx
+frontend/src/app/ingest/error.tsx
+frontend/src/app/ingest/loading.tsx
+frontend/src/app/supplier-compliance/opengraph-image.tsx
+frontend/src/app/supplier-compliance/pag

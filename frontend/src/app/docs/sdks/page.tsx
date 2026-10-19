@@ -3,10 +3,10 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'SDKs & Libraries | RegEngine',
-  description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
+  description: 'RegEngine client libraries for Python, Node.js, and Go are planned and not released yet. Use the REST API and the OpenAPI spec today.',
   openGraph: {
     title: 'SDKs & Libraries',
-    description: 'Official RegEngine client libraries for Python, Node.js, and Go, plus REST API usage guidance.',
+    description: 'RegEngine client libraries for Python, Node.js, and Go are planned and not released yet. Use the REST API and the OpenAPI spec today.',
     url: 'https://regengine.co/docs/sdks',
     type: 'website',
   },
@@ -37,9 +37,9 @@ export default function SDKsDocsPage() {
                         Back to Docs
                     </Link>
                 }
-                eyebrow="SDK Access"
+                eyebrow="Roadmap"
                 title="SDKs & Libraries"
-                description="Official client libraries for Python, Node.js, and more"
+                description="Client libraries are planned and not released yet. Use the REST API directly."
             />
 
             <div className="space-y-8">

@@ -28,6 +28,10 @@ FDA_WARNING_LETTERS_RSS = "https://www.fda.gov/about-fda/contact-fda/stay-inform
 FDA_API_BASE = "https://api.fda.gov/food/enforcement.json"
 
 
+class _UnreadableRSSFeed(Exception):
+    """The RSS body could not be parsed, or defusedxml rejected it."""
+
+
 class FDAWarningLettersScraper(BaseScraper):
     """Scraper for FDA Warning Letters.
 
@@ -60,11 +64,16 @@ class FDAWarningLettersScraper(BaseScraper):
         """Scrape FDA Warning Letters from RSS feed."""
         start_time = time.time()
         items: List[EnforcementItem] = []
+        warnings: List[str] = []
         error_message: Optional[str] = None
+        rss_unreadable: Optional[str] = None
 
         try:
             # Try RSS feed first
-            items = self._scrape_rss()
+            try:
+                items = self._scrape_rss()
+            except _UnreadableRSSFeed as unreadable:
+                rss_unreadable = f"rss_unreadable: {unreadable}"
 
             if items:
                 logger.info(
@@ -73,7 +82,7 @@ class FDAWarningLettersScraper(BaseScraper):
                     count=len(items),
                 )
             else:
-                # If _scrape_rss returned [] because of a 404, we try API
+                # The feed gave no items (404, empty, or unreadable): try the API.
                 logger.debug("no_rss_items_trying_api_fallback")
                 items = self._scrape_api()
                 logger.info(
@@ -81,8 +90,22 @@ class FDAWarningLettersScraper(BaseScraper):
                     source="api",
                     count=len(items),
                 )
+                # An unreadable feed still falls back to the API (#3323). If
+                # the API is empty too, nothing shows the source is healthy,
+                # so record a failed scrape (#3293). If the API has items,
+                # data still flows and the broken feed becomes a warning.
+                if rss_unreadable:
+                    if items:
+                        warnings.append(rss_unreadable)
+                    else:
+                        error_message = f"{rss_unreadable}; openFDA API fallback returned no items"
 
-        except (httpx.HTTPError, ConnectionError, TimeoutError, ValueError, KeyError) as scrap_error:
+        # QA5: broad catch is intentional. The scraper contract is to always
+        # return a ScrapeResult, never raise: the scheduler records a failure
+        # result with an error message, while a raised error skips that
+        # bookkeeping. This previously let XML parse errors (a SyntaxError,
+        # not a ValueError) escape on malformed RSS bodies.
+        except Exception as scrap_error:
             logger.warning(
                 "scrape_attempt_failed",
                 error=str(scrap_error),
@@ -100,6 +123,7 @@ class FDAWarningLettersScraper(BaseScraper):
             items=items,
             error_message=error_message,
             duration_ms=duration_ms,
+            warnings=warnings,
         )
 
     def _scrape_rss(self) -> List[EnforcementItem]:
@@ -131,7 +155,20 @@ class FDAWarningLettersScraper(BaseScraper):
             raise e
 
         items = []
-        root = ElementTree.fromstring(response.content)
+        try:
+            root = ElementTree.fromstring(response.content)
+        except Exception as parse_error:
+            # ParseError is a SyntaxError and EntitiesForbidden is a
+            # ValueError. Raised as is, either becomes a failed scrape with
+            # no API fallback. scrape() treats an unreadable body as an empty
+            # feed and falls back, but unlike a well-formed empty feed it is
+            # a failure when the fallback is empty too.
+            logger.warning(
+                "rss_unreadable_falling_back_to_api",
+                error=str(parse_error),
+                error_type=type(parse_error).__name__,
+            )
+            raise _UnreadableRSSFeed(f"{type(parse_error).__name__}: {parse_error}") from parse_error
 
         # RSS structure: rss/channel/item
         for item in root.findall(".//item"):
@@ -205,6 +242,18 @@ class FDAWarningLettersScraper(BaseScraper):
         for result in data.get("results", []):
             try:
                 recall_number = result.get("recall_number", "")
+                if not recall_number:
+                    # QA5: rows without a recall number must leave a trace
+                    # instead of sharing source_id "fda_enf:". The state
+                    # manager dedupes on source_id only, so emitting them
+                    # would silently drop distinct actions after the first.
+                    logger.warning(
+                        "warning_letter_row_missing_recall_number_dropped",
+                        report_date=result.get("report_date", ""),
+                        classification=result.get("classification", ""),
+                        product_hint=str(result.get("product_description", ""))[:80],
+                    )
+                    continue
                 source_id = self._create_source_id("fda_enf", recall_number)
 
                 # Parse date
@@ -223,17 +272,20 @@ class FDAWarningLettersScraper(BaseScraper):
                 else:
                     severity = EnforcementSeverity.MEDIUM
 
+                recalling_firm = result.get("recalling_firm", "") or "Unknown"
+                product_description = result.get("product_description", "") or ""
+
                 items.append(
                     EnforcementItem(
                         source_type=self.source_type,
                         source_id=source_id,
-                        title=f"{result.get('recalling_firm', 'Unknown')} - {result.get('product_description', '')[:100]}",
+                        title=f"{recalling_firm} - {product_description[:100]}",
                         summary=result.get("reason_for_recall", "")[:500],
                         url=f"https://www.accessdata.fda.gov/scripts/ires/index.cfm?event=ires.dspBriefRecallNumber&RecallNumber={recall_number}",
                         published_date=published_date,
                         severity=severity,
-                        affected_products=[result.get("product_description", "")],
-                        affected_companies=[result.get("recalling_firm", "")],
+                        affected_products=[product_description] if product_description else [],
+                        affected_companies=[recalling_firm],
                         jurisdiction="US-FDA",
                         raw_data=result,
                     )
@@ -261,6 +313,11 @@ class FDAWarningLettersScraper(BaseScraper):
             # Example: "Wed, 15 Jan 2026 12:00:00 -0500"
             from email.utils import parsedate_to_datetime
 
-            return parsedate_to_datetime(date_str)
+            parsed = parsedate_to_datetime(date_str)
+            # QA5: feeds sometimes omit the zone. Return UTC-aware so
+            # downstream code never mixes naive and aware datetimes.
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed
         except (ValueError, TypeError, OverflowError):
             return datetime.now(timezone.utc)

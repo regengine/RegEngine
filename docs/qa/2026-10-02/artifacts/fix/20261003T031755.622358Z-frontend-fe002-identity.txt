@@ -1,0 +1,21 @@
+UTC: 2026-10-03T03:17:55.622358+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import subprocess; [subprocess.run(c,check=False) for c in [["git","branch","--show-current"],["git","remote","get-url","origin"],["git","worktree","list"],["git","status","--short"]]]'
+Exit: 0
+Duration: 0.11s
+Timeout: False
+
+qa/2026-10-02-fixes
+https://github.com/regengine/RegEngine.git
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine a7f001fc [qa/2026-10-02-fixes]
+ M services/shared/request_safety.py
+ M tests/qa_sweep_20261002/test_request_safety.py
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-chromium-2026-10-03T03-16-21-775Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-firefox-2026-10-03T03-16-23-735Z.png
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.json
+?? docs/qa/2026-10-02/artifacts/browser/fe-001-webkit-2026-10-03T03-16-25-413Z.png
+?? docs/qa/2026-10-02/artifacts/browser/followup-server-20261003T031612Z-metadata.txt
+?? docs/qa/2026-10-02/artifacts/fix/

@@ -79,7 +79,6 @@ def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSen
         )
 
     where = [
-        "e.tenant_id = :tenant_id",
         "e.event_type = 'shipping'",
         "e.validation_status != 'rejected'",
     ]
@@ -124,12 +123,12 @@ def _query_shipping_rows(db_session, sender_tenant_id: str, request: ExchangeSen
                     (
                         SELECT jsonb_object_agg(k.kde_key, k.kde_value)
                         FROM fsma.cte_kdes k
-                        WHERE k.cte_event_id = e.id AND k.tenant_id = e.tenant_id
+                        WHERE k.cte_event_id = e.id AND k.tenant_id = :tenant_id
                     ),
                     '{{}}'::jsonb
                 ) AS kdes
             FROM fsma.cte_events e
-            WHERE {" AND ".join(where)}
+            WHERE e.tenant_id = :tenant_id AND {" AND ".join(where)}
             ORDER BY e.event_timestamp ASC
             LIMIT :limit
             """
@@ -329,7 +328,7 @@ def _load_packages_db(
                         received_at
                     FROM fsma.exchange_packages
                     WHERE receiver_tenant_id = :receiver_tenant_id
-                      AND id = :package_id::uuid
+                      AND id = CAST(:package_id AS uuid)
                     LIMIT 1
                     """
                 ),
@@ -342,7 +341,7 @@ def _load_packages_db(
                         UPDATE fsma.exchange_packages
                         SET status = 'received', received_at = now()
                         WHERE receiver_tenant_id = :receiver_tenant_id
-                          AND id = :package_id::uuid
+                          AND id = CAST(:package_id AS uuid)
                         """
                     ),
                     {"receiver_tenant_id": receiver_tenant_id, "package_id": package_id},
@@ -365,7 +364,7 @@ def _load_packages_db(
                             received_at
                         FROM fsma.exchange_packages
                         WHERE receiver_tenant_id = :receiver_tenant_id
-                          AND id = :package_id::uuid
+                          AND id = CAST(:package_id AS uuid)
                         LIMIT 1
                         """
                     ),
@@ -498,11 +497,21 @@ async def send_exchange_package(
             raise HTTPException(status_code=503, detail="Exchange service unavailable") from exc
 
         logger.warning("exchange_send_failed_using_fallback error=%s", str(exc))
+        # The DB-backed path rejects filter-less sends with 400 before any
+        # I/O; the fallback enforces the same contract instead of queueing
+        # an empty package no receiver can use.
+        fallback_tlcs = sorted({code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code})
+        fallback_event_ids = sorted({event_id for event_id in request.event_ids if event_id})
+        if not fallback_tlcs and not fallback_event_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide traceability_lot_code, lot_codes, or event_ids when sending exchange data",
+            )
         # Re-run extraction in fallback mode without DB package persistence.
         package_id = str(uuid4())
         created_at = datetime.now(timezone.utc).isoformat()
         records = []
-        for event_id in request.event_ids:
+        for event_id in fallback_event_ids:
             records.append(
                 {
                     "cte_event_id": event_id,
@@ -522,8 +531,32 @@ async def send_exchange_package(
                     "source": "exchange_fallback",
                 }
             )
+        if not records:
+            # A lot_codes-only send carries no event IDs, so each requested
+            # lot gets one synthetic record. Without this the package would
+            # claim lots in its summary while carrying zero records.
+            for tlc in fallback_tlcs:
+                records.append(
+                    {
+                        "cte_event_id": f"fallback-{tlc}",
+                        "traceability_lot_code": tlc,
+                        "event_type": "shipping",
+                        "event_timestamp": created_at,
+                        "product_description": "EDI/EPCIS Shipping Event",
+                        "quantity": None,
+                        "unit_of_measure": None,
+                        "ship_from": {},
+                        "ship_to": {},
+                        "tlc_source": {},
+                        "reference_document_number": None,
+                        "carrier": None,
+                        "integrity": {"record_hash": None, "chain_hash": None},
+                        "additional_kdes": {},
+                        "source": "exchange_fallback",
+                    }
+                )
 
-        lot_codes = sorted({code for code in ([request.traceability_lot_code] + list(request.lot_codes)) if code})
+        lot_codes = fallback_tlcs
         package = {
             "package_id": package_id,
             "package_version": "1.0",

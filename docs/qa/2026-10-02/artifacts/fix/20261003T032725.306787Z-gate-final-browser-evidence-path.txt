@@ -1,0 +1,17 @@
+UTC: 2026-10-03T03:27:25.306787+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files docs/qa/2026-10-02/artifacts/fix -g '*frontend-final-summary*' -g '*tour*'
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+docs/qa/2026-10-02/artifacts/fix/20261003T032328.083465Z-frontend-final-tour-dependency-scope.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032341.937653Z-frontend-final-tour-paths.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032536.539155Z-frontend-final-summary.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032334.372798Z-frontend-final-tour-retry.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032433.268261Z-frontend-final-summary-inputs.txt
+docs/qa/2026-10-02/artifacts/fix/frontend-final-tour-retry.json
+docs/qa/2026-10-02/artifacts/fix/frontend-final-summary.json
+docs/qa/2026-10-02/artifacts/fix/20261003T032352.001103Z-frontend-final-tour-imports.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032341.934743Z-frontend-final-tour-test-source.txt
+docs/qa/2026-10-02/artifacts/fix/20261003T032328.083830Z-frontend-final-tour-retry-config.txt

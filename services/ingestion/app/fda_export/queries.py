@@ -152,11 +152,11 @@ def fetch_recall_events(db_session, where_clause: str, params: dict, limit: int 
                 e.location_gln, e.location_name, e.source, e.sha256_hash,
                 h.chain_hash,
                 (SELECT jsonb_object_agg(k.kde_key, k.kde_value)
-                 FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id) AS kdes,
+                 FROM fsma.cte_kdes k WHERE k.cte_event_id = e.id AND k.tenant_id = :tid) AS kdes,
                 e.ingested_at
             FROM fsma.cte_events e
-            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
-            WHERE {where_clause}
+            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = :tid
+            WHERE e.tenant_id = :tid AND {where_clause}
             ORDER BY e.event_timestamp ASC
             LIMIT :lim
         """),
@@ -290,9 +290,7 @@ def build_recall_where_clause_canonical(
     return where_clause, params
 
 
-def fetch_recall_events_canonical(
-    db_session, where_clause: str, params: dict, limit: int = 10001
-) -> list:
+def fetch_recall_events_canonical(db_session, where_clause: str, params: dict, limit: int = 10001) -> list:
     """Canonical-store twin of ``fetch_recall_events``.
 
     Column order and shapes match the legacy SELECT exactly so
@@ -317,8 +315,8 @@ def fetch_recall_events_canonical(
                  WHERE kv.value <> 'null'::jsonb) AS kdes,
                 e.ingested_at
             FROM fsma.traceability_events e
-            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = e.tenant_id
-            WHERE {where_clause}
+            LEFT JOIN fsma.hash_chain h ON h.event_hash = e.sha256_hash AND h.tenant_id = :tid
+            WHERE e.tenant_id = :tid AND {where_clause}
             ORDER BY e.event_timestamp ASC
             LIMIT :lim
         """),
@@ -492,6 +490,7 @@ def log_recall_export(
     product: Optional[str] = None,
     location: Optional[str] = None,
     event_type: Optional[str] = None,
+    include_pii: bool = False,
 ) -> None:
     """Write the recall-export audit log entry.
 
@@ -525,9 +524,10 @@ def log_recall_export(
             text("""
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash,
-                 generated_by, query_tlc, query_start_date, query_end_date)
+                 generated_by, query_tlc, query_start_date, query_end_date,
+                 include_pii)
                 VALUES (:tid, :etype, :cnt, :hash, :generated_by,
-                        :tlc, :sd, :ed)
+                        :tlc, :sd, :ed, :pii)
             """),
             {
                 "tid": tenant_id,
@@ -538,6 +538,7 @@ def log_recall_export(
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
+                "pii": bool(include_pii),
             },
         )
         db_session.commit()
@@ -578,6 +579,7 @@ def log_recall_export(
             "export_hash": export_hash,
             "record_count": len(events),
             "filters_applied": filters_applied,
+            "pii_included": bool(include_pii),
             "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
         },
     )
@@ -682,9 +684,9 @@ def fetch_v2_events(db_session, where_clause: str, params: dict) -> list:
                 e.no_verdict_reason
             FROM fsma.traceability_events e
             LEFT JOIN fsma.rule_evaluations re
-                ON re.event_id = e.event_id AND re.tenant_id = e.tenant_id
+                ON re.event_id = e.event_id AND re.tenant_id = :tid
             LEFT JOIN fsma.rule_definitions rd ON rd.rule_id = re.rule_id
-            WHERE {where_clause}
+            WHERE e.tenant_id = :tid AND {where_clause}
             GROUP BY
                 e.event_id, e.event_type, e.traceability_lot_code,
                 e.product_reference, e.quantity, e.unit_of_measure,
@@ -765,6 +767,8 @@ def log_v2_export(
     request_id: Optional[str] = None,
     user_agent: Optional[str] = None,
     source_ip: Optional[str] = None,
+    include_pii: bool = False,
+    event_type: Optional[str] = None,
 ) -> None:
     """Write the v2 export audit log entry.
 
@@ -776,8 +780,10 @@ def log_v2_export(
             text("""
                 INSERT INTO fsma.fda_export_log
                 (tenant_id, export_type, record_count, export_hash, generated_by,
-                 query_tlc, query_start_date, query_end_date)
-                VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed)
+                 query_tlc, query_start_date, query_end_date,
+                 include_pii, query_event_type)
+                VALUES (:tid, :etype, :cnt, :hash, :generated_by, :tlc, :sd, :ed,
+                        :pii, :qetype)
             """),
             {
                 "tid": tenant_id,
@@ -788,6 +794,8 @@ def log_v2_export(
                 "tlc": tlc,
                 "sd": start_date,
                 "ed": end_date,
+                "pii": bool(include_pii),
+                "qetype": event_type,
             },
         )
         db_session.commit()
@@ -828,7 +836,9 @@ def log_v2_export(
                 "tlc": tlc,
                 "start_date": start_date,
                 "end_date": end_date,
+                "event_type": event_type,
             },
+            "pii_included": bool(include_pii),
             "initiated_at_utc": datetime.now(timezone.utc).isoformat(),
         },
     )

@@ -1,0 +1,752 @@
+UTC: 2026-10-03T00:36:36.395703+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg --files services/ingestion/app services/shared | rg "(fda|export|authz|webhook_compat|idempot|api_key|tenant).*py$"; sed -n "1,260p" services/ingestion/app/authz.py; sed -n "1,200p" services/admin/app/data_export_routes.py; sed -n "1,230p" services/admin/app/supplier_facilities_routes.py'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+services/shared/tenant_models.py
+services/shared/agent_org/authz.py
+services/shared/maintenance_tenants.py
+services/shared/api_key_store.py
+services/shared/validators/tenant_validator.py
+services/ingestion/app/epcis_export.py
+services/ingestion/app/audit_export_log.py
+services/ingestion/app/webhook_compat.py
+services/ingestion/app/authz.py
+services/ingestion/app/email_ingest/tenant_lookup.py
+services/shared/tenant_settings.py
+services/ingestion/app/scrapers/state_adaptors/fda_enforcement.py
+services/ingestion/app/fda_export_service.py
+services/shared/cte_persistence/exports.py
+services/shared/tenant_rate_limiting.py
+services/shared/workflows/export_output.py
+services/ingestion/app/tenant_validation.py
+services/ingestion/app/shared/tenant_resolution.py
+services/ingestion/app/export_models.py
+services/shared/tenant_context.py
+services/ingestion/app/fda_export/router.py
+services/shared/idempotency.py
+services/shared/tests/test_fda_export_shared.py
+services/ingestion/app/fda_export/queries.py
+services/ingestion/app/fda_export/coverage.py
+services/ingestion/app/fda_export/__init__.py
+services/ingestion/app/fda_export/merkle.py
+services/ingestion/app/fda_export/recall.py
+services/ingestion/app/fda_export/formatters.py
+services/ingestion/app/fda_export/verification.py
+services/shared/tests/test_agent_org_authz.py
+services/shared/tests/test_tenant_isolation.py
+services/shared/tests/test_api_key_store_set_context.py
+services/shared/tests/test_api_key_store_pgbouncer_compat.py
+services/shared/tests/test_auth_preshared_tenant_required_1068.py
+services/shared/tests/test_api_key_store_rate_limit_minute_rollover.py
+services/shared/neo4j_tenant_context.py
+services/shared/tests/test_tenant_context_set_guc.py
+services/shared/tests/test_tenant_context.py
+services/shared/tests/test_tenant_models_cypher_scoping_1413.py
+services/shared/tests/test_tenant_guc_hook.py
+services/shared/tests/test_cte_persistence_log_export_1655.py
+services/shared/tests/test_api_key_store_usage_throttle.py
+services/shared/tests/test_api_key_response_null_coercion.py
+services/shared/tests/test_api_key_store_liveness_connect_args.py
+services/shared/tests/test_tenant_context_2696.py
+services/ingestion/app/export_monitoring.py
+services/ingestion/app/webhook_router_v2/tenant.py
+services/shared/middleware/tenant_context.py
+services/shared/fda_export/pii.py
+services/shared/fda_export/pagination.py
+services/shared/fda_export/windows.py
+services/shared/fda_export/__init__.py
+services/shared/fda_export/filenames.py
+services/shared/fda_export/csv_safety.py
+"""Ingestion service authorization helpers."""
+
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from functools import lru_cache
+from typing import Optional
+
+from fastapi import Depends, Header, HTTPException, Request, Response
+from pydantic import BaseModel, Field
+from shared.api_key_store import APIKeyResponse
+from shared.auth import APIKey, optional_api_key, require_api_key
+from shared.permissions import has_permission
+from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
+
+logger = logging.getLogger("authz")
+
+
+# ---------------------------------------------------------------------------
+# Auth failure rate limiting — blocks IPs after repeated failed auth attempts
+#
+# #2711: backed by shared.rate_limit.BruteForceLimiter (the #1392 admin
+# privileged-auth pattern) instead of a bare module-level dict, so the failure
+# budget is shared across workers/replicas when Redis is available and
+# honors RATE_LIMIT_FAIL_MODE on Redis uncertainty. Falls back to a
+# per-process counter (with a loud per-activation warning) when it isn't.
+# ---------------------------------------------------------------------------
+_AUTH_FAIL_WINDOW = 300  # 5-minute window
+_AUTH_FAIL_MAX = 15  # max failures before blocking
+_auth_limiter = None
+_auth_limiter_lock = threading.Lock()
+
+
+def _get_auth_limiter():
+    global _auth_limiter
+    if _auth_limiter is None:
+        with _auth_limiter_lock:
+            if _auth_limiter is None:
+                from shared.rate_limit import BruteForceLimiter
+
+                _auth_limiter = BruteForceLimiter(
+                    namespace="ingestion_auth_fail",
+                    max_failures=_AUTH_FAIL_MAX,
+                    window_seconds=_AUTH_FAIL_WINDOW,
+                )
+    return _auth_limiter
+
+
+def _check_auth_rate_limit(client_ip: str) -> None:
+    """Raise 429 if client_ip has exceeded auth failure threshold."""
+    if _get_auth_limiter().is_limited(client_ip):
+        logger.warning("auth_rate_limit_blocked: %s", client_ip)
+        raise HTTPException(status_code=429, detail="Too many authentication failures")
+
+
+def _record_auth_failure(client_ip: str) -> None:
+    """Record a failed auth attempt for rate limiting."""
+    _get_auth_limiter().record_failure(client_ip)
+
+
+def _is_dev_env() -> bool:
+    """Return True only when development/test mode is explicit.
+
+    Fail closed: unset, staging, preview, and any unknown value all require
+    real authentication.
+    """
+    return os.getenv("REGENGINE_ENV", "").strip().lower() in {"development", "test"}
+
+
+def _is_production_env() -> bool:
+    """Backward-compatible fail-closed production check.
+
+    Existing callers and tests still reference this name. The semantics are
+    now intentionally conservative: anything that is not explicit dev/test is
+    treated as production.
+    """
+    return not _is_dev_env()
+
+
+class IngestionPrincipal(BaseModel):
+    """Authenticated caller context for ingestion endpoints."""
+
+    key_id: str
+    scopes: list[str] = Field(default_factory=list)
+    tenant_id: Optional[str] = None
+    auth_mode: str = "scoped_key"
+
+
+_ACTION_BASE_RPM: dict[str, int] = {
+    "read": 180,
+    "write": 90,
+    "ingest": 75,
+    "export": 90,
+    "verify": 45,
+}
+
+_ROLE_MULTIPLIER: dict[str, float] = {
+    "viewer": 1.0,
+    "operator": 1.5,
+    "admin": 3.0,
+}
+
+
+def _normalize_permission(permission: str) -> str:
+    return permission.strip().lower().replace(":", ".")
+
+
+def _principal_rate_limit_role(principal: IngestionPrincipal) -> str:
+    normalized_scopes = [_normalize_permission(scope) for scope in principal.scopes]
+    if has_permission(normalized_scopes, "*") or any(scope.startswith("admin") for scope in normalized_scopes):
+        return "admin"
+    if any(scope.endswith((".write", ".ingest", ".export", ".verify")) for scope in normalized_scopes):
+        return "operator"
+    return "viewer"
+
+
+@lru_cache(maxsize=1)
+def _rate_limit_overrides() -> dict[str, int]:
+    """
+    Parse optional per-scope RPM overrides.
+
+    Format:
+        INGESTION_RBAC_RATE_LIMITS="fda.export=60,exchange.read=240"
+    """
+    raw = os.getenv("INGESTION_RBAC_RATE_LIMITS", "").strip()
+    if not raw:
+        return {}
+
+    overrides: dict[str, int] = {}
+    for item in raw.split(","):
+        token = item.strip()
+        if not token or "=" not in token:
+            continue
+        scope_raw, value_raw = token.split("=", 1)
+        scope = _normalize_permission(scope_raw)
+        try:
+            value = int(value_raw.strip())
+        except ValueError:
+            continue
+        overrides[scope] = max(1, value)
+    return overrides
+
+
+def _rpm_for_permission(required_permission: str, principal: IngestionPrincipal) -> int:
+    required = _normalize_permission(required_permission)
+    action = required.split(".")[-1] if "." in required else required
+    default_rpm = max(1, int(os.getenv("INGESTION_RBAC_RATE_LIMIT_DEFAULT_RPM", "120")))
+    base_rpm = _rate_limit_overrides().get(required, _ACTION_BASE_RPM.get(action, default_rpm))
+
+    role = _principal_rate_limit_role(principal)
+    multiplier = _ROLE_MULTIPLIER.get(role, 1.0)
+    return max(1, int(round(base_rpm * multiplier)))
+
+
+def _rate_limit_window_seconds() -> int:
+    return max(1, int(os.getenv("INGESTION_RBAC_RATE_LIMIT_WINDOW_SECONDS", "60")))
+
+
+def _store_rate_limit_headers(
+    request: Request,
+    response: Response,
+    *,
+    limit: int,
+    remaining: int,
+    tenant_id: str,
+    scope: str,
+    window: int,
+) -> None:
+    reset = str(rate_limit_reset_epoch(window))
+    request.state.rate_limit_limit = limit
+    request.state.rate_limit_remaining = remaining
+    request.state.rate_limit_reset = reset
+    request.state.rate_limit_tenant = tenant_id
+    request.state.rate_limit_scope = scope
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    response.headers["X-RateLimit-Reset"] = reset
+    response.headers["X-RateLimit-Tenant"] = tenant_id
+    response.headers["X-RateLimit-Scope"] = scope
+
+
+def _tenant_for_rate_limit(request: Request, principal: IngestionPrincipal) -> str:
+    if principal.tenant_id:
+        return principal.tenant_id
+    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+    if header_tenant:
+        return str(header_tenant)
+    # Query-string fallback removed (EPIC-A #1651): attacker-controllable
+    # input must not determine the rate-limit bucket. A request that lands
+    # here with no authenticated principal AND no X-Tenant-ID header gets
+    # the shared "global" bucket, preventing tenant-bucket isolation
+    # attacks. The header fallback is used only by the explicit local
+    # dev-open principal; production keys are credential-bound.
+    return "global"
+
+
+def _requested_tenant_context(request: Request) -> Optional[str]:
+    """Return query/header tenant context for DEFENSIVE mismatch detection.
+
+    The returned value is NEVER used as a tenant trust signal — the
+    authoritative tenant is always the authenticated principal. This
+    helper exists solely so ``require_permission`` can detect a caller
+    attempting to override the principal's tenant via query string or
+    header and reject the request with 403.
+
+    The Semgrep rule ``tenant-id-from-query-string`` correctly flags
+    untrustworthy READS, but a defensive DETECTION read that never feeds
+    a trust decision is the legitimate exception this helper exists for.
+    Each query/header read below is annotated with ``nosemgrep:`` and
+    only that specific finding is suppressed; new call sites elsewhere
+    in the codebase still trip the gate.
+
+    Long-term: replace this defensive check with
+    ``services/shared/tenant_context.py:resolve_tenant_context()`` at each
+    call site. The shared resolver now understands ``request.state.principal``;
+    this helper remains only for older read endpoints that intentionally return
+    404 on tenant mismatch to avoid tenant-existence oracles.
+    """
+    # nosemgrep: tenant-id-from-query-string  defensive-detection-not-trust
+    query_tenant = request.query_params.get("tenant_id")
+    header_tenant = request.headers.get("X-Tenant-ID") or request.headers.get("X-RegEngine-Tenant-ID")
+
+    if query_tenant and header_tenant and query_tenant != header_tenant:
+        raise HTTPException(
+            status_code=400,
+            detail="Conflicting tenant context: tenant_id does not match X-Tenant-ID header",
+        )
+
+    return query_tenant or header_tenant
+
+
+def _principal_from_api_key(api_key: [REDACTED] | APIKeyResponse) -> IngestionPrincipal:
+    return IngestionPrincipal(
+        key_id=api_key.key_id,
+        scopes=list(api_key.scopes or []),
+        tenant_id=api_key.tenant_id,
+        auth_mode="scoped_key",
+    )
+
+
+async def get_ingestion_principal(
+    request: Request,
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+) -> IngestionPrincipal:
+    """
+    Authenticate caller and return principal context.
+
+    Production accepts only database-backed, credential-bound API keys.
+    Explicit development/test mode retains the historical open fallback.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check if this IP is temporarily blocked due to repeated auth failures
+    _check_auth_rate_limit(client_ip)
+
+    _dev = _is_dev_env()
+    if not x_regengine_api_key:
+        [REDACTED] not _dev:
+"""GDPR Art. 15 / 20 — right-to-access and data portability.
+
+Provides GET /v1/account/export for authenticated users to obtain a
+structured, machine-readable copy of their personal data. Secrets
+(TOTP seeds, refresh tokens, session tokens) are never included.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from typing import Any, Dict, List, Optional
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, Request
+from shared.rate_limit import limiter
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from .audit import AuditLogger
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import (
+    AuditLogModel,
+    MembershipModel,
+    MFARecoveryCodeModel,
+    RoleModel,
+    SessionModel,
+    SupplierCTEEventModel,
+    SupplierFacilityModel,
+    SupplierFunnelEventModel,
+    SupplierTraceabilityLotModel,
+    UserModel,
+)
+
+logger = structlog.get_logger("data_export")
+
+router = APIRouter(prefix="/v1/account", tags=["Account"])
+
+# Maximum audit log rows returned inline (GDPR Art. 12(3): respond within one month)
+_AUDIT_LOG_LIMIT = 100
+
+
+def _serialize(val: Any) -> Any:
+    """Convert non-JSON-serialisable objects (UUID, datetime) to strings."""
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):  # datetime
+        return val.isoformat()
+    return str(val)
+
+
+def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
+    """Collect all personal data for *user_id* and return a scrubbed dict.
+
+    Secrets (mfa_secret, mfa_secret_ciphertext, refresh_token_hash)
+    are explicitly excluded from every query.
+    """
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid user identifier")
+
+    # -------------------------------------------------------------------------
+    # 1. User account — exclude mfa_secret*, token_version
+    # -------------------------------------------------------------------------
+    user: Optional[UserModel] = db.get(UserModel, user_uuid)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    account_data: Dict[str, Any] = {
+        "id": _serialize(user.id),
+        "email": user.email,
+        "status": user.status,
+        "is_sysadmin": user.is_sysadmin,
+        "created_at": _serialize(user.created_at),
+        "updated_at": _serialize(user.updated_at),
+        "last_login_at": _serialize(user.last_login_at),
+    }
+
+    # -------------------------------------------------------------------------
+    # 2. Memberships with role names (two separate queries for easy mocking)
+    # -------------------------------------------------------------------------
+    membership_rows = db.query(MembershipModel).filter(MembershipModel.user_id == user_uuid).all()
+    memberships: List[Dict[str, Any]] = []
+    for m in membership_rows:
+        role = db.get(RoleModel, m.role_id)
+        role_name = role.name if role else str(m.role_id)
+        memberships.append(
+            {
+                "tenant_id": _serialize(m.tenant_id),
+                "role": role_name,
+                "is_active": m.is_active,
+                "created_at": _serialize(m.created_at),
+            }
+        )
+
+    # -------------------------------------------------------------------------
+    # 3. Sessions metadata — exclude refresh_token_hash
+    # -------------------------------------------------------------------------
+    sessions_rows = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == user_uuid)
+        .order_by(SessionModel.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    sessions: List[Dict[str, Any]] = []
+    for s in sessions_rows:
+        sessions.append(
+            {
+                "id": _serialize(s.id),
+                "created_at": _serialize(s.created_at),
+                "last_used_at": _serialize(s.last_used_at),
+                "expires_at": _serialize(s.expires_at),
+                "is_revoked": s.is_revoked,
+                "user_agent": s.user_agent,
+                "ip_address": s.ip_address,
+            }
+        )
+
+    # -------------------------------------------------------------------------
+    # 4. MFA status — enrolled yes/no + recovery codes count only; no secrets
+    # -------------------------------------------------------------------------
+    mfa_enrolled = bool(user.mfa_secret or user.mfa_secret_ciphertext)
+    recovery_code_count = (
+        db.query(MFARecoveryCodeModel)
+        .filter(
+            MFARecoveryCodeModel.user_id == user_uuid,
+            MFARecoveryCodeModel.used_at.is_(None),
+        )
+        .count()
+    )
+    mfa_data: Dict[str, Any] = {
+        "enrolled": mfa_enrolled,
+        "unused_recovery_codes": recovery_code_count,
+    }
+
+    # -------------------------------------------------------------------------
+    # 5. tool_leads rows — keyed on user email, raw SQL (no ORM model)
+    # -------------------------------------------------------------------------
+    tool_leads: List[Dict[str, Any]] = []
+    try:
+        rows = (
+            db.execute(
+                text(
+                    "SELECT email, domain, first_tool_used, access_count, created_at, verified_at "
+                    "FROM tool_leads WHERE LOWER(email) = LOWER(:email)"
+                ),
+                {"email": user.email},
+            )
+            .mappings()
+            .all()
+        )
+        for row in rows:
+            tool_leads.append(
+                {
+                    "email": row["email"],
+                    "domain": row["domain"],
+                    "first_tool_used": row["first_tool_used"],
+                    "access_count": row["access_count"],
+                    "created_at": _serialize(row["created_at"]),
+                    "verified_at": _serialize(row["verified_at"]),
+                }
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Table may not exist in all environments (e.g. SQLite test DB without migration)
+        logger.debug("data_export_tool_leads_unavailable", error=str(exc))
+
+    # -------------------------------------------------------------------------
+    # 6. Supplier-scoped rows
+    # -------------------------------------------------------------------------
+    supplier_facilities = [
+        {
+            "id": _serialize(f.id),
+            "tenant_id": _serialize(f.tenant_id),
+            "name": f.name,
+            "street": f.street,
+            "city": f.city,
+            "state": f.state,
+            "postal_code": f.postal_code,
+            "fda_registration_number": f.fda_registration_number,
+            "roles": f.roles,
+            "created_at": _serialize(f.created_at),
+            "updated_at": _serialize(f.updated_at),
+        }
+        for f in db.query(SupplierFacilityModel).filter(SupplierFacilityModel.supplier_user_id == user_uuid).all()
+    ]
+
+    supplier_traceability_lots = [
+        {
+            "id": _serialize(tl.id),
+            "tenant_id": _serialize(tl.tenant_id),
+            "facility_id": _serialize(tl.facility_id),
+            "tlc_code": tl.tlc_code,
+            "product_description": tl.product_description,
+            "status": tl.status,
+            "created_at": _serialize(tl.created_at),
+            "updated_at": _serialize(tl.updated_at),
+"""Supplier Facilities sub-router — Facilities CRUD, FTL categories, required CTEs, CTE events, TLCs.
+
+Split from supplier_onboarding_routes.py for maintainability.
+All shared models, helpers, and constants are imported from the original module.
+"""
+
+from __future__ import annotations
+
+import uuid as uuid_module
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from shared.pagination import PaginationParams
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
+
+from .database import get_session
+from .dependencies import get_current_user
+from .models import TenantContext
+from .sqlalchemy_models import (
+    SupplierCTEEventModel,
+    SupplierFacilityFTLCategoryModel,
+    SupplierFacilityModel,
+    SupplierTraceabilityLotModel,
+    UserModel,
+)
+from .supplier_cte_service import _persist_supplier_cte_event
+from .supplier_graph_sync import supplier_graph_sync
+from .supplier_onboarding_routes import (
+    FTL_CATEGORY_CATALOG,
+    FTL_CATEGORY_LOOKUP,
+    FacilityFTLScopingRequest,
+    FacilityFTLScopingResponse,
+    SupplierCTEEventCreateRequest,
+    SupplierCTEEventResponse,
+    SupplierFacilityCreateRequest,
+    SupplierFacilityResponse,
+    SupplierTLCResponse,
+    SupplierTLCUpsertRequest,
+    _derive_required_ctes,
+    _get_supplier_facility_or_404,
+    _iso_utc,
+)
+
+router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
+
+
+@router.get("/ftl-categories", response_model=dict[str, list[dict[str, Any]]])
+async def get_ftl_categories(
+    current_user: UserModel = Depends(get_current_user),
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the FTL category catalog. Requires authentication."""
+    return {"categories": FTL_CATEGORY_CATALOG}
+
+
+@router.get("/facilities", response_model=dict[str, Any])
+async def list_supplier_facilities(
+    pagination: PaginationParams = Depends(),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+):
+    """List all facilities belonging to the current supplier user."""
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    base_filter = [
+        SupplierFacilityModel.tenant_id == tenant_id,
+        SupplierFacilityModel.supplier_user_id == current_user.id,
+    ]
+
+    total = db.execute(select(func.count()).select_from(SupplierFacilityModel).where(*base_filter)).scalar()
+
+    rows = db.scalars(
+        select(SupplierFacilityModel)
+        .where(*base_filter)
+        .order_by(SupplierFacilityModel.created_at.desc())
+        .offset(pagination.skip)
+        .limit(pagination.limit)
+    ).all()
+
+    items = [
+        SupplierFacilityResponse(
+            id=str(f.id),
+            name=f.name,
+            street=f.street,
+            city=f.city,
+            state=f.state,
+            postal_code=f.postal_code,
+            fda_registration_number=f.fda_registration_number,
+            roles=f.roles or [],
+        )
+        for f in rows
+    ]
+    return {"items": items, "total": total, "skip": pagination.skip, "limit": pagination.limit}
+
+
+@router.post("/facilities", response_model=SupplierFacilityResponse)
+async def create_supplier_facility(
+    request: SupplierFacilityCreateRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierFacilityResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    facility = SupplierFacilityModel(
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        name=request.name.strip(),
+        street=request.street.strip(),
+        city=request.city.strip(),
+        state=request.state.strip(),
+        postal_code=request.postal_code.strip(),
+        fda_registration_number=(request.fda_registration_number.strip() if request.fda_registration_number else None),
+        roles=[role.strip() for role in request.roles if role.strip()],
+    )
+    db.add(facility)
+    db.commit()
+    db.refresh(facility)
+
+    return SupplierFacilityResponse(
+        id=str(facility.id),
+        name=facility.name,
+        street=facility.street,
+        city=facility.city,
+        state=facility.state,
+        postal_code=facility.postal_code,
+        fda_registration_number=facility.fda_registration_number,
+        roles=facility.roles or [],
+    )
+
+
+@router.put("/facilities/{facility_id}/ftl-categories", response_model=FacilityFTLScopingResponse)
+async def set_facility_ftl_categories(
+    facility_id: str,
+    request: FacilityFTLScopingRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> FacilityFTLScopingResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    facility = _get_supplier_facility_or_404(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=facility_uuid,
+    )
+
+    categories: list[dict[str, Any]] = []
+    for category_id in request.category_ids:
+        normalized_id = str(category_id)
+        category = FTL_CATEGORY_LOOKUP.get(normalized_id)
+        if category is None:
+            raise HTTPException(status_code=400, detail=f"Unknown FTL category id: {normalized_id}")
+        categories.append(category)
+
+    db.execute(
+        delete(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+        )
+    )
+
+    for category in categories:
+        db.add(
+            SupplierFacilityFTLCategoryModel(
+                tenant_id=tenant_id,
+                facility_id=facility_uuid,
+                category_id=category["id"],
+                category_name=category["name"],
+                required_ctes=category["ctes"],
+            )
+        )
+
+    db.commit()
+
+    supplier_graph_sync.record_facility_ftl_scoping(
+        tenant_id=str(tenant_id),
+        facility_id=str(facility.id),
+        facility_name=facility.name,
+        supplier_user_id=str(current_user.id),
+        supplier_email=current_user.email,
+        street=facility.street,
+        city=facility.city,
+        state=facility.state,
+        postal_code=facility.postal_code,
+        fda_registration_number=facility.fda_registration_number,
+        roles=facility.roles or [],
+        categories=categories,
+    )
+
+    return FacilityFTLScopingResponse(
+        facility_id=str(facility.id),
+        categories=categories,
+        required_ctes=_derive_required_ctes(categories),
+        source="postgres",
+    )
+
+
+@router.get("/facilities/{facility_id}/required-ctes", response_model=FacilityFTLScopingResponse)
+async def get_required_ctes(
+    facility_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> FacilityFTLScopingResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    facility = _get_supplier_facility_or_404(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=facility_uuid,
+    )
+

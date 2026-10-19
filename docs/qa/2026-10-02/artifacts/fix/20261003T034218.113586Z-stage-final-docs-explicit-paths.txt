@@ -1,0 +1,121 @@
+UTC: 2026-10-03T03:42:18.113586+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import subprocess,json; qa="docs/qa/2026-10-02/"; paths=subprocess.check_output(["git","ls-files","--others","--exclude-standard"],text=True).splitlines(); paths.append(qa+"SUMMARY.md"); manifest=qa+"artifacts/fix/final-docs-staging-manifest.json"; paths.append(manifest); paths=sorted(set(paths));
+for p in paths:
+ assert p in {qa+"FIXES.md",qa+"FIX-SESSION-LOG.md",qa+"SUMMARY.md"} or p.startswith(qa+"artifacts/fix/") or p.startswith(qa+"artifacts/browser/"); assert Path(p).name not in {"AGENTS.md","CLAUDE.md"}; assert not Path(p).name.startswith(".env"); assert not any(x in Path(p).parts for x in ("node_modules","coverage",".next","__pycache__"))
+Path(manifest).write_text(json.dumps({"explicit_git_add_paths":paths},indent=2)+"\n"); subprocess.run(["git","add","--",*paths],check=True); print("Explicit paths staged",len(paths)); print(subprocess.check_output(["git","diff","--cached","--shortstat"],text=True)); check=subprocess.run(["git","diff","--cached","--check"],text=True,capture_output=True); print("cached_diff_check_exit",check.returncode); Path("/private/tmp/regengine-fix-cached-diff-check.txt").write_text(check.stdout+check.stderr); print((check.stdout+check.stderr)[-6000:]); raise SystemExit(check.returncode)'
+Exit: 2
+Duration: 0.69s
+Timeout: False
+
+warning: in the working copy of 'docs/qa/2026-10-02/artifacts/fix/20261003T031544.406432Z-frontend-fe001-build.txt', CRLF will be replaced by LF the next time Git touches it
+Explicit paths staged 380
+ 380 files changed, 86252 insertions(+)
+
+cached_diff_check_exit 2
+261003T032708.261182Z-gate-final-product-diff.txt:23: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:42: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:87: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:119: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:121: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:124: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:144: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:146: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:149: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:150: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:155: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:162: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:168: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:176: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:257: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032708.261182Z-gate-final-product-diff.txt:258: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:14: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:24: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:64: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:76: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:79: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:128: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:129: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:152: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:158: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:166: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:179: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:180: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:190: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:191: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:201: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:202: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:236: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:237: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:240: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:241: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:257: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:258: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:262: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:263: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:283: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:315: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:316: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:334: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:342: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:343: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:349: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:354: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:377: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:380: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.306781Z-gate-final-test-diff.txt:381: trailing whitespace.
++
+docs/qa/2026-10-02/artifacts/fix/20261003T032725.487335Z-final-mypy-duplicate-baseline.txt:7: new blank line at EOF.
+docs/qa/2026-10-02/artifacts/fix/20261003T032730.855560Z-gate-final-diff-check.txt:7: new blank line at EOF.
+docs/qa/2026-10-02/artifacts/fix/20261003T032823.570537Z-gate-summary-draft.txt:14: trailing whitespace.
++

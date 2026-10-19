@@ -116,7 +116,7 @@ class _CanonicalSession:
 
     def execute(self, stmt, params=None):
         sql = str(getattr(stmt, "text", stmt))
-        if "LEFT JOIN fsma.traceability_events" in sql:
+        if "LEFT JOIN te" in sql:
             return _Result(self.chain_rows)
         if "COUNT(*)" in sql and "traceability_events" in sql:
             return _Result([(self.event_count,)])
@@ -135,11 +135,11 @@ class _LegacySession:
 
     def execute(self, stmt, params=None):
         sql = str(getattr(stmt, "text", stmt))
-        if "LEFT JOIN fsma.cte_events" in sql and "ORDER BY hc.sequence_num" in sql:
+        if "FROM fsma.hash_chain hc" in sql and "ORDER BY hc.sequence_num" in sql:
             return _Result(self.chain_rows)
         if "COUNT(*)" in sql and "validation_status != 'rejected'" in sql:
             return _Result([(0,)])  # canonical-only: zero cte_events rows
-        if "LEFT JOIN fsma.hash_chain" in sql and "hc.id IS NULL" in sql:
+        if "NOT EXISTS" in sql and "FROM fsma.hash_chain hc" in sql:
             return _Result([])
         return _Result([])
 

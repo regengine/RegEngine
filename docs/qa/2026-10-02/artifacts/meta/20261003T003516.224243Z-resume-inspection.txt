@@ -1,0 +1,624 @@
+UTC: 2026-10-03T00:35:16.224243+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'date -u; cat frontend/AGENTS.md; cat .claude/skills/jev-sidecar/SKILL.md; sed -n "1,210p" conftest.py; sed -n "1,200p" frontend/playwright.config.ts; sed -n "1,180p" frontend/vitest.config.mts; command -v uv; command -v npx; command -v python3; command -v node; for p in .venv/bin/python venv/bin/python /Users/sellers/Projects/RegEngine/repo/.venv/bin/python frontend/node_modules/.bin/next; do test ! -e "$p" || ls -ld "$p"; done'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Sat Oct  3 00:35:16 UTC 2026
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+---
+name: jev-sidecar
+description: >
+  Consult TypeSafe Jev as a second opinion while answering the user's requests
+  in RegEngine. Use whenever a request, or a step in answering it, contains a
+  judgment Jev can make: which of these (FSMA 204 CTE of a file, canonical field
+  of a CSV header, which option fits a reviewer's ask), is this true (is this CI
+  failure a real regression, does this finding describe reachable behavior, does
+  this header row carry a lot code), or how much (severity, likelihood, risk).
+  Runs scripts/jev_ask.py and reports Jev's answer and confidence next to your own.
+---
+
+# Jev sidecar
+
+Ask Jev next to your own reasoning, then show both. Jev is a second opinion
+with a calibrated confidence. It never replaces verified facts.
+
+## When to ask
+
+Ask on every request that contains one of these judgments:
+
+| Judgment in the request | Question kind | RegEngine examples |
+| --- | --- | --- |
+| Which of these | `--choice` | Which CTE a CSV records. Which canonical field a header is. What made a CI job fail. Which of two fixes matches a reviewer's ask. |
+| Is this true | `--noul` | Does this review finding describe code a request can reach? Does the header row include a traceability lot code column? |
+| How much | `--score` | Severity of a finding (low to critical). How likely a supplier file is rejected as-is. |
+
+Do not ask when:
+
+- the request is mechanical (push, rename, run the tests, open a PR);
+- code or a command answers it exactly: grep, parse, test, count, compare
+  dates, calculate. Jev is unreliable at counting, arithmetic and date order.
+  Do those in code and ask Jev only for the semantic part;
+- the only state that could answer it is something from **Never send** below;
+- you run unattended (a CI job, a scheduled audit, a review bot) with a fixed
+  output format and no person's request to answer.
+
+## Never send
+
+The state leaves this machine for `api.typesafe.ai`. Never put these in it:
+
+- secrets: API keys, tokens, passwords, connection strings, `.env` contents,
+  Railway or cloud variable values, signed URLs;
+- customer data: values from real uploads (lot codes, GLNs, quantities, dates,
+  business names), tenant ids, names, emails, phone numbers, addresses;
+- the user's messages copied word for word. Restate the decision instead.
+
+Header names, synthetic examples, code, and log lines with secrets removed are
+fine. Before sending a log excerpt, check it for tokens and connection strings.
+
+## How to ask
+
+1. Check the key once per session without printing it:
+   `test -n "$TYPESAFE_API_KEY" && echo set || echo unset`.
+   If it is unset, say once in your reply: "Jev sidecar is off in this session:
+   `TYPESAFE_API_KEY` is not set in the environment." Then continue without
+   Jev and do not ask again in this session.
+2. Build the smallest state that holds what the question needs, as JSON with
+   named fields. Unrelated content lowers accuracy.
+3. Put every question for the request into one call. The questions are
+   evaluated in parallel and billed as one request.
+4. Run it with `venv/bin/python` (the session start hook installs
+   `requirements.lock` there):
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"headers": ["Ship Dte", "Cust Name", "Lot No.", "Qty Shpd"]}' \
+  --choice cte "Which FSMA 204 critical tracking event do rows with these CSV headers record?" \
+    "shipping=the sender records goods leaving its location" \
+    "receiving=the recipient records goods arriving at its location" \
+    "transformation=inputs are combined or processed into new lots" \
+    "unclear=the headers do not identify one event" \
+  --noul has_lot "Does one of the headers name a traceability lot code column?"
+```
+
+```bash
+venv/bin/python scripts/jev_ask.py \
+  --state '{"job": "backend-ci / ingestion", "log_excerpt": "..."}' \
+  --choice cause "What made the job fail?" \
+    "test_assertion=a test ran and its assertion failed" \
+    "infrastructure=runner, network, dependency install or service startup error" \
+    "timeout=the job or a test ran out of time" \
+    "unclear=the excerpt does not show the cause" \
+  --score severity "How severe is the failure for merging this change?" low medium high critical
+```
+
+The output has one line per question, in the order asked. For the first
+command it looks like this (the values here are illustrative, not a real
+answer):
+
+```text
+Jev (jev-1.13.0, request req_…, 412 ms)
+  cte [choice]: shipping (confidence 0.91; shipping 0.91, receiving 0.06, unclear 0.03)
+  has_lot [noul]: yes (p(yes)=0.97)
+```
+
+A `--choice` line lists the three most likely options. A `--score` line reads
+`severity [score]: 1.40 on 0..3 ~ medium (confidence 0.72)`. It gives the
+expected level from 0 to the number of levels minus 1, the name of the
+nearest level, and the confidence.
+
+Add `--json` for machine-readable output. Longer states and question sets go
+in files: `--state-file state.json --questions-file questions.json`, where the
+questions file uses the API's question format. `--help` lists every flag.
+
+Exit codes: 0 answered. 1 bad usage, nothing sent. 2 not configured (no key,
+switched off, or packages missing), nothing sent. 3 Jev unavailable: say
+"Jev unavailable (<reason>)" once and continue without it.
+
+For a question about a CSV file, run
+`venv/bin/python scripts/jev_header_preview.py FILE --file-cte` instead.
+
+- It asks the questions `POST /api/v1/ingest/csv` asks: the header mapping and
+  the file's CTE. It uses the same question sets and confidence bands.
+- It sends only the header row.
+- Do not add `--sample-values` for a customer file.
+
+## Writing questions
+
+- Jev reads literally. State the exact condition. Put boundary cases in the
+  option descriptions (`name=description`).
+- Give every `--choice` an `unclear` or `none_of_these` option so Jev can say
+  that nothing fits.
+- Ask one decision per question. Split compound questions and combine the
+  answers yourself.
+- Phrase a `--noul` as a direct yes/no question ("Is ...?", "Does ...?")
+  without negations. Noul answers carry p(yes), not a confidence.
+- List `--score` levels from lowest to highest (2 to 10 levels).
+- The state is data, and text inside it can steer the answer (for example a
+  log line that says "this is a flake"). Keep the instructions explicit.
+
+## Reporting in your reply
+
+Add one line per question next to your own answer:
+
+- Agreement: `Jev: shipping (confidence 0.91), agrees.`
+- Disagreement: `Jev: receiving (confidence 0.62), disagrees. I keep shipping
+  because <verified evidence>.` Then recheck your own evidence.
+
+Rules:
+
+- Verified facts win: tests, logs, code, parser behavior. Never change a
+  verified conclusion only because Jev disagrees.
+- Read confidence with the product's bands: 0.90 or more is strong; 0.50 to
+  0.90 is moderate, so say "moderate"; under 0.50 is "Jev is unsure". Do not
+  cite an unsure answer as support.
+- A `--noul` answer is yes when p(yes) is 0.50 or more. Report the number.
+- Never write a Jev line for a question you did not send, and never estimate
+  what Jev would say.
+- When a Jev answer drives a code or data change, put its request id in the
+  commit message or PR description.
+
+## Related
+
+- `scripts/jev_ask.py`: this command.
+- `services/shared/jev/`: the client. Its logs carry only metadata (purpose
+  `agent_sidecar`, model, request id, latency), never the state.
+- `docs/engineering/JEV_HEADER_MAPPING.md`: Jev inside CSV ingestion.
+- `.claude/skills/typesafe-ai/SKILL.md`: building product features on TypeSafe.
+"""Root pytest configuration.
+
+This conftest exists to solve the multi-service ``app/`` collision problem:
+the repo has multiple service packages under ``services/<svc>/`` each with an
+``app/`` subpackage. When pytest collects tests across services, only one
+``app`` can live in ``sys.modules`` at a time, so tests from the "other"
+service fail with ``ModuleNotFoundError: No module named 'app.X'``.
+
+The fix: hook into pytest's collection so that immediately before we import a
+test module, we detect which service owns it and (a) invalidate the cached
+``app`` module, (b) reorder ``sys.path`` so that service's directory wins.
+
+This keeps feature code untouched while letting the full test suite collect
+in a single ``pytest`` run.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import re
+import sys
+from contextlib import suppress
+from pathlib import Path
+from types import ModuleType
+from typing import Optional
+
+import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parent
+_SERVICES_DIR = _REPO_ROOT / "services"
+
+# Known services that expose their own top-level ``app/`` package.
+_APP_BEARING_SERVICES = ("admin", "compliance", "graph", "ingestion", "nlp", "scheduler")
+
+# Tests under top-level ``tests/`` that reach into a specific service via
+# bare ``from app.X`` imports. The conftest flips sys.path to the named
+# service before the test module is imported so ``app`` resolves correctly.
+# Keys are path suffixes (as shipped, always POSIX); values are service
+# names from ``_APP_BEARING_SERVICES``.
+_TEST_TO_SERVICE_OVERRIDES = {
+    "tests/billing/test_stripe_billing.py": "ingestion",
+    "tests/billing/test_stripe_webhook_ordering_1196.py": "ingestion",
+    "tests/contract/test_admin_api_contract.py": "admin",
+    "tests/ingestion/test_ingest_url.py": "ingestion",
+    "tests/security/test_audit_integrity.py": "admin",
+    "tests/security/test_strict_ciam_compliance.py": "admin",
+    "tests/test_trace_engine.py": "ingestion",
+    "tests/test_compliance_control_plane_e2e.py": "ingestion",
+    "tests/test_rules_engine.py": "ingestion",
+    "tests/test_rules_engine_unit.py": "ingestion",
+    "tests/graph/test_hierarchy_builder_global_scope.py": "graph",
+}
+_KNOWN_SERVICE_MODULES: dict[str, dict[str, ModuleType]] = {service: {} for service in _APP_BEARING_SERVICES}
+_KNOWN_SHARED_MODULES: dict[str, ModuleType] = {}
+
+
+def _service_from_module_file(module: ModuleType | None) -> Optional[str]:
+    """Infer which service owns an imported ``app`` module."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    if not mod_file:
+        return None
+
+    for service in _APP_BEARING_SERVICES:
+        service_root = str(_SERVICES_DIR / service)
+        if service_root and service_root in mod_file:
+            return service
+    return None
+
+
+def _evict_module(name: str) -> None:
+    """Remove a module and detach any lingering package attribute."""
+    sys.modules.pop(name, None)
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is None or not hasattr(parent, child_name):
+        return
+
+    with suppress(AttributeError):
+        delattr(parent, child_name)
+
+
+def _bind_module(name: str, module: ModuleType) -> None:
+    """Install a cached real module and reattach it to its parent package."""
+    sys.modules[name] = module
+
+    parent_name, _, child_name = name.rpartition(".")
+    if not parent_name:
+        return
+
+    parent = sys.modules.get(parent_name)
+    if parent is not None:
+        setattr(parent, child_name, module)
+
+
+def _remember_real_module(
+    cache: dict[str, ModuleType],
+    name: str,
+    module: ModuleType | None,
+    expected_root: str,
+) -> bool:
+    """Cache real modules so later stub cleanup can restore them."""
+    mod_file = str(getattr(module, "__file__", "") or "")
+    mod_spec = getattr(module, "__spec__", None)
+    if module is None or mod_spec is None:
+        return False
+    if expected_root:
+        try:
+            module_path = Path(mod_file).resolve()
+            expected_path = Path(expected_root).resolve()
+            module_path.relative_to(expected_path)
+        except (OSError, ValueError):
+            return False
+    cache[name] = module
+    return True
+
+
+def _repair_package_links(prefix: str) -> None:
+    """Reattach submodules to their live parent packages."""
+    names = sorted(
+        [name for name in sys.modules if name == prefix or name.startswith(f"{prefix}.")],
+        key=lambda value: value.count("."),
+    )
+    for name in names:
+        if "." not in name:
+            continue
+        parent_name, _, child_name = name.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        child = sys.modules.get(name)
+        if parent is not None and child is not None:
+            setattr(parent, child_name, child)
+
+
+def _service_for_path(path: Path) -> Optional[str]:
+    """Return the service name owning ``path``, or ``None`` if unowned."""
+    try:
+        rel = path.resolve().relative_to(_SERVICES_DIR)
+    except ValueError:
+        rel = None
+
+    if rel is not None:
+        parts = rel.parts
+        if parts and parts[0] in _APP_BEARING_SERVICES:
+            return parts[0]
+
+    # Check top-level tests/* overrides.
+    try:
+        rel_root = path.resolve().relative_to(_REPO_ROOT)
+    except ValueError:
+        return None
+    key = rel_root.as_posix()
+    return _TEST_TO_SERVICE_OVERRIDES.get(key)
+
+
+def _activate_service_for_path(path: Path) -> None:
+    """Flip import context for any test path owned by a service."""
+    service = _service_for_path(path)
+    if service is not None:
+        _switch_to_service(service)
+
+
+def _switch_to_service(service: str) -> None:
+    """Make ``services/<service>/`` the active site for the ``app`` package.
+
+    Python caches imported packages in ``sys.modules``. If ``app`` was
+    imported earlier from a sibling service, subsequent ``from app.X``
+    imports will resolve against that stale package. Evict the cache and
+    reorder ``sys.path`` so the fresh import resolves correctly.
+    """
+    service_dir = _SERVICES_DIR / service
+    service_dir_str = str(service_dir)
+    service_cache = _KNOWN_SERVICE_MODULES.setdefault(service, {})
+    _prepare_service_test_environment(service)
+
+    # Drop any cached bare ``main`` and ``app`` (plus app submodules) so
+    # reimport uses the correct service. Several service-local tests import
+    # ``from main import app`` at module scope, so only evicting ``app.*`` is
+    # not enough during full-suite collection.
+    stale = sorted(
+        [name for name in sys.modules if name == "main" or name == "app" or name.startswith("app.")],
+        key=lambda value: value.count("."),
+        reverse=True,
+    )
+    for name in stale:
+        mod = sys.modules.get(name)
+        owner_service = _service_from_module_file(mod)
+        owner_cache = _KNOWN_SERVICE_MODULES.setdefault(owner_service, {}) if owner_service else None
+        if owner_cache is not None:
+            remembered = _remember_real_module(
+                owner_cache,
+                name,
+                mod,
+                str(_SERVICES_DIR / owner_service),
+            )
+            if remembered and owner_service == service:
+                continue
+
+        cached = service_cache.get(name)
+        if cached is not None:
+            _bind_module(name, cached)
+            continue
+
+        _evict_module(name)
+
+    # Also evict ``shared.*`` entries that resolved from an unknown/stale
+    # location (e.g. loaded before sys.path was correct).  If the module
+
+import { defineConfig, devices } from '@playwright/test';
+
+if (process.env.FORCE_COLOR) {
+    delete process.env.NO_COLOR;
+}
+
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const localBaseURL = 'http://localhost:3001';
+const localJwtSigningKey =
+    process.env.JWT_SIGNING_KEY ||
+    process.env.AUTH_SECRET_KEY ||
+    'playwright-local-jwt-signing-key-2026';
+const localOtpHmacSecret =
+    [REDACTED] ||
+    'playwright-local-otp-hmac-secret-2026-minimum-32-bytes';
+const localTestUserEmail = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
+const localTestPassword = [REDACTED] || 'Trace204!Playwright1';
+const localTestAdminEmail =
+    process.env.TEST_ADMIN_EMAIL || 'playwright-sysadmin@example.com';
+const localTestAdminPassword =
+    [REDACTED] || 'Trace204!Playwright1';
+const localBackendBaseURL = 'http://localhost:8000';
+const localEmailOutboxPath =
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
+    '/tmp/regengine-playwright-email-outbox.jsonl';
+const localSharedDatabaseUrl =
+    process.env.DATABASE_URL || 'postgresql://[REDACTED]@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — local test service
+const localAdminDatabaseUrl =
+    process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
+const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
+
+if (!externalBaseURL) {
+    process.env.REGENGINE_ENV = process.env.REGENGINE_ENV || 'development';
+    process.env.JWT_SIGNING_KEY = localJwtSigningKey;
+    process.env.AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY || localJwtSigningKey;
+    process.env.AUTH_OTP_HMAC_SECRET = [REDACTED];
+    process.env.CSRF_SECRET = [REDACTED] || localJwtSigningKey;
+    process.env.TEST_USER_EMAIL = localTestUserEmail;
+    process.env.TEST_PASSWORD = [REDACTED];
+    process.env.TEST_ADMIN_EMAIL = localTestAdminEmail;
+    process.env.TEST_ADMIN_PASSWORD = [REDACTED];
+    // Playwright local mode owns the backend webServer. Ignore externally
+    // provided service URLs so CI cannot accidentally mutate production.
+    process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
+    process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
+    process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
+    process.env.ENABLE_DB_API_KEYS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
+    process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.DATABASE_URL = localSharedDatabaseUrl;
+    process.env.ADMIN_FALLBACK_SQLITE = localAdminDatabaseUrl;
+    process.env.WEBAUTHN_EXPECTED_ORIGIN =
+        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL;
+    process.env.WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+    process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
+    process.env.ALLOW_INMEMORY_SESSION_STORE =
+        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
+    // Every seeded passwordless user shares one org/tenant (one organization
+    // per email domain), so the suites' combined traffic exceeds the 100/min
+    // per-tenant production default.
+    process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
+    process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
+        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
+}
+
+const forwardedEnv = { ...process.env };
+delete forwardedEnv.NO_COLOR;
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
+ */
+export default defineConfig({
+    testDir: './tests/e2e',
+    globalSetup: './tests/e2e/global-setup.ts',
+    /* The local webServer runs `next dev`, which compiles each route on
+     * first hit. A cold compile of a heavy page (dashboard, settings) can
+     * exceed Playwright's default 30s test / 5s expect timeouts on a slow
+     * runner, flaking auth-flow on unrelated PRs. Assertions still have to
+     * genuinely pass — this only stops first-render latency from failing
+     * the gate. */
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
+    /* Run tests in files in parallel */
+    fullyParallel: true,
+    /* Fail the build on CI if you accidentally left test.only in the source code. */
+    forbidOnly: !!process.env.CI,
+    /* Retry on CI only — retries=1 handles genuine flakiness; backend-down failures
+     * are caught by the preflight health check before tests run, not by retrying. */
+    retries: process.env.CI ? 1 : 0,
+    /* 2 workers in CI — tests are independent, parallelism halves total run time. */
+    workers: process.env.CI ? 1 : externalBaseURL ? undefined : 1,
+    /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+    reporter: 'html',
+    /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+    use: {
+        /* Base URL — localhost is a secure context in Chromium, so Secure
+         * __Host-regengine_session cookies are accepted without local HTTPS.
+         * Override with PLAYWRIGHT_BASE_URL for staging/prod runs. */
+        baseURL: externalBaseURL || localBaseURL,
+
+        /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+        trace: 'on-first-retry',
+    },
+
+    /* Start the Next.js dev server before running tests in CI.
+     * env: explicitly forward secrets so the Next.js middleware can verify
+     * JWTs signed by the Railway admin service. Without this, the child
+     * process may not inherit CI env vars and every authenticated route
+     * redirects to /login?error=session_expired. */
+    webServer: externalBaseURL
+        ? undefined
+        : [
+            {
+                command: 'env -u NO_COLOR bash ../scripts/start-e2e-backend.sh',
+                url: localAdminHealthUrl,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    PORT: '8000',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
+                    REGENGINE_E2E_EMAIL_OUTBOX:
+                        process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
+                    DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
+                    ADMIN_FALLBACK_SQLITE:
+                        process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
+                    WEBAUTHN_EXPECTED_ORIGIN:
+                        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL,
+                    WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || 'localhost',
+                    DISABLE_TASK_WORKER: process.env.DISABLE_TASK_WORKER || 'true',
+                    ALLOW_INMEMORY_SESSION_STORE:
+                        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true',
+                    INVITE_BASE_URL: process.env.INVITE_BASE_URL || localBaseURL,
+                },
+            },
+            {
+                command: 'env -u NO_COLOR npm run dev -- -p 3001',
+                url: localBaseURL,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    // Ensure JWT keys reach the dev server for middleware verification.
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    CSRF_SECRET: [REDACTED] || localJwtSigningKey,
+                    TEST_USER_EMAIL: process.env.TEST_USER_EMAIL || localTestUserEmail,
+                    TEST_PASSWORD: [REDACTED] || localTestPassword,
+                    TEST_ADMIN_EMAIL: process.env.TEST_ADMIN_EMAIL || localTestAdminEmail,
+                    TEST_ADMIN_PASSWORD:
+                        [REDACTED] || localTestAdminPassword,
+                    ADMIN_SERVICE_URL: localBackendBaseURL,
+                    INGESTION_SERVICE_URL: localBackendBaseURL,
+                    COMPLIANCE_SERVICE_URL: localBackendBaseURL,
+                    // Supabase config: intentionally omitted for JWT-only E2E mode.
+                    NEXT_PUBLIC_SUPABASE_URL: '',
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+                    NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES:
+                        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true',
+                },
+            },
+        ],
+
+    /* Configure projects for major browsers */
+    projects: [
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'] },
+        },
+    ],
+});
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+
+export default defineConfig({
+    plugins: [react()],
+    test: {
+        environment: 'jsdom',
+        globals: true,
+        setupFiles: ['./src/__tests__/setup.ts'],
+        include: ['src/**/*.{test,spec}.{ts,tsx}'],
+        coverage: {
+            provider: 'v8',
+            reporter: ['text', 'json', 'html', 'lcov'],
+            exclude: [
+                'node_modules/',
+                'src/__tests__/',
+                'src/test/',
+                '**/*.d.ts',
+                '**/*.config.*',
+                '**/types/**',
+                '.next/**',
+                'out/**',
+            ],
+            // Issue #2845: these were 20 while real coverage sat in the
+            // 59-69% range, so the gate had ~40 points of slack and could not
+            // have caught any realistic regression. `npm run test:coverage`
+            // now runs in CI (frontend-ci.yml), so the numbers finally matter.
+            //
+            // Each floor is set ~6 points below the value measured on
+            // 2026-08-27 — enough headroom that ordinary churn does not trip
+            // the build, tight enough that a meaningful drop does:
+            //
+            //   statements 66.56%  branches 59.68%
+            //   functions  59.40%  lines    68.75%
+            //
+            // Raise these as coverage improves. Lowering one to make a build
+            // pass reinstates exactly the false assurance this replaced.
+            thresholds: {
+                statements: 60,
+                branches: 53,
+                functions: 53,
+                lines: 62,
+            },
+        },
+        testTimeout: 10000,
+    },
+    resolve: {
+        alias: {
+            '@': path.resolve(__dirname, './src'),
+        },
+    },
+});
+/Users/sellers/.local/bin/uv
+/opt/homebrew/bin/npx
+/opt/homebrew/bin/python3
+/opt/homebrew/bin/node
+lrwxr-xr-x@ 1 sellers  staff  84 Jul 29 20:36 /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -> /Users/sellers/.local/share/uv/python/cpython-3.11-macos-aarch64-none/bin/python3.11

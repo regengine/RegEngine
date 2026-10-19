@@ -1,0 +1,16 @@
+UTC: 2026-10-03T03:27:25.486830+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat docs/qa/2026-10-02/artifacts/backend/20261003T004115.045419Z-typecheck-focus.txt
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+UTC: 2026-10-03T00:41:15.045419+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: mypy --follow-imports=skip --ignore-missing-imports --cache-dir /private/tmp/regengine-qa-mypy-cache services/ingestion/app/webhook_models.py services/ingestion/app/csv_templates.py services/shared/request_safety.py
+Exit: 1
+Duration: 1.00s
+Timeout: False
+
+services/ingestion/app/csv_templates.py:784: error: Argument 1 to "len" has incompatible type "Sequence[str] | None"; expected "Sized"  [arg-type]
+Found 1 error in 1 file (checked 3 source files)

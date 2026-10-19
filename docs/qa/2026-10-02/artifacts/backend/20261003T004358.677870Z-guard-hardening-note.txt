@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:43:58.677870+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'print("Extended backend_pytest.py guard to SQLAlchemy Engine.connect and native DB driver entrypoints. Initial broad ingestion loaded remediation conftest, which performs a localhost scratch Postgres availability probe at collection; it returned unavailable and skipped50 tests. No live database success or mutation occurred. Future broad runs exclude remediation and deny driver entrypoints before collection.")'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+Extended backend_pytest.py guard to SQLAlchemy Engine.connect and native DB driver entrypoints. Initial broad ingestion loaded remediation conftest, which performs a localhost scratch Postgres availability probe at collection; it returned unavailable and skipped50 tests. No live database success or mutation occurred. Future broad runs exclude remediation and deny driver entrypoints before collection.

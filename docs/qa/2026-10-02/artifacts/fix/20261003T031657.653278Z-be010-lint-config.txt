@@ -1,0 +1,15 @@
+UTC: 2026-10-03T03:16:57.653278+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'ruff|mypy|check-untyped|python_version' pyproject.toml
+Exit: 0
+Duration: 0.01s
+Timeout: False
+
+15:# package metadata and tool configuration ([tool.ruff], [tool.mypy],
+19:[tool.ruff]
+24:[tool.ruff.lint]
+26:# (see backend-ci.yml) runs ruff with an explicit narrow select
+30:[tool.ruff.lint.isort]
+34:[tool.mypy]
+35:python_version = "3.11"
+38:# Non-blocking: mypy is available for local use but is not yet a CI gate.

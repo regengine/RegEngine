@@ -1,0 +1,65 @@
+UTC: 2026-10-03T03:22:03.388186+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity --runxfail --tb=short --no-cov
+Exit: 1
+Duration: 1.73s
+Timeout: False
+
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_______________ test_csv_rejects_nonfinite_output_quantity[inf] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:141: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+_____________ test_csv_rejects_nonfinite_output_quantity[Infinity] _____________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:141: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+______________ test_csv_rejects_nonfinite_output_quantity[1e309] _______________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:141: in test_csv_rejects_nonfinite_output_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+________________ test_csv_rejects_nonfinite_input_quantity[nan] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:154: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+________________ test_csv_rejects_nonfinite_input_quantity[inf] ________________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:154: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+_______________ test_csv_rejects_nonfinite_input_quantity[1e309] _______________
+services/ingestion/tests/test_qa_sweep_20261002_contract.py:154: in test_csv_rejects_nonfinite_input_quantity
+    assert response.status_code == 400, f"status={response.status_code}; captured={len(captured)}"
+E   AssertionError: status=200; captured=1
+E   assert 200 == 400
+E    +  where 200 = <Response [200 OK]>.status_code
+=========================== short test summary info ============================
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[inf] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[Infinity] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_output_quantity[1e309] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[nan] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[inf] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+FAILED services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_csv_rejects_nonfinite_input_quantity[1e309] - AssertionError: status=200; captured=1
+assert 200 == 400
+ +  where 200 = <Response [200 OK]>.status_code
+6 failed in 0.99s

@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:13:33.091545+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import os,subprocess; print(os.getcwd()); [subprocess.run(c,check=False) for c in [["git","branch","--show-current"],["git","remote","get-url","origin"],["git","worktree","list"],["git","status","--short"]]]'
+Exit: 0
+Duration: 0.10s
+Timeout: False
+
+qa/2026-10-02-fixes
+https://github.com/regengine/RegEngine.git
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine b5dd065e [qa/2026-10-02-fixes]
+?? docs/qa/2026-10-02/FIX-SESSION-LOG.md
+?? docs/qa/2026-10-02/artifacts/fix/
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine

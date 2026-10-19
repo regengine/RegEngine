@@ -252,7 +252,7 @@ jobs:
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
 
-      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape)
+      - name: Semgrep repo-local rules gate (tenant-trust + FDA export + user shape + webhook signature)
         run: |
           # No grandfathered tenant-trust findings. Tenant authority must come
           # from authenticated principal state; see services/shared/tenant_context.py.
@@ -265,11 +265,28 @@ jobs:
           semgrep --config=.semgrep/tenant-trust.yaml \
             --config=.semgrep.yml \
             --config=.semgrep/current-user-shape.yaml \
+            --config=.semgrep/webhook-signature.yaml \
             --error \
             --json --output semgrep-tenant-trust.json \
             .
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Tenant-scope query gate (Pattern 3, fails on new violations)
+        # Required check. The scanner flags Cypher MATCH/MERGE on tenant
+        # data and SQL on fsma tenant tables without a tenant predicate,
+        # plus the $tenant_id IS NULL OR fail-open shim. Sites that are
+        # scoped at runtime (dynamic WHERE builders, global-DB reads,
+        # control-plane ops) are baselined in
+        # .semgrep/tenant-scope-allowlist.yml with a reason each; anything
+        # else fails the build. The semgrep rules in
+        # .semgrep/tenant-query-scope.yaml cover the same ground for
+        # editors and ad-hoc runs; they stay out of the blocking gate
+        # until the baselined sites are fixed in product code, because
+        # semgrep cannot consume the allowlist and would fail on them.
+        run: |
+          python -m pip install "pyyaml==6.0.3"
+          python3 scripts/security/scan_tenant_scope.py
 
       - name: Upload EPIC-A Semgrep results
         if: always()
@@ -642,7 +659,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
 
       - name: Generate SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
         with:
           path: .
           artifact-name: sbom.spdx.json
@@ -719,9 +736,9 @@ jobs:
   # Issue #2814: the in-job "validate secrets" step reported success when the
   # audit secrets were absent, so an unconfigured run was a green check rather
   # than a skip. `secrets` cannot be read from a job-level `if:`, so the check
-  # is hoisted into a preflight job whose output gates the real one — the
-  # Scheduled/requested checks fail preflight when unconfigured; PR/push runs
-  # do not make authenticated calls to a deployed environment.
+  # is hoisted into a preflight job whose output gates the real one — scheduled
+  # runs skip with a warning when unconfigured; requested runs fail. PR/push
+  # runs do not make authenticated calls to a deployed environment.
   audit-integrity-preflight:
     name: Audit chain preflight (secrets configured?)
     runs-on: ubuntu-latest
@@ -733,6 +750,7 @@ jobs:
       - name: Check audit chain secrets
         id: check
         env:
+          EVENT_NAME: ${{ github.event_name }}
           AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
           AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
         run: |
@@ -740,8 +758,13 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::error::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are required for the scheduled or requested audit chain check."
-            exit 1
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo "::warning::Audit chain check skipped because AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are not configured."
+              exit 0
+            else
+              echo "::error::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are required for the requested audit chain check."
+              exit 1
+            fi
           fi
 
   audit-integrity:

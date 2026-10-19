@@ -1,0 +1,378 @@
+UTC: 2026-10-03T00:39:10.094651+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; spans={"services/shared/request_safety.py":[(1,110)],"services/ingestion/app/supplier_portal.py":[(480,530),(635,665),(880,925),(945,990)],"services/ingestion/app/proof_verify_router.py":[(735,765)],"services/shared/fda_export_service.py":[(235,310)],"tests/qa_sweep_20261002/test_portal_export_disclosure.py":[(1,200)]}; [(print("FILE",p),print("\n".join(f"{i}: {line}" for i,line in enumerate(Path(p).read_text().splitlines(),1) if any(a<=i<=b for a,b in ranges)))) for p,ranges in spans.items() if Path(p).exists()]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+FILE services/shared/request_safety.py
+1: """
+2: API-01 / API-02: Request body size limiting and global request timeout.
+3: 
+4: Middleware that protects services from oversized payloads and runaway
+5: requests.  Wire these into each service's ``main.py`` via
+6: ``app.add_middleware(...)``.
+7: 
+8: Usage::
+9: 
+10:     from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+11: 
+12:     app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+13:     app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+14: """
+15: 
+16: from __future__ import annotations
+17: 
+18: import asyncio
+19: import logging
+20: from typing import Optional
+21: 
+22: from starlette.middleware.base import BaseHTTPMiddleware
+23: from starlette.requests import Request
+24: from starlette.responses import JSONResponse
+25: 
+26: logger = logging.getLogger(__name__)
+27: 
+28: _EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+29: 
+30: 
+31: # ---------------------------------------------------------------------------
+32: # API-01: Request body size limiter
+33: # ---------------------------------------------------------------------------
+34: 
+35: 
+36: class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+37:     """Reject requests whose Content-Length exceeds *max_bytes*.
+38: 
+39:     For chunked/streaming uploads where Content-Length is absent the
+40:     middleware allows the request through (Starlette's own body reader
+41:     will enforce memory limits downstream).
+42:     """
+43: 
+44:     def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+45:         super().__init__(app)
+46:         self.max_bytes = max_bytes
+47: 
+48:     async def dispatch(self, request: Request, call_next):
+49:         if request.url.path in _EXEMPT_PATHS:
+50:             return await call_next(request)
+51: 
+52:         content_length = request.headers.get("content-length")
+53:         if content_length is not None:
+54:             try:
+55:                 length = int(content_length)
+56:             except ValueError:
+57:                 return JSONResponse(
+58:                     status_code=400,
+59:                     content={
+60:                         "error": "invalid_content_length",
+61:                         "detail": "Content-Length header is not a valid integer.",
+62:                     },
+63:                 )
+64:             if length > self.max_bytes:
+65:                 mb = self.max_bytes / (1024 * 1024)
+66:                 # NOTE: this is the stdlib logger, not structlog — kwargs
+67:                 # here raised TypeError, turning every oversized request
+68:                 # into a 500 instead of the intended 413 (#2503).
+69:                 logger.warning(
+70:                     "request_too_large: content_length=%s max_bytes=%s path=%s",
+71:                     length,
+72:                     self.max_bytes,
+73:                     request.url.path,
+74:                 )
+75:                 return JSONResponse(
+76:                     status_code=413,
+77:                     content={
+78:                         "error": "payload_too_large",
+79:                         "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+80:                     },
+81:                 )
+82:         return await call_next(request)
+83: 
+84: 
+85: # ---------------------------------------------------------------------------
+86: # API-02: Global request timeout
+87: # ---------------------------------------------------------------------------
+88: 
+89: 
+90: class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+91:     """Cancel request processing after *timeout_seconds*.
+92: 
+93:     Returns 504 Gateway Timeout if the handler doesn't complete in time.
+94:     Health/metrics endpoints are exempt.
+95:     """
+96: 
+97:     def __init__(self, app, timeout_seconds: float = 120.0):
+98:         super().__init__(app)
+99:         self.timeout_seconds = timeout_seconds
+100: 
+101:     async def dispatch(self, request: Request, call_next):
+102:         if request.url.path in _EXEMPT_PATHS:
+103:             return await call_next(request)
+104: 
+105:         try:
+106:             return await asyncio.wait_for(
+107:                 call_next(request),
+108:                 timeout=self.timeout_seconds,
+109:             )
+110:         except asyncio.TimeoutError:
+FILE services/ingestion/app/supplier_portal.py
+480:     temperature_celsius: Optional[float] = Field(None, description="Temperature at shipping (°C)")
+481:     notes: Optional[str] = Field(None, description="Additional notes")
+482: 
+483: 
+484: class SubmissionResult(BaseModel):
+485:     """Result of a supplier submission."""
+486: 
+487:     status: str  # "accepted" or "error"
+488:     event_id: Optional[str] = None
+489:     sha256_hash: Optional[str] = None
+490:     message: str
+491:     supplier_name: str
+492:     submitted_at: str
+493: 
+494: 
+495: class SupplierPreflightResult(BaseModel):
+496:     """Validate supplier-submitted data before committing it."""
+497: 
+498:     status: str
+499:     message: str
+500:     supplier_name: str
+501:     result: SandboxResponse
+502:     readiness: ReadinessSummary
+503:     commit_gate: CommitGateDecision
+504: 
+505: 
+506: def _submission_event_dict(portal_id: str, link: dict, submission: SupplierSubmission) -> dict:
+507:     kdes: dict = {
+508:         "ship_date": submission.ship_date,
+509:         "ship_from_location": submission.ship_from_location,
+510:         "ship_to_location": submission.ship_to_location,
+511:         "supplier_name": link["supplier_name"],
+512:         "submission_source": "supplier_portal",
+513:         "portal_id": portal_id,
+514:     }
+515:     if submission.carrier_name:
+516:         kdes["carrier_name"] = submission.carrier_name
+517:     if submission.po_number:
+518:         kdes["po_number"] = submission.po_number
+519:     kdes["reference_document"] = submission.po_number or f"supplier-portal:{portal_id}"
+520:     kdes["tlc_source_reference"] = link["supplier_name"]
+521:     kdes["ftl_covered"] = True
+522:     if submission.temperature_celsius is not None:
+523:         kdes["temperature_celsius"] = submission.temperature_celsius
+524:     if submission.notes:
+525:         kdes["notes"] = submission.notes
+526: 
+527:     return {
+528:         "cte_type": "shipping",
+529:         "traceability_lot_code": submission.traceability_lot_code,
+530:         "product_description": submission.product_description,
+635:     )
+636: 
+637: 
+638: @router.post(
+639:     "/links",
+640:     response_model=PortalLinkResponse,
+641:     summary="Create a supplier portal link",
+642:     description="Generate a unique, expiring link that a supplier can use to submit shipping data.",
+643: )
+644: async def create_portal_link(
+645:     request: CreatePortalLinkRequest,
+646:     principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+647:     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+648: ) -> PortalLinkResponse:
+649:     """Create a supplier portal link."""
+650:     tenant_id = resolve_principal_tenant_id(request.tenant_id, x_tenant_id, principal.tenant_id)
+651:     portal_id = secrets.token_urlsafe(16)
+652:     now = datetime.now(timezone.utc)
+653:     expires_at = (now + timedelta(days=request.expires_days)).isoformat()
+654: 
+655:     link_data = {
+656:         "tenant_id": tenant_id,
+657:         "supplier_name": request.supplier_name,
+658:         "supplier_email": request.supplier_email,
+659:         "allowed_cte_types": request.allowed_cte_types,
+660:         "integration_profile_id": request.integration_profile_id,
+661:         "expires_at": expires_at,
+662:         "created_at": now.isoformat(),
+663:     }
+664: 
+665:     # Try DB first, fall back to in-memory
+880:             link["tenant_id"],
+881:             scope="preflight",
+882:             limit=_PORTAL_PREFLIGHT_RATE_LIMIT_RPM,
+883:         )
+884:         return _build_supplier_preflight(portal_id, link, submission)
+885: 
+886: 
+887: @router.post(
+888:     "/{portal_id}/submit",
+889:     response_model=SubmissionResult,
+890:     summary="Submit supplier data",
+891:     description=(
+892:         "Supplier submits shipping/receiving data through the portal. "
+893:         "Data is validated, SHA-256 hashed, and ingested into the customer's tenant."
+894:     ),
+895: )
+896: async def submit_supplier_data(
+897:     portal_id: str,
+898:     submission: SupplierSubmission,
+899: ) -> SubmissionResult:
+900:     """Process a supplier submission — no auth required (link-based access)."""
+901:     link = _get_active_portal_link(portal_id)
+902: 
+903:     # #2461: public route — the portal-link row binds the token to exactly
+904:     # one tenant; scope the remainder of the handler (including the
+905:     # awaited ingest_events persistence) to it so the Engine begin-hook
+906:     # applies app.tenant_id on every transaction.
+907:     with tenant_scope(link["tenant_id"]):
+908:         return await _submit_supplier_data_inner(portal_id, link, submission)
+909: 
+910: 
+911: async def _submit_supplier_data_inner(
+912:     portal_id: str,
+913:     link: dict,
+914:     submission: SupplierSubmission,
+915: ) -> SubmissionResult:
+916:     """Body of submit_supplier_data — runs inside tenant_scope(link tenant)."""
+917:     # Issue #2508 — per-link submission cap. Scoped to the portal link, not the
+918:     # victim tenant's general ingest budget, and enforced BEFORE any persisted
+919:     # write so abuse past the cap never reaches ``ingest_events``.
+920:     _enforce_portal_rate_limit(
+921:         portal_id,
+922:         link["tenant_id"],
+923:         scope="submit",
+924:         limit=_PORTAL_SUBMIT_RATE_LIMIT_RPM,
+925:     )
+945:             submitted_at=datetime.now(timezone.utc).isoformat(),
+946:         )
+947: 
+948:     # Build KDEs
+949:     event_data = _submission_event_dict(portal_id, link, submission)
+950:     kdes: dict = event_data["kdes"]
+951: 
+952:     # Create event
+953:     event = IngestEvent(
+954:         cte_type=WebhookCTEType.SHIPPING,
+955:         traceability_lot_code=submission.traceability_lot_code,
+956:         product_description=submission.product_description,
+957:         quantity=submission.quantity,
+958:         unit_of_measure=submission.unit_of_measure,
+959:         location_gln=submission.ship_from_gln,
+960:         location_name=submission.ship_from_location,
+961:         timestamp=event_data["timestamp"],
+962:         kdes=kdes,
+963:     )
+964: 
+965:     # Ingest into customer's tenant. The portal link record IS the
+966:     # authenticated context here — the supplier's identity is verified
+967:     # via the portal token, and the link binds that token to exactly
+968:     # one customer tenant. Passing link["tenant_id"] as principal makes
+969:     # the symmetric verification trivially pass while keeping the
+970:     # contract enforceable for any future caller.
+971:     payload = WebhookPayload(
+972:         source="supplier_portal",
+973:         events=[event],
+974:         tenant_id=link["tenant_id"],
+975:     )
+976:     result = await ingest_events(payload, principal_tenant_id=link["tenant_id"])
+977: 
+978:     submitted_at = datetime.now(timezone.utc).isoformat()
+979: 
+980:     if result.accepted > 0:
+981:         event_result = result.events[0]
+982:         logger.info(
+983:             "supplier_submission_accepted",
+984:             extra={
+985:                 "portal_id": portal_id,
+986:                 "tenant_id": link["tenant_id"],
+987:                 "supplier": link["supplier_name"],
+988:                 "tlc": submission.traceability_lot_code,
+989:             },
+990:         )
+FILE services/ingestion/app/proof_verify_router.py
+735:     an ``application/json`` body shaped as :class:`JsonBundle`. Performs
+736:     structural checks plus Merkle-root recomputation against the
+737:     bundle's declared root. Reads no tenant data — operates purely on
+738:     the uploaded bytes.
+739:     """
+740:     ip_hash = _hash_ip(request.client.host if request.client else None)
+741:     content_type = (request.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+742: 
+743:     # ---- JSON path ----
+744:     if bundle is None:
+745:         if not content_type.startswith("application/json"):
+746:             raise HTTPException(
+747:                 status_code=400,
+748:                 detail=(
+749:                     "request must be multipart/form-data with a 'bundle' file "
+750:                     "OR application/json with {manifest, events, merkle_root}"
+751:                 ),
+752:             )
+753:         try:
+754:             raw_json = await request.body()
+755:             if len(raw_json) > MAX_BUNDLE_BYTES:
+756:                 raise HTTPException(
+757:                     status_code=413,
+758:                     detail=f"JSON body exceeds {MAX_BUNDLE_BYTES} bytes",
+759:                 )
+760:             payload = JsonBundle.model_validate_json(raw_json)
+761:         except HTTPException:
+762:             raise
+763:         except Exception as exc:
+764:             raise HTTPException(status_code=400, detail=f"malformed JSON: {exc}")
+765: 
+FILE tests/qa_sweep_20261002/test_portal_export_disclosure.py
+1: """QA BE-011: exported evidence must not disclose a portal bearer capability.
+2: 
+3: Uses an invalid synthetic identifier only. No portal link is created and no
+4: storage, provider, or network operation is called.
+5: """
+6: 
+7: import csv
+8: import io
+9: 
+10: import pytest
+11: 
+12: _SYNTHETIC_CAPABILITY = "qa-only-invalid-portal-capability"
+13: 
+14: 
+15: def _exported_portal_event_csv():
+16:     from services.ingestion.app.fda_export_service import _generate_csv
+17:     from services.ingestion.app.supplier_portal import SupplierSubmission, _submission_event_dict
+18: 
+19:     submission = SupplierSubmission(
+20:         traceability_lot_code="QA-LOT-001",
+21:         product_description="QA lettuce",
+22:         quantity=2,
+23:         unit_of_measure="cases",
+24:         ship_date="2026-10-02",
+25:         ship_from_location="QA origin",
+26:         ship_to_location="QA destination",
+27:     )
+28:     event = _submission_event_dict(
+29:         _SYNTHETIC_CAPABILITY, {"supplier_name": "QA supplier"}, submission
+30:     )
+31:     # Match the persisted event field names consumed by the FDA formatter.
+32:     event["event_type"] = event["cte_type"]
+33:     event["event_timestamp"] = event["timestamp"]
+34:     return _generate_csv([event], include_pii=False)
+35: 
+36: 
+37: def test_portal_export_keeps_lot_and_redacts_location():
+38:     """Positive control: the sample is an otherwise valid redacted FDA row."""
+39:     row = next(csv.DictReader(io.StringIO(_exported_portal_event_csv())))
+40:     assert row["Traceability Lot Code (TLC)"] == "QA-LOT-001"
+41:     assert row["Location Name"] == "[REDACTED]"
+42:     assert "QA origin" not in row["Additional KDEs (JSON)"]
+43: 
+44: 
+45: @pytest.mark.xfail(
+46:     strict=True,
+47:     raises=AssertionError,
+48:     reason="BE-011: supplier portal bearer capability is disclosed in exported KDEs",
+49: )
+50: def test_redacted_fda_export_does_not_disclose_portal_capability():
+51:     exported = _exported_portal_event_csv()
+52:     assert _SYNTHETIC_CAPABILITY not in exported

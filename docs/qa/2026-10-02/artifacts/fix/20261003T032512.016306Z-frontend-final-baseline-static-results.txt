@@ -1,0 +1,28 @@
+UTC: 2026-10-03T03:25:12.016306+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import re; p=Path("docs/qa/2026-10-02/artifacts/frontend");
+for f in sorted(p.glob("*.txt")):
+ if any(k in f.name for k in ["lint","typecheck","tsc","node20-build"]):
+  s=f.read_text();print(f.name);print("\n".join(line for line in s.splitlines() if re.search(r"^Exit:|problems|warnings|design-lint|Compiled successfully|TypeScript|error TS|Type error",line)))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+20261003T003655.183617Z-frontend-lint.txt
+Exit: 0
+> eslint . && node scripts/design-lint.mjs
+/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/scripts/design-lint.mjs
+  243:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+  303:5  warning  Unused eslint-disable directive (no problems were reported from '@typescript-eslint/no-explicit-any')
+✖ 41 problems (0 errors, 41 warnings)
+  0 errors and 2 warnings potentially fixable with the `--fix` option.
+design-lint: clean (676 files)
+20261003T003946.746162Z-node20-build.txt
+Exit: 0
+✓ Compiled successfully in 5.5s
+  Running TypeScript ...
+  Finished TypeScript in 5.1s ...
+20261003T004050.444244Z-added-test-lint-correct-cwd.txt
+Exit: 0
+20261003T004437.368428Z-final-added-tests-lint.txt
+Exit: 0

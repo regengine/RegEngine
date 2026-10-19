@@ -1,0 +1,24 @@
+UTC: 2026-10-03T03:29:22.704912+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import json; from pathlib import Path; findings=json.loads(Path("/private/tmp/regengine-fix-artifacts-prescan.json").read_text()); result=[]
+for f in findings:
+ p=Path(f["File"]); line=p.read_text().splitlines()[f["StartLine"]-1]; result.append({"file":str(p),"line":f["StartLine"],"test_path_prefix":line[:min(120,f["StartColumn"]-1)],"matched_span":"[REDACTED]"})
+print(json.dumps(result,indent=2))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+[
+  {
+    "file": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "line": 10843,
+    "test_path_prefix": "E    +    where <Response [503 Service Unavailable]> = post('/session-protected', headers={'Cookie': '__Host-regengine_s",
+    "matched_span": "[REDACTED]"
+  },
+  {
+    "file": "docs/qa/2026-10-02/artifacts/fix/20261003T031410.637052Z-backend_full_baseline.txt",
+    "line": 13604,
+    "test_path_prefix": " +    where <Response [503 Service Unavailable]> = post('/session-protected', headers={'Cookie': '__Host-regengine_sessi",
+    "matched_span": "[REDACTED]"
+  }
+]

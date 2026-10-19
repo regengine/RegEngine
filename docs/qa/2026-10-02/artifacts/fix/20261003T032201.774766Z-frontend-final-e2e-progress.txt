@@ -1,0 +1,10 @@
+UTC: 2026-10-03T03:22:01.774766+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path;import datetime;print(datetime.datetime.now(datetime.timezone.utc).isoformat());p=Path("docs/qa/2026-10-02/artifacts/fix/frontend-final-existing-e2e.json");print("result_exists",p.exists(),"bytes",p.stat().st_size if p.exists() else None);print("detail_count",len(list(Path("/private/tmp/regengine-fix-existing-e2e-details").glob("*"))))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+2026-10-03T03:22:01.797729+00:00
+result_exists True bytes 671424
+detail_count 30

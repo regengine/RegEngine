@@ -54,6 +54,7 @@ class MatchingMixin:
                 JOIN fsma.canonical_entities ce
                     ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
                 WHERE ea.tenant_id = :tenant_id
+                  AND ce.tenant_id = :tenant_id
                   AND ea.alias_type = :alias_type
                   AND ea.alias_value = :alias_value
                   AND ce.is_active = TRUE
@@ -189,6 +190,7 @@ class MatchingMixin:
                                 ON ce.entity_id = ea.entity_id
                                AND ce.tenant_id = ea.tenant_id
                             WHERE ea.tenant_id = :tenant_id
+                              AND ce.tenant_id = :tenant_id
                               AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
                               AND ce.is_active = TRUE
                               AND (CAST(:entity_type AS text) IS NULL OR ce.entity_type = CAST(:entity_type AS text))
@@ -233,6 +235,7 @@ class MatchingMixin:
                     JOIN fsma.canonical_entities ce
                         ON ce.entity_id = ea.entity_id AND ce.tenant_id = ea.tenant_id
                     WHERE ea.tenant_id = :tenant_id
+                      AND ce.tenant_id = :tenant_id
                       AND ea.alias_type IN ('name', 'trade_name', 'abbreviation')
                       AND ce.is_active = TRUE
                       AND (CAST(:entity_type AS text) IS NULL OR ce.entity_type = CAST(:entity_type AS text))

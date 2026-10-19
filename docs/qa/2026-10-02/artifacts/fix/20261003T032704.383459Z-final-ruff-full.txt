@@ -1,0 +1,1890 @@
+UTC: 2026-10-03T03:27:04.383459+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/ruff check --no-cache --output-format=json .
+Exit: 1
+Duration: 0.13s
+Timeout: False
+
+[
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 23,
+      "row": 15
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260623_38e02636e340_v089_step_up_session_metadata.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 12
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 12
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 12,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 23,
+      "row": 14
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260623_a9b0c1d2e3f4_v086_verified_org_domains.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 11
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 43,
+      "row": 15
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260623_b0c1d2e3f4a5_v087_webauthn_credentials.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\nfrom sqlalchemy.dialects import postgresql\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 11
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 23,
+      "row": 14
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260623_bdb2bec8bcc6_v088_drop_user_password_hash.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 11
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 23,
+      "row": 14
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260623_f8a9b0c1d2e3_v085_enterprise_sso_policy.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 11
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 11,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 24,
+      "row": 11
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260630_d1bdfe74d1fd_merge_v090_heads_hash_chain_fk_drop_.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 8
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 8
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 8,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 24,
+      "row": 11
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260912_5541fb62ee2d_merge_v121_heads_label_charges_inbound_.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 8
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 8
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 8,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 24,
+      "row": 16
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/alembic/versions/20260915_e9f2a4c71b05_merge_v123_heads.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from typing import Sequence, Union\n\nimport sqlalchemy as sa\n\nfrom alembic import op\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 19
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 13
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 12,
+      "row": 13
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/browser-followup-server.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import hashlib\nimport os\nimport secrets\nimport shutil\nimport subprocess\nimport tempfile\nimport time\nfrom pathlib import Path\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 6
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 6
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 6,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 17,
+      "row": 6
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-proxy-check.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import http.client\nimport importlib.util\nimport json\nimport threading\nfrom pathlib import Path\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 8
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 55,
+      "row": 7
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/existing-e2e-proxy.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import json\nimport re\nimport threading\nfrom http.client import HTTPConnection\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nfrom urllib.parse import urljoin, urlsplit, urlunsplit\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 12,
+      "row": 17
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/run_logged.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport datetime as dt\nimport os\nimport re\nimport shlex\nimport signal\nimport subprocess\nimport sys\nimport time\nfrom pathlib import Path\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 19
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 44,
+      "row": 15
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/ux-local-proxy.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import base64\nimport datetime\nimport json\nimport re\nimport threading\nimport urllib.error\nimport urllib.request\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nfrom pathlib import Path\nfrom urllib.parse import parse_qs, urlsplit\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 6
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 6
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 6,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 12,
+      "row": 137
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/ux-local-proxy.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import time\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 138
+          },
+          "location": {
+            "column": 1,
+            "row": 137
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 137
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 137,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 30,
+      "row": 12
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/ux-server.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import hashlib\nimport os\nimport secrets\nimport shutil\nimport subprocess\nimport sys\nimport threading\nimport time\nfrom pathlib import Path\n\nfrom run_logged import redact\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 2,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 18,
+      "row": 6
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/validate_handoff.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import re\nimport subprocess\nfrom collections import Counter\nfrom pathlib import Path\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 8
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 38,
+      "row": 9
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/app/rate_limit_service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport hashlib\nimport math\nimport time\nfrom dataclasses import dataclass\nfrom typing import Callable, Sequence\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 41,
+      "row": 24
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/app/system_routes.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import asyncio\nimport inspect\nimport os\nimport uuid as uuid_module\nfrom datetime import datetime, timezone\nfrom typing import Any, Dict, List, Optional\n\nimport httpx\nimport structlog\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom pydantic import BaseModel, Field\nfrom shared.circuit_breaker import CircuitOpenError\nfrom shared.resilient_http import resilient_client\nfrom shared.task_queue import get_task_queue_summary, replay_dead_tasks\nfrom sqlalchemy import select, text\nfrom sqlalchemy.exc import SQLAlchemyError\nfrom sqlalchemy.orm import Session\n\nfrom .database import arm_global_admin_context\nfrom .dependencies import get_current_user, get_session\nfrom .models import TenantContext\nfrom .privileged_auth import PrivilegedActor, require_sysadmin_high_assurance\nfrom .qa_health import QAHealthResponse, load_qa_health_summary\nfrom .sqlalchemy_models import UserModel\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 26
+          },
+          "location": {
+            "column": 1,
+            "row": 1
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 1
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 1,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 61,
+      "row": 13
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/tests/test_auth_crypto.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport hashlib\nimport inspect\nimport re\nimport uuid\n\nimport pytest\n\nfrom services.admin.app import auth_crypto\nfrom services.admin.app.auth_crypto import AuthCryptoService\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 66,
+      "row": 14
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/tests/test_backfill_email_fingerprints.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport uuid\n\nfrom app.auth_crypto import AuthCryptoService\nfrom app.sqlalchemy_models import Base, UserEmailModel, UserModel\nfrom sqlalchemy import create_engine, select\nfrom sqlalchemy.orm import sessionmaker\nfrom sqlalchemy.pool import StaticPool\n\nfrom services.admin.scripts.backfill_email_fingerprints import backfill_email_fingerprints\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 22,
+      "row": 12
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/tests/test_funnel_endpoint.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nfrom uuid import UUID\n\n# Previously imported services.admin.main, which eagerly initialized the\n# Postgres pool at module load and broke any test host without a running\n# local Postgres. Build a minimal FastAPI app around just the v1_router\n# so the endpoint is exercisable with in-memory mocks.\nfrom app import routes as routes_mod\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 41,
+      "row": 98
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/admin/tests/test_invite_audit_chain_guard_2857.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "    import app.invite_routes as invite_routes\n    from app.database import get_session\n    from app.dependencies import PermissionChecker, get_current_user\n",
+          "end_location": {
+            "column": 1,
+            "row": 99
+          },
+          "location": {
+            "column": 1,
+            "row": 96
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 5,
+      "row": 96
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 96,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 48,
+      "row": 86
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/fda_export/router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport hashlib\nimport io\nimport logging\nfrom collections import Counter\nfrom datetime import datetime, timezone\nfrom typing import Any, Literal, Optional\n\nfrom fastapi import APIRouter, Depends, HTTPException, Query, Request\nfrom fastapi.responses import StreamingResponse\nfrom shared.fda_export import (\n    MAX_EXPORT_WINDOW_DAYS,\n    ExportWindowError,\n    validate_export_window,\n)\nfrom shared.permissions import has_permission as _has_permission\nfrom shared.rules import verdict as verdict_tokens\nfrom shared.rules.verdict import classify_event_verdict\n\nfrom ..authz import IngestionPrincipal, require_permission\nfrom ..export_models import ExportHistoryResponse, ExportVerifyResponse\nfrom ..fda_export_service import (\n    _build_chain_verification_payload,\n    _build_completeness_summary,\n    _build_fda_package,\n    _generate_csv,\n    _generate_csv_v2,\n    _generate_pdf,\n    _safe_filename_token,\n)\nfrom ..subscription_gate import require_active_subscription\nfrom ..tenant_validation import resolve_tenant\nfrom ..webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType\nfrom .coverage import _enforce_kde_coverage_gate\nfrom .formatters import (\n    build_compliance_headers,\n    build_csv_response,\n    build_package_response,\n    build_pdf_response,\n    generate_csv_and_hash,\n    generate_csv_v2_and_hash,\n    make_timestamp,\n    safe_filename_token,\n)\nfrom .merkle import get_merkle_proof_handler, get_merkle_root_handler\nfrom .queries import (\n    AuditLogWriteError,\n    ExportOverflowError,\n    _verify_chain_for_export,\n    build_recall_where_clause,\n    build_v2_where_clause,\n    fetch_export_log_history,\n    fetch_recall_events,\n    fetch_trace_graph_data,\n    fetch_v2_events,\n    format_export_log_rows,\n    log_recall_export,\n    log_v2_export,\n    reconstruct_full_export_events,\n    rows_to_event_dicts,\n    v2_rows_to_event_dicts,\n)\nfrom .recall import export_recall_filtered_handler\nfrom .verification import verify_export_handler\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 88
+          },
+          "location": {
+            "column": 1,
+            "row": 22
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 22
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 22,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 52
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/sandbox/router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport hashlib\nimport secrets\nfrom datetime import datetime, timedelta, timezone\nfrom typing import Any, Dict, List\n\nimport structlog\nfrom fastapi import APIRouter, HTTPException, Request\nfrom sqlalchemy import text\n\nfrom .client_ip import resolve_client_ip\nfrom .csv_parser import (\n    _collect_value_normalizations,\n    _normalize_for_rules,\n    _parse_csv_to_events,\n)\nfrom .evaluators import (\n    _evaluate_event_stateless,\n    _evaluate_relational_in_memory,\n)\nfrom .models import (\n    EventEvaluationResponse,\n    NormalizationAction,\n    RuleResultResponse,\n    SandboxRequest,\n    SandboxResponse,\n    SandboxShareRequest,\n    SandboxShareResponse,\n    SandboxTraceRequest,\n    TraceGraphResponse,\n)\nfrom .rate_limiting import _check_sandbox_rate_limit\nfrom .tracer import _trace_in_memory, sandbox_trace as _sandbox_trace_impl\nfrom .validation import (\n    _detect_duplicate_lots,\n    _detect_entity_mismatches,\n    _validate_kdes,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 54
+          },
+          "location": {
+            "column": 1,
+            "row": 14
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 14
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 14,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 53,
+      "row": 22
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/sandbox/tracer.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nfrom collections import defaultdict, deque\nfrom typing import Any, Dict, List, Optional\n\nfrom fastapi import HTTPException, Request\n\nfrom .client_ip import resolve_client_ip\nfrom .csv_parser import _parse_csv_to_events, input_lot_codes\nfrom .models import (\n    SandboxTraceRequest,\n    TraceEdge,\n    TraceGraphResponse,\n    TraceNode,\n)\nfrom .rate_limiting import _check_sandbox_rate_limit\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 120
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/stripe_billing/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import stripe  # noqa: F401 — tests monkeypatch stripe_billing.stripe.*\nfrom shared.funnel_events import emit_funnel_event  # noqa: F401 — tests monkeypatch stripe_billing.emit_funnel_event\n\nfrom . import (\n    customers as _customers_mod,  # noqa: F401\n    helpers as _helpers_mod,  # noqa: F401\n    label_billing as _label_billing_mod,  # noqa: F401\n    plans as _plans_mod,  # noqa: F401\n    routes as _routes_mod,  # noqa: F401\n    state as _state_mod,  # noqa: F401\n    usage as _usage_mod,  # noqa: F401\n    usage_reporting as _usage_reporting_mod,  # noqa: F401\n    webhooks as _webhooks_mod,  # noqa: F401\n)\nfrom .customers import (\n    _create_customer_for_tenant,\n    _create_portal_session,\n    _create_tenant_via_admin,\n    _ensure_customer_mapping,\n    _get_existing_customer_id,\n    _record_checkout_session_hint,\n)\nfrom .helpers import (\n    _coerce_int,\n    _coerce_optional_int,\n    _configure_stripe,\n    _enforce_admin_or_operator,\n    _extract_invoice_period_end,\n    _extract_paid_at,\n    _format_period_end,\n    _normalize_scope,\n    _principal_role,\n    _resolve_tenant_context,\n    _stripe_get,\n)\nfrom .label_billing import (\n    STATUS_CHARGED,\n    STATUS_FAILED,\n    STATUS_NO_CUSTOMER,\n    LabelChargeResult,\n    charge_for_label,\n    get_label_charge,\n)\nfrom .models import (\n    BillingPortalRequest,\n    BillingPortalResponse,\n    CheckoutRequest,\n    CheckoutResponse,\n    InvoiceListResponse,\n    InvoicePdfResponse,\n    InvoiceSummary,\n    SubscriptionStatus,\n    UsageResponse,\n)\nfrom .plans import (\n    DEFAULT_CANCEL_URL,\n    DEFAULT_PORTAL_RETURN_URL,\n    DEFAULT_SUCCESS_URL,\n    METERED_ADDONS,\n    PLAN_ALIASES,\n    PLANS,\n    _normalize_billing_period,\n    _normalize_plan_id,\n    _resolve_price_id,\n)\nfrom .routes import (\n    create_checkout,\n    create_portal_session_for_tenant,\n    create_portal_session_legacy,\n    get_invoice_pdf,\n    get_subscription,\n    get_usage,\n    list_invoices,\n    list_plans,\n    opt_in_metered_usage,\n    opt_out_metered_usage,\n    report_usage,\n    router,\n    stripe_webhook_legacy,\n    stripe_webhooks,\n)\nfrom .state import (\n    _buffer_pending_subscription_update,\n    _customer_lookup_key,\n    _event_dedup_key,\n    _find_tenant_id,\n    _get_subscription_mapping,\n    _mark_event_seen,\n    _pending_sub_update_key,\n    _pop_pending_subscription_update,\n    _redis_client,\n    _session_lookup_key,\n    _store_subscription_mapping,\n    _subscription_lookup_key,\n    _tenant_subscription_key,\n)\nfrom .usage import _current_billing_period, increment_usage_for_event\nfrom .usage_reporting import METER_EVENT_NAME, report_tenant_usage_to_stripe\nfrom .webhooks import (\n    _handle_checkout_completed,\n    _handle_stripe_event,\n    _process_stripe_webhook,\n    _update_subscription_status,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 122
+          },
+          "location": {
+            "column": 1,
+            "row": 17
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 17
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 17,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 67,
+      "row": 28
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/subscription_gate.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport logging\nimport os\nimport threading\nfrom typing import Any, Optional\n\nfrom fastapi import HTTPException, Request\nfrom shared.circuit_breaker import CircuitOpenError, redis_circuit\nfrom starlette.concurrency import run_in_threadpool\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 30
+          },
+          "location": {
+            "column": 1,
+            "row": 18
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 18
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 18,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 59,
+      "row": 73
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/webhook_router_v2/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport hashlib\nimport hmac\nimport json\nimport os\nimport time\nimport uuid\nfrom datetime import datetime, timedelta, timezone\nfrom typing import Optional\nfrom uuid import UUID\n\nimport structlog\nfrom fastapi import APIRouter, Depends, Header, HTTPException, Request\nfrom shared.api_key_store import api_key_hash_candidates\nfrom shared.canonical_event import normalize_webhook_event\nfrom shared.database import get_db_session\nfrom shared.funnel_events import emit_funnel_event\nfrom shared.idempotency import IdempotencyDependency\nfrom shared.permissions import has_permission as _has_permission\nfrom shared.tenant_context import resolve_tenant_context\nfrom shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch\nfrom sqlalchemy.exc import SQLAlchemyError\n\nfrom ..authz import IngestionPrincipal, get_ingestion_principal, require_permission\nfrom ..config import get_settings\nfrom ..subscription_gate import require_active_subscription\nfrom ..tenant_validation import validate_tenant_id\nfrom ..webhook_models import (\n    REQUIRED_KDES_BY_CTE,\n    ChainVerifyResponse,\n    EventResult,\n    IngestEvent,\n    IngestResponse,\n    RecentEventsResponse,\n    WebhookPayload,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 75
+          },
+          "location": {
+            "column": 1,
+            "row": 35
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 35
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 35,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 38,
+      "row": 117
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/webhook_router_v2/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from . import metrics as _metrics_mod  # noqa: E402\nfrom .security import (  # noqa: E402\n    _is_production,\n    _max_event_age_days,\n    _max_event_future_hours,\n    _validate_event_timestamp_window,\n    _verify_api_key,\n    _verify_api_key_present,\n    _verify_webhook_signature,\n    _webhook_hmac_secret,\n    webhook_hmac_configured,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 119
+          },
+          "location": {
+            "column": 1,
+            "row": 105
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 105
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 105,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 179
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/webhook_router_v2/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from .graph_sync import (  # noqa: E402\n    _NEO4J_SYNC_QUEUE_KEY,\n    _SYNC_COUNTER_PREFIX,\n    _get_redis_client,\n    _incr_sync_counter,\n    _neo4j_sync_enabled,\n    _neo4j_sync_max_queue,\n    _publish_graph_sync,\n    get_graph_sync_stats,\n)\nfrom .ratelimit import (  # noqa: E402\n    _WEBHOOK_RATE_LIMIT_RPM,\n    _WEBHOOK_RATE_LIMIT_WINDOW_SECS,\n    _WEBHOOK_READ_RATE_LIMIT_RPM,\n    _WEBHOOK_READ_RATE_LIMIT_WINDOW_SECS,\n    _check_rate_limit,\n    _check_read_rate_limit,\n    _store_rate_limit_state,\n)\nfrom .routes import (  # noqa: E402\n    _enforce_webhooks_read_principal,\n    _require_idempotency_key,\n    get_recent_events,\n    ingest_events,\n    recent_events_endpoint,\n    router,\n    verify_chain,\n)\nfrom .rules_eval import (  # noqa: E402\n    _CanonicalPersistenceError,\n    _get_persistence,\n    _persist_canonical_and_eval,\n    _persist_required_canonical_and_eval,\n    _rules_preeval_reject,\n)\nfrom .tenant import (  # noqa: E402\n    _lookup_tenant_id_for_api_key,\n    _resolve_ingest_tenant_id,\n)\nfrom .validation import (  # noqa: E402\n    _check_obligations,\n    _generate_alerts,\n    _validate_event_kdes,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 181
+          },
+          "location": {
+            "column": 1,
+            "row": 131
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 131
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 131,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 39,
+      "row": 19
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/webhook_router_v2/tenant.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport sys\nfrom typing import Optional\n\nfrom fastapi import HTTPException\nfrom sqlalchemy.exc import SQLAlchemyError\n\nfrom ..authz import IngestionPrincipal\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 21
+          },
+          "location": {
+            "column": 1,
+            "row": 10
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 10
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 10,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 68,
+      "row": 31
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/app/webhook_router_v2/tenant.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "        from shared.api_key_store import set_api_key_lookup_context\n        from shared.database import SessionLocal\n        from sqlalchemy import bindparam as _bindparam, text as _text\n",
+          "end_location": {
+            "column": 1,
+            "row": 32
+          },
+          "location": {
+            "column": 1,
+            "row": 27
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 9,
+      "row": 27
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 27,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 61,
+      "row": 566
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "    from app.edi_ingestion.extractors import _extract_856_fields\n    from app.edi_ingestion.parser import _parse_x12_segments\n    from fastapi import HTTPException\n",
+          "end_location": {
+            "column": 1,
+            "row": 567
+          },
+          "location": {
+            "column": 1,
+            "row": 563
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 5,
+      "row": 563
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 563,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 61,
+      "row": 580
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "    from app.edi_ingestion.extractors import _extract_856_fields\n    from app.edi_ingestion.parser import _parse_x12_segments\n    from fastapi import HTTPException\n",
+          "end_location": {
+            "column": 1,
+            "row": 581
+          },
+          "location": {
+            "column": 1,
+            "row": 577
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 5,
+      "row": 577
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 577,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 46
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_ingest_error_logging_2868.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import app.webhook_router_v2 as wr  # noqa: E402\n\nfrom services.ingestion.tests.test_webhook_router_v2_1342 import (  # noqa: E402\n    _build_app,\n    _client,\n    _FakePersistence,\n    _FakeSession,\n    _make_shipping_event,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 48
+          },
+          "location": {
+            "column": 1,
+            "row": 38
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 38
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 38,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 48,
+      "row": 28
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_routes_discovery_tenant_key_2921.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport asyncio\nimport re\nfrom pathlib import Path\nfrom unittest.mock import MagicMock\n\nimport app.routes_discovery as routes_discovery\nimport pytest\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom shared.auth import APIKey, require_api_key\n\nfrom services.ingestion.app import discovery as discovery_mod\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 30
+          },
+          "location": {
+            "column": 1,
+            "row": 16
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 16
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 16,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 45,
+      "row": 33
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_subscription_gate_event_loop_2849.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport asyncio\nimport threading\nimport time\nfrom types import SimpleNamespace\nfrom unittest.mock import MagicMock, patch\n\nimport app.subscription_gate as gate\nimport pytest\nfrom app.subscription_gate import require_active_subscription\nfrom fastapi import Depends, FastAPI\nfrom httpx import ASGITransport, AsyncClient\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 36
+          },
+          "location": {
+            "column": 1,
+            "row": 21
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 21
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 21,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 50,
+      "row": 72
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import sys\nfrom pathlib import Path\n\nimport structlog\nfrom confluent_kafka.admin import NewTopic\nfrom jsonschema import Draft7Validator, ValidationError\nfrom opentelemetry import propagate, trace\nfrom prometheus_client import Counter\nfrom shared.kafka_compat import (\n    KafkaAdminClientCompat as KafkaAdminClient,\n    KafkaConsumerCompat as KafkaConsumer,\n    KafkaError,\n    KafkaProducerCompat as KafkaProducer,\n    KafkaTimeoutError,\n    TopicAlreadyExistsError,\n)\n\n# Standardized path discovery via shared utility\nfrom shared.paths import ensure_shared_importable\nfrom structlog.contextvars import get_contextvars\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 73
+          },
+          "location": {
+            "column": 1,
+            "row": 53
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 53
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 53,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 155
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from shared.kafka_auth import (\n    KafkaAuthError,\n    get_allowed_producers,\n    sign_event,\n    verify_event,\n)\nfrom shared.observability.kafka_propagation import (\n    bind_correlation_context,\n    extract_correlation_headers,\n    inject_correlation_headers_tuples,\n)\nfrom shared.schemas import (\n    ExtractionPayload,\n    GraphEvent,\n    ObligationType,\n    ReviewItem,\n    Threshold,\n)\nfrom shared.url_validation import PathTraversalError\n\nfrom ..classification import SignalClassifier\nfrom ..config import settings\nfrom ..extractor import extract_entities\nfrom ..extractors import FSMAExtractor, LLMGenerativeExtractor\nfrom ..extractors.fsma_types import (\n    TOPIC_GRAPH_UPDATE as FSMA_TOPIC_GRAPH_UPDATE,\n    TOPIC_NEEDS_REVIEW as FSMA_TOPIC_NEEDS_REVIEW,\n)\nfrom ..resolution import EntityResolver\nfrom ..s3_loader import parse_s3_uri\nfrom ..s3_utils import get_bytes\n\n# Producer service identity used when this consumer re-emits events to\n# downstream topics (graph.update, nlp.needs_review, nlp.extracted).\n# Must match the value the downstream consumer expects in its\n# KAFKA_ALLOWED_PRODUCERS_<TOPIC> env var (#1078).\n# ---------------------------------------------------------------------------\n# Backward-compatible re-exports from the package submodules. Every name the\n# original consumer.py defined at module level remains importable from\n# ``app.consumer`` (and patchable as an attribute of this module).\n# ---------------------------------------------------------------------------\nfrom .constants import (\n    _LEGACY_HEURISTIC_CONFIDENCE_CAP,\n    _LLM_EXTRACTION_CONFIDENCE_CAP,\n    MAX_RETRIES,\n    NLP_PRODUCER_SERVICE,\n    TOPIC_DLQ,\n    TOPIC_FSMA_DLQ,\n    TOPIC_GRAPH_UPDATE,\n    TOPIC_NEEDS_REVIEW,\n)\nfrom .conversion import (\n    CLASSIFIER,\n    RESOLVER,\n    _convert_entities_to_extraction,\n    _convert_llm_results_to_extractions,\n    _now_iso,\n    _score_regulatory_date,\n)\nfrom .dlq import _collect_ftl_flags, _is_fsma_event, _retry_counts, _send_to_dlq, _send_to_fsma_dlq\nfrom .health import (\n    _HEALTH_PORT,\n    _POLL_ERROR_UNHEALTHY_THRESHOLD,\n    _HealthHandler,\n    _shutdown_event,\n    _start_health_server,\n    consumer_health,\n    mark_loop_started,\n    mark_loop_stopped,\n    record_poll_error,\n    record_poll_success,\n    record_topic_creation_failure,\n    reset_consumer_health,\n    stop_consumer,\n)\nfrom .review_routing import _build_review_reasons, _route_extraction\nfrom .schema_validation import _INBOUND_VALIDATOR, _load_inbound_schema, _load_schema\nfrom .tenancy import _kafka_key_for, _resolve_tenant_id, _retry_key_for\nfrom .thresholds import CONFIDENCE_THRESHOLD, _current_thresholds, _ThresholdProxy\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 157
+          },
+          "location": {
+            "column": 1,
+            "row": 75
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 75
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 75,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 64,
+      "row": 400
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from shared.observability import setup_standalone_observability\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 401
+          },
+          "location": {
+            "column": 1,
+            "row": 400
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 400
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 400,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 27
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/conversion.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nfrom datetime import datetime, timezone\nfrom typing import Optional\n\nimport structlog\nfrom shared.schemas import (\n    ExtractionPayload,\n    ObligationType,\n    Threshold,\n)\n\nfrom ..classification import SignalClassifier\nfrom ..extractor import infer_obligation_type\nfrom ..resolution import MASTER_DATA_SOURCE, EntityResolver\nfrom .constants import (\n    _LEGACY_HEURISTIC_CONFIDENCE_CAP,\n    _LLM_EXTRACTION_CONFIDENCE_CAP,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 29
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 52,
+      "row": 20
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/dlq.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport structlog\nfrom shared.kafka_compat import (\n    KafkaProducerCompat as KafkaProducer,\n    KafkaTimeoutError,\n)\n\nfrom ..config import settings\nfrom .constants import TOPIC_DLQ, TOPIC_FSMA_DLQ\nfrom .conversion import _now_iso\nfrom .tenancy import _kafka_key_for, _retry_key_for\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 22
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 44,
+      "row": 24
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/consumer/review_routing.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nfrom typing import Optional\n\nimport structlog\nfrom shared.kafka_auth import sign_event\nfrom shared.kafka_compat import KafkaProducerCompat as KafkaProducer\nfrom shared.schemas import ExtractionPayload, GraphEvent\nfrom structlog.contextvars import get_contextvars\n\nfrom .constants import (\n    NLP_PRODUCER_SERVICE,\n    TOPIC_GRAPH_UPDATE,\n    TOPIC_NEEDS_REVIEW,\n)\nfrom .tenancy import _kafka_key_for\nfrom .thresholds import _current_thresholds\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 26
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 7,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 44,
+      "row": 46
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/extractors/fsma_extractor/__init__.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from shared.pii import redact_pii  # noqa: F401\n\nfrom ..fsma_types import (  # noqa: F401 — backward compat re-exports\n    CTE,\n    HITL_CONFIDENCE_THRESHOLD,\n    KDE,\n    TOPIC_GRAPH_UPDATE,\n    TOPIC_NEEDS_REVIEW,\n    CTEType,\n    DocumentType,\n    ExtractionConfidence,\n    FSMAExtractionResult,\n    LineItem,\n)\nfrom .classification import (  # noqa: F401\n    FTL_CATEGORIES,\n    DocumentClassificationMixin,\n    _ClassificationResult,\n)\nfrom .cte_builder import CTEBuilderMixin  # noqa: F401\nfrom .entity_resolution import EntityResolutionMixin  # noqa: F401\nfrom .extractor import FSMAExtractor, logger  # noqa: F401\nfrom .patterns import ExtractionPatternsMixin  # noqa: F401\nfrom .serialization import GraphEventSerializationMixin  # noqa: F401\nfrom .tabular import TabularExtractionMixin  # noqa: F401\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 48
+          },
+          "location": {
+            "column": 1,
+            "row": 22
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 22
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 22,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 67,
+      "row": 13
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/extractors/fsma_extractor/cte_builder.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import re\nfrom typing import Dict, List, Optional\n\nimport structlog\n\n# F-NLP-2: redact PII before persisting raw text snippets. ``redact_pii`` is\n# applied ONLY at stored-snippet assignment — never before the regex pass —\n# so it does not mutilate GLNs / lot codes that pattern-match phone numbers.\nfrom shared.pii import redact_pii\n\nfrom ..fsma_types import CTE, KDE, CTEType, DocumentType, LineItem\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 3,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 44,
+      "row": 36
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/app/extractors/fsma_extractor/extractor.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from datetime import datetime, timezone\nfrom typing import Any, Dict, Optional\n\nimport structlog\n\n# F-NLP-2: redact PII before persisting raw text snippets. ``redact_pii`` is\n# applied ONLY at stored-snippet assignment — never before the regex pass —\n# so it does not mutilate GLNs / lot codes that pattern-match phone numbers.\nfrom shared.pii import redact_pii\n\nfrom ..fsma_types import (\n    HITL_CONFIDENCE_THRESHOLD,\n    TOPIC_GRAPH_UPDATE,\n    TOPIC_NEEDS_REVIEW,\n    DocumentType,\n    ExtractionConfidence,\n    FSMAExtractionResult,\n)\nfrom .classification import DocumentClassificationMixin\nfrom .cte_builder import CTEBuilderMixin\nfrom .entity_resolution import EntityResolutionMixin\nfrom .patterns import ExtractionPatternsMixin\nfrom .serialization import GraphEventSerializationMixin\nfrom .tabular import TabularExtractionMixin\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 38
+          },
+          "location": {
+            "column": 1,
+            "row": 13
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 13
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 13,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 62,
+      "row": 173
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/tests/test_fsma_routing_status_2972.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "        from shared.kafka_auth import KafkaAuthError\n\n        from services.nlp.app import consumer as consumer_mod\n",
+          "end_location": {
+            "column": 1,
+            "row": 174
+          },
+          "location": {
+            "column": 1,
+            "row": 172
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 9,
+      "row": 172
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 172,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 62,
+      "row": 203
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/nlp/tests/test_fsma_routing_status_2972.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "        from shared.kafka_compat import KafkaTimeoutError\n\n        from services.nlp.app import consumer as consumer_mod\n",
+          "end_location": {
+            "column": 1,
+            "row": 204
+          },
+          "location": {
+            "column": 1,
+            "row": 202
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 9,
+      "row": 202
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 202,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 51,
+      "row": 27
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/identity_resolution/registration.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport logging\nfrom datetime import datetime, timezone\nfrom typing import Any, Dict, List, Optional, Tuple\nfrom uuid import uuid4\n\nfrom shared.identity_resolution.constants import (\n    VALID_ALIAS_TYPES,\n    VALID_ENTITY_TYPES,\n)\nfrom shared.identity_resolution.normalization import _normalize_identifier\n\n# #1233: PII masking helpers for log emission. Raw alias_value /\n# canonical_name must never reach the log sinks — log retention is\n# typically longer than DB retention and sinks are accessible to a\n# wider personnel surface (SRE, observability vendors).\nfrom shared.pii import mask_alias_value, mask_name\nfrom sqlalchemy import text\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 29
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 9
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 9,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 40,
+      "row": 22
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/identity_resolution/resolver.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport logging\nfrom typing import Any, Dict, List, Optional, Tuple\n\nfrom shared.identity_resolution.constants import (\n    AMBIGUOUS_THRESHOLD_HIGH,\n    AMBIGUOUS_THRESHOLD_LOW,\n)\n\n# #1233: PII masking helpers for log emission. Raw alias_value /\n# canonical_name must never reach the log sinks.\nfrom shared.pii import mask_alias_value\nfrom sqlalchemy import text\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 24
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 9
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 9,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 71,
+      "row": 19
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/identity_resolution/review.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport json\nimport logging\nfrom datetime import datetime, timezone\nfrom typing import Any, Dict, List, Optional, Tuple\nfrom uuid import uuid4\n\nfrom shared.identity_resolution.constants import VALID_REVIEW_STATUSES\nfrom sqlalchemy import text\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 21
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 9
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 9,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 51,
+      "row": 62
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/identity_resolution/service.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport logging\nfrom typing import Optional\n\nfrom shared.identity_resolution.constants import (  # noqa: F401\n    AMBIGUOUS_THRESHOLD_HIGH,\n    AMBIGUOUS_THRESHOLD_LOW,\n    VALID_ALIAS_TYPES,\n    VALID_ENTITY_TYPES,\n    VALID_REVIEW_STATUSES,\n)\nfrom shared.identity_resolution.matching import MatchingMixin\nfrom shared.identity_resolution.merging import MergeMixin\nfrom shared.identity_resolution.normalization import (  # noqa: F401\n    _STRUCTURED_IDENTIFIER_ALIAS_TYPES,\n    _normalize_identifier,\n)\nfrom shared.identity_resolution.registration import RegistrationMixin\nfrom shared.identity_resolution.resolver import ResolverMixin\nfrom shared.identity_resolution.review import ReviewMixin\n\n# #1233: PII masking helpers for log emission. Raw alias_value /\n# canonical_name must never reach the log sinks — log retention is\n# typically longer than DB retention and sinks are accessible to a\n# wider personnel surface (SRE, observability vendors). Re-exported\n# here for backward compatibility (the log call sites now live in\n# registration.py and resolver.py, which import these directly).\nfrom shared.pii import mask_alias_value, mask_name  # noqa: F401\nfrom sqlalchemy.orm import Session\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 64
+          },
+          "location": {
+            "column": 1,
+            "row": 33
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 33
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 33,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 56,
+      "row": 42
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/tests/test_agent_org_onboarding.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport uuid\nfrom types import SimpleNamespace\nfrom unittest.mock import AsyncMock, MagicMock\n\nimport pytest\nfrom shared.agent_org import onboarding as mod\nfrom shared.agent_org.onboarding import (\n    DEFAULT_ONBOARDING_AGENT_CAPABILITIES,\n    PodSpec,\n    _existing_agent_key_id,\n    _get_or_create_agent,\n    _get_or_create_inbox,\n    _get_or_create_pod,\n    _get_tenant_slug,\n    onboard_tenant_agent_org,\n)\nfrom shared.agent_org.providers import DevInboxProvider\nfrom sqlalchemy.exc import IntegrityError\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 45
+          },
+          "location": {
+            "column": 1,
+            "row": 23
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 23
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 23,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 57,
+      "row": 26
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/tests/test_agent_org_router.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nfrom typing import Any\nfrom unittest.mock import AsyncMock\n\nimport pytest\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom shared.agent_org import router as agent_org_router_mod\nfrom shared.agent_org.onboarding import OnboardingResult\n\nfrom services.ingestion.app.authz import IngestionPrincipal, get_ingestion_principal\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 28
+          },
+          "location": {
+            "column": 1,
+            "row": 15
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 15
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 15,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 14,
+      "row": 36
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/tests/invariants/test_launch_orchestrator_docs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport contextlib\nimport importlib.util\nimport io\nimport re\nimport shlex\nimport sys\nfrom pathlib import Path\n\nimport pytest\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 38
+          },
+          "location": {
+            "column": 1,
+            "row": 26
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 26
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 26,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 23,
+      "row": 33
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/tests/shared/test_identity_resolution_pii_logs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from shared import pii  # noqa: E402\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 36
+          },
+          "location": {
+            "column": 1,
+            "row": 33
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 33
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 33,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 35
+    },
+    "filename": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/tests/shared/test_identity_resolution_sql_hardening.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from services.shared.identity_resolution import (\n    VALID_ENTITY_TYPES,\n    IdentityResolutionService,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 38
+          },
+          "location": {
+            "column": 1,
+            "row": 32
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 32
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "noqa_row": 32,
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  }
+]

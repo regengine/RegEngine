@@ -1,0 +1,12 @@
+UTC: 2026-10-03T03:26:47.093924+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'git diff --check -- services/ingestion/app/csv_templates.py services/ingestion/tests/test_qa_sweep_20261002_contract.py && git add services/ingestion/app/csv_templates.py services/ingestion/tests/test_qa_sweep_20261002_contract.py && git diff --cached --stat && git diff --cached --name-only'
+Exit: 0
+Duration: 0.06s
+Timeout: False
+
+ services/ingestion/app/csv_templates.py                |  8 +++++++-
+ .../ingestion/tests/test_qa_sweep_20261002_contract.py | 18 ++++++++++++------
+ 2 files changed, 19 insertions(+), 7 deletions(-)
+services/ingestion/app/csv_templates.py
+services/ingestion/tests/test_qa_sweep_20261002_contract.py

@@ -4,6 +4,26 @@ import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experi
 import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
 /**
+ * Date-only lastmod. Next prints a Date through toISOString(), and an invalid
+ * Date throws, which makes /sitemap.xml return HTTP 500. A bad value is
+ * omitted instead. The string is stable across requests.
+ */
+export function stableLastModified(isoDate: string | undefined): string | undefined {
+    if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return undefined;
+    const parsed = new Date(`${isoDate}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) return undefined;
+    const [year, month, day] = isoDate.split('-').map(Number);
+    if (
+        parsed.getUTCFullYear() !== year
+        || parsed.getUTCMonth() + 1 !== month
+        || parsed.getUTCDate() !== day
+    ) {
+        return undefined;
+    }
+    return isoDate;
+}
+
+/**
  * XML sitemap.
  *
  * Includes all public-facing pages: marketing, tools, content, docs, and resources.
@@ -21,8 +41,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/pricing`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/security`, changeFrequency: 'monthly' as const, priority: 0.8 },
         // /alpha, /verticals/food-safety and /developer/register are redirect
-        // stubs (the last one client-side, into robots-disallowed /signup), so
-        // they are deliberately absent: a sitemap entry must resolve to a 200.
+        // stubs (the last one a next.config.js redirect to /login), so they are
+        // deliberately absent: a sitemap entry must resolve to a 200.
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
@@ -53,13 +73,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'cte-mapper',
         'kde-checker',
         'knowledge-graph',
-        'recall-readiness',
+        // recall-readiness and readiness-assessment are next.config.js
+        // redirects. A sitemap URL has to answer 200.
         'roi-calculator',
         'tlc-validator',
         'drill-simulator',
         'sop-generator',
         'data-import',
-        'readiness-assessment',
         'fsma-unified',
         // Added Sep 2026 — built after the April curation, never listed.
         // ask, label-scanner and inflow-lab are experimental and drop out of
@@ -88,12 +108,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
         // Every published post, from the same list the blog index renders —
         // four posts were live but uncrawled while these were hand-maintained.
-        ...BLOG_POST_SLUGS.map((slug) => ({
-            url: `${baseUrl}/blog/${slug}`,
-            lastModified: BLOG_POST_PUBLISHED[slug],
-            changeFrequency: 'monthly' as const,
-            priority: 0.8,
-        })),
+        ...BLOG_POST_SLUGS.flatMap((slug) => {
+            const lastModified = stableLastModified(BLOG_POST_PUBLISHED[slug]);
+            return [{
+                url: `${baseUrl}/blog/${slug}`,
+                ...(lastModified ? { lastModified } : {}),
+                changeFrequency: 'monthly' as const,
+                priority: 0.8,
+            }];
+        }),
     ];
 
     // Resource pages

@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:27:14.103625+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py tests/qa_sweep_20261002 -k 'not real_redis' --no-cov --tb=short
+Exit: 0
+Duration: 2.04s
+Timeout: False
+
+........................................................................ [ 29%]
+........................................................................ [ 59%]
+...................................................................x.... [ 89%]
+..........................                                               [100%]
+=========================== short test summary info ============================
+XFAIL tests/qa_sweep_20261002/test_portal_export_disclosure.py::test_redacted_fda_export_does_not_disclose_portal_capability - BE-011: supplier portal bearer capability is disclosed in exported KDEs
+241 passed, 1 deselected, 1 xfailed in 1.33s

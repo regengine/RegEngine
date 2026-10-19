@@ -67,6 +67,10 @@ class CircuitBreaker:
     stats: CircuitStats = field(default_factory=CircuitStats)
     _opened_at: Optional[float] = field(default=None, repr=False)
     _half_open_calls: int = field(default=0, repr=False)
+    # Trip decisions use CONSECUTIVE failures: a success resets the streak.
+    # stats.failures stays a lifetime total for observability and is not
+    # used for the open/closed decision.
+    _consecutive_failures: int = field(default=0, repr=False)
 
     def can_execute(self) -> bool:
         """Check if a request can be executed."""
@@ -74,8 +78,11 @@ class CircuitBreaker:
             return True
 
         if self.state == CircuitState.OPEN:
-            # Check if recovery timeout has elapsed
-            if self._opened_at and (time.time() - self._opened_at) >= self.recovery_timeout:
+            # Recovery uses a monotonic clock. A wall-clock step backward
+            # (NTP or a VM resume) used to keep this negative forever, so
+            # the breaker stayed open. 0.0 is a real monotonic reading, so
+            # the timestamp is compared with `is not None`.
+            if self._opened_at is not None and (time.monotonic() - self._opened_at) >= self.recovery_timeout:
                 self._transition_to_half_open()
                 return True
             self.stats.rejected_calls += 1
@@ -94,6 +101,9 @@ class CircuitBreaker:
         self.stats.successes += 1
         self.stats.total_calls += 1
         self.stats.last_success_time = time.time()
+        # Any success breaks the failure streak, so scattered transient
+        # failures across a long uptime can no longer trip the breaker.
+        self._consecutive_failures = 0
 
         if self.state == CircuitState.HALF_OPEN:
             self._half_open_calls += 1
@@ -120,20 +130,22 @@ class CircuitBreaker:
                 error=str(error) if error else "Unknown",
             )
         elif self.state == CircuitState.CLOSED:
-            if self.stats.failures >= self.failure_threshold:
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self.failure_threshold:
                 self._transition_to_open()
                 logger.warning(
                     "circuit_opened",
                     name=self.name,
-                    failures=self.stats.failures,
+                    failures=self._consecutive_failures,
                     threshold=self.failure_threshold,
                 )
 
     def _transition_to_open(self) -> None:
         """Transition to open state."""
         self.state = CircuitState.OPEN
-        self._opened_at = time.time()
+        self._opened_at = time.monotonic()
         self._half_open_calls = 0
+        self._consecutive_failures = 0
 
     def _transition_to_half_open(self) -> None:
         """Transition to half-open state."""
@@ -147,6 +159,7 @@ class CircuitBreaker:
         self.stats.failures = 0
         self._opened_at = None
         self._half_open_calls = 0
+        self._consecutive_failures = 0
 
     def reset(self) -> None:
         """Reset the circuit breaker to initial state."""
@@ -154,6 +167,7 @@ class CircuitBreaker:
         self.stats = CircuitStats()
         self._opened_at = None
         self._half_open_calls = 0
+        self._consecutive_failures = 0
 
     def get_status(self) -> Dict[str, Any]:
         """Get current circuit breaker status."""

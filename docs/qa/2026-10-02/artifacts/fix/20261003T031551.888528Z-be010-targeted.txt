@@ -1,0 +1,223 @@
+UTC: 2026-10-03T03:15:51.888528+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py tests/qa_sweep_20261002/test_request_safety.py services/ingestion/tests/test_upload_limits_1342.py --no-cov
+Exit: 1
+Duration: 2.30s
+Timeout: False
+
+....................F................................                    [100%]
+=================================== FAILURES ===================================
+__________ test_incomplete_upload_remains_subject_to_request_timeout ___________
+  + Exception Group Traceback (most recent call last):
+  |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/_utils.py", line 81, in collapse_excgroups
+  |     yield
+  |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 192, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/anyio/_backends/_asyncio.py", line 799, in __aexit__
+  |     raise BaseExceptionGroup(
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 353, in from_call
+    |     result: TResult | None = func()
+    |                              ^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 245, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/logging.py", line 850, in pytest_runtest_call
+    |     yield
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/capture.py", line 900, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/skipping.py", line 268, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/runner.py", line 179, in pytest_runtest_call
+    |     item.runtest()
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pytest_asyncio/plugin.py", line 469, in runtest
+    |     super().runtest()
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/python.py", line 1720, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pluggy/_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/_pytest/python.py", line 166, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/pytest_asyncio/plugin.py", line 716, in inner
+    |     runner.run(coro, context=context)
+    |   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/runners.py", line 118, in run
+    |     return self._loop.run_until_complete(task)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/base_events.py", line 654, in run_until_complete
+    |     return future.result()
+    |            ^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/tests/qa_sweep_20261002/test_request_safety.py", line 193, in test_incomplete_upload_remains_subject_to_request_timeout
+    |     await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
+    |   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/tasks.py", line 489, in wait_for
+    |     return fut.result()
+    |            ^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 198, in __call__
+    |     raise app_exc
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+    |     with recv_stream, send_stream, collapse_excgroups():
+    |   File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/contextlib.py", line 158, in __exit__
+    |     self.gen.throw(typ, value, traceback)
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    |     raise exc
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/request_safety.py", line 67, in dispatch
+    |     async for chunk in request.stream():
+    |   File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/requests.py", line 245, in stream
+    |     raise ClientDisconnect()
+    | starlette.requests.ClientDisconnect
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/tests/qa_sweep_20261002/test_request_safety.py", line 193, in test_incomplete_upload_remains_subject_to_request_timeout
+    await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
+  File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/tasks.py", line 489, in wait_for
+    return fut.result()
+           ^^^^^^^^^^^^
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 198, in __call__
+    raise app_exc
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 191, in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+  File "/Users/sellers/.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/contextlib.py", line 158, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/_utils.py", line 87, in collapse_excgroups
+    raise exc
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/shared/request_safety.py", line 67, in dispatch
+    async for chunk in request.stream():
+  File "/Users/sellers/Projects/RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/requests.py", line 245, in stream
+    raise ClientDisconnect()
+starlette.requests.ClientDisconnect
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.mark.asyncio
+    async def test_incomplete_upload_remains_subject_to_request_timeout():
+        import asyncio
+
+        sent = []
+
+        async def receive():
+            await asyncio.Event().wait()
+
+        async def send(message):
+            sent.append(message)
+
+        async def handler(scope, receive, send):
+            pytest.fail("Incomplete upload reached the handler")
+
+        app = RequestTimeoutMiddleware(
+            RequestSizeLimitMiddleware(handler, max_bytes=8), timeout_seconds=0.01
+        )
+>       await asyncio.wait_for(app(_http_scope(), receive, send), timeout=1)
+
+tests/qa_sweep_20261002/test_request_safety.py:193:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/asyncio/tasks.py:489: in wait_for
+    return fut.result()
+           ^^^^^^^^^^^^
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py:198: in __call__
+    raise app_exc
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py:191: in __call__
+    with recv_stream, send_stream, collapse_excgroups():
+../../../.local/share/uv/python/cpython-3.11.15-macos-aarch64-none/lib/python3.11/contextlib.py:158: in __exit__
+    self.gen.throw(typ, value, traceback)
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/_utils.py:87: in collapse_excgroups
+    raise exc
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/middleware/base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+services/shared/request_safety.py:67: in dispatch
+    async for chunk in request.stream():
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.middleware.base._CachedRequest object at 0x10ae4c510>
+
+    async def stream(self) -> AsyncGenerator[bytes, None]:
+        if hasattr(self, "_body"):
+            yield self._body
+            yield b""
+            return
+        if self._stream_consumed:
+            raise RuntimeError("Stream consumed")
+        while not self._stream_consumed:
+            message = await self._receive()
+            if message["type"] == "http.request":
+                body = message.get("body", b"")
+                if not message.get("more_body", False):
+                    self._stream_consumed = True
+                if body:
+                    yield body
+            elif message["type"] == "http.disconnect":  # pragma: no branch
+                self._is_disconnected = True
+>               raise ClientDisconnect()
+E               starlette.requests.ClientDisconnect
+
+../../RegEngine/repo/.venv/lib/python3.11/site-packages/starlette/requests.py:245: ClientDisconnect
+------------------------------ Captured log call -------------------------------
+ERROR    shared.request_safety:request_safety.py:122 request_timeout: path=/consume method=POST timeout_seconds=0.01
+=========================== short test summary info ============================
+FAILED tests/qa_sweep_20261002/test_request_safety.py::test_incomplete_upload_remains_subject_to_request_timeout - starlette.requests.ClientDisconnect
+1 failed, 52 passed in 1.31s

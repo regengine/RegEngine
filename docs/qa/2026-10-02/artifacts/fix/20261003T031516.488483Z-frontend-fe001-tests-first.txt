@@ -1,0 +1,46 @@
+UTC: 2026-10-03T03:15:16.488483+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path
+p=Path("frontend/src/__tests__/lib/qa-sweep-gs1.test.ts")
+text=p.read_text().replace("    // Existing parser wrongly treats AI-like digits inside the lot as a new AI.\n","")
+text=text.replace("it.fails.each(['"'"'LOT-10-ABC'"'"', '"'"'LOT-21-ABC'"'"', '"'"'LOT-17260930'"'"'])", "it.each(['"'"'LOT-10-ABC'"'"', '"'"'LOT-21-ABC'"'"', '"'"'LOT-17260930'"'"'])")
+marker="    // FE-002: invalid percent encodings"
+addition="""    it.each(['"'"'LOT-10-ABC'"'"', '"'"'LOT-21-ABC'"'"', '"'"'LOT-17260930'"'"'])('"'"'FE-001 preserves final lot %s without inferring another AI'"'"', (lot) => {
+        const parsed = parseGS1(`010950600013435210${lot}`);
+        expect(parsed.tlc).toBe(lot);
+        expect(parsed.serial).toBeUndefined();
+        expect(parsed.expiryDate).toBeUndefined();
+    });
+
+    it('"'"'FE-001 preserves parenthesized boundaries after variable-length fields'"'"', () => {
+        const parsed = parseGS1('"'"'(01)09506000134352(10)LOT-21-ABC(21)SER-10-ABC(17)260930'"'"');
+        expect(parsed.tlc).toBe('"'"'LOT-21-ABC'"'"');
+        expect(parsed.serial).toBe('"'"'SER-10-ABC'"'"');
+        expect(parsed.expiryDate).toBe('"'"'2026-09-30'"'"');
+    });
+
+    it('"'"'FE-001 preserves scanner FNC1 surrogate boundaries after variable-length fields'"'"', () => {
+        const parsed = parseGS1('"'"'010950600013435210LOT-10-ABCñ21SER-17-ABCñ17260930'"'"');
+        expect(parsed.tlc).toBe('"'"'LOT-10-ABC'"'"');
+        expect(parsed.serial).toBe('"'"'SER-17-ABC'"'"');
+        expect(parsed.expiryDate).toBe('"'"'2026-09-30'"'"');
+    });
+
+    it('"'"'FE-001 preserves a maximum-length lot and parses the explicitly separated date'"'"', () => {
+        const lot = '"'"'10172101131710172101'"'"';
+        expect(lot).toHaveLength(20);
+        const parsed = parseGS1(`010950600013435210${lot}\\x1d17260930`);
+        expect(parsed.tlc).toBe(lot);
+        expect(parsed.expiryDate).toBe('"'"'2026-09-30'"'"');
+    });
+
+"""
+assert marker in text
+p.write_text(text.replace(marker,addition+marker))
+print("FE-001 expected failures converted; added end-of-input, parenthesized, scanner-surrogate, serial, and maximum-length boundaries before product fix.")
+'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+FE-001 expected failures converted; added end-of-input, parenthesized, scanner-surrogate, serial, and maximum-length boundaries before product fix.

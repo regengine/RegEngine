@@ -14,8 +14,8 @@ import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
 const KDE_CHECKER_CONFIG: ToolConfig = {
     id: 'kde-checker',
-    title: 'KDE Checklist Builder',
-    description: 'Tell us your product and your role in the supply chain and we\'ll draft a starting KDE checklist mapped to the relevant CTE under 21 CFR Part 1 Subpart S. Educational; review with your compliance team before relying on it.',
+    title: 'KDE Field Checklist',
+    description: 'Tell us your product and your role in the supply chain and we\'ll draft a starting Key Data Element (KDE) checklist mapped to the relevant Critical Tracking Event (CTE) under 21 CFR Part 1 Subpart S. Educational; review with your compliance team before relying on it.',
     icon: 'ClipboardList',
     stages: {
         questions: [
@@ -27,14 +27,14 @@ const KDE_CHECKER_CONFIG: ToolConfig = {
             },
             {
                 id: 'ctes',
-                text: 'Which events do you perform for this food? (Select all that apply. For seafood received from a fishing vessel, use First Land-Based Receiving — non-seafood importers should use Receiving instead.)',
+                text: 'Which events do you perform for this food? (Select all that apply. For seafood received from a fishing vessel, use First Land-Based Receiving; non-seafood importers should use Receiving instead.)',
                 type: 'multi-select',
                 options: Object.entries(FSMA_CTES).map(([id, data]) => ({ label: data.name, value: id }))
             }
         ],
         leadGate: {
             title: 'Download Your Draft Checklist',
-            description: 'You can print or save your checklist as a PDF and download an importable CSV template for your team. This is a draft starting checklist — review against the rule and your operation\'s actual obligations before adoption.',
+            description: 'You can print or save your checklist as a PDF and download an importable CSV template for your team. This is a draft starting checklist. Review against the rule and your operation\'s actual obligations before adoption.',
             cta: 'Download Draft Checklist'
         }
     }
@@ -72,7 +72,7 @@ export function KDECheckerClient() {
                         <h3 className="text-heading text-re-text-primary">Your Draft KDE Checklist</h3>
                         <p className="mt-1 text-ui text-re-text-secondary">For {categoryName} · Mapped to 21 CFR Part 1 Subpart S</p>
                         <p className="mt-2 max-w-[70ch] text-small text-re-text-tertiary">
-                            Starting checklist — not a regulatory determination. Verify against the rule for your specific operation, surface any §1.1305 exemptions that apply, and review with counsel before relying on it.
+                            Starting checklist, not a regulatory determination. Verify against the rule for your specific operation, surface any §1.1305 exemptions that apply, and review with counsel before relying on it.
                         </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
@@ -142,14 +142,11 @@ export function KDECheckerClient() {
             <FSMAToolShell
                 config={KDE_CHECKER_CONFIG}
                 renderResults={renderResults}
-                onLeadCapture={(lead) => {
-                    if (lead.email) {
-                        posthog?.capture('kde_checked', {
-                            email: lead.email,
-                            answers: lead.answers
-                        });
-                        posthog?.identify(lead.email, { email: lead.email });
-                    }
+                onLeadCapture={() => {
+                    posthog?.capture('kde_checked', {
+                        tool_id: KDE_CHECKER_CONFIG.id,
+                        lead_captured: true
+                    });
                 }}
             />
 

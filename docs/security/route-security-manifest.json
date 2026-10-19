@@ -51,6 +51,19 @@
       "test_adapter": "public_no_auth"
     },
     {
+      "operation": "admin:PATCH:/admin/organizations/{org_id}",
+      "owner": "admin",
+      "method": "PATCH",
+      "path": "/admin/organizations/{org_id}",
+      "classification": "global-sysadmin",
+      "authentication": "opaque-session-cookie:webauthn-or-sso",
+      "required_permissions": [
+        "sysadmin"
+      ],
+      "storage_boundary": "admin-postgres:audited-global",
+      "test_adapter": "global_sysadmin_high_assurance"
+    },
+    {
       "operation": "admin:PUT:/admin/organizations/{org_id}/sso-policy",
       "owner": "admin",
       "method": "PUT",
@@ -1647,6 +1660,17 @@
       "authentication": "none",
       "required_permissions": [],
       "storage_boundary": "public-static-or-health:no-tenant-secret",
+      "test_adapter": "public_no_auth"
+    },
+    {
+      "operation": "admin:POST:/api/v1/tools/check-access",
+      "owner": "admin",
+      "method": "POST",
+      "path": "/api/v1/tools/check-access",
+      "classification": "public",
+      "authentication": "none",
+      "required_permissions": [],
+      "storage_boundary": "admin-postgres:identity-bound-public-flow",
       "test_adapter": "public_no_auth"
     },
     {
@@ -4855,12 +4879,12 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 250,
+    "enabled_operation_count": 252,
     "disabled_operation_count": 180,
     "disabled_unique_path_count": 163,
     "enabled_by_classification": {
-      "global-sysadmin": 15,
-      "public": 29,
+      "global-sysadmin": 16,
+      "public": 30,
       "tenant-scoped": 199,
       "workload-only": 7
     }

@@ -1,0 +1,18 @@
+UTC: 2026-10-03T03:35:05.218190+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; from collections import Counter; import subprocess,json; files=[p for p in Path("docs/qa/2026-10-02/artifacts/fix").rglob("*") if p.is_file()]; print(json.dumps({"artifact_extensions":dict(Counter(p.suffix for p in files)),"head":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"tracked_uncommitted":subprocess.check_output(["git","diff","--name-only"],text=True).splitlines()},indent=2)); print("new_instruction_files",[p for p in subprocess.check_output(["git","ls-files","--others","--exclude-standard"],text=True).splitlines() if Path(p).name in ("AGENTS.md","CLAUDE.md")])'
+Exit: 0
+Duration: 0.12s
+Timeout: False
+
+{
+  "artifact_extensions": {
+    ".txt": 304,
+    ".json": 10
+  },
+  "head": "b6222b2942cfd1fee2ac1a3fa259857afeb55c67",
+  "tracked_uncommitted": [
+    "docs/qa/2026-10-02/SUMMARY.md"
+  ]
+}
+new_instruction_files []

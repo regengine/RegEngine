@@ -1,0 +1,40 @@
+UTC: 2026-10-03T00:36:53.631279+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json
+Exit: 2
+Duration: 3.95s
+Timeout: False
+
+
+==================================== ERRORS ====================================
+____ ERROR collecting services/ingestion/tests/test_csv_malformed_input.py _____
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_csv_malformed_input.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_csv_malformed_input.py:26: in <module>
+    from app import csv_templates as ct
+services/ingestion/app/csv_templates.py:29: in <module>
+    from shared.jev import JevDecider, get_jev_decider
+services/shared/jev/__init__.py:19: in <module>
+    from .client import (
+services/shared/jev/client.py:47: in <module>
+    from typesafe_sdk import (
+E   ModuleNotFoundError: No module named 'typesafe_sdk'
+____ ERROR collecting services/ingestion/tests/test_csv_input_quantities.py ____
+ImportError while importing test module '/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/services/ingestion/tests/test_csv_input_quantities.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+services/ingestion/tests/test_csv_input_quantities.py:15: in <module>
+    from app.csv_templates import CTE_COLUMNS, _generate_csv_template, parse_csv_rows
+services/ingestion/app/csv_templates.py:29: in <module>
+    from shared.jev import JevDecider, get_jev_decider
+services/shared/jev/__init__.py:19: in <module>
+    from .client import (
+services/shared/jev/client.py:47: in <module>
+    from typesafe_sdk import (
+E   ModuleNotFoundError: No module named 'typesafe_sdk'
+=========================== short test summary info ============================
+ERROR services/ingestion/tests/test_csv_malformed_input.py
+ERROR services/ingestion/tests/test_csv_input_quantities.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
+2 errors in 3.40s

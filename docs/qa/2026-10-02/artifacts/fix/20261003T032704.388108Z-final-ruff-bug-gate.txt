@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:27:04.388108+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Library/Frameworks/Python.framework/Versions/3.12/bin/ruff check --no-cache --select E9,F63,F7,F82 services/ingestion services/shared services/admin server tests/qa_sweep_20261002 services/ingestion/tests/test_qa_sweep_20261002_contract.py
+Exit: 0
+Duration: 0.10s
+Timeout: False
+
+All checks passed!

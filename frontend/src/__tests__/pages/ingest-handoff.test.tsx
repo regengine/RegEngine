@@ -29,6 +29,34 @@ vi.mock('@/hooks/use-api', () => ({
     mutateAsync: vi.fn(),
     reset: vi.fn(),
   })),
+  useIngestEpcisEvent: vi.fn(() => ({
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+    mutateAsync: vi.fn(),
+    reset: vi.fn(),
+  })),
+  useIngestEpcisBatch: vi.fn(() => ({
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+    mutateAsync: vi.fn(),
+    reset: vi.fn(),
+  })),
+  useIngestEpcisXml: vi.fn(() => ({
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+    mutateAsync: vi.fn(),
+    reset: vi.fn(),
+  })),
+  useValidateEpcisEvent: vi.fn(() => ({
+    isPending: false,
+    isSuccess: false,
+    isError: false,
+    mutateAsync: vi.fn(),
+    reset: vi.fn(),
+  })),
 }));
 
 vi.mock('@/hooks/use-dashboard-refresh', () => ({

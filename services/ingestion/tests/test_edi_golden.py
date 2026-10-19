@@ -67,6 +67,7 @@ from app.edi_ingestion.parser import (  # noqa: E402
     _parse_x12_segments,
     _split_transaction_sets,
 )
+from app.webhook_compat import _batch_dedup_key  # noqa: E402
 from app.webhook_models import EventResult, IngestResponse  # noqa: E402
 
 _CORPUS_DIR = Path(__file__).parent / "fixtures" / "edi_corpus"
@@ -85,6 +86,8 @@ _FIXTURES = {
     "po_850": "850",
     "invoice_810": "810",
     "receiving_861": "861",
+    "receipt_944": "944",
+    "advice_945": "945",
 }
 
 # #2976: fixture stem -> the transaction set every ST/SE pair carries.
@@ -173,14 +176,36 @@ def test_edi_multi_set_extractor_golden(name: str) -> None:
     assert len(set(ship_from)) == len(ship_from), "#2976: N1 ship-from bled across ST/SE boundaries"
 
 
-def test_856_multi_sn1_quantity_is_the_line_sum() -> None:
-    """#2974 acceptance: the multi-line ASN fixture's quantity is the sum
-    of its SN1 lines (120 + 80 + 40), not its last line's 40.
+def test_856_lot_is_read_from_lin_ref_or_sln() -> None:
+    """A line lot may sit on LIN, on REF*LT after SN1, or on an SLN LT pair.
+    """
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000009*0*P*>~"
+    raw = (
+        isa
+        + "GS*SH*S*R*20260310*1200*1*X*004010~ST*856*0001~BSN*00*A*20260310*1200~"
+        + "LIN**LT*LOT-A*SK*ROM~SN1**10*CA~"
+        + "LIN**SK*SPI~SN1**20*CA~REF*LT*LOT-B~"
+        + "LIN**SK*KALE~SN1**30*CA~SLN*1**I*30*CA****LT*LOT-C~"
+        + "SE*8*0001~GE*1*1~IEA*1*000000009~"
+    )
+    lines = _extract_fields_for_set("856", _parse_x12_segments(raw))["line_items"]
+    assert [(line["lot_number"], line["quantity"], line["product_description"]) for line in lines] == [
+        ("LOT-A", 10.0, "ROM"),
+        ("LOT-B", 20.0, "SPI"),
+        ("LOT-C", 30.0, "KALE"),
+    ]
+
+
+def test_856_multi_sn1_keeps_each_line() -> None:
+    """Each SN1 is its own line. 120 + 80 + 40 must not collapse to 240.
     """
     raw = (_CORPUS_DIR / "asn_856_multi_line.edi").read_text(encoding="utf-8")
     extracted = _extract_fields_for_set("856", _parse_x12_segments(raw))
-    assert extracted["quantity"] == 240.0
-    assert extracted["unit_of_measure"] == "CT"
+    assert [(line["quantity"], line["unit_of_measure"]) for line in extracted["line_items"]] == [
+        (120.0, "CT"),
+        (80.0, "CT"),
+        (40.0, "CT"),
+    ]
 
 
 def test_810_total_amount_is_tds_over_100() -> None:
@@ -199,7 +224,7 @@ def test_861_condition_code_is_rcd_index_5() -> None:
     """
     raw = (_CORPUS_DIR / "receiving_861.edi").read_text(encoding="utf-8")
     extracted = _extract_fields_for_set("861", _parse_x12_segments(raw))
-    assert extracted["condition_code"] == "4"
+    assert extracted["line_items"][0]["condition_code"] == "4"
 
 
 def test_861_bra_element_offsets_match_x12_layout() -> None:
@@ -287,10 +312,10 @@ def test_sn1_vs_po1_quantity_fallback_divergence() -> None:
         + "BRA*RA-1*20260312*00*1~RCD*1*ABC*CA~SE*5*0001~GE*1*1~IEA*1*000000009~"
     )
 
-    q856 = _extract_fields_for_set("856", _parse_x12_segments(e856))["quantity"]
+    q856 = _extract_fields_for_set("856", _parse_x12_segments(e856))["line_items"][0]["quantity"]
     q850 = _extract_fields_for_set("850", _parse_x12_segments(e850))["quantity"]
     q810 = _extract_fields_for_set("810", _parse_x12_segments(e810))["quantity"]
-    q861 = _extract_fields_for_set("861", _parse_x12_segments(e861))["quantity"]
+    q861 = _extract_fields_for_set("861", _parse_x12_segments(e861))["line_items"][0]["quantity"]
 
     assert q856 is None, "#2974: 856 SN1 falls back to 0.0 -> quantity left None"
     assert q850 is None, "850 PO1 falls back to 0.0 -> quantity left None"
@@ -320,20 +345,20 @@ def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClien
 
     async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
         captured_payload["payload"] = payload
-        event = payload.events[0]
         return IngestResponse(
-            accepted=1,
+            accepted=len(payload.events),
             rejected=0,
-            total=1,
+            total=len(payload.events),
             events=[
                 EventResult(
                     traceability_lot_code=event.traceability_lot_code,
                     cte_type=event.cte_type.value,
                     status="accepted",
-                    event_id="evt-edi-golden",
+                    event_id=f"evt-edi-golden-{index}",
                     sha256_hash="hash-1",
                     chain_hash="chain-1",
                 )
+                for index, event in enumerate(payload.events, start=1)
             ],
         )
 
@@ -367,7 +392,7 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
     },
     "asn_856_multi_line": {
         "cte_type": "shipping",
-        "quantity": 240.0,  # #2974: 120 + 80 + 40, not the last line's 40
+        "quantity": 120.0,  # first SN1; 80 and 40 are their own events
         "unit_of_measure": "cartons",  # #2978: SN1 "CT"
         "product_description": "ROMAINE-12CT",
         "location_gln": "6141410000014",  # ship_from_gln
@@ -397,6 +422,22 @@ _E2E_EXPECTED: dict[str, dict[str, Any]] = {
         "location_gln": "6141410000069",  # receiving_location_gln
         "event_date": "2026-03-12",  # receive_date_raw
     },
+    "receipt_944": {
+        "cte_type": "receiving",
+        "quantity": 10.0,
+        "unit_of_measure": "cases",  # W07 "CA"
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # warehouse GLN
+        "event_date": "2026-03-18",  # W17 date, not G62
+    },
+    "advice_945": {
+        "cte_type": "shipping",
+        "quantity": 10.0,  # W1203 shipped, not W1202 ordered
+        "unit_of_measure": "cases",
+        "product_description": "Romaine Hearts 12ct",
+        "location_gln": "6141410000069",  # ship-from warehouse GLN
+        "event_date": "2026-03-19",  # W06 date, not G62
+    },
 }
 
 
@@ -408,12 +449,15 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     output to persisted FSMA KDEs for all four sets — not just 856.
     """
     raw = (_CORPUS_DIR / f"{name}.edi").read_bytes()
+    data = {
+        "traceability_lot_code": _VALID_FSMA_TLC,
+        "tenant_id": TEST_TENANT_ID,
+    }
+    if name in ("receipt_944", "advice_945"):
+        data["tlc_source_reference"] = "Packinghouse Assigner"
     response = client.post(
         "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
+        data=data,
         files={"file": (f"{name}.edi", raw, "application/edi-x12")},
         headers={"X-Partner-ID": "WALMART"},
     )
@@ -421,6 +465,21 @@ def test_document_endpoint_maps_kdes_per_set(name: str, client: TestClient, capt
     body = response.json()
     assert body["document_type"] == f"X12_{_FIXTURES[name]}"
     assert body["extracted"]["fsma_validation_status"] == "passed"
+    if name in ("receipt_944", "advice_945"):
+        assert body["extracted"]["event_count"] == 3
+        assert body["ingestion_result"]["total"] == len(body["ingestion_result"]["events"]) == 3
+        assert [event.traceability_lot_code for event in captured_payload["payload"].events] == [
+            "00012345678905-A",
+            "00012345678912-B",
+            "00012345678929-C",
+        ]
+        assert [event.quantity for event in captured_payload["payload"].events] == [10.0, 20.0, 30.0]
+        assert [event.unit_of_measure for event in captured_payload["payload"].events] == ["cases", "cases", "each"]
+    if name == "asn_856_multi_line":
+        posted = captured_payload["payload"].events
+        assert [event.quantity for event in posted] == [120.0, 80.0, 40.0]
+        assert {event.traceability_lot_code for event in posted} == {_VALID_FSMA_TLC}
+        assert len({_batch_dedup_key(event) for event in posted}) == 3
 
     payload = captured_payload["payload"]
     assert payload.tenant_id == TEST_TENANT_ID
@@ -460,3 +519,117 @@ def test_861_bsn_ordered_bra_is_rejected(client: TestClient) -> None:
 
     assert response.status_code == 400, response.text
     assert response.json()["detail"]["error"] == "invalid_edi_date"
+
+
+def _three_line_document(transaction_set: str, lots: tuple[str, str, str], units: tuple[str, str, str]) -> bytes:
+    """One interchange whose three item lines carry lots and their own units."""
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000321*0*P*>~"
+    if transaction_set == "856":
+        body = (
+            "GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+            "ST*856*0001~BSN*00*ASN-ABC*20260310*1200~HL*1**S~"
+            "N1*SF*Valley Fresh Farms*92*6141410000014~"
+            "N1*ST*Metro Distribution Center*92*6141410000069~"
+            f"LIN**SK*ROMAINE-12CT*LT*{lots[0]}~SN1**10*CA~"
+            f"LIN**SK*SPINACH-6CT*LT*{lots[1]}~SN1**20*LB~"
+            f"LIN**UP*012345678905*LT*{lots[2]}~SN1**30*EA~"
+            "REF*BM*BOL-ABC~SE*12*0001~GE*1*1~IEA*1*000000321~"
+        )
+    else:
+        body = (
+            "GS*RC*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+            "ST*861*0001~BRA*RA-ABC*20260312*00*1~"
+            "N1*SF*Valley Fresh Farms*92*6141410000014~"
+            "N1*ST*Metro Distribution Center*92*6141410000069~"
+            f"RCD*1*10*{units[0]}**4~LIN**SK*ROMAINE-12CT*LT*{lots[0]}~"
+            f"RCD*2*20*{units[1]}**5~LIN**SK*SPINACH-6CT*LT*{lots[1]}~"
+            f"RCD*3*30*{units[2]}**6~LIN**UP*012345678905*LT*{lots[2]}~"
+            "REF*PO*PO-ABC~SE*12*0001~GE*1*1~IEA*1*000000321~"
+        )
+    return (isa + body).encode("utf-8")
+
+
+@pytest.mark.parametrize("transaction_set", ["856", "861"])
+def test_three_item_lines_become_three_events(transaction_set: str, client: TestClient, captured_payload: dict) -> None:
+    """Lots A, B and C are three CTEs. The TLC is the lot verbatim, and
+    two lines that share a lot still both survive batch dedup.
+    """
+    lots = ("00012345678901-A", "00012345678901-B", "00012345678901-C")
+    units = ("CA", "LB", "EA") if transaction_set == "856" else ("CA", "LB", "EA")
+    raw = _three_line_document(transaction_set, lots, units)
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={"traceability_lot_code": _VALID_FSMA_TLC, "tenant_id": TEST_TENANT_ID},
+        files={"file": (f"{transaction_set}.edi", raw, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201, response.text
+    events = captured_payload["payload"].events
+    assert [(event.traceability_lot_code, event.quantity, event.unit_of_measure) for event in events] == [
+        ("00012345678901-A", 10.0, "cases"),
+        ("00012345678901-B", 20.0, "lbs"),
+        ("00012345678901-C", 30.0, "each"),
+    ]
+    assert events[2].traceability_lot_code == "00012345678901-C"
+    assert "012345678905" not in events[2].traceability_lot_code
+    assert len({_batch_dedup_key(event) for event in events}) == 3
+    assert len({event.kdes["edi_line_index"] for event in events}) == 3
+    if transaction_set == "856":
+        assert {event.kdes["asn_number"] for event in events} == {"ASN-ABC"}
+        assert {event.kdes["ship_from_location"] for event in events} == {"Valley Fresh Farms"}
+    else:
+        assert {event.kdes["receiving_advice_number"] for event in events} == {"RA-ABC"}
+        assert [event.kdes["condition_code"] for event in events] == ["4", "5", "6"]
+
+    shared = _three_line_document(transaction_set, (lots[0], lots[0], lots[0]), units)
+    captured_payload.clear()
+    again = client.post(
+        "/api/v1/ingest/edi/document",
+        data={"traceability_lot_code": _VALID_FSMA_TLC, "tenant_id": TEST_TENANT_ID},
+        files={"file": (f"{transaction_set}-same-lot.edi", shared, "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert again.status_code == 201, again.text
+    same_lot = captured_payload["payload"].events
+    assert [event.traceability_lot_code for event in same_lot] == [lots[0], lots[0], lots[0]]
+    assert [event.quantity for event in same_lot] == [10.0, 20.0, 30.0]
+    assert len({_batch_dedup_key(event) for event in same_lot}) == 3
+
+
+def test_line_without_a_lot_uses_the_form_field_and_a_short_lot_is_not_prefixed(
+    client: TestClient, captured_payload: dict
+) -> None:
+    """The form TLC is only the fallback. A lot of ``A`` is rejected as
+    itself; it is not rewritten to a GTIN-prefixed TLC.
+    """
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000322*0*P*>~"
+    no_lot = (
+        isa
+        + "GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~ST*856*0001~"
+        + "BSN*00*ASN-1*20260310*1200~HL*1**S~"
+        + "N1*SF*Valley Fresh Farms*92*6141410000014~"
+        + "N1*ST*Metro Distribution Center*92*6141410000069~"
+        + "LIN**SK*ROMAINE-12CT~SN1**10*CA~REF*BM*BOL-1~SE*9*0001~GE*1*1~IEA*1*000000322~"
+    )
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={"traceability_lot_code": _VALID_FSMA_TLC, "tenant_id": TEST_TENANT_ID},
+        files={"file": ("no-lot.edi", no_lot.encode("utf-8"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201, response.text
+    assert captured_payload["payload"].events[0].traceability_lot_code == _VALID_FSMA_TLC
+
+    short = no_lot.replace("LIN**SK*ROMAINE-12CT~", "LIN**UP*012345678905*LT*A~")
+    captured_payload.clear()
+    rejected = client.post(
+        "/api/v1/ingest/edi/document",
+        data={"traceability_lot_code": _VALID_FSMA_TLC, "tenant_id": TEST_TENANT_ID},
+        files={"file": ("short-lot.edi", short.encode("utf-8"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert rejected.status_code == 422, rejected.text
+    detail = rejected.json()["detail"]
+    assert detail["error"] == "fsma_validation_failed"
+    assert "012345678905" not in json.dumps(detail)
+    assert "payload" not in captured_payload

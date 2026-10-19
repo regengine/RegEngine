@@ -1,0 +1,277 @@
+UTC: 2026-10-03T03:15:45.011169+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; files=["frontend/AGENTS.md","frontend/playwright.config.ts","docs/qa/2026-10-02/scripts/node-isolation.cjs"]; [print("\nFILE "+p+"\n"+Path(p).read_text()) for p in files]'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+
+FILE frontend/AGENTS.md
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
+
+
+FILE frontend/playwright.config.ts
+
+import { defineConfig, devices } from '@playwright/test';
+
+if (process.env.FORCE_COLOR) {
+    delete process.env.NO_COLOR;
+}
+
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const localBaseURL = 'http://localhost:3001';
+const localJwtSigningKey =
+    process.env.JWT_SIGNING_KEY ||
+    process.env.AUTH_SECRET_KEY ||
+    'playwright-local-jwt-signing-key-2026';
+const localOtpHmacSecret =
+    [REDACTED] ||
+    'playwright-local-otp-hmac-secret-2026-minimum-32-bytes';
+const localTestUserEmail = process.env.TEST_USER_EMAIL || 'playwright-e2e@example.com';
+const localTestPassword = [REDACTED] || 'Trace204!Playwright1';
+const localTestAdminEmail =
+    process.env.TEST_ADMIN_EMAIL || 'playwright-sysadmin@example.com';
+const localTestAdminPassword =
+    [REDACTED] || 'Trace204!Playwright1';
+const localBackendBaseURL = 'http://localhost:8000';
+const localEmailOutboxPath =
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX ||
+    '/tmp/regengine-playwright-email-outbox.jsonl';
+const localSharedDatabaseUrl =
+    process.env.DATABASE_URL || 'postgresql://[REDACTED]@127.0.0.1:5432/playwright_shared'; // pragma: allowlist secret — local test service
+const localAdminDatabaseUrl =
+    process.env.ADMIN_FALLBACK_SQLITE || 'sqlite:////tmp/regengine-playwright-admin.db';
+const localAdminHealthUrl = new URL('/health', `${localBackendBaseURL}/`).toString();
+
+if (!externalBaseURL) {
+    process.env.REGENGINE_ENV = process.env.REGENGINE_ENV || 'development';
+    process.env.JWT_SIGNING_KEY = localJwtSigningKey;
+    process.env.AUTH_SECRET_KEY = process.env.AUTH_SECRET_KEY || localJwtSigningKey;
+    process.env.AUTH_OTP_HMAC_SECRET = [REDACTED];
+    process.env.CSRF_SECRET = [REDACTED] || localJwtSigningKey;
+    process.env.TEST_USER_EMAIL = localTestUserEmail;
+    process.env.TEST_PASSWORD = [REDACTED];
+    process.env.TEST_ADMIN_EMAIL = localTestAdminEmail;
+    process.env.TEST_ADMIN_PASSWORD = [REDACTED];
+    // Playwright local mode owns the backend webServer. Ignore externally
+    // provided service URLs so CI cannot accidentally mutate production.
+    process.env.ADMIN_SERVICE_URL = localBackendBaseURL;
+    process.env.INGESTION_SERVICE_URL = localBackendBaseURL;
+    process.env.COMPLIANCE_SERVICE_URL = localBackendBaseURL;
+    process.env.ENABLE_DB_API_KEYS = 'true';
+    process.env.REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379/0';
+    process.env.REGENGINE_E2E_MODE = process.env.REGENGINE_E2E_MODE || 'true';
+    process.env.REGENGINE_E2E_EMAIL_OUTBOX = localEmailOutboxPath;
+    process.env.DATABASE_URL = localSharedDatabaseUrl;
+    process.env.ADMIN_FALLBACK_SQLITE = localAdminDatabaseUrl;
+    process.env.WEBAUTHN_EXPECTED_ORIGIN =
+        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL;
+    process.env.WEBAUTHN_RP_ID = process.env.WEBAUTHN_RP_ID || 'localhost';
+    process.env.DISABLE_TASK_WORKER = process.env.DISABLE_TASK_WORKER || 'true';
+    process.env.ALLOW_INMEMORY_SESSION_STORE =
+        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true';
+    // Every seeded passwordless user shares one org/tenant (one organization
+    // per email domain), so the suites' combined traffic exceeds the 100/min
+    // per-tenant production default.
+    process.env.TENANT_RATE_LIMIT_RPM = process.env.TENANT_RATE_LIMIT_RPM || '100000';
+    process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES =
+        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true';
+}
+
+const forwardedEnv = { ...process.env };
+delete forwardedEnv.NO_COLOR;
+
+/**
+ * See https://playwright.dev/docs/test-configuration.
+ */
+export default defineConfig({
+    testDir: './tests/e2e',
+    globalSetup: './tests/e2e/global-setup.ts',
+    /* The local webServer runs `next dev`, which compiles each route on
+     * first hit. A cold compile of a heavy page (dashboard, settings) can
+     * exceed Playwright's default 30s test / 5s expect timeouts on a slow
+     * runner, flaking auth-flow on unrelated PRs. Assertions still have to
+     * genuinely pass — this only stops first-render latency from failing
+     * the gate. */
+    timeout: 120_000,
+    expect: { timeout: 15_000 },
+    /* Run tests in files in parallel */
+    fullyParallel: true,
+    /* Fail the build on CI if you accidentally left test.only in the source code. */
+    forbidOnly: !!process.env.CI,
+    /* Retry on CI only — retries=1 handles genuine flakiness; backend-down failures
+     * are caught by the preflight health check before tests run, not by retrying. */
+    retries: process.env.CI ? 1 : 0,
+    /* 2 workers in CI — tests are independent, parallelism halves total run time. */
+    workers: process.env.CI ? 1 : externalBaseURL ? undefined : 1,
+    /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+    reporter: 'html',
+    /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+    use: {
+        /* Base URL — localhost is a secure context in Chromium, so Secure
+         * __Host-regengine_session cookies are accepted without local HTTPS.
+         * Override with PLAYWRIGHT_BASE_URL for staging/prod runs. */
+        baseURL: externalBaseURL || localBaseURL,
+
+        /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+        trace: 'on-first-retry',
+    },
+
+    /* Start the Next.js dev server before running tests in CI.
+     * env: explicitly forward secrets so the Next.js middleware can verify
+     * JWTs signed by the Railway admin service. Without this, the child
+     * process may not inherit CI env vars and every authenticated route
+     * redirects to /login?error=session_expired. */
+    webServer: externalBaseURL
+        ? undefined
+        : [
+            {
+                command: 'env -u NO_COLOR bash ../scripts/start-e2e-backend.sh',
+                url: localAdminHealthUrl,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    PORT: '8000',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    REGENGINE_E2E_MODE: process.env.REGENGINE_E2E_MODE || 'true',
+                    REGENGINE_E2E_EMAIL_OUTBOX:
+                        process.env.REGENGINE_E2E_EMAIL_OUTBOX || localEmailOutboxPath,
+                    DATABASE_URL: process.env.DATABASE_URL || localSharedDatabaseUrl,
+                    ADMIN_FALLBACK_SQLITE:
+                        process.env.ADMIN_FALLBACK_SQLITE || localAdminDatabaseUrl,
+                    WEBAUTHN_EXPECTED_ORIGIN:
+                        process.env.WEBAUTHN_EXPECTED_ORIGIN || localBaseURL,
+                    WEBAUTHN_RP_ID: process.env.WEBAUTHN_RP_ID || 'localhost',
+                    DISABLE_TASK_WORKER: process.env.DISABLE_TASK_WORKER || 'true',
+                    ALLOW_INMEMORY_SESSION_STORE:
+                        process.env.ALLOW_INMEMORY_SESSION_STORE || 'true',
+                    INVITE_BASE_URL: process.env.INVITE_BASE_URL || localBaseURL,
+                },
+            },
+            {
+                command: 'env -u NO_COLOR npm run dev -- -p 3001',
+                url: localBaseURL,
+                reuseExistingServer: !process.env.CI,
+                timeout: 120_000,
+                env: {
+                    ...forwardedEnv,
+                    // Ensure JWT keys reach the dev server for middleware verification.
+                    JWT_SIGNING_KEY: process.env.JWT_SIGNING_KEY || localJwtSigningKey,
+                    JWT_PREVIOUS_KEY: process.env.JWT_PREVIOUS_KEY ?? '',
+                    AUTH_SECRET_KEY: process.env.AUTH_SECRET_KEY || localJwtSigningKey,
+                    AUTH_OTP_HMAC_SECRET:
+                        [REDACTED] || localOtpHmacSecret,
+                    CSRF_SECRET: [REDACTED] || localJwtSigningKey,
+                    TEST_USER_EMAIL: process.env.TEST_USER_EMAIL || localTestUserEmail,
+                    TEST_PASSWORD: [REDACTED] || localTestPassword,
+                    TEST_ADMIN_EMAIL: process.env.TEST_ADMIN_EMAIL || localTestAdminEmail,
+                    TEST_ADMIN_PASSWORD:
+                        [REDACTED] || localTestAdminPassword,
+                    ADMIN_SERVICE_URL: localBackendBaseURL,
+                    INGESTION_SERVICE_URL: localBackendBaseURL,
+                    COMPLIANCE_SERVICE_URL: localBackendBaseURL,
+                    // Supabase config: intentionally omitted for JWT-only E2E mode.
+                    NEXT_PUBLIC_SUPABASE_URL: '',
+                    NEXT_PUBLIC_SUPABASE_ANON_KEY: '',
+                    NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES:
+                        process.env.NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES || 'true',
+                },
+            },
+        ],
+
+    /* Configure projects for major browsers */
+    projects: [
+        {
+            name: 'chromium',
+            use: { ...devices['Desktop Chrome'] },
+        },
+    ],
+});
+
+
+FILE docs/qa/2026-10-02/scripts/node-isolation.cjs
+// QA-only process guard: do not read dotenv/credential files or connect off-host.
+// Load with NODE_OPTIONS=--require=/absolute/path/to/this/file.
+const fs = require('node:fs');
+const net = require('node:net');
+const dns = require('node:dns');
+const { syncBuiltinESMExports } = require('node:module');
+
+function sensitive(file) {
+  if (typeof file !== 'string' && !(file instanceof URL)) return false;
+  const name = String(file);
+  return /(^|[/\\])\.env(?:[./\\]|$)/.test(name)
+    || /(^|[/\\])(?:\.npmrc|\.netrc|credentials|id_rsa|id_ed25519)(?:[/\\]|$)/.test(name);
+}
+function absent(file) {
+  const error = new Error('QA isolation: protected configuration file unavailable');
+  error.code = 'ENOENT';
+  return error;
+}
+for (const name of ['readFileSync', 'openSync', 'statSync', 'lstatSync', 'accessSync']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return original.call(this, file, ...args);
+  };
+}
+const existsSync = fs.existsSync;
+fs.existsSync = function (file) { return !sensitive(file) && existsSync.call(this, file); };
+for (const name of ['readFile', 'open', 'stat', 'lstat', 'access']) {
+  const original = fs[name];
+  fs[name] = function (file, ...args) {
+    if (sensitive(file)) {
+      const callback = args.at(-1);
+      if (typeof callback === 'function') return queueMicrotask(() => callback(absent(file)));
+      throw absent(file);
+    }
+    return original.call(this, file, ...args);
+  };
+  const promiseOriginal = fs.promises[name];
+  fs.promises[name] = async function (file, ...args) {
+    if (sensitive(file)) throw absent(file);
+    return promiseOriginal.call(this, file, ...args);
+  };
+}
+function local(host) {
+  return !host || ['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0'].includes(host);
+}
+const connect = net.Socket.prototype.connect;
+net.Socket.prototype.connect = function (...args) {
+  // net.connect()/http.request() may supply Node's normalized [options, cb]
+  // argument array rather than the public positional/options call shape.
+  const normalized = Array.isArray(args[0]) ? args[0] : args;
+  const options = normalized[0];
+  const host = options && typeof options === 'object'
+    ? options.host || options.hostname
+    : typeof normalized[1] === 'string' ? normalized[1] : undefined;
+  if (!local(host)) throw new Error('QA isolation: off-host socket blocked');
+  return connect.apply(this, args);
+};
+for (const name of ['lookup', 'resolve', 'resolve4', 'resolve6', 'resolveAny']) {
+  const original = dns[name];
+  dns[name] = function (hostname, ...args) {
+    if (!local(hostname)) throw new Error('QA isolation: off-host DNS blocked');
+    return original.call(this, hostname, ...args);
+  };
+}
+const fetch = globalThis.fetch;
+if (fetch) globalThis.fetch = async function (input, ...args) {
+  const raw = typeof input === 'string' || input instanceof URL ? input : input.url;
+  const target = new URL(raw, 'http://localhost');
+  if (!local(target.hostname)) throw new Error('QA isolation: off-host fetch blocked');
+  return fetch.call(this, input, ...args);
+};
+syncBuiltinESMExports();

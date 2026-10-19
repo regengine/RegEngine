@@ -31,15 +31,15 @@ const TOOLS = [
     ['cte-mapper', 'CTE Mapper', 'Map the 7 Critical Tracking Events across a supply chain.', Map, 'validate'],
     ['kde-checker', 'KDE Field Checklist', 'Check whether CTE/KDE fields are present for each FTL product and CTE type.', ClipboardList, 'validate'],
     ['tlc-validator', 'TLC Format Check', 'Check traceability lot code format and uniqueness assumptions.', FlaskConical, 'validate'],
-    ['self-reported-checklist', 'Self-Reported Checklist', 'You answer. We echo what you reported. Not a readiness score.', ShieldCheck, 'assess'],
-    ['records-request-checklist', 'Records-Request Checklist', 'Self-reported checklist. Not a 24-hour capability test.', Timer, 'assess'],
+    ['self-reported-checklist', 'Self Reported Checklist', 'You answer. It echoes what you reported. Not a readiness score.', ShieldCheck, 'assess'],
+    ['records-request-checklist', 'Records Request Checklist', 'Self reported checklist. Not a 24 hour capability test.', Timer, 'assess'],
 ] as const;
 
 /** The hero aside: a hairline ledger, not a bordered data table (SPEC §6). */
 const ROUTE_ROWS: [string, string][] = [
     ['Start', 'FTL list'],
     ['Map', 'CTEs and KDEs'],
-    ['Check', 'Self-reported fields'],
+    ['Check', 'Self reported fields'],
     ['Operate', 'Inflow and export'],
 ];
 
@@ -58,13 +58,13 @@ export function ToolsLandingClient() {
                 <div>
                     <p className="mb-5 font-mono uppercase text-label text-re-text-muted">Tools</p>
                     <h1 className="max-w-[20ch] font-display text-display text-re-text-primary">
-                        Small tools for list checks and field checks.
+                        Free tools for FSMA 204 list checks and field checks.
                     </h1>
                     <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-                        These pages help you look at the Food Traceability List, CTE/KDE fields, and a self-reported records-request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
+                        These pages help you look at the Food Traceability List, Critical Tracking Event (CTE) and Key Data Element (KDE) fields, and a self reported records request checklist. They do not score readiness, they do not decide if you are a covered person, and they do not claim you can meet §1.1455's clock.
                     </p>
                     <p className="mt-4 max-w-[68ch] text-small text-re-text-muted">
-                        The federal Food Traceability Rule compliance date is July 20, 2028.
+                        FDA won't enforce before July 20, 2028.
                     </p>
                 </div>
                 <Card className="self-start overflow-hidden">

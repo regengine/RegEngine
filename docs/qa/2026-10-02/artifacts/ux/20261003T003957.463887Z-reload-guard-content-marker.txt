@@ -1,0 +1,8 @@
+UTC: 2026-10-03T00:39:57.463887+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("/private/tmp/regengine-qa-ux-u2059hm8/frontend/next.config.js"); p.write_text(p.read_text()+"\n// QA mirror only: restart process after isolation guard hardening.\n"); print("Added inert restart marker to disposable mirror config only")'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+Added inert restart marker to disposable mirror config only

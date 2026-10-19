@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Jev Lab</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/lab.css">
+<script src="/static/lab.js" defer></script>
+</head>
+<body>
+<div id="gate" class="gate" hidden>
+  <div>
+    <h2>Open Jev Lab from your terminal link</h2>
+    <p>This page needs the access token that <code>scripts/jev_lab serve</code> printed. Open the link that starts with
+      <code>http://127.0.0.1:</code> and ends with <code>#token=…</code>. The token stays in this browser tab.</p>
+  </div>
+</div>
+
+<header class="bar">
+  <div class="brand"><h1>Jev Lab</h1><span class="tag">experimental dev tooling</span></div>
+  <div class="pills">
+    <span id="pill-jev" class="pill">Jev: connecting</span>
+    <span id="pill-claude" class="pill">Claude: –</span>
+    <span id="pill-budget" class="pill" title="Jev requests sent in this session / budget">Requests: –</span>
+    <button id="motion-toggle" class="ghost" type="button" aria-pressed="false">Pause motion</button>
+    <button id="theme-toggle" class="ghost" type="button">Theme: auto</button>
+  </div>
+</header>
+<div id="fake-banner" class="fake-banner" hidden>OFFLINE FAKE JEV: answers come from a word-overlap stand-in, not from Jev. Nothing leaves this machine.</div>
+
+<section class="now" aria-label="Now">
+  <p id="now-text">Connecting to the lab…</p>
+  <div class="actions">
+    <button id="now-primary" class="primary" type="button" disabled>Light the sky</button>
+    <button id="now-stop" class="ghost" type="button" hidden>Stop</button>
+  </div>
+</section>
+<p id="announce" class="sr-only" aria-live="polite"></p>
+
+<main class="layout">
+  <section class="sky-card" aria-labelledby="sky-title">
+    <div class="sky-head">
+      <h2 id="sky-title">The sky: every labelled subject, as Jev last answered it</h2>
+      <div class="seg" role="group" aria-label="Which question">
+        <button type="button" data-kind="header_mapping" aria-pressed="true">Header fields</button>
+        <button type="button" data-kind="file_cte" aria-pressed="false">File CTE</button>
+      </div>
+    </div>
+    <div class="sky-wrap">
+      <canvas id="sky" aria-hidden="true"></canvas>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </div>
+    <p id="sky-caption" class="caption">No answers yet. Light the sky to ask Jev every labelled subject.</p>
+    <ul class="legend" aria-label="What the sky shows">
+      <li><canvas data-glyph="right" width="32" height="32"></canvas>right answer</li>
+      <li><canvas data-glyph="wrong" width="32" height="32"></canvas>wrong answer</li>
+      <li><canvas data-glyph="decline" width="32" height="32"></canvas>declined (no_match / mixed), right</li>
+      <li><canvas data-glyph="decline-wrong" width="32" height="32"></canvas>declined, wrong</li>
+      <li><canvas data-glyph="nova" width="32" height="32"></canvas>wrong at auto-apply confidence</li>
+      <li><canvas data-glyph="twin" width="32" height="32"></canvas>changed when options were reversed</li>
+      <li>Closer to Jev = more confident. Upper sky: training split. Behind the veil: held out, never shown to Claude.</li>
+      <li>Rings: gold kept, dashed rejected on held-out, dotted failed training. The moon is Claude; each comet is a rewrite. A dashed ring around the moon changed nothing.</li>
+    </ul>
+    <div id="inspector" class="inspector" hidden></div>
+  </section>
+
+  <section class="panel" aria-label="Controls">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-ask" aria-controls="panel-ask" aria-selected="true">Ask Jev</button>
+      <button role="tab" id="tab-headers" aria-controls="panel-headers" aria-selected="false" tabindex="-1">Header check</button>
+      <button role="tab" id="tab-loop" aria-controls="panel-loop" aria-selected="false" tabindex="-1">Loop</button>
+      <button role="tab" id="tab-ledger" aria-controls="panel-ledger" aria-selected="false" tabindex="-1">Ledger</button>
+      <button role="tab" id="tab-table" aria-controls="panel-table" aria-selected="false" tabindex="-1">Sky as table</button>
+    </div>
+
+    <div id="panel-ask" class="tabpanel" role="tabpanel" aria-labelledby="tab-ask">
+      <p class="small">One request: every question is answered about the same state. Send header names, synthetic examples
+        and code. Never send secrets, customer data or messages copied word for word.</p>
+      <div class="field">
+        <label for="ask-state">State (JSON, or plain text)</label>
+        <textarea id="ask-state" spellcheck="false">{"headers": ["Ship Dte", "Cust Name", "Lot No.", "Qty Shpd"]}</textarea>
+      </div>
+      <div id="questions"></div>
+      <div class="row">
+        <button id="add-question" class="ghost" type="button">Add question</button>
+        <label class="sr-only" for="example-select">Example questions</label>
+        <select id="example-select" class="grow">
+          <option value="">Examples…</option>
+          <option value="cte">Which CTE do these headers record?</option>
+          <option value="lot">Is there a lot code column?</option>
+          <option value="risk">How likely is the file to be rejected?</option>
+        </select>
+        <button id="ask-send" class="primary" type="button">Ask Jev</button>
+      </div>
+      <div id="ask-result" class="result" aria-live="polite"></div>
+    </div>
+
+    <div id="panel-headers" class="tabpanel" role="tabpanel" aria-labelledby="tab-headers" hidden>
+      <p class="small">Paste one CSV header row. Jev gets the two questions <code>POST /api/v1/ingest/csv</code> asks.
+        Header names only: a row of values is refused.</p>
+      <div class="field">
+        <label for="hdr-row">Header row (comma or tab separated)</label>
+        <input id="hdr-row" type="text" spellcheck="false" value="Ship Dte, Cust Name, Lot No., Qty Shpd, Freight Co.">
+      </div>
+      <div class="row">
+        <label class="small" for="hdr-wording">Wording</label>
+        <select id="hdr-wording" aria-describedby="hdr-wording-note">
+          <option value="incumbent">Lab incumbent</option>
+          <option value="production">Production</option>
+        </select>
+        <button id="hdr-send" class="primary" type="button">Ask both questions</button>
+      </div>
+      <p id="hdr-wording-note" class="small"></p>
+      <div id="hdr-result" class="result" aria-live="polite"></div>
+    </div>
+
+    <div id="panel-loop" class="tabpanel" role="tabpanel" aria-labelledby="tab-loop" hidden>
+      <div class="row">
+        <div class="field"><label for="loop-gens">Generations</label><input id="loop-gens" type="number" min="1" max="25" value="5"></div>
+        <div class="field"><label for="loop-margin">Held-out margin</label><input id="loop-margin" type="number" min="0" max="0.5" step="0.005" value="0.01"></div>
+        <div class="field grow"><label for="loop-proposer">Claude backend</label><select id="loop-proposer"></select></div>
+      </div>
+      <p id="loop-estimate" class="small"></p>
+      <div class="row">
+        <button id="loop-start" class="primary" type="button">Start loop</button>
+        <button id="loop-score" class="ghost" type="button">Score only</button>
+        <button id="loop-stop" class="ghost" type="button" disabled>Stop</button>
+      </div>
+      <div class="gauges" id="gauges"></div>
+      <h3 class="small">Brier per generation (lower is better): solid training, dashed held-out, gold dot kept</h3>
+      <canvas id="tide" class="chart" aria-label="Brier score per generation" role="img"></canvas>
+      <h3 class="small">Reliability: how often Jev was right at each confidence (diagonal = calibrated)</h3>
+      <canvas id="reliability" class="chart" aria-label="Reliability diagram" role="img"></canvas>
+      <p id="reliability-note" class="small"></p>
+      <div class="table-wrap" id="metrics"></div>
+      <h3 class="small">What happened</h3>
+      <ol id="log" class="log"></ol>
+    </div>
+
+    <div id="panel-ledger" class="tabpanel" role="tabpanel" aria-labelledby="tab-ledger" hidden>
+      <div class="row">
+        <button id="ledger-refresh" class="ghost" type="button">Refresh</button>
+        <button id="ledger-reset" class="ghost" type="button">Start again from production</button>
+        <button id="ledger-rotate" class="ghost" type="button">Rotate the split</button>
+      </div>
+      <p id="ledger-promote" class="small" hidden>Promotion is a pull request a person reviews: run <code>venv/bin/python scripts/jev_lab export &lt;digest&gt;</code>
+        and ask Claude Code to apply it to the production question set (and bump its <code>QUESTIONS_VERSION</code>).</p>
+      <p id="ledger-promote-fake" class="small" hidden>This ledger was judged by the offline fake (word overlap), not Jev:
+        nothing here is a candidate for production. Run the loop against live Jev to get one.</p>
+      <div id="ledger-list"></div>
+      <div id="ledger-detail"></div>
+    </div>
+
+    <div id="panel-table" class="tabpanel" role="tabpanel" aria-labelledby="tab-table" hidden>
+      <p class="small">The same data the sky draws, one row per subject of the selected question.</p>
+      <div class="table-wrap" id="subject-table"></div>
+    </div>
+  </section>
+</main>
+<noscript><p>Jev Lab needs JavaScript.</p></noscript>
+</body>
+</html>

@@ -10,12 +10,12 @@ import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Unified Dashboard | Anomaly Detection & Knowledge Graph | RegEngine",
-    description: "Unified command center for FSMA 204 compliance. Monitor supply chain anomalies and explore knowledge graphs — all in one free dashboard.",
+    description: "Unified command center for FSMA 204 compliance. Monitor supply chain anomalies and explore knowledge graphs in one free dashboard.",
     alternates: {
         canonical: "https://regengine.co/tools/fsma-unified",
     },
     openGraph: {
-        title: "FSMA 204 Unified Dashboard — RegEngine",
+        title: "FSMA 204 Unified Dashboard | RegEngine",
         description: "Monitor FSMA 204 supply chain anomalies and explore knowledge graphs from one free compliance dashboard.",
         type: "website",
         url: "https://regengine.co/tools/fsma-unified",
@@ -29,11 +29,6 @@ const jsonLd = {
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Consolidated FSMA 204 command center for anomaly detection and supply chain mapping.",
-    "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-    },
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -72,7 +67,7 @@ export default function UnifiedDashboardPage() {
             <RelatedTools tools={filterExperimentalToolLinks([
                 { href: "/tools/knowledge-graph", title: "Knowledge Graph", description: "Build an interactive visual map of your FSMA 204 supply chain nodes and coverage gaps." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
-                { href: "/tools/drill-simulator", title: "24-Hour Drill Simulator", description: "Run a scenario-based FDA outbreak drill to test your record retrieval speed." },
+                { href: "/tools/drill-simulator", title: "24 Hour Drill Simulator", description: "Run a scenario-based FDA outbreak drill to test your record retrieval speed." },
             ])} />
         </>
     );

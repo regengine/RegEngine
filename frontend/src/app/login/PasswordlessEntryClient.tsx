@@ -11,6 +11,7 @@ import { Callout } from '@/components/ui/callout';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
+import { safeNextPath } from '@/lib/safe-redirect';
 import {
   isValidEmail,
   performPasskeyLogin,
@@ -19,16 +20,12 @@ import {
   startEmailChallenge,
 } from '@/lib/passwordless-auth';
 
-const GENERIC_OTP_MESSAGE = 'If this address is eligible, a sign-in code is on its way.';
+const INVITED_ACCOUNT_CODE_MESSAGE =
+  'A sign-in code is sent only if the email has an invited account.';
 
-function resolveSafeNextPath(nextPath: string | null): string {
-  if (!nextPath) return '/dashboard';
-  const trimmed = nextPath.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.startsWith('/login')) {
-    return '/dashboard';
-  }
-  return trimmed;
-}
+// Never forward back to the pages that read `next` (a /login or /auth/verify
+// target would loop).
+const NEXT_DENY_PREFIXES = ['/login', '/auth/verify'] as const;
 
 export default function PasswordlessEntryClient() {
   const router = useRouter();
@@ -43,7 +40,7 @@ export default function PasswordlessEntryClient() {
   const [isPasskeySubmitting, setIsPasskeySubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
 
-  const nextPath = resolveSafeNextPath(searchParams.get('next'));
+  const nextPath = safeNextPath(searchParams.get('next'), '/dashboard', NEXT_DENY_PREFIXES);
   const queryError = searchParams.get('error');
 
   useEffect(() => {
@@ -78,7 +75,7 @@ export default function PasswordlessEntryClient() {
         challengeId: response.challenge_id ?? null,
         createdAt: Date.now(),
       });
-      setStatusMessage(response.detail || response.message || GENERIC_OTP_MESSAGE);
+      setStatusMessage(INVITED_ACCOUNT_CODE_MESSAGE);
       router.push('/auth/verify');
     } catch (err: unknown) {
       const apiError = err as { response?: { status?: number }; message?: string };
@@ -213,6 +210,16 @@ export default function PasswordlessEntryClient() {
           )}
         </Button>
       </form>
+
+      <p className="mt-4 text-small text-re-text-secondary">
+        New to RegEngine?{' '}
+        <Link
+          href="/signup"
+          className="font-medium text-re-text-primary underline-offset-[3px] hover:underline"
+        >
+          Request access
+        </Link>
+      </p>
 
       <div className="my-5 flex items-center gap-3 text-label uppercase text-re-text-muted">
         <div className="h-px flex-1 bg-re-border-subtle" />

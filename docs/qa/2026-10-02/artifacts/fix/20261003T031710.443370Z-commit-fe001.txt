@@ -1,0 +1,13 @@
+UTC: 2026-10-03T03:17:10.443370+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git commit -m 'fix(FE-001): preserve complete GS1 lot identifiers' -m 'Root cause: variable-length fields treated AI-like digits within lot and serial data as implicit boundaries, while normalization discarded explicit parenthesized boundaries.
+
+Fix: terminate variable fields only at explicit group separators or end of input, preserving parenthesized AI delimiters. Convert FE-001 unit and browser expected failures to ordinary regressions and cover delimiter, final-field and maximum-length cases.
+
+Proving tests: frontend/src/__tests__/lib/qa-sweep-gs1.test.ts::FE-001 preserves lot %s through the group separator; frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts::FE-001 preserves complete GS1 lot identifiers in the real scanner form. Negative control: 9 failed. Related suite: 39 passed, 3 unrelated expected failures. Chromium/Firefox/WebKit: 3 passed. Node 20 build passed. Independent local gate accepted.'
+Exit: 0
+Duration: 0.04s
+Timeout: False
+
+[qa/2026-10-02-fixes a7f001fc] fix(FE-001): preserve complete GS1 lot identifiers
+ 3 files changed, 33 insertions(+), 18 deletions(-)

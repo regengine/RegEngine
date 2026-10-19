@@ -1,0 +1,36 @@
+"""Local ASGI reproduction of BE-010; no sockets or real backend are used."""
+
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.testclient import TestClient
+from shared.request_safety import RequestSizeLimitMiddleware
+
+
+@pytest.fixture
+def body_client():
+    app = FastAPI()
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=8)
+
+    @app.post("/consume")
+    async def consume(request: Request):
+        return {"bytes_read": len(await request.body())}
+
+    with TestClient(app) as client:
+        yield client
+
+
+def test_declared_oversized_body_rejected(body_client):
+    assert body_client.post("/consume", content=b"123456789").status_code == 413
+
+
+def test_body_at_limit_accepted(body_client):
+    response = body_client.post("/consume", content=b"12345678")
+    assert response.status_code == 200
+    assert response.json() == {"bytes_read": 8}
+
+
+def test_streamed_body_is_limited_without_content_length(body_client):
+    response = body_client.post("/consume", content=iter([b"12345", b"67890"]))
+    if "content-length" in response.request.headers:
+        pytest.fail("Fixture unexpectedly added Content-Length; chunked-body repro is invalid")
+    assert response.status_code == 413, response.text

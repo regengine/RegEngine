@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { BookCallLink } from "@/components/conversion/BookCallLink";
 import {
   ArrowRight,
   Building2,
@@ -69,7 +70,7 @@ const PRINCIPLES = [
     Icon: Shield,
     title: "Verifiable, not just claimed",
     description:
-      "Compliance records are hash-linked once ingested, so any later change is detectable. Customers can independently verify export-bundle integrity using our published verify_chain.py script.",
+      "Compliance records are hash-linked once ingested, so any later change is detectable. You can independently verify export-bundle integrity using our published verify_chain.py script.",
   },
   {
     Icon: Lightbulb,
@@ -206,7 +207,7 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="mt-1 text-ui text-re-text-secondary">
-                No committee approvals. Design-partner feedback is scoped to
+                No committee approvals. Early tester feedback is scoped to
                 ship within days, not quarters. Regulatory updates deploy
                 without waiting for quarterly release trains.
               </p>
@@ -261,10 +262,10 @@ export default function AboutPage() {
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/contact">
+              <BookCallLink href="/contact" placement="about_page">
                 Book a free gap analysis call
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-              </Link>
+              </BookCallLink>
             </Button>
             <Button asChild variant="secondary" size="lg">
               <Link href="/pricing">View pricing</Link>

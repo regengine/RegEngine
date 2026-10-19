@@ -220,7 +220,11 @@ async def export_epcis(
     """
     logger.info("epcis_export_initiated", start=start_date, end=end_date, format=format)
 
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         from ...fsma_utils import query_events_by_range
@@ -231,7 +235,7 @@ async def export_epcis(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            events = await query_events_by_range(client, start_date, end_date, str(tenant_id))
+            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
 
         # Map CTE types to EPCIS bizStep
         BIZ_STEP_MAP = {
@@ -454,7 +458,11 @@ async def export_trace_csv(
     - Facility GLN
     - Facility Address
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         # #2833: `async with` closes the driver — and its connection
@@ -464,9 +472,9 @@ async def export_trace_csv(
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
             if direction == "forward":
-                result = await trace_forward(client, tlc, max_depth, str(tenant_id))
+                result = await trace_forward(client, tlc, max_depth, scoped_tenant_id)
             else:
-                result = await trace_backward(client, tlc, max_depth, str(tenant_id))
+                result = await trace_backward(client, tlc, max_depth, scoped_tenant_id)
 
         # Generate CSV content. #2945: rows come from the shared builder,
         # which emits one row per observed lot<->event<->facility association
@@ -479,6 +487,7 @@ async def export_trace_csv(
         writer = csv.writer(csv_buffer)
         writer.writerow(TRACE_CSV_HEADER)
         data_rows = build_trace_csv_rows(result, tlc)
+        # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- every cell is csv_safe()-wrapped in build_trace_csv_rows; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
         writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()
@@ -527,7 +536,11 @@ async def export_recall_contacts(
     system records no notification outcomes, so the column is the recall
     coordinator's to fill in. See ``exporters.recall_contacts_csv``.
     """
-    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+    # #2511: reconcile the two tenant sources (middleware vs authenticated
+    # API key) and scope Neo4j to the authenticated principal — fail closed
+    # (409 E_TENANT_MISMATCH) on divergence before any read.
+    scoped_tenant_id = reconcile_tenant_scope(api_key, tenant_id, request_path=request.url.path)
+    db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
         # #2833: `async with` closes the driver — and its connection
@@ -536,13 +549,14 @@ async def export_recall_contacts(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            result = await trace_forward(client, tlc, 10, str(tenant_id))
+            result = await trace_forward(client, tlc, 10, scoped_tenant_id)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
         writer.writerow(RECALL_CONTACTS_HEADER)
         # RE-SEC-002: every cell is csv_safe()-wrapped inside the builder.
         data_rows = build_recall_contacts_rows(result)
+        # nosemgrep: python.django.security.injection.csv-writer-injection.csv-writer-injection -- every cell is csv_safe()-wrapped in build_recall_contacts_rows; the only `request` reference (request.url.path at #2511 reconcile) feeds logging, never a CSV cell.
         writer.writerows(data_rows)
 
         csv_content = csv_buffer.getvalue()
@@ -959,9 +973,16 @@ async def get_compliance_score(
     Returns unmeasured dimensions for an empty graph; database failures return 503.
     """
     generated_at = datetime.now(timezone.utc).isoformat()
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
+
+    # Scope to the tenant database like every other endpoint in this module.
+    # On Community Neo4j the client pins to the global database either way,
+    # so this is a no-op there; on Enterprise it keeps the score query on
+    # the same per-tenant database as the rest of the FSMA surface.
+    db_name = Neo4jClient.get_tenant_database_name(tenant_id)
 
     try:
-        async with Neo4jClient() as client:
+        async with Neo4jClient(database=db_name) as client:
             async with client.session() as session:
                 # #1273 — every OPTIONAL MATCH must repeat the tenant filter.
                 # The Obligation anchor was scoped, but Control and Evidence
@@ -984,13 +1005,25 @@ async def get_compliance_score(
                         count(DISTINCT c)  AS controls_mapped,
                         count(DISTINCT e)  AS evidence_items,
                         avg(c.effectiveness_score) AS avg_effectiveness,
-                        sum(CASE WHEN e.timestamp > datetime() - duration('P90D') THEN 1 ELSE 0 END)
+                        // Obligations with at least one mapped control.
+                        // count(DISTINCT c) would score 200% when each
+                        // obligation has two controls; coverage is about
+                        // obligations, so count those distinctly.
+                        count(DISTINCT CASE WHEN c IS NOT NULL THEN o END)
+                            AS covered_obligations,
+                        // Distinct fresh evidence NODES, not join rows: one
+                        // evidence proving two controls is one row in
+                        // evidence_items but two rows here under SUM.
+                        count(DISTINCT CASE
+                            WHEN e.timestamp > datetime() - duration('P90D') THEN e
+                        END)
                             AS fresh_evidence
                     RETURN
                         total_obligations,
                         controls_mapped,
                         evidence_items,
                         avg_effectiveness,
+                        covered_obligations,
                         fresh_evidence
                     """,
                     tenant_id=str(tenant_id),
@@ -1001,6 +1034,7 @@ async def get_compliance_score(
         controls_mapped = row["controls_mapped"] if row else 0
         evidence_items = row["evidence_items"] if row else 0
         avg_eff = row["avg_effectiveness"] if row and row["avg_effectiveness"] else 0.0
+        covered_obligations = row["covered_obligations"] if row else 0
         fresh_evidence = row["fresh_evidence"] if row else 0
 
         if total_obligations == 0:
@@ -1017,7 +1051,7 @@ async def get_compliance_score(
                 generated_at=generated_at,
             )
 
-        obligation_coverage = (controls_mapped / total_obligations * 100) if total_obligations else 0.0
+        obligation_coverage = (covered_obligations / total_obligations * 100) if total_obligations else 0.0
         control_effectiveness = avg_eff * 100
         evidence_freshness = (fresh_evidence / evidence_items * 100) if evidence_items else 0.0
 

@@ -1,0 +1,9 @@
+UTC: 2026-10-03T03:15:22.736584+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: cat docs/qa/2026-10-02/scripts/run_pytest.py docs/qa/2026-10-02/scripts/run_frontend_checks.py
+Exit: 1
+Duration: 0.01s
+Timeout: False
+
+cat: docs/qa/2026-10-02/scripts/run_pytest.py: No such file or directory
+cat: docs/qa/2026-10-02/scripts/run_frontend_checks.py: No such file or directory

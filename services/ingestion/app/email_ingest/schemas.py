@@ -36,7 +36,10 @@ class PostmarkInboundPayload(BaseModel):
     see ``service._first_recipient``.
     """
 
-    MessageID: str
+    # Non-empty: the audit table keys idempotency on MessageID, so an empty
+    # value would make unrelated emails collide and replay each other's
+    # recorded results. Rejected at the boundary with a 422.
+    MessageID: str = Field(min_length=1)
     From: str
     To: Optional[str] = None
     ToFull: Optional[List[Dict[str, Any]]] = None

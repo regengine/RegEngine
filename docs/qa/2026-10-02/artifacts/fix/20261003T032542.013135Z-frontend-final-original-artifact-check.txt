@@ -1,0 +1,6 @@
+UTC: 2026-10-03T03:25:42.013135+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: git diff --name-only -- docs/qa/2026-10-02/artifacts/frontend docs/qa/2026-10-02/artifacts/browser frontend
+Exit: 0
+Duration: 0.01s
+Timeout: False

@@ -160,6 +160,29 @@ accepting files that declare nothing, and it does not cover supplier
 exports. Left open; the advisory answer and the UI prompt keep a human in
 the loop either way.
 
+## Amendment (2026-10-03): request size and option order
+
+Reviewed against the current TypeSafe documentation (SDK 0.7.2, model
+`jev-1.13.0`; no SDK 1.x exists). Two changes:
+
+* **Request size.** TypeSafe caps a request at 64k tokens. Header-mapping
+  questions carry the full vocabulary (~1.8k tokens each), so uploads with
+  more than ~35 unrecognised columns were rejected and got no suggestions.
+  Columns are now sent in batches under ~40k tokens
+  (`csv-header-mapping.v3`).
+* **Option order.** Jev 1.13 leans toward the first option of a `Choice`.
+  An answer may change rows only if it also holds with the options
+  reversed: the file-CTE question carries a reversed twin in the same
+  request (`csv-file-cte.v2`); header mappings get a second request, only
+  for answers about to be applied. A missing or different reversed answer
+  leaves rows unchanged (`order_check_unavailable`, `order_inconsistent`).
+
+Everything else already matched the vendor guidance and is unchanged: the
+pinned model, fail-open client with bounded retries, `no_match` and
+`mixed_or_unclear` options, structured `what`/`not_for`/`examples`
+criteria, all questions for one state in one request, and confidence-banded
+policy in code.
+
 ## Addendum 2026-10-19: model pin moved to `jev-1.14.0`
 
 Decision 5 pinned `jev-1.13.0`. The pin is now `jev-1.14.0`

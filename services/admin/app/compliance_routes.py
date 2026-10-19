@@ -21,7 +21,7 @@ from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from .compliance_models import AlertSeverity, AlertSourceType
@@ -114,11 +114,18 @@ class CreateAlertRequest(BaseModel):
 
     source_type: str = "MANUAL"
     source_id: Optional[str] = None
-    title: str
+    title: str = Field(min_length=1, max_length=500)
     summary: Optional[str] = None
     severity: str = "MEDIUM"
-    countdown_hours: int = 24
+    countdown_hours: int = Field(default=24, ge=0, le=87600)
     required_actions: List[Dict[str, Any]] = Field(default_factory=list)
+
+    @field_validator("title")
+    @classmethod
+    def _title_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("title must not be blank")
+        return value
 
 
 class ProductProfileRequest(BaseModel):

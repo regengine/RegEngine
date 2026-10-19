@@ -8,16 +8,18 @@ unlock free compliance tools. Verified leads are stored in tool_leads.
 
 from __future__ import annotations
 
+import json
+import math
 import os
 import re
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import redis.asyncio as aioredis
 import structlog
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from shared.blocked_email_domains import extract_domain, is_personal_email
 from shared.env import requires_strict_auth_runtime
 from shared.pii import mask_email
@@ -70,6 +72,91 @@ if not _tool_access_secret_env:
         ),
     )
 TOOL_ACCESS_SECRET = _tool_access_secret_env
+
+# ---------------------------------------------------------------------------
+# Tool-access JWT lifetime — tokens must expire (#medium-9).
+#
+# A leaked or stolen ``re_tool_access`` cookie stops working once ``exp``
+# passes. ``decode_tool_access_token`` rejects expired tokens (PyJWT
+# verifies ``exp`` on every decode path, including the legacy fallback).
+# Configurable so tests and short-lived deployments can tighten it.
+# Values above the 24-hour maximum fall back to the default so an
+# operator cannot silently turn the expiry control off via env config.
+# ---------------------------------------------------------------------------
+TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT = 24.0
+TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS = 24.0
+
+
+def _tool_access_expire_hours() -> float:
+    """Return the minted tool-access token lifetime in hours.
+
+    Read from ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS`` on every call so the
+    value can change without a restart. Missing, unparsable,
+    non-positive, non-finite, or unrepresentable values fall back to the
+    24-hour default, as do sub-second durations (they round to zero JWT
+    seconds and would mint an immediately-expired cookie). Values above
+    the 24-hour maximum also fall back, so the expiry control cannot be
+    disabled through configuration.
+    """
+    raw = os.environ.get("TOOL_ACCESS_TOKEN_EXPIRE_HOURS", "").strip()
+    if not raw:
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        hours = float(raw)
+    except ValueError:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if not math.isfinite(hours) or hours <= 0:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if hours > TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        lifetime = timedelta(hours=hours)
+    except OverflowError:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    if lifetime.total_seconds() < 1:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    try:
+        datetime.now(timezone.utc) + lifetime
+    except OverflowError:
+        logger.warning("tool_access_expiry_misconfigured", value=raw)
+        return TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT
+    return hours
+
+
+def _mint_tool_access_token(email: str, domain: str, expire_hours: float | None = None) -> str:
+    """Mint a short-lived tool-access JWT for a verified lead."""
+    import jwt
+
+    now = datetime.now(timezone.utc)
+    if expire_hours is None:
+        expire_hours = _tool_access_expire_hours()
+    try:
+        expires_at = now + timedelta(hours=expire_hours)
+    except OverflowError:
+        # _tool_access_expire_hours already rejects unrepresentable values;
+        # this is defense-in-depth so minting itself can never crash.
+        logger.warning("tool_access_expiry_overflow")
+        expires_at = now + timedelta(hours=TOOL_ACCESS_TOKEN_EXPIRE_HOURS_DEFAULT)
+    return jwt.encode(
+        {
+            "email": email,
+            "domain": domain,
+            "verified_at": now.isoformat(),
+            "type": "tool_access",
+            "aud": TOOL_ACCESS_AUDIENCE,
+            "iss": SESSION_ISSUER,
+            "iat": now,
+            "exp": expires_at,
+        },
+        TOOL_ACCESS_SECRET,
+        algorithm="HS256",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Redis — reuse the pattern from bulk_upload/session_store.py
@@ -176,21 +263,23 @@ def _cleanup_memory() -> None:
         _memory_store.pop(k, None)
 
 
-async def _store_code(email: str, code: str) -> None:
+async def _store_code(email: str, code: str, utm: dict[str, str] | None = None) -> None:
     key = f"tool_verify:{email}"
-    payload = f"{code}:{MAX_VERIFICATION_ATTEMPTS}"
+    utm = utm or {}
+    payload = json.dumps({"code": code, "attempts": MAX_VERIFICATION_ATTEMPTS, "utm": utm})
     if await _redis_set_code(key, payload, "store_tool_code"):
         return
     _cleanup_memory()
     _memory_store[key] = {
         "code": code,
         "attempts": MAX_VERIFICATION_ATTEMPTS,
+        "utm": utm,
         "expires": time.time() + VERIFICATION_CODE_TTL,
     }
 
 
-async def _check_code(email: str, code: str) -> tuple[bool, str]:
-    """Return (success, error_message). Decrements attempts on failure."""
+async def _check_code(email: str, code: str) -> tuple[bool, str, dict[str, str]]:
+    """Return (success, error_message, UTM values). Decrement attempts on failure."""
     key = f"tool_verify:{email}"
 
     redis_checked = False
@@ -200,36 +289,49 @@ async def _check_code(email: str, code: str) -> tuple[bool, str]:
 
     if redis_checked:
         if not raw:
-            return False, "Code expired or not found. Please request a new code."
-        stored_code, attempts_str = raw.rsplit(":", 1)
-        attempts = int(attempts_str)
+            return False, "Code expired or not found. Please request a new code.", {}
+        if raw.startswith("{"):
+            stored_payload = json.loads(raw)
+            stored_code = stored_payload["code"]
+            attempts = int(stored_payload["attempts"])
+            utm = stored_payload.get("utm", {})
+        else:
+            # Codes issued before this change remain valid during deployment.
+            stored_code, attempts_str = raw.rsplit(":", 1)
+            attempts = int(attempts_str)
+            utm = {}
         if attempts <= 0:
             await _redis_delete_code(key, "delete_exhausted_tool_code")
-            return False, "Too many attempts. Please request a new code."
+            return False, "Too many attempts. Please request a new code.", {}
         if stored_code != code:
-            await _redis_set_code(key, f"{stored_code}:{attempts - 1}", "decrement_tool_code_attempts")
+            if raw.startswith("{"):
+                stored_payload["attempts"] = attempts - 1
+                next_payload = json.dumps(stored_payload)
+            else:
+                next_payload = f"{stored_code}:{attempts - 1}"
+            await _redis_set_code(key, next_payload, "decrement_tool_code_attempts")
             remaining = attempts - 1
-            return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+            return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.", {}
         await _redis_delete_code(key, "consume_tool_code")
-        return True, ""
+        return True, "", utm
 
     # In-memory fallback
     _cleanup_memory()
     stored = _memory_store.get(key)
     if not stored:
-        return False, "Code expired or not found. Please request a new code."
+        return False, "Code expired or not found. Please request a new code.", {}
     if stored["expires"] < time.time():
         _memory_store.pop(key, None)
-        return False, "Code expired. Please request a new code."
+        return False, "Code expired. Please request a new code.", {}
     if stored["attempts"] <= 0:
         _memory_store.pop(key, None)
-        return False, "Too many attempts. Please request a new code."
+        return False, "Too many attempts. Please request a new code.", {}
     if stored["code"] != code:
         stored["attempts"] -= 1
         remaining = stored["attempts"]
-        return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining."
+        return False, f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.", {}
     _memory_store.pop(key, None)
-    return True, ""
+    return True, "", stored.get("utm", {})
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +405,9 @@ class VerifyEmailRequest(BaseModel):
     email: EmailStr
     tool_name: str = "unknown"
     source_url: str = ""
+    utm_source: str | None = Field(default=None, max_length=100)
+    utm_medium: str | None = Field(default=None, max_length=100)
+    utm_campaign: str | None = Field(default=None, max_length=100)
 
 
 class ConfirmCodeRequest(BaseModel):
@@ -318,6 +423,11 @@ class VerifyEmailResponse(BaseModel):
 
 class ConfirmCodeResponse(BaseModel):
     status: str
+    token: str = ""
+    expires_in_seconds: int = 86400
+
+
+class CheckAccessRequest(BaseModel):
     token: str = ""
 
 
@@ -353,7 +463,12 @@ async def verify_email(payload: VerifyEmailRequest, request: Request):
         )
 
     code = f"{secrets.randbelow(900000) + 100000}"
-    await _store_code(email, code)
+    utm = {
+        key: value.strip()
+        for key in ("utm_source", "utm_medium", "utm_campaign")
+        if (value := getattr(payload, key)) and value.strip()
+    }
+    await _store_code(email, code, utm)
 
     # Send via Resend
     if RESEND_API_KEY:
@@ -392,7 +507,7 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     email = payload.email.strip().lower()
     code = payload.code.strip()
 
-    ok, err = await _check_code(email, code)
+    ok, err, utm = await _check_code(email, code)
     if not ok:
         status = 429 if "Too many" in err else 400
         raise HTTPException(status_code=status, detail=err)
@@ -400,29 +515,42 @@ async def confirm_code(payload: ConfirmCodeRequest, request: Request):
     # Save lead to Postgres (best-effort — don't block verification on DB failure)
     domain = extract_domain(email)
     try:
-        _save_lead(email, domain, payload.tool_name)
+        _save_lead(email, domain, payload.tool_name, utm)
     except Exception as exc:
-        logger.error("lead_save_failed", email=mask_email(email), error=str(exc))
+        logger.error("lead_save_failed", email=mask_email(email), error=type(exc).__name__)
 
-    # Sign a JWT for the cookie — aud/iss pin this to the tool-access domain
-    # so it cannot be swapped in as a session token (#1060).
-    import jwt
-
-    token = jwt.encode(
-        {
-            "email": email,
-            "domain": domain,
-            "verified_at": datetime.now(timezone.utc).isoformat(),
-            "type": "tool_access",
-            "aud": TOOL_ACCESS_AUDIENCE,
-            "iss": SESSION_ISSUER,
-        },
-        TOOL_ACCESS_SECRET,
-        algorithm="HS256",
-    )
+    # Sign a short-lived JWT for the cookie — aud/iss pin this to the
+    # tool-access domain so it cannot be swapped in as a session token
+    # (#1060), and exp bounds the damage if the cookie leaks (#medium-9).
+    expire_hours = _tool_access_expire_hours()
+    token = _mint_tool_access_token(email, domain, expire_hours=expire_hours)
 
     logger.info("tool_lead_verified", email=mask_email(email), domain=domain, tool=payload.tool_name)
-    return ConfirmCodeResponse(status="verified", token=token)
+    return ConfirmCodeResponse(
+        status="verified",
+        token=token,
+        expires_in_seconds=int(timedelta(hours=expire_hours).total_seconds()),
+    )
+
+
+@router.post("/check-access")
+@limiter.limit("30/minute")
+async def check_access_tool_token(payload: CheckAccessRequest, request: Request):
+    """Verify a ``re_tool_access`` cookie value.
+
+    Used by the Next.js ``/api/tools/check-access`` proxy so the 24-hour
+    expiry is enforced where access is decided, not only inside tests.
+    Returns ``{"hasAccess": True}`` only when the token carries a valid
+    signature, audience, issuer, and unexpired ``exp`` within the
+    24-hour maximum lifetime. Every other input, including an empty or
+    missing ``exp``, returns ``hasAccess: False``. The token value itself
+    is never logged.
+    """
+    try:
+        decode_tool_access_token(payload.token)
+    except Exception:
+        return {"hasAccess": False}
+    return {"hasAccess": True}
 
 
 # ---------------------------------------------------------------------------
@@ -564,35 +692,84 @@ def decode_tool_access_token(token: str) -> dict:
     even if the attacker controls the signing key, because its aud is
     ``regengine-api`` (see #1060).
 
+    Tokens minted after the expiry fix carry ``iat``/``exp`` (default
+    24-hour lifetime, see ``TOOL_ACCESS_TOKEN_EXPIRE_HOURS``). ``exp`` is
+    required on both decode paths below: an expired token raises
+    ``ExpiredSignatureError`` and a token without ``exp`` raises
+    ``MissingRequiredClaimError`` — old no-exp cookies must reverify.
+
     During the transitional rollout legacy tokens (minted before aud was
-    added) have no ``aud`` claim; we accept those so existing cookies keep
-    working until they expire. A token with the *wrong* aud — e.g. an
+    added) have no ``aud``/``iss`` claim; we accept those only when they
+    carry a valid ``exp``. A token with the *wrong* aud — e.g. an
     attacker pasting a session token — raises ``InvalidAudienceError``.
+
+    Tokens whose lifetime exceeds the 24-hour maximum are rejected with
+    ``InvalidTokenError``, so a token minted under a looser configuration
+    cannot outlive the control.
     """
     import jwt as _jwt
 
     try:
-        return _jwt.decode(
+        payload = _jwt.decode(
             token,
             TOOL_ACCESS_SECRET,
             algorithms=["HS256"],
             audience=TOOL_ACCESS_AUDIENCE,
             issuer=SESSION_ISSUER,
+            options={"require": ["exp"]},
         )
-    except _jwt.exceptions.MissingRequiredClaimError:
-        # Legacy token predates aud/iss — verify signature only.
-        return _jwt.decode(
+    except _jwt.exceptions.MissingRequiredClaimError as exc:
+        if exc.claim not in ("aud", "iss"):
+            # Missing exp (or any other required claim) — re-raise. The
+            # legacy fallback must never re-accept a token without expiry.
+            raise
+        # Legacy tokens may omit aud/iss, but must not bypass a present claim.
+        legacy = _jwt.decode(
             token,
             TOOL_ACCESS_SECRET,
             algorithms=["HS256"],
-            options={"verify_aud": False, "verify_iss": False},
+            options={"verify_aud": False, "verify_iss": False, "require": ["exp"]},
         )
+        # Retain PyJWT's audience/issuer validation, including audience lists.
+        payload = _jwt.decode(
+            token,
+            TOOL_ACCESS_SECRET,
+            algorithms=["HS256"],
+            audience=TOOL_ACCESS_AUDIENCE,
+            issuer=SESSION_ISSUER,
+            options={"verify_aud": "aud" in legacy, "verify_iss": "iss" in legacy, "require": ["exp"]},
+        )
+    _enforce_tool_access_max_lifetime(payload)
+    return payload
+
+
+def _enforce_tool_access_max_lifetime(payload: dict) -> None:
+    """Reject tool-access tokens that live longer than the 24-hour maximum.
+
+    Lifetime is ``exp - iat`` when the token carries ``iat`` (all tokens
+    minted by ``_mint_tool_access_token`` do), otherwise ``exp - now``.
+    Raises ``jwt.InvalidTokenError`` when the lifetime is over the cap.
+    A small tolerance covers JWT whole-second truncation of the two
+    timestamps.
+    """
+    import jwt as _jwt
+
+    now_ts = datetime.now(timezone.utc).timestamp()
+    exp_ts = float(payload["exp"])
+    iat_ts = payload.get("iat")
+    if iat_ts is None:
+        lifetime_seconds = exp_ts - now_ts
+    else:
+        lifetime_seconds = exp_ts - float(iat_ts)
+    max_seconds = TOOL_ACCESS_TOKEN_MAX_LIFETIME_HOURS * 3600 + 5
+    if lifetime_seconds > max_seconds:
+        raise _jwt.exceptions.InvalidTokenError("tool-access token lifetime exceeds the 24-hour maximum")
 
 
 # ---------------------------------------------------------------------------
 # Database — save lead (sync, uses existing SQLAlchemy session pattern)
 # ---------------------------------------------------------------------------
-def _save_lead(email: str, domain: str, tool_name: str) -> None:
+def _save_lead(email: str, domain: str, tool_name: str, utm: dict[str, str]) -> None:
     """Insert or update a tool lead row. Uses the Admin DB sync session."""
     from sqlalchemy import text
 
@@ -602,13 +779,26 @@ def _save_lead(email: str, domain: str, tool_name: str) -> None:
     try:
         session.execute(
             text("""
-                INSERT INTO tool_leads (email, domain, first_tool_used)
-                VALUES (:email, :domain, :tool)
+                INSERT INTO tool_leads (
+                    email, domain, first_tool_used, utm_source, utm_medium, utm_campaign
+                ) VALUES (
+                    :email, :domain, :tool, :utm_source, :utm_medium, :utm_campaign
+                )
                 ON CONFLICT (email) DO UPDATE SET
                     last_tool_access = NOW(),
-                    access_count = tool_leads.access_count + 1
+                    access_count = tool_leads.access_count + 1,
+                    utm_source = COALESCE(tool_leads.utm_source, EXCLUDED.utm_source),
+                    utm_medium = COALESCE(tool_leads.utm_medium, EXCLUDED.utm_medium),
+                    utm_campaign = COALESCE(tool_leads.utm_campaign, EXCLUDED.utm_campaign)
             """),
-            {"email": email, "domain": domain, "tool": tool_name},
+            {
+                "email": email,
+                "domain": domain,
+                "tool": tool_name,
+                "utm_source": utm.get("utm_source"),
+                "utm_medium": utm.get("utm_medium"),
+                "utm_campaign": utm.get("utm_campaign"),
+            },
         )
         session.commit()
     except Exception:

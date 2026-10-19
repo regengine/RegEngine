@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import quote
 
 try:
     import requests
@@ -146,7 +147,7 @@ def verify_record_offline(record: dict) -> VerificationResult:
         return VerificationResult(tlc=tlc, expected_hash=expected_hash, computed_hash="", valid=False, error=str(e))
 
 
-def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.regengine.co") -> VerificationResult:
+def verify_record_online(tlc: str, api_key: str, base_url: str = "https://regengine.co") -> VerificationResult:
     """Verify a record against the RegEngine API."""
     if not HAS_REQUESTS:
         return VerificationResult(
@@ -158,9 +159,13 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.re
         )
 
     try:
-        # Fetch record
+        # Fetch record. The lot code is one path segment, so it is
+        # percent-encoded: a raw lot code with slashes or spaces would
+        # otherwise change the request target.
+        base = base_url.rstrip("/")
+        encoded_tlc = quote(tlc, safe="")
         headers = {"Authorization": f"Bearer {api_key}"}
-        resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}", headers=headers, timeout=30)
+        resp = requests.get(f"{base}/api/graph/fsma/v1/records/{encoded_tlc}", headers=headers, timeout=30)
         resp.raise_for_status()
         record = resp.json()
 
@@ -168,7 +173,9 @@ def verify_record_online(tlc: str, api_key: str, base_url: str = "https://api.re
         result = verify_record_offline(record)
 
         # Cross-check with server's verification endpoint
-        verify_resp = requests.get(f"{base_url}/api/graph/fsma/v1/records/{tlc}/verify", headers=headers, timeout=30)
+        verify_resp = requests.get(
+            f"{base}/api/graph/fsma/v1/records/{encoded_tlc}/verify", headers=headers, timeout=30
+        )
         if verify_resp.ok:
             verify_data = verify_resp.json()
             result.chain_position = verify_data.get("chain_position")
@@ -327,10 +334,10 @@ def main():
 Examples:
   # Verify a single lot online
   regengine-verify --tlc LOT-2026-001 --api-key rge_live_xxx
-  
+
   # Verify exported records offline
   regengine-verify --file exported_records.json --offline
-  
+
   # Verify an FDA audit pack
   regengine-verify --audit-pack audit_2026_02.zip
         """,
@@ -340,7 +347,7 @@ Examples:
     parser.add_argument("--api-key", help="RegEngine API key")
     parser.add_argument("--file", type=Path, help="JSON file with records to verify")
     parser.add_argument("--offline", action="store_true", help="Verify without API calls")
-    parser.add_argument("--base-url", default="https://api.regengine.co", help="API base URL")
+    parser.add_argument("--base-url", default="https://regengine.co", help="API base URL")
     parser.add_argument("--version", action="version", version=f"regengine-verify {_sdk_version()}")
 
     args = parser.parse_args()

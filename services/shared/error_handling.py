@@ -11,6 +11,7 @@ Usage:
 
 from __future__ import annotations
 
+import math
 import os
 
 import structlog
@@ -120,6 +121,8 @@ def _json_safe(value: object) -> object:
         return {str(key): _json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
@@ -174,6 +177,21 @@ def _sentry_before_send(event, hint):
     return event
 
 
+def _float_env(name: str, default: float) -> float:
+    """Read a float env knob, falling back to ``default`` when malformed.
+
+    A typo in an optional observability knob must not crash startup.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        logger.warning("sentry_invalid_sample_rate", var=name, value=raw)
+        return default
+
+
 def init_sentry() -> None:
     """Initialize Sentry error tracking if SENTRY_DSN is configured.
 
@@ -198,8 +216,8 @@ def init_sentry() -> None:
     sentry_sdk.init(
         dsn=dsn,
         environment=get_environment(),
-        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
-        profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+        traces_sample_rate=_float_env("SENTRY_TRACES_SAMPLE_RATE", 0.1),
+        profiles_sample_rate=_float_env("SENTRY_PROFILES_SAMPLE_RATE", 0.1),
         integrations=[
             FastApiIntegration(),
             StarletteIntegration(),
@@ -244,6 +262,9 @@ async def _http_exception_handler(request: Request, exc: StarletteHTTPException)
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": _safe_http_error_content(exc.status_code, exc.detail)},
+        # Forward headers the route attached (Retry-After and X-RateLimit-* on
+        # 429, WWW-Authenticate on 401), as Starlette's default handler does.
+        headers=getattr(exc, "headers", None),
     )
 
 

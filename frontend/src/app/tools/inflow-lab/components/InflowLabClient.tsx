@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { inflowErrorMessage } from "@/lib/inflow-error";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -38,6 +39,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { fetchWithCsrf } from "@/lib/fetch-with-csrf";
+import { trackToolRunCompleted, trackToolRunStarted } from "@/lib/conversion-events";
 import { useAuth } from "@/lib/auth-context";
 import { useTenant } from "@/lib/tenant-context";
 import { cn } from "@/lib/utils";
@@ -294,7 +296,7 @@ async function inflowJson<T>(path: string, init?: RequestInit): Promise<T> {
     });
     if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || payload.detail || `Inflow Lab request failed: ${response.status}`);
+        throw new Error(inflowErrorMessage(response.status, payload));
     }
     return response.json();
 }
@@ -1000,6 +1002,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     };
 
     const runPipeline = async () => {
+        trackToolRunStarted("inflow-lab");
         setIsBusy(true);
         setRunStage("generating");
         setActiveTab(primaryTab);
@@ -1022,9 +1025,11 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             await inflowJson("/api/simulate/stop", { method: "POST" });
             await refreshService();
             setRunStage("complete");
+            trackToolRunCompleted("inflow-lab", "success");
         } catch (error) {
             setServiceError(error instanceof Error ? error.message : "Could not run Inflow Lab pipeline");
             setRunStage("loaded");
+            trackToolRunCompleted("inflow-lab", "error");
         } finally {
             setIsBusy(false);
         }
@@ -1058,6 +1063,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
             return;
         }
 
+        trackToolRunStarted("inflow-lab");
         setIsFeederEvaluating(true);
         setFeederError(null);
         try {
@@ -1121,8 +1127,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                         : "Workbench preview unavailable"
                 );
             }
+            trackToolRunCompleted("inflow-lab", "success");
         } catch (error) {
             setFeederError(error instanceof Error ? error.message : "Could not evaluate pasted data");
+            trackToolRunCompleted("inflow-lab", "error");
         } finally {
             setIsFeederEvaluating(false);
         }
@@ -1582,7 +1590,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                 <span className="text-sm font-semibold text-slate-950">{activeDataBoundary}</span>
                             </div>
                             <p className="mt-1 max-w-4xl text-xs leading-5 text-slate-600">
-                                {boundaryStateDetail} The lab checks traceability handoffs (CTEs) and required data fields (KDEs), but it cannot create formal production records. Your operation remains responsible for compliance.
+                                {boundaryStateDetail} The lab checks Critical Tracking Event (CTE) handoffs and required Key Data Element (KDE) fields, but it cannot create formal production records. Your operation remains responsible for compliance.
                             </p>
                         </div>
                         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -2319,7 +2327,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                             </div>
                                                             <p className="mt-3 break-words font-mono text-[11px] font-semibold leading-5 text-slate-950">{lot.lotCode}</p>
                                                             <p className="mt-2 text-xs text-slate-500">
-                                                                {lot.completeCount}/{lot.totalCount} CTEs captured - delivery {lot.readiness.deliveryLabel}
+                                                                {lot.completeCount}/{lot.totalCount} CTEs captured; delivery {lot.readiness.deliveryLabel}
                                                             </p>
                                                         </button>
                                                     ))}

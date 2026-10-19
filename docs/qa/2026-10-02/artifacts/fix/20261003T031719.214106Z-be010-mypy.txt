@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:17:19.214106+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: /Users/sellers/Projects/RegEngine/repo/.venv/bin/python -m mypy --follow-imports=skip services/shared/request_safety.py
+Exit: 1
+Duration: 0.02s
+Timeout: False
+
+/Users/sellers/Projects/RegEngine/repo/.venv/bin/python: No module named mypy

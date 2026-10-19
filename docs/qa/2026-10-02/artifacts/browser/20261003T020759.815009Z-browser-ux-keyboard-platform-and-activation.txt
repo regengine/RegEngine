@@ -1,0 +1,8 @@
+UTC: 2026-10-03T02:07:59.815009+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PW_TEST_CONNECT_WS_ENDPOINT=ws://127.0.0.1:3950/ NODE_OPTIONS=--require=/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/scripts/node-isolation.cjs node docs/qa/2026-10-02/scripts/browser-ux-followup.cjs keyboard
+Exit: 0
+Duration: 28.19s
+Timeout: False
+
+{"output":"/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/docs/qa/2026-10-02/artifacts/browser/browser-ux-2026-10-03T02-07-59-985Z","pages":0,"keyboard":3,"errors":[]}

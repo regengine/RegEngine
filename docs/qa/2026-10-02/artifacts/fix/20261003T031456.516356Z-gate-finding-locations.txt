@@ -1,0 +1,196 @@
+UTC: 2026-10-03T03:14:56.516356+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'FE-001|BE-010|request_safety|gs1|GS1' docs/qa/2026-10-02/FINDINGS.md docs/qa/2026-10-02/SUMMARY.md docs/qa/2026-10-02/COVERAGE.md frontend/src services/shared
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+docs/qa/2026-10-02/COVERAGE.md:20:The GS1 parser specifically increases from 92/96 to 94/96 lines, 108/120 to 112/120 statements and 82/99 to 86/99 branches. Existing broad coverage did not prevent its lot-code boundary bug. Backend branch coverage was not enabled; statement coverage must not be described as branch coverage.
+docs/qa/2026-10-02/COVERAGE.md:29:| Full frontend unit/component suite | 136 files; 1027 passed, 2 skipped | 137 files; 1033 passed, 7 expected failures, 2 skipped | Includes complete existing Vitest selection plus GS1 and offline-photo regressions |
+docs/qa/2026-10-02/COVERAGE.md:68:| FE-001 browser witness | Confirmed | Confirmed | Confirmed |
+docs/qa/2026-10-02/FINDINGS.md:28:| BE-010 | High | Backend | Streaming bodies bypass the global request-size limit | Run `tests/qa_sweep_20261002/test_request_safety.py::test_streamed_body_is_limited_without_content_length`. Send two five-byte chunks without Content-Length through the real middleware configured for eight bytes. | HTTP 413 once actual bytes exceed eight. | HTTP 200, `bytes_read=10`. Public proof parsing buffers its body before a later size check. No large payload, real network or memory-exhaustion test was used. | `services/shared/request_safety.py:52`; `server/main.py:343`; `proof_verify_router.py:754`; [security analysis](SECURITY-REPORT.md). | Count actual ASGI receive bytes before buffering; preserve Content-Length as an early check only. Test absent/deceptive lengths and chunked bodies. |
+docs/qa/2026-10-02/FINDINGS.md:29:| FE-001 | High | Frontend | Valid barcode lot identifiers are silently truncated | Run GS1 `FE-001` cases in `frontend/src/__tests__/lib/qa-sweep-gs1.test.ts`. Parse `010950600013435210LOT-10-ABC\x1d17260930` with an actual ASCII group separator; repeat with `LOT-21-ABC` and `LOT-17260930`. | Preserve the complete lot through its explicit delimiter. | `tlc` becomes `LOT-`; one case invents serial `-ABC`. Field capture copies the parsed identifier into the ingest payload. Database persistence was not exercised. | `frontend/src/lib/gs1-parser.ts:75,179`; `FieldCaptureClient.tsx:192,224`; [actual parser outputs](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt). | Respect explicit variable-length AI delimiters, field maximum length and end-of-input; do not treat ordinary AI-like digits within lot text as separators. |
+docs/qa/2026-10-02/FINDINGS.md:35:| FE-002 | Medium | Frontend | Malformed Digital Link escapes crash scan handling | Run GS1 `FE-002` cases. Parse `/01/09506000134352/10/%`, then `%ZZ` and `%E0%A4`; the public scanner and receiving handlers call the same parser. | Invalid-scan result with recoverable feedback. | Uncaught `URIError: URI malformed` from `decodeURIComponent`; callers do not catch it. | `frontend/src/lib/gs1-parser.ts:107`; `tools/scan/page.tsx:30`; `receiving/page.tsx:158`; [actual outputs](artifacts/frontend/20261003T003912.837095Z-fe-c2-gs1-defect-evidence.txt). | Catch decode failures at the parser boundary and display a clear invalid-input state. |
+docs/qa/2026-10-02/FINDINGS.md:59:| **FE-001** | **Confirmed in browser — Chromium, Firefox and WebKit** | The actual `/tools/scan` page displays `LOT-` for three valid lot identifiers containing AI-like digits. Simple-lot and Digital Link controls succeed. The test supplies and verifies the exact ASCII group-separator bytes in the browser input; physical scanner hardware is not exercised. See `frontend/tests/e2e/qa-2026-10-02/fe-001-barcode.spec.ts` and the [regression evidence index](artifacts/browser/fe-regressions-summary.md). |
+docs/qa/2026-10-02/SUMMARY.md:20:The Backend security supporting report repeats BE-010/011; they are counted once. Environmental/test-harness failures are not counted as product defects. No Critical finding was established; this is not a claim that every surface is safe.
+docs/qa/2026-10-02/SUMMARY.md:25:2. **FE-001 — High:** Scanning a valid lot code can silently shorten its identity to `LOT-`. Correct variable-length GS1 parsing before customers rely on scanned traceability data.
+docs/qa/2026-10-02/SUMMARY.md:26:3. **BE-010 — High:** Chunked or absent-length bodies bypass the global request-size limit. Enforce actual bytes before buffering to reduce resource-exhaustion risk.
+docs/qa/2026-10-02/SUMMARY.md:80:**FE-001 is confirmed in Chromium, Firefox and WebKit. FE-004 is confirmed in Chromium and Firefox using real IndexedDB and the real replay hook with synthetic sessions.** FE-004 proves an attempted client upload of A's photo under B's cookie; a local 422 stub prevents persistence. WebKit's native Blob storage fails before replay and remains unverified for that scenario. New test witnesses and their setup boundaries are in the [regression evidence index](artifacts/browser/fe-regressions-summary.md).
+services/shared/identity_resolution/normalization.py:31:    - Lowercase URN-form values (``urn:epc:...``, ``urn:gs1:...``).
+services/shared/schemas.py:266:    gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+services/shared/schemas.py:286:    gtin: Optional[str] = Field(None, description="GS1 Global Trade Item Number (14 digits)")
+services/shared/schemas.py:353:    location_gln: Optional[str] = Field(None, description="Primary location GLN (13-digit GS1)")
+services/shared/schemas.py:421:    gln: Optional[str] = Field(None, description="GS1 Global Location Number (13 digits)")
+services/shared/request_safety.py:10:    from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+services/shared/canonical_event.py:1067:    """Lot (LGTIN) or serial (SGTIN) segment of a GS1 EPC URI; None for other schemes."""
+frontend/src/lib/fsma-tools-data.ts:230:        description: 'Stress-test your Traceability Lot Code format for GS1 compatibility and entropy risks.',
+frontend/src/lib/fsma-tools-data.ts:257:        title: 'GS1 Barcode Scanner',
+frontend/src/lib/fsma-tools-data.ts:258:        description: 'Scan a GS1 barcode with your camera. Auto-fill CTE fields. Ingest in one tap.',
+services/shared/rules/seeds.py:427:        "citation_reference": "GS1 General Specifications (GS1 check digit)",
+services/shared/rules/seeds.py:429:        # accepted any 13 digits. gs1_check_digit actually verifies it
+services/shared/rules/seeds.py:431:        "evaluation_logic": {"type": "gs1_check_digit", "field": "from_facility_reference"},
+services/shared/rules/seeds.py:432:        "failure_reason_template": "Facility GLN '{field_name}' is not a valid 13-digit GS1 identifier",
+services/shared/rules/seeds.py:433:        "remediation_suggestion": "Verify the GLN is exactly 13 digits with a valid GS1 check digit",
+frontend/src/lib/customer-readiness.ts:83:    format: 'FDA Package' | 'GS1 EPCIS 2.0' | 'Audit Bundle';
+frontend/src/lib/customer-readiness.ts:313:        name: 'GS1 EPCIS 2.0',
+frontend/src/lib/customer-readiness.ts:431:        format: 'GS1 EPCIS 2.0',
+frontend/src/lib/gs1-parser.ts:2: * GS1-128 Barcode Parser
+frontend/src/lib/gs1-parser.ts:4: * Extracts Application Identifiers (AIs) from a raw GS1 barcode string.
+frontend/src/lib/gs1-parser.ts:13:export interface GS1ParsedData {
+frontend/src/lib/gs1-parser.ts:19:    sourceFormat?: 'gs1_ai' | 'digital_link' | 'unknown';
+frontend/src/lib/gs1-parser.ts:83:function parseDigitalLink(raw: string): Partial<GS1ParsedData> | null {
+frontend/src/lib/gs1-parser.ts:104:    const fields: Partial<GS1ParsedData> = {};
+frontend/src/lib/gs1-parser.ts:140:export function parseGS1(raw: string): GS1ParsedData {
+frontend/src/lib/gs1-parser.ts:141:    const data: GS1ParsedData = {
+frontend/src/lib/gs1-parser.ts:152:        data.sourceFormat = 'gs1_ai';
+frontend/src/lib/gs1-parser.ts:199:export function isFSMACompatible(data: GS1ParsedData): boolean {
+services/shared/external_connectors/retailers.py:7:  - Walmart: GDSN / GS1 US Data Hub integration for item data sync
+services/shared/external_connectors/retailers.py:35:    """Walmart GDSN / GS1 US Data Hub connector.
+services/shared/external_connectors/retailers.py:38:    using GS1 GDSN (Global Data Synchronisation Network) format.
+services/shared/external_connectors/retailers.py:77:        Notice) format with GS1 identifiers.
+services/shared/external_connectors/retailers.py:151:                "Push shipping traceability data to Walmart via GS1 GDSN. "
+services/shared/external_connectors/retailers.py:161:                "GS1 GDSN format compliance",
+frontend/src/lib/scan-match.ts:4: * A scan can arrive as a GS1 AI-encoded string / GS1 Digital Link (parsed
+frontend/src/lib/scan-match.ts:5: * upstream by parseGS1) or as a bare GTIN / lot code typed by hand — the
+frontend/src/lib/scan-match.ts:12:    /** GTIN extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/lib/scan-match.ts:14:    /** Lot/TLC extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/lib/gs1-parser.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from './gs1-parser';
+frontend/src/lib/gs1-parser.test.ts:4:describe('GS1-128 Parser', () => {
+frontend/src/lib/gs1-parser.test.ts:5:    it('should parse a standard GS1-128 with brackets', () => {
+frontend/src/lib/gs1-parser.test.ts:7:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:10:        expect(result.sourceFormat).toBe("gs1_ai");
+frontend/src/lib/gs1-parser.test.ts:14:    it('should parse a literal GS1-128 without brackets', () => {
+frontend/src/lib/gs1-parser.test.ts:16:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:23:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:31:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:37:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:47:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:55:    it('should parse GS1 Digital Link URLs', () => {
+frontend/src/lib/gs1-parser.test.ts:57:        const result = parseGS1(raw);
+frontend/src/lib/gs1-parser.test.ts:67:    it('should parse GS1 Digital Link path-only payloads', () => {
+frontend/src/lib/gs1-parser.test.ts:69:        const result = parseGS1(raw);
+services/shared/rules/evaluators/stateless.py:11:from shared.fsma_validation import verify_gs1_check_digit
+services/shared/rules/evaluators/stateless.py:424:def evaluate_gs1_check_digit(
+services/shared/rules/evaluators/stateless.py:429:    """Verify a GS1 identifier's check digit when one is provided (#3041).
+services/shared/rules/evaluators/stateless.py:435:                                     GS1 mod-10 check digit, else fail
+services/shared/rules/evaluators/stateless.py:448:            "expected": "13-digit GS1 identifier with valid check digit",
+services/shared/rules/evaluators/stateless.py:465:    valid = len(raw) == 13 and verify_gs1_check_digit(raw)
+services/shared/rules/evaluators/stateless.py:480:    reason = "wrong length" if len(raw) != 13 else "invalid GS1 check digit"
+services/shared/rules/evaluators/stateless.py:488:            f"{field_path.split('.')[-1]} value '{raw[:50]}' is not a valid GS1 identifier "
+services/shared/rules/evaluators/stateless.py:489:            f"({reason}) — {rule.citation_reference or 'GS1 General Specifications'}"
+services/shared/rules/evaluators/stateless.py:505:    # #3041 — real GS1 check-digit verification for provided GLNs.
+services/shared/rules/evaluators/stateless.py:506:    "gs1_check_digit": evaluate_gs1_check_digit,
+frontend/src/lib/scan-match.test.ts:3:import { parseGS1 } from './gs1-parser';
+frontend/src/lib/scan-match.test.ts:9:    const parsed = parseGS1(raw);
+frontend/src/lib/scan-match.test.ts:22:    it('matches a GS1 AI-encoded GTIN (AI 01)', () => {
+services/shared/jev/header_mapping.py:114:        "what": "GS1 Global Location Number (13 digits) of the event location.",
+services/shared/jev/header_mapping.py:174:        "what": "GS1 GLN of the ship-from location.",
+services/shared/jev/header_mapping.py:179:        "what": "GS1 GLN of the ship-to location.",
+services/shared/jev/header_mapping.py:189:        "what": "GS1 GLN of the receiving location.",
+services/shared/fsma_validation.py:4:Self-contained module providing high-integrity validation for GS1 and FDA
+services/shared/fsma_validation.py:13:calculate_gs1_check_digit – GS1 check digit calculation
+services/shared/fsma_validation.py:14:verify_gs1_check_digit  – verify a GS1 check digit
+services/shared/fsma_validation.py:16:extract_company_prefix  – extract GS1 Company Prefix from GTIN-14
+services/shared/fsma_validation.py:18:validate_gln            – GLN-13 with GS1 check digit
+services/shared/fsma_validation.py:19:validate_gtin           – GTIN-8/12/13/14 with GS1 check digit
+services/shared/fsma_validation.py:21:validate_sscc           – SSCC-18 with GS1 check digit
+services/shared/fsma_validation.py:77:def _gs1_check_digit(digits: str) -> int:
+services/shared/fsma_validation.py:78:    """Calculate GS1 check digit for a numeric string (without the check digit).
+services/shared/fsma_validation.py:80:    Per the GS1 General Specifications mod-10 algorithm, the data digits are
+services/shared/fsma_validation.py:87:    and GS1 sample GTIN-14 ``09506000134352`` has check digit 2 — both only
+services/shared/fsma_validation.py:94:def _validate_gs1_check(clean: str, field_name: str, id_type: IdentifierType) -> Optional[ValidationResult]:
+services/shared/fsma_validation.py:95:    """Return a failure result if the GS1 check digit is wrong, else None."""
+services/shared/fsma_validation.py:96:    expected = _gs1_check_digit(clean[:-1])
+services/shared/fsma_validation.py:113:    """Validate GS1 Global Location Number (13 digits with check digit)."""
+services/shared/fsma_validation.py:131:    chk = _validate_gs1_check(clean, "gln", IdentifierType.GLN)
+services/shared/fsma_validation.py:145:    """Validate GS1 Global Trade Item Number (GTIN-8/12/13/14)."""
+services/shared/fsma_validation.py:163:    chk = _validate_gs1_check(clean, "gtin", IdentifierType.GTIN)
+services/shared/fsma_validation.py:249:    """Validate GS1 Serial Shipping Container Code (18 digits with check digit)."""
+services/shared/fsma_validation.py:267:    chk = _validate_gs1_check(clean, "sscc", IdentifierType.SSCC)
+services/shared/fsma_validation.py:281:# Public GS1 helpers
+services/shared/fsma_validation.py:285:def calculate_gs1_check_digit(digits: str) -> int:
+services/shared/fsma_validation.py:286:    """Calculate the GS1 check digit for a numeric string (sans check digit).
+services/shared/fsma_validation.py:292:    return _gs1_check_digit(digits)
+services/shared/fsma_validation.py:295:def verify_gs1_check_digit(number: str) -> bool:
+services/shared/fsma_validation.py:296:    """Return ``True`` if *number*'s last digit is a valid GS1 check digit.
+services/shared/fsma_validation.py:303:    return int(number[-1]) == _gs1_check_digit(number[:-1])
+services/shared/fsma_validation.py:313:    """Extract the GS1 Company Prefix from a GTIN-14.
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:2:import { isValidGTINCheckDigit, parseGS1 } from '@/lib/gs1-parser';
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:4:describe('2026-10-02 QA: GS1 traceability input boundaries', () => {
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:7:            const parsed = parseGS1(`/01/09506000134352/10/${encodeURIComponent(lot)}`);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:28:        expect(parseGS1(`(01)09506000134352(17)${value}`).expiryDate).toBeUndefined();
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:31:    // FE-001: a variable-length lot ends only at its explicit delimiter/end.
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:33:    it.fails.each(['LOT-10-ABC', 'LOT-21-ABC', 'LOT-17260930'])('FE-001 preserves lot %s through the group separator', (lot) => {
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:35:        const parsed = parseGS1(input);
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts:43:        expect(() => parseGS1(`/01/09506000134352/10/${lot}`)).not.toThrow();
+frontend/src/__tests__/pages/receiving.test.tsx:15:const mockParseGS1 = vi.fn();
+frontend/src/__tests__/pages/receiving.test.tsx:16:vi.mock('@/lib/gs1-parser', () => ({
+frontend/src/__tests__/pages/receiving.test.tsx:17:    parseGS1: (value: string) => mockParseGS1(value),
+frontend/src/__tests__/pages/receiving.test.tsx:44:        mockParseGS1.mockImplementation((raw: string) => ({
+frontend/src/__tests__/pages/receiving.test.tsx:87:        mockParseGS1.mockReturnValue({
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:8:    parseGS1: vi.fn(),
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:75:vi.mock('@/lib/gs1-parser', () => ({
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:76:    parseGS1: (...args: any[]) => mocks.parseGS1(...args),
+frontend/src/__tests__/components/FieldCaptureClient.test.tsx:99:        mocks.parseGS1.mockReturnValue({
+frontend/src/app/compliance/page.tsx:261:                <Badge tone="neutral">GS1</Badge>
+frontend/src/app/blog/fsma-204-cte-kde-guide/page.tsx:298:  "@context": "https://ref.gs1.org/standards/epcis",
+frontend/src/app/buyer-programs/page.tsx:83:                <li>• GS1-128 on food cases</li>
+frontend/src/app/buyer-programs/page.tsx:153:                <li>• Physical labels/SSCC-18/GS1-128</li>
+frontend/src/app/blog/food-traceability-software/page.tsx:169:                  FSMA 204 requires standardized data formats (GS1 codes, lot/traceability identifiers, location names). Does the platform enforce these standards or allow free-form entry? Enforcement prevents audit failures caused by inconsistent data.
+frontend/src/app/tools/tlc-validator/page.tsx:12:    title: "TLC Validator | Test Your GS1 Traceability Lot Code Format | RegEngine",
+frontend/src/app/tools/tlc-validator/page.tsx:13:    description: "Stress-test your Traceability Lot Code (TLC) format against GS1 standards and FDA uniqueness requirements. Free data integrity checker for FSMA 204 compliance.",
+frontend/src/app/tools/tlc-validator/page.tsx:19:        description: "Validate your Traceability Lot Code format against GS1 standards and FDA FSMA 204 requirements. Free.",
+frontend/src/app/tools/tlc-validator/page.tsx:31:    "description": "GS1 compatibility and uniqueness validator for Traceability Lot Codes (TLC).",
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:17:    description: 'Stress-test your Traceability Lot Code (TLC) format against GS1 conventions and common entropy/parseability pitfalls. FDA does not specify a TLC format; uniqueness must be enforced by your assignment system.',
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:26:                hint: 'We analyze the structure for GS1 compatibility and entropy risks.'
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:31:            description: 'See the full in-browser analysis of your TLC structure — GS1 compatibility, entropy, and parseability checks — with guidance on making your lot codes defensible.',
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:47:        // 1. GS1 Compatibility Check
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:49:            findings.push({ severity: 'LOW', label: "Starts with '10' — may be a GS1 AI (10) batch/lot prefix; verify against your GS1 spec.", icon: CheckCircle2 });
+frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx:52:            findings.push({ severity: 'MEDIUM', label: 'Non-alphanumeric chars detected (GS1 preference is clean alphanumeric)', icon: Search });
+frontend/src/app/blog/fsma-204-traceability-lot-codes/page.tsx:75:    description: "Encode your TLC in a barcode (GS1-128 or DataMatrix) so it can be captured at receiving without manual entry.",
+frontend/src/components/mobile/FieldCaptureClient.tsx:39:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/components/mobile/FieldCaptureClient.tsx:73:    parsed: ReturnType<typeof parseGS1>,
+frontend/src/components/mobile/FieldCaptureClient.tsx:192:        const parsed = parseGS1(rawScan);
+frontend/src/components/mobile/BarcodeScanner.tsx:169:                Supports QR (GS1 Digital Link), GS1-128, DataMatrix, EAN-13, and UPC-A.
+frontend/src/app/trust/page.tsx:155:            'GLN format and GS1 check-digit verification',
+frontend/src/app/trust/page.tsx:213:            'GS1 EPCIS 2.0 JSON-LD (industry standard)',
+frontend/src/app/trust/page.tsx:378:                description="Exports use open standards (GS1 EPCIS 2.0, the FDA sortable spreadsheet, CSV) so records can be read and stored outside RegEngine. Re-import into another system depends on that system's ingest support for the chosen format."
+frontend/src/app/docs/walkthrough/page.tsx:124:              <strong className="font-medium text-re-text-primary">422 validation error</strong> — the response body lists which KDE failed; fix and resubmit. Lot codes follow GS1 GTIN-14 + lot suffix.
+frontend/src/app/tools/kde-checker/page.tsx:75:                { href: "/tools/tlc-validator", title: "TLC Validator", description: "Validate your Traceability Lot Code format against GS1 and FDA standards." },
+frontend/src/app/tools/data-import/page.tsx:68:                { href: "/tools/scan", title: "GS1 Barcode Scanner", description: "Scan barcodes to decode GTIN and lot codes directly into FSMA 204 traceability records." },
+frontend/src/app/trust/retention/page.tsx:60:        standard: 'GS1 industry standard',
+frontend/src/app/controls/page.tsx:286:                  <option value="GS1">GS1</option>
+frontend/src/app/tools/scan/page.tsx:8:import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:9:import type { GS1ParsedData } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:13:  const [parsed, setParsed] = useState<GS1ParsedData | null>(null);
+frontend/src/app/tools/scan/page.tsx:30:    const result = parseGS1(barcode);
+frontend/src/app/tools/scan/page.tsx:109:        subtitle="Scan a GS1 barcode with your camera or paste a barcode string to extract FSMA-compatible traceability data"
+frontend/src/app/tools/scan/page.tsx:144:              <span className={styles.badge}>GS1-128</span>
+frontend/src/app/tools/scan/page.tsx:216:                  {parsed.sourceFormat === 'gs1_ai'
+frontend/src/app/tools/scan/page.tsx:217:                    ? 'GS1-AI'
+frontend/src/app/tools/scan/page.tsx:219:                      ? 'GS1 Digital Link'
+frontend/src/app/tools/label-scanner/layout.tsx:31:    { href: '/tools/scan', title: 'GS1 Barcode Scanner', description: 'Scan or paste GS1 barcodes to decode GTIN, lot codes, and expiry into traceability records.' },
+frontend/src/app/tools/scan/layout.tsx:7:    title: 'GS1 Barcode Scanner | Decode Food Traceability Barcodes | RegEngine',
+frontend/src/app/tools/scan/layout.tsx:8:    description: 'Scan or paste GS1 barcodes to decode GTIN, lot codes, and expiry dates into FSMA 204-compatible traceability records. Works with any food product barcode. Free.',
+frontend/src/app/tools/scan/layout.tsx:13:        title: 'GS1 Barcode Scanner — RegEngine',
+frontend/src/app/tools/scan/layout.tsx:14:        description: 'Decode GS1 barcodes into FSMA 204-compatible traceability records. Free barcode scanner tool.',
+frontend/src/app/tools/scan/layout.tsx:23:    name: 'GS1 Barcode Scanner',
+frontend/src/app/tools/scan/layout.tsx:26:    description: 'Scan or paste GS1 barcodes to extract FSMA 204-compatible traceability data including GTIN, lot code, and expiry date.',
+frontend/src/app/tools/scan/layout.tsx:34:    { href: '/tools/tlc-validator', title: 'TLC Validator', description: 'Validate your Traceability Lot Code format against GS1 and FDA FSMA 204 requirements.' },
+frontend/src/app/tools/scan/opengraph-image.tsx:4:export const alt = 'Decode GS1 food traceability barcodes';
+frontend/src/app/tools/scan/opengraph-image.tsx:9:    return renderOgCard({ eyebrow: 'Free Tool', title: 'Decode GS1 food traceability barcodes' });
+frontend/src/app/tools/scan/scan.module.css:1:/* Scan & Ingest — CSS-module layer for the GS1 scanner.
+frontend/src/app/dashboard/settings/page.tsx:50:    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'available', desc: 'GS1 event format bridge' },
+frontend/src/app/fsma/integration/page.tsx:74:                                For enterprise systems (SAP, Oracle, NetSuite). Push events directly to our endpoints via Webhooks or standard GS1 EPCIS 2.0 XML/JSON payloads.
+frontend/src/app/fsma/integration/page.tsx:126:                                Essential for small growers, vessels, or one-off corrections. Scan a GS1 barcode or upload a label photo and RegEngine extracts the lot code, GTIN, and KDEs for your records.
+frontend/src/app/fsma/integration/page.tsx:130:                                <p className="flex h-8 items-center rounded-md border border-re-border bg-re-surface-card px-3 text-small text-re-text-tertiary">Scan GS1 barcode...</p>
+frontend/src/app/dashboard/scan/page.tsx:108:    'QR Code (GS1 Digital Link)',
+frontend/src/app/dashboard/scan/page.tsx:109:    'GS1-128',
+frontend/src/components/tools/EmailGate.tsx:36:    scan: 'GS1 scan result',
+frontend/src/app/case-studies/page.tsx:456:                                'EPCIS 2.0 JSON-LD (GS1 business step mapping)',
+frontend/src/app/dashboard/export-jobs/page.tsx:169:                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
+frontend/src/app/dashboard/compliance/page.tsx:628:                                            <span className="text-label text-muted-foreground">GS1 2.0 format</span>
+frontend/src/app/dashboard/recall-report/page.tsx:117:    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload — confirm specific format with each buyer', icon: ShoppingCart, done: false },
+frontend/src/app/dashboard/receiving/page.tsx:30:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/app/dashboard/receiving/page.tsx:158:        const parsed = parseGS1(raw);
+frontend/src/app/dashboard/receiving/page.tsx:161:        // The input invites typing a bare GTIN or lot code, but parseGS1 only

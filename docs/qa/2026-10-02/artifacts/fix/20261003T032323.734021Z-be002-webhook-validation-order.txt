@@ -1,0 +1,74 @@
+UTC: 2026-10-03T03:23:23.734021+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sed -n 90,156p services/ingestion/app/webhook_router_v2/routes.py
+Exit: 0
+Duration: 0.00s
+Timeout: False
+
+
+
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    summary="Ingest traceability events",
+    description=(
+        "Accept CTE events from external systems (IoT platforms, ERPs, manual entry). "
+        "Each event is validated against FSMA 204 KDE requirements, SHA-256 hashed, "
+        "chain-linked, and persisted to the compliance database. "
+        "The ``Idempotency-Key`` header is REQUIRED — safe retries replay "
+        "the cached response for 24 hours. Cache keys are tenant-scoped."
+    ),
+)
+async def ingest_events(
+    payload: WebhookPayload,
+    request: Request,
+    principal: IngestionPrincipal = Depends(require_permission("webhooks.ingest")),
+    x_regengine_api_key: [REDACTED] = Header(default=None, alias="X-RegEngine-API-Key"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-ID"),
+    _auth: None = Depends(_verify_api_key),
+    # #1243: HMAC signature check runs in parallel with the API-key check.
+    # A leaked key alone is no longer sufficient to forge events when
+    # ``WEBHOOK_HMAC_SECRET`` is configured.
+    _signature: None = Depends(_verify_webhook_signature),
+    _subscription: None = Depends(require_active_subscription),
+    _idempotency_key: Optional[str] = Depends(_require_idempotency_key),
+    db_session=Depends(get_db_session),
+) -> IngestResponse:
+    """Process incoming webhook events with persistent storage."""
+    ctx = await _pkg.resolve_tenant_context(request)
+    tenant_id = ctx.tenant_id
+    _pkg.validate_tenant_id(tenant_id)
+
+    # Rate limiting (tenant-scoped)
+    _pkg._check_rate_limit(tenant_id, request=request)
+
+    results: list[EventResult] = []
+    accepted = 0
+    rejected = 0
+    # Per-label FSMA 204 billing (v121) — event ids to charge once (and only
+    # once) db_session.commit() below actually lands. Billing from inside
+    # the loop, before that commit, would charge Stripe for a label whose
+    # persistence row could still be rolled back by a later failure in this
+    # same request -- a retry would then get a fresh event_id and bypass the
+    # UNIQUE(tenant_id, cte_event_id) idempotency guarantee entirely.
+    billable_event_ids: list[str] = []
+
+    # Batch deduplication — detect identical events within the same payload
+    seen_in_batch: set[str] = set()
+
+    # Get persistence layer from injected db_session (Depends(get_db_session))
+    persistence = None
+    if db_session is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable — cannot accept events. Retry after service recovery.",
+        )
+    try:
+        from shared.cte_persistence import CTEPersistence
+
+        persistence = CTEPersistence(db_session)
+    except (ImportError, SQLAlchemyError, RuntimeError, ConnectionError, OSError) as e:
+        _pkg.logger.error("db_init_failed — rejecting ingest: %s", str(e))
+        raise HTTPException(
+            status_code=503,
+            detail="Database unavailable — cannot accept events. Retry after service recovery.",

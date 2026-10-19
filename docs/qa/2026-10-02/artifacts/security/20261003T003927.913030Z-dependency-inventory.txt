@@ -1,0 +1,34 @@
+UTC: 2026-10-03T00:39:27.913030+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+Frontend lockfileVersion: 3
+Frontend locked package entries: 931
+Entries missing integrity (excluding workspace root/local links): 6
+Frontend package: next version: 16.3.5
+Frontend package: react version: 18.3.1
+Frontend package: react-dom version: 18.3.1
+Frontend package: @sentry/nextjs version: 10.75.1
+Frontend package: axios version: 1.20.0
+Frontend package: zod version: 4.3.6
+Frontend package: @playwright/test version: 1.63.0
+Frontend package: vitest version: 4.1.11
+Python manifest: requirements.lock lines: 4629
+  Package: fastapi constraint: ==0.141.1
+  Package: starlette constraint: ==1.6.0
+  Package: pydantic constraint: ==2.13.5
+  Package: python-multipart constraint: ==0.0.32
+  Package: sqlalchemy constraint: ==2.0.54
+  Package: cryptography constraint: ==50.0.1
+  Package: httpx constraint: ==0.28.1
+  Package: redis constraint: ==8.1.0
+  Package: uvicorn constraint: ==0.54.0
+Python manifest: pyproject.toml lines: 95
+Installed audit tool: pip-audit available: False
+Installed audit tool: safety available: False
+Installed audit tool: osv-scanner available: False
+Installed audit tool: npm available: True
+Current advisory audit NOT RUN: network authorization permits dependency/package downloads, not advisory API queries. No cached advisory database is provided in this checkout; version inventory is not a vulnerability verdict.

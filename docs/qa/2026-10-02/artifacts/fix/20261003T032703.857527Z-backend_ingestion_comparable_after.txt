@@ -1,0 +1,14 @@
+UTC: 2026-10-03T03:27:03.857527+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py services/ingestion/tests/test_qa_sweep_20261002_contract.py --no-cov --tb=short
+Exit: 0
+Duration: 5.26s
+Timeout: False
+
+........................................................................ [ 65%]
+...........xxx........................                                   [100%]
+=========================== short test summary info ============================
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T12:00:00] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+XFAIL services/ingestion/tests/test_qa_sweep_20261002_contract.py::test_webhook_naive_timestamp_is_a_validation_response[2026-04-17T00:00:00.123456] - BE-001: timezone-naive timestamps escape validation as TypeError / HTTP 500
+107 passed, 3 xfailed in 4.61s

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from math import isfinite
 from typing import Any
-
-from fastapi import HTTPException
 
 from .constants import _FROM_ENTITY_CODES, _TO_ENTITY_CODES
 from .parser import _first_segment
-from .utils import _resolve_unit_code, _safe_float
+from .utils import _safe_float
 
 
 def _extract_envelope_ids(segments: list[list[str]]) -> dict[str, Any]:
@@ -70,6 +69,114 @@ def _extract_envelope_ids(segments: list[list[str]]) -> dict[str, Any]:
     }
 
 
+# Item identifiers that become the line's product description. LT is the
+# lot and is never folded into that description.
+_ITEM_ID_QUALIFIERS = {"SK", "UP", "EN", "VP", "BP"}
+
+
+def _segment_value(segment: list[str], index: int) -> str | None:
+    if len(segment) <= index:
+        return None
+    value = segment[index].strip()
+    return value or None
+
+
+def _positive_line_quantity(raw: str | None) -> float | None:
+    """A line quantity is unset unless the element is a finite number above 0.
+
+    ``_safe_float``'s 0.0 fallback is what keeps a blank or non-numeric
+    SN1/RCD from inventing a quantity. The route then refuses that line
+    instead of synthesizing 1.0.
+    """
+    if not raw:
+        return None
+    quantity = _safe_float(raw, fallback=0.0)
+    if isfinite(quantity) and quantity > 0:
+        return quantity
+    return None
+
+
+def _apply_id_pairs(target: dict[str, Any], segment: list[str], start: int) -> None:
+    for index in range(start, len(segment) - 1, 2):
+        qualifier = segment[index].strip().upper()
+        value = segment[index + 1].strip()
+        if not qualifier or not value:
+            continue
+        if qualifier == "LT":
+            target["lot_number"] = target["lot_number"] or value
+        elif qualifier in _ITEM_ID_QUALIFIERS:
+            target["product_description"] = target["product_description"] or value
+
+
+class _ItemLines:
+    """One CTE draft per SN1 or RCD, with lot and product from that item.
+
+    A LIN before the quantity segment fills the draft the next SN1/RCD
+    copies. A LIN after a quantity segment that still has no product and
+    no lot fills that line (861 often sends RCD, then LIN). A later LIN
+    starts the next item. PID, REF*LT, and an SLN LT qualifier attach to
+    the open line, or to the draft when no line is open yet. SLN itself
+    is not a CTE.
+    """
+
+    def __init__(self) -> None:
+        self.item: dict[str, Any] = {
+            "product_description": None,
+            "lot_number": None,
+        }
+        self.lines: list[dict[str, Any]] = []
+        self._open: int | None = None
+
+    def add_lin(self, segment: list[str]) -> None:
+        if self._open is not None:
+            line = self.lines[self._open]
+            if not line["product_description"] and not line["lot_number"]:
+                _apply_id_pairs(line, segment, 2)
+                self._open = None
+                self.item = {"product_description": None, "lot_number": None}
+                return
+            self.item = {"product_description": None, "lot_number": None}
+            self._open = None
+        _apply_id_pairs(self.item, segment, 2)
+
+    def add_description(self, text: str | None) -> None:
+        if not text:
+            return
+        if self._open is not None:
+            line = self.lines[self._open]
+            line["product_description"] = line["product_description"] or text
+        else:
+            self.item["product_description"] = self.item["product_description"] or text
+
+    def add_lot(self, lot: str | None) -> None:
+        if not lot:
+            return
+        if self._open is not None:
+            line = self.lines[self._open]
+            line["lot_number"] = line["lot_number"] or lot
+        else:
+            self.item["lot_number"] = self.item["lot_number"] or lot
+
+    def add_sln(self, segment: list[str]) -> None:
+        # SLN product-id pairs start at SLN09.
+        if self._open is not None:
+            _apply_id_pairs(self.lines[self._open], segment, 9)
+        else:
+            _apply_id_pairs(self.item, segment, 9)
+
+    def commit(self, segment: list[str], *, condition_index: int | None = None) -> None:
+        line: dict[str, Any] = {
+            "quantity": _positive_line_quantity(_segment_value(segment, 2)),
+            "unit_of_measure": _segment_value(segment, 3),
+            "product_description": self.item["product_description"],
+            "lot_number": self.item["lot_number"],
+        }
+        if condition_index is not None:
+            line["condition_code"] = _segment_value(segment, condition_index)
+        self.lines.append(line)
+        self._open = len(self.lines) - 1
+
+
 def _apply_envelope_ids(data: dict[str, Any], segments: list[list[str]]) -> None:
     """Populate envelope fields on an extraction dict in-place."""
     envelope = _extract_envelope_ids(segments)
@@ -103,11 +210,9 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
         "ship_from_gln": None,
         "ship_to_name": None,
         "ship_to_gln": None,
-        "quantity": None,
-        "unit_of_measure": None,
-        "product_description": None,
         "reference_document_number": None,
         "carrier": None,
+        "line_items": [],
     }
 
     _apply_envelope_ids(data, segments)
@@ -122,8 +227,7 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
         data["ship_date_raw"] = bsn[3] if len(bsn) > 3 else None
         data["ship_time_raw"] = bsn[4] if len(bsn) > 4 else None
 
-    total_quantity = 0.0
-    sn1_units: list[str] = []
+    items = _ItemLines()
     for segment in segments:
         if not segment:
             continue
@@ -142,35 +246,23 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                 data["ship_to_gln"] = data["ship_to_gln"] or location_id
 
         elif seg_id == "SN1":
-            # #2974: accumulate across the item-level SN1 lines the way
-            # PO1/IT1/RCD already do, and make the unit first-wins to
-            # match them. Assigning per segment made the 856 the sole
-            # last-segment-wins handler, so a multi-line ASN persisted
-            # only its final line's quantity. The fallback is aligned to
-            # 0.0 for the same reason the siblings use it: a zero or
-            # non-numeric SN1 must leave ``quantity`` unset rather than
-            # synthesize 1.0.
-            if len(segment) > 2 and segment[2]:
-                total_quantity += _safe_float(segment[2], fallback=0.0)
-            if len(segment) > 3 and segment[3]:
-                data["unit_of_measure"] = data["unit_of_measure"] or segment[3]
-                sn1_units.append(segment[3].strip().upper())
+            items.commit(segment)
 
         elif seg_id == "PID":
-            if len(segment) > 5 and segment[5]:
-                data["product_description"] = data["product_description"] or segment[5]
+            items.add_description(_segment_value(segment, 5))
 
         elif seg_id == "LIN":
-            for idx in range(1, len(segment) - 1):
-                qualifier = segment[idx].upper()
-                if qualifier in {"SK", "UP", "EN", "VP", "BP"} and segment[idx + 1]:
-                    data["product_description"] = data["product_description"] or segment[idx + 1]
-                    break
+            items.add_lin(segment)
+
+        elif seg_id == "SLN":
+            items.add_sln(segment)
 
         elif seg_id == "REF":
             if len(segment) > 2 and segment[2]:
                 qualifier = segment[1].upper() if len(segment) > 1 else ""
-                if qualifier in {"BM", "SI", "CN", "PO", "PK"}:
+                if qualifier == "LT":
+                    items.add_lot(segment[2].strip())
+                elif qualifier in {"BM", "SI", "CN", "PO", "PK"}:
                     data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
         elif seg_id == "TD5":
@@ -181,43 +273,7 @@ def _extract_856_fields(segments: list[list[str]]) -> dict[str, Any]:
                     if data["carrier"]:
                         break
 
-    # #2974: a summed quantity is only meaningful when every SN1 line
-    # measures in the same unit. 120 cases + 80 pounds is not 200 of
-    # anything, so refuse rather than pair the total with whichever unit
-    # happened to come first.
-    # Review on #2991: compare RESOLVED units, not raw element-355 codes.
-    # Several codes resolve to the same FSMA unit -- CA and CS both mean
-    # "cases" -- so comparing raw codes rejects an interchange whose lines
-    # genuinely agree. This PR is what added CS to the map, so raw
-    # comparison would have created that false rejection. A code that
-    # resolves to nothing keeps its raw form so two unmappable-but-
-    # different codes still refuse rather than silently collapsing.
-    distinct_units = {
-        (_resolve_unit_code(unit) or unit) for unit in sn1_units if unit
-    }
-    if len(distinct_units) > 1:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "edi_856_mixed_units_of_measure",
-                "message": (
-                    "EDI 856 SN1 lines disagree on the unit of measure. "
-                    "Quantities across differing units cannot be summed "
-                    "into a single shipping CTE; split the ASN or correct "
-                    "the SN1 unit codes."
-                ),
-                # Report the RAW element-355 codes the partner actually
-                # sent, not the resolved names: they debug against the
-                # interchange they transmitted. The comparison above is on
-                # resolved units so equivalent codes don't false-reject;
-                # the diagnostic stays in their vocabulary.
-                "units": sorted({unit for unit in sn1_units if unit}),
-                "resolved_units": sorted(distinct_units),
-            },
-        )
-
-    if total_quantity > 0:
-        data["quantity"] = total_quantity
+    data["line_items"] = items.lines
 
     if not data["reference_document_number"]:
         data["reference_document_number"] = data["asn_number"]
@@ -298,6 +354,17 @@ def _extract_850_fields(segments: list[list[str]]) -> dict[str, Any]:
         elif seg_id == "PID":
             if len(segment) > 5 and segment[5]:
                 data["product_description"] = data["product_description"] or segment[5]
+
+        elif seg_id == "REF":
+            # A PO number sent only via REF*PO (BEG without BEG03) must
+            # still link the CTE, mirroring the 861 extractor.
+            if len(segment) > 2 and segment[2]:
+                qualifier = segment[1].upper() if len(segment) > 1 else ""
+                if qualifier == "PO":
+                    data["po_number"] = data["po_number"] or segment[2]
+
+    if not data["reference_document_number"]:
+        data["reference_document_number"] = data["po_number"]
 
     if total_quantity > 0:
         data["quantity"] = total_quantity
@@ -418,11 +485,8 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
         "ship_from_gln": None,
         "receiving_location_name": None,
         "receiving_location_gln": None,
-        "quantity": None,
-        "unit_of_measure": None,
-        "product_description": None,
         "reference_document_number": None,
-        "condition_code": None,
+        "line_items": [],
     }
 
     _apply_envelope_ids(data, segments)
@@ -440,7 +504,7 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
 
     data["reference_document_number"] = data["receiving_advice_number"]
 
-    total_quantity = 0.0
+    items = _ItemLines()
     for segment in segments:
         if not segment:
             continue
@@ -458,35 +522,372 @@ def _extract_861_fields(segments: list[list[str]]) -> dict[str, Any]:
                 data["receiving_location_gln"] = data["receiving_location_gln"] or location_id
 
         elif seg_id == "RCD":
-            if len(segment) > 2 and segment[2]:
-                total_quantity += _safe_float(segment[2], fallback=0.0)
-            if len(segment) > 3 and segment[3]:
-                data["unit_of_measure"] = data["unit_of_measure"] or segment[3]
-            if len(segment) > 5 and segment[5]:
-                data["condition_code"] = data["condition_code"] or segment[5]
+            # RCD[5] is the condition code this extractor has always read.
+            items.commit(segment, condition_index=5)
 
         elif seg_id == "LIN":
-            for idx in range(1, len(segment) - 1):
-                qualifier = segment[idx].upper()
-                if qualifier in {"SK", "UP", "EN", "VP", "BP"} and segment[idx + 1]:
-                    data["product_description"] = data["product_description"] or segment[idx + 1]
-                    break
+            items.add_lin(segment)
+
+        elif seg_id == "SLN":
+            items.add_sln(segment)
 
         elif seg_id == "PID":
-            if len(segment) > 5 and segment[5]:
-                data["product_description"] = data["product_description"] or segment[5]
+            items.add_description(_segment_value(segment, 5))
 
         elif seg_id == "REF":
             if len(segment) > 2 and segment[2]:
                 qualifier = segment[1].upper() if len(segment) > 1 else ""
-                if qualifier in {"PO", "BM", "SI"}:
+                if qualifier == "LT":
+                    items.add_lot(segment[2].strip())
+                elif qualifier in {"PO", "BM", "SI"}:
                     if qualifier == "PO":
                         data["po_number"] = data["po_number"] or segment[2]
                     data["reference_document_number"] = data["reference_document_number"] or segment[2]
 
-    if total_quantity > 0:
-        data["quantity"] = total_quantity
+    data["line_items"] = items.lines
 
+    return data
+
+
+def _element(segment: list[str], index: int) -> str | None:
+    """Return a stripped element, or None when it is missing or blank."""
+    if len(segment) <= index:
+        return None
+    value = segment[index].strip()
+    return value or None
+
+
+# Product-id qualifiers on W07 and W12. UP is a UPC. The rest are GTIN-style.
+# SKU-like qualifiers fill the description only when no G69 text is present.
+_GTIN_QUALIFIERS = {"UK", "EN", "UI", "UA", "EO"}
+_UPC_QUALIFIERS = {"UP"}
+_SKU_QUALIFIERS = {"SK", "VN", "BP", "IN", "VP", "PI"}
+
+# W07 product-id pairs are (04,05), (06,07), (18,19) and (20,21).
+# W0708 (index 8) is the warehouse lot and must not be read as a qualifier.
+_W07_PRODUCT_PAIRS = ((4, 5), (6, 7), (18, 19), (20, 21))
+# W12 pairs are (07,08), (19,20) and (21,22). W1209 (index 9) is the lot.
+_W12_PRODUCT_PAIRS = ((7, 8), (19, 20), (21, 22))
+
+
+def _keep_first(data: dict[str, Any], key: str, value: str | None) -> None:
+    if value:
+        data[key] = data[key] or value
+
+
+def _apply_product_id(data: dict[str, Any], qualifier: str | None, value: str | None) -> None:
+    if not qualifier or not value:
+        return
+    code = qualifier.upper()
+    if code in _UPC_QUALIFIERS:
+        data["upc"] = data["upc"] or value
+    elif code in _GTIN_QUALIFIERS:
+        data["gtin"] = data["gtin"] or value
+    elif code in _SKU_QUALIFIERS:
+        data["product_description"] = data["product_description"] or value
+
+
+def _apply_product_pairs(
+    data: dict[str, Any],
+    segment: list[str],
+    pairs: tuple[tuple[int, int], ...],
+) -> None:
+    for qualifier_index, value_index in pairs:
+        _apply_product_id(data, _element(segment, qualifier_index), _element(segment, value_index))
+
+
+def _apply_n9(data: dict[str, Any], segment: list[str]) -> None:
+    qualifier = (_element(segment, 1) or "").upper()
+    value = _element(segment, 2)
+    if not qualifier or not value:
+        return
+    data["reference_numbers"].setdefault(qualifier, value)
+    if qualifier == "PO":
+        data["po_number"] = data["po_number"] or value
+    elif qualifier == "BM":
+        data["bill_of_lading"] = data["bill_of_lading"] or value
+
+
+def _note_g62(data: dict[str, Any], segment: list[str], header_date_field: str) -> None:
+    """Record G62. Use it as the event date only when the header date is empty."""
+    qualifier = _element(segment, 1)
+    date_value = _element(segment, 2)
+    if qualifier:
+        data["g62_date_qualifier"] = data["g62_date_qualifier"] or qualifier
+    if not date_value:
+        return
+    data["g62_date_raw"] = data["g62_date_raw"] or date_value
+    if not data.get(header_date_field):
+        data[header_date_field] = date_value
+
+
+def _party_from_n1(segment: list[str]) -> tuple[str, str | None, str | None, str | None, str | None]:
+    entity = (_element(segment, 1) or "").upper()
+    name = _element(segment, 2)
+    qualifier = (_element(segment, 3) or "").upper() or None
+    identifier = _element(segment, 4)
+    # A GLN is stored only when N103 says UL. Qualifier 92 is an assigned
+    # id, so it stays on the identifier field and the GLN stays empty.
+    gln = identifier if qualifier == "UL" else None
+    return entity, name, qualifier, identifier, gln
+
+
+def _assign_identified_party(
+    data: dict[str, Any],
+    prefix: str,
+    name: str | None,
+    qualifier: str | None,
+    identifier: str | None,
+    gln: str | None,
+) -> None:
+    _keep_first(data, f"{prefix}_name", name)
+    _keep_first(data, f"{prefix}_id", identifier)
+    _keep_first(data, f"{prefix}_id_qualifier", qualifier)
+    _keep_first(data, f"{prefix}_gln", gln)
+
+
+def _fill_reference_if_blank(data: dict[str, Any]) -> None:
+    if data.get("reference_document_number"):
+        return
+    refs = data.get("reference_numbers") or {}
+    for key in ("BM", "SI", "PO", "PK", "CN"):
+        if refs.get(key):
+            data["reference_document_number"] = refs[key]
+            return
+
+
+def _envelope_defaults() -> dict[str, Any]:
+    return {
+        "sender_id": None,
+        "receiver_id": None,
+        "isa_sender_id": None,
+        "isa_receiver_id": None,
+        "gs_sender_id": None,
+        "gs_receiver_id": None,
+        "isa13": None,
+        "gs_control_number": None,
+        "envelope_mismatch": False,
+        "control_number": None,
+    }
+
+
+def _extract_944_fields(segments: list[list[str]]) -> dict[str, Any]:
+    """Extract fields from X12 944 Warehouse Stock Transfer Receipt Advice.
+
+    W17 is the receipt header. W0701 is quantity received. The warehouse
+    (N1*WH) is the receiving location. The ship-from party is N1*SF when
+    present, otherwise the depositor.
+    """
+    data: dict[str, Any] = {
+        **_envelope_defaults(),
+        "reporting_code": None,
+        "receive_date_raw": None,
+        "g62_date_raw": None,
+        "g62_date_qualifier": None,
+        "warehouse_receipt_number": None,
+        "depositor_order_number": None,
+        "shipment_id": None,
+        "reference_document_number": None,
+        "po_number": None,
+        "bill_of_lading": None,
+        "warehouse_name": None,
+        "warehouse_id": None,
+        "warehouse_id_qualifier": None,
+        "warehouse_gln": None,
+        "depositor_name": None,
+        "depositor_id": None,
+        "depositor_id_qualifier": None,
+        "depositor_gln": None,
+        "ship_from_name": None,
+        "ship_from_gln": None,
+        "ship_to_name": None,
+        "ship_to_gln": None,
+        "receiving_location_name": None,
+        "receiving_location_gln": None,
+        "reference_numbers": {},
+        "line_items": [],
+    }
+
+    _apply_envelope_ids(data, segments)
+
+    st = _first_segment(segments, "ST")
+    if st and len(st) > 2:
+        data["control_number"] = st[2]
+
+    w17 = _first_segment(segments, "W17")
+    if w17:
+        data["reporting_code"] = _element(w17, 1)
+        data["receive_date_raw"] = _element(w17, 2)
+        data["warehouse_receipt_number"] = _element(w17, 3)
+        data["depositor_order_number"] = _element(w17, 4)
+        data["shipment_id"] = _element(w17, 5)
+
+    # Header wins. N9 fills the reference only when W17 left it blank.
+    data["reference_document_number"] = data["warehouse_receipt_number"] or data["shipment_id"]
+
+    saw_ship_from = False
+    for segment in segments:
+        if not segment:
+            continue
+        seg_id = segment[0].upper()
+
+        if seg_id == "N1":
+            entity, name, qualifier, identifier, gln = _party_from_n1(segment)
+            if entity in _FROM_ENTITY_CODES:
+                saw_ship_from = True
+                _keep_first(data, "ship_from_name", name)
+                _keep_first(data, "ship_from_gln", gln)
+            elif entity in _TO_ENTITY_CODES:
+                _keep_first(data, "ship_to_name", name)
+                _keep_first(data, "ship_to_gln", gln)
+            elif entity == "WH":
+                _assign_identified_party(data, "warehouse", name, qualifier, identifier, gln)
+            elif entity == "DE":
+                _assign_identified_party(data, "depositor", name, qualifier, identifier, gln)
+
+        elif seg_id == "N9":
+            _apply_n9(data, segment)
+
+        elif seg_id == "G62":
+            _note_g62(data, segment, "receive_date_raw")
+
+        elif seg_id == "G69":
+            text = _element(segment, 1)
+            if text and data["line_items"]:
+                data["line_items"][-1]["product_description"] = text
+
+        elif seg_id == "W07":
+            quantity = _safe_float(_element(segment, 1), fallback=0.0)
+            line = {
+                "quantity": quantity if isfinite(quantity) and quantity > 0 else None,
+                "unit_of_measure": _element(segment, 2),
+                "upc": _element(segment, 3),
+                "gtin": None,
+                "product_description": None,
+                "lot_number": _element(segment, 8),
+            }
+            _apply_product_pairs(line, segment, _W07_PRODUCT_PAIRS)
+            data["line_items"].append(line)
+
+    if not saw_ship_from:
+        data["ship_from_name"] = data["depositor_name"]
+        data["ship_from_gln"] = data["depositor_gln"]
+    if data["warehouse_name"] or data["warehouse_gln"]:
+        data["receiving_location_name"] = data["warehouse_name"]
+        data["receiving_location_gln"] = data["warehouse_gln"]
+    else:
+        data["receiving_location_name"] = data["ship_to_name"]
+        data["receiving_location_gln"] = data["ship_to_gln"]
+    _fill_reference_if_blank(data)
+    return data
+
+
+def _extract_945_fields(segments: list[list[str]]) -> dict[str, Any]:
+    """Extract fields from X12 945 Warehouse Shipping Advice.
+
+    W06 is the shipment header. W1203 is units shipped (the CTE quantity).
+    W1202 is quantity ordered and is kept aside so it cannot replace shipped.
+    Ship-from is N1*SF when present, otherwise the warehouse (N1*WH).
+    """
+    data: dict[str, Any] = {
+        **_envelope_defaults(),
+        "reporting_code": None,
+        "ship_date_raw": None,
+        "g62_date_raw": None,
+        "g62_date_qualifier": None,
+        "depositor_order_number": None,
+        "shipment_id": None,
+        "agent_shipment_id": None,
+        "po_number": None,
+        "reference_document_number": None,
+        "bill_of_lading": None,
+        "warehouse_name": None,
+        "warehouse_id": None,
+        "warehouse_id_qualifier": None,
+        "warehouse_gln": None,
+        "depositor_name": None,
+        "depositor_id": None,
+        "depositor_id_qualifier": None,
+        "depositor_gln": None,
+        "ship_from_name": None,
+        "ship_from_gln": None,
+        "ship_to_name": None,
+        "ship_to_gln": None,
+        "reference_numbers": {},
+        "line_items": [],
+    }
+
+    _apply_envelope_ids(data, segments)
+
+    st = _first_segment(segments, "ST")
+    if st and len(st) > 2:
+        data["control_number"] = st[2]
+
+    w06 = _first_segment(segments, "W06")
+    if w06:
+        data["reporting_code"] = _element(w06, 1)
+        data["depositor_order_number"] = _element(w06, 2)
+        data["ship_date_raw"] = _element(w06, 3)
+        data["shipment_id"] = _element(w06, 4)
+        data["agent_shipment_id"] = _element(w06, 5)
+        data["po_number"] = _element(w06, 6)
+
+    data["reference_document_number"] = data["shipment_id"] or data["depositor_order_number"]
+
+    saw_ship_from = False
+    for segment in segments:
+        if not segment:
+            continue
+        seg_id = segment[0].upper()
+
+        if seg_id == "N1":
+            entity, name, qualifier, identifier, gln = _party_from_n1(segment)
+            if entity in _FROM_ENTITY_CODES:
+                saw_ship_from = True
+                _keep_first(data, "ship_from_name", name)
+                _keep_first(data, "ship_from_gln", gln)
+            elif entity in _TO_ENTITY_CODES:
+                _keep_first(data, "ship_to_name", name)
+                _keep_first(data, "ship_to_gln", gln)
+            elif entity == "WH":
+                _assign_identified_party(data, "warehouse", name, qualifier, identifier, gln)
+            elif entity == "DE":
+                _assign_identified_party(data, "depositor", name, qualifier, identifier, gln)
+
+        elif seg_id == "N9":
+            _apply_n9(data, segment)
+
+        elif seg_id == "G62":
+            _note_g62(data, segment, "ship_date_raw")
+
+        elif seg_id == "G69":
+            text = _element(segment, 1)
+            if text and data["line_items"]:
+                data["line_items"][-1]["product_description"] = text
+
+        elif seg_id == "W12":
+            ordered_raw = _element(segment, 2)
+            try:
+                ordered = float(ordered_raw) if ordered_raw is not None else None
+            except ValueError:
+                ordered = None
+            quantity = _safe_float(_element(segment, 3), fallback=0.0)
+            line = {
+                "quantity": quantity if isfinite(quantity) and quantity > 0 else None,
+                "quantity_ordered": ordered if ordered is not None and isfinite(ordered) else None,
+                "unit_of_measure": _element(segment, 5),
+                "upc": _element(segment, 6),
+                "gtin": None,
+                "product_description": None,
+                "lot_number": _element(segment, 9),
+            }
+            _apply_product_pairs(line, segment, _W12_PRODUCT_PAIRS)
+            data["line_items"].append(line)
+
+    if not saw_ship_from:
+        data["ship_from_name"] = data["warehouse_name"]
+        data["ship_from_gln"] = data["warehouse_gln"]
+    _fill_reference_if_blank(data)
     return data
 
 
@@ -500,4 +901,8 @@ def _extract_fields_for_set(transaction_set: str, segments: list[list[str]]) -> 
         return _extract_810_fields(segments)
     elif transaction_set == "861":
         return _extract_861_fields(segments)
+    elif transaction_set == "944":
+        return _extract_944_fields(segments)
+    elif transaction_set == "945":
+        return _extract_945_fields(segments)
     return {}

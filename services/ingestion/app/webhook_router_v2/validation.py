@@ -24,20 +24,38 @@ _pkg = sys.modules[__package__]
 # ---------------------------------------------------------------------------
 
 
+def _authoritative_kdes(event: IngestEvent) -> dict[str, object]:
+    """Merge top-level fields over ``event.kdes`` for presence checks.
+
+    The typed top-level fields are authoritative: a colliding KDE entry
+    (for example ``kdes: {"location_name": ""}``) must neither erase a
+    real top-level value (false rejection) nor override it with an
+    unvalidated one. KDE entries still fill gaps where the top level is
+    absent, preserving the historical pass for KDE-carried locations.
+    """
+    available: dict[str, object] = dict(event.kdes)
+    for _key, _val in (
+        ("traceability_lot_code", event.traceability_lot_code),
+        ("product_description", event.product_description),
+        ("quantity", event.quantity),
+        ("unit_of_measure", event.unit_of_measure),
+        ("location_name", event.location_name),
+        ("location_gln", event.location_gln),
+    ):
+        if _val is None:
+            continue
+        if isinstance(_val, str) and _val.strip() == "":
+            continue
+        available[_key] = _val
+    return available
+
+
 def _validate_event_kdes(event: IngestEvent) -> list[str]:
     """Validate that an event has all required KDEs for its CTE type."""
     errors: list[str] = []
     required = _pkg.REQUIRED_KDES_BY_CTE.get(event.cte_type, [])
 
-    available: dict[str, object] = {
-        "traceability_lot_code": event.traceability_lot_code,
-        "product_description": event.product_description,
-        "quantity": event.quantity,
-        "unit_of_measure": event.unit_of_measure,
-        "location_name": event.location_name,
-        "location_gln": event.location_gln,
-        **event.kdes,
-    }
+    available = _authoritative_kdes(event)
 
     for kde_name in required:
         val = available.get(kde_name)
@@ -92,6 +110,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
     if db_session is None:
         return []
 
+    rules_ok = True
     try:
         from sqlalchemy import text
 
@@ -115,23 +134,19 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
             nested.commit()
         except (SQLAlchemyError, ValueError, TypeError, RuntimeError) as exc:
             nested.rollback()
-            _pkg.logger.debug("obligation_query_rollback: %s", str(exc))
+            rules_ok = False
+            # M-5: a skipped obligation pass must be loud, not silent.
+            _pkg.logger.warning("obligation_query_rollback: %s", str(exc))
+            _pkg._record_obligation_skip()
             return []
 
         if not rows:
             return []
 
         alerts = []
-        # Build available KDE values from event
-        available = {
-            "traceability_lot_code": event.traceability_lot_code,
-            "product_description": event.product_description,
-            "quantity": event.quantity,
-            "unit_of_measure": event.unit_of_measure,
-            "location_name": event.location_name,
-            "location_gln": event.location_gln,
-            **event.kdes,
-        }
+        # Build available KDE values from event (top-level authoritative,
+        # KDE-carried values fill gaps — see _authoritative_kdes).
+        available = _authoritative_kdes(event)
 
         for row in rows:
             rule_id, obl_id, cte_type, kde_key, validation_rule, desc, obl_text, risk = row
@@ -179,6 +194,7 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                         SELECT COUNT(*) FROM fsma.hash_chain h
                         JOIN fsma.cte_events e ON e.id = h.cte_event_id
                         WHERE e.tenant_id = :tid
+                          AND h.tenant_id = :tid
                           AND e.traceability_lot_code = :tlc
                     """),
                     {"tid": tenant_id, "tlc": event.traceability_lot_code},
@@ -237,6 +253,16 @@ def _check_obligations(db_session, event: IngestEvent, event_id: str, tenant_id:
                 except (SQLAlchemyError, ValueError, RuntimeError) as alert_err:
                     alert_sp.rollback()
                     _pkg.logger.warning("obligation_alert_write_failed: %s", str(alert_err))
+
+        if not alerts and rules_ok and rows:
+            # Jev second-judgment (M-5): the rules ran clean, but does the
+            # event still look review-worthy? A flag here is observability,
+            # not a compliance determination — it is returned to the caller
+            # and never written to fsma.compliance_alerts.
+            review_flag = _pkg.review_event_for_alert_worthiness(event, rules_evaluated=len(rows))
+            if review_flag is not None:
+                _pkg._record_jev_review_flag(tenant_id)
+                alerts.append(review_flag)
 
         return alerts
 

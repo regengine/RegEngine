@@ -107,6 +107,91 @@ describe('passwordless login', () => {
     });
   });
 
+  // A `next` that is not a plain same-app path must never reach router.push:
+  // an authenticated visitor following /login?next=<hostile> is forwarded
+  // straight to it. '/<TAB>/evil.com' is the live bypass the old inline
+  // validator accepted (browsers strip the TAB and read '//evil.com').
+  const HOSTILE_NEXT: [string, string][] = [
+    ['protocol-relative', '//evil.com'],
+    ['TAB between slashes', '/\t/evil.com'],
+    ['LF between slashes', '/\n/evil.com'],
+    ['CR between slashes', '/\r/evil.com'],
+    ['backslash host', '/\\evil.com'],
+    ['dot-segment collapses to //', '/.//evil.com'],
+    ['dot-dot-segment collapses to //', '/..//evil.com'],
+    ['nested dot-dot collapses to //', '/x/..//evil.com'],
+    ['encoded dot-dot collapses to //', '/%2e%2e//evil.com'],
+    ['leading space', ' //evil.com'],
+    ['absolute URL', 'https://evil.com'],
+    ['javascript scheme', 'javascript:alert(1)'],
+    ['the login page itself', '/login'],
+    ['the verify page', '/auth/verify'],
+  ];
+
+  it.each(HOSTILE_NEXT)(
+    'forwards an authenticated user to /dashboard, not the hostile next (%s)',
+    async (_label, hostile) => {
+      authState.user = { id: 'live', email: 'live@example.com' };
+      authState.isAuthenticated = true;
+      mocks.searchParamGet.mockImplementation((key: string) => (key === 'next' ? hostile : null));
+
+      render(<LoginPage />);
+
+      await waitFor(() => {
+        expect(mocks.routerPush).toHaveBeenCalledWith('/dashboard');
+      });
+      expect(mocks.routerPush).not.toHaveBeenCalledWith(hostile);
+      expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    ['/developer/portal'],
+    ['/developer/portal/keys'],
+    ['/dashboard/settings?tab=api#keys'],
+  ])('forwards an authenticated user to the validated next %s unchanged', async (valid) => {
+    authState.user = { id: 'live', email: 'live@example.com' };
+    authState.isAuthenticated = true;
+    mocks.searchParamGet.mockImplementation((key: string) => (key === 'next' ? valid : null));
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(mocks.routerPush).toHaveBeenCalledWith(valid);
+    });
+    expect(mocks.routerPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not navigate an unauthenticated visitor, whatever next says', () => {
+    mocks.searchParamGet.mockImplementation((key: string) =>
+      key === 'next' ? '/\t/evil.com' : null,
+    );
+
+    render(<LoginPage />);
+
+    expect(mocks.routerPush).not.toHaveBeenCalled();
+  });
+
+  it('sends a passkey sign-in to /dashboard when next is hostile', async () => {
+    const assign = mockLocationAssign();
+    mocks.searchParamGet.mockImplementation((key: string) =>
+      key === 'next' ? '/\t/evil.com' : null,
+    );
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.click(screen.getByRole('button', { name: /sign in with passkey/i }));
+    await user.type(screen.getByLabelText(/passkey email/i), 'passkey@example.com');
+    const passkeyButtons = screen.getAllByRole('button', { name: /sign in with passkey/i });
+    await user.click(passkeyButtons[passkeyButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mocks.performPasskeyLogin).toHaveBeenCalledWith('passkey@example.com');
+      expect(assign).toHaveBeenCalledWith('/dashboard');
+    });
+    expect(assign).not.toHaveBeenCalledWith('/\t/evil.com');
+  });
+
   it('renders a single email entry point with passkey sign-in and no password field', () => {
     render(<LoginPage />);
 
@@ -116,6 +201,7 @@ describe('passwordless login', () => {
     expect(screen.getByRole('button', { name: /sign in with passkey/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /create an account/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /request access/i })).toHaveAttribute('href', '/signup');
   });
 
   it('starts an OTP challenge and routes to the verification screen', async () => {
@@ -134,6 +220,10 @@ describe('passwordless login', () => {
       });
       expect(mocks.routerPush).toHaveBeenCalledWith('/auth/verify');
     });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /a sign-in code is sent only if the email has an invited account/i,
+    );
+    expect(screen.queryByText(/if this address is eligible/i)).not.toBeInTheDocument();
   });
 
   it('does not honor identity-revealing redirect fields in a challenge response', async () => {
@@ -193,6 +283,8 @@ describe('OTP verification', () => {
         initialChallengeId="11111111-1111-4111-8111-111111111111"
       />,
     );
+
+    expect(screen.getByText(/sent only if the email has an invited account/i)).toBeInTheDocument();
 
     await user.type(screen.getByLabelText(/verification code/i), '123');
     await user.click(screen.getByRole('button', { name: /verify and continue/i }));

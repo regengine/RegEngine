@@ -7,17 +7,18 @@ and monitoring supplier compliance health.
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from .webhook_compat import require_tenant_context
 
@@ -87,21 +88,24 @@ def _db_get_suppliers(tenant_id: str) -> Optional[list[SupplierRecord]]:
         for row in rows:
             suppliers.append(
                 SupplierRecord(
-                    id=row[0],
+                    # id is UUID and last_submission TIMESTAMPTZ: the driver returns
+                    # uuid.UUID and datetime, which the str fields reject unrendered.
+                    id=str(row[0]),
                     name=row[1],
                     contact_email=row[2],
                     portal_link_id=row[3],
                     portal_status=row[4],
                     submissions_count=row[5],
-                    last_submission=row[6],
+                    last_submission=row[6].isoformat() if row[6] else None,
                     compliance_status=row[7],
-                    missing_kdes=json.loads(row[8]) if row[8] else [],
-                    products=json.loads(row[9]) if row[9] else [],
+                    # TEXT[] columns: the driver returns Python lists (NULL -> None).
+                    missing_kdes=list(row[8] or []),
+                    products=list(row[9] or []),
                     is_sample=False,
                 )
             )
         return suppliers
-    except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError) as exc:
+    except (ValueError, KeyError, TypeError, RuntimeError, OSError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("db_read_failed error=%s", str(exc))
         return None
     finally:
@@ -116,14 +120,14 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
     try:
         db.execute(
             text("""
-                INSERT INTO fsma.tenant_suppliers 
-                (id, tenant_id, name, contact_email, portal_link_id, portal_status, submissions_count, 
+                INSERT INTO fsma.tenant_suppliers
+                (id, tenant_id, name, contact_email, portal_link_id, portal_status, submissions_count,
                  last_submission, compliance_status, missing_kdes, products, is_sample, created_at, updated_at)
                 VALUES (:id, :tid, :name, :email, :plink, :pstatus, :subcount, :lastsub, :comp, :kdes, :prods, false, now(), now())
-                ON CONFLICT (id) DO UPDATE SET 
-                    name = :name, contact_email = :email, portal_link_id = :plink, 
-                    portal_status = :pstatus, submissions_count = :subcount, 
-                    last_submission = :lastsub, compliance_status = :comp, 
+                ON CONFLICT (id) DO UPDATE SET
+                    name = :name, contact_email = :email, portal_link_id = :plink,
+                    portal_status = :pstatus, submissions_count = :subcount,
+                    last_submission = :lastsub, compliance_status = :comp,
                     missing_kdes = :kdes, products = :prods, updated_at = now()
             """),
             {
@@ -136,16 +140,24 @@ def _db_add_supplier(tenant_id: str, supplier: SupplierRecord) -> bool:
                 "subcount": supplier.submissions_count,
                 "lastsub": supplier.last_submission,
                 "comp": supplier.compliance_status,
-                "kdes": json.dumps(supplier.missing_kdes),
-                "prods": json.dumps(supplier.products),
+                # TEXT[] columns: psycopg adapts a Python list to a Postgres array.
+                # A JSON string is rejected as a malformed array literal.
+                "kdes": supplier.missing_kdes,
+                "prods": supplier.products,
             },
         )
         db.commit()
         return True
-    except (ValueError, TypeError, RuntimeError, OSError, AttributeError) as exc:
+    except (ValueError, TypeError, RuntimeError, OSError, AttributeError, SQLAlchemyError) as exc:
         logger.warning("db_write_failed error=%s", str(exc))
         if db:
             db.rollback()
+        # A denied write must not be reported as a successful memory-only save.
+        # psycopg 3 exposes sqlstate; psycopg 2 exposes pgcode.
+        if isinstance(exc, DBAPIError):
+            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+            if sqlstate == "42501":
+                raise HTTPException(status_code=503, detail="Supplier changes could not be saved") from exc
         return False
     finally:
         db.close()
@@ -198,16 +210,9 @@ async def add_supplier(
 ):
     """Add a new supplier to the management dashboard."""
     tenant_id = ctx.tenant_id
-    # Get current count from DB or memory
-    suppliers = _db_get_suppliers(tenant_id)
-    if suppliers is None:
-        with _suppliers_lock:
-            if tenant_id not in _suppliers_store:
-                _suppliers_store[tenant_id] = []
-            suppliers = list(_suppliers_store[tenant_id])
-
     new_supplier = SupplierRecord(
-        id=f"{tenant_id}-sup-{len(suppliers) + 1:03d}",
+        # fsma.tenant_suppliers.id is UUID; a "{tenant}-sup-001" id is rejected.
+        id=str(uuid.uuid4()),
         name=request.name,
         contact_email=request.contact_email,
         portal_status="no_link",
@@ -245,6 +250,8 @@ async def send_portal_link(
 
     for supplier in suppliers:
         if supplier.id == supplier_id:
+            # Memory reads share record objects; publish changes only after the write.
+            supplier = supplier.model_copy()
             supplier.portal_link_id = f"portal-{supplier_id[-3:]}-new"
             supplier.portal_status = "active"
 

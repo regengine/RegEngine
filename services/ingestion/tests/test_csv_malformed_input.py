@@ -141,6 +141,20 @@ def test_blank_header_row_is_a_400(upload, text):
     assert captured == {}
 
 
+@pytest.mark.parametrize("duplicate", ["quantity", " Quantity ", "reference document"])
+def test_duplicate_normalized_headers_are_rejected_before_reading_data(monkeypatch, duplicate):
+    # BE-003: reject the ambiguous header before DictReader can overwrite data.
+    def unexpected_row_read(_reader):
+        pytest.fail("Duplicate headers reached row dictionary construction")
+
+    monkeypatch.setattr(csv.DictReader, "__next__", unexpected_row_read)
+    events, errors, warnings = ct.parse_csv_rows(f"{HEADER},{duplicate}\n{ROW},999\n", "harvesting")
+    assert events == [] and warnings == []
+    assert len(errors) == 1
+    assert "duplicate column" in errors[0]
+    assert ct.normalize_csv_header(duplicate) in errors[0]
+
+
 def test_empty_file_keeps_its_existing_400(upload):
     post, _ = upload
     resp = post("")

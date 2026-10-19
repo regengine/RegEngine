@@ -14,9 +14,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from sqlalchemy import text
-
 from shared.identity_resolution.constants import VALID_REVIEW_STATUSES
+from sqlalchemy import text
 
 logger = logging.getLogger("identity-resolution")
 
@@ -90,9 +89,7 @@ class ReviewMixin:
             return {
                 "review_id": str(open_existing[0]),
                 "status": open_existing[1],
-                "match_confidence": (
-                    float(open_existing[2]) if open_existing[2] is not None else None
-                ),
+                "match_confidence": (float(open_existing[2]) if open_existing[2] is not None else None),
                 "idempotent": True,
             }
 
@@ -304,9 +301,7 @@ class ReviewMixin:
         self._verify_tenant_access(tenant_id)
 
         if resolution not in VALID_REVIEW_STATUSES:
-            raise ValueError(
-                f"Invalid resolution '{resolution}'. Must be one of {sorted(VALID_REVIEW_STATUSES)}"
-            )
+            raise ValueError(f"Invalid resolution '{resolution}'. Must be one of {sorted(VALID_REVIEW_STATUSES)}")
 
         review = self.session.execute(
             text("""
@@ -327,10 +322,7 @@ class ReviewMixin:
 
         # Validate caller-supplied target up front — reject before any
         # side effect if it's not one of the two entities on this review.
-        if (
-            target_entity_id is not None
-            and target_entity_id not in (entity_a_id, entity_b_id)
-        ):
+        if target_entity_id is not None and target_entity_id not in (entity_a_id, entity_b_id):
             raise ValueError(
                 f"target_entity_id '{target_entity_id}' is not part of review "
                 f"'{review_id}' (expected one of '{entity_a_id}' or "
@@ -381,7 +373,9 @@ class ReviewMixin:
                 }
             else:
                 source, target, rationale = self._pick_merge_target(
-                    tenant_id, entity_a_id, entity_b_id,
+                    tenant_id,
+                    entity_a_id,
+                    entity_b_id,
                 )
             logger.info(
                 "review_merge_target_selected",
@@ -395,10 +389,7 @@ class ReviewMixin:
                 tenant_id=tenant_id,
                 source_entity_id=source,
                 target_entity_id=target,
-                reason=(
-                    f"Confirmed match via review {review_id} "
-                    f"(target selected by {rationale['tiebreaker']})"
-                ),
+                reason=(f"Confirmed match via review {review_id} (target selected by {rationale['tiebreaker']})"),
                 performed_by=resolved_by,
             )
             result["merge"] = merge_result
@@ -442,6 +433,8 @@ class ReviewMixin:
                 JOIN fsma.canonical_entities ceb
                     ON ceb.entity_id = irq.entity_b_id AND ceb.tenant_id = irq.tenant_id
                 WHERE irq.tenant_id = :tenant_id
+                  AND cea.tenant_id = :tenant_id
+                  AND ceb.tenant_id = :tenant_id
                   AND irq.status IN ('pending', 'deferred')
                 ORDER BY irq.match_confidence DESC, irq.created_at ASC
                 LIMIT :limit OFFSET :offset

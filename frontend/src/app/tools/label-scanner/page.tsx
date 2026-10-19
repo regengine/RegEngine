@@ -34,6 +34,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
 /* ────────────────────────────────────────────────────────────── */
 /*  Types                                                        */
@@ -138,6 +139,7 @@ function LabelScannerContent() {
 
     const analyze = useCallback(async () => {
         if (!imageFile) return;
+        trackToolRunStarted('label-scanner');
         setAnalyzing(true);
         setError(null);
         setResult(null);
@@ -157,8 +159,10 @@ function LabelScannerContent() {
 
             const data: LabelResult = await res.json();
             setResult(data);
+            trackToolRunCompleted('label-scanner', 'success');
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Analysis failed');
+            trackToolRunCompleted('label-scanner', 'error');
         } finally {
             setAnalyzing(false);
         }
@@ -235,7 +239,7 @@ function LabelScannerContent() {
             }
             setIngested(true);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Ingest failed — are you logged in?');
+            setError(err instanceof Error ? err.message : 'Ingest failed. Are you logged in?');
         } finally {
             setIngesting(false);
         }
@@ -274,8 +278,8 @@ function LabelScannerContent() {
                     <h1 className="text-title text-re-text-primary">Label Scanner</h1>
                     <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
                         Upload or photograph a food product label. Computer vision attempts to extract product name, lot code, GTIN,
-                        expiry date, and allergens, and suggests a mapping to FSMA 204 Key Data Elements. Always review extracted
-                        values before ingesting — OCR mistakes are common, and a label is not itself a CTE record.
+                        expiry date, and allergens, and suggests a mapping to FSMA 204 Key Data Element (KDE) fields. Always review extracted
+                        values before ingesting. OCR mistakes are common, and a label is not itself a Critical Tracking Event (CTE) record.
                     </p>
                 </div>
             </Container>
@@ -298,7 +302,7 @@ function LabelScannerContent() {
                                             Drop an image here or click to upload
                                         </p>
                                         <p className="mt-1 text-small text-re-text-tertiary">
-                                            JPEG, PNG, WebP — max 10 MB
+                                            JPEG, PNG, WebP. Max 10 MB
                                         </p>
                                     </div>
                                     <div className="mt-2 flex flex-wrap justify-center gap-2">
@@ -432,7 +436,7 @@ function LabelScannerContent() {
 
                                         {/* Editable extracted fields */}
                                         <div className="space-y-2">
-                                            <h3 className="text-subheading text-re-text-primary">Extracted Fields <span className="text-small font-normal text-re-text-tertiary">— click to edit</span></h3>
+                                            <h3 className="text-subheading text-re-text-primary">Extracted Fields <span className="text-small font-normal text-re-text-tertiary">(click to edit)</span></h3>
                                             {DEMO_FIELDS.map(({ key, label }) => {
                                                 const value = getFieldValue(key);
                                                 if (!value && !editedFields[key]) return null;
@@ -521,7 +525,7 @@ function LabelScannerContent() {
                                                     {result.fsma_kdes.map((kde, i) => (
                                                         <div key={i} className="flex items-center gap-2 text-small">
                                                             <span className="min-w-[120px] text-re-text-tertiary">{kde.field}</span>
-                                                            <span className="flex-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{kde.value || '—'}</span>
+                                                            <span className="flex-1 truncate font-mono text-[0.8125rem] text-re-text-primary">{kde.value || 'Not found'}</span>
                                                             <Badge
                                                                 size="sm"
                                                                 mono
@@ -568,7 +572,7 @@ function LabelScannerContent() {
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">
-                            <Link href="/alpha">
+                            <Link href="/contact">
                                 Become a Design Partner <ArrowRight aria-hidden="true" className="ml-2 h-3.5 w-3.5" strokeWidth={1.75} />
                             </Link>
                         </Button>

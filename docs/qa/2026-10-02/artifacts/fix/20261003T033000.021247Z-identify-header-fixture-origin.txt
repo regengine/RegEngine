@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:30:00.021247+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'import ast,json; from pathlib import Path; p=Path("tests/shared/test_idempotency_middleware_1338.py"); tree=ast.parse(p.read_text()); rows=[]
+for n in ast.walk(tree):
+ if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and "session" in n.name: rows.append({"function":n.name,"line":n.lineno,"local_cookie_setup":any(isinstance(x,ast.Name) and "session" in x.id for x in ast.walk(n))})
+print(json.dumps({"test_file":str(p),"functions":rows},indent=2))'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{
+  "test_file": "tests/shared/test_idempotency_middleware_1338.py",
+  "functions": [
+    {
+      "function": "test_revoked_cookie_session_rechecks_real_session_dependency",
+      "line": 1205,
+      "local_cookie_setup": true
+    }
+  ]
+}

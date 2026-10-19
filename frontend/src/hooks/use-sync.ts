@@ -8,11 +8,26 @@ import {
     markPhotoSyncFailed,
     getPendingUploads,
     cleanupOfflineRecords,
+    scanIdempotencyKey,
 } from '@/lib/db';
 import { useIngestFile } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/components/ui/use-toast';
 import { getServiceURL } from '@/lib/api-config';
+
+/**
+ * Tenant named inside a stored offline scan payload, if any. Legacy records
+ * without a payload carry no owner and are handled by the caller.
+ */
+function storedScanTenantId(payload: string | undefined): string | undefined {
+    if (!payload) return undefined;
+    try {
+        const parsed = JSON.parse(payload) as { tenant_id?: unknown };
+        return typeof parsed?.tenant_id === 'string' ? parsed.tenant_id : undefined;
+    } catch {
+        return undefined;
+    }
+}
 
 export function useSync() {
     const [isOnline, setIsOnline] = useState(true);
@@ -23,12 +38,15 @@ export function useSync() {
 
     const { mutateAsync: ingestFile } = useIngestFile();
 
-    const syncEndpoint = useCallback(async (payload: string) => {
+    const syncEndpoint = useCallback(async (payload: string, idempotencyKey: string) => {
         const response = await fetchWithCsrf(`${getServiceURL('ingestion')}/api/v1/webhooks/ingest`, {
             method: 'POST',
             credentials: 'include', // Send HTTP-only cookies
             headers: {
                 'Content-Type': 'application/json',
+                // Stable per-scan key: retries replay the first response
+                // instead of recording the scan twice.
+                'Idempotency-Key': idempotencyKey,
             },
             body: payload,
         });
@@ -64,9 +82,17 @@ export function useSync() {
             // Sync Scans — replay the stored ingest payload via webhook endpoint
             for (const scan of scans) {
                 try {
+                    const queuedTenantId = storedScanTenantId(scan.payload);
+                    if (queuedTenantId && queuedTenantId !== tenantId) {
+                        // Captured under a different tenant session (account
+                        // switch while offline). Never replay it under this
+                        // session; keep it queued until its owner signs in.
+                        throw new Error('Scan belongs to a different tenant session; kept queued.');
+                    }
+                    const idempotencyKey = scanIdempotencyKey(scan);
                     if (scan.payload) {
                         // Structured payload saved by FieldCaptureClient — replay directly
-                        await syncEndpoint(scan.payload);
+                        await syncEndpoint(scan.payload, idempotencyKey);
                     } else {
                         // Legacy record with only raw barcode string — build minimal event
                         const payload = {
@@ -83,7 +109,7 @@ export function useSync() {
                                 kdes: { raw_scan: scan.content },
                             }],
                         };
-                        await syncEndpoint(JSON.stringify(payload));
+                        await syncEndpoint(JSON.stringify(payload), idempotencyKey);
                     }
                     if (typeof scan.id === 'number') {
                         await markScanSynced(scan.id);

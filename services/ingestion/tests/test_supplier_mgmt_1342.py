@@ -5,7 +5,11 @@ Issue: #1342
 
 from __future__ import annotations
 
+import re
+import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,9 +24,10 @@ from app.supplier_mgmt import (
     router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from shared.tenant_context import TenantContext
+from sqlalchemy.exc import DataError, OperationalError, ProgrammingError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -80,6 +85,18 @@ def _make_supplier(**overrides) -> SupplierRecord:
     )
     defaults.update(overrides)
     return SupplierRecord(**defaults)
+
+
+def _ddl_columns(sql_file: str, table: str) -> set[str]:
+    """Column names of ``table`` as declared in an ``alembic/sql`` file."""
+    ddl = (Path(__file__).resolve().parents[3] / "alembic/sql" / sql_file).read_text()
+    body = ddl.split(f"CREATE TABLE IF NOT EXISTS {table} (", 1)[1].split("\n);", 1)[0]
+    return set(re.findall(r"^ {4}([a-z_]+) ", body, flags=re.MULTILINE))
+
+
+def _identifiers(sql: str) -> set[str]:
+    """Lower-case words of ``sql`` other than bind names. Keywords are upper-case, so these are identifiers."""
+    return set(re.findall(r"\b[a-z_]+\b", re.sub(r":\w+", " ", sql)))
 
 
 # ---------------------------------------------------------------------------
@@ -142,19 +159,26 @@ class TestDbGetSuppliers:
         session.close.assert_called_once()
 
     def test_rows_mapped_to_records(self, monkeypatch):
+        """Rows carry what the driver returns: uuid.UUID, datetime and lists for the TEXT[] columns.
+
+        ``json.loads`` on those lists raised ``TypeError``, the except branch
+        returned ``None`` and every tenant with a populated array saw an empty
+        dashboard. ``test_supplier_mgmt_pg.py`` reads real rows back.
+        """
+        supplier_id = uuid.uuid4()
         session = _mock_db_session(
             rows=[
                 (
-                    "t1-sup-001",
+                    supplier_id,
                     "Acme",
                     "a@x.com",
                     "portal-abc",
                     "active",
                     5,
-                    "2026-04-18T00:00:00+00:00",
+                    datetime(2026, 4, 18, tzinfo=timezone.utc),
                     "compliant",
-                    '["kde1", "kde2"]',
-                    '["Spinach"]',
+                    ["kde1", "kde2"],
+                    ["Spinach"],
                 ),
             ]
         )
@@ -162,29 +186,57 @@ class TestDbGetSuppliers:
         suppliers = _db_get_suppliers("t1")
         assert len(suppliers) == 1
         s = suppliers[0]
-        assert s.id == "t1-sup-001"
+        assert s.id == str(supplier_id)
         assert s.portal_status == "active"
         assert s.submissions_count == 5
+        assert s.last_submission == "2026-04-18T00:00:00+00:00"
         assert s.missing_kdes == ["kde1", "kde2"]
         assert s.products == ["Spinach"]
         assert s.is_sample is False
 
-    def test_null_json_fields_become_empty_lists(self, monkeypatch):
+    def test_null_array_columns_become_empty_lists(self, monkeypatch):
         session = _mock_db_session(
             rows=[
-                ("t1-sup-001", "Acme", "a@x.com", None, "no_link", 0, None, "unknown", None, None),
+                (uuid.uuid4(), "Acme", "a@x.com", None, "no_link", 0, None, "unknown", None, None),
             ]
         )
         monkeypatch.setattr(sm, "get_db_safe", lambda: session)
         suppliers = _db_get_suppliers("t1")
         assert suppliers[0].missing_kdes == []
         assert suppliers[0].products == []
+        assert suppliers[0].last_submission is None
 
     def test_exception_returns_none_and_closes(self, monkeypatch):
         session = _mock_db_session(raise_on_execute=True)
         monkeypatch.setattr(sm, "get_db_safe", lambda: session)
         assert _db_get_suppliers("t1") is None
         session.close.assert_called_once()
+
+    def test_database_error_returns_none_and_closes(self, monkeypatch):
+        """A statement Postgres rejects is the fallback case, not a 500: ``SQLAlchemyError`` is caught."""
+        session = _mock_db_session()
+        session.execute.side_effect = OperationalError("SELECT 1", {}, Exception("connection lost"))
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+        assert _db_get_suppliers("t1") is None
+        session.close.assert_called_once()
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The SELECT names ``fsma.tenant_suppliers`` columns as V042 declares them.
+
+        The mock session never parses SQL; ``test_supplier_mgmt_pg.py`` runs
+        the statement on a live cluster and this is the copy that needs no
+        database.
+        """
+        columns = _ddl_columns("V042__tenant_feature_data_tables.sql", "fsma.tenant_suppliers")
+        assert {"missing_kdes", "products"} <= columns  # the DDL parse itself still works
+
+        session = _mock_db_session(rows=[])
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+        _db_get_suppliers("t1")
+        sql = str(session.execute.call_args[0][0])
+
+        referenced = _identifiers(sql) - {"fsma", "tenant_suppliers"}
+        assert referenced <= columns, f"not columns of fsma.tenant_suppliers: {sorted(referenced - columns)}"
 
     def test_tid_param_passed(self, monkeypatch):
         session = _mock_db_session(rows=[])
@@ -213,14 +265,19 @@ class TestDbAddSupplier:
         session.commit.assert_called_once()
         session.close.assert_called_once()
 
-    def test_json_fields_serialized(self, monkeypatch):
+    def test_array_columns_bound_as_lists(self, monkeypatch):
+        """``missing_kdes`` and ``products`` are TEXT[]: the binds are Python lists, never JSON strings.
+
+        ``json.dumps`` produced ``'["tlc"]'``, which Postgres rejects as a
+        malformed array literal for every supplier, empty lists included.
+        """
         session = _mock_db_session()
         monkeypatch.setattr(sm, "get_db_safe", lambda: session)
         supp = _make_supplier(products=["Spinach", "Kale"], missing_kdes=["tlc"])
         _db_add_supplier("t1", supp)
         _sql, params = session.execute.call_args[0]
-        assert params["kdes"] == '["tlc"]'
-        assert params["prods"] == '["Spinach", "Kale"]'
+        assert params["kdes"] == ["tlc"]
+        assert params["prods"] == ["Spinach", "Kale"]
         assert params["tid"] == "t1"
         assert params["id"] == "t1-sup-001"
 
@@ -230,6 +287,44 @@ class TestDbAddSupplier:
         assert _db_add_supplier("t1", _make_supplier()) is False
         session.rollback.assert_called_once()
         session.close.assert_called_once()
+
+    def test_database_error_rolls_back_and_returns_false(self, monkeypatch):
+        """A rejected statement returns False so the router falls back to memory instead of raising."""
+        session = _mock_db_session()
+        session.execute.side_effect = DataError("INSERT", {}, Exception("malformed array literal"))
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+        assert _db_add_supplier("t1", _make_supplier()) is False
+        session.rollback.assert_called_once()
+        session.close.assert_called_once()
+
+    @pytest.mark.parametrize("code_attribute", ["sqlstate", "pgcode"])
+    @pytest.mark.parametrize("operation", ["execute", "commit"])
+    def test_permission_failure_rolls_back_and_raises(self, monkeypatch, code_attribute, operation):
+        """Driver-shaped mocks cover both psycopg versions and commit-time errors."""
+        session = _mock_db_session()
+        error = ProgrammingError("INSERT", {}, SimpleNamespace(**{code_attribute: "42501"}))
+        getattr(session, operation).side_effect = error
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+
+        with pytest.raises(HTTPException) as raised:
+            _db_add_supplier("t1", _make_supplier())
+
+        assert raised.value.status_code == 503
+        assert raised.value.detail == "Supplier changes could not be saved"
+        session.rollback.assert_called_once()
+        session.close.assert_called_once()
+
+    def test_statement_references_only_real_columns(self, monkeypatch):
+        """The INSERT ... ON CONFLICT names ``fsma.tenant_suppliers`` columns as V042 declares them."""
+        columns = _ddl_columns("V042__tenant_feature_data_tables.sql", "fsma.tenant_suppliers")
+
+        session = _mock_db_session()
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+        _db_add_supplier("t1", _make_supplier())
+        sql = str(session.execute.call_args[0][0])
+
+        referenced = _identifiers(sql) - {"fsma", "tenant_suppliers", "now", "false"}
+        assert referenced <= columns, f"not columns of fsma.tenant_suppliers: {sorted(referenced - columns)}"
 
 
 # ---------------------------------------------------------------------------
@@ -290,17 +385,22 @@ class TestAddSupplierEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["created"] is True
-        assert body["supplier"]["id"] == "t1-sup-001"
+        assert uuid.UUID(body["supplier"]["id"]).version == 4
         assert body["supplier"]["products"] == ["Spinach"]
         assert body["supplier"]["portal_status"] == "no_link"
         assert body["supplier"]["compliance_status"] == "unknown"
 
-    def test_add_supplier_id_increments(self, client, monkeypatch):
-        existing = [_make_supplier(id=f"t1-sup-{i:03d}") for i in range(1, 4)]
-        monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: existing)
-        monkeypatch.setattr(sm, "_db_add_supplier", lambda tid, s: True)
-        resp = client.post("/api/v1/suppliers/t1", json={"name": "Z", "contact_email": "z@x.com"})
-        assert resp.json()["supplier"]["id"] == "t1-sup-004"
+    def test_add_supplier_ids_are_distinct_uuids(self, client, monkeypatch):
+        """``fsma.tenant_suppliers.id`` is UUID: Postgres rejected the old ``{tenant}-sup-001`` ids."""
+        written = []
+        monkeypatch.setattr(sm, "_db_add_supplier", lambda tid, s: written.append(s) or True)
+        ids = [
+            client.post("/api/v1/suppliers/t1", json={"name": "Z", "contact_email": "z@x.com"}).json()["supplier"]["id"]
+            for _ in range(2)
+        ]
+        assert [uuid.UUID(i).version for i in ids] == [4, 4]
+        assert len(set(ids)) == 2
+        assert [s.id for s in written] == ids
 
     def test_add_supplier_memory_fallback_when_db_unavailable(self, client, monkeypatch):
         monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: None)
@@ -327,6 +427,21 @@ class TestAddSupplierEndpoint:
 
 
 class TestSendPortalLinkEndpoint:
+    def test_denied_write_preserves_memory_record(self, client, monkeypatch):
+        supplier = _make_supplier()
+        _suppliers_store["t1"] = [supplier]
+        monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: None)
+        session = _mock_db_session()
+        session.execute.side_effect = ProgrammingError("INSERT", {}, SimpleNamespace(sqlstate="42501"))
+        monkeypatch.setattr(sm, "get_db_safe", lambda: session)
+
+        response = client.post(f"/api/v1/suppliers/t1/{supplier.id}/send-link")
+
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Supplier changes could not be saved"}
+        assert _suppliers_store["t1"][0].portal_status == "no_link"
+        assert _suppliers_store["t1"][0].portal_link_id is None
+
     def test_send_link_db_success(self, client, monkeypatch):
         supp = _make_supplier(id="t1-sup-001")
         monkeypatch.setattr(sm, "_db_get_suppliers", lambda tid: [supp])

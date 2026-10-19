@@ -1,0 +1,16 @@
+UTC: 2026-10-03T03:15:35.050604+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg --files docs/qa/2026-10-02/scripts frontend -g '*qa*' -g '*playwright*' -g AGENTS.md -g '*isolation*'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+docs/qa/2026-10-02/scripts/node-isolation.cjs
+frontend/src/__tests__/pages/qa-health.test.tsx
+frontend/tests/e2e/tenant-isolation.spec.ts
+frontend/playwright.config.ts
+frontend/playwright.demo-smoke.config.ts
+frontend/src/__tests__/lib/qa-sweep-gs1.test.ts
+frontend/src/components/dashboard/qa-health-widget.tsx
+frontend/AGENTS.md
+frontend/src/__tests__/components/qa-health-widget.test.tsx

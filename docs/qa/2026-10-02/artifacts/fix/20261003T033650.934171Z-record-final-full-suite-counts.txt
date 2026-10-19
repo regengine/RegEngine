@@ -1,0 +1,8 @@
+UTC: 2026-10-03T03:36:50.934171+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; p=Path("docs/qa/2026-10-02/FIXES.md"); s=p.read_text().replace("| Root backend full inventory during fix-pass bootstrap | 10644 / 246 / 3 / 541, plus 480 errors | Pending final full run |", "| Root backend full suite (guarded) | 10644 / 246 / 3 / 541, plus 480 errors | 11406 / 253 / 5 / 539, plus 342 errors |"); s=s.replace("Final full-run comparison follows below when complete.", "Final full run completed at frozen b6222b29 in 525.29 seconds with no selection exclusions or failure cap. It remains red. Most count differences reflect restoration of the sweep SDK overlay and newly executed tests; regression attribution for newly executed route assertions is being checked before the report is sealed."); p.write_text(s); print("Authoritative full-backend counts recorded; final attribution pending")'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+Authoritative full-backend counts recorded; final attribution pending

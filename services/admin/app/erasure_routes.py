@@ -14,6 +14,8 @@ preserves the audit trail's integrity while removing PII.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import uuid
 from contextlib import contextmanager
@@ -24,7 +26,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from shared.tenant_context import set_tenant_guc
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -67,37 +69,105 @@ def get_db():
         db.rollback()
         db.close()
 
-# Cypher to detach-delete only graph nodes that represent the erased user.
-# tenant_id and user_id are always passed as parameters, never interpolated.
-_CYPHER_DELETE_USER_GRAPH_DATA = """
-MATCH (n {tenant_id: $tenant_id})
-WHERE n.user_id = $user_id
-   OR n.actor_id = $user_id
-   OR (
-        n.id = $user_id
-        AND any(label IN labels(n) WHERE label IN [
-            'User',
-            'Account',
-            'TeamMember',
-            'SupplierContact'
-        ])
-   )
+# Graph node labels that represent a user identity. Only nodes carrying one
+# of these labels are ever deleted by erasure. Every other node (trace
+# events, CTEs, facilities, lots, audit entries) is somebody's compliance
+# evidence, so erasure anonymizes its actor reference instead of deleting
+# the record. SupplierContact is the only identity label the codebase
+# currently writes to the graph (see supplier_graph_sync.py); User,
+# Account and TeamMember are kept as defensive matches for identity nodes
+# written by other paths. tenant_id, user_id and erased_actor_id are
+# always passed as parameters, never interpolated.
+_ERASURE_IDENTITY_LABELS: tuple[str, ...] = (
+    "User",
+    "Account",
+    "TeamMember",
+    "SupplierContact",
+)
+
+_IDENTITY_LABEL_LIST = "[" + ", ".join(f"'{label}'" for label in _ERASURE_IDENTITY_LABELS) + "]"
+
+# Delete only the erased user's own identity nodes for this tenant.
+# Identity is matched by user_id, id, or actor_id, since all three are ways
+# an identity node can link to a person. Shared records are never matched
+# here because the label filter requires an identity label.
+_CYPHER_DELETE_IDENTITY_NODES = f"""
+MATCH (n {{tenant_id: $tenant_id}})
+WHERE any(label IN labels(n) WHERE label IN {_IDENTITY_LABEL_LIST})
+  AND (n.user_id = $user_id OR n.id = $user_id OR n.actor_id = $user_id)
 DETACH DELETE n
 """
 
+# Anonymize the actor reference on shared records for this tenant. The
+# record itself (and its relationships) is preserved because it is other
+# parties' FSMA 204 compliance evidence. Identity nodes are excluded here
+# because the delete query above already removed them. Invite bookkeeping
+# fields (created_by, accepted_by) are rewritten the same way; the invite
+# email is dropped only on invites the erased user accepted, since that
+# address is their own (a pending invite they created still belongs to its
+# invitee). Setting a property to NULL removes it in Neo4j.
+_CYPHER_ANONYMIZE_SHARED_ACTOR_REFS = f"""
+MATCH (m {{tenant_id: $tenant_id}})
+WHERE (m.actor_id = $user_id OR m.user_id = $user_id
+   OR m.created_by = $user_id OR m.accepted_by = $user_id)
+  AND NOT any(label IN labels(m) WHERE label IN {_IDENTITY_LABEL_LIST})
+SET m.actor_id = CASE WHEN m.actor_id = $user_id THEN $erased_actor_id ELSE m.actor_id END,
+    m.user_id = CASE WHEN m.user_id = $user_id THEN $erased_actor_id ELSE m.user_id END,
+    m.created_by = CASE WHEN m.created_by = $user_id THEN $erased_actor_id ELSE m.created_by END,
+    m.accepted_by = CASE WHEN m.accepted_by = $user_id THEN $erased_actor_id ELSE m.accepted_by END,
+    m.email = CASE WHEN m.accepted_by = $user_id
+      AND any(label IN labels(m) WHERE label = 'PendingSupplierInvite')
+      THEN NULL ELSE m.email END
+"""
 
-async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
-    """Delete Neo4j nodes for *user_id* as part of GDPR erasure.
+
+def _erased_actor_token(user_id: str) -> str:
+    """Return a stable pseudonymous actor id for an erased user.
+
+    When ``ERASURE_TOKEN_SECRET`` (or ``AUTH_SECRET_KEY`` as a fallback) is
+    set, the token is an HMAC of the user id under that server secret, so a
+    reader of the outbox or audit row cannot recompute the token from the
+    stored user id. Without a configured secret it falls back to a plain
+    sha256 of the user id, which keeps dev and test behavior unchanged.
+    Either way every shared record converges on the same token and repeated
+    erasure replays stay idempotent, and rotating the secret is safe because
+    matching always runs against the raw user id, never the token.
+    """
+    secret = (os.getenv("ERASURE_TOKEN_SECRET") or os.getenv("AUTH_SECRET_KEY") or "").strip()
+    if secret:
+        digest = hmac.new(
+            secret.encode("utf-8"),
+            f"gdpr-erasure:{user_id}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+    else:
+        digest = hashlib.sha256(f"gdpr-erasure:{user_id}".encode("utf-8")).hexdigest()
+    return f"erased-user-{digest[:16]}"
+
+
+async def _delete_neo4j_user_graph_data(
+    tenant_id: str,
+    user_id: str,
+    erased_actor_id: Optional[str] = None,
+) -> None:
+    """Remove a user's graph identity and anonymize their shared references.
+
+    Identity nodes (User, Account, TeamMember, SupplierContact) for
+    *user_id* are deleted; shared records that reference the user via
+    ``actor_id``/``user_id`` are kept with the reference replaced by a
+    stable ``erased-user-<hash>`` token, preserving other parties'
+    traceability evidence.
 
     This is best-effort: if Neo4j is not configured (``NEO4J_URI`` /
     ``NEO4J_URL`` absent) the call is skipped silently.  If the driver is
-    configured but the query fails, a warning is logged and the function
+    configured but a query fails, a warning is logged and the function
     returns without raising so that the already-committed Postgres erasure
     is not affected.
 
-    ``tenant_id`` and ``user_id`` are passed as Cypher parameters to prevent
-    injection.  The query must stay user-scoped: account erasure is not tenant
-    offboarding and must not delete the tenant's traceability graph.
+    ``tenant_id``, ``user_id`` and ``erased_actor_id`` are passed as Cypher
+    parameters to prevent injection. Both queries stay tenant-scoped:
+    account erasure is not tenant offboarding and must not touch another
+    tenant's graph.
     """
     if not tenant_id or not user_id:
         logger.debug(
@@ -118,17 +188,35 @@ async def _delete_neo4j_user_graph_data(tenant_id: str, user_id: str) -> None:
         )
         return
 
+    token = erased_actor_id or _erased_actor_token(str(user_id))
     try:
         from neo4j import AsyncGraphDatabase
 
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "")
+        if not neo4j_password:
+            # Never open the driver with an empty password: skip the graph
+            # delete (the HTTP response still reports the Postgres erasure)
+            # and leave a warning so the half-wired Neo4j gets fixed.
+            logger.warning(
+                "erasure_neo4j_skip",
+                reason="NEO4J_PASSWORD not configured",
+                tenant_id=tenant_id,
+                user_id=user_id,
+            )
+            return
         async with AsyncGraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password)) as neo4j_driver:
             async with neo4j_driver.session() as session:
                 await session.run(
-                    _CYPHER_DELETE_USER_GRAPH_DATA,
+                    _CYPHER_DELETE_IDENTITY_NODES,
                     tenant_id=tenant_id,
                     user_id=user_id,
+                )
+                await session.run(
+                    _CYPHER_ANONYMIZE_SHARED_ACTOR_REFS,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    erased_actor_id=token,
                 )
         logger.info(
             "erasure_neo4j_user_graph_data_deleted",
@@ -327,13 +415,47 @@ def _apply_account_erasure(
         if audit_entry_id is None:
             raise SQLAlchemyError("account erasure audit marker could not be persisted")
 
+        # Graph cleanup is two durable steps: delete the user's identity
+        # nodes, then anonymize their actor reference on shared records.
+        # Shared trace/CTE nodes are never deleted; they are other
+        # parties' compliance evidence.
+        erased_actor_id = _erased_actor_token(str(user_id))
         enqueue_graph_write(
             db,
             tenant_id=str(marker_tenant_id),
             operation="user_erasure",
-            cypher=_CYPHER_DELETE_USER_GRAPH_DATA,
+            cypher=_CYPHER_DELETE_IDENTITY_NODES,
             params={"user_id": str(user_id)},
             dedupe_key=f"user_erasure:{marker_tenant_id}:{user_id}",
+        )
+        # A delete row enqueued before this fix carries the old Cypher under
+        # the same dedupe key, and ON CONFLICT DO NOTHING keeps the stored
+        # statement. Refresh any still-pending delete row so the drainer
+        # cannot run the pre-fix query that deleted shared records by
+        # actor_id. Drained rows are left alone.
+        db.execute(
+            text(
+                """
+                UPDATE graph_outbox
+                   SET cypher = :cypher
+                 WHERE operation = 'user_erasure'
+                   AND dedupe_key = :dedupe_key
+                   AND status = 'pending'
+                   AND cypher != :cypher
+                """
+            ),
+            {
+                "cypher": _CYPHER_DELETE_IDENTITY_NODES,
+                "dedupe_key": f"user_erasure:{marker_tenant_id}:{user_id}",
+            },
+        )
+        enqueue_graph_write(
+            db,
+            tenant_id=str(marker_tenant_id),
+            operation="user_erasure",
+            cypher=_CYPHER_ANONYMIZE_SHARED_ACTOR_REFS,
+            params={"user_id": str(user_id), "erased_actor_id": erased_actor_id},
+            dedupe_key=f"user_erasure_anonymize:{marker_tenant_id}:{user_id}",
         )
     return historical_audit_rows
 
@@ -439,12 +561,15 @@ async def request_erasure(
             ) from exc
 
         # The post-commit Neo4j call below is retained as a low-latency
-        # best-effort attempt — the outbox row above is the durability
-        # guarantee. The Cypher MATCH/DETACH DELETE is idempotent, so a
-        # successful immediate delete followed by a redundant drainer
-        # replay is harmless. If Neo4j is reachable: deletion is fast.
-        # If unreachable: this no-ops (warning logged) and the drainer
-        # eventually applies the same Cypher.
+        # best-effort attempt — the outbox rows above are the durability
+        # guarantee. Erasure is two steps: delete the user's identity nodes,
+        # then anonymize their actor reference on shared records (both run
+        # here for the request tenant; every marker tenant is covered by
+        # the outbox). Both statements are idempotent, so a successful
+        # immediate run followed by a redundant drainer replay is harmless.
+        # If Neo4j is reachable: cleanup is fast. If unreachable: this
+        # no-ops (warning logged) and the drainer eventually applies the
+        # same Cypher.
         await _delete_neo4j_user_graph_data(str(tenant_id), str(user_id))
 
         return ErasureResponse(

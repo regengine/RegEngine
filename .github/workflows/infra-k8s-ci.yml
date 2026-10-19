@@ -5,11 +5,17 @@ on:
     branches: [main]
     paths:
       - 'infra/k8s/**'
+      - 'infra/gateway/**'
+      - 'infra/otel-collector-config.yaml'
+      - 'tests/infra/**'
       - '.github/workflows/infra-k8s-ci.yml'
   push:
     branches: [main]
     paths:
       - 'infra/k8s/**'
+      - 'infra/gateway/**'
+      - 'infra/otel-collector-config.yaml'
+      - 'tests/infra/**'
       - '.github/workflows/infra-k8s-ci.yml'
   workflow_dispatch:
 
@@ -21,6 +27,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # #3247: the tests that pin these configs (tests/infra plus the nginx
+  # gateway tests) run in backend CI only when backend paths change, so an
+  # infra-only revert used to merge without them. This job runs them here,
+  # on the workflow that already watches the infra paths.
+  infra-config-tests:
+    name: Infra Config Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Run infra config tests
+        run: |
+          python3 -m pip install --quiet "pytest==9.1.1" "pytest-asyncio==1.4.0" "pytest-cov==7.1.0" "pyyaml==6.0.3"
+          python3 -m pytest tests/infra infra/gateway/tests -q --no-cov -o "testpaths=tests" -p no:cacheprovider
+
   production-kustomize:
     name: Production Kustomize Render
     runs-on: ubuntu-latest

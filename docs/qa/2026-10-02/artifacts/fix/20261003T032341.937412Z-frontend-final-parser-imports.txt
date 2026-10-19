@@ -1,0 +1,20 @@
+UTC: 2026-10-03T03:23:41.937412+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: rg -n 'gs1-parser|parseGS1|TourProvider|TourOverlay|GuidedTour' frontend/src -g '*.tsx' -g '*.ts' -g '!*.test.*'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+frontend/src/lib/gs1-parser.ts:129:export function parseGS1(raw: string): GS1ParsedData {
+frontend/src/lib/scan-match.ts:5: * upstream by parseGS1) or as a bare GTIN / lot code typed by hand — the
+frontend/src/lib/scan-match.ts:12:    /** GTIN extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/lib/scan-match.ts:14:    /** Lot/TLC extracted by parseGS1, if the input was AI-encoded. */
+frontend/src/app/dashboard/receiving/page.tsx:30:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/app/dashboard/receiving/page.tsx:158:        const parsed = parseGS1(raw);
+frontend/src/app/dashboard/receiving/page.tsx:161:        // The input invites typing a bare GTIN or lot code, but parseGS1 only
+frontend/src/components/mobile/FieldCaptureClient.tsx:39:import { parseGS1 } from '@/lib/gs1-parser';
+frontend/src/components/mobile/FieldCaptureClient.tsx:73:    parsed: ReturnType<typeof parseGS1>,
+frontend/src/components/mobile/FieldCaptureClient.tsx:192:        const parsed = parseGS1(rawScan);
+frontend/src/app/tools/scan/page.tsx:8:import { parseGS1, isFSMACompatible } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:9:import type { GS1ParsedData } from '@/lib/gs1-parser';
+frontend/src/app/tools/scan/page.tsx:30:    const result = parseGS1(barcode);

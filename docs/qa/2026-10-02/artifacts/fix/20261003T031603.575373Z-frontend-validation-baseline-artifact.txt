@@ -1,0 +1,610 @@
+UTC: 2026-10-03T03:16:03.575373+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; import json; p=Path("docs/qa/2026-10-02/artifacts/browser/existing-e2e-proxy-local-browser-summary.json"); j=json.loads(p.read_text());print(json.dumps(j,indent=2)[:25000])'
+Exit: 0
+Duration: 0.03s
+Timeout: False
+
+{
+  "input": "existing-e2e-proxy-local-browser.json",
+  "capturedAt": "2026-10-03T02:18:16.132Z",
+  "localFrontend": "http://127.0.0.1:3115",
+  "noAuthenticatedBackend": true,
+  "projects": [
+    {
+      "project": "chromium",
+      "discovered": 90,
+      "passed": 21,
+      "failed": 8,
+      "skipped": 61,
+      "timedOut": 1,
+      "interrupted": 0,
+      "failureClasses": {
+        "environment: prohibited database/OTP setup": 5,
+        "harness: stale Password button expectation on OTP login": 1,
+        "environment: local evaluator backend unavailable": 1,
+        "harness: config matches configured inside Next script text": 1
+      },
+      "skipReasons": {
+        "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.": 8,
+        "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).": 24,
+        "Set a pre-provisioned DEMO_SMOKE_API_KEY with inflow.read, inflow.write, and webhooks.ingest scopes.": 1,
+        "Set TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD or TEST_USER_EMAIL/TEST_PASSWORD, plus JWT_SIGNING_KEY (or AUTH_SECRET_KEY), to run admin-authenticated E2E tests.": 23,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user": 1,
+        "sandbox router is mounted \u2014 the unavailable path does not apply": 1,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD": 3
+      }
+    },
+    {
+      "project": "firefox",
+      "discovered": 90,
+      "passed": 20,
+      "failed": 9,
+      "skipped": 61,
+      "timedOut": 1,
+      "interrupted": 0,
+      "failureClasses": {
+        "environment: prohibited database/OTP setup": 5,
+        "harness: browser-specific network error wording": 1,
+        "harness: stale Password button expectation on OTP login": 1,
+        "environment: local evaluator backend unavailable": 1,
+        "harness: config matches configured inside Next script text": 1
+      },
+      "skipReasons": {
+        "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.": 8,
+        "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).": 24,
+        "Set a pre-provisioned DEMO_SMOKE_API_KEY with inflow.read, inflow.write, and webhooks.ingest scopes.": 1,
+        "Set TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD or TEST_USER_EMAIL/TEST_PASSWORD, plus JWT_SIGNING_KEY (or AUTH_SECRET_KEY), to run admin-authenticated E2E tests.": 23,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user": 1,
+        "sandbox router is mounted \u2014 the unavailable path does not apply": 1,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD": 3
+      }
+    },
+    {
+      "project": "webkit",
+      "discovered": 90,
+      "passed": 18,
+      "failed": 11,
+      "skipped": 61,
+      "timedOut": 1,
+      "interrupted": 0,
+      "failureClasses": {
+        "environment: prohibited database/OTP setup": 5,
+        "product UX-008: WebKit guided-tour tooltip extends below viewport (settling probe confirmed)": 1,
+        "environment: macOS WebKit keyboard focus preference (plain HTML control confirms)": 1,
+        "harness: browser-specific network error wording": 1,
+        "harness: stale Password button expectation on OTP login": 1,
+        "environment: local evaluator backend unavailable": 1,
+        "harness: config matches configured inside Next script text": 1
+      },
+      "skipReasons": {
+        "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.": 8,
+        "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).": 24,
+        "Set a pre-provisioned DEMO_SMOKE_API_KEY with inflow.read, inflow.write, and webhooks.ingest scopes.": 1,
+        "Set TEST_ADMIN_EMAIL/TEST_ADMIN_PASSWORD or TEST_USER_EMAIL/TEST_PASSWORD, plus JWT_SIGNING_KEY (or AUTH_SECRET_KEY), to run admin-authenticated E2E tests.": 23,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD secrets pointing to a sysadmin user": 1,
+        "sandbox router is mounted \u2014 the unavailable path does not apply": 1,
+        "Requires a dedicated sysadmin account \u2014 set TEST_ADMIN_EMAIL + TEST_ADMIN_PASSWORD": 3
+      }
+    }
+  ],
+  "tests": [
+    {
+      "project": "chromium",
+      "file": "auth-diagnostic.spec.ts",
+      "line": 22,
+      "title": "login API \u2192 session cookie \u2192 authenticated page",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "skip",
+          "description": "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-diagnostic.spec.ts",
+            "line": 20,
+            "column": 10
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "auth-diagnostic.spec.ts",
+      "line": 22,
+      "title": "login API \u2192 session cookie \u2192 authenticated page",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "skip",
+          "description": "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-diagnostic.spec.ts",
+            "line": 20,
+            "column": 10
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "webkit",
+      "file": "auth-diagnostic.spec.ts",
+      "line": 22,
+      "title": "login API \u2192 session cookie \u2192 authenticated page",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "skip",
+          "description": "Set TEST_USER_EMAIL, TEST_PASSWORD, and JWT_SIGNING_KEY (or AUTH_SECRET_KEY) to run authenticated E2E tests.",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/auth-diagnostic.spec.ts",
+            "line": 20,
+            "column": 10
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "auth-flow.spec.ts",
+      "line": 11,
+      "title": "email OTP login hydrates profile and requires passkey step-up for admin policy",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 92,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "chromium",
+      "file": "auth-flow.spec.ts",
+      "line": 30,
+      "title": "pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 92,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "firefox",
+      "file": "auth-flow.spec.ts",
+      "line": 11,
+      "title": "email OTP login hydrates profile and requires passkey step-up for admin policy",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 521,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "firefox",
+      "file": "auth-flow.spec.ts",
+      "line": 30,
+      "title": "pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 510,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "webkit",
+      "file": "auth-flow.spec.ts",
+      "line": 11,
+      "title": "email OTP login hydrates profile and requires passkey step-up for admin policy",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 457,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "webkit",
+      "file": "auth-flow.spec.ts",
+      "line": 30,
+      "title": "pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up",
+      "status": "failed",
+      "expectedStatus": "passed",
+      "classification": "environment: prohibited database/OTP setup",
+      "annotations": [],
+      "durationMs": 303,
+      "error": "Error: QA environment restriction: OTP database fixture cleanup is outside browser-only scope\n\n   at ../../../docs/qa/2026-10-02/scripts/existing-e2e-safety.cjs:21\n\n  19 | fs.rmSync = function (file, ...args) {\n  20 |   if (String(file).includes('regengine-playwright-email-outbox')) {\n> 21 |     throw new Error('QA environment restriction: OTP database fixture cleanup is outside browser-only scope');\n     |           ^"
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 248,
+      "title": "primary resource create -> list -> open -> edit -> delete with UI and backend assertions",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 1,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 295,
+      "title": "settings change persists across logout and API login",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 356,
+      "title": "search/filter on populated dataset returns expected results and backend pagination",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 400,
+      "title": "invite collaborator -> email sent -> accept invite -> appears in member list",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 450,
+      "title": "billing/plan change -> account state and Stripe state",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "chromium",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 454,
+      "title": "bulk action on 50+ items -> progress and backend completion",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 248,
+      "title": "primary resource create -> list -> open -> edit -> delete with UI and backend assertions",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 295,
+      "title": "settings change persists across logout and API login",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 356,
+      "title": "search/filter on populated dataset returns expected results and backend pagination",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 400,
+      "title": "invite collaborator -> email sent -> accept invite -> appears in member list",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 450,
+      "title": "billing/plan change -> account state and Stripe state",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "firefox",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 454,
+      "title": "bulk action on 50+ items -> progress and backend completion",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 245,
+            "column": 14
+          }
+        }
+      ],
+      "durationMs": 0,
+      "error": ""
+    },
+    {
+      "project": "webkit",
+      "file": "authenticated-core-journeys.spec.ts",
+      "line": 248,
+      "title": "primary resource create -> list -> open -> edit -> delete with UI and backend assertions",
+      "status": "skipped",
+      "expectedStatus": "skipped",
+      "classification": "skipped",
+      "annotations": [
+        {
+          "type": "serial",
+          "location": {
+            "file": "/Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine/frontend/tests/e2e/authenticated-core-journeys.spec.ts",
+            "line": 243,
+            "column": 15
+          }
+        },
+        {
+          "type": "skip",
+          "description": "Passwordless login E2E requires the local stack (REGENGINE_E2E_MODE=true backend with the OTP outbox fixture).",
+          "location": {

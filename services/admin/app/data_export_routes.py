@@ -145,7 +145,8 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
         rows = (
             db.execute(
                 text(
-                    "SELECT email, domain, first_tool_used, access_count, created_at, verified_at "
+                    "SELECT email, domain, first_tool_used, access_count, created_at, verified_at, "
+                    "utm_source, utm_medium, utm_campaign "
                     "FROM tool_leads WHERE LOWER(email) = LOWER(:email)"
                 ),
                 {"email": user.email},
@@ -159,6 +160,9 @@ def _build_user_export(db: Session, user_id: str) -> Dict[str, Any]:
                     "email": row["email"],
                     "domain": row["domain"],
                     "first_tool_used": row["first_tool_used"],
+                    "utm_source": row["utm_source"],
+                    "utm_medium": row["utm_medium"],
+                    "utm_campaign": row["utm_campaign"],
                     "access_count": row["access_count"],
                     "created_at": _serialize(row["created_at"]),
                     "verified_at": _serialize(row["verified_at"]),

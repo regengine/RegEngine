@@ -1,0 +1,222 @@
+UTC: 2026-10-03T00:37:06.216322+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: sh -c 'rg -n "class |body\(|receive|MAX|content.length|scope|tenant|permission|cache_key" services/shared/idempotency.py; sed -n "1,260p" services/shared/request_safety.py; rg --files services/compliance | head -60'
+Exit: 0
+Duration: 0.05s
+Timeout: False
+
+9:Keys bind exact request bytes, URL, content type, and credential to the tenant.
+19:API-key replay fingerprints include fresh database scopes and jurisdictions,
+20:so same-key permission changes invalidate older responses. A replay still skips
+25:``idempotency:{tenant_id}:{idempotency_key}`` so that two tenants who
+29:The tenant is sourced ONLY from authenticated context: the RBAC principal,
+30:``request.state.tenant_id``, the secret-gated ``X-RegEngine-Tenant-ID``
+31:internal header, or a scoped API-key lookup. Neither the request body
+34:authentication runs. When no authenticated tenant is available the request
+51:from shared.internal_caller import internal_tenant_id
+59:# tenant-scoped, letting tenant B receive tenant A's cached 2xx response
+61:# is ``idempotency:{tenant_id}:{idempotency_key}`` — see
+62:# ``_build_cache_key`` below. Legacy un-scoped keys will expire out on
+66:_ANONYMOUS_TENANT = "_anonymous_"  # placeholder when no tenant resolvable
+69:def _tenant_value_to_str(value: Any) -> Optional[str]:
+79:    """Resolve a scoped API key to its tenant before route dependencies run.
+99:                SELECT tenant_id, enabled, expires_at, key_id, scopes, allowed_jurisdictions
+111:        tenant_id, enabled, expires_at, key_id, scopes, jurisdictions = row
+116:        if not tenant_id:
+122:                str(tenant_id),
+124:                sorted(scopes or []),
+128:        return str(tenant_id), hashlib.sha256(snapshot.encode()).hexdigest()
+134:class IdempotencyMiddleware(BaseHTTPMiddleware):
+179:    def _get_cache_key(self, idempotency_key: str, tenant_id: Optional[str] = None) -> str:
+180:        """Generate a tenant-scoped Redis cache key (#1237).
+182:        The cache key is ``idempotency:{tenant_id}:{idempotency_key}``
+183:        so that two tenants using the same idempotency key cannot see
+184:        each other's cached responses. If tenant cannot be resolved
+187:        safe_tenant = tenant_id or _ANONYMOUS_TENANT
+188:        return f"{IDEMPOTENCY_KEY_PREFIX}{safe_tenant}:{idempotency_key}"
+190:    def _resolve_tenant_id(self, request: Request) -> Optional[str]:
+191:        """Resolve tenant from AUTHENTICATED context only — never client input.
+194:        auth middleware set it) > request.state.tenant_id > secret-gated internal
+195:        tenant header. Returns ``None`` when none of those yield a
+196:        tenant, and ``dispatch`` then skips the cache entirely.
+204:        caller could name any tenant and, because ``dispatch`` serves a
+205:        cache hit before ``call_next``, be handed that tenant's cached 2xx
+210:        ``X-Tenant-ID`` is now ignored outright. The trusted-tenant path in
+211:        ``shared/middleware/tenant_context.py`` refuses that header too, so
+214:        same gate ``tenant_context.py`` applies.
+217:        # internal header already provided a tenant. Never fall back from a
+224:            tenant, authorization_fingerprint = context
+226:            return tenant
+228:        principal_tenant = getattr(principal, "tenant_id", None) if principal else None
+229:        tenant = _tenant_value_to_str(principal_tenant)
+230:        if tenant:
+231:            return tenant
+232:        state_tenant = getattr(request.state, "tenant_id", None)
+233:        tenant = _tenant_value_to_str(state_tenant)
+234:        if tenant:
+235:            return tenant
+236:        internal_tenant = internal_tenant_id(request.headers)
+237:        if internal_tenant:
+238:            return internal_tenant
+242:        # Bind the exact operation and credential, not just the tenant. Never
+293:        must not treat a tenant lookup as fresh route authorization.
+298:        # beyond API-key scopes. Always let its canonical dependencies execute.
+311:        tenant_id = self._resolve_tenant_id(request)
+312:        if not tenant_id:
+328:        cache_key = self._get_cache_key(idempotency_key, tenant_id)
+331:            cached_data = await client.get(cache_key)
+334:                    cache_key,
+340:                    cached_data = await client.get(cache_key)
+372:                    cache_key,
+396:                cache_key,
+406:class IdempotencyDependency:
+"""
+API-01 / API-02: Request body size limiting and global request timeout.
+
+Middleware that protects services from oversized payloads and runaway
+requests.  Wire these into each service's ``main.py`` via
+``app.add_middleware(...)``.
+
+Usage::
+
+    from shared.request_safety import RequestSizeLimitMiddleware, RequestTimeoutMiddleware
+
+    app.add_middleware(RequestSizeLimitMiddleware, max_bytes=10 * 1024 * 1024)
+    app.add_middleware(RequestTimeoutMiddleware, timeout_seconds=120)
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Optional
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
+
+_EXEMPT_PATHS = {"/health", "/ready", "/readiness", "/metrics", "/"}
+
+
+# ---------------------------------------------------------------------------
+# API-01: Request body size limiter
+# ---------------------------------------------------------------------------
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Reject requests whose Content-Length exceeds *max_bytes*.
+
+    For chunked/streaming uploads where Content-Length is absent the
+    middleware allows the request through (Starlette's own body reader
+    will enforce memory limits downstream).
+    """
+
+    def __init__(self, app, max_bytes: int = 10 * 1024 * 1024):
+        super().__init__(app)
+        self.max_bytes = max_bytes
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                length = int(content_length)
+            except ValueError:
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "invalid_content_length",
+                        "detail": "Content-Length header is not a valid integer.",
+                    },
+                )
+            if length > self.max_bytes:
+                mb = self.max_bytes / (1024 * 1024)
+                # NOTE: this is the stdlib logger, not structlog — kwargs
+                # here raised TypeError, turning every oversized request
+                # into a 500 instead of the intended 413 (#2503).
+                logger.warning(
+                    "request_too_large: content_length=%s max_bytes=%s path=%s",
+                    length,
+                    self.max_bytes,
+                    request.url.path,
+                )
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "error": "payload_too_large",
+                        "detail": f"Request body exceeds the {mb:.0f} MB limit.",
+                    },
+                )
+        return await call_next(request)
+
+
+# ---------------------------------------------------------------------------
+# API-02: Global request timeout
+# ---------------------------------------------------------------------------
+
+
+class RequestTimeoutMiddleware(BaseHTTPMiddleware):
+    """Cancel request processing after *timeout_seconds*.
+
+    Returns 504 Gateway Timeout if the handler doesn't complete in time.
+    Health/metrics endpoints are exempt.
+    """
+
+    def __init__(self, app, timeout_seconds: float = 120.0):
+        super().__init__(app)
+        self.timeout_seconds = timeout_seconds
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in _EXEMPT_PATHS:
+            return await call_next(request)
+
+        try:
+            return await asyncio.wait_for(
+                call_next(request),
+                timeout=self.timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            # Same stdlib-logger kwargs bug as above: the structlog-style
+            # call raised TypeError, turning every timed-out request into
+            # a 500 instead of the intended 504 (#2503).
+            logger.error(
+                "request_timeout: path=%s method=%s timeout_seconds=%s",
+                request.url.path,
+                request.method,
+                self.timeout_seconds,
+            )
+            return JSONResponse(
+                status_code=504,
+                content={
+                    "error": "request_timeout",
+                    "detail": f"Request timed out after {self.timeout_seconds:.0f} seconds.",
+                },
+            )
+services/compliance/main.py
+services/compliance/__init__.py
+services/compliance/conftest.py
+services/compliance/tests/test_industries_and_checklists.py
+services/compliance/tests/test_fsma204_tenant_trust_1106.py
+services/compliance/tests/test_tenant_isolation_1130.py
+services/compliance/tests/test_smoke_compliance.py
+services/compliance/tests/test_validation_engine.py
+services/compliance/tests/test_checklist_cte_consistency_2851.py
+services/compliance/tests/test_validator_ftl_scoping_1105.py
+services/compliance/tests/test_postgres_persistence.py
+services/compliance/tests/test_fda_spreadsheet.py
+services/compliance/tests/test_cte_industry_scope_1109.py
+services/compliance/tests/test_tenant_isolation.py
+services/compliance/tests/test_audit_spreadsheet_hardening.py
+services/compliance/tests/test_fsma_rules_contract_1223.py
+services/compliance/tests/test_snapshots_router.py
+services/compliance/app/routes.py
+services/compliance/app/fsma_rules.json
+services/compliance/app/fsma_spreadsheet.py
+services/compliance/app/__init__.py
+services/compliance/app/config.py
+services/compliance/app/csv_safety.py
+services/compliance/app/snapshots.py

@@ -1,0 +1,29 @@
+UTC: 2026-10-03T03:24:41.718096+00:00
+CWD: /Users/sellers/Projects/qa-sweep-2026-10-02/RegEngine
+Command: python3 -c 'from pathlib import Path; names=["20261003T003755.090249Z-baseline-ingest-final.txt", "20261003T003827.342544Z-baseline-shared.txt", "20261003T004540.374674Z-ingest-after-final.txt", "20261003T004559.647569Z-shared-after.txt"]; root=Path("docs/qa/2026-10-02/artifacts/backend");
+for name in names:
+ lines=(root/name).read_text().splitlines(); print(name); print("\n".join(line for line in lines if line.startswith(("Command:","Exit:","Duration:")) or (" passed" in line and any(s in line for s in [" in "," deselected", "xfailed"]))))'
+Exit: 0
+Duration: 0.02s
+Timeout: False
+
+20261003T003755.090249Z-baseline-ingest-final.txt
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-before.json
+Exit: 0
+Duration: 5.35s
+65 passed in 4.72s
+20261003T003827.342544Z-baseline-shared.txt
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py -k 'not real_redis' --cov=shared.auth --cov=shared.idempotency --cov=shared.webhook_security --cov=shared.permissions --cov=shared.canonical_event --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-before.json
+Exit: 0
+Duration: 2.66s
+210 passed, 1 deselected in 1.98s
+20261003T004540.374674Z-ingest-after-final.txt
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/ingestion/tests/test_csv_malformed_input.py services/ingestion/tests/test_csv_input_quantities.py services/ingestion/tests/test_csv_ingestion_receipt.py services/ingestion/tests/test_webhook_models.py services/ingestion/tests/test_webhook_models_1342.py services/ingestion/tests/test_webhook_router_v2_idor_f1.py services/ingestion/tests/test_epcis_tenant_isolation.py services/ingestion/tests/test_qa_sweep_20261002_contract.py --cov=app.csv_templates --cov=app.webhook_models --cov=app.authz --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-ingest-after.json
+Exit: 0
+Duration: 7.10s
+75 passed, 14 xfailed in 6.26s
+20261003T004559.647569Z-shared-after.txt
+Command: env PYTHONPATH=/private/tmp/regengine-qa-backend-deps /Users/sellers/Projects/RegEngine/repo/.venv/bin/python docs/qa/2026-10-02/scripts/backend_pytest.py services/shared/tests/test_auth_1338.py services/shared/tests/test_permissions.py services/shared/tests/test_tenant_isolation.py services/shared/tests/test_tenant_context_set_guc.py tests/shared/test_idempotency_middleware_1338.py tests/shared/test_canonical_event_idempotency_key.py tests/shared/test_webhook_security.py tests/qa_sweep_20261002 -k 'not real_redis' --cov=shared.auth --cov=shared.idempotency --cov=shared.webhook_security --cov=shared.permissions --cov=shared.canonical_event --cov-report=term --cov-report=json:docs/qa/2026-10-02/artifacts/backend/coverage-shared-after.json
+Exit: 0
+Duration: 2.89s
+213 passed, 1 deselected, 2 xfailed in 2.08s

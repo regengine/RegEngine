@@ -42,6 +42,7 @@ from fastapi import (
     UploadFile,
 )
 from prometheus_client import REGISTRY, Counter, Histogram
+from pydantic import ValidationError
 
 # Advanced ingestion framework components
 from regengine_ingestion.audit import AuditLogger
@@ -508,7 +509,14 @@ def _process_and_emit(
     normalized_alias_key = f"normalized/by-document-id/{document_id}/current.json"
 
     raw_uri = put_bytes(settings.raw_bucket, raw_key, raw_bytes)
-    normalized_payload = NormalizedDocument(**normalized)
+    try:
+        normalized_payload = NormalizedDocument(**normalized)
+    except ValidationError as exc:
+        logger.error("normalized_document_invalid", url=url_str, error=str(exc))
+        raise HTTPException(
+            status_code=422,
+            detail="Document parsing/normalization failed. Check server logs for details.",
+        ) from exc
     normalized_uri = put_json(
         settings.processed_bucket,
         normalized_key,
@@ -626,6 +634,8 @@ async def ingest_direct(
 
     try:
         content = payload.text.encode("utf-8") if payload.text else b""
+        if not content:
+            raise HTTPException(status_code=400, detail="Empty text provided")
 
         event = _process_and_emit(
             raw_bytes=content,
@@ -649,6 +659,8 @@ async def ingest_direct(
         REQUEST_COUNTER.labels(endpoint=endpoint, status="200").inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(time.perf_counter() - start_time)
         return event
+    except HTTPException:
+        raise
     except Exception as exc:  # Catch-all: route must return HTTP response
         logger.exception("ingest_direct_failed", job_id=job_id, error=str(exc))
         if db_manager:
@@ -656,7 +668,6 @@ async def ingest_direct(
             job.error_message = str(exc)
             job.completed_at = datetime.now(timezone.utc)
             db_manager.update_job(job)
-        logger.exception("ingestion_error", error=str(exc))
         raise HTTPException(status_code=500, detail="Internal server error")
     finally:
         if db_manager:
@@ -711,7 +722,10 @@ async def ingest_file(
 
         event = _process_and_emit(
             raw_bytes=content,
-            url_str=f"http://upload.internal/{safe_filename}",
+            # Opaque provenance ref, never fetched: the stored-source
+            # validator in models.py accepts the ``upload://`` marker
+            # without DNS and SSRF-screens every other value.
+            url_str=f"upload://file/{safe_filename}",
             source_system=source_system,
             tenant_id=tenant_id,
             content_type=content_type,
