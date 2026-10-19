@@ -75,7 +75,8 @@ def _is_record(row: Any) -> bool:
     """A ledger line of the shapes the lab writes, so every reader can index it without a traceback."""
     if not isinstance(row, dict):
         return False
-    containers = {"candidates": dict, "decisions": dict, "accepted": list, "metrics": dict}
+    # ``accepted`` is the list of kinds kept on a generation row and a kept count on a run row.
+    containers = {"candidates": dict, "decisions": dict, "accepted": (list, int), "metrics": dict}
     return all(
         row.get(key) is None or isinstance(row[key], kind) for key, kind in {"run_id": str, **containers}.items()
     )
