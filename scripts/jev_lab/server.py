@@ -365,7 +365,8 @@ def create_app(lab: Lab) -> FastAPI:
             raise HTTPException(400, "refused: a header has a line break or is too long")
         mappings = body.get("mappings") or {}
         cte_label = body.get("cte")
-        reasons = privacy.findings({"headers": row, "mappings": mappings}) + privacy.data_row_findings(row)
+        reasons = privacy.findings({"headers": row, "cte": cte_label, "mappings": mappings})
+        reasons += privacy.data_row_findings(row)
         if reasons:
             return _refuse(reasons)
         case_id = "local-" + hashlib.sha256("\x1f".join(row).encode("utf-8")).hexdigest()[:12]
@@ -417,6 +418,7 @@ def create_app(lab: Lab) -> FastAPI:
             margin = -1.0
         if not 0.0 <= margin <= 0.5:
             raise HTTPException(400, "margin must be between 0 and 0.5")
+        every_case(lab.ledger)  # a tainted or broken cases file is refused here, before a run starts
         try:
             lab.start_loop(LoopConfig(generations=generations, margin=margin), backend)
         except RuntimeError as exc:

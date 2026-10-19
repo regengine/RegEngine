@@ -759,6 +759,24 @@ def test_a_tainted_labelled_row_is_refused_before_anything_is_sent(tmp_path, fak
         loop.every_case(lab)
 
 
+def test_every_field_of_a_hand_edited_row_is_checked_and_never_echoed(tmp_path, fake):
+    """A secret in the label or the id would be repeated by the validation message: it is refused first."""
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-label", "headers": ["Ship Dte", "Lot No."], "cte": token, "mappings": {}})
+    lab.add_case({"id": "jane.doe@example.com", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "cases.local.json case 'local-label': key-like token at $.cte" in message
+    assert "cases.local.json case <row 2>: personal data" in message and "at $.id" in message
+    assert token not in message and "jane" not in message and "example.com" not in message
+    with pytest.raises(privacy.Refused):
+        loop.run_loop(ledger=lab, decider=fake, proposer=proposer.OfflineProposer())
+    assert fake.stats()["sent"] == 0
+
+
 def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):
     lab = _home(tmp_path)
     base = questions.baseline(questions.HEADER_MAPPING)

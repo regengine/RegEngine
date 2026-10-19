@@ -64,9 +64,11 @@ rows and synthetic examples, not exports.
 
 Rows in `cases.local.json` are checked again every time they are loaded,
 not only when they were labelled, because the file can be edited by hand or
-restored from an older copy. A row that fails stops the lab with a message
-naming the case and the kind of content; nothing is sent until the row is
-fixed or removed.
+restored from an older copy. Every field of a row is checked, the id and the
+label included, since a validation message would otherwise repeat them. A
+row that fails stops the lab with a message naming the case (by position,
+when the id is itself the problem) and the kind of content; nothing is sent,
+and a run is refused before it starts, until the row is fixed or removed.
 
 ## The page
 

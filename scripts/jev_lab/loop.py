@@ -129,18 +129,23 @@ def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> N
     """Refuse a labelled row that must not leave the machine, before anything is asked about it.
 
     The sandbox checks a row when it is labelled, but ``cases.local.json`` can
-    be edited by hand or restored from an older copy. Every row is checked
-    again each time it is loaded, so a secret, a person's details or a row of
-    values in that file never reaches Jev or Claude. The reasons name the case
-    and the kind of content, never the content.
+    be edited by hand or restored from an older copy. Every field of every row
+    (the id and the label too, which a validation message would repeat) is
+    checked again each time it is loaded, so a secret, a person's details or a
+    row of values in that file never reaches Jev, Claude, a log or the page.
+    The reasons name the case and the kind of content, never the content.
     """
     reasons: list[str] = []
-    for row in rows:
-        headers = row.get("headers")
-        found = privacy.findings({"headers": headers, "mappings": row.get("mappings")})
+    for index, row in enumerate(rows, start=1):
+        checked = {key: row.get(key) for key in ("id", "headers", "cte", "mappings")}
+        found = privacy.findings(checked)
+        headers = checked["headers"]
         if isinstance(headers, list) and all(isinstance(h, str) for h in headers):
             found += privacy.data_row_findings(headers)
-        reasons += [f"{source} case {row.get('id')!r}: {reason}" for reason in found]
+        # A reason names the case by its id, unless the id is itself a finding: then by position.
+        clean_id = isinstance(checked["id"], str) and not any(reason.endswith(" at $.id") for reason in found)
+        where = f"case {checked['id']!r}" if clean_id else f"case <row {index}>"
+        reasons += [f"{source} {where}: {reason}" for reason in found]
     if reasons:
         raise privacy.Refused(reasons)
 

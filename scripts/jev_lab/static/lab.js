@@ -1065,9 +1065,12 @@
     const text = $('#now-text');
     const primary = $('#now-primary');
     const stop = $('#now-stop');
+    // The Loop tab's buttons follow the primary one: nothing starts during a run or while the lab
+    // is refusing (the server refuses such a run before it starts, so the page never shows one).
+    const blocked = S.running || Boolean(S.unusable);
     $('#loop-stop').disabled = !S.running;
-    $('#loop-start').disabled = S.running;
-    $('#loop-score').disabled = S.running;
+    $('#loop-start').disabled = blocked;
+    $('#loop-score').disabled = blocked;
     stop.hidden = !S.running;
     // A refusal or a lab-file message wins over everything else, also after a status was loaded:
     // the file may be edited while the page is open, and the next poll is what reports it.
@@ -1149,6 +1152,7 @@
 
   // ---------------------------------------------------------------- loop controls
   async function startLoop(scoreOnly) {
+    if (S.unusable) { logLine('Not started: ' + S.unusable, 'failed'); announce('Not started: ' + S.unusable); updateNow(); return; }
     const generations = scoreOnly ? 0 : Math.max(1, Math.min(25, parseInt($('#loop-gens').value, 10) || 5));
     const margin = parseFloat($('#loop-margin').value);
     const r = await api('/api/loop/start', { method: 'POST', body: { generations, margin: Number.isFinite(margin) ? margin : 0.01, proposer: $('#loop-proposer').value || undefined } });
