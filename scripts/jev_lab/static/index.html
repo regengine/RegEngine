@@ -106,12 +106,13 @@
       </div>
       <div class="row">
         <label class="small" for="hdr-wording">Wording</label>
-        <select id="hdr-wording">
+        <select id="hdr-wording" aria-describedby="hdr-wording-note">
           <option value="incumbent">Lab incumbent</option>
           <option value="production">Production</option>
         </select>
         <button id="hdr-send" class="primary" type="button">Ask both questions</button>
       </div>
+      <p id="hdr-wording-note" class="small"></p>
       <div id="hdr-result" class="result" aria-live="polite"></div>
     </div>
 

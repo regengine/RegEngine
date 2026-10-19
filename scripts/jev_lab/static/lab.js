@@ -401,6 +401,8 @@
     ctx.beginPath(); ctx.moveTo(cx - geom.orbit, cy); ctx.lineTo(cx - geom.rMin, cy); ctx.moveTo(cx + geom.rMin, cy); ctx.lineTo(cx + geom.orbit, cy); ctx.stroke();
     ctx.restore();
 
+    drawAxisLabels(p);
+
     // Milky Way: one mote per sandbox question this session.
     S.motes.forEach((m, i) => {
       const x = 14 + (i % 40) * ((w - 28) / 40);
@@ -531,8 +533,6 @@
       }
     }
 
-    drawAxisLabels(p);
-
     // Claude: a moon on the outer orbit that advances one step per generation.
     const moonA = moonAngle(S.generation);
     const mx = cx + Math.cos(moonA) * geom.orbit;
@@ -620,7 +620,8 @@
     if (busy || (animated() && lively && subjectsOf(S.kind).length)) requestDraw();
   }
 
-  // The four labels along the horizontal axis, drawn over the stars with a sky-coloured halo.
+  // The four labels along the horizontal axis, drawn under the stars (a datum is never hidden by
+  // a label) with a sky-coloured halo that keeps them clear of the circle and veil lines.
   // Right of Jev: the threshold labels, auto-apply above the axis and review below it. Left: the
   // split labels on the same two lines. A split label is written out in full only when it ends
   // before the threshold label on its line (where that is actually drawn, after clamping to the
@@ -744,11 +745,14 @@
     layoutDirty = true;
   }
 
+  // Follow new lines inside the log box only, and only while it is scrolled to the end: the page
+  // itself never moves away from the sky.
   function logLine(text, cls) {
     S.log.push({ text, cls });
-    const li = el('li', { class: cls || '', text });
-    $('#log').append(li);
-    li.scrollIntoView({ block: 'nearest' });
+    const log = $('#log');
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 8;
+    log.append(el('li', { class: cls || '', text }));
+    if (atEnd) log.scrollTop = log.scrollHeight;
   }
 
   // Screen-reader announcements. History is redrawn but never read out again: on the first
@@ -1005,11 +1009,12 @@
     pillJev.className = 'pill ' + (fake ? 'fake' : 'live');
     pillJev.textContent = fake ? 'Jev: OFFLINE FAKE' : `Jev: live, ${status.jev.model}`;
     $('#fake-banner').hidden = !fake;
-    // Header check asks both questions: say whose wording each one gets (a production version or a
-    // lab rewrite) and who judged it.
-    if (status.incumbents) {
+    // Header check asks both questions: a caption under the short "Lab incumbent" choice says whose
+    // wording each one gets (a production version or a lab rewrite) and who judged it.
+    const note = $('#hdr-wording-note');
+    if (status.incumbents && note) {
       const label = (kind) => (status.incumbents[kind] ? status.incumbents[kind].label : 'production');
-      $('#hdr-wording').options[0].textContent = `Lab incumbent: header fields ${label('header_mapping')}, file CTE ${label('file_cte')}${fake ? ' (offline fake ledger)' : ''}`;
+      note.textContent = `Lab incumbent${fake ? ', from the offline fake ledger' : ''}: header fields ${label('header_mapping')}; file CTE ${label('file_cte')}.`;
     }
     // Promotion only ever starts from wording live Jev judged. (Guarded: a cached older page may lack them.)
     for (const [id, hide] of [['#ledger-promote', fake], ['#ledger-promote-fake', !fake]]) {
@@ -1251,7 +1256,13 @@
     list.sort((a, b) => { const va = value(a, sortKey); const vb = value(b, sortKey); return va < vb ? -1 : va > vb ? 1 : 0; });
     // Confidence sorts highest first (its key is negated); every other column sorts ascending.
     const direction = (key) => (key === 'conf' ? 'descending' : 'ascending');
-    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? direction(key) : 'none' }, el('button', { type: 'button', text: label, onclick: () => { sortKey = key; renderTable(); } }));
+    // Re-rendering replaces the buttons: keep keyboard focus on the one that was pressed.
+    const sortBtn = (key, label) => el('th', { 'aria-sort': sortKey === key ? direction(key) : 'none', 'data-key': key }, el('button', { type: 'button', text: label, onclick: () => {
+      sortKey = key;
+      renderTable();
+      const again = $(`#subject-table th[data-key="${key}"] button`);
+      if (again) again.focus();
+    } }));
     const head = el('tr', {}, sortBtn('case', 'Case · subject'), sortBtn('split', 'Split'), el('th', { text: 'Expected' }), el('th', { text: 'Jev' }), sortBtn('conf', 'Confidence'), sortBtn('right', 'Right?'), el('th', { text: 'Order check' }));
     const rows = list.map((s) => {
       const o = s.cur || {};
