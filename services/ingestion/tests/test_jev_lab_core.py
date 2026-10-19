@@ -777,6 +777,58 @@ def test_every_field_of_a_hand_edited_row_is_checked_and_never_echoed(tmp_path, 
     assert fake.stats()["sent"] == 0
 
 
+def test_a_value_like_label_mapping_or_id_is_refused_before_a_message_could_repeat_it(tmp_path):
+    """A lot code, a date or an SSCC where a label belongs matches no secret pattern, yet jev_eval would repeat it."""
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-lot", "headers": ["Ship Dte", "Lot No."], "cte": "LOT-R-0423", "mappings": {}})
+    lab.add_case(
+        {
+            "id": "local-map",
+            "headers": ["Ship Dte", "Lot No."],
+            "cte": "shipping",
+            "mappings": {"Ship Dte": "2024-04-23", "003401234567890123": "lot_code"},
+        }
+    )
+    lab.add_case({"id": "012345678905", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "case 'local-lot': looks like a value (date, number or code), not a label at $.cte" in message
+    assert "case 'local-map': looks like a value (date, number or code), not a label at $.mappings.Ship Dte" in message
+    assert "case 'local-map': looks like a value (date, number or code), not a label at $.mappings.<key 2>" in message
+    assert "case <row 3>: looks like a value (date, number or code), not a label at $.id" in message
+    for value in ("LOT-R-0423", "2024-04-23", "003401234567890123", "012345678905"):
+        assert value not in message
+    # The page's own ids hold digits by design and are never mistaken for values.
+    assert privacy.value_findings({"id": "local-123456abcdef"}, codes=False) == []
+    assert privacy.value_findings({"cte": "shipping", "mappings": {"Lot No.": "lot_code"}}) == []
+
+
+def test_a_row_that_is_not_a_case_object_is_refused_by_position(tmp_path):
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    data = json.loads(lab.cases_path.read_text())
+    data["cases"] += ["not a row", {"id": ["x"], "headers": ["Ship Dte"]}]
+    lab.cases_path.write_text(json.dumps(data))
+
+    with pytest.raises(ledger.LabStateError, match=r"cases\.local\.json row 2 is not a case object with a string id"):
+        loop.every_case(lab)
+    with pytest.raises(ledger.LabStateError, match="row 2"):
+        lab.add_case({"id": "local-new", "headers": ["Pick Dt"], "cte": None, "mappings": {}})
+
+
+def test_a_refusal_counts_rows_as_the_file_does(tmp_path):
+    """Row 1 reuses a repository case id and is dropped; the tainted row is still called row 2."""
+    lab = _home(tmp_path)
+    repo_id = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=False)[0].id
+    lab.add_case({"id": repo_id, "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    lab.add_case({"id": "jane.doe@example.com", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused, match=r"case <row 2>: personal data"):
+        loop.every_case(lab)
+
+
 def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):
     lab = _home(tmp_path)
     base = questions.baseline(questions.HEADER_MAPPING)

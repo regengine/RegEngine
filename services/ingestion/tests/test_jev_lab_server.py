@@ -170,7 +170,7 @@ def test_a_label_that_holds_a_secret_is_refused_by_location_and_never_saved(clie
     assert token not in response.text and lab.ledger.local_cases() == []
 
 
-def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab):
+def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab, monkeypatch):
     lab.ledger.add_case({"id": "local-bogus", "headers": ["Ship Dte", "Lot No."], "cte": "bogus", "mappings": {}})
 
     response = client.get("/api/status", headers=AUTH)
@@ -178,8 +178,20 @@ def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab):
     assert "cases.local.json" in response.json()["error"] and "local-bogus" in response.json()["error"]
     start = client.post("/api/loop/start", headers=POST, json={"generations": 0})
     assert start.status_code == 500 and "cases.local.json" in start.json()["error"] and not lab.running
-    # A run in progress still answers 409, not the state handler.
-    assert "a run is already in progress" not in response.text
+
+    # A row that is not an object is named by position, with the file: never a bare 500.
+    data = json.loads(lab.ledger.cases_path.read_text())
+    data["cases"] = [{"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": None, "mappings": {}}, "not a row"]
+    lab.ledger.cases_path.write_text(json.dumps(data))
+    response = client.get("/api/status", headers=AUTH)
+    assert response.status_code == 500 and "cases.local.json row 2 is not a case object" in response.json()["error"]
+
+    # A run in progress answers 409 before the file is read.
+    monkeypatch.setattr(server, "run_loop", lambda **kw: time.sleep(0.3))
+    lab._start(server.LoopConfig(generations=1), None)
+    busy = client.post("/api/loop/start", headers=POST, json={"generations": 0})
+    _wait_idle(lab)
+    assert busy.status_code == 409 and "a run is already in progress" in busy.json()["error"]
 
 
 PARSE_ROW_FIXTURES = [

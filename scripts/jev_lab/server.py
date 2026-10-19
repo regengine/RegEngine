@@ -152,6 +152,7 @@ class Lab:
         with self._starting:  # two clicks or two tabs: one run
             if self.running:
                 raise RuntimeError("a run is already in progress")
+            every_case(self.ledger)  # a tainted or broken cases file is refused here, before a run starts
             self._start(config, build_proposer(backend, model=self.proposer_model))
 
     def _start(self, config: LoopConfig, proposer: Any) -> None:
@@ -418,9 +419,10 @@ def create_app(lab: Lab) -> FastAPI:
             margin = -1.0
         if not 0.0 <= margin <= 0.5:
             raise HTTPException(400, "margin must be between 0 and 0.5")
-        every_case(lab.ledger)  # a tainted or broken cases file is refused here, before a run starts
         try:
             lab.start_loop(LoopConfig(generations=generations, margin=margin), backend)
+        except LabStateError:
+            raise  # a lab file no longer says what it recorded: the app's handler names it
         except RuntimeError as exc:
             return JSONResponse(status_code=409, content={"error": str(exc)})
         return {"started": True, "proposer": backend, "generations": generations, "margin": margin}

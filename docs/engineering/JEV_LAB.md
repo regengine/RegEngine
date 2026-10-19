@@ -65,7 +65,10 @@ rows and synthetic examples, not exports.
 Rows in `cases.local.json` are checked again every time they are loaded,
 not only when they were labelled, because the file can be edited by hand or
 restored from an older copy. Every field of a row is checked, the id and the
-label included, since a validation message would otherwise repeat them. A
+label included, since a validation message would otherwise repeat them; a
+label, mapping or id that reads as a row value (a date, a number, a lot code)
+is refused the same way, and a row that is not a case object is named by its
+position in the file. A
 row that fails stops the lab with a message naming the case (by position,
 when the id is itself the problem) and the kind of content; nothing is sent,
 and a run is refused before it starts, until the row is fixed or removed.

@@ -367,7 +367,13 @@ class Ledger:
             raise LabStateError(f"{self.cases_path} is not JSON: fix it, or delete it") from None
         if not isinstance(data, dict) or not isinstance(data.get("cases", []), list):
             raise LabStateError(f"{self.cases_path} is not a cases file: fix it, or delete it")
-        return list(data.get("cases") or [])
+        rows = list(data.get("cases") or [])
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                raise LabStateError(
+                    f"{self.cases_path} row {index} is not a case object with a string id: fix or delete it"
+                )
+        return rows
 
     def add_case(self, case: Mapping[str, Any]) -> None:
         """Save a labelled row. Relabelling keeps the row's first ``labelled_at``."""

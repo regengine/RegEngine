@@ -91,6 +91,8 @@
     kind: store.get('jevLabKind') === 'file_cte' ? 'file_cte' : 'header_mapping',
     motion: store.get('jevLabMotion') !== 'off',
     running: false,
+    statusSeq: 0,   // status polls are applied in the order they were sent, never a stale one over a newer one
+    runsEnded: 0,   // run_done + run_failed seen, so a late start reply never revives a run that already ended
     phase: 'idle',
     run: null,
     generation: 0,
@@ -910,6 +912,7 @@
     },
     run_done(d) {
       S.running = false;
+      S.runsEnded += 1;
       S.phase = 'idle';
       endPendingComets();
       S.lastSummary = d;
@@ -920,6 +923,7 @@
     },
     run_failed(d) {
       S.running = false;
+      S.runsEnded += 1;
       S.phase = 'idle';
       endPendingComets();
       logLine('Run failed: ' + d.error, 'failed');
@@ -1056,7 +1060,9 @@
   }
 
   async function refreshStatus() {
+    const seq = ++S.statusSeq;
     const r = await api('/api/status');
+    if (seq !== S.statusSeq) return; // a newer poll is in flight or has answered: this one is stale
     if (r.ok) applyStatus(r.data);
     else if (r.data && (r.data.refused || r.data.error)) showUnusable(errorText(r));
   }
@@ -1155,9 +1161,10 @@
     if (S.unusable) { logLine('Not started: ' + S.unusable, 'failed'); announce('Not started: ' + S.unusable); updateNow(); return; }
     const generations = scoreOnly ? 0 : Math.max(1, Math.min(25, parseInt($('#loop-gens').value, 10) || 5));
     const margin = parseFloat($('#loop-margin').value);
+    const ended = S.runsEnded;
     const r = await api('/api/loop/start', { method: 'POST', body: { generations, margin: Number.isFinite(margin) ? margin : 0.01, proposer: $('#loop-proposer').value || undefined } });
     if (!r.ok) { logLine('Could not start: ' + errorText(r), 'failed'); announce('Could not start: ' + errorText(r)); }
-    else S.running = true;
+    else if (S.runsEnded === ended) S.running = true; // unless the stream already reported this run's end
     updateNow();
   }
   async function stopLoop() {

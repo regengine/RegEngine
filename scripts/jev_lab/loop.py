@@ -142,6 +142,10 @@ def refuse_tainted_cases(rows: Sequence[Mapping[str, Any]], *, source: str) -> N
         headers = checked["headers"]
         if isinstance(headers, list) and all(isinstance(h, str) for h in headers):
             found += privacy.data_row_findings(headers)
+        # A label, a mapping or an id that reads as a row value (a lot code, an SSCC, a date) is
+        # refused too: jev_eval would otherwise repeat it as an unknown label or a missing header.
+        found += privacy.value_findings({"cte": checked["cte"], "mappings": checked["mappings"]})
+        found += privacy.value_findings({"id": checked["id"]}, codes=False)
         # A reason names the case by its id, unless the id is itself a finding: then by position.
         clean_id = isinstance(checked["id"], str) and not any(reason.endswith(" at $.id") for reason in found)
         where = f"case {checked['id']!r}" if clean_id else f"case <row {index}>"
@@ -164,7 +168,10 @@ def every_case(ledger: Ledger, *, templates: bool = True) -> list[jev_eval.Case]
     cases = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=templates)
     seen = {header_key(case.headers) for case in cases}
     known = {case.id for case in cases}
-    local = [c for c in ledger.local_cases() if c.get("id") not in known]
+    rows = ledger.local_cases()  # each an object with a string id, or the ledger has refused the file
+    # Checked before any row is dropped, so a position in a reason is the row's position in the file.
+    refuse_tainted_cases(rows, source=ledger.cases_path.name)
+    local = [c for c in rows if c["id"] not in known]
     for case in validate_cases(ledger, local, source=ledger.cases_path.name):
         if header_key(case.headers) not in seen:
             seen.add(header_key(case.headers))
