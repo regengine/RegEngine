@@ -79,9 +79,9 @@ REGENGINE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. 
     },    {
         id: 'limitation-of-liability',
         title: '8. Limitation of Liability',
-        content: `TO THE MAXIMUM EXTENT PERMITTED BY LAW, REGENGINE INC. SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION LOST PROFITS, LOST DATA, BUSINESS INTERRUPTION, REGULATORY FINES, OR PRODUCT RECALL COSTS, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+        content: `TO THE MAXIMUM EXTENT PERMITTED BY LAW, REGENGINE LLC SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, CONSEQUENTIAL, SPECIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION LOST PROFITS, LOST DATA, BUSINESS INTERRUPTION, REGULATORY FINES, OR PRODUCT RECALL COSTS, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
-REGENGINE INC.'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT PAID BY YOU TO REGENGINE INC. IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO THE CLAIM.
+REGENGINE LLC'S TOTAL AGGREGATE LIABILITY ARISING OUT OF OR RELATING TO THE SERVICE SHALL NOT EXCEED THE AMOUNT PAID BY YOU TO REGENGINE LLC IN THE TWELVE (12) MONTHS PRECEDING THE EVENT GIVING RISE TO THE CLAIM.
 
 This limitation applies regardless of the theory of liability (contract, tort, strict liability, or otherwise).`,
     },
@@ -126,7 +126,7 @@ If you disagree with changes, you can close your account before the updated term
         title: '14. Dispute Resolution & Arbitration',
         content: `Any dispute, claim, or controversy arising out of or relating to these Terms or the use of RegEngine shall be resolved by binding arbitration administered by the American Arbitration Association under its Commercial Arbitration Rules.
 
-YOU AND REGENGINE INC. AGREE TO WAIVE ANY RIGHT TO A JURY TRIAL OR TO PARTICIPATE IN A CLASS ACTION. Arbitration shall be conducted on an individual basis only.
+YOU AND REGENGINE LLC AGREE TO WAIVE ANY RIGHT TO A JURY TRIAL OR TO PARTICIPATE IN A CLASS ACTION. Arbitration shall be conducted on an individual basis only.
 
 The arbitration shall take place in Los Angeles County, California, unless the parties agree otherwise. The arbitrator's decision shall be final and binding.
 

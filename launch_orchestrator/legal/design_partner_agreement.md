@@ -5,7 +5,7 @@
 
 This DESIGN PARTNER AGREEMENT ("Agreement") is entered into as of {EFFECTIVE_DATE} ("Effective Date") between:
 
-- **RegEngine, Inc.**, a {STATE/COUNTRY} corporation with its principal place of business at {ADDRESS} ("Provider"), and  
+- **RegEngine LLC**, a {STATE/COUNTRY} limited liability company with its principal place of business at {ADDRESS} ("Provider"), and  
 - **{PARTNER_NAME}**, a {ENTITY_TYPE} with its principal place of business at {PARTNER_ADDRESS} ("Partner").
 
 Provider and Partner are each a "Party" and together the "Parties."
