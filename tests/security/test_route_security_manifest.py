@@ -67,7 +67,8 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # tenant-scoped — see DESIGN_metering-billing.md.
         # +1 public: admin:POST:/api/v1/tools/check-access, the lead-capture
         # tool-access token check the Next.js gate calls (#3318).
-        "enabled_operation_count": 251,
+        # +1 global-sysadmin: admin:PATCH:/admin/organizations/{org_id} (rename).
+        "enabled_operation_count": 252,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
@@ -89,7 +90,7 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         "disabled_operation_count": 180,
         "disabled_unique_path_count": 163,
         "enabled_by_classification": {
-            "global-sysadmin": 15,
+            "global-sysadmin": 16,
             "public": 30,
             "tenant-scoped": 199,
             "workload-only": 7,
