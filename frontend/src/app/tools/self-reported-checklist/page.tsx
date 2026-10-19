@@ -27,7 +27,7 @@ const jsonLd = {
     "name": "Self Reported Checklist",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
-    "description": "You answer. We echo what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.",
+    "description": "You answer. It echoes what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.",
     "publisher": {
         "@type": "Organization",
         "name": "RegEngine"
@@ -36,8 +36,8 @@ const jsonLd = {
 
 const relatedTools = [
     { href: "/tools/ftl-checker", title: "FTL List Checker", description: "Look at the Food Traceability List. This page does not decide if you are a covered person." },
-    { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Events your supply chain must document." },
-    { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether CTE/KDE fields are present for each FTL product and CTE type." },
+    { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Event (CTE) types your supply chain must document." },
+    { href: "/tools/kde-checker", title: "KDE Field Checklist", description: "Check whether Critical Tracking Event (CTE) and Key Data Element (KDE) fields are present for each FTL product and CTE type." },
 ];
 
 export default function SelfReportedChecklistPage() {
@@ -48,7 +48,7 @@ export default function SelfReportedChecklistPage() {
                     <div className="border-b border-re-border-subtle pb-5">
                         <p className="text-title text-re-text-primary">Self Reported Checklist</p>
                         <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
-                            You answer. We echo what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
+                            You answer. It echoes what you reported. We do not verify records, we do not score readiness, and we do not decide whether you can meet §1.1455.
                         </p>
                     </div>
                     <div className="mt-6 space-y-3" role="status" aria-live="polite">

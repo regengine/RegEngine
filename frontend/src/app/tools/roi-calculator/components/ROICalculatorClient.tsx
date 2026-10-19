@@ -134,12 +134,12 @@ export function ROICalculatorClient() {
                         },
                         {
                             title: 'Tamper-evident exports',
-                            desc: 'Signed event records (downstream verification rolling out) give auditors verifiable evidence — they don\'t replace audits.',
+                            desc: 'Signed event records (downstream verification rolling out) give auditors verifiable evidence. They don\'t replace audits.',
                             icon: ShieldAlert
                         },
                         {
                             title: '§1.1455(c) ready',
-                            desc: 'Designed to support the §1.1455(c) 24-hour records-on-request standard once your data is in the system.',
+                            desc: 'Designed to support the §1.1455(c) 24 hour records-on-request standard once your data is in the system.',
                             icon: Zap
                         }
                     ].map((item, i) => (

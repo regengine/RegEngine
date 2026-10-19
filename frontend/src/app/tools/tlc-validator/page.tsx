@@ -63,7 +63,7 @@ export default function TLCValidatorPage() {
                 </Container>
             </div>
             <RelatedTools tools={[
-                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the full Key Data Element checklist required for your product and CTE type." },
+                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the full Key Data Element (KDE) checklist required for your product and Critical Tracking Event (CTE) type." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Confirm your product is on the FDA Food Traceability List before building lot codes." },
                 { href: "/tools/export", title: "FDA-Oriented Export Generator", description: "Generate a verifiable records package from your traceability records." },
             ]} />

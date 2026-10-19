@@ -10,12 +10,12 @@ import { filterExperimentalToolLinks } from "@/lib/experimental-features";
 
 export const metadata: Metadata = {
     title: "FSMA 204 Data Import Hub | Upload CSV, IoT & Webhook Traceability Data | RegEngine",
-    description: "Import FSMA 204 traceability data via CSV upload, IoT temperature logs, or webhook API. Supports Sensitech TempTale and all CTE types with schema checks and field auto-mapping.",
+    description: "Import FSMA 204 traceability data via CSV upload, IoT temperature logs, or webhook API. Supports Sensitech TempTale and all Critical Tracking Event (CTE) types with schema checks and field auto-mapping.",
     alternates: {
         canonical: "https://regengine.co/tools/data-import",
     },
     openGraph: {
-        title: "FSMA 204 Data Import Hub — RegEngine",
+        title: "FSMA 204 Data Import Hub | RegEngine",
         description: "Import traceability data via CSV, IoT logs, or webhook API with FSMA 204 schema checks. Free tool.",
         type: "website",
         url: "https://regengine.co/tools/data-import",
@@ -37,7 +37,7 @@ function DataImportFallback() {
             <Container width="tool">
                 <div className="mx-auto max-w-2xl text-center">
                     <h1 className="text-title text-re-text-primary">Data Import Hub</h1>
-                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload, XLSX spreadsheets, IoT temperature logs, or webhook API. Supports all FSMA 204 Critical Tracking Event types with automatic validation and auto-cleaning of common formatting issues.</p>
+                    <p className="mx-auto mt-3 max-w-[70ch] text-ui text-re-text-secondary">Import your traceability data into RegEngine via CSV upload, XLSX spreadsheets, IoT temperature logs, or webhook API. Supports all FSMA 204 Critical Tracking Event (CTE) types with automatic validation and auto-cleaning of common formatting issues.</p>
                 </div>
                 <div className="mt-8 space-y-4">
                     <Skeleton className="h-10 w-1/3 rounded-md" />
@@ -61,7 +61,7 @@ export default function DataImportPage() {
             </Suspense>
             <RelatedTools tools={filterExperimentalToolLinks([
                 { href: "/tools/scan", title: "GS1 Barcode Scanner", description: "Scan barcodes to decode GTIN and lot codes directly into FSMA 204 traceability records." },
-                { href: "/tools/label-scanner", title: "AI Label Scanner", description: "Upload a food label and AI extracts lot code, GTIN, and FSMA 204 KDEs automatically." },
+                { href: "/tools/label-scanner", title: "AI Label Scanner", description: "Upload a food label and AI extracts lot code, GTIN, and FSMA 204 Key Data Element (KDE) fields automatically." },
                 { href: "/tools/export", title: "FDA-Oriented Export Generator", description: "Generate a verifiable records package from your traceability records." },
             ])} />
             </>

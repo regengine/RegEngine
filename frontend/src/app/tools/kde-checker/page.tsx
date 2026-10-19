@@ -10,13 +10,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export const metadata: Metadata = {
     title: "FSMA 204 KDE Field Checklist | RegEngine",
-    description: "A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it.",
+    description: "A starting Key Data Element (KDE) checklist for an FTL food and a Critical Tracking Event (CTE). Educational only. Check the rule before you rely on it.",
     alternates: {
         canonical: "https://regengine.co/tools/kde-checker",
     },
     openGraph: {
         title: "FSMA 204 KDE Field Checklist | RegEngine",
-        description: "A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it.",
+        description: "A starting Key Data Element (KDE) checklist for an FTL food and a Critical Tracking Event (CTE). Educational only. Check the rule before you rely on it.",
         type: "website",
         url: "https://regengine.co/tools/kde-checker",
     },
@@ -66,7 +66,7 @@ export default function KDECheckerPage() {
                 </Container>
             </div>
             <RelatedTools tools={[
-                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Visualize all 7 Critical Tracking Events across your supply chain nodes." },
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Visualize all 7 Critical Tracking Event (CTE) types across your supply chain nodes." },
                 { href: "/tools/tlc-validator", title: "TLC Format Check", description: "Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format." },
                 { href: "/tools/ftl-checker", title: "FTL Checker", description: "Check if your food products are on the FDA Food Traceability List." },
             ]} />

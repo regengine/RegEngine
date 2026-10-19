@@ -6,12 +6,12 @@ import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
     title: "FSMA 204 SOP Generator | Draft Traceability Plan Template | RegEngine",
-    description: "Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Customized to your inputs; review with counsel before adoption — not legal advice.",
+    description: "Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Customized to your inputs; review with counsel before adoption. Not legal advice.",
     alternates: {
         canonical: "https://regengine.co/tools/sop-generator",
     },
     openGraph: {
-        title: "FSMA 204 SOP Generator — RegEngine",
+        title: "FSMA 204 SOP Generator | RegEngine",
         description: "Auto-generate a draft FSMA 204 Traceability Plan template. Review with counsel before audit or retailer use.",
         type: "website",
         url: "https://regengine.co/tools/sop-generator",
@@ -36,8 +36,8 @@ export default function SOPGeneratorPage() {
             </EmailGate>
             <RelatedTools tools={[
                 { href: "/tools/self-reported-checklist", title: "Self Reported Checklist", description: "You answer and the page echoes what you reported. It does not score readiness." },
-                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the Critical Tracking Events your SOPs need to cover across your supply chain." },
-                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the Key Data Element checklist to include in your traceability procedures." },
+                { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map each Critical Tracking Event (CTE) your SOPs need to cover across your supply chain." },
+                { href: "/tools/kde-checker", title: "KDE Checker", description: "Generate the Key Data Element (KDE) checklist to include in your traceability procedures." },
             ]} />
         </>
     );
