@@ -169,7 +169,8 @@ def redact_proposal(proposal: Proposal) -> tuple[Proposal, dict[str, list[str]]]
     never refuses a question set it wrote itself. A rationale or note holding
     such text is dropped the same way.
     """
-    found = privacy.findings(proposal.to_dict())
+    shown = proposal.to_dict()  # only what the lab shows, saves or sends; a model id is bookkeeping
+    found = privacy.findings({key: shown[key] for key in ("patches", "rationale", "notes", "predicted_fixes")})
     if not found:
         return proposal, {}
     refused: dict[str, list[str]] = {}
