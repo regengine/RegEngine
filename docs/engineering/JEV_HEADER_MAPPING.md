@@ -27,7 +27,8 @@ RegEngine uses one `Choice` per unrecognised CSV column.
 Vendor references: [docs](https://docs.typesafe.ai/llms.txt),
 [API](https://docs.typesafe.ai/api.md),
 [Python SDK](https://docs.typesafe.ai/sdk/python.md),
-[known limitations of Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md).
+[known limitations of Jev 1.13](https://docs.typesafe.ai/model-jaggedness/jev-1.13.md)
+(the latest page the vendor has published; there is none for 1.14 yet).
 The vendor's agent skill is vendored at `.claude/skills/typesafe-ai/SKILL.md`
 for coding-agent sessions.
 
@@ -299,7 +300,7 @@ a where-configured subprocessor in `frontend/src/lib/trust-subprocessors.ts`.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `TYPESAFE_API_KEY` | unset | Enables the integration. Unset = disabled. |
-| `TYPESAFE_DEFAULT_MODEL` | `jev-1.13.0` | Model name. RegEngine pins a version; `jev-latest` floats. |
+| `TYPESAFE_DEFAULT_MODEL` | `jev-1.14.0` | Model name. RegEngine pins a version; `jev-latest` floats. The client rejects a response whose model differs from the pin (`unavailable:invalid_response`), except for `jev-latest` and `jev-preview`. |
 | `TYPESAFE_BASE_URL` | vendor default | API root override (gateway, proxy). |
 | `REGENGINE_JEV_ENABLED` | `1` | Kill switch; `0` disables even with a key. |
 | `REGENGINE_JEV_TIMEOUT_SECONDS` | `5` | Per HTTP attempt. |
@@ -472,6 +473,24 @@ the cases file.
 
 Exit codes: 0 ran, 1 bad usage or cases file, 2 not configured, 3 vendor
 unavailable for at least one request.
+
+### Calibration record
+
+Re-run the eval and add a row here before changing `DEFAULT_MODEL`. Same 22
+cases and the same code each time; headers only.
+
+| Date | Model | File CTE correct | Header mapping correct | Highest-confidence wrong field named | Recommended auto-apply |
+| --- | --- | --- | --- | --- | --- |
+| 2026-10-19 | `jev-1.13.0` (one run) | 20/21 | 93/97 | 0.88 (`Harvest Area` as `location_name`) | 0.90 |
+| 2026-10-19 | `jev-1.14.0` (three runs) | 20/21 | 94/97 | 0.77 (same header) | 0.85 |
+
+Nothing applied was wrong at the shipped default of 0.90 on either model. The
+default stays at 0.90 rather than the 0.85 floor: on 1.13.0 the 0.88 wrong
+answer sat just below 0.90, and 0.85 on 1.14.0 would apply only one or two
+more answers than 0.90 does (71 or 72 against 70 header mappings). The three 1.14.0 runs agreed on accuracy and on the
+recommendation; individual confidences moved by 0.05 or more on 4 of 118
+answers. A `no_match` that should have been a field (`Work Order`,
+`Weight (lbs)`) is a decline, not an applied error: it costs coverage only.
 
 ## Ask Jev from the command line (agent sidecar)
 

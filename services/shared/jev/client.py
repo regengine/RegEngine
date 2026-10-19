@@ -329,6 +329,8 @@ class JevDecider:
         questions: Mapping[str, Any],
         started: float,
     ) -> JevAnswers:
+        if self._settings.model not in {"jev-latest", "jev-preview"} and response.model != self._settings.model:
+            raise JevUnavailable("invalid_response", purpose=purpose)
         choices, nouls, scores = _convert(response)
         request_id = response.raw_http_response.headers.get("x-typesafe-request-id")
         evidence = JevEvidence(

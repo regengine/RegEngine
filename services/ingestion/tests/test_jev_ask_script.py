@@ -65,7 +65,7 @@ def _transport(seen: dict, status: int = 200) -> httpx2.MockTransport:
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_ask"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 40, "output_tokens": 3}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 40, "output_tokens": 3}},
         )
 
     return httpx2.MockTransport(handler)
@@ -126,7 +126,7 @@ def test_text_answers_in_question_order_with_confidence(script, capsys):
 
     assert code == 0, err
     lines = out.strip().splitlines()
-    assert lines[0].startswith("Jev (jev-1.13.0, request req_ask, ")
+    assert lines[0].startswith("Jev (jev-1.14.0, request req_ask, ")
     assert lines[1] == "  cte [choice]: shipping (confidence 0.91; shipping 0.91, receiving 0.06, unclear 0.03)"
     assert lines[2] == "  has_lot [noul]: yes (p(yes)=0.97)"
     assert lines[3] == "  risk [score]: 0.40 on 0..2 ~ low (confidence 0.80)"

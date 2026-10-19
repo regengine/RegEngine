@@ -70,7 +70,7 @@ def _transport(answer_for: dict[str, dict], seen: dict | None = None) -> httpx2.
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_hm"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 200, "output_tokens": 4}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 200, "output_tokens": 4}},
         )
 
     return httpx2.MockTransport(handler)
@@ -185,7 +185,7 @@ def test_request_sends_header_row_and_only_unrecognized_columns():
     assert body["state"]["csv_headers"] == HEADERS
     assert [column["header"] for column in body["state"]["columns_to_map"]] == ["Lot #", "Ship Dt", "Notes"]
     assert set(body["questions"]) == {"col_0", "col_1", "col_2"}
-    assert body["model"] == "jev-1.13.0"
+    assert body["model"] == "jev-1.14.0"
     assert result.evidence is not None
     assert result.evidence.purpose == PURPOSE
     assert result.evidence.questions_version == QUESTIONS_VERSION
@@ -580,7 +580,7 @@ def test_artifacts_cover_actionable_suggestions_and_validate_the_contract():
         assert artifact.tenant_id == tenant_id
         assert artifact.agent_name == AGENT_NAME
         assert artifact.agent_version == QUESTIONS_VERSION
-        assert artifact.model_name == "typesafe/jev-1.13.0"
+        assert artifact.model_name == "typesafe/jev-1.14.0"
         assert artifact.context.ingestion_run_id == run_id
         assert artifact.context.source_hashes == [SOURCE_HASH]
         assert artifact.context.request_id == "req_hm"

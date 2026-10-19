@@ -82,7 +82,7 @@ def _transport(
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_file_cte"},
-            json={"model": "jev-1.13.0", "answers": answered, "usage": {"input_tokens": 90, "output_tokens": 1}},
+            json={"model": "jev-1.14.0", "answers": answered, "usage": {"input_tokens": 90, "output_tokens": 1}},
         )
 
     return httpx2.MockTransport(handler)
@@ -231,7 +231,7 @@ def test_advisory_answer_rides_the_400_so_the_uploader_can_re_upload_with_it(har
         "band": "auto_apply",
         "applied": False,
         "blocked_reason": "apply_disabled",
-        "model": "jev-1.13.0",
+        "model": "jev-1.14.0",
         "request_id": "req_file_cte",
         "questions_version": QUESTIONS_VERSION,
         "apply_enabled": False,
