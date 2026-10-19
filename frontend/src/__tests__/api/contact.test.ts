@@ -108,7 +108,7 @@ describe('POST /api/contact abuse controls', () => {
     it('delivers via Resend when no webhook is configured', async () => {
         delete process.env.CONTACT_WEBHOOK_URL;
         delete process.env.RESEND_FROM_EMAIL;
-        process.env.RESEND_API_KEY = 'test-resend-key';
+        process.env.RESEND_API_KEY = 'test-resend-key'; // pragma: allowlist secret
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
         const res = await POST(makeRequest({
@@ -151,7 +151,7 @@ describe('POST /api/contact abuse controls', () => {
 
     it('returns 502 when Resend refuses the email', async () => {
         delete process.env.CONTACT_WEBHOOK_URL;
-        process.env.RESEND_API_KEY = 'test-resend-key';
+        process.env.RESEND_API_KEY = 'test-resend-key'; // pragma: allowlist secret
         vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 422 }));
         const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
@@ -164,7 +164,7 @@ describe('POST /api/contact abuse controls', () => {
     });
 
     it('prefers the webhook when both providers are configured', async () => {
-        process.env.RESEND_API_KEY = 'test-resend-key';
+        process.env.RESEND_API_KEY = 'test-resend-key'; // pragma: allowlist secret
 
         const res = await POST(makeRequest(valid, '198.51.100.212'));
 
