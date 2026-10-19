@@ -46,10 +46,14 @@ from jev_lab import cli, fake_jev, ledger  # noqa: E402
 
 @pytest.fixture
 def home(tmp_path):
-    lab = ledger.Ledger(tmp_path / "lab")
-    lab.ensure()
-    lab.split_path.write_text(json.dumps({"salt": "test-salt-0", "created": "2026-01-01T00:00:00Z", "looks": {}}))
-    return lab
+    for mode in (ledger.LIVE, ledger.FAKE):
+        lab = ledger.Ledger(tmp_path / "lab", mode=mode)
+        lab.ensure()
+        lab.split_path.write_text(json.dumps({"salt": "test-salt-0", "created": "2026-01-01T00:00:00Z", "looks": {}}))
+    return ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
+
+
+LIVE_ENV = {"TYPESAFE_API_KEY": FAKE_KEY, "REGENGINE_JEV_MAX_RETRIES": "0"}
 
 
 def _counting(seen: list) -> httpx2.MockTransport:
@@ -97,8 +101,9 @@ def test_fake_loop_and_score_run_offline(capsys, home):
     code, out, _ = _run(capsys, ["score", "--fake", "--json", "--home", str(home.home)])
     assert code == 0 and set(json.loads(out)["metrics"]) == {"header_mapping", "file_cte"}
 
-    code, out, _ = _run(capsys, ["ledger", "--home", str(home.home)])
+    code, out, _ = _run(capsys, ["ledger", "--fake", "--home", str(home.home)])
     assert code == 0 and "g1" in out and "Incumbent header_mapping" in out
+    assert _run(capsys, ["ledger", "--home", str(home.home)])[1].startswith("No generations recorded")
 
 
 def test_live_mode_never_prints_or_stores_the_key(capsys, home):
@@ -111,6 +116,17 @@ def test_live_mode_never_prints_or_stores_the_key(capsys, home):
     stored = "".join(path.read_text() for path in home.home.rglob("*") if path.is_file())
     assert FAKE_KEY not in out + err + stored
     assert (home.home / "jev-cache.jsonl").exists()
+
+
+def test_score_exits_3_when_jev_is_unavailable(capsys, home):
+    def refuse(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(401, json={"error": "nope"})
+
+    code, out, err = _run(
+        capsys, ["score", "--home", str(home.home)], env=LIVE_ENV, transport=httpx2.MockTransport(refuse)
+    )
+
+    assert code == 3 and "unavailable: auth" in err
 
 
 def test_prompt_key_is_read_hidden_and_never_echoed(capsys, home):
@@ -128,11 +144,18 @@ def test_prompt_key_is_read_hidden_and_never_echoed(capsys, home):
     assert FAKE_KEY not in out + err
 
 
-def test_export_prints_the_diff_and_every_pin_to_update(capsys, home):
-    _run(capsys, ["loop", "--fake", "--generations", "2", "--json", "--home", str(home.home)])
-    accepted = [row for row in home.generations() if row["outcome"] == "accepted"]
+def _accepted_digest(capsys, home, *extra, **kwargs):
+    argv = ["loop", "--proposer", "offline", "--generations", "2", "--json", "--home", str(home.home), *extra]
+    assert _run(capsys, argv, **kwargs)[0] == 0
+    lab = ledger.Ledger(home.home, mode=ledger.FAKE if "--fake" in extra else ledger.LIVE)
+    accepted = [row for row in lab.generations() if row["outcome"] == "accepted"]
     assert accepted, "the pinned split accepts generation 1 on the fake"
-    digest = next(iter(accepted[0]["candidates"].values()))
+    return next(iter(accepted[0]["candidates"].values()))
+
+
+def test_export_prints_the_diff_and_every_pin_to_update(capsys, home):
+    seen: list = []
+    digest = _accepted_digest(capsys, home, env=LIVE_ENV, transport=_counting(seen))
 
     code, out, _ = _run(capsys, ["export", digest, "--home", str(home.home)])
 
@@ -142,11 +165,22 @@ def test_export_prints_the_diff_and_every_pin_to_update(capsys, home):
     assert _run(capsys, ["export", "f" * 64, "--home", str(home.home)])[0] == 1
 
 
+def test_fake_judged_wording_is_never_offered_for_promotion(capsys, home):
+    digest = _accepted_digest(capsys, home, "--fake")
+
+    code, out, _ = _run(capsys, ["export", digest, "--fake", "--home", str(home.home)])
+
+    assert code == 0 and "Judged by the OFFLINE FAKE Jev" in out and "grep -rn" not in out
+    assert _run(capsys, ["export", digest, "--home", str(home.home)])[0] == 1  # not in the live ledger
+    assert all(qs.label.startswith("csv-") for qs in home.incumbents().values())
+
+
 def test_confirm_reports_insufficient_fresh_data(capsys, home):
     code, out, _ = _run(capsys, ["export", "incumbent", "--home", str(home.home)])
     assert code == 0 and "differs from production csv-header-mapping.v3 in: nothing" in out
     digest = home.save_set(next(iter(home.incumbents().values())))
 
+    ledger.Ledger(home.home, mode=ledger.FAKE).save_set(next(iter(home.incumbents().values())))
     code, out, _ = _run(capsys, ["confirm", digest, "--fake", "--home", str(home.home)])
 
     assert code == 0 and "Insufficient fresh data" in out
@@ -167,6 +201,7 @@ def test_reset_and_rotate(capsys, home):
     [
         (["loop", "--fake", "--generations", "0"], "--generations must be 1 to 25"),
         (["score", "--fake", "--max-jev-requests", "0"], "--max-jev-requests must be at least 1"),
+        (["loop", "--fake", "--margin", "nan"], "--margin must be a number from 0 to 0.5"),
         (["teleport"], "invalid choice"),
     ],
 )

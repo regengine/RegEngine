@@ -12,13 +12,14 @@ Acceptance is conservative because the labelled set is small, and runs in
 two stages so the held-out split is looked at as rarely as possible:
 
 1. :func:`screen` on the training split: the candidate must lower the
-   confidence Brier score and keep every correct answer. A candidate that
-   fails here is never asked about held-out cases.
-2. :func:`decide` on the held-out split: it must keep every correct answer,
-   add no wrong answer and no order-inconsistent answer at or above the
-   auto-apply threshold, lower the Brier score by at least ``margin``, not
-   raise the calibration error or the confidence of wrong answers beyond a
-   small slack, and improve more held-out subjects than it worsens.
+   confidence Brier score, turn no more right answers wrong than Jev's own
+   repeat noise explains, and make no subject wrong or order-inconsistent at
+   auto-apply confidence. A candidate that fails here is never asked about
+   held-out cases.
+2. :func:`decide` on the held-out split: the same subject-by-subject gates,
+   plus a Brier gain of at least ``margin``, no growth in calibration error
+   or in the confidence of wrong answers beyond a small slack, and more
+   held-out subjects improved than worsened.
 
 "Confidence Brier" scores Jev's confidence as a forecast of "this answer is
 right": the property the confidence bands rely on.
@@ -362,31 +363,54 @@ def evaluate(
 
 
 def parity_problems(cases: Sequence[jev_eval.Case]) -> list[str]:
-    """Where the lab's scoring of the production wording differs from ``jev_eval``'s, on the offline fake.
+    """Where the lab's asking or scoring of the production wording differs from ``jev_eval``'s.
 
-    Free (nothing leaves the process) and run before every loop, so a change to
-    production's ask path that the lab has not followed stops the loop instead
-    of quietly optimising against the wrong questions.
+    Runs on the offline fake (nothing leaves the process) before every loop:
+    both paths must send the same request bodies and score the same answers,
+    so a change to production's ask path that the lab has not followed stops
+    the loop instead of quietly optimising against the wrong questions.
     """
-    from .jev_access import FAKE, build_decider
+    import httpx2
+    from shared.jev import JevDecider
+
+    from . import fake_jev
+    from .jev_access import fake_settings
     from .questions import KINDS, baseline
 
-    decider = build_decider(FAKE)
+    def recording(bodies: list[str]) -> Any:
+        def handler(request: Any) -> Any:
+            bodies.append(json.dumps(json.loads(request.content), sort_keys=True))
+            return fake_jev.handler(request)
+
+        return httpx2.MockTransport(handler)
+
+    eval_bodies: list[str] = []
+    lab_bodies: list[str] = []
+    eval_decider = JevDecider(fake_settings(), transport=recording(eval_bodies))
+    lab_decider = JevDecider(fake_settings(), transport=recording(lab_bodies))
     try:
-        cte_scored, map_scored = jev_eval.evaluate(cases, decider)
-        expected = {
-            (s.case_id, s.subject, "file" if s.subject == "(file)" else "map"): s for s in (*cte_scored, *map_scored)
-        }
-        thresholds = decider.settings.thresholds
-        lab = evaluate(cases, {kind: baseline(kind) for kind in KINDS}, decider, split={})
+        cte_scored, map_scored = jev_eval.evaluate(cases, eval_decider)
+        lab = evaluate(cases, {kind: baseline(kind) for kind in KINDS}, lab_decider, split={})
     finally:
-        decider.close()
+        eval_decider.close()
+        lab_decider.close()
+    expected = {
+        (s.case_id, s.subject, "file" if s.subject == "(file)" else "map"): s for s in (*cte_scored, *map_scored)
+    }
+    thresholds = lab_decider.settings.thresholds
     found = {(o.case_id, o.subject, "file" if o.kind == FILE_CTE else "map"): o.scored(thresholds) for o in lab}
     problems = [f"{key[0]} {key[1]}: only jev_eval scores it" for key in expected.keys() - found.keys()]
     problems += [f"{key[0]} {key[1]}: only the lab scores it" for key in found.keys() - expected.keys()]
     for key in expected.keys() & found.keys():
         if expected[key] != found[key]:
             problems.append(f"{key[0]} {key[1]}: jev_eval {expected[key].answer} vs lab {found[key].answer}")
+    only_eval = len(set(eval_bodies) - set(lab_bodies))
+    only_lab = len(set(lab_bodies) - set(eval_bodies))
+    if only_eval or only_lab or len(eval_bodies) != len(lab_bodies):
+        problems.append(
+            f"request bodies differ: {only_eval} sent only by jev_eval, {only_lab} only by the lab "
+            f"({len(eval_bodies)} vs {len(lab_bodies)} requests)"
+        )
     return sorted(problems)
 
 
@@ -506,26 +530,75 @@ def by_split(observations: Sequence[Observation], kind: str, side: str) -> list[
     return [o for o in observations if o.kind == kind and o.split == side]
 
 
+def _changes(
+    incumbent: Sequence[Observation], candidate: Sequence[Observation], *, auto_apply: float
+) -> dict[str, Any]:
+    """Per-subject comparison of two evaluations of the same subjects."""
+    before = {o.key: o for o in incumbent}
+    pairs = [(before[o.key], o) for o in candidate if o.key in before]
+
+    def wrong_at_auto(o: Observation) -> bool:
+        return o.answered and o.acts and not o.correct and o.confidence >= auto_apply
+
+    def flipped_at_auto(o: Observation) -> bool:
+        return o.answered and o.acts and o.confidence >= auto_apply and o.order_consistent is False
+
+    deltas = [new.brier() - old.brier() for old, new in pairs]
+    return {
+        "subjects": len(pairs),
+        "lost_correct": sum(1 for old, new in pairs if old.correct and not new.correct),
+        "new_wrong_at_auto_apply": sum(1 for old, new in pairs if wrong_at_auto(new) and not wrong_at_auto(old)),
+        "new_order_flips_at_auto_apply": sum(
+            1 for old, new in pairs if flipped_at_auto(new) and not flipped_at_auto(old)
+        ),
+        "wins": sum(1 for delta in deltas if delta < -1e-9),
+        "losses": sum(1 for delta in deltas if delta > 1e-9),
+        "mean_delta": round(sum(deltas) / len(deltas), 4) if deltas else None,
+    }
+
+
+def _subject_gates(change: Mapping[str, Any], *, allowed_flips: int, split_name: str) -> list[str]:
+    reasons = []
+    if change["lost_correct"] > allowed_flips:
+        reasons.append(
+            f"{change['lost_correct']} {split_name} subject(s) went from right to wrong (noise allows {allowed_flips})"
+        )
+    if change["new_wrong_at_auto_apply"]:
+        reasons.append(f"{change['new_wrong_at_auto_apply']} new {split_name} wrong answer(s) at auto-apply confidence")
+    if change["new_order_flips_at_auto_apply"]:
+        reasons.append(
+            f"{change['new_order_flips_at_auto_apply']} new {split_name} order flip(s) at auto-apply confidence"
+        )
+    return reasons
+
+
 def screen(
-    kind: str, incumbent: Sequence[Observation], candidate: Sequence[Observation], *, auto_apply: float
+    kind: str,
+    incumbent: Sequence[Observation],
+    candidate: Sequence[Observation],
+    *,
+    auto_apply: float,
+    allowed_flips: int = 0,
 ) -> tuple[list[str], dict[str, Any]]:
-    """Stage 1, training split only: ``(reasons it fails, train metrics)``. No held-out case is read."""
+    """Stage 1, training split only: ``(reasons it fails, train metrics)``. No held-out case is read.
+
+    Compared subject by subject: the Brier score must improve, no subject may
+    become wrong at auto-apply confidence or start flipping with the options
+    reversed, and no more right answers may turn wrong than Jev's own repeat
+    noise explains (``allowed_flips``).
+    """
     inc, cand = by_split(incumbent, kind, TRAIN), by_split(candidate, kind, TRAIN)
     train = {"incumbent": metrics(inc, auto_apply=auto_apply), "candidate": metrics(cand, auto_apply=auto_apply)}
+    change = _changes(inc, cand, auto_apply=auto_apply)
+    train["paired"] = change
     reasons: list[str] = []
     incomplete = [o for o in cand if not o.answered]
     if incomplete:
         reasons.append(f"{len(incomplete)} training subject(s) unanswered ({incomplete[0].status})")
     t_inc, t_cand = train["incumbent"], train["candidate"]
-    if t_cand["correct"] < t_inc["correct"]:
-        reasons.append(f"training correct answers fell {t_inc['correct']} -> {t_cand['correct']}")
     if t_inc["brier"] is not None and t_cand["brier"] is not None and t_cand["brier"] >= t_inc["brier"]:
         reasons.append(f"training Brier did not improve ({t_inc['brier']:.4f} -> {t_cand['brier']:.4f})")
-    if t_cand["wrong_at_auto_apply"] > t_inc["wrong_at_auto_apply"]:
-        reasons.append(
-            "training wrong answers at auto-apply rose "
-            f"{t_inc['wrong_at_auto_apply']} -> {t_cand['wrong_at_auto_apply']}"
-        )
+    reasons += _subject_gates(change, allowed_flips=allowed_flips, split_name="training")
     return reasons, train
 
 
@@ -548,24 +621,21 @@ def decide(
     *,
     margin: float = DEFAULT_MARGIN,
     auto_apply: float,
+    allowed_flips: int = 0,
 ) -> Decision:
-    """Stage 2, held-out split: whether ``candidate`` replaces ``incumbent``. ``reasons`` lists every failed gate."""
+    """Stage 2, held-out split: whether ``candidate`` replaces ``incumbent``. ``reasons`` lists every failed gate.
+
+    The same subject-by-subject gates as :func:`screen`, plus: the Brier gain
+    must reach ``margin``, calibration error and the confidence of wrong
+    answers may not grow beyond a small slack, and more subjects must improve
+    than worsen.
+    """
     inc_hold, cand_hold = by_split(incumbent, kind, HOLDOUT), by_split(candidate, kind, HOLDOUT)
     holdout = {
         "incumbent": metrics(inc_hold, auto_apply=auto_apply),
         "candidate": metrics(cand_hold, auto_apply=auto_apply),
     }
-    before = {o.key: o for o in inc_hold}
-    deltas = [o.brier() - before[o.key].brier() for o in cand_hold if o.key in before]
-    wins = sum(1 for delta in deltas if delta < -1e-9)
-    losses = sum(1 for delta in deltas if delta > 1e-9)
-    paired = {
-        "subjects": len(deltas),
-        "wins": wins,
-        "losses": losses,
-        "ties": len(deltas) - wins - losses,
-        "mean_delta": round(sum(deltas) / len(deltas), 4) if deltas else None,
-    }
+    paired = _changes(inc_hold, cand_hold, auto_apply=auto_apply)
 
     reasons: list[str] = []
     if not cand_hold:
@@ -574,18 +644,7 @@ def decide(
     if incomplete:
         reasons.append(f"{len(incomplete)} held-out subject(s) unanswered ({incomplete[0].status})")
     h_inc, h_cand = holdout["incumbent"], holdout["candidate"]
-    if h_cand["correct"] < h_inc["correct"]:
-        reasons.append(f"held-out correct answers fell {h_inc['correct']} -> {h_cand['correct']}")
-    if h_cand["wrong_at_auto_apply"] > h_inc["wrong_at_auto_apply"]:
-        reasons.append(
-            "wrong answers at auto-apply confidence rose "
-            f"{h_inc['wrong_at_auto_apply']} -> {h_cand['wrong_at_auto_apply']}"
-        )
-    if h_cand["order_inconsistent_at_auto_apply"] > h_inc["order_inconsistent_at_auto_apply"]:
-        reasons.append(
-            "order-inconsistent answers at auto-apply confidence rose "
-            f"{h_inc['order_inconsistent_at_auto_apply']} -> {h_cand['order_inconsistent_at_auto_apply']}"
-        )
+    reasons += _subject_gates(paired, allowed_flips=allowed_flips, split_name="held-out")
     if h_inc["brier"] is not None and h_cand["brier"] is not None:
         gain = h_inc["brier"] - h_cand["brier"]
         if gain < margin:
@@ -595,6 +654,6 @@ def decide(
     wrong_inc, wrong_cand = h_inc["mean_confidence_wrong"], h_cand["mean_confidence_wrong"]
     if wrong_inc is not None and wrong_cand is not None and wrong_cand > wrong_inc + WRONG_CONFIDENCE_SLACK:
         reasons.append(f"held-out wrong answers grew more confident {wrong_inc:.4f} -> {wrong_cand:.4f}")
-    if losses > wins:
-        reasons.append(f"more held-out subjects got worse ({losses}) than better ({wins})")
+    if paired["wins"] <= paired["losses"]:
+        reasons.append(f"held-out subjects improved {paired['wins']}, worsened {paired['losses']}: not more improved")
     return Decision(kind, not reasons, tuple(reasons), holdout, paired)

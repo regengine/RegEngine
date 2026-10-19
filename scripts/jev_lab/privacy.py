@@ -73,7 +73,12 @@ def strings(value: Any, path: str = "$") -> Iterable[tuple[str, str]]:
     elif isinstance(value, (list, tuple)):
         for index, item in enumerate(value):
             yield from strings(item, f"{path}[{index}]")
-    elif value is not None and not isinstance(value, (int, float, bool)):
+    elif isinstance(value, bool) or value is None:
+        return
+    elif isinstance(value, int) or (isinstance(value, float) and value.is_integer()):
+        # A GLN, GTIN or phone number pasted as a JSON number is still one.
+        yield path, str(int(value))
+    elif not isinstance(value, float):
         yield path, json.dumps(value, default=str)
 
 
@@ -93,9 +98,12 @@ def _looks_opaque(text: str) -> bool:
 # compared in memory only; a finding names the variable, never the value.
 _SECRET_ENV_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|DSN|DATABASE_URL", re.IGNORECASE)
 _MIN_SECRET_ENV_CHARS = 8
-# Cells that look like row values rather than column names.
+# Cells that look like row values rather than column names: dates, numbers,
+# and single-token codes with a run of three or more digits (lot codes,
+# order numbers). Column names almost never look like any of these, so one
+# such cell is enough to refuse the row.
 _VALUE_CELL = re.compile(r"^\s*(?:\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{2,4}|[-+]?\d[\d,]*(?:\.\d+)?|\d{4,}\S*)\s*$")
-DATA_ROW_SHARE = 0.3
+_CODE_CELL = re.compile(r"^\s*(?=\S*\d{3})[A-Za-z0-9]+(?:[-/._#][A-Za-z0-9]+)*\s*$")
 
 
 def _secret_env_values(environ: Mapping[str, str] | None = None) -> list[tuple[str, str]]:
@@ -108,14 +116,19 @@ def _secret_env_values(environ: Mapping[str, str] | None = None) -> list[tuple[s
 
 
 def data_row_findings(headers: Sequence[str]) -> list[str]:
-    """A refusal reason when ``headers`` looks like a row of values rather than a header row."""
-    cells = [str(cell) for cell in headers if str(cell).strip()]
-    if not cells:
+    """A refusal reason when any cell of ``headers`` looks like a value rather than a column name.
+
+    The reason gives cell positions (1-based), never their content.
+    """
+    positions = [
+        index
+        for index, cell in enumerate((str(cell) for cell in headers), start=1)
+        if cell.strip() and (_VALUE_CELL.match(cell) or _CODE_CELL.match(cell) or _personal(cell))
+    ]
+    if not positions:
         return []
-    values = sum(1 for cell in cells if _VALUE_CELL.match(cell) or _personal(cell))
-    if values / len(cells) >= DATA_ROW_SHARE:
-        return [f"{values} of {len(cells)} cells look like values, not column names: paste only the header row"]
-    return []
+    listed = ", ".join(str(index) for index in positions[:12])
+    return [f"cell(s) {listed} look like values (dates, numbers or codes), not column names: paste only the header row"]
 
 
 def findings(value: Any, *, environ: Mapping[str, str] | None = None) -> list[str]:

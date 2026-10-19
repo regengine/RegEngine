@@ -21,12 +21,14 @@ import asyncio
 import collections
 import hashlib
 import json
+import re
 import secrets
 import threading
 from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 from typing import Any
 
+from app import csv_templates as route
 from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from shared.jev import JevUnavailable, header_mapping as hm
@@ -34,7 +36,7 @@ from shared.jev import JevUnavailable, header_mapping as hm
 from . import load_script, privacy
 from .jev_access import LabDecider
 from .ledger import Ledger
-from .loop import LoopConfig, confirm, load_all_cases, run_estimate, run_loop
+from .loop import LoopConfig, confirm, epoch_split, every_case, header_key, run_estimate, run_loop, validate_cases
 from .proposer import BACKENDS, build_proposer
 from .questions import FILE_CTE, HEADER_MAPPING, KINDS, baseline, changed_options
 from .scoring import ask_headers
@@ -127,6 +129,7 @@ class Lab:
         self.origins = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
         self._loop_thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self._starting = threading.Lock()
         self.last_summary: dict[str, Any] | None = None
         self.loop_error: str | None = None
 
@@ -135,9 +138,12 @@ class Lab:
         return self._loop_thread is not None and self._loop_thread.is_alive()
 
     def start_loop(self, config: LoopConfig, backend: str) -> None:
-        if self.running:
-            raise RuntimeError("a run is already in progress")
-        proposer = build_proposer(backend, model=self.proposer_model)
+        with self._starting:  # two clicks or two tabs: one run
+            if self.running:
+                raise RuntimeError("a run is already in progress")
+            self._start(config, build_proposer(backend, model=self.proposer_model))
+
+    def _start(self, config: LoopConfig, proposer: Any) -> None:
         self._stop = threading.Event()
         self.loop_error = None
 
@@ -162,7 +168,7 @@ class Lab:
         self._stop.set()
 
     def status(self) -> dict[str, Any]:
-        cases = load_all_cases(self.ledger)
+        _, split, every = epoch_split(self.ledger)
         return {
             "mode": self.decider.mode,
             "jev": {**self.decider.settings.public_summary(), **self.decider.stats()},
@@ -171,11 +177,11 @@ class Lab:
             "proposer": {"backend": self.proposer_backend, "model": self.proposer_model, "backends": list(BACKENDS)},
             "loop": {"running": self.running, "error": self.loop_error, "last": self.last_summary},
             "cases": {
-                "total": len(cases),
+                "total": sum(1 for case in every if case.id in split),
                 "local": len(self.ledger.local_cases()),
-                "fresh": len(self.ledger.local_cases(fresh=True)),
+                "fresh": sum(1 for case in every if case.id not in split),
             },
-            "estimate": run_estimate(cases, self.ledger.epoch()["salt"]),
+            "estimate": run_estimate(every, split),
             "incumbents": {
                 kind: {"label": qs.label, "digest": qs.digest} for kind, qs in self.ledger.incumbents().items()
             },
@@ -198,9 +204,14 @@ def _validated_questions(raw: Any) -> dict[str, dict[str, Any]]:
             raise HTTPException(400, f"question {question_id!r} needs a type of choice, noul or score")
         if not question.get("instructions"):
             raise HTTPException(400, f"question {question_id!r} needs instructions")
-        if question["type"] == "choice" and len(question.get("criteria") or {}) < 2:
+        if not isinstance(question["instructions"], (str, dict)):
+            raise HTTPException(400, f"question {question_id!r}: instructions must be text or an object")
+        criteria = question.get("criteria")
+        if question["type"] == "choice" and (
+            not isinstance(criteria, (dict, list)) or len(criteria) < 2 or not all(isinstance(k, str) for k in criteria)
+        ):
             raise HTTPException(400, f"choice question {question_id!r} needs at least two options")
-        if question["type"] == "score" and not 2 <= len(question.get("criteria") or []) <= 10:
+        if question["type"] == "score" and (not isinstance(criteria, list) or not 2 <= len(criteria) <= 10):
             raise HTTPException(400, f"score question {question_id!r} needs 2 to 10 levels")
     return raw
 
@@ -322,18 +333,31 @@ def create_app(lab: Lab) -> FastAPI:
             return _refuse(reasons)
         case_id = "local-" + hashlib.sha256("\x1f".join(row).encode("utf-8")).hexdigest()[:12]
         case = {"id": case_id, "headers": [h.strip() for h in row], "cte": cte_label or None, "mappings": mappings}
-        probe = lab.ledger.home / ".label-probe.json"
-        lab.ledger.ensure()
-        probe.write_text(json.dumps({"cases": [case]}), encoding="utf-8")
         try:
-            parsed = jev_eval.load_cases(probe, templates=False)
+            parsed = validate_cases(lab.ledger, [case])
         except jev_eval._UsageError as exc:
-            raise HTTPException(400, str(exc).replace(probe.name + " ", "")) from None
-        finally:
-            probe.unlink(missing_ok=True)
+            raise HTTPException(400, re.sub(r"^\S+\.json case ", "case ", str(exc))) from None
+        twin = next(
+            (
+                other.id
+                for other in every_case(lab.ledger)
+                if other.id != case_id and header_key(other.headers) == header_key(row)
+            ),
+            None,
+        )
+        if twin is not None:
+            raise HTTPException(400, f"this header row is already labelled as case {twin}")
         already_read = jev_eval.recognized_labels(parsed)
         if already_read:
             raise HTTPException(400, "the parser already reads " + ", ".join(already_read) + "; it is never asked")
+        asked = set(hm.unrecognized_headers(row, route._RECOGNIZED_COLUMNS)[: hm.MAX_COLUMNS_PER_UPLOAD])
+        beyond = [header for header in mappings if header.strip() not in asked]
+        if beyond:
+            raise HTTPException(
+                400,
+                f"production asks about the first {hm.MAX_COLUMNS_PER_UPLOAD} unrecognised columns only; "
+                f"{len(beyond)} labelled column(s) are beyond that",
+            )
         lab.ledger.add_case(case)
         return {"id": case_id, "local_cases": len(lab.ledger.local_cases())}
 

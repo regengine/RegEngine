@@ -1,24 +1,28 @@
 """The lab's local record: question-set versions, generations and labelled cases. Never committed.
 
 Everything lives under one directory (default ``~/.regengine/jev-lab``,
-override with ``JEV_LAB_HOME`` or ``--home``), outside the repository:
+override with ``JEV_LAB_HOME`` or ``--home``), outside the repository. Runs
+judged by the offline fake keep their state in ``<home>/fake``, so wording
+the fake picked can never become the live incumbent or use up the live
+held-out split. Labelled rows are shared: a label is a person's call, not
+Jev's.
 
 * ``ledger.jsonl``: one JSON object per line. ``{"type": "generation", ...}``
   rows record what was proposed, how it scored on each split and why it was
   kept or not; ``{"type": "incumbent", ...}`` rows record each accepted
   question set by digest.
 * ``question_sets/<digest>.json``: the wording behind each digest.
-* ``split.json``: the current split epoch: the salt that assigns cases to
-  the training or held-out split, and how many times each kind's held-out
-  split has been used to judge a candidate (capped; see
+* ``split.json``: the current split epoch. Its salt and ``assignment`` (case
+  id -> training or held-out side) are fixed when the epoch is first used;
+  a case that is not in the assignment is *fresh*: the loop never sees it,
+  and ``confirm`` checks a rewrite on fresh cases only. ``looks`` counts how
+  many candidates each kind's held-out split has judged (capped; see
   :data:`MAX_HOLDOUT_LOOKS`). Accepted wording belongs to the epoch it was
   judged in; rotating the split starts again from production.
-* ``cases.local.json``: header rows labelled in the sandbox, in the format of
+* ``cases.local.json`` (in ``<home>``, shared by both modes): header rows
+  labelled in the sandbox, in the format of
   ``docs/engineering/examples/jev_eval_cases.json`` (headers and labels only)
-  plus ``labelled_at``. A row labelled after the current split epoch began is
-  *fresh*: the loop never sees it, and ``confirm`` uses only fresh rows to
-  check a rewrite on data no generation was selected on. Rotating the split
-  folds fresh rows into the next epoch's split.
+  plus the time each row was first labelled.
 * ``jev-cache.jsonl``: answers to identical live requests, keyed by a
   SHA-256 of the request (see :mod:`jev_lab.jev_access`).
 
@@ -28,17 +32,23 @@ transcript. Each generation row keeps Claude's rationale and the patch.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import secrets
 import stat
 import threading
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .questions import KINDS, QuestionSet, baseline
+
+try:  # POSIX: serialise split.json updates across processes (a CLI run next to the page).
+    import fcntl
+except ImportError:  # pragma: no cover - Windows
+    fcntl = None  # type: ignore[assignment]
 
 HOME_ENV = "JEV_LAB_HOME"
 # Each judgement on the held-out split leaks a little of it into the choice of
@@ -46,6 +56,12 @@ HOME_ENV = "JEV_LAB_HOME"
 # must be rotated before more candidates are judged.
 MAX_HOLDOUT_LOOKS = 12
 DEFAULT_HOME = Path.home() / ".regengine" / "jev-lab"
+LIVE = "live"
+FAKE = "fake"
+
+
+class EpochChanged(RuntimeError):
+    """The split was rotated while a run was using it: the run must stop."""
 
 
 def default_home() -> Path:
@@ -58,21 +74,41 @@ def now_iso() -> str:
 
 
 class Ledger:
-    def __init__(self, home: Path) -> None:
+    def __init__(self, home: Path, *, mode: str = LIVE) -> None:
+        if mode not in (LIVE, FAKE):
+            raise ValueError(f"unknown mode {mode!r}")
         self.home = home
-        self.path = home / "ledger.jsonl"
-        self.sets_dir = home / "question_sets"
+        self.mode = mode
+        self.state_dir = home if mode == LIVE else home / FAKE
+        self.path = self.state_dir / "ledger.jsonl"
+        self.sets_dir = self.state_dir / "question_sets"
+        self.cache_path = self.state_dir / "jev-cache.jsonl"
+        self.split_path = self.state_dir / "split.json"
         self.cases_path = home / "cases.local.json"
-        self.cache_path = home / "jev-cache.jsonl"
-        self.split_path = home / "split.json"
         self._lock = threading.Lock()
 
     def ensure(self) -> None:
         self.sets_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            os.chmod(self.home, stat.S_IRWXU)  # owner only: the ledger names labelled headers
-        except OSError:
-            pass
+        for directory in {self.home, self.state_dir}:
+            try:
+                os.chmod(directory, stat.S_IRWXU)  # owner only: the ledger names labelled headers
+            except OSError:
+                pass
+
+    @contextlib.contextmanager
+    def _exclusive(self) -> Iterator[None]:
+        """This process's lock plus, where the OS has one, a lock file other processes respect."""
+        with self._lock:
+            self.ensure()
+            if fcntl is None:
+                yield
+                return
+            with (self.state_dir / ".lock").open("a") as handle:
+                fcntl.flock(handle, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
 
     # -- rows ------------------------------------------------------------------
 
@@ -88,9 +124,8 @@ class Ledger:
         return rows
 
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]:
-        record = {"at": now_iso(), **row}
-        with self._lock:
-            self.ensure()
+        record = {"at": now_iso(), "mode": self.mode, **row}
+        with self._exclusive():
             with self.path.open("a", encoding="utf-8") as handle:
                 handle.write(json.dumps(record, ensure_ascii=False) + "\n")
         return record
@@ -118,38 +153,62 @@ class Ledger:
 
     # -- split epoch -----------------------------------------------------------------
 
-    def epoch(self) -> dict[str, Any]:
-        """``{"salt", "created", "looks": {kind: n}}``, created on first use."""
-        with self._lock:
-            if self.split_path.exists():
-                try:
-                    data = json.loads(self.split_path.read_text(encoding="utf-8"))
-                    if isinstance(data.get("salt"), str) and data["salt"]:
-                        data.setdefault("looks", {})
-                        return data
-                except ValueError:
-                    pass
-            return self._write_epoch()
-
-    def _write_epoch(self) -> dict[str, Any]:
-        data = {"salt": secrets.token_hex(8), "created": now_iso(), "looks": {kind: 0 for kind in KINDS}}
-        self.ensure()
-        self.split_path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+    def _read_epoch(self) -> dict[str, Any] | None:
+        """The stored epoch, ``None`` when there is none yet; an unreadable file is an error, never a new epoch."""
+        if not self.split_path.exists():
+            return None
+        try:
+            data = json.loads(self.split_path.read_text(encoding="utf-8"))
+        except ValueError:
+            data = None
+        if not isinstance(data, dict) or not isinstance(data.get("salt"), str) or not data["salt"]:
+            raise RuntimeError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
+        data.setdefault("looks", {})
         return data
+
+    def _write(self, data: Mapping[str, Any], path: Path | None = None) -> None:
+        """Write JSON atomically: a reader sees the old file or the new one, never half of one."""
+        target = path or self.split_path
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        temporary.replace(target)
+
+    def _new_epoch(self) -> dict[str, Any]:
+        data = {"salt": secrets.token_hex(8), "created": now_iso(), "looks": {kind: 0 for kind in KINDS}}
+        self._write(data)
+        return data
+
+    def epoch(self) -> dict[str, Any]:
+        """``{"salt", "created", "looks", "assignment"?}``, created on first use."""
+        with self._exclusive():
+            return self._read_epoch() or self._new_epoch()
+
+    def assign(self, split: Mapping[str, str], *, salt: str) -> dict[str, str]:
+        """Fix the epoch's case -> side assignment the first time it is used; return the fixed one."""
+        with self._exclusive():
+            data = self._read_epoch()
+            if data is None or data["salt"] != salt:
+                raise EpochChanged("the split was rotated")
+            if not data.get("assignment"):
+                data["assignment"] = dict(split)
+                self._write(data)
+            return dict(data["assignment"])
 
     def rotate_split(self) -> dict[str, Any]:
         """A new split epoch: new salt, unused held-out split, production wording again."""
-        with self._lock:
-            data = self._write_epoch()
+        with self._exclusive():
+            data = self._new_epoch()
         self.append({"type": "split_rotated", "epoch": data["salt"]})
         return data
 
-    def record_holdout_look(self, kind: str) -> int:
-        with self._lock:
-            data = json.loads(self.split_path.read_text(encoding="utf-8"))
+    def record_holdout_look(self, kind: str, *, salt: str) -> int:
+        with self._exclusive():
+            data = self._read_epoch()
+            if data is None or data["salt"] != salt:
+                raise EpochChanged("the split was rotated")
             looks = data.setdefault("looks", {})
             looks[kind] = int(looks.get(kind, 0)) + 1
-            self.split_path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+            self._write(data)
             return looks[kind]
 
     # -- incumbents -------------------------------------------------------------------
@@ -173,7 +232,9 @@ class Ledger:
                 current[row["kind"]] = loaded
         return current
 
-    def record_incumbent(self, qs: QuestionSet, *, generation: int, run_id: str) -> None:
+    def record_incumbent(self, qs: QuestionSet, *, generation: int, run_id: str, salt: str) -> None:
+        if self.epoch()["salt"] != salt:
+            raise EpochChanged("the split was rotated")
         self.append(
             {
                 "type": "incumbent",
@@ -183,12 +244,13 @@ class Ledger:
                 "generation": generation,
                 "run_id": run_id,
                 "baseline_digest": baseline(qs.kind).digest,
-                "epoch": self.epoch()["salt"],
+                "epoch": salt,
             }
         )
 
     def reset(self) -> None:
         """Forget accepted rewrites: the next run starts from production again. History stays."""
+        salt = self.epoch()["salt"]
         self.append({"type": "reset"})
         for kind in KINDS:
             base = baseline(kind)
@@ -201,31 +263,28 @@ class Ledger:
                     "generation": 0,
                     "run_id": "reset",
                     "baseline_digest": base.digest,
-                    "epoch": self.epoch()["salt"],
+                    "epoch": salt,
                 }
             )
 
     # -- labelled cases -------------------------------------------------------------
 
-    def local_cases(self, *, fresh: bool | None = None) -> list[dict[str, Any]]:
-        """Rows labelled here; ``fresh=True`` only those labelled after the epoch began, ``False`` the others."""
+    def local_cases(self) -> list[dict[str, Any]]:
         if not self.cases_path.exists():
             return []
         data = json.loads(self.cases_path.read_text(encoding="utf-8"))
-        cases = list(data.get("cases") or [])
-        if fresh is None:
-            return cases
-        began = self.epoch()["created"]
-        return [case for case in cases if (str(case.get("labelled_at") or "") > began) == fresh]
+        return list(data.get("cases") or [])
 
     def add_case(self, case: Mapping[str, Any]) -> None:
-        with self._lock:
-            self.ensure()
-            cases = [c for c in self.local_cases() if c.get("id") != case["id"]]
-            cases.append({**case, "labelled_at": now_iso()})
+        """Save a labelled row. Relabelling keeps the row's first ``labelled_at``."""
+        with self._exclusive():
+            existing = {c.get("id"): c for c in self.local_cases()}
+            first = (existing.get(case["id"]) or {}).get("labelled_at") or now_iso()
+            cases = [c for c in existing.values() if c.get("id") != case["id"]]
+            cases.append({**case, "labelled_at": first})
             document = {
                 "version": 1,
                 "about": "Header rows labelled in Jev Lab's sandbox. Headers and labels only, never row values.",
                 "cases": cases,
             }
-            self.cases_path.write_text(json.dumps(document, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+            self._write(document, self.cases_path)

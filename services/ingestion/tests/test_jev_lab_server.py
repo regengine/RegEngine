@@ -53,7 +53,7 @@ TOKEN = "test-token-not-a-secret"  # pragma: allowlist secret
 
 @pytest.fixture
 def lab(tmp_path):
-    home = ledger.Ledger(tmp_path / "lab")
+    home = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
     home.ensure()
     home.split_path.write_text(json.dumps({"salt": "test-salt-0", "created": "2026-01-01T00:00:00Z", "looks": {}}))
     decider = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE)
@@ -195,6 +195,9 @@ def test_ask_refuses_secrets_and_never_echoes_them(client, lab):
         ({"q": {"type": "essay", "instructions": "?"}}, "choice, noul or score"),
         ({"q": {"type": "choice", "instructions": "?", "criteria": {"a": None}}}, "at least two options"),
         ({"q": {"type": "score", "instructions": "?", "criteria": ["only"]}}, "2 to 10 levels"),
+        ({"q": {"type": "choice", "instructions": "?", "criteria": 5}}, "at least two options"),
+        ({"q": {"type": "score", "instructions": "?", "criteria": 3}}, "2 to 10 levels"),
+        ({"q": {"type": "noul", "instructions": 7}}, "instructions must be text"),
     ],
 )
 def test_ask_refuses_malformed_questions(client, questions, detail):
@@ -233,10 +236,20 @@ def test_header_check_asks_both_production_questions(client):
 
 
 def test_header_check_refuses_rows_of_values_and_broken_rows(client, lab):
-    values = client.post("/api/headers", headers=POST, json={"headers": ["2024-01-03", "LOT-1", "12", "Acme"]})
+    values = client.post(
+        "/api/headers",
+        headers=POST,
+        json={"headers": ["Romaine Hearts 3ct", "LOT-R-0423", "240", "cases", "Fresh Farms Inc", "2024-04-23"]},
+    )
     broken = client.post("/api/headers", headers=POST, json={"headers": ["Ship Date\nLOT-1,12", "Qty"]})
 
-    assert values.status_code == 422 and "paste only the header row" in values.json()["refused"][0]
+    assert values.status_code == 422 and values.json()["refused"] == [
+        "cell(s) 2, 3, 6 look like values (dates, numbers or codes), not column names: paste only the header row"
+    ]
+    numbers = client.post(
+        "/api/ask", headers=POST, json={"state": {"gln": 1234567890128}, "questions": {"cte": CTE_QUESTION}}
+    )
+    assert numbers.status_code == 422
     assert broken.status_code == 400
     assert lab.decider.stats()["sent"] == 0
 
@@ -258,6 +271,29 @@ def test_labels_are_validated_and_stamped(client, lab):
     case = lab.ledger.local_cases()[0]
     assert case["headers"] == ["Pick Dt", "Grower", "Qty"] and case["labelled_at"] > "2026-01-01T00:00:00Z"
     assert unknown.status_code == 400 and "unknown label(s) pick_date" in unknown.json()["detail"]
+    twin = client.post(
+        "/api/labels",
+        headers=POST,
+        json={
+            "headers": [
+                "Ship Dte",
+                "Sales Order",
+                "Cust Name",
+                "Ship-To City",
+                "Item Desc",
+                "Lot No.",
+                "Cases Shipped",
+                "UOM",
+                "BOL No",
+                "Freight Co.",
+            ],
+            "cte": "shipping",
+        },
+    )
+    assert twin.status_code == 400 and "already labelled as case erp-shipping-log" in twin.json()["detail"]
+    wide = [f"Extra Col {chr(65 + i // 26)}{chr(65 + i % 26)}" for i in range(48)] + ["Pick Dt"]
+    beyond = client.post("/api/labels", headers=POST, json={"headers": wide, "mappings": {"Pick Dt": "harvest_date"}})
+    assert beyond.status_code == 400 and "first 48 unrecognised columns" in beyond.json()["detail"]
     assert read.status_code == 400 and "already reads" in read.json()["detail"]
 
 
@@ -300,6 +336,32 @@ def test_loop_start_validates_its_inputs(client, body, detail):
     response = client.post("/api/loop/start", headers=POST, json=body)
 
     assert response.status_code == 400 and detail in response.json()["detail"]
+
+
+def test_only_one_run_starts_when_two_requests_race(lab, monkeypatch):
+    import threading as _threading
+
+    gate = _threading.Barrier(2)
+    started: list = []
+    monkeypatch.setattr(server, "run_loop", lambda **kw: (started.append(1), time.sleep(0.3)))
+    monkeypatch.setattr(server, "build_proposer", lambda backend, model: None)
+    errors: list = []
+
+    def go():
+        try:
+            gate.wait()
+            lab.start_loop(server.LoopConfig(generations=1), "offline")
+        except RuntimeError as exc:
+            errors.append(str(exc))
+
+    threads = [_threading.Thread(target=go) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    _wait_idle(lab)
+
+    assert len(started) == 1 and errors == ["a run is already in progress"]
 
 
 def test_confirm_and_rotate(client, lab):

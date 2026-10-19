@@ -113,36 +113,47 @@ theme follows the system unless you pick one.
 1. **Cases.** The cases are:
    - the seven CSV templates;
    - `docs/engineering/examples/jev_eval_cases.json`;
-   - rows labelled in Header check before the current split began.
+   - rows labelled in Header check.
 
-   They are split by case into training and held-out sets with a salt
-   stored in `split.json`. The split is stratified by label, so a rare label
-   lands on both sides.
+   The first run of a split epoch splits them by case into training and
+   held-out sets, stratified by label so a rare label lands on both sides,
+   and pins each case's side in `split.json`. A case added later is *fresh*:
+   the loop leaves it out until you rotate the split, and `confirm` uses it.
+   A labelled row with the same headers as an existing case is refused.
 2. **Parity tripwire.** On the offline fake, the lab must score the
    production wording exactly as `scripts/jev_eval.py` does: same answers and
    same request bodies. Otherwise the run stops.
 3. **Incumbent.** Jev answers every case with the current wording. The
-   training split is asked a second time without the cache. The difference
-   between the two answers is Jev's noise floor, and the required held-out
-   gain is at least twice that noise.
+   training split is asked a second time without the cache. How much the two
+   answers differ, subject by subject, is Jev's noise floor:
+   - the required held-out Brier gain is at least twice the noise's standard
+     error at the held-out split's size;
+   - the number of right answers that may turn wrong is what Jev's own
+     answer-flip rate predicts (zero on the fake, which repeats itself
+     exactly).
 4. **Each generation:**
    1. Claude gets the training data. The brief is checked for held-out cases
       and held-out headers before it leaves.
    2. Claude returns a patch to the wording (`what`, `not_for`, `examples`,
       `task`, `guidance`) and the misses it predicts the patch will fix.
    3. The wording is refused if it renames, adds, drops or reorders an
-      option, copies a labelled header into an example, stops explaining the
+      option, copies a training header into an example, stops explaining the
       state keys, or grows past 1.5 times production.
-   4. **Training screen.** The Brier score must improve and no correct
-      answer may be lost. A candidate that fails never touches the held-out
-      split.
-   5. **Held-out gate.** A candidate replaces the incumbent only if:
-      - it keeps every correct answer;
-      - it adds no wrong answer and no order flip at auto-apply confidence;
-      - it gains at least the margin in Brier score;
+   4. **Training screen**, compared subject by subject. The Brier score must
+      improve. No subject may become wrong, or start flipping when the
+      options are reversed, at auto-apply confidence. No more right answers
+      may turn wrong than the noise allows. A candidate that fails never
+      touches the held-out split.
+   5. **Held-out gate.** The same subject-by-subject checks, plus:
+      - a Brier gain of at least the margin;
       - calibration error and the confidence of wrong answers do not grow
         past a small slack;
       - more subjects improve than worsen.
+
+      A candidate that copies a held-out or fresh header into an example is
+      turned away here. That costs a held-out look, and Claude sees the same
+      "not kept" as for any rejection, so the check cannot reveal which
+      headers are held out.
    6. **Foresight.** Claude's predicted fixes are scored on the training
       split and returned to it next generation. Jev's answers teach Claude
       the wording, and the hit rate tells Claude how well it reads Jev.
@@ -152,6 +163,9 @@ theme follows the system unless you pick one.
    - the Jev request budget runs out;
    - the held-out split has judged 12 candidates per question, after which
      you rotate the split;
+   - Jev stops answering (that is recorded as a Jev failure, never as a
+     rejection, and costs no held-out look);
+   - the split is rotated while the run is using it;
    - you press Stop.
 
 "Confidence Brier" scores Jev's confidence as a forecast of "this answer is
@@ -191,14 +205,18 @@ requests are answered from `jev-cache.jsonl` and cost nothing. Pass
 
 Local state lives in `~/.regengine/jev-lab/` (override it with
 `JEV_LAB_HOME` or `--home`). The directory is outside the repository and has
-mode 0700.
+mode 0700. Runs judged by the offline fake keep everything except labelled
+rows in `~/.regengine/jev-lab/fake/`. Wording the fake picked can never
+become the live incumbent or use the live held-out split. `ledger`,
+`export`, `confirm` and `reset` take `--fake` to read that ledger, and
+`export` never offers fake-judged wording for promotion.
 
 | File | Contents |
 | --- | --- |
 | `ledger.jsonl` | Generations, decisions, runs, noise floors, sandbox verdicts |
 | `question_sets/<digest>.json` | The wording behind each digest |
-| `split.json` | The split salt, when the epoch began, held-out looks per question |
-| `cases.local.json` | Rows labelled in Header check (headers and labels, with `labelled_at`) |
+| `split.json` | The split salt, each case's pinned side, held-out looks per question |
+| `cases.local.json` | Rows labelled in Header check (headers and labels, with the first `labelled_at`); shared by both modes |
 | `jev-cache.jsonl` | Jev answers keyed by a SHA-256 of the request; the request itself is not stored |
 
 Never written: API keys, the page token, row values, Claude's transcript.
@@ -210,9 +228,9 @@ Never written: API keys, the page token, row values, Claude's transcript.
    - the diff against production;
    - the checklist below.
 2. `venv/bin/python scripts/jev_lab confirm <digest>` checks the rewrite on
-   *fresh* rows. Fresh rows were labelled after the current split began, so
-   no generation was selected on them. With fewer than 5 fresh subjects it
-   says the data is insufficient.
+   *fresh* rows. Fresh rows were added after the current split was pinned,
+   so no generation was selected on them. With fewer than 5 fresh subjects
+   it says the data is insufficient.
 3. Open a PR that applies the wording:
    - header mapping goes to `services/shared/jev/header_mapping.py`;
    - file CTE goes to `services/shared/jev/cte_classification.py`.
@@ -238,7 +256,9 @@ Never written: API keys, the page token, row values, Claude's transcript.
 
 ## Always ready to answer
 
-`serve` keeps running until Ctrl-C. To have it start at login, add a
+`serve` keeps running until Ctrl-C. It opens your browser through a
+one-minute, owner-only redirect file in the lab directory, so the page token
+never appears on a command line other users can see. To have it start at login, add a
 LaunchAgent that runs the `serve` command from a shell that reads the key
 from the Keychain, as in step 2. The plist itself must not contain the key.
 The server never starts a loop on its own: every run is started by a person.

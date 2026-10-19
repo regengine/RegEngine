@@ -72,7 +72,7 @@ def fake():
 
 
 def _home(tmp_path: Path, salt: str = ACCEPTING_SALT, looks: dict | None = None) -> ledger.Ledger:
-    lab = ledger.Ledger(tmp_path / "lab")
+    lab = ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE)
     lab.ensure()
     lab.split_path.write_text(json.dumps({"salt": salt, "created": "2026-01-01T00:00:00Z", "looks": looks or {}}))
     return lab
@@ -254,6 +254,22 @@ def test_lab_scores_production_wording_exactly_like_jev_eval(cases):
     assert all(set(body["state"]) <= {"csv_headers", "columns_to_map"} for body in lab_bodies)
 
 
+def test_parity_tripwire_catches_request_drift_the_fake_cannot_score(cases, monkeypatch):
+    original = cte._question
+
+    def drifted(criteria):
+        question = original(criteria)
+        question["instructions"] = {**question["instructions"], "sample_policy": "headers only"}
+        return question
+
+    monkeypatch.setattr(cte, "_question", drifted)
+
+    problems = scoring.parity_problems(cases)
+
+    assert any(p.startswith("request bodies differ") for p in problems)
+    assert not any("vs lab" in p for p in problems)  # the fake's answers alone would not show it
+
+
 def test_order_check_reasks_confident_answers_with_options_reversed(cases, fake):
     baselines = {kind: questions.baseline(kind) for kind in questions.KINDS}
     observations = scoring.evaluate(cases, baselines, fake, split={}, order_check_at=0.9)
@@ -332,13 +348,13 @@ def test_screen_stops_a_rewrite_that_does_not_help_training():
 @pytest.mark.parametrize(
     "hold_before,hold_after,reason",
     [
-        ([RIGHT_LOW, RIGHT_LOW], [RIGHT_HIGH, WRONG_LOW], "held-out correct answers fell 2 -> 1"),
-        ([WRONG_LOW, RIGHT_LOW], [WRONG_HIGH, RIGHT_HIGH], "wrong answers at auto-apply confidence rose 0 -> 1"),
+        ([RIGHT_LOW, RIGHT_LOW], [RIGHT_HIGH, WRONG_LOW], "1 held-out subject(s) went from right to wrong"),
+        ([WRONG_LOW, RIGHT_LOW], [WRONG_HIGH, RIGHT_HIGH], "1 new held-out wrong answer(s) at auto-apply"),
         ([RIGHT_LOW, RIGHT_LOW], [{"correct": True, "confidence": 0.61}, RIGHT_LOW], "below the margin"),
         (
             [RIGHT_LOW, RIGHT_LOW, RIGHT_LOW],
             [RIGHT_HIGH, {"correct": True, "confidence": 0.55}, {"correct": True, "confidence": 0.55}],
-            "more held-out subjects got worse (2) than better (1)",
+            "improved 1, worsened 2: not more improved",
         ),
     ],
 )
@@ -357,7 +373,32 @@ def test_new_order_flips_at_auto_apply_are_refused():
 
     decision = scoring.decide(HM, inc, cand, margin=0.01, auto_apply=0.9)
 
-    assert any("order-inconsistent" in r for r in decision.reasons)
+    assert any("new held-out order flip(s) at auto-apply" in r for r in decision.reasons)
+
+
+def test_gates_compare_subject_by_subject_not_totals():
+    # A swap that keeps every total: one subject turns wrong at auto-apply while another is fixed.
+    swap_before = [{"correct": True, "confidence": 0.8}, WRONG_HIGH, RIGHT_LOW, RIGHT_LOW]
+    swap_after = [WRONG_HIGH, RIGHT_HIGH, {"correct": True, "confidence": 0.92}, {"correct": True, "confidence": 0.92}]
+    inc, cand = _pair(swap_before, swap_after, swap_before, swap_after)
+
+    reasons, _ = scoring.screen(HM, inc, cand, auto_apply=0.9)
+    decision = scoring.decide(HM, inc, cand, margin=0.01, auto_apply=0.9)
+
+    assert any("went from right to wrong" in r for r in reasons)
+    assert any("new training wrong answer(s) at auto-apply" in r for r in reasons)
+    assert not decision.accepted
+    assert any("went from right to wrong" in r for r in decision.reasons)
+
+
+def test_noise_allows_as_many_lost_answers_as_jev_flips_by_itself():
+    inc, cand = _pair([WRONG_LOW], [RIGHT_LOW], [RIGHT_LOW, RIGHT_LOW, RIGHT_LOW], [RIGHT_HIGH, RIGHT_HIGH, WRONG_LOW])
+
+    strict = scoring.decide(HM, inc, cand, margin=0.01, auto_apply=0.9)
+    noisy = scoring.decide(HM, inc, cand, margin=0.01, auto_apply=0.9, allowed_flips=1)
+
+    assert any("went from right to wrong (noise allows 0)" in r for r in strict.reasons)
+    assert not any("went from right to wrong" in r for r in noisy.reasons)
 
 
 # ---------------------------------------------------------------------------
@@ -395,21 +436,57 @@ def test_history_tells_claude_one_bit_about_held_out():
             },
             "changed": ["quantity"],
         },
-        questions.FILE_CTE: {
-            "accepted": False,
-            "stage": "invalid",
-            "reasons": ["shipping: example 'Secret Hdr' copies a labelled header"],
-        },
+        questions.FILE_CTE: {"accepted": False, "stage": "screen", "reasons": ["training Brier did not improve"]},
     }
 
-    entry = loop.public_history(1, "rejected", proposal, results, {"predicted": 0}, train_phrases=set())
+    entry = loop.public_history(1, "rejected", proposal, results, {"predicted": 0})
     text = json.dumps(entry)
 
     assert entry["kinds"][HM]["held_out_check"] == "not kept"
     assert entry["kinds"][HM]["training"]["brier"] == [0.3, 0.25]
     assert "0.0042" not in text and "0.2142" not in text and "held-out Brier" not in text
-    assert "Secret Hdr" not in text
-    assert "an example copies a labelled header" in text
+    assert entry["kinds"][questions.FILE_CTE]["held_out_check"] == "not run: the training split did not improve"
+
+
+def test_copying_a_held_out_header_is_turned_away_by_the_held_out_check(tmp_path, cases, fake):
+    lab = _home(tmp_path)
+    split = scoring.split_cases(cases, salt=ACCEPTING_SALT)
+    train = {questions.normalize_phrase(h) for case in cases if split[case.id] == scoring.TRAIN for h in case.headers}
+    held_out = next(
+        header
+        for case in cases
+        if split[case.id] == scoring.HOLDOUT
+        for header in case.mappings
+        if questions.normalize_phrase(header) not in train
+    )
+
+    class CopyingHeuristic:
+        """The offline heuristic's training-improving patch, plus one copied held-out header."""
+
+        name = "copying"
+
+        def propose(self, brief):
+            proposal = proposer.OfflineProposer().propose(brief)
+            patch = proposal.patches[HM]
+            if patch:
+                first = dict(patch["criteria"][0])
+                current = brief["kinds"][HM]["wording"]["criteria"][first["option"]].get("examples", [])
+                first["examples"] = [*current[:10], held_out]
+                patch = {**patch, "criteria": [first, *patch["criteria"][1:]]}
+            return proposer.Proposal({HM: patch, questions.FILE_CTE: None}, "copy", "copying")
+
+    recorder = _Recording(CopyingHeuristic())
+
+    loop.run_loop(ledger=lab, decider=fake, proposer=recorder, config=loop.LoopConfig(generations=2, patience=5))
+
+    decision = lab.generations()[0]["decisions"][HM]
+    assert decision["stage"] == "holdout"  # it passed the training screen, and validation did not name it
+    assert decision["reasons"] == ["an example copies a held-out or fresh header"]
+    judged = sum(1 for g in lab.generations() if (g.get("decisions") or {}).get(HM, {}).get("stage") == "holdout")
+    assert lab.epoch()["looks"][HM] == judged >= 1
+    history = json.dumps(recorder.briefs[1]["history"])
+    assert '"held_out_check": "not kept"' in history
+    assert "copies" not in history and held_out not in history
 
 
 def test_holdout_leak_scan_ignores_wording_but_catches_data():
@@ -423,6 +500,11 @@ def test_holdout_leak_scan_ignores_wording_but_catches_data():
     assert loop.holdout_leaks(brief, {"sealedheader"}) == ["Sealed Header"]
     brief["kinds"][HM]["misses"] = []
     assert loop.holdout_leaks(brief, {"sealedheader"}) == []
+
+    base = questions.baseline(HM)
+    copied = questions.apply_patch(base, {"criteria": [{"option": "carrier", "examples": ["Hauler", "Sealed Header"]}]})
+    assert loop.copies_secret_header(copied, base, {"sealedheader"})
+    assert not loop.copies_secret_header(base, base, {"hauler"})
 
 
 # ---------------------------------------------------------------------------
@@ -545,6 +627,44 @@ def test_loop_stops_cleanly_when_the_jev_budget_runs_out(tmp_path):
     assert decider.stats()["sent"] == 5
 
 
+class _Outage:
+    """A LabDecider stand-in that answers until ``after`` requests, then reports Jev unavailable."""
+
+    def __init__(self, inner, after):
+        self.inner, self.after, self.mode, self.calls = inner, after, inner.mode, 0
+
+    settings = property(lambda self: self.inner.settings)
+    enabled = property(lambda self: self.inner.enabled)
+
+    def stats(self):
+        return self.inner.stats()
+
+    def ask(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls > self.after:
+            raise JevUnavailable("rate_limited", purpose=kwargs.get("purpose", "x"))
+        return self.inner.ask(*args, **kwargs)
+
+
+def test_a_jev_outage_mid_run_is_a_jev_failure_not_a_verdict(tmp_path, fake):
+    lab = _home(tmp_path)
+    first = loop.run_loop(
+        ledger=lab, decider=fake, proposer=proposer.OfflineProposer(), config=loop.LoopConfig(generations=0)
+    )
+    flaky = _Outage(fake, after=first["jev"]["sent"] + first["jev"]["cache_hits"] + 1)
+    lab2 = _home(tmp_path / "again")
+
+    summary = loop.run_loop(
+        ledger=lab2, decider=flaky, proposer=proposer.OfflineProposer(), config=loop.LoopConfig(generations=3)
+    )
+
+    assert summary["stopped"] == "jev unavailable:rate_limited"
+    assert sum(lab2.epoch()["looks"].values()) == 0
+    assert [g["outcome"] for g in lab2.generations()] == ["jev_unavailable"]
+    with pytest.raises(JevUnavailable):
+        loop.evaluate_once(lab2, _Outage(fake, after=0))
+
+
 def test_estimate_bounds_what_a_run_sends(tmp_path, cases):
     decider = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE)
     lab = _home(tmp_path)
@@ -552,7 +672,7 @@ def test_estimate_bounds_what_a_run_sends(tmp_path, cases):
     loop.run_loop(
         ledger=lab, decider=decider, proposer=proposer.OfflineProposer(), config=loop.LoopConfig(generations=3)
     )
-    estimate = loop.run_estimate(cases, ACCEPTING_SALT, generations=3)
+    estimate = loop.run_estimate(cases, lab.epoch()["assignment"], generations=3)
 
     assert decider.stats()["sent"] <= estimate["jev_requests_max"]
     assert estimate["claude_calls_max"] == 3
@@ -560,6 +680,7 @@ def test_estimate_bounds_what_a_run_sends(tmp_path, cases):
 
 def test_fresh_rows_are_kept_from_the_loop_for_confirmation(tmp_path, fake):
     lab = _home(tmp_path)
+    loop.load_all_cases(lab)  # the first use of the epoch fixes its split
     lab.add_case(
         {
             "id": "local-fresh",
@@ -577,6 +698,44 @@ def test_fresh_rows_are_kept_from_the_loop_for_confirmation(tmp_path, fake):
     lab.rotate_split()
     assert "local-fresh" in {case.id for case in loop.load_all_cases(lab)}
     assert loop.fresh_cases(lab) == []
+
+
+def test_the_epoch_pins_each_case_to_its_side(tmp_path):
+    lab = _home(tmp_path)
+    before = {case.id for case in loop.load_all_cases(lab)}
+    assignment = dict(lab.epoch()["assignment"])
+    lab.add_case({"id": "local-x", "headers": ["Txn Kind", "Lot Ref"], "cte": "mixed_or_unclear"})
+    first = lab.local_cases()[0]["labelled_at"]
+    lab.add_case({"id": "local-x", "headers": ["Txn Kind", "Lot Ref"], "cte": "receiving"})
+
+    assert {case.id for case in loop.load_all_cases(lab)} == before
+    assert lab.epoch()["assignment"] == assignment
+    assert lab.local_cases()[0]["labelled_at"] == first
+    assert [case.id for case in loop.fresh_cases(lab)] == ["local-x"]
+
+
+def test_a_rotation_during_a_run_stops_it(tmp_path, fake):
+    lab = _home(tmp_path)
+
+    class Rotating(_Scripted):
+        def propose(self, brief):
+            lab.rotate_split()
+            return proposer.OfflineProposer().propose(brief)
+
+    summary = loop.run_loop(ledger=lab, decider=fake, proposer=Rotating(), config=loop.LoopConfig(generations=3))
+
+    assert summary["stopped"] == "the split was rotated during the run"
+    assert sum(lab.epoch()["looks"].values()) == 0
+    assert all(qs.label.startswith("csv-") for qs in lab.incumbents().values())
+
+
+def test_fake_and_live_ledgers_never_mix(tmp_path, fake):
+    live = ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
+
+    with pytest.raises(ValueError, match="cannot write to the live ledger"):
+        loop.run_loop(ledger=live, decider=fake, proposer=proposer.OfflineProposer())
+    assert ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).state_dir == tmp_path / "lab" / "fake"
+    assert live.cases_path == ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).cases_path
 
 
 # ---------------------------------------------------------------------------
@@ -642,6 +801,14 @@ def test_privacy_guard_passes_headers_and_question_wording():
 
 def test_privacy_guard_refuses_rows_of_values_and_secret_env_values():
     assert privacy.data_row_findings(["2024-01-03", "LOT-889", "12", "Acme"])
+    row = ["Romaine Hearts 3ct", "LOT-R-0423", "240", "cases", "Fresh Farms Inc", "Salinas CA", "2024-04-23"]
+    assert privacy.data_row_findings(row) == [
+        "cell(s) 2, 3, 7 look like values (dates, numbers or codes), not column names: paste only the header row"
+    ]
+    assert privacy.findings({"gln": 1234567890128, "phone": 5551234567, "ok": 3, "flag": True}) == [
+        "GLN or GTIN number at $.gln",
+        "personal data (email, phone, SSN or street address) at $.phone",
+    ]
     environ = {"TYPESAFE_API_KEY": "ts-not-a-real-key-123"}  # pragma: allowlist secret
     found = privacy.findings({"state": "x ts-not-a-real-key-123 y"}, environ=environ)
     assert found == ["the value of TYPESAFE_API_KEY at $.state"]
@@ -780,6 +947,29 @@ def _message(stop_reason, text):
     return type("Message", (), {"stop_reason": stop_reason, "content": [block], "model": "claude-opus-5-5"})()
 
 
+def test_proposer_failures_never_crash_the_run(tmp_path, fake):
+    class Broken:
+        name = "broken"
+
+        def propose(self, brief):
+            raise ConnectionError("socket closed")
+
+    summary = loop.run_loop(
+        ledger=_home(tmp_path), decider=fake, proposer=Broken(), config=loop.LoopConfig(generations=3)
+    )
+
+    assert summary["stopped"] == "proposer failed: ConnectionError"
+    assert lab_outcomes(tmp_path) == ["no_proposal"]
+    with pytest.raises(ValueError, match="margin"):
+        loop.run_loop(
+            ledger=_home(tmp_path / "n"), decider=fake, proposer=Broken(), config=loop.LoopConfig(margin=float("nan"))
+        )
+
+
+def lab_outcomes(tmp_path):
+    return [g["outcome"] for g in ledger.Ledger(tmp_path / "lab", mode=ledger.FAKE).generations()]
+
+
 def test_anthropic_sdk_proposer_uses_structured_output_and_refusal_fallback():
     body = json.dumps({"rationale": "r", HM: None, questions.FILE_CTE: None, "predicted_fixes": []})
     client = _FakeAnthropic(_message("end_turn", body))
@@ -799,6 +989,28 @@ def test_anthropic_sdk_proposer_uses_structured_output_and_refusal_fallback():
     with pytest.raises(proposer.ProposerError, match="declined"):
         proposer.AnthropicSdkProposer(client=refused).propose({"auto_apply_threshold": 0.9, "kinds": {}, "history": []})
 
+    class Overloaded(_FakeAnthropic):
+        def __init__(self):
+            super().__init__(None)
+
+            class Messages:
+                def stream(self, **kwargs):
+                    raise RuntimeError("529 overloaded")
+
+            self.beta = type("Beta", (), {"messages": Messages()})()
+
+    with pytest.raises(proposer.ProposerError, match="the Claude API call failed: RuntimeError"):
+        proposer.AnthropicSdkProposer(client=Overloaded()).propose(
+            {"auto_apply_threshold": 0.9, "kinds": {}, "history": []}
+        )
+
+
+def test_claude_cli_proposer_is_refused_before_any_jev_request_when_claude_is_missing(monkeypatch):
+    monkeypatch.setenv("PATH", "/nonexistent")
+
+    with pytest.raises(proposer.ProposerError, match="not on PATH"):
+        proposer.build_proposer(proposer.CLAUDE_CLI)
+
 
 def test_noise_floor_and_foresight():
     a = [
@@ -810,8 +1022,9 @@ def test_noise_floor_and_foresight():
         _obs(HM, "d", "y", "train", correct=True, confidence=0.7),
     ]
 
-    noise = loop.noise_floor(a, b)
+    noise = loop.noise_floor(a, b, {HM: 8})
     seen = loop.foresight([(HM, "d", "y"), (HM, "c", "x")], a, b)
 
-    assert noise[HM]["flip_rate"] == 0.5 and noise[HM]["brier_delta"] > 0
+    assert noise[HM]["flip_rate"] == 0.5 and noise[HM]["allowed_flips"] == 4
+    assert noise[HM]["brier_sd"] > 0 and noise[HM]["noise_margin"] > 0
     assert seen == {"predicted": 2, "came_true": 1, "hit_rate": 0.5, "unpredicted_fixes": 0, "breaks": 0}

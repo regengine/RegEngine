@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
@@ -289,6 +290,8 @@ class ClaudeCliProposer:
         max_changes: int = DEFAULT_MAX_CHANGES,
         runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     ) -> None:
+        if runner is subprocess.run and shutil.which(executable) is None:
+            raise ProposerError(f"{executable!r} is not on PATH: install Claude Code, or use --proposer anthropic-sdk")
         self.model = model
         self.executable = executable
         self.timeout = timeout
@@ -338,10 +341,14 @@ class ClaudeCliProposer:
                 ) from None
             except subprocess.TimeoutExpired:
                 raise ProposerError(f"claude did not answer within {self.timeout:.0f} s") from None
+            except OSError as exc:
+                raise ProposerError(f"claude could not be started: {type(exc).__name__}") from None
         try:
             result = json.loads(completed.stdout or "{}")
         except json.JSONDecodeError:
             raise ProposerError(f"claude exited {completed.returncode} without a JSON result") from None
+        if not isinstance(result, dict):
+            raise ProposerError(f"claude exited {completed.returncode} with an unexpected result")
         if completed.returncode != 0 or result.get("is_error"):
             raise ProposerError(f"claude exited {completed.returncode}: {result.get('subtype') or 'error'}")
         structured = result.get("structured_output")
@@ -392,17 +399,22 @@ class AnthropicSdkProposer:
     def propose(self, brief: Mapping[str, Any]) -> Proposal:
         privacy.check(brief)
         # A declined request is re-run server-side on Anthropic's recommended
-        # fallback model; message.model records which model answered.
-        with self._client.beta.messages.stream(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-            system=SYSTEM_PROMPT,
-            output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": PROPOSAL_SCHEMA}},
-            messages=[{"role": "user", "content": render_prompt(brief, max_changes=self.max_changes)}],
-        ) as stream:
-            message = stream.get_final_message()
+        # fallback model; message.model records which model answered. Errors
+        # left after the SDK's own retries (rate limit, overload, connection)
+        # end this generation as a ProposerError.
+        try:
+            with self._client.beta.messages.stream(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                betas=[FALLBACK_BETA],
+                fallbacks="default",
+                system=SYSTEM_PROMPT,
+                output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": PROPOSAL_SCHEMA}},
+                messages=[{"role": "user", "content": render_prompt(brief, max_changes=self.max_changes)}],
+            ) as stream:
+                message = stream.get_final_message()
+        except Exception as exc:  # noqa: BLE001 - the SDK's error classes, without importing the optional package
+            raise ProposerError(f"the Claude API call failed: {type(exc).__name__}") from None
         if message.stop_reason == "refusal":
             raise ProposerError("Claude declined to answer, and so did the fallback model")
         if message.stop_reason == "max_tokens":

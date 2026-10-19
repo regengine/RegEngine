@@ -24,8 +24,13 @@ import dataclasses
 import getpass
 import json
 import logging
+import math
+import os
+import secrets
 import socket
+import stat
 import sys
+import threading
 import webbrowser
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -82,8 +87,12 @@ def _parser() -> _Parser:
 
     def common(p: argparse.ArgumentParser, *, jev: bool = True) -> None:
         p.add_argument("--home", type=Path, default=default_home(), help="ledger directory (default %(default)s)")
+        p.add_argument(
+            "--fake",
+            action="store_true",
+            help="use the offline fake Jev (nothing is sent anywhere) and its separate ledger",
+        )
         if jev:
-            p.add_argument("--fake", action="store_true", help="use the offline fake Jev: nothing is sent anywhere")
             p.add_argument("--prompt-key", action="store_true", help="read the TypeSafe key from a hidden prompt")
             p.add_argument("--max-jev-requests", type=int, default=400, help="request budget (default %(default)s)")
             p.add_argument("--no-cache", action="store_true", help="re-send requests that were answered before")
@@ -170,7 +179,9 @@ def _decider(
         if transport is not None
         else build_decider(LIVE, settings)
     )
-    cache = None if args.no_cache else args.home / "jev-cache.jsonl"
+    from .ledger import Ledger
+
+    cache = None if args.no_cache else Ledger(args.home, mode=LIVE).cache_path
     return LabDecider(decider, mode=LIVE, max_requests=args.max_jev_requests, cache_path=cache)
 
 
@@ -187,6 +198,25 @@ def _free_port(port: int) -> bool:
         except OSError:
             return False
     return True
+
+
+def _open_without_exposing(url: str, ledger: Any) -> None:
+    """Open ``url`` in a browser without putting its token on a command line.
+
+    ``webbrowser.open(url)`` passes the URL to a helper process as an
+    argument, where other users of the machine can read it (``ps``). Instead a
+    small owner-only file that redirects to the URL is opened, and removed a
+    minute later.
+    """
+    ledger.ensure()
+    launcher = ledger.state_dir / f".open-{secrets.token_hex(8)}.html"
+    redirect = f"<script>location.replace({json.dumps(url)})</script>"
+    launcher.write_text(f'<!doctype html><meta charset="utf-8"><title>Jev Lab</title>{redirect}', encoding="utf-8")
+    os.chmod(launcher, stat.S_IRUSR | stat.S_IWUSR)
+    webbrowser.open(launcher.as_uri())
+    timer = threading.Timer(60.0, lambda: launcher.unlink(missing_ok=True))
+    timer.daemon = True
+    timer.start()
 
 
 def _any_free_port() -> int:
@@ -233,7 +263,7 @@ def _cmd_serve(args: argparse.Namespace, decider: Any, ledger: Any) -> int:
     print(f"Open: {url}")
     print("The token in that link is this session's key to the page. Ctrl-C stops the lab.")
     if not args.no_open:
-        webbrowser.open(url)
+        _open_without_exposing(url, ledger)
     uvicorn.run(create_app(lab), host="127.0.0.1", port=args.port, log_level="warning", access_log=False)
     return EXIT_OK
 
@@ -288,9 +318,15 @@ def _cmd_loop(args: argparse.Namespace, decider: Any, ledger: Any) -> int:
 
 
 def _cmd_score(args: argparse.Namespace, decider: Any, ledger: Any) -> int:
+    from shared.jev import JevUnavailable
+
     from .loop import evaluate_once
 
-    result = evaluate_once(ledger, decider)
+    try:
+        result = evaluate_once(ledger, decider)
+    except JevUnavailable as exc:
+        print(f"{PROG}: unavailable: {exc.reason}", file=sys.stderr)
+        return EXIT_UNAVAILABLE
     if args.json:
         print(json.dumps(result, indent=2))
     else:
@@ -380,7 +416,12 @@ def _cmd_export(args: argparse.Namespace, ledger: Any) -> int:
                 f"\n+ candidate:  {json.dumps(new, ensure_ascii=False)}"
             )
         print("\n" + json.dumps(qs.to_dict(), indent=1, ensure_ascii=False))
-        if changed:
+        if changed and ledger.mode == "fake":
+            print(
+                "\nJudged by the OFFLINE FAKE Jev, not by Jev: this is no evidence for production. "
+                "Run the loop live to get a rewrite worth promoting."
+            )
+        elif changed:
             print(
                 "\nPromotion is a pull request a person reviews:\n"
                 f"  1. Apply the wording above to {PROMOTION_FILES[qs.kind]}.\n"
@@ -410,11 +451,13 @@ def main(
             raise _UsageError("--max-jev-requests must be at least 1")
         if args.command == "loop" and not 1 <= args.generations <= 25:
             raise _UsageError("--generations must be 1 to 25")
+        if args.command == "loop" and not (math.isfinite(args.margin) and 0.0 <= args.margin <= 0.5):
+            raise _UsageError("--margin must be a number from 0 to 0.5")
     except _UsageError as exc:
         print(f"{PROG}: error: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
-    ledger = Ledger(args.home)
+    ledger = Ledger(args.home, mode="fake" if args.fake else "live")
     if args.command == "ledger":
         return _cmd_ledger(args, ledger)
     if args.command == "export":
