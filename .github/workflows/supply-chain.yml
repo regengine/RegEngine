@@ -6,8 +6,30 @@ name: Supply Chain Gate
 # actionlint keeps the workflow files themselves valid.
 on:
   pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'Dockerfile'
+      - 'scripts/**'
+      - 'infra/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
   push:
     branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'Dockerfile'
+      - 'scripts/**'
+      - 'infra/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+
+concurrency:
+  group: supply-chain-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

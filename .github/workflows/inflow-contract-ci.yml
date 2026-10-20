@@ -3,8 +3,24 @@ name: Inflow Lab Contract CI
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'services/ingestion/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/inflow_lab/**'
+      - '.github/workflows/inflow-contract-ci.yml'
   push:
     branches: [main]
+    paths:
+      - 'services/ingestion/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/inflow_lab/**'
+      - '.github/workflows/inflow-contract-ci.yml'
   workflow_dispatch:
     inputs:
       inflow_lab_ref:
