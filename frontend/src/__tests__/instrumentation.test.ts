@@ -17,6 +17,8 @@ function resetEnv() {
     delete process.env.NEXT_RUNTIME;
     delete process.env.SENTRY_DSN;
     delete process.env.NEXT_PUBLIC_SENTRY_DSN;
+    delete process.env.NEXT_PUBLIC_VERCEL_ENV;
+    delete process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
 }
 
 // Avoid Sentry side effects.
