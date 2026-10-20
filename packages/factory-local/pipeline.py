@@ -63,9 +63,10 @@ def pg_connect() -> psycopg.Connection:
 
 
 def ensure_schema(conn: psycopg.Connection) -> None:
-    """Apply db_init/01_init.sql (idempotent). The compose initdb mount alone is not
-    enough when the Docker VM does not share this directory (colima default mounts)."""
-    conn.execute((ROOT / "db_init" / "01_init.sql").read_text())
+    """Apply db_init/*.sql in order (each is idempotent). The compose initdb mount alone is
+    not enough when the Docker VM does not share this directory (colima default mounts)."""
+    for sql in sorted((ROOT / "db_init").glob("*.sql")):
+        conn.execute(sql.read_text())
 
 
 def opa_url() -> str:
@@ -160,9 +161,10 @@ def deploy_to_opa(rule_uid: str, rego: str, watch_timeout: float = 10.0) -> str:
     return "api"
 
 
-def evaluate(rule_uid: str, payload: dict) -> dict:
-    path = package_for(rule_uid).replace(".", "/")
-    resp = httpx.post(f"{opa_url()}/v1/data/{path}/result", json={"input": payload}, timeout=10)
+def evaluate(rule_uid: str, payload: dict, data_path: str | None = None) -> dict:
+    """POST to /v1/data/<data_path>. The default reads the `result` object of the rule's package."""
+    path = data_path or package_for(rule_uid).replace(".", "/") + "/result"
+    resp = httpx.post(f"{opa_url()}/v1/data/{path}", json={"input": payload}, timeout=10)
     resp.raise_for_status()
     body = resp.json()
     if "result" not in body:
@@ -195,17 +197,24 @@ def approve(rule_uid: str) -> dict:
 
 
 def deploy_and_record(
-    conn: psycopg.Connection, ir: DeonticIR, rule_uid: str, rego: str, version_uid: str, tenant_id: str = TENANT_ID
+    conn: psycopg.Connection,
+    ir: DeonticIR,
+    rule_uid: str,
+    rego: str,
+    version_uid: str,
+    tenant_id: str = TENANT_ID,
+    cases: list[tuple[str, dict, str, float]] = EXPECTED,
+    data_path: str | None = None,
 ) -> dict:
-    """Write the cartridge, load it into OPA, check the EXPECTED cases, append one signed
-    receipt per case to the tenant's chain, then verify the whole chain."""
+    """Write the cartridge, load it into OPA, check the cases (EXPECTED by default), append one
+    signed receipt per case to the tenant's chain, then verify the whole chain."""
     CARTRIDGES.mkdir(exist_ok=True)
     (CARTRIDGES / f"{cartridge_name(rule_uid)}.rego").write_text(rego)
     loaded_via = deploy_to_opa(rule_uid, rego)
 
     evaluations = []
-    for name, payload, want_status, want_exposure in EXPECTED:
-        got = evaluate(rule_uid, payload)
+    for name, payload, want_status, want_exposure in cases:
+        got = evaluate(rule_uid, payload, data_path)
         if got["compliance_status"] != want_status or got["violation_exposure_usd"] != want_exposure:
             raise AssertionError(
                 f"{name}: expected {want_status}/{want_exposure}, "
@@ -221,7 +230,7 @@ def deploy_and_record(
 
     key = load_or_create_signing_key()
     receipts = []
-    for (name, payload, _, _), ev in zip(EXPECTED, evaluations):
+    for (name, payload, _, _), ev in zip(cases, evaluations):
         r = append_receipt(
             conn,
             tenant_id,
