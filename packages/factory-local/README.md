@@ -17,18 +17,22 @@ RegEngine application.
 | File | Role |
 | --- | --- |
 | `schemas.py` | `DeonticPredicate` and `DeonticIR` (pydantic). Fact and control names are validated as safe identifiers. |
-| `compiler.py` | `compile_ir_to_rego(ir, pkg)` emits Rego v1 with strict status precedence. |
-| `verify.py` | Z3 formulas built from the IR. Proves the statuses are disjoint and complete; finds cross-rule exempt/obligated collisions with a concrete model. |
+| `compiler.py` | `compile_ir_to_rego(ir, pkg)` emits Rego v1 with strict `compliance_status` precedence. |
+| `verify.py` | Z3 formulas built from the IR. Proves the compliance statuses are disjoint and complete; finds cross-rule exempt/obligated collisions with a concrete model. |
 | `ledger.py` | RFC 8785 canonical hashing, Ed25519 signatures, per-tenant advisory lock, `verify_chain`. |
 | `extract.py` | Ollama structured extraction with fixture fallback. Never pulls models. |
 | `graph.py` | Seeds Neo4j with the bill, sections, versions, and one fictional `ExampleOrg`. |
 | `pipeline.py` | CLI: `run`, `approve --rule`, `verify-chain`. |
+| `app/local_factory.py` | One-shot dry run with the fixture (no approval step, no Neo4j). |
+| `bootstrap.sh` | venv, `.env`, compose stack, then the dry run. |
 | `approval_ui.py` | Streamlit review screen with an Approve & Deploy button. |
 | `db_init/01_init.sql` | Tables, plus an append-only trigger on the ledger. |
 
-## Status logic
+## compliance_status logic
 
-Highest precedence first. Missing control keys behave as false.
+The Rego `result` object reports it as `compliance_status`. Each body excludes
+the ones above it, so no two can hold at once. Highest precedence first.
+Missing control keys behave as false.
 
 1. `COMPLIANT`: applicable and the required action is done
 2. `COMPLIANT_VIA_SAFE_HARBOR`: applicable, action not done, safe harbor control true
@@ -42,19 +46,32 @@ For `PROHIBITION` rules, "action done" means the control is not true.
 
 ```bash
 cd packages/factory-local
-python3 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements.lock
-cp .env.example .env            # then replace the changeme placeholders
+./bootstrap.sh
+```
+
+`bootstrap.sh` is safe to re-run. It creates `.venv` and installs
+`requirements.lock` with `--require-hashes` (again only when the lock changes),
+creates `.env` from `.env.example` with generated passwords if `.env` is missing
+(it never prints them), runs `docker compose up -d --wait`, then runs
+`app/local_factory.py`. That entrypoint takes the SB 24-205 fixture through Z3
+verification, Rego compile, cartridge write, OPA evaluation, Ed25519 signed
+receipts on the Postgres hash chain, and a full chain check. It skips the human
+approval step and Neo4j.
+
+The step by step flow with human approval:
+
+```bash
 set -a; . ./.env; set +a        # the Python commands read the same variables
-docker compose up -d --wait
 .venv/bin/python pipeline.py run
 .venv/bin/python pipeline.py approve --rule US_CO_SB205_V2
 .venv/bin/python pipeline.py verify-chain
 .venv/bin/streamlit run approval_ui.py --server.port 8501
+docker compose down
 ```
 
-If a local Postgres already uses 5432, set `FACTORY_PG_PORT=55432` (and
-`FACTORY_OPA_PORT`, `FACTORY_NEO4J_BOLT_PORT` as needed) for both
-`docker compose` and the Python commands.
+If a local Postgres already uses 5432, export `FACTORY_PG_PORT=55432` (and
+`FACTORY_OPA_PORT`, `FACTORY_NEO4J_BOLT_PORT`, `FACTORY_NEO4J_HTTP_PORT` as
+needed) before `./bootstrap.sh`, `docker compose`, and the Python commands.
 
 Set `OLLAMA_MODEL` to a model you already have locally to use live extraction.
 Without it, or if Ollama fails or returns invalid JSON, the pipeline uses
@@ -91,7 +108,7 @@ key you kept, but new receipts start signing with a new key.
   through `PUT /v1/policies`. Either way it confirms that the loaded text
   matches the verified Rego exactly. `opa_loaded_via` in the output reports
   `watch` or `api`.
-- Z3 checks the status logic built from the IR, not the generated Rego text.
+- Z3 checks the compliance_status logic built from the IR, not the generated Rego text.
   The two are kept in step by hand and by tests.
 - `approve` marks the rule `human_verified` before deployment finishes. If OPA
   or an assertion fails afterwards, the flag stays true and no receipt is

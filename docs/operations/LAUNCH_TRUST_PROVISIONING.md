@@ -73,3 +73,49 @@ Rollback:
    its built-in mailer or returns a delivery error.
 3. If the built-in mailer is re-enabled for customer traffic, update DPA/Trust
    disclosures before relying on it.
+
+## Site contact and request-access forms
+
+This path is the Next.js route `POST /api/contact`
+(`frontend/src/app/api/contact/route.ts`). It is separate from the Supabase
+Auth SMTP settings above. `/contact` and `/signup` both post here.
+`/signup` renders the request-access form. It does not redirect to login.
+A `plan` or `billing` query value is appended to the message when it matches
+`^[a-z0-9][a-z0-9_-]{0,31}$`.
+
+Delivery order:
+
+1. When `CONTACT_WEBHOOK_URL` is set, the route POSTs the submission JSON
+   there and does not call Resend. Redirects are not followed. A 3xx or any
+   other non-2xx response is HTTP 502 `contact_delivery_failed`. A network
+   error is HTTP 503 `contact_service_unavailable`.
+2. When the webhook is unset and `RESEND_API_KEY` is set, the route POSTs to
+   `https://api.resend.com/emails` with a 10 second timeout. The message goes
+   to `christopher@regengine.co`. `reply_to` is the submitter. `from` is
+   `RESEND_FROM_EMAIL`, or `RegEngine <onboarding@regengine.co>` when that
+   variable is unset. The subject is `RegEngine request:` plus the company,
+   or the name when the company is blank, with carriage returns and newlines
+   removed and the subject cut at 150 characters.
+3. When neither variable is set, the route returns HTTP 503
+   `contact_service_unavailable` and does not claim the message was sent.
+
+`source` on the request is accepted only as the exact value `signup`, which
+is recorded as `regengine.co/signup`. Every other value, including a URL, is
+recorded as `regengine.co/contact`. UTM fields are trimmed, lowercased, and
+cut at 100 characters.
+
+The form field `website` is a honeypot. A non-empty value returns HTTP 200
+`{ "ok": true }` and is not delivered. The route also keeps an in-memory
+counter of 5 submissions per IP per 10 minutes, per serverless instance. The
+sixth is HTTP 429 with `Retry-After: 600`. Logs carry the submission id and
+delivery shape. They do not include the name, email, company, or message.
+
+```bash
+curl -X POST "$SITE/api/contact" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ada Lovelace","email":"ada@example.com","company":"Analytical Engines","message":"We need a workspace.","source":"signup"}'
+```
+
+A successful delivery returns `{ "ok": true }`. The form tells the visitor
+the team will respond within one business day. The contact page also links
+`mailto:christopher@regengine.co`. The signup form hides that link.
