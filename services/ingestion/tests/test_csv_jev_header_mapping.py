@@ -91,7 +91,7 @@ def _transport(answers: dict[str, dict], seen: Optional[dict] = None, status: in
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_csv"},
-            json={"model": "jev-1.13.0", "answers": answered, "usage": {"input_tokens": 100, "output_tokens": 2}},
+            json={"model": "jev-1.14.0", "answers": answered, "usage": {"input_tokens": 100, "output_tokens": 2}},
         )
 
     return httpx2.MockTransport(handler)
@@ -232,7 +232,7 @@ def test_advisory_mode_suggests_records_and_leaves_rows_alone(harness):
     engine = body["header_mapping_engine"]
     assert engine["provider"] == "typesafe"
     assert engine["status"] == "ok"
-    assert engine["model"] == "jev-1.13.0"
+    assert engine["model"] == "jev-1.14.0"
     assert engine["request_id"] == "req_csv"
     assert engine["apply_enabled"] is False
     assert engine["artifacts_recorded"] == 1

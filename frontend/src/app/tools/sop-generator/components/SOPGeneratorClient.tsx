@@ -81,11 +81,11 @@ export function SOPGeneratorClient() {
             ctes.push('✅ Initial Packing of RACs (§1.1330)');
         }
         if (formData.company_type === 'importer') {
-            ctes.push('✅ First Land-Based Receiving — applies only to seafood obtained from a fishing vessel (§1.1335)');
+            ctes.push('✅ First Land-Based Receiving applies only to seafood obtained from a fishing vessel (§1.1335)');
         }
         ctes.push('✅ Shipping (§1.1340)');
         if (formData.company_type === 'retailer') {
-            ctes.push('⚠️ Receiving (§1.1345) — verify whether the §1.1305(j) restaurant/retail-food-establishment exemption applies to your operation before adopting');
+            ctes.push('⚠️ Receiving (§1.1345): Verify whether the §1.1305(j) restaurant/retail-food-establishment exemption applies to your operation before adopting');
         } else {
             ctes.push('✅ Receiving (§1.1345)');
         }
@@ -93,13 +93,13 @@ export function SOPGeneratorClient() {
             ctes.push('✅ Transformation (§1.1350)');
         }
 
-        return `# FSMA 204 Traceability Plan — DRAFT TEMPLATE
+        return `# FSMA 204 Traceability Plan: DRAFT TEMPLATE
 *Unreviewed starting template. Not legal advice. Requires review by qualified food-safety/regulatory counsel before adoption.*
 
 **Company**: ${formData.company_name}
 **Type**: ${formData.company_type.charAt(0).toUpperCase() + formData.company_type.slice(1)}
 **Generated**: ${now}
-**Contact**: ${formData.primary_contact}${formData.contact_title ? ` — ${formData.contact_title}` : ''}
+**Contact**: ${formData.primary_contact}${formData.contact_title ? `, ${formData.contact_title}` : ''}
 
 ## Products Covered
 ${prodList}
@@ -107,7 +107,7 @@ ${prodList}
 ## Facilities
 ${facList}
 
-## CTE Procedures (per the Critical Tracking Events you indicated)
+## Critical Tracking Event (CTE) Procedures (for the events you indicated)
 ${ctes.join('\n')}
 
 ## Operations
@@ -127,7 +127,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
     return (
         <FreeToolPageShell
             title="SOP Generator"
-            subtitle="Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Output is a draft starting point — review with your food-safety team and counsel before audit or retailer use."
+            subtitle="Auto-generate a starting-template FSMA 204 Traceability Plan and SOP scaffold. Output is a draft starting point. Review with your food-safety team and counsel before audit or retailer use."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'drill-simulator']}
         >
             <AnimatePresence mode="wait">
@@ -288,7 +288,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                             <FileText className="h-12 w-12 text-[var(--re-brand)]" />
                         </motion.div>
                         <div className="text-lg font-bold">Generating your draft template...</div>
-                        <div className="text-sm text-muted-foreground">Customizing CTE procedures for {formData.company_type}</div>
+                        <div className="text-sm text-muted-foreground">Customizing Critical Tracking Event (CTE) procedures for {formData.company_type}</div>
                     </motion.div>
                 )}
 
@@ -302,7 +302,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                         <LeadGate
                             source="sop-generator"
                             headline="Download Your Draft Template"
-                            subheadline="Get a customizable starting-template FSMA 204 Traceability Plan. Review with your food-safety team and counsel before audit or retailer use — not legal advice."
+                            subheadline="Get a customizable starting-template FSMA 204 Traceability Plan. Review with your food-safety team and counsel before audit or retailer use. Not legal advice."
                             ctaText="Unlock Draft Template"
                             toolContext={{ toolInputs: formData }}
                             teaser={

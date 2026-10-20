@@ -118,5 +118,12 @@ exports[`reviewed CSRF route-and-method exemptions > keeps the reviewed rule inv
     ],
     "path": "/api/tools/verify",
   },
+  {
+    "match": "exact",
+    "methods": [
+      "POST",
+    ],
+    "path": "/api/contact",
+  },
 ]
 `;

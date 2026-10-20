@@ -216,10 +216,16 @@ class APIKeyStore:
         if not isinstance(raw_key, str) or not raw_key.startswith("rge_"):
             return None
 
-        # Extract key_id from the raw key (first part before hash)
+        # Extract key_id from the raw key (first part before hash). Keys
+        # minted by create_key() always carry the ``rge_{key_id}.{secret}``
+        # shape; log a malformed-format event instead of failing silent.
+        # Only the 8-char prefix is logged — never the presented credential.
         try:
-            key_id, _ = raw_key.split(".", 1)
+            key_id, secret = raw_key.split(".", 1)
         except ValueError:
+            key_id, secret = raw_key, ""
+        if not key_id or not secret:
+            logger.warning("malformed_key_format", key_prefix=raw_key[:8])
             return None
 
         with self._lock:

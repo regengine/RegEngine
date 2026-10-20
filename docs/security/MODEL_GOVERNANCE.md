@@ -23,7 +23,7 @@ This document establishes governance over AI/ML models used in RegEngine for reg
 | NLP-002 | Confidence Scorer | Rule-based + ML | Score extraction confidence 0.0-1.0 | High |
 | NLP-003 | Entity Linker | Graph matching | Link extracted entities to knowledge graph | Medium |
 | NLP-004 | Threshold Parser | Regex + NER | Extract numeric thresholds with units | Medium |
-| ING-001 | Jev CSV Header Mapper | Calibrated classifier (TypeSafe AI Jev 1.13.0, external API) | Suggest the canonical FSMA 204 field for CSV column headers the parser does not recognise; advisory by default, applied only at >= 0.90 confidence when explicitly enabled (ADR-005) | Medium |
+| ING-001 | Jev CSV Header Mapper | Calibrated classifier (TypeSafe AI Jev 1.14.0, external API) | Suggest the canonical FSMA 204 field for CSV column headers the parser does not recognise; advisory by default, applied only at >= 0.90 confidence when explicitly enabled (ADR-005) | Medium |
 
 ### Model Risk Tiers
 
@@ -50,12 +50,12 @@ Each model must define:
 Intended Use:
   - Extract regulatory obligations from English-language regulatory text
   - Identify subject, action, object, and obligation type (MUST/SHOULD/MAY)
-  
+
 Prohibited Use:
   - Legal advice or definitive compliance determination
   - Processing of confidential client data without consent
   - Extraction from non-regulatory documents (contracts, etc.)
-  
+
 Limitations:
   - Accuracy degrades on highly technical financial regulations
   - May misclassify conditional obligations
@@ -140,7 +140,7 @@ def test_jurisdictional_parity():
     """Ensure <5% accuracy difference between jurisdictions."""
     us_accuracy = evaluate_corpus("test_data/us_regulations.json")
     eu_accuracy = evaluate_corpus("test_data/eu_regulations.json")
-    
+
     assert abs(us_accuracy - eu_accuracy) < 0.05, \
         f"Jurisdictional bias detected: US={us_accuracy}, EU={eu_accuracy}"
 ```

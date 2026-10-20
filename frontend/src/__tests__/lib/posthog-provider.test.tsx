@@ -116,7 +116,7 @@ describe('PostHog client initialization', () => {
     ['http://localhost:8000/', 'http://localhost:8000'],
     ['not-a-url', 'https://us.i.posthog.com'],
     ['ftp://eu.i.posthog.com', 'https://us.i.posthog.com'],
-    ['https://user:secret@eu.i.posthog.com', 'https://us.i.posthog.com'],
+    ['https://user:secret@eu.i.posthog.com', 'https://us.i.posthog.com'], // pragma: allowlist secret
   ])('uses a valid API host or the safe fallback for %s', async (host, expectedHost) => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_HOST', host);
     document.cookie = 're_cookie_consent=accepted; path=/';

@@ -283,6 +283,24 @@ class TestValidation:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_validate_no_separator_logs_malformed_format(self):
+        """SEL-10: hand-inserted dot-less keys log malformed_key_format, not silent None."""
+        from structlog.testing import capture_logs
+
+        from shared.api_key_store import DatabaseAPIKeyStore
+
+        store = DatabaseAPIKeyStore(database_url=TEST_DATABASE_URL)
+        presented = "rge_inflowlab_XXX"
+        with capture_logs() as logs:
+            result = await store.validate_key(presented)
+        assert result is None
+        malformed = [entry for entry in logs if entry.get("event") == "malformed_key_format"]
+        assert len(malformed) == 1
+        assert malformed[0]["log_level"] == "warning"
+        assert malformed[0]["key_prefix"] == presented[:8]
+        assert presented not in repr(malformed[0])
+
+    @pytest.mark.asyncio
     async def test_validate_naive_past_expiry_rejected_not_raised(self):
         """A naive expires_at in the past must deny, not raise TypeError.
 

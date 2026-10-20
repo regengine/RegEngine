@@ -29,7 +29,7 @@ const REQUIREMENTS: Requirement[] = [
         regulation: 'FSMA 204',
         citation: '21 CFR 1.1320',
         label: 'Traceability Lot Code mention',
-        description: 'Draft should clearly identify the traceability lot code and affected product scope. TLC assignment lives in §1.1320; KDEs live in the per-event sections (§§1.1325-1.1350).',
+        description: 'Draft should clearly identify the traceability lot code and affected product scope. TLC assignment lives in §1.1320; Key Data Elements (KDEs) live in the per-event sections (§§1.1325 to 1.1350).',
         keywords: ['traceability lot code', 'tlc', 'lot code', 'product description', 'food traceability list'],
         weight: 'critical',
     },
@@ -37,8 +37,8 @@ const REQUIREMENTS: Requirement[] = [
         id: 'fda-request-events',
         regulation: 'FSMA 204',
         citation: '21 CFR §§1.1325, 1.1330, 1.1335, 1.1340, 1.1345, 1.1350',
-        label: 'Critical Tracking Events mention',
-        description: 'Draft should name the applicable CTE(s). Per-event sections: harvesting/cooling §1.1325; initial packing §1.1330; first land-based receiving (seafood from a fishing vessel) §1.1335; shipping §1.1340; receiving §1.1345 (subject to the §1.1305(j) restaurant/RFE exemption); transformation §1.1350.',
+        label: 'Critical Tracking Events (CTEs) mention',
+        description: 'Draft should name the applicable CTEs. Per-event sections: harvesting/cooling §1.1325; initial packing §1.1330; first land-based receiving (seafood from a fishing vessel) §1.1335; shipping §1.1340; receiving §1.1345 (subject to the §1.1305(j) restaurant/RFE exemption); transformation §1.1350.',
         keywords: ['receiving', 'shipping', 'transformation', 'cte', 'critical tracking event'],
         weight: 'critical',
     },
@@ -46,8 +46,8 @@ const REQUIREMENTS: Requirement[] = [
         id: 'fda-request-kdes',
         regulation: 'FSMA 204',
         citation: '21 CFR §§1.1325, 1.1330, 1.1335, 1.1340, 1.1345, 1.1350',
-        label: 'Key Data Elements mention',
-        description: 'Draft should mention the KDEs needed to reconstruct lot movement. Required KDEs are defined per CTE in the §§1.1325-1.1350 sections; this self-check only looks for keyword presence.',
+        label: 'Key Data Elements (KDEs) mention',
+        description: 'Draft should mention the KDEs needed to reconstruct lot movement. Required KDEs are defined per CTE in the §§1.1325 to 1.1350 sections; this self-check only looks for keyword presence.',
         keywords: ['quantity', 'unit of measure', 'ship from', 'ship to', 'event date', 'kde'],
         weight: 'critical',
     },
@@ -56,7 +56,7 @@ const REQUIREMENTS: Requirement[] = [
         regulation: 'FSMA 204',
         citation: '21 CFR §1.1455(c)',
         label: 'Sortable spreadsheet mention',
-        description: '§1.1455(c) requires you to provide a sortable electronic spreadsheet to FDA as soon as possible, and not later than 24 hours after request. This check looks for sortable-export language in the draft — it does not measure whether your operational 24-hour clock will be met.',
+        description: '§1.1455(c) requires you to provide a sortable electronic spreadsheet to FDA as soon as possible, and not later than 24 hours after request. This check looks for sortable-export language in the draft. It does not measure whether your operational 24 hour clock will be met.',
         keywords: ['csv', 'sortable spreadsheet', 'export', 'fda request', 'within 24 hours'],
         weight: 'important',
     },
@@ -65,7 +65,7 @@ const REQUIREMENTS: Requirement[] = [
         regulation: 'RegEngine',
         citation: 'Integrity-marker mention',
         label: 'Integrity-marker mention',
-        description: 'Checks whether the draft mentions hashes or audit references. This is a text check only — it does not verify any cryptographic chain.',
+        description: 'Checks whether the draft mentions hashes or audit references. This is a text check only. It does not verify any cryptographic chain.',
         keywords: ['sha256', 'chain hash', 'verification', 'audit trail', 'immutable'],
         weight: 'recommended',
     },
@@ -91,7 +91,7 @@ Key Data Elements Included:
 
 Export Package:
 - Sortable spreadsheet CSV attached
-- Sortable spreadsheet prepared per §1.1455(c) 24-hour availability requirement
+- Sortable spreadsheet prepared per §1.1455(c) 24 hour availability requirement
 - SHA256 and chain hash references included for record verification`,
     bad: `Lot response attached.
 
@@ -157,7 +157,7 @@ export default function NoticeValidatorPage() {
                         Spot keyword gaps in a draft FSMA 204 response before your team or counsel reviews it
                     </h1>
                     <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
-                        Paste a draft response, export summary, or internal request memo. This is a heuristic keyword self-check, not an FDA validator. It looks for keywords associated with FSMA 204 elements; presence of a keyword does not mean the underlying record content is sufficient. Have counsel and your QA lead review any response before submission to FDA.
+                        Paste a draft response, export summary, or internal request memo. This is a heuristic keyword self-check, not an FDA validator. It looks for Critical Tracking Event (CTE) references, Key Data Element (KDE) coverage, and other FSMA 204 elements; presence of a keyword does not mean the underlying record content is sufficient. Have counsel and your QA lead review any response before submission to FDA.
                     </p>
                 </div>
 
@@ -228,7 +228,7 @@ export default function NoticeValidatorPage() {
                                 toolContext={{ quizGrade: undefined, quizScore: results.detected }}
                                 teaser={summary('Heuristic keyword check on a draft. Not a compliance determination.')}
                             >
-                                {summary('Heuristic keyword check on a draft. Not a compliance determination — have counsel and your QA lead review before any FDA submission.')}
+                                {summary('Heuristic keyword check on a draft. Not a compliance determination. Have counsel and your QA lead review before any FDA submission.')}
 
                                 {results.checks.map((check) => (
                                     <article key={check.id}>
@@ -254,10 +254,10 @@ export default function NoticeValidatorPage() {
                         ) : (
                             <>
                                 <Callout tone="info" role="note" icon={Info} title="What this checks">
-                                    Lot scope, CTE references, KDE coverage, sortable export signals, and traceability record integrity markers.
+                                    Lot scope, Critical Tracking Event (CTE) references, Key Data Element (KDE) coverage, sortable export signals, and traceability record integrity markers.
                                 </Callout>
                                 <Callout tone="warning" role="note" icon={AlertTriangle} title="Scope note">
-                                    Heuristic keyword self-check on a draft response. Does not validate FDA compliance, evidentiary integrity, or your 24-hour obligation under §1.1455(c). Have counsel and your QA lead review any response before submission to FDA.
+                                    Heuristic keyword self-check on a draft response. Does not validate FDA compliance, evidentiary integrity, or your 24 hour obligation under §1.1455(c). Have counsel and your QA lead review any response before submission to FDA.
                                 </Callout>
                             </>
                         )}

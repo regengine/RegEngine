@@ -33,7 +33,7 @@ const HOME_H1 = 'FSMA 204 recordkeeping for the Food Traceability Rule.';
 
 const TOOLS_TITLE = 'Free FSMA 204 Tools | RegEngine';
 const TOOLS_DESCRIPTION =
-    'Free FTL List Checker, CTE Mapper, KDE checklist, and TLC format check. Self reported lists do not score readiness. FDA date: July 20, 2028.';
+    'Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.';
 const TOOLS_H1 = 'Free tools for FSMA 204 list checks and field checks.';
 
 const TOOLS: { slug: string; name: string; title: string; description: string }[] = [
@@ -49,14 +49,14 @@ const TOOLS: { slug: string; name: string; title: string; description: string }[
         name: 'CTE Mapper',
         title: 'FSMA 204 CTE Mapper by Role | RegEngine',
         description:
-            'See which Critical Tracking Events usually apply to a role under 21 CFR Part 1 Subpart S. Educational only. Exemptions can change what applies.',
+            'See which Critical Tracking Event (CTE) types usually apply to a role under 21 CFR Part 1 Subpart S. Educational only. Exemptions can change what applies.',
     },
     {
         slug: 'kde-checker',
         name: 'KDE Field Checklist',
         title: 'FSMA 204 KDE Field Checklist | RegEngine',
         description:
-            'A starting checklist of Key Data Elements for an FTL food and a Critical Tracking Event. Educational only. Check the rule before you rely on it.',
+            'A starting Key Data Element (KDE) checklist for an FTL food and a Critical Tracking Event (CTE). Educational only. Check the rule before you rely on it.',
     },
     {
         slug: 'tlc-validator',

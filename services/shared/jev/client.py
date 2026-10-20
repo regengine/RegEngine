@@ -329,8 +329,19 @@ class JevDecider:
         questions: Mapping[str, Any],
         started: float,
     ) -> JevAnswers:
-        choices, nouls, scores = _convert(response)
         request_id = response.raw_http_response.headers.get("x-typesafe-request-id")
+        if self._settings.model not in {"jev-latest", "jev-preview"} and response.model != self._settings.model:
+            logger.warning(
+                "jev.unavailable",
+                purpose=purpose,
+                reason="invalid_response",
+                request_id=request_id,
+                latency_ms=_elapsed_ms(started),
+                requested_model=self._settings.model,
+                response_model=response.model,
+            )
+            raise JevUnavailable("invalid_response", purpose=purpose, request_id=request_id)
+        choices, nouls, scores = _convert(response)
         evidence = JevEvidence(
             purpose=purpose,
             requested_model=self._settings.model,

@@ -89,7 +89,7 @@ command it looks like this (the values here are illustrative, not a real
 answer):
 
 ```text
-Jev (jev-1.13.0, request req_…, 412 ms)
+Jev (jev-1.14.0, request req_…, 412 ms)
   cte [choice]: shipping (confidence 0.91; shipping 0.91, receiving 0.06, unclear 0.03)
   has_lot [noul]: yes (p(yes)=0.97)
 ```
@@ -153,6 +153,9 @@ Rules:
 ## Related
 
 - `scripts/jev_ask.py`: this command.
+- `scripts/jev_lab/`: a local page for asking Jev anything, and a loop in
+  which Claude rewrites the question wording from Jev's misses
+  (`docs/engineering/JEV_LAB.md`).
 - `services/shared/jev/`: the client. Its logs carry only metadata (purpose
   `agent_sidecar`, model, request id, latency), never the state.
 - `docs/engineering/JEV_HEADER_MAPPING.md`: Jev inside CSV ingestion.

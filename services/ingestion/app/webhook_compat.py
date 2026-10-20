@@ -45,11 +45,15 @@ def _batch_dedup_key(event: IngestEvent) -> str:
         f"{event.cte_type.value}|{event.traceability_lot_code}"
         f"|{event.timestamp}|{event.location_gln or event.location_name or ''}"
     )
-    # Repeated warehouse lines can share a TLC, time, and location. Their
-    # interchange position distinguishes W07/W12 lines without changing
-    # the batch key for any other event type.
+    # Repeated item lines can share a TLC, time, and location. Their
+    # interchange position distinguishes 856 SN1, 861 RCD, and 944/945
+    # warehouse lines without changing the batch key for any other event.
     line_index = event.kdes.get("edi_line_index")
-    if event.kdes.get("edi_transaction_set") in ("944", "945") and isinstance(line_index, int) and line_index > 0:
+    if (
+        event.kdes.get("edi_transaction_set") in ("856", "861", "944", "945")
+        and isinstance(line_index, int)
+        and line_index > 0
+    ):
         return (
             f"{key}|{event.kdes.get('edi_isa13') or ''}"
             f"|{event.kdes.get('edi_control_number') or ''}|{line_index}"

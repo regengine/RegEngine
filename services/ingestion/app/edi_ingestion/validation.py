@@ -69,6 +69,12 @@ def _validate_edi_as_fsma_event(
                 if isinstance(item_id, str) and item_id.isascii() and item_id.isdigit() and len(item_id) in lengths:
                     tlc = f"{item_id.zfill(14)}-{line.lot_number}"
                     break
+    elif transaction_set in ("856", "861"):
+        # The line lot is the TLC verbatim. Do not prefix a GTIN (#1104).
+        # A line with no lot keeps the caller-supplied form field.
+        lot = extracted.get("lot_number")
+        if isinstance(lot, str) and lot.strip():
+            tlc = lot.strip()
 
     # Resolve location GLN from whichever field is available
     location_gln = (

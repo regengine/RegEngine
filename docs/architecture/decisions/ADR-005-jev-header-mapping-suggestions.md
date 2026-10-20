@@ -182,3 +182,17 @@ pinned model, fail-open client with bounded retries, `no_match` and
 `mixed_or_unclear` options, structured `what`/`not_for`/`examples`
 criteria, all questions for one state in one request, and confidence-banded
 policy in code.
+
+## Addendum 2026-10-19: model pin moved to `jev-1.14.0`
+
+Decision 5 pinned `jev-1.13.0`. The pin is now `jev-1.14.0`
+(`DEFAULT_MODEL` in `services/shared/jev/settings.py`), and the client now
+rejects a response whose model differs from the pin
+(`unavailable:invalid_response`, fail-open) unless the pin is `jev-latest` or
+`jev-preview`.
+
+`scripts/jev_eval.py` was re-run on both models against the same 22 cases
+before the change. Thresholds are unchanged (auto-apply 0.90, review 0.50):
+nothing applied was wrong at 0.90 on either model, and the highest-confidence
+wrong field answer fell from 0.88 to 0.77. The numbers are in the
+"Calibration record" of `docs/engineering/JEV_HEADER_MAPPING.md`.

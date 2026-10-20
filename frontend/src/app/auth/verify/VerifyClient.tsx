@@ -83,8 +83,8 @@ export default function VerifyClient({ initialEmail = '', initialChallengeId = '
       title="Enter your 6-digit sign-in code."
       description={
         state?.email
-          ? `If this address is eligible, use the code sent to ${state.email}`
-          : 'Use the same browser where you requested the sign-in code.'
+          ? `A sign-in code is sent only if the email has an invited account. If you received a code for ${state.email}, enter it below.`
+          : 'A sign-in code is sent only if the email has an invited account. Use the same browser where you requested the code.'
       }
       footer={
         <Link

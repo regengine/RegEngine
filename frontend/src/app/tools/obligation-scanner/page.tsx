@@ -11,21 +11,21 @@ import { Card, CardContent } from '@/components/ui/card';
 
 const OBLIGATIONS = [
     {
-        title: 'CTE Capture Coverage',
-        citation: '21 CFR 1.1325-1.1350',
-        description: 'Document how receiving, transformation, shipping, and other applicable Critical Tracking Events are captured across each facility.',
+        title: 'Critical Tracking Event (CTE) Capture Coverage',
+        citation: '21 CFR 1.1325 through 1.1350',
+        description: 'Document how receiving, transformation, shipping, and other applicable CTEs are captured across each facility.',
         evidence: ['cte_type', 'event_timestamp', 'facility_identifier', 'linked_traceability_lot_code'],
         risk: 'HIGH',
     },
     {
-        title: 'KDE Completeness',
-        citation: '21 CFR 1.1325-1.1350',
-        description: 'Verify required Key Data Elements are stored and retrievable for each event and Food Traceability List product.',
+        title: 'Key Data Element (KDE) Completeness',
+        citation: '21 CFR 1.1325 through 1.1350',
+        description: 'Verify required KDEs are stored and retrievable for each event and Food Traceability List product.',
         evidence: ['product_description', 'quantity', 'unit_of_measure', 'ship_from', 'ship_to'],
         risk: 'HIGH',
     },
     {
-        title: '24-Hour FDA Export Readiness',
+        title: '24 Hour FDA Export Readiness',
         citation: '21 CFR 1.1455(c)',
         description: 'Confirm traceability records can be exported in sortable form within 24 hours of FDA request.',
         evidence: ['export_job_log', 'csv_preview', 'tenant_scope', 'request_audit_trail'],
