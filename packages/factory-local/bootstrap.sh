@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # One command local setup and dry run. Safe to re-run.
 #   ./bootstrap.sh
+#   ./bootstrap.sh --bill SB205 [--state CO]   live LegiScan bill (needs LEGISCAN_API_KEY in .env)
+# requirements.lock carries every dependency (including beautifulsoup4, pypdf, openai).
 # Host ports: export FACTORY_PG_PORT / FACTORY_OPA_PORT / FACTORY_NEO4J_BOLT_PORT /
 # FACTORY_NEO4J_HTTP_PORT first if the defaults are taken. PYTHON picks the interpreter.
 set -euo pipefail
@@ -79,5 +81,5 @@ for port in ports:
             time.sleep(1)
 PY
 
-echo "==> dry run"
-.venv/bin/python app/local_factory.py
+if [ "$#" -eq 0 ]; then echo "==> dry run"; else echo "==> live bill: $*"; fi
+.venv/bin/python app/local_factory.py "$@"

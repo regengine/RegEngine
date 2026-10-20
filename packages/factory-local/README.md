@@ -23,10 +23,11 @@ RegEngine application.
 | `extract.py` | Ollama structured extraction with fixture fallback. Never pulls models. |
 | `graph.py` | Seeds Neo4j with the bill, sections, versions, and one fictional `ExampleOrg`. |
 | `pipeline.py` | CLI: `run`, `approve --rule`, `verify-chain`. |
-| `app/local_factory.py` | One-shot dry run with the fixture (no approval step, no Neo4j). |
+| `app/local_factory.py` | One-shot dry run with the fixture (no approval step, no Neo4j), or a live LegiScan bill with `--bill` / `--bill-id`. |
 | `bootstrap.sh` | venv, `.env`, compose stack, then the dry run. |
 | `approval_ui.py` | Streamlit review screen with an Approve & Deploy button. |
 | `db_init/01_init.sql` | Tables, plus an append-only trigger on the ledger. |
+| `db_init/02_live_bill.sql` | Adds `bill_versions.version_stage` and `extracted_rules.opportunity_score_vs` for live bills. |
 
 ## compliance_status logic
 
@@ -78,6 +79,53 @@ Without it, or if Ollama fails or returns invalid JSON, the pipeline uses
 `fixtures/co_sb205_ir.json` and records the reason as `extraction_source`.
 
 `fixtures/co_sb205_text.txt` is a paraphrase for the demo, not the statute.
+
+## Live bill from LegiScan
+
+```bash
+set -a; . ./.env; set +a                                    # .env holds LEGISCAN_API_KEY
+.venv/bin/python app/local_factory.py --bill SB205 --state CO
+.venv/bin/python app/local_factory.py --bill HR1 --state US  # Congress
+.venv/bin/python app/local_factory.py --bill-id 1789123      # exact LegiScan bill_id, no search
+./bootstrap.sh --bill SB205                                  # same, after setup
+```
+
+With no arguments the script runs the fixture dry run exactly as before. With
+`--bill` or `--bill-id` it:
+
+1. Finds the bill with LegiScan `getSearch` (exact bill number, all sessions, most
+   recent last action wins; use `--bill-id` to pin one), then `getBill` and
+   `getBillText` for the latest text by date. HTML is stripped with BeautifulSoup,
+   PDF is read with pypdf. Other formats stop the run with an error.
+2. Sends the first 45000 characters to an OpenAI compatible endpoint with
+   structured output (`DeonticIR` plus `opportunity_score_vs`), temperature 0.
+   `rule_id` is forced to the bill uid, for example `CO_SB205_2061` (state, bill
+   number, LegiScan session id).
+3. Runs the Z3 checks from `verify.py`, plus a check that a breach input exists.
+   Z3 Optimize picks a synthetic payload sitting on each numeric threshold.
+4. Compiles `package cartridge.<slug>` to `cartridges/<slug>.rego`.
+5. Stores the bill version (`<bill uid>@<doc_id>`, with `version_stage`) and the rule
+   in Postgres with `human_verified = false`. A rule that fails Z3 is stored but
+   not deployed.
+6. Calls `pipeline.deploy_and_record()`: OPA load, evaluation of the boundary
+   breach and boundary safe harbor payloads at `/v1/data/cartridge/<slug>`, one
+   signed receipt per case on the tenant's hash chain, and a full chain check.
+
+| Variable | Default |
+| --- | --- |
+| `LEGISCAN_API_KEY` | none; required for `--bill` and `--bill-id` |
+| `LLM_BASE_URL` | `http://localhost:11434/v1` (Ollama) |
+| `LLM_MODEL` | `qwen2.5-coder:14b` |
+| `OPENAI_API_KEY` | `ollama` |
+
+Postgres and OPA come from the same variables as the dry run (`FACTORY_PG_PORT`,
+`OPA_URL` or `FACTORY_OPA_PORT`). The LegiScan key is sent only as the API query
+parameter. Error messages are rebuilt without the request URL, and the httpx
+request log is raised to WARNING so the key is not printed.
+
+This path skips human review on purpose, like the dry run. `pipeline.py approve`
+does not accept these rules, because their package is `cartridge.<slug>` rather
+than `factory.<slug>` and the stored Rego check fails.
 
 `requirements.txt` is the editable spec; `requirements.lock` is generated from
 it with hashes (`uv pip compile --universal --python-version 3.12
