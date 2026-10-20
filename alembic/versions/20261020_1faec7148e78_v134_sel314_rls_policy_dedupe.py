@@ -74,13 +74,16 @@ _TENANT_OR_SYSADMIN = f"""
 # inside fsma.get_active_portal_link_by_token) sees only the matching row:
 # the third arm hides every other row instead of reaching the raising tenant
 # arm. Tenant sessions carry an empty token (begin-hook baseline), so they
-# skip that arm and stay fail-hard.
+# skip that arm and stay fail-hard. The tenant arm is reserved for the app
+# roles, as the replaced ALL policy was; any other role gets only the token
+# arm, which is what portal_links_token_lookup (TO PUBLIC) granted before.
 _SELECT_PREDICATE = f"""
     CASE
         WHEN {_TOKEN_ARM} THEN true
         WHEN {_SYSADMIN_ARM} THEN true
         WHEN NULLIF((SELECT current_setting('app.portal_link_token', true)), '') IS NOT NULL
             THEN false
+        WHEN current_user NOT IN ('regengine', 'regengine_sysadmin') THEN false
         ELSE tenant_id = (SELECT public.get_tenant_context())
     END
 """

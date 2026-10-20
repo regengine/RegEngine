@@ -75,7 +75,9 @@ BEGIN
     -- fsma.get_active_portal_link_by_token) sees only the matching row: the
     -- third arm hides every other row instead of reaching the raising tenant
     -- arm. Tenant sessions carry an empty token (begin-hook baseline), skip
-    -- that arm, and stay fail-hard.
+    -- that arm, and stay fail-hard. The tenant arm is reserved for the app
+    -- roles, as the replaced ALL policy was; any other role gets only the
+    -- token arm, which is what portal_links_token_lookup (TO PUBLIC) granted.
     CREATE POLICY portal_links_select ON fsma.tenant_portal_links
         FOR SELECT
         USING (
@@ -88,6 +90,8 @@ BEGIN
                      AND current_user = 'regengine_sysadmin'
                     THEN true
                 WHEN NULLIF((SELECT current_setting('app.portal_link_token', true)), '') IS NOT NULL
+                    THEN false
+                WHEN current_user NOT IN ('regengine', 'regengine_sysadmin')
                     THEN false
                 ELSE tenant_id = (SELECT public.get_tenant_context())
             END
