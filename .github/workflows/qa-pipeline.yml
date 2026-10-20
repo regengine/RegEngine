@@ -5,10 +5,14 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
 
 concurrency:
-  group: qa-${{ github.ref }}
-  cancel-in-progress: true
+  group: qa-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Issue #2875: no job in this workflow uses the GITHUB_TOKEN — no gh CLI, no
 # github-script, no check-run or PR-comment action — so checks:write and

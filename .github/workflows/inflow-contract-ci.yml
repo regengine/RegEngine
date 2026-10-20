@@ -3,6 +3,25 @@ name: Inflow Lab Contract CI
 on:
   pull_request:
     branches: [main]
+    paths:
+      # Mirror the contract-impacting paths in the changes job below.
+      - '.github/workflows/inflow-contract-ci.yml'
+      - 'alembic/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'services/ingestion/app/authz.py'
+      - 'services/ingestion/app/config.py'
+      - 'services/ingestion/app/tenant_validation.py'
+      - 'services/ingestion/app/webhook_compat.py'
+      - 'services/ingestion/app/webhook_models.py'
+      - 'services/ingestion/app/webhook_router_v2/**'
+      - 'services/ingestion/main.py'
+      - 'services/shared/auth.py'
+      - 'services/shared/canonical_event.py'
+      - 'services/shared/canonical_persistence/**'
+      - 'services/shared/cte_persistence/**'
+      - 'services/shared/funnel_events.py'
+      - 'services/shared/idempotency.py'
   push:
     branches: [main]
   workflow_dispatch:
@@ -13,8 +32,8 @@ on:
         type: string
 
 concurrency:
-  group: inflow-contract-${{ github.ref }}
-  cancel-in-progress: true
+  group: inflow-contract-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   PYTHON_VERSION: '3.11'

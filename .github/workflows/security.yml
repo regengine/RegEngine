@@ -1,22 +1,15 @@
 name: security
 
-# Six jobs here emit branch-protection required contexts (Privileged Workflow
-# Tool Pinning, Secrets Scan (gitleaks), Secrets Audit (detect-secrets),
-# Browser Storage PII Guard, SAST (Semgrep), Dependency Audit). A required
-# context MUST be able to post on every PR, so the `pull_request:` trigger
-# below is deliberately UNFILTERED — see docs/runbooks/BRANCH_PROTECTION.md and
-# scripts/check_workflow_inventory.py, which fails CI if a filter reappears.
-#
-# It previously carried `paths-ignore: ['**/*.md', 'docs/**', ...]`, which made
-# every docs-only PR structurally unmergeable: six required checks never
-# posted, so the PR sat in "Expected — waiting for status" forever and could
-# only land via admin override. Scanning docs is also correct on its own
-# merits — secrets get pasted into markdown runbooks, and gitleaks /
-# detect-secrets are exactly the gates that catch it.
-#
-# The `push:` trigger keeps its filter: main-branch runs are not gating merges.
+# The always-on PR Gate scans secrets on PRs to main, and
+# pr-secrets-non-main.yml covers other PRs, including docs-only changes.
+# This workflow skips docs-only PRs and keeps the full scans on main,
+# schedule, and workflow_dispatch.
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
   push:
     branches: ["main"]
     paths-ignore:
@@ -28,14 +21,95 @@ on:
     - cron: '0 6 * * 1'  # Weekly: Monday 06:00 UTC
 
 concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: security-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
   pull-requests: read
 
 jobs:
+  changes:
+    name: Security path changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sast: ${{ steps.filter.outputs.sast }}
+      deps: ${{ steps.filter.outputs.deps }}
+      tenant: ${{ steps.filter.outputs.tenant }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3.0.4
+        id: filter
+        with:
+          filters: |
+            sast:
+              - '**/*.py'
+              - '**/*.js'
+              - '**/*.mjs'
+              - '**/*.cjs'
+              - '**/*.jsx'
+              - '**/*.ts'
+              - '**/*.mts'
+              - '**/*.tsx'
+              - '**/*.sh'
+              - '**/*.sql'
+              - '**/*.cypher'
+              - '**/*.tf'
+              - '**/*.yaml'
+              - '**/*.yml'
+              - '**/*.toml'
+              - '.semgrep/**'
+              - 'data-schemas/**'
+              - '.github/workflows/**'
+              - 'Dockerfile*'
+            deps:
+              - '**/requirements*'
+              - '**/package*.json'
+              - 'pyproject.toml'
+              - 'Dockerfile*'
+              - '.trivyignore'
+              - 'scripts/check_trivyignore_sync.py'
+              - '.github/workflows/security.yml'
+            tenant:
+              - 'alembic/**'
+              - 'alembic.ini'
+              - 'server/**'
+              - 'services/**'
+              - 'shared/**'
+              - 'kernel/**'
+              - 'regengine/**'
+              - 'packages/**'
+              - 'audit/**'
+              - 'security/**'
+              - 'sql/**'
+              - 'data-schemas/**'
+              - 'plugins/fsma/**'
+              - 'scripts/**'
+              - 'tests/**'
+              - 'sample_data/**'
+              - '**/requirements*'
+              - 'pyproject.toml'
+              - 'Dockerfile*'
+              - '.github/workflows/security.yml'
+            frontend:
+              - 'frontend/**'
+              - 'scripts/security/scan_browser_storage_pii.py'
+              - '.github/workflows/security.yml'
+            app:
+              - 'server/**'
+              - 'services/**'
+              - 'shared/**'
+              - 'kernel/**'
+              - 'plugins/**'
+              - 'frontend/**'
+              - 'Dockerfile*'
+              - '**/requirements*'
+              - 'scripts/security/zap_baseline.sh'
+              - '.github/workflows/security.yml'
+
   # ──────────────────────────────────────────────
   # 0. Privileged Workflow Tool Pinning
   # ──────────────────────────────────────────────
@@ -96,6 +170,7 @@ jobs:
   # ──────────────────────────────────────────────
   secrets:
     name: Secrets Scan (gitleaks)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -142,6 +217,7 @@ jobs:
   # every contributor has `pre-commit install` wired up locally.
   detect-secrets:
     name: Secrets Audit (detect-secrets)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -185,6 +261,8 @@ jobs:
   # ──────────────────────────────────────────────
   browser-storage-pii:
     name: Browser Storage PII Guard
+    needs: changes
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -203,6 +281,8 @@ jobs:
   # ──────────────────────────────────────────────
   sast:
     name: SAST (Semgrep)
+    needs: changes
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.sast == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -311,6 +391,8 @@ jobs:
   # ──────────────────────────────────────────────
   deps:
     name: Dependency Audit
+    needs: changes
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.deps == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -434,6 +516,8 @@ jobs:
   # ──────────────────────────────────────────────
   tenant-isolation:
     name: Tenant Isolation & Auth Tests
+    needs: changes
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.tenant == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -577,6 +661,8 @@ jobs:
   # GitHub then renders DAST as genuinely *skipped* when unconfigured.
   dast-preflight:
     name: DAST preflight (ZAP_TARGET configured?)
+    needs: changes
+    if: ${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.app == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
