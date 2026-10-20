@@ -19,13 +19,13 @@ sqlalchemy>=2.1.3
 # Pin it explicitly so pip-compile always emits a hash — otherwise --require-hashes
 # rejects the build on Railway. See build failure on #1823 / #1842.
 greenlet>=3.5.6
-pydantic>=2.13.5,<3
+pydantic>=2.14.1,<3
 pydantic-settings>=2.15.0
 structlog>=26.1.0
 python-json-logger>=4.2.0
 python-dotenv>=1.2.4
 click>=8.5.0
-typer>=0.27.2
+typer>=0.27.3
 PyYAML>=6.0.3
 gunicorn>=26.2.0
 
@@ -41,12 +41,12 @@ gunicorn>=26.2.0
 # ORM-only CHECK is introduced — so the blind spot did not widen.
 alembic>=1.20.0
 psycopg[binary]>=3.3.6
-asyncpg>=0.31.0
+asyncpg>=0.32.0
 redis>=8.1.0
 neo4j>=6.4.0
 
 # Cloud SDKs & External Services
-boto3>=1.43.108
+boto3>=1.43.111
 supabase>=2.32.0
 gotrue>=2.12.4,<3
 resend>=2.49.1,<3
@@ -99,13 +99,13 @@ sentry-sdk>=2.71.0
 # (CookieJar.load() arbitrary code execution) and CVE-2026-47265 (cookies
 # leaked across cross-origin redirect), plus CVE-2026-59881, CVE-2026-69243,
 # and CVE-2026-69244. Pinned here so the lockfile cannot regress below the fix.
-aiohttp>=3.14.4
+aiohttp>=3.14.5
 # Transitive of aiohttp/yarl. Floored to >=6.9.1 for CVE-2026-104874
 # (items-view reference leak allowing unbounded memory growth). Pinned here
 # so the lockfile cannot regress below the fix.
-multidict>=6.9.1
+multidict>=7.1.0
 httpx[http2]>=0.28.1
-tenacity>=9.1.4
+tenacity>=9.2.1
 slowapi>=0.1.10
 feedparser>=6.0.14
 email-validator>=2.3.0
@@ -116,24 +116,24 @@ email-validator>=2.3.0
 urllib3>=2.8.0
 
 # Messaging / Kafka
-confluent-kafka[schema-registry,avro]>=2.15.1
-fastavro>=1.13.0
+confluent-kafka[schema-registry,avro]>=2.16.0
+fastavro>=1.13.1
 cachetools>=7.2.1
 attrs>=26.1.0
 
 # NLP & ML
 regex>=2026.9.29
-langchain>=1.4.3
+langchain>=1.4.4
 langchain-classic>=1.0.8  # CVE-2026-45134
-langchain-core>=1.6.6,<2.0.0
+langchain-core>=1.6.9,<2.0.0
 langchain-community>=0.4.2
 langchain-text-splitters>=1.1.3
 # Transitive of langgraph. Floored to >=0.4.4 for CVE-2026-104873
 # (resource-scoped auth decorators ignored actions=).
-langgraph-sdk>=0.4.4
+langgraph-sdk>=0.4.6
 langchain-groq>=1.1.3
-langsmith>=0.14.4  # Transitive of langchain; pinned for CVE-2026-45134 and GHSA-f4xh-w4cj-qxq8
-openai>=3.24.0
+langsmith>=0.14.7  # Transitive of langchain; pinned for CVE-2026-45134 and GHSA-f4xh-w4cj-qxq8
+openai>=3.29.0
 jsonschema>=4.26.0
 
 # AI decisioning — TypeSafe AI "Jev" System One model (services/shared/jev/).
@@ -144,7 +144,7 @@ jsonschema>=4.26.0
 # Transitives are httpx2 (pydantic's maintained httpx fork; a separate import
 # name, coexists with httpx), httpcore2 and truststore — all pure-Python
 # wheels, so --require-hashes stays satisfiable on Railway.
-typesafe-sdk>=0.7.2,<0.8
+typesafe-sdk>=0.7.4,<0.8
 
 # Document extraction — LlamaIndex "Extract" (LlamaCloud) agents, v2.5 line
 # (services/shared/document_extract/). Schema-guided extraction of FSMA 204
@@ -152,7 +152,7 @@ typesafe-sdk>=0.7.2,<0.8
 # (scans, free-form letters). Optional at runtime (no LLAMA_CLOUD_API_KEY ->
 # disabled). Stainless SDK; its transitives (anyio, distro, httpx, pydantic,
 # sniffio, typing-extensions) are already in the lock.
-llama-cloud>=2.16.0,<3
+llama-cloud>=2.18.0,<3
 
 # Scheduler
 apscheduler>=3.11.3
@@ -162,7 +162,7 @@ beautifulsoup4>=4.15.0
 lxml>=6.1.3
 pdfminer.six>=20260107
 pdfplumber>=0.11.10
-pypdf>=6.19.0,<7  # CVE-2026-71852, CVE-2026-71870; earlier: CVE-2026-59935/59936 (inline-image DoS), CVE-2026-48155/48156, GHSA-jm82-fx9c-mx94
+pypdf>=6.20.0,<7  # CVE-2026-71852, CVE-2026-71870; earlier: CVE-2026-59935/59936 (inline-image DoS), CVE-2026-48155/48156, GHSA-jm82-fx9c-mx94
 fpdf2>=2.8.9,<3
 python-docx>=1.2.0
 docx2txt>=0.9
@@ -177,7 +177,7 @@ pytest-asyncio>=1.4.0
 pytest-cov>=7.1.0
 pytest-mock>=3.16.0
 pytest-xdist>=3.8.0
-hypothesis>=6.168.5
+hypothesis>=6.169.0
 aiosqlite>=0.22.1
 testcontainers[postgres]>=4.15.0
 testcontainers[redis]>=4.15.0
