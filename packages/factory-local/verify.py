@@ -1,6 +1,6 @@
-"""Z3 verification of the status logic, built from the IR (not from Rego text).
+"""Z3 verification of the compliance_status logic, built from the IR (not from Rego text).
 
-The status bodies here mirror compiler.py line for line. Two properties:
+The compliance_status bodies here mirror compiler.py line for line. Two properties:
   deterministic  every pair of status bodies is disjoint (no OPA conflict)
   complete       Not(Or(bodies)) is UNSAT (every input gets a status)
 
@@ -15,7 +15,6 @@ from itertools import combinations
 from typing import Iterable
 
 import z3
-
 from schemas import DeonticIR, Modality, Operator
 
 STATUSES = ("COMPLIANT", "COMPLIANT_VIA_SAFE_HARBOR", "NON_COMPLIANT_BREACH", "EXEMPT_OR_NOT_APPLICABLE")
