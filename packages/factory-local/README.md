@@ -23,11 +23,12 @@ RegEngine application.
 | `extract.py` | Ollama structured extraction with fixture fallback. Never pulls models. |
 | `graph.py` | Seeds Neo4j with the bill, sections, versions, and one fictional `ExampleOrg`. |
 | `pipeline.py` | CLI: `run`, `approve --rule`, `verify-chain`. |
-| `app/local_factory.py` | One-shot dry run with the fixture (no approval step, no Neo4j), or a live LegiScan bill with `--bill` / `--bill-id`. |
+| `app/local_factory.py` | One-shot dry run with the fixture (no approval step, no Neo4j), a live LegiScan bill with `--bill` / `--bill-id`, or a ranked state scan with `--scan-state`. |
 | `bootstrap.sh` | venv, `.env`, compose stack, then the dry run. |
 | `approval_ui.py` | Streamlit review screen with an Approve & Deploy button. |
 | `db_init/01_init.sql` | Tables, plus an append-only trigger on the ledger. |
 | `db_init/02_live_bill.sql` | Adds `bill_versions.version_stage` and `extracted_rules.opportunity_score_vs` for live bills. |
+| `app/seed_neo4j.py` | Seeds Neo4j with the SAMPLE lobbying graph in `fixtures/sample_lobbying_graph.json` and prints a buyer intent table. |
 
 ## compliance_status logic
 
@@ -103,17 +104,62 @@ With no arguments the script runs the fixture dry run exactly as before. With
    number, LegiScan session id).
 3. Runs the Z3 checks from `verify.py`, plus a check that a breach input exists.
    Z3 Optimize picks a synthetic payload sitting on each numeric threshold.
-4. Compiles `package cartridge.<slug>` to `cartridges/<slug>.rego`.
-5. Stores the bill version (`<bill uid>@<doc_id>`, with `version_stage`) and the rule
-   in Postgres with `human_verified = false`. A rule that fails Z3 is stored but
-   not deployed.
-6. Calls `pipeline.deploy_and_record()`: OPA load, evaluation of the boundary
+4. Gates the bill. It continues only when `opportunity_score_vs` is 70 or more
+   and Z3 verifies it. Otherwise the run prints `SKIPPED <bill uid>: <reason>` to
+   stderr and stores and deploys nothing. A low score exits 0; a Z3 failure exits 1.
+5. Compiles `package cartridge.<slug>` to `cartridges/<slug>.rego`.
+6. Stores the bill version (`<bill uid>@<doc_id>`, with `version_stage`) and the rule
+   in Postgres with `human_verified = false`.
+7. Calls `pipeline.deploy_and_record()`: OPA load, evaluation of the boundary
    breach and boundary safe harbor payloads at `/v1/data/cartridge/<slug>`, one
    signed receipt per case on the tenant's hash chain, and a full chain check.
 
+The system prompt gives the model a rubric for `opportunity_score_vs` (0 to 100):
+breadth of regulated entities (up to 30), enforcement severity (up to 25),
+recurring work software can automate (up to 25), and certainty and timing (up to 20).
+
+### Scan a state
+
+```bash
+.venv/bin/python app/local_factory.py --scan-state --state CA            # top 5
+.venv/bin/python app/local_factory.py --scan-state --state NY --top-n 10
+```
+
+Stage 1 makes one LegiScan `getMasterList` call for the state's current session
+and ranks bills without fetching any text:
+
+* Keeps status 1 to 4 (Introduced, Engrossed, Enrolled, Passed).
+* Drops a bill whose title or description contains a noise keyword
+  (appropriations, budget, memorial, highway, bridge, license plate,
+  congratulating, commemorating, school district). Matching ignores case.
+* Scores title plus description by keyword weight, each keyword counted once:
+  5 for artificial intelligence, algorithmic, automated decision, extended
+  producer responsibility, impact assessment; 4 for biometric, privacy, consumer
+  data, data broker, cybersecurity, emissions, greenhouse gas, supply chain, pay
+  transparency, civil penalty; 3 for packaging, employer, disclosure, reporting,
+  audit, attorney general, fiduciary; 2 for financial.
+* Adds 3 when the score is above 0 and the bill is past introduction (status 2
+  or more).
+* Keeps scores of 4 or more, sorts by score then status (both highest first),
+  and takes the top N.
+
+Stage 2 runs each candidate through the single bill steps above, including the 70
+and Z3 gate. A bill that fails (LegiScan, LLM, Postgres or OPA error) becomes an
+`ERROR` row and the scan moves on. The output is a ranked matrix, highest
+`opportunity_score_vs` first and errors last:
+
+```text
+rank  bill_uid      score  max fine  PRA  Z3 status                        action
+1     CA_SB7_2140   82     $20,000   no   UNSAT_DETERMINISTIC_AND_COMPLETE  GREENLIT cartridges/ca_sb7_2140.rego
+2     CA_AB12_2140  55     $7,500    yes  UNSAT_DETERMINISTIC_AND_COMPLETE  SKIPPED: opportunity_score_vs 55 < 70
+3     CA_AB40                                                               ERROR: LiveBillError: LegiScan getBill returned HTTP 500
+```
+
+The scan exits 1 when any bill errored or a greenlit chain check failed, else 0.
+
 | Variable | Default |
 | --- | --- |
-| `LEGISCAN_API_KEY` | none; required for `--bill` and `--bill-id` |
+| `LEGISCAN_API_KEY` | none; required for `--bill`, `--bill-id` and `--scan-state` |
 | `LLM_BASE_URL` | `http://localhost:11434/v1` (Ollama) |
 | `LLM_MODEL` | `qwen2.5-coder:14b` |
 | `OPENAI_API_KEY` | `ollama` |
@@ -132,6 +178,49 @@ it with hashes (`uv pip compile --universal --python-version 3.12
 --generate-hashes requirements.txt -o requirements.lock`). Regenerate the lock
 after editing `requirements.txt`.
 
+## Sample lobbying graph (SAMPLE DATA)
+
+```bash
+./bootstrap.sh                              # once, so .env and the Neo4j container exist
+.venv/bin/python app/seed_neo4j.py
+```
+
+**Everything in this graph is sample data.** The bill numbers (CO SB205, CT SB2,
+TX HB1709, CA SB253), sponsors (Rodriguez, Maroney, Capriglione, Wiener) and
+companies (Workday, HireVue, Upstart, Chevron) are real names. Every filing ID,
+spend, lobbying position, `passage_probability`, `les_score`, `opportunity_score`,
+model DNA similarity, committee link and lobbying firm is invented. Do not show
+it to anyone as fact.
+
+The script:
+
+1. Loads `.env` from this directory with python-dotenv. Connection settings are
+   `NEO4J_URI` (default `bolt://localhost:7687`, or the port in
+   `FACTORY_NEO4J_BOLT_PORT`), `NEO4J_USER` (default `neo4j`) and
+   `NEO4J_PASSWORD`. Without those two it splits `NEO4J_AUTH=neo4j/<password>`,
+   which is how `.env.example` and `docker-compose.yml` set the auth.
+2. Creates uniqueness constraints (`IF NOT EXISTS`) on `Bill.bill_uid`,
+   `BillVersion.version_uid`, `Legislator.bioguide_or_os_id`,
+   `Committee.committee_uid`, `Corporation.domain` and `LobbyingFirm.name`.
+3. Writes every node and relationship with `MERGE`, so re running it does not
+   duplicate anything. Each one carries `sample: true`.
+4. Prints the buyer intent table, framed by a SAMPLE DATA banner: corporations
+   whose lobbying firm worked a bill with `passage_probability >= 0.4`, where the
+   retained position is `OPPOSE`, `AMEND` or `MONITOR`, highest spend first.
+
+Relationships: `HAS_VERSION` and `MORPHED_INTO` (bill versions),
+`SHARES_MODEL_DNA` (bill to bill), `SPONSORED`, `CHAIRS`, `REFERRED_TO`,
+`RETAINED` (with `spend`, `filing_id`, `position`) and `LOBBIED_ON`.
+
+Remove the sample data:
+
+```cypher
+MATCH (n {sample: true}) DETACH DELETE n
+```
+
+`tests/test_seed_neo4j.py` runs offline against a fake session. Its one live
+test is marked `integration` and skips when Neo4j is not reachable.
+
 ## Keys
 
 `ledger.py` creates `.keys/ed25519.pem` (mode 600) on first approve. `.keys/`
@@ -142,7 +231,7 @@ key you kept, but new receipts start signing with a new key.
 
 ```bash
 .venv/bin/python -m pytest -m "not integration"   # offline, no services
-.venv/bin/python -m pytest -m integration         # needs OPA + Postgres up
+.venv/bin/python -m pytest -m integration         # needs OPA + Postgres (+ Neo4j for the seed test) up
 ```
 
 ## Known limits

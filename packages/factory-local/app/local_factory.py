@@ -3,6 +3,7 @@
   python app/local_factory.py [--tenant T]
   python app/local_factory.py --bill SB205 [--state CO] [--tenant T]
   python app/local_factory.py --bill-id 1234567 [--tenant T]
+  python app/local_factory.py --scan-state --state CO [--top-n 5] [--tenant T]
 
 Dry run (no --bill/--bill-id): Z3 verification, Rego compile, cartridge write, OPA
 evaluation, Ed25519 signed receipts appended to the Postgres hash chain, then a full
@@ -12,7 +13,11 @@ and Neo4j; use pipeline.py for that flow. Reads the same environment as pipeline
 Live bill: fetches the latest bill text from LegiScan (LEGISCAN_API_KEY), extracts a
 DeonticIR through an OpenAI compatible endpoint (LLM_BASE_URL, LLM_MODEL), checks it with
 Z3, compiles package cartridge.<slug>, stores the bill version and rule
-(human_verified=false), then deploys and records receipts for a Z3 boundary payload.
+(human_verified=false), then deploys and records receipts for a Z3 boundary payload. A bill
+is only compiled, stored and deployed when opportunity_score_vs >= 70 and Z3 verifies it.
+
+Scan: one getMasterList call ranks the state's current bills by compliance keywords, then
+runs the top N through the live bill steps and prints a ranked matrix.
 """
 
 from __future__ import annotations
@@ -51,6 +56,48 @@ from verify import OK_STATUS, model_to_dict, status_bodies, verify_ir  # noqa: E
 
 LEGISCAN_URL = "https://api.legiscan.com/"
 MAX_LLM_CHARS = 45000
+OPPORTUNITY_THRESHOLD = 70
+
+# Stage 1 masterlist triage. Case insensitive substring match on title + description.
+NOISE_KEYWORDS = (
+    "appropriations",
+    "budget",
+    "memorial",
+    "highway",
+    "bridge",
+    "license plate",
+    "congratulating",
+    "commemorating",
+    "school district",
+)
+KEYWORD_WEIGHTS = {
+    "artificial intelligence": 5,
+    "algorithmic": 5,
+    "automated decision": 5,
+    "biometric": 4,
+    "privacy": 4,
+    "consumer data": 4,
+    "data broker": 4,
+    "cybersecurity": 4,
+    "emissions": 4,
+    "greenhouse gas": 4,
+    "extended producer responsibility": 5,
+    "packaging": 3,
+    "supply chain": 4,
+    "pay transparency": 4,
+    "employer": 3,
+    "disclosure": 3,
+    "reporting": 3,
+    "audit": 3,
+    "impact assessment": 5,
+    "civil penalty": 4,
+    "attorney general": 3,
+    "fiduciary": 3,
+    "financial": 2,
+}
+ACTIVE_STATUSES = range(1, 5)  # LegiScan 1 Introduced, 2 Engrossed, 3 Enrolled, 4 Passed
+ADVANCED_BONUS = 3  # past introduction (status >= 2) and already relevant
+MIN_CANDIDATE_SCORE = 4
 
 
 def dry_run(tenant_id: str = TENANT_ID) -> dict:
@@ -114,6 +161,12 @@ class LegiScanClient:
             raise LiveBillError(f"LegiScan has no bill {bill_number} in {state}")
         return int(max(hits, key=lambda r: r.get("last_action_date") or "")["bill_id"])
 
+    def fetch_state_master_candidates(self, state: str, limit: int = 5) -> list[dict]:
+        """Stage 1: one getMasterList call for the state's current session, ranked by
+        rank_master_candidates. Each candidate carries bill_id, number, title, status, score."""
+        masterlist = self._call("getMasterList", state=state.upper())["masterlist"]
+        return rank_master_candidates(masterlist, limit)
+
     def get_bill(self, bill_id: int) -> dict:
         return self._call("getBill", id=bill_id)["bill"]
 
@@ -139,6 +192,44 @@ class LegiScanClient:
             "doc_id": int(latest["doc_id"]),
             "url": latest.get("state_link") or bill.get("state_link") or bill.get("url", ""),
         }
+
+
+def score_candidate(text: str, status: int) -> tuple[int, list[str]] | None:
+    """Keyword score for one masterlist entry, or None when a noise keyword excludes it."""
+    text = text.lower()
+    if any(noise in text for noise in NOISE_KEYWORDS):
+        return None
+    matched = [kw for kw in KEYWORD_WEIGHTS if kw in text]
+    score = sum(KEYWORD_WEIGHTS[kw] for kw in matched)
+    if score > 0 and status >= 2:
+        score += ADVANCED_BONUS
+    return score, matched
+
+
+def rank_master_candidates(masterlist: dict, limit: int) -> list[dict]:
+    candidates = []
+    for key, entry in masterlist.items():
+        if key == "session" or not isinstance(entry, dict):
+            continue
+        status = int(entry.get("status") or 0)
+        if status not in ACTIVE_STATUSES:
+            continue
+        title, description = entry.get("title") or "", entry.get("description") or ""
+        scored = score_candidate(f"{title} {description}", status)
+        if scored is None or scored[0] < MIN_CANDIDATE_SCORE:
+            continue
+        candidates.append(
+            {
+                "bill_id": int(entry["bill_id"]),
+                "number": entry.get("number", ""),
+                "title": title,
+                "status": status,
+                "score": scored[0],
+                "matched": scored[1],
+            }
+        )
+    candidates.sort(key=lambda c: (c["score"], c["status"]), reverse=True)
+    return candidates[:limit]
 
 
 def _norm_bill_number(number: str) -> str:
@@ -190,7 +281,15 @@ LLM_SYSTEM_PROMPT = (
     "GREATER_THAN or LESS_THAN with a number). action_required is a snake_case control name that satisfies "
     "the duty. safe_harbor_control is a snake_case control that gives an affirmative defense, default "
     "nist_ai_rmf_aligned. max_penalty_usd is the per violation civil penalty in USD (0 if none stated). "
-    "opportunity_score_vs is 0 to 100. Reply with JSON only."
+    "opportunity_score_vs is an integer 0 to 100 for how much a compliance software vendor could sell "
+    "against this duty. Add up four parts: breadth of regulated entities, up to 30 (many private "
+    "businesses across sectors scores high; one agency or a tiny niche scores low); enforcement "
+    "severity, up to 25 (large per violation civil penalty, private right of action, attorney general "
+    "enforcement); recurring work software can automate, up to 25 (impact assessments, audits, "
+    "reporting, disclosures, record keeping, monitoring); certainty and timing, up to 20 (enacted or "
+    "advancing, near effective date, concrete deadlines). Give 70 or more only when the duty is broad, "
+    "enforceable and creates recurring compliance work. A bill that only funds, studies, names or "
+    "commemorates scores below 20. Reply with JSON only."
 )
 
 
@@ -270,34 +369,54 @@ def boundary_cases(ir: DeonticIR, breach: dict) -> list[tuple[str, dict, str, fl
     return cases
 
 
-def live_bill_run(
-    api_key: str,
-    state: str = "CO",
-    bill: str | None = None,
-    bill_id: int | None = None,
+def process_single_bill(
+    bill_id: int,
+    legiscan: LegiScanClient,
     tenant_id: str = TENANT_ID,
-    legiscan: LegiScanClient | None = None,
     llm_client=None,
+    threshold: int = OPPORTUNITY_THRESHOLD,
 ) -> dict:
-    legiscan = legiscan or LegiScanClient(api_key)
-    if bill_id is None:
-        bill_id = legiscan.search_bill_id(state, bill)
+    """Stage 2 for one LegiScan bill: text, IR extraction, Z3. Only when opportunity_score_vs >=
+    threshold and Z3 verifies: compile, persist, write the cartridge and load it into OPA
+    (deploy_and_record). A skipped bill touches neither Postgres nor OPA. Errors raise."""
     meta = legiscan.fetch_latest_bill_text(bill_id)
     live_ir = extract_deontic_ir_from_text(meta, llm_client)
     ir = DeonticIR.model_validate(live_ir.model_dump(exclude={"opportunity_score_vs"}))
     rule_uid, slug = ir.rule_id, cartridge_name(ir.rule_id)
     check = verify_with_boundary(ir)
-    rego = compile_ir_to_rego(ir, f"cartridge.{slug}")
     version_uid = f"{meta['bill_uid']}@{meta['doc_id']}"
+    row = {
+        "bill_uid": meta["bill_uid"],
+        "rule_uid": rule_uid,
+        "version_uid": version_uid,
+        "version_stage": meta["version_stage"],
+        "legiscan_bill_id": bill_id,
+        "doc_id": meta["doc_id"],
+        "source_uri": meta["url"],
+        "tenant_id": tenant_id,
+        "opportunity_score_vs": live_ir.opportunity_score_vs,
+        "max_penalty_usd": ir.max_penalty_usd,
+        "private_right_of_action": ir.private_right_of_action,
+        "z3_status": check["status"],
+        "boundary_payload": check["boundary_payload"],
+        "human_verified": False,
+    }
+    reasons = []
+    if live_ir.opportunity_score_vs < threshold:
+        reasons.append(f"opportunity_score_vs {live_ir.opportunity_score_vs} < {threshold}")
+    if not check["verified"]:
+        reasons.append(f"Z3 status {check['status']}")
+    if reasons:
+        return {**row, "action": "SKIPPED", "reason": "; ".join(reasons), "cartridge": None}
+
+    rego = compile_ir_to_rego(ir, f"cartridge.{slug}")
     jurisdiction = "US" if meta["state"] == "US" else f"US-{meta['state']}"
-    # status is the overall verdict, so pipeline.approve refuses a rule that failed either check.
     z3_record = {
         **check["z3"],
         "status": check["status"],
         "verified": check["verified"],
         "boundary_payload": check["boundary_payload"],
     }
-
     with pg_connect() as conn:
         ensure_schema(conn)
         conn.execute(
@@ -335,8 +454,6 @@ def live_bill_run(
                 live_ir.opportunity_score_vs,
             ),
         )
-        if not check["verified"]:
-            raise LiveBillError(f"refusing to deploy {rule_uid}: Z3 status {check['status']}")
         deployed = deploy_and_record(
             conn,
             ir,
@@ -348,31 +465,100 @@ def live_bill_run(
             data_path=f"cartridge/{slug}",
         )
     return {
-        "rule_uid": rule_uid,
-        "version_uid": version_uid,
-        "version_stage": meta["version_stage"],
-        "legiscan_bill_id": bill_id,
-        "doc_id": meta["doc_id"],
-        "source_uri": meta["url"],
-        "tenant_id": tenant_id,
+        **row,
+        "action": "GREENLIT",
+        "reason": None,
         "cartridge": f"cartridges/{slug}.rego",
         "package": f"cartridge.{slug}",
-        "opportunity_score_vs": live_ir.opportunity_score_vs,
-        "z3_status": check["status"],
-        "boundary_payload": check["boundary_payload"],
-        "human_verified": False,
         **deployed,
     }
+
+
+def live_bill_run(
+    api_key: str,
+    state: str = "CO",
+    bill: str | None = None,
+    bill_id: int | None = None,
+    tenant_id: str = TENANT_ID,
+    legiscan: LegiScanClient | None = None,
+    llm_client=None,
+) -> dict:
+    legiscan = legiscan or LegiScanClient(api_key)
+    if bill_id is None:
+        bill_id = legiscan.search_bill_id(state, bill)
+    return process_single_bill(bill_id, legiscan, tenant_id, llm_client)
+
+
+def scan_state(
+    state: str,
+    legiscan: LegiScanClient,
+    top_n: int = 5,
+    tenant_id: str = TENANT_ID,
+    llm_client=None,
+    threshold: int = OPPORTUNITY_THRESHOLD,
+) -> list[dict]:
+    """Stage 1 then stage 2 for each candidate. A bill that errors becomes an ERROR row and the
+    loop continues. Rows are ranked by opportunity_score_vs (stage 1 order breaks ties), errors last."""
+    rows = []
+    for c in legiscan.fetch_state_master_candidates(state, top_n):
+        try:
+            row = process_single_bill(c["bill_id"], legiscan, tenant_id, llm_client, threshold)
+        except Exception as exc:  # one bad bill (LegiScan, LLM, Postgres, OPA) must not stop the scan
+            row = {
+                "bill_uid": f"{state.upper()}_{_norm_bill_number(c['number'])}",
+                "legiscan_bill_id": c["bill_id"],
+                "action": "ERROR",
+                "reason": f"{type(exc).__name__}: {exc}",
+                "cartridge": None,
+            }
+        rows.append({**row, "candidate_score": c["score"]})
+    rows.sort(key=lambda r: (r["action"] == "ERROR", -(r.get("opportunity_score_vs") or 0)))
+    return [{"rank": i, **r} for i, r in enumerate(rows, 1)]
+
+
+def format_matrix(rows: list[dict]) -> str:
+    header = ("rank", "bill_uid", "score", "max fine", "PRA", "Z3 status", "action")
+    lines = []
+    for r in rows:
+        if r["action"] == "GREENLIT":
+            action = f"GREENLIT {r['cartridge']}"
+        else:
+            action = f"{r['action']}: {r['reason']}"
+        pra = r.get("private_right_of_action")
+        lines.append(
+            (
+                str(r["rank"]),
+                r["bill_uid"],
+                "" if r.get("opportunity_score_vs") is None else str(r["opportunity_score_vs"]),
+                "" if r.get("max_penalty_usd") is None else f"${r['max_penalty_usd']:,.0f}",
+                "" if pra is None else ("yes" if pra else "no"),
+                r.get("z3_status") or "",
+                action,
+            )
+        )
+    widths = [max(len(row[i]) for row in [header, *lines]) for i in range(len(header) - 1)]
+    return "\n".join(
+        "  ".join(cell.ljust(w) for cell, w in zip(row, widths)) + "  " + row[-1] for row in [header, *lines]
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--tenant", default=TENANT_ID)
-    parser.add_argument("--state", default="CO", help="LegiScan state code, or US for Congress (with --bill)")
+    parser.add_argument(
+        "--state", default="CO", help="LegiScan state code, or US for Congress (with --bill or --scan-state)"
+    )
     parser.add_argument("--bill", help="bill number, e.g. SB205; runs the live LegiScan pipeline")
     parser.add_argument("--bill-id", type=int, help="LegiScan bill_id; skips the search")
+    parser.add_argument("--scan-state", action="store_true", help="rank the --state masterlist and process the top N")
+    parser.add_argument("--top-n", type=int, default=5, help="bills to process with --scan-state (default 5)")
     args = parser.parse_args(argv)
-    live = args.bill is not None or args.bill_id is not None
+    single = args.bill is not None or args.bill_id is not None
+    if args.scan_state and single:
+        parser.error("--scan-state cannot be combined with --bill or --bill-id")
+    if args.top_n < 1:
+        parser.error("--top-n must be at least 1")
+    live = single or args.scan_state
     if live and not os.environ.get("LEGISCAN_API_KEY"):
         print(
             "LEGISCAN_API_KEY is not set. Add it to .env (gitignored, never commit it), then "
@@ -381,7 +567,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     try:
-        if live:
+        if args.scan_state:
+            legiscan = LegiScanClient(os.environ["LEGISCAN_API_KEY"])
+            rows = scan_state(args.state, legiscan, args.top_n, args.tenant)
+            if not rows:
+                print(f"no {args.state.upper()} masterlist bills scored {MIN_CANDIDATE_SCORE} or more")
+                return 0
+            print(format_matrix(rows))
+            failed = any(r["action"] == "ERROR" or not r.get("chain", {"ok": True})["ok"] for r in rows)
+            return 1 if failed else 0
+        if single:
             out = live_bill_run(os.environ["LEGISCAN_API_KEY"], args.state, args.bill, args.bill_id, args.tenant)
         else:
             out = dry_run(args.tenant)
@@ -392,6 +587,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"live bill failed: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(out, indent=2, default=str))
+    if out.get("action") == "SKIPPED":
+        print(f"SKIPPED {out['bill_uid']}: {out['reason']}; nothing stored or deployed", file=sys.stderr)
+        return 1 if out["z3_status"] != OK_STATUS else 0  # a low score is a decision, a Z3 failure is not
     return 0 if out["chain"]["ok"] else 1
 
 

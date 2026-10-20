@@ -336,6 +336,7 @@ def test_live_bill_run_persists_then_deploys(monkeypatch):
     assert out["version_uid"] == "CO_SB205_2061@300"
     assert out["package"] == "cartridge.co_sb205_2061" and out["cartridge"] == "cartridges/co_sb205_2061.rego"
     assert out["human_verified"] is False and out["chain"]["ok"] is True
+    assert out["action"] == "GREENLIT" and out["opportunity_score_vs"] == 72
     assert deployed["data_path"] == "cartridge/co_sb205_2061"
     assert deployed["rego"].startswith("package cartridge.co_sb205_2061\n")
     assert [c[2] for c in deployed["cases"]] == ["NON_COMPLIANT_BREACH", "COMPLIANT_VIA_SAFE_HARBOR"]
@@ -351,10 +352,8 @@ def test_live_bill_run_persists_then_deploys(monkeypatch):
     json.dumps(z3_record)
 
 
-def test_live_bill_run_refuses_unverified_after_persisting(monkeypatch):
-    conn = FakeConn()
-    monkeypatch.setattr(lf, "pg_connect", lambda: conn)
-    monkeypatch.setattr(lf, "ensure_schema", lambda c: None)
+def test_live_bill_run_skips_unverified_without_persisting(monkeypatch):
+    monkeypatch.setattr(lf, "pg_connect", lambda: pytest.fail("a skipped bill must not touch Postgres"))
     monkeypatch.setattr(lf, "deploy_and_record", lambda *a, **k: pytest.fail("must not deploy"))
     bad = {
         **LLM_IR,
@@ -363,15 +362,15 @@ def test_live_bill_run_refuses_unverified_after_persisting(monkeypatch):
             {"fact": "fte_count", "operator": "LESS_THAN", "value": 10},
         ],
     }
-    with pytest.raises(lf.LiveBillError, match="UNSAT_BREACH_UNREACHABLE"):
-        lf.live_bill_run(
-            KEY,
-            bill_id=1789,
-            legiscan=legiscan(HTML_DOC, "text/html"),
-            llm_client=FakeLLM(lf.LiveDeonticIR.model_validate(bad)),
-        )
-    assert len(conn.executed) == 2  # bill version and unverified rule are still recorded
-    assert conn.executed[1][1][4].obj["verified"] is False
+    out = lf.live_bill_run(
+        KEY,
+        bill_id=1789,
+        legiscan=legiscan(HTML_DOC, "text/html"),
+        llm_client=FakeLLM(lf.LiveDeonticIR.model_validate(bad)),
+    )
+    assert out["action"] == "SKIPPED" and out["cartridge"] is None
+    assert out["z3_status"] == "UNSAT_BREACH_UNREACHABLE"
+    assert out["reason"] == "Z3 status UNSAT_BREACH_UNREACHABLE"
 
 
 def test_bill_without_key_is_a_clear_error(monkeypatch, capsys):
