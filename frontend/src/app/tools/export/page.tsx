@@ -77,16 +77,16 @@ const HASH_STEPS = [
 
 // Sample CTE data for demo
 const SAMPLE_RECORDS = [
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C - Nevada' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F - Georgia' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J - Oklahoma' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A, California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B, California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C, Nevada' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D, Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E, Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F, Georgia' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J, Oklahoma' },
 ];
 
 interface GeneratedPackage {

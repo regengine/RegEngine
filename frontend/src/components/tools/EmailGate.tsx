@@ -257,7 +257,7 @@ export function EmailGate({ toolName, children }: EmailGateProps) {
                                 ? 'Enter your work email to save results and receive a verification code. No account required, no credit card, no spam.'
                                 : (
                                     <>
-                                        Check your inbox — we sent a 6-digit code to{' '}
+                                        Check your inbox. We sent a 6-digit code to{' '}
                                         <span className="font-medium text-re-text-primary">{email}</span>
                                     </>
                                 )}
