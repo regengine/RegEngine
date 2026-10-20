@@ -125,7 +125,7 @@ jobs:
           echo "and \`services/shared/tests/test_rls_enforcement_live.py\` in backend-ci — check those, not this count." >> security-report.md
 
       - name: Upload security report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: security-sweep-report
           path: security-report.md
@@ -198,7 +198,7 @@ jobs:
           fi
 
       - name: Upload UI report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: ui-drift-report
           path: ui-report.md
@@ -285,7 +285,7 @@ jobs:
           fi
 
       - name: Upload infra report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: infra-health-report
           path: infra-report.md
