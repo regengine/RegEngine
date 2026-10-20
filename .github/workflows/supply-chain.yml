@@ -4,17 +4,15 @@ name: Supply Chain Gate
 # the build must be pinned to an exact version or digest and verified.
 # The gate script scans workflows, Dockerfiles, infra manifests and scripts;
 # actionlint keeps the workflow files themselves valid.
+#
+# "Pinned supply chain" is a required context (see workflow_inventory.txt and
+# docs/runbooks/BRANCH_PROTECTION.md), so the `pull_request:` trigger below is
+# deliberately UNFILTERED — required contexts MUST be able to post on every PR,
+# otherwise PRs that miss a path filter are structurally unmergeable.
+#
+# The `push:` trigger keeps its filter: main-branch runs are not gating merges.
 on:
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'Dockerfile'
-      - 'scripts/**'
-      - 'infra/**'
-      - 'requirements.in'
-      - 'requirements.lock'
-      - 'frontend/package.json'
-      - 'frontend/package-lock.json'
   push:
     branches: [main]
     paths:
