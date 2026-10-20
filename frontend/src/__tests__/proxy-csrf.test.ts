@@ -111,4 +111,30 @@ describe('proxy CSRF gate', () => {
         expect(body).not.toContain('CSRF');
         expect(body).not.toContain('Cross-origin mutation rejected');
     });
+
+    it('allows same-origin contact POST without CSRF cookies', async () => {
+        const response = await proxy(
+            await makeMutation({
+                pathname: '/api/contact',
+                token: null,
+                signature: null,
+            }),
+        );
+
+        expect(response.status).toBe(200);
+    });
+
+    it('rejects cross-origin contact POST without CSRF cookies', async () => {
+        const response = await proxy(
+            await makeMutation({
+                pathname: '/api/contact',
+                origin: 'https://attacker.example',
+                token: null,
+                signature: null,
+            }),
+        );
+
+        expect(response.status).toBe(403);
+        await expect(response.json()).resolves.toEqual({ error: 'Cross-origin mutation rejected' });
+    });
 });

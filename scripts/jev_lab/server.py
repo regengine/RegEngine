@@ -152,6 +152,7 @@ class Lab:
         with self._starting:  # two clicks or two tabs: one run
             if self.running:
                 raise RuntimeError("a run is already in progress")
+            every_case(self.ledger)  # a tainted or broken cases file is refused here, before a run starts
             self._start(config, build_proposer(backend, model=self.proposer_model))
 
     def _start(self, config: LoopConfig, proposer: Any) -> None:
@@ -365,7 +366,8 @@ def create_app(lab: Lab) -> FastAPI:
             raise HTTPException(400, "refused: a header has a line break or is too long")
         mappings = body.get("mappings") or {}
         cte_label = body.get("cte")
-        reasons = privacy.findings({"headers": row, "mappings": mappings}) + privacy.data_row_findings(row)
+        reasons = privacy.findings({"headers": row, "cte": cte_label, "mappings": mappings})
+        reasons += privacy.data_row_findings(row) + privacy.value_findings({"cte": cte_label, "mappings": mappings})
         if reasons:
             return _refuse(reasons)
         case_id = "local-" + hashlib.sha256("\x1f".join(row).encode("utf-8")).hexdigest()[:12]
@@ -419,6 +421,8 @@ def create_app(lab: Lab) -> FastAPI:
             raise HTTPException(400, "margin must be between 0 and 0.5")
         try:
             lab.start_loop(LoopConfig(generations=generations, margin=margin), backend)
+        except LabStateError:
+            raise  # a lab file no longer says what it recorded: the app's handler names it
         except RuntimeError as exc:
             return JSONResponse(status_code=409, content={"error": str(exc)})
         return {"started": True, "proposer": backend, "generations": generations, "margin": margin}

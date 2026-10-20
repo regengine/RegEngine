@@ -556,7 +556,9 @@ export async function proxy(request: NextRequest) {
             !request.headers.get('referer')
         );
 
-    if (csrfProtectedRequest) {
+    // Public contact has no CSRF cookie, but must still pass the origin check.
+    const sameOriginRequired = csrfProtectedRequest || (pathname === '/api/contact' && request.method === 'POST');
+    if (sameOriginRequired) {
         const sourceUrl = request.headers.get('origin') || request.headers.get('referer');
         let sourceOrigin: string | null = null;
         try {
@@ -570,7 +572,9 @@ export async function proxy(request: NextRequest) {
                 { status: 403 },
             ));
         }
+    }
 
+    if (csrfProtectedRequest) {
         const headerToken = request.headers.get(CSRF_HEADER);
         const sigCookie = request.cookies.get(CSRF_SIG_COOKIE)?.value;
 

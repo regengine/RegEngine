@@ -36,6 +36,7 @@ bundle-analysis.yml
 demo-smoke.yml
 dependabot-lock-sync.yml
 deploy.yml
+factory-local-ci.yml
 frontend-ci.yml
 inflow-contract-ci.yml
 infra-k8s-ci.yml

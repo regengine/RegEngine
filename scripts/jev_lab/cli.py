@@ -398,10 +398,11 @@ def _cmd_ledger(args: argparse.Namespace, ledger: Any) -> int:
         decisions = row.get("decisions") or {}
         kept = ", ".join(row.get("accepted") or []) or "-"
         judge = "" if row.get("run_id") in trusted else "  [offline fake, not Jev]"
-        print(f"{row['at']}  run {row['run_id']}  g{row['generation']}  {row['outcome']:<11} kept: {kept}{judge}")
+        at, run_id, generation, outcome = (row.get(k, "-") for k in ("at", "run_id", "generation", "outcome"))
+        print(f"{at}  run {run_id}  g{generation}  {str(outcome):<11} kept: {kept}{judge}")
         for kind, digest in (row.get("candidates") or {}).items():
             reasons = decisions.get(kind, {}).get("reasons") or []
-            print(f"    {kind:<15} {digest[:12]}  {reasons[0] if reasons else 'accepted'}")
+            print(f"    {kind:<15} {str(digest)[:12]}  {reasons[0] if reasons else 'accepted'}")
     for kind, qs in ledger.incumbents().items():
         print(f"Incumbent {kind}: {qs.label} {qs.digest}")
     return EXIT_OK

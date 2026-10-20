@@ -86,7 +86,7 @@ def _transport(answer: dict | None, seen: dict | None = None, status: int = 200)
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_cte"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 90, "output_tokens": 1}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 90, "output_tokens": 1}},
         )
 
     return httpx2.MockTransport(handler)
@@ -313,7 +313,7 @@ def test_applied_answer_becomes_a_reviewed_cte_type_artifact():
     assert artifact.tenant_id == tenant_id
     assert artifact.agent_name == AGENT_NAME
     assert artifact.agent_version == QUESTIONS_VERSION
-    assert artifact.model_name == "typesafe/jev-1.13.0"
+    assert artifact.model_name == "typesafe/jev-1.14.0"
     assert artifact.requires_human_review is False
     assert artifact.confidence == pytest.approx(0.96)
     assert artifact.context.ingestion_run_id == run_id
@@ -398,7 +398,7 @@ def _twin_transport(forward: dict, reverse: dict | None) -> httpx2.MockTransport
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_cte"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 90, "output_tokens": 2}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 90, "output_tokens": 2}},
         )
 
     return httpx2.MockTransport(handler)

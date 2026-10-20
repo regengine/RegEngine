@@ -1,0 +1,39 @@
+name: factory-local CI
+
+on:
+  pull_request:
+    paths:
+      - 'packages/factory-local/**'
+      - '.github/workflows/factory-local-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/factory-local/**'
+      - '.github/workflows/factory-local-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-tests:
+    name: factory-local offline tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: packages/factory-local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --require-hashes -r requirements.lock
+
+      - name: Run offline tests
+        run: .venv/bin/python -m pytest -m "not integration"

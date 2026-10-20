@@ -89,7 +89,7 @@ command it looks like this (the values here are illustrative, not a real
 answer):
 
 ```text
-Jev (jev-1.13.0, request req_…, 412 ms)
+Jev (jev-1.14.0, request req_…, 412 ms)
   cte [choice]: shipping (confidence 0.91; shipping 0.91, receiving 0.06, unclear 0.03)
   has_lot [noul]: yes (p(yes)=0.97)
 ```

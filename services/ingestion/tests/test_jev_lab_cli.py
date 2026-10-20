@@ -53,7 +53,10 @@ def home(tmp_path):
     return ledger.Ledger(tmp_path / "lab", mode=ledger.LIVE)
 
 
-LIVE_ENV = {"TYPESAFE_API_KEY": FAKE_KEY, "REGENGINE_JEV_MAX_RETRIES": "0"}
+# Live mode through the fake transport: the client rejects a response whose model differs from the
+# pinned model, and the fake answers as ``fake_jev.MODEL``, so the run pins that model.
+PINNED_FAKE_MODEL = {"TYPESAFE_DEFAULT_MODEL": fake_jev.MODEL}
+LIVE_ENV = {"TYPESAFE_API_KEY": FAKE_KEY, "REGENGINE_JEV_MAX_RETRIES": "0", **PINNED_FAKE_MODEL}
 
 
 def _counting(seen: list) -> httpx2.MockTransport:
@@ -108,7 +111,7 @@ def test_fake_loop_and_score_run_offline(capsys, home):
 
 def test_live_mode_never_prints_or_stores_the_key(capsys, home):
     seen: list = []
-    env = {"TYPESAFE_API_KEY": FAKE_KEY, "REGENGINE_JEV_MAX_RETRIES": "0"}
+    env = {"TYPESAFE_API_KEY": FAKE_KEY, "REGENGINE_JEV_MAX_RETRIES": "0", **PINNED_FAKE_MODEL}
 
     code, out, err = _run(capsys, ["score", "--json", "--home", str(home.home)], env=env, transport=_counting(seen))
 
@@ -135,7 +138,7 @@ def test_prompt_key_is_read_hidden_and_never_echoed(capsys, home):
     code, out, err = _run(
         capsys,
         ["score", "--prompt-key", "--home", str(home.home)],
-        env={},
+        env=PINNED_FAKE_MODEL,
         transport=_counting(seen),
         read_key=lambda prompt: FAKE_KEY,
     )
@@ -199,6 +202,16 @@ def test_a_tainted_labelled_row_exits_1_without_naming_its_content(capsys, home)
 
     assert code == 1 and "case 'local-bad'" in err and "personal data" in err
     assert "jane" not in out + err and not seen
+
+
+def test_ledger_tolerates_a_hand_edited_generation_row(capsys, home):
+    with home.path.open("a", encoding="utf-8") as stream:
+        stream.write('{"type": "generation", "mode": "live", "candidates": {"header_mapping": 7}}\n"a bare string"\n')
+        stream.write('{"type": "generation", "mode": "live", "run_id": ["x"], "decisions": []}\n')
+
+    code, out, err = _run(capsys, ["ledger", "--home", str(home.home)])
+
+    assert code == 0 and "run -  g-" in out and "Traceback" not in err
 
 
 def test_confirm_reports_insufficient_fresh_data(capsys, home):

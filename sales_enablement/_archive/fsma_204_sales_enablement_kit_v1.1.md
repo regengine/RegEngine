@@ -69,7 +69,7 @@ Subject: Turn Your FSMA Assessments into Recurring SaaS Revenue
 # Full White-Label Partner Agreement
 
 REGENGINE WHITE-LABEL PARTNER AGREEMENT  
-Effective Date: [Date] | Parties: RegEngine, Inc. and [Partner]  
+Effective Date: [Date] | Parties: RegEngine LLC and [Partner]  
 
 (Full clauses from your kit + Exhibit A: Partner Gateway API Spec (full OpenAPI YAML linked)  
 Exhibit B: Revenue Share Tiers (25/30/35%)  

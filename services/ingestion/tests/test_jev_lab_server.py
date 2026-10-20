@@ -156,20 +156,48 @@ def test_a_tainted_labelled_row_makes_the_lab_refuse_and_say_which(client, lab):
     reasons = response.json()["refused"]
     assert any("case 'local-bad'" in r and "personal data" in r for r in reasons)
     assert "jane" not in response.text
-    # The loop and confirm go through the same gate and send nothing.
+    # A run is refused before it starts, so the page never shows one running; nothing is sent.
     start = client.post("/api/loop/start", headers=POST, json={"generations": 1, "proposer": "offline"})
-    _wait_idle(lab)
-    assert start.status_code in (200, 422) and lab.decider.stats()["sent"] == 0
+    assert start.status_code == 422 and "jane" not in start.text and not lab.running
+    assert lab.decider.stats()["sent"] == 0
 
 
-def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab):
+def test_a_label_that_holds_a_secret_is_refused_by_location_and_never_saved(client, lab):
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    response = client.post("/api/labels", headers=POST, json={"headers": ["Ship Dte", "Lot No."], "cte": token})
+
+    assert response.status_code == 422 and "key-like token at $.cte" in response.json()["refused"]
+    assert token not in response.text and lab.ledger.local_cases() == []
+    # A label or mapping that reads as a row value is refused the same way, by location only.
+    lot = client.post("/api/labels", headers=POST, json={"headers": ["Ship Dte", "Lot No."], "cte": "LOT-R-0423"})
+    assert lot.status_code == 422 and lot.json()["refused"] == [
+        "looks like a value (date, number or code), not a label at $.cte"
+    ]
+    assert "LOT-R-0423" not in lot.text and "cases.local.json" not in lot.text and lab.ledger.local_cases() == []
+
+
+def test_a_broken_lab_file_is_named_in_the_error_not_a_bare_500(client, lab, monkeypatch):
     lab.ledger.add_case({"id": "local-bogus", "headers": ["Ship Dte", "Lot No."], "cte": "bogus", "mappings": {}})
 
     response = client.get("/api/status", headers=AUTH)
     assert response.status_code == 500
     assert "cases.local.json" in response.json()["error"] and "local-bogus" in response.json()["error"]
-    # A run in progress still answers 409, not the state handler.
-    assert "a run is already in progress" not in response.text
+    start = client.post("/api/loop/start", headers=POST, json={"generations": 0})
+    assert start.status_code == 500 and "cases.local.json" in start.json()["error"] and not lab.running
+
+    # A row that is not an object is named by position, with the file: never a bare 500.
+    data = json.loads(lab.ledger.cases_path.read_text())
+    data["cases"] = [{"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": None, "mappings": {}}, "not a row"]
+    lab.ledger.cases_path.write_text(json.dumps(data))
+    response = client.get("/api/status", headers=AUTH)
+    assert response.status_code == 500 and "cases.local.json row 2 is not a case object" in response.json()["error"]
+
+    # A run in progress answers 409 before the file is read.
+    monkeypatch.setattr(server, "run_loop", lambda **kw: time.sleep(0.3))
+    lab._start(server.LoopConfig(generations=1), None)
+    busy = client.post("/api/loop/start", headers=POST, json={"generations": 0})
+    _wait_idle(lab)
+    assert busy.status_code == 409 and "a run is already in progress" in busy.json()["error"]
 
 
 PARSE_ROW_FIXTURES = [

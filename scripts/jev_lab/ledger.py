@@ -35,6 +35,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import secrets
 import stat
 import threading
@@ -43,6 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from . import privacy
 from .questions import KINDS, QuestionSet, baseline
 
 try:  # POSIX: serialise split.json updates across processes (a CLI run next to the page).
@@ -58,6 +60,41 @@ MAX_HOLDOUT_LOOKS = 12
 DEFAULT_HOME = Path.home() / ".regengine" / "jev-lab"
 LIVE = "live"
 FAKE = "fake"
+
+
+# A question set's label (``baseline``, ``csv-header-mapping.v3``, ``lab-<run>-g<n>-<kind>``) and its
+# parent (a digest) as the lab writes them; a hand-edited file is held to the same shapes.
+_LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,47}")
+_LAB_LABEL = re.compile(r"lab-[0-9a-f]{12}-g\d{1,3}-(?:" + "|".join(re.escape(kind) for kind in KINDS) + r")")
+_DIGEST = re.compile(r"[0-9a-f]{64}")
+# The two sides of a split (scoring.TRAIN / scoring.HOLDOUT); a case pinned to anything else is never asked.
+_SIDES = ("train", "holdout")
+
+
+def _is_record(row: Any) -> bool:
+    """A ledger line of the shapes the lab writes, so every reader can index it without a traceback."""
+    if not isinstance(row, dict):
+        return False
+    shapes = {
+        "type": str,
+        "run_id": str,
+        "kind": str,
+        "digest": str,
+        "candidates": dict,
+        "decisions": dict,
+        "metrics": dict,
+    }
+    if not all(row.get(key) is None or isinstance(row[key], kind) for key, kind in shapes.items()):
+        return False
+    if not all(isinstance(decision, dict) for decision in (row.get("decisions") or {}).values()):
+        return False
+    accepted = row.get("accepted")
+    if accepted is None:
+        return True
+    # The list of kinds kept on a generation row; the kept count on a run summary row.
+    if row.get("type") == "run":
+        return isinstance(accepted, int) and not isinstance(accepted, bool)
+    return isinstance(accepted, list)
 
 
 class LabStateError(RuntimeError):
@@ -141,9 +178,11 @@ class Ledger:
         rows = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except ValueError:
                 continue
+            if _is_record(row):  # a hand-edited line that is not a record is skipped like a torn one
+                rows.append(row)
         return rows
 
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]:
@@ -167,7 +206,7 @@ class Ledger:
                     self._write(qs.to_dict(), path)
         return digest
 
-    def load_set(self, digest: str) -> QuestionSet | None:
+    def load_set(self, digest: str) -> QuestionSet | None:  # noqa: C901 - one check per field, in order
         """The wording behind ``digest``; ``None`` when there is no such file.
 
         The file names the wording Jev judged. One that no longer parses, or
@@ -185,6 +224,25 @@ class Ledger:
             raise LabStateError(f"{path} is unreadable: delete it, or restore it from a backup") from None
         if loaded.digest != digest or loaded.kind not in KINDS:
             raise LabStateError(f"{path} does not match its digest: delete it, or restore it from a backup")
+        # The label, parent and notes sit outside the digest, so an edited file passes the check above.
+        # They are held to the lab's own shapes, and the notes to the privacy guard, before the page,
+        # the ledger or the CLI repeats them; a message names the file, never what was in it.
+        parent_ok = loaded.parent is None or (isinstance(loaded.parent, str) and _DIGEST.fullmatch(loaded.parent))
+        if not _LABEL.fullmatch(loaded.label) or not parent_ok:
+            raise LabStateError(
+                f"{path} has a label or parent of the wrong shape: delete it, or restore it from a backup"
+            )
+        # A run's own label holds a hex run id, which reads as a token or a code, so it is exempt from
+        # the scans; any other label is scanned like a note. The wording is scanned too: it is what is
+        # sent to Jev, and the digest only proves it is the wording the file names, not that it is clean.
+        scanned = {"notes": list(loaded.notes)}
+        if not _LAB_LABEL.fullmatch(loaded.label):
+            scanned["label"] = loaded.label
+        found = privacy.findings({**scanned, "wording": loaded.wording()}) + privacy.value_findings(scanned)
+        if found:
+            raise LabStateError(
+                f"{path} holds content that must not leave ({'; '.join(found)}): delete it, or restore it"
+            )
         return loaded
 
     # -- split epoch -----------------------------------------------------------------
@@ -199,7 +257,17 @@ class Ledger:
             data = None
         if not isinstance(data, dict) or not isinstance(data.get("salt"), str) or not data["salt"]:
             raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
-        data.setdefault("looks", {})
+        looks = data.setdefault("looks", {})
+        assignment = data.get("assignment")
+        counts_ok = isinstance(looks, dict) and all(
+            kind in KINDS and isinstance(n, int) and not isinstance(n, bool) for kind, n in looks.items()
+        )
+        sides_ok = assignment is None or (
+            isinstance(assignment, dict) and all(isinstance(k, str) and v in _SIDES for k, v in assignment.items())
+        )
+        created_ok = "created" not in data or isinstance(data["created"], str)
+        if not counts_ok or not sides_ok or not created_ok:  # a value here would otherwise be repeated
+            raise LabStateError(f"{self.split_path} is unreadable: fix it, or delete it to start a new split epoch")
         return data
 
     def _write(self, data: Mapping[str, Any], path: Path | None = None) -> None:
@@ -367,7 +435,13 @@ class Ledger:
             raise LabStateError(f"{self.cases_path} is not JSON: fix it, or delete it") from None
         if not isinstance(data, dict) or not isinstance(data.get("cases", []), list):
             raise LabStateError(f"{self.cases_path} is not a cases file: fix it, or delete it")
-        return list(data.get("cases") or [])
+        rows = list(data.get("cases") or [])
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                raise LabStateError(
+                    f"{self.cases_path} row {index} is not a case object with a string id: fix or delete it"
+                )
+        return rows
 
     def add_case(self, case: Mapping[str, Any]) -> None:
         """Save a labelled row. Relabelling keeps the row's first ``labelled_at``."""

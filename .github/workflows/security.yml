@@ -290,7 +290,7 @@ jobs:
 
       - name: Upload EPIC-A Semgrep results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: semgrep-tenant-trust
           path: semgrep-tenant-trust.json
@@ -298,7 +298,7 @@ jobs:
 
       - name: Upload Semgrep results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: semgrep-results
           path: |
@@ -318,7 +318,7 @@ jobs:
 
       # ---- Node (frontend/) ----
       - name: Setup Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v6
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -420,7 +420,7 @@ jobs:
 
       - name: Upload dependency audit results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: dependency-audit
           path: |
@@ -561,7 +561,7 @@ jobs:
 
       - name: Upload isolation test results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: tenant-isolation-results
           path: artifacts/tenant-isolation/
@@ -610,7 +610,7 @@ jobs:
 
       - name: Upload ZAP reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: zap-reports
           path: artifacts/zap/
@@ -680,7 +680,7 @@ jobs:
 
       - name: Upload SBOM signature bundle
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: sbom-signature
           path: |
@@ -724,7 +724,7 @@ jobs:
 
       - name: Upload Trivy results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: trivy
           path: trivy.json
@@ -736,9 +736,9 @@ jobs:
   # Issue #2814: the in-job "validate secrets" step reported success when the
   # audit secrets were absent, so an unconfigured run was a green check rather
   # than a skip. `secrets` cannot be read from a job-level `if:`, so the check
-  # is hoisted into a preflight job whose output gates the real one — the
-  # Scheduled/requested checks fail preflight when unconfigured; PR/push runs
-  # do not make authenticated calls to a deployed environment.
+  # is hoisted into a preflight job whose output gates the real one — scheduled
+  # runs skip with a warning when unconfigured; requested runs fail. PR/push
+  # runs do not make authenticated calls to a deployed environment.
   audit-integrity-preflight:
     name: Audit chain preflight (secrets configured?)
     runs-on: ubuntu-latest
@@ -750,6 +750,7 @@ jobs:
       - name: Check audit chain secrets
         id: check
         env:
+          EVENT_NAME: ${{ github.event_name }}
           AUDIT_API_BASE: ${{ secrets.AUDIT_API_BASE }}
           AUDIT_TOKEN: ${{ secrets.AUDIT_VERIFY_TOKEN }}
         run: |
@@ -757,8 +758,13 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::error::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are required for the scheduled or requested audit chain check."
-            exit 1
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo "::warning::Audit chain check skipped because AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are not configured."
+              exit 0
+            else
+              echo "::error::AUDIT_API_BASE / AUDIT_VERIFY_TOKEN are required for the requested audit chain check."
+              exit 1
+            fi
           fi
 
   audit-integrity:

@@ -129,7 +129,7 @@ def test_fake_speaks_the_wire_format_through_the_real_client():
     first = decider.ask({"headers": ["Ship Date", "Lot"]}, questions_, purpose="test")
     second = decider.ask({"headers": ["Ship Date", "Lot"]}, questions_, purpose="test")
 
-    assert first.evidence.model == fake_jev.MODEL != "jev-1.13.0"
+    assert first.evidence.model == fake_jev.MODEL != "jev-1.14.0"
     assert first.evidence.request_id.startswith("fake_")
     assert first.choices["cte"].choice == "shipping"
     assert 0.0 < first.choices["cte"].confidence <= 1.0
@@ -607,6 +607,62 @@ def test_invalid_wording_and_proposer_failures_are_recorded_not_raised(tmp_path,
     assert sum(lab.epoch()["looks"].values()) == 0
 
 
+def test_a_rewrite_that_holds_what_must_not_leave_is_invalid_and_never_saved_or_asked(tmp_path, fake):
+    """A proposer may write an example that reads as a GTIN; it is refused when proposed, not after it was accepted."""
+    lab = _home(tmp_path)
+    base = questions.baseline(HM)
+    tainted = proposer.Proposal(
+        {
+            HM: {
+                "task": None,
+                "guidance": base.guidance + " A GTIN is a 14-digit number such as 00012345678905.",
+                "criteria": None,
+            }
+        },
+        "add an example",
+        "scripted",
+    )
+    events: list = []
+
+    summary = loop.run_loop(
+        ledger=lab,
+        decider=fake,
+        proposer=_Scripted(tainted),
+        config=loop.LoopConfig(generations=1),
+        emit=lambda name, data: events.append((name, data)),
+    )
+
+    decision = lab.generations()[0]["decisions"][HM]
+    assert decision["stage"] == "invalid"
+    assert decision["reasons"] == ["GLN or GTIN number at $.patches.header_mapping.guidance"]
+    assert "00012345678905" not in json.dumps(lab.generations()) + json.dumps(events)
+    assert not [path for path in lab.sets_dir.glob("*.json") if "lab-" in path.read_text()]  # never saved
+    assert summary["accepted"] == 0 and lab.incumbents()[HM] == base  # and every later read still works
+    # A rationale that holds such text is dropped, not repeated; a clean patch is not punished for it.
+    chatty = proposer.Proposal({HM: None}, "call jane.doe@example.com about it", "scripted")
+    redacted, refused = loop.redact_proposal(chatty)
+    assert (
+        refused == {} and redacted.rationale.startswith("refused: personal data") and "jane" not in redacted.rationale
+    )
+    # A kind is refused by what its patch holds, never by reading a location back out of a reason.
+    sly = proposer.Proposal(
+        {HM: {"task": None, "guidance": None, "criteria": [{"option": "lot", "look at this": "00012345678905"}]}},
+        "x",
+        "scripted",
+    )
+    redacted, refused = loop.redact_proposal(sly)
+    assert redacted.patches[HM] is None and list(refused) == [HM] and "00012345678905" not in json.dumps(refused)
+    parsed = proposer.parse_proposal(
+        {HM: {"criteria": [{"option": "lot", "look at this": "x"}]}, "rationale": "r"},
+        backend="scripted",
+        max_changes=5,
+    )
+    assert parsed.patches[HM]["criteria"] == [{"option": "lot", "what": None, "not_for": None, "examples": None}]
+    # Bookkeeping is not scanned: a long model id never blanks a clean rationale.
+    long_model = proposer.Proposal({HM: None}, "shorten the guidance", "anthropic-sdk", model="claude-x9-" + "a1" * 16)
+    assert loop.redact_proposal(long_model) == (long_model, {})
+
+
 def test_loop_stops_at_the_held_out_cap_and_on_request(tmp_path, fake):
     capped = _home(tmp_path / "a", looks={kind: ledger.MAX_HOLDOUT_LOOKS for kind in questions.KINDS})
     summary = loop.run_loop(ledger=capped, decider=fake, proposer=proposer.OfflineProposer())
@@ -757,6 +813,193 @@ def test_a_tainted_labelled_row_is_refused_before_anything_is_sent(tmp_path, fak
     lab.add_case({"id": "local-bad", "headers": ["2024-04-23", "LOT-R-0423", "240"], "cte": None, "mappings": {}})
     with pytest.raises(privacy.Refused, match="look like values"):
         loop.every_case(lab)
+
+
+def test_every_field_of_a_hand_edited_row_is_checked_and_never_echoed(tmp_path, fake):
+    """A secret in the label or the id would be repeated by the validation message: it is refused first."""
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-label", "headers": ["Ship Dte", "Lot No."], "cte": token, "mappings": {}})
+    lab.add_case({"id": "jane.doe@example.com", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "cases.local.json case 'local-label': key-like token at $.cte" in message
+    assert "cases.local.json case <row 2>: personal data" in message and "at $.id" in message
+    assert token not in message and "jane" not in message and "example.com" not in message
+    with pytest.raises(privacy.Refused):
+        loop.run_loop(ledger=lab, decider=fake, proposer=proposer.OfflineProposer())
+    assert fake.stats()["sent"] == 0
+
+
+def test_a_value_like_label_mapping_or_id_is_refused_before_a_message_could_repeat_it(tmp_path):
+    """A lot code, a date or an SSCC where a label belongs matches no secret pattern, yet jev_eval would repeat it."""
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-lot", "headers": ["Ship Dte", "Lot No."], "cte": "LOT-R-0423", "mappings": {}})
+    lab.add_case(
+        {
+            "id": "local-map",
+            "headers": ["Ship Dte", "Lot No."],
+            "cte": "shipping",
+            "mappings": {"Ship Dte": "2024-04-23", "003401234567890123": "lot_code"},
+        }
+    )
+    lab.add_case({"id": "012345678905", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused) as refused:
+        loop.every_case(lab)
+    message = str(refused.value)
+    assert "case 'local-lot': looks like a value (date, number or code), not a label at $.cte" in message
+    assert "case 'local-map': looks like a value (date, number or code), not a label at $.mappings.Ship Dte" in message
+    assert "case 'local-map': looks like a value (date, number or code), not a label at $.mappings.<key 2>" in message
+    assert "case <row 3>: looks like a value (date, number or code), not a label at $.id" in message
+    for value in ("LOT-R-0423", "2024-04-23", "003401234567890123", "012345678905"):
+        assert value not in message
+    # The page's own ids hold digits by design and are never mistaken for values.
+    assert privacy.value_findings({"id": "local-123456abcdef"}, codes=False) == []
+    assert privacy.value_findings({"cte": "shipping", "mappings": {"Lot No.": "lot_code"}}) == []
+
+
+def test_a_row_that_is_not_a_case_object_is_refused_by_position(tmp_path):
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-ok", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    data = json.loads(lab.cases_path.read_text())
+    data["cases"] += ["not a row", {"id": ["x"], "headers": ["Ship Dte"]}]
+    lab.cases_path.write_text(json.dumps(data))
+
+    with pytest.raises(ledger.LabStateError, match=r"cases\.local\.json row 2 is not a case object with a string id"):
+        loop.every_case(lab)
+    with pytest.raises(ledger.LabStateError, match="row 2"):
+        lab.add_case({"id": "local-new", "headers": ["Pick Dt"], "cte": None, "mappings": {}})
+
+
+def test_a_refusal_counts_rows_as_the_file_does(tmp_path):
+    """Row 1 reuses a repository case id and is dropped; the tainted row is still called row 2."""
+    lab = _home(tmp_path)
+    repo_id = jev_eval.load_cases(jev_eval.DEFAULT_CASES, templates=False)[0].id
+    lab.add_case({"id": repo_id, "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    lab.add_case({"id": "jane.doe@example.com", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+
+    with pytest.raises(privacy.Refused, match=r"case <row 2>: personal data"):
+        loop.every_case(lab)
+
+
+def test_an_edited_question_set_label_parent_or_notes_is_refused_by_shape_not_value(tmp_path):
+    """Label, parent and notes sit outside the digest: a hand-edited file is held to the lab's shapes."""
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    rewrite = questions.apply_patch(base, {"guidance": "A rewrite."})
+    ours = rewrite.with_label(
+        "lab-3f9a8b7c6d5e-g1-header_mapping", parent=base.digest, notes=("header_mapping:guidance:shorter",)
+    )
+    digest = lab.save_set(ours)
+    assert lab.load_set(digest) == ours  # the lab's own label, parent and notes pass
+    lab.record_incumbent(ours, generation=1, run_id="r", salt=lab.epoch()["salt"])
+    path = lab.sets_dir / f"{digest}.json"
+    good = json.loads(path.read_text())
+
+    for field, bad, why in (
+        ("label", token, r"must not leave \(key-like token at \$\.label\)"),
+        ("label", "jane.doe@example.com", "wrong shape"),
+        ("parent", {"owner": "jane.doe@example.com"}, "wrong shape"),
+    ):
+        path.write_text(json.dumps({**good, field: bad}))
+        with pytest.raises(ledger.LabStateError, match=why) as raised:
+            lab.load_set(digest)
+        assert path.name in str(raised.value) and token not in str(raised.value) and "jane" not in str(raised.value)
+        with pytest.raises(ledger.LabStateError):
+            lab.incumbents()
+    path.write_text(json.dumps({**good, "notes": ["header_mapping:guidance:shorter", "mailto jane.doe@example.com"]}))
+    with pytest.raises(ledger.LabStateError, match=r"must not leave \(personal data .* at \$\.notes\[1\]\)") as raised:
+        lab.load_set(digest)
+    assert "jane" not in str(raised.value)
+
+
+def test_edited_wording_or_a_value_like_label_in_a_question_set_is_refused(tmp_path):
+    """The digest proves the wording is the one the file names, not that it is clean: it is scanned too."""
+    lab = _home(tmp_path)
+    base = questions.baseline(questions.HEADER_MAPPING)
+    data = base.to_dict()
+    data["guidance"] = data["guidance"] + " Ask jane.doe@example.com when unsure."
+    edited = questions.QuestionSet.from_dict(data)
+    (lab.sets_dir / f"{edited.digest}.json").write_text(json.dumps(edited.to_dict()))
+    with pytest.raises(
+        ledger.LabStateError, match=r"must not leave \(personal data .* at \$\.wording\.guidance\)"
+    ) as raised:
+        lab.load_set(edited.digest)
+    assert "jane" not in str(raised.value)
+
+    digest = lab.save_set(
+        questions.apply_patch(base, {"guidance": "Shorter."}).with_label("LOT-R-0423", parent=base.digest)
+    )
+    with pytest.raises(ledger.LabStateError, match=r"looks like a value .* at \$\.label") as raised:
+        lab.load_set(digest)
+    assert "LOT-R-0423" not in str(raised.value)
+    for kind in questions.KINDS:  # the production wording and labels pass
+        assert lab.load_set(lab.save_set(questions.baseline(kind))) == questions.baseline(kind)
+
+
+def test_a_hand_written_id_is_held_to_the_code_heuristic_but_the_page_s_own_ids_pass(tmp_path):
+    lab = _home(tmp_path)
+    lab.add_case({"id": "local-123456abcdef", "headers": ["Ship Dte", "Lot No."], "cte": "shipping", "mappings": {}})
+    assert [case.id for case in loop.every_case(lab) if case.id.startswith("local-")] == ["local-123456abcdef"]
+    lab.add_case({"id": "LOT-R-0423", "headers": ["Pick Dt", "Grower"], "cte": "harvesting", "mappings": {}})
+    with pytest.raises(privacy.Refused, match=r"case <row 2>: looks like a value .* at \$\.id") as refused:
+        loop.every_case(lab)
+    assert "LOT-R-0423" not in str(refused.value)
+
+
+def test_a_cached_jev_answer_row_edited_by_hand_is_skipped_at_load(tmp_path):
+    cache = tmp_path / "cache.jsonl"
+    decider = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE, cache_path=cache)
+    state = {"csv_headers": ["Distinctive Header Name"]}
+    questions_ = {"q": {"type": "noul", "instructions": "Is it a date?"}}
+    decider.ask(state, questions_, purpose="t")
+    row = json.loads(cache.read_text().splitlines()[0])
+    row["answers"]["evidence"]["jane.doe@example.com"] = 1
+    cache.write_text(json.dumps(row) + "\n")
+
+    reloaded = jev_access.LabDecider(jev_access.build_decider(jev_access.FAKE), mode=jev_access.FAKE, cache_path=cache)
+    reloaded.ask(state, questions_, purpose="t")  # the edited row is not a cache hit, and never a TypeError
+    assert reloaded.stats()["sent"] == 1 and reloaded.stats()["cache_hits"] == 0
+
+
+def test_an_unreadable_split_epoch_is_refused_without_repeating_it(tmp_path):
+    token = "Zq7w9x2y4v8u1t3s5r6p0o9n8m7l6k5j4h3g2f1"  # pragma: allowlist secret
+    lab = _home(tmp_path)
+    for broken in (
+        {"looks": {"header_mapping": token}},
+        {"looks": [1]},
+        {"looks": {token: 1}},
+        {"assignment": {"c1": ["train"]}},
+        {"assignment": {"c1": "elsewhere"}},
+        {"created": {"at": token}},
+    ):
+        lab.split_path.write_text(json.dumps({"salt": "s", "created": "2026-01-01T00:00:00Z", "looks": {}, **broken}))
+        with pytest.raises(ledger.LabStateError, match="split.json is unreadable") as raised:
+            lab.epoch()
+        assert token not in str(raised.value)
+
+
+def test_a_ledger_line_that_is_not_a_record_is_skipped(tmp_path):
+    lab = _home(tmp_path)
+    lab.append({"type": "noise"})
+    lab.append({"type": "run", "run_id": "r1", "generations": 1, "accepted": 0, "stopped": "generations"})
+    lab.append(
+        {"type": "generation", "run_id": "r1", "generation": 1, "accepted": ["header_mapping"], "candidates": {}}
+    )
+    with lab.path.open("a", encoding="utf-8") as stream:
+        stream.write('"a bare string"\n[1, 2]\n42\n')
+        stream.write('{"type": "generation", "run_id": ["x"]}\n{"type": "generation", "candidates": []}\n')
+        stream.write('{"type": "generation", "run_id": "r1", "accepted": 3}\n{"type": "run", "accepted": ["x"]}\n')
+        stream.write(
+            '{"type": "incumbent", "kind": ["x"]}\n{"type": "generation", "decisions": {"header_mapping": []}}\n'
+        )
+
+    assert [row["type"] for row in lab.rows()] == ["noise", "run", "generation"]  # every shape the lab writes
+    assert [row["run_id"] for row in lab.generations()] == ["r1"] and lab.incumbents()
 
 
 def test_a_question_set_file_that_no_longer_matches_its_digest_is_refused(tmp_path):

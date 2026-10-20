@@ -68,7 +68,7 @@ def _transport(answer: dict | None, seen: dict | None = None, status: int = 200)
         return httpx2.Response(
             200,
             headers={"x-typesafe-request-id": "req_match"},
-            json={"model": "jev-1.13.0", "answers": answers, "usage": {"input_tokens": 80, "output_tokens": 1}},
+            json={"model": "jev-1.14.0", "answers": answers, "usage": {"input_tokens": 80, "output_tokens": 1}},
         )
 
     return httpx2.MockTransport(handler)

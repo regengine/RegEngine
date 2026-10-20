@@ -139,6 +139,27 @@ def data_row_findings(headers: Sequence[str]) -> list[str]:
     return [f"cell(s) {listed} look like values (dates, numbers or codes), not column names: paste only the header row"]
 
 
+def value_findings(value: Any, *, codes: bool = True) -> list[str]:
+    """``"looks like a value ... at <location>"`` for every string in ``value`` that reads as a row value.
+
+    For a labelled row's labels, mappings and id, which a validation message
+    would repeat: a lot code, an SSCC or a date pasted where a label belongs is
+    refused by location before any message could repeat it. A key that looks
+    like a value is given by position, as in :func:`findings`. With
+    ``codes=False`` only dates and numbers count (an id such as
+    ``local-3f9a8b7c6d5e`` holds digits by design).
+    """
+
+    def value_like(text: str) -> bool:
+        return bool(text.strip()) and bool(_VALUE_CELL.match(text) or (codes and _CODE_CELL.match(text)))
+
+    return [
+        f"looks like a value (date, number or code), not a label at {location}"
+        for location, text in strings(value, name_key=lambda key: not value_like(key))
+        if value_like(text)
+    ]
+
+
 def _kinds(text: str, secrets_in_env: Sequence[tuple[str, str]]) -> list[str]:
     """What in ``text`` must not leave, by kind. Empty: nothing."""
     found: list[str] = []

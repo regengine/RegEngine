@@ -254,7 +254,14 @@ def parse_proposal(
         for key in ("task", "guidance"):
             if patch.get(key) is not None and not isinstance(patch[key], str):
                 raise ProposerError(f"{kind}: {key} is not text")
-        patches[kind] = {"task": patch.get("task"), "guidance": patch.get("guidance"), "criteria": list(changes)}
+        patches[kind] = {
+            "task": patch.get("task"),
+            "guidance": patch.get("guidance"),
+            # Only the schema's keys: an extra key is never recorded, shown or scanned under its own name.
+            "criteria": [
+                {key: change.get(key) for key in ("option", "what", "not_for", "examples")} for change in changes
+            ],
+        }
     rationale = data.get("rationale")
     predictions = []
     for item in data.get("predicted_fixes") or ():
