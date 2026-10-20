@@ -1,41 +1,44 @@
 import pytest
-from pydantic import ValidationError
-
 from compiler import compile_ir_to_rego
-from conftest import make_ir
+from pydantic import ValidationError
 from schemas import DeonticIR, DeonticPredicate
+
+from conftest import make_ir
 
 
 def test_fixture_rego_shape(ir):
     rego = compile_ir_to_rego(ir, "factory.us_co_sb205")
     assert rego.startswith("package factory.us_co_sb205\n\nimport rego.v1\n")
-    assert 'default status := "EXEMPT_OR_NOT_APPLICABLE"' in rego
+    assert 'default compliance_status := "EXEMPT_OR_NOT_APPLICABLE"' in rego
     assert "default violation_exposure_usd := 0" in rego
     assert "\tinput.fte_count > 49\n\tinput.does_business_in_co == true\n" in rego
     assert (
-        'status := "COMPLIANT" if {\n\tis_applicable\n'
+        'compliance_status := "COMPLIANT" if {\n\tis_applicable\n'
         "\tinput.controls.annual_impact_assessment_completed == true\n}"
     ) in rego
     assert (
-        'status := "COMPLIANT_VIA_SAFE_HARBOR" if {\n\tis_applicable\n'
+        'compliance_status := "COMPLIANT_VIA_SAFE_HARBOR" if {\n\tis_applicable\n'
         "\tnot input.controls.annual_impact_assessment_completed == true\n"
         "\tinput.controls.nist_ai_rmf_aligned == true\n}"
     ) in rego
     assert (
-        'status := "NON_COMPLIANT_BREACH" if {\n\tis_applicable\n'
+        'compliance_status := "NON_COMPLIANT_BREACH" if {\n\tis_applicable\n'
         "\tnot input.controls.annual_impact_assessment_completed == true\n"
         "\tnot input.controls.nist_ai_rmf_aligned == true\n}"
     ) in rego
     assert (
         "violation_exposure_usd := input.affected_consumer_count * 20000 if {\n"
-        '\tstatus == "NON_COMPLIANT_BREACH"\n}'
+        '\tcompliance_status == "NON_COMPLIANT_BREACH"\n}'
     ) in rego
     assert 'citation := "C.R.S. § 6-1-1703"' in rego
 
 
 def test_prohibition_flips_action_test():
     rego = compile_ir_to_rego(make_ir("P1", [], modality="PROHIBITION"), "factory.p1")
-    assert 'status := "COMPLIANT" if {\n\tis_applicable\n\tnot input.controls.assessment_done == true\n}' in rego
+    assert (
+        'compliance_status := "COMPLIANT" if {\n\tis_applicable\n\tnot input.controls.assessment_done == true\n}'
+        in rego
+    )
     assert "is_applicable if {\n\ttrue\n}" in rego
 
 

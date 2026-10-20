@@ -1,8 +1,8 @@
 """factory-local pipeline CLI.
 
-  python pipeline.py run                          seed, extract, compile, verify, store (unverified)
-  python pipeline.py approve --rule US_CO_SB205_V2  deploy to OPA, evaluate, write signed receipts
-  python pipeline.py verify-chain [--tenant T]    recompute and check the receipt chain
+python pipeline.py run                          seed, extract, compile, verify, store (unverified)
+python pipeline.py approve --rule US_CO_SB205_V2  deploy to OPA, evaluate, write signed receipts
+python pipeline.py verify-chain [--tenant T]    recompute and check the receipt chain
 """
 
 from __future__ import annotations
@@ -18,11 +18,10 @@ from urllib.parse import quote
 
 import httpx
 import psycopg
-from psycopg.types.json import Jsonb
-
 from compiler import compile_ir_to_rego
 from extract import extract_ir
 from ledger import DEFAULT_KEY_PATH, append_receipt, load_or_create_signing_key, verify_chain
+from psycopg.types.json import Jsonb
 from schemas import DeonticIR
 from verify import OK_STATUS, verify_ir
 
@@ -101,9 +100,8 @@ def run() -> dict:
     rego = compile_ir_to_rego(ir, package_for(ir.rule_id))
     z3_result = verify_ir(ir)
 
-    from neo4j import GraphDatabase
-
     from graph import seed_graph
+    from neo4j import GraphDatabase
 
     user, _, password = os.environ["NEO4J_AUTH"].partition("/")
     uri = os.environ.get("NEO4J_URI", f"bolt://localhost:{os.environ.get('FACTORY_NEO4J_BOLT_PORT', '7687')}")
@@ -122,8 +120,12 @@ def run() -> dict:
                    approved_at = NULL, updated_at = now()""",
             (ir.rule_id, VERSION_UID, Jsonb(ir.model_dump(mode="json")), rego, Jsonb(z3_result), source),
         )
-    return {"rule_uid": ir.rule_id, "extraction_source": source, "z3_status": z3_result["status"],
-            "human_verified": False}
+    return {
+        "rule_uid": ir.rule_id,
+        "extraction_source": source,
+        "z3_status": z3_result["status"],
+        "human_verified": False,
+    }
 
 
 def wait_for_opa_policy(rego: str, timeout: float = 30.0) -> bool:
@@ -145,8 +147,12 @@ def deploy_to_opa(rule_uid: str, rego: str, watch_timeout: float = 10.0) -> str:
     forward this directory (colima), push the same text through the policy API."""
     if wait_for_opa_policy(rego, watch_timeout):
         return "watch"
-    resp = httpx.put(f"{opa_url()}/v1/policies/factory_local/{cartridge_name(rule_uid)}", content=rego,
-                     headers={"Content-Type": "text/plain"}, timeout=10)
+    resp = httpx.put(
+        f"{opa_url()}/v1/policies/factory_local/{cartridge_name(rule_uid)}",
+        content=rego,
+        headers={"Content-Type": "text/plain"},
+        timeout=10,
+    )
     if resp.status_code != 200:
         raise RuntimeError(f"OPA rejected the policy: {resp.status_code} {resp.text}")
     if not wait_for_opa_policy(rego, 10.0):
@@ -179,36 +185,56 @@ def approve(rule_uid: str) -> dict:
         if compile_ir_to_rego(ir, package_for(rule_uid)) != rego:
             raise RuntimeError(f"refusing to deploy {rule_uid}: stored rego does not match its IR")
 
-        CARTRIDGES.mkdir(exist_ok=True)
-        (CARTRIDGES / f"{cartridge_name(rule_uid)}.rego").write_text(rego)
         conn.execute(
             "UPDATE extracted_rules SET human_verified = true, approved_at = now(), updated_at = now() "
             "WHERE rule_uid = %s",
             (rule_uid,),
         )
-        loaded_via = deploy_to_opa(rule_uid, rego)
+        deployed = deploy_and_record(conn, ir, rule_uid, rego, version_uid)
+    return {"rule_uid": rule_uid, "human_verified": True, **deployed}
 
-        evaluations = []
-        for name, payload, want_status, want_exposure in EXPECTED:
-            got = evaluate(rule_uid, payload)
-            if got["status"] != want_status or got["violation_exposure_usd"] != want_exposure:
-                raise AssertionError(
-                    f"{name}: expected {want_status}/{want_exposure}, "
-                    f"got {got['status']}/{got['violation_exposure_usd']}"
-                )
-            evaluations.append({"case": name, "status": got["status"],
-                                "violation_exposure_usd": got["violation_exposure_usd"]})
 
-        key = load_or_create_signing_key()
-        receipts = []
-        for (name, payload, _, _), ev in zip(EXPECTED, evaluations):
-            r = append_receipt(conn, TENANT_ID, rule_uid=rule_uid, version_uid=version_uid,
-                               input_payload=payload, evaluated_decision=ev["status"],
-                               citation_uri=citation_uri(ir.citation), private_key=key)
-            receipts.append({"case": name, "seq": r["seq"], "leaf_hash": r["leaf_hash"]})
-        chain = verify_chain(conn, TENANT_ID, key.public_key())
-    return {"rule_uid": rule_uid, "human_verified": True, "opa_loaded_via": loaded_via, "evaluations": evaluations,
-            "receipts": receipts, "chain": chain}
+def deploy_and_record(
+    conn: psycopg.Connection, ir: DeonticIR, rule_uid: str, rego: str, version_uid: str, tenant_id: str = TENANT_ID
+) -> dict:
+    """Write the cartridge, load it into OPA, check the EXPECTED cases, append one signed
+    receipt per case to the tenant's chain, then verify the whole chain."""
+    CARTRIDGES.mkdir(exist_ok=True)
+    (CARTRIDGES / f"{cartridge_name(rule_uid)}.rego").write_text(rego)
+    loaded_via = deploy_to_opa(rule_uid, rego)
+
+    evaluations = []
+    for name, payload, want_status, want_exposure in EXPECTED:
+        got = evaluate(rule_uid, payload)
+        if got["compliance_status"] != want_status or got["violation_exposure_usd"] != want_exposure:
+            raise AssertionError(
+                f"{name}: expected {want_status}/{want_exposure}, "
+                f"got {got['compliance_status']}/{got['violation_exposure_usd']}"
+            )
+        evaluations.append(
+            {
+                "case": name,
+                "compliance_status": got["compliance_status"],
+                "violation_exposure_usd": got["violation_exposure_usd"],
+            }
+        )
+
+    key = load_or_create_signing_key()
+    receipts = []
+    for (name, payload, _, _), ev in zip(EXPECTED, evaluations):
+        r = append_receipt(
+            conn,
+            tenant_id,
+            rule_uid=rule_uid,
+            version_uid=version_uid,
+            input_payload=payload,
+            evaluated_decision=ev["compliance_status"],
+            citation_uri=citation_uri(ir.citation),
+            private_key=key,
+        )
+        receipts.append({"case": name, "seq": r["seq"], "leaf_hash": r["leaf_hash"]})
+    chain = verify_chain(conn, tenant_id, key.public_key())
+    return {"opa_loaded_via": loaded_via, "evaluations": evaluations, "receipts": receipts, "chain": chain}
 
 
 def verify_chain_cmd(tenant_id: str) -> dict:

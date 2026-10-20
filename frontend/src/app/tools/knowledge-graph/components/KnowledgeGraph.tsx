@@ -221,11 +221,10 @@ export function SupplyChainKnowledgeGraphBuilder() {
     // and repaint in a loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => { draw(); }, [nodes, edges, vp, selNode, selEdge, trace, visNodes, visEdges]);
-    // Keep a ref pointing at the latest `draw` so the once-bound resize listener
-    // below always repaints from current state instead of the first render's
-    // stale closure.
+    // Keep a ref pointing at the latest `draw` after each render so the
+    // once-bound resize listener repaints from current state.
     const drawRef = useRef(draw);
-    drawRef.current = draw;
+    useEffect(() => { drawRef.current = draw; });
     // The resize listener is bound once (empty deps) — the `drawRef` indirection
     // lets it read fresh state without re-registering on every render.
     useEffect(() => { const h = () => drawRef.current(); if (typeof window !== 'undefined') window.addEventListener("resize", h); return () => { if (typeof window !== 'undefined') window.removeEventListener("resize", h); }; }, []);
