@@ -54,4 +54,10 @@ describe('reviewed CSRF route-and-method exemptions', () => {
         expect(isCsrfExempt('/api/webhooks-malicious/stripe', 'POST')).toBe(false);
         expect(isCsrfExempt('/api/webhooks/stripe', 'GET')).toBe(false);
     });
+
+    it('exempts only POST to the public contact form', () => {
+        expect(isCsrfExempt('/api/contact', 'POST')).toBe(true);
+        expect(isCsrfExempt('/api/contact/x', 'POST')).toBe(false);
+        expect(isCsrfExempt('/api/contact', 'GET')).toBe(false);
+    });
 });

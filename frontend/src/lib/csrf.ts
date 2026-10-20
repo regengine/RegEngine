@@ -199,6 +199,8 @@ export const CSRF_EXEMPT_RULES: readonly CsrfExemptionRule[] = [
     },
     { methods: ['POST'], path: '/api/tools/check-access', match: 'exact' },
     { methods: ['POST'], path: '/api/tools/verify', match: 'exact' },
+    // Public contact has no CSRF cookies; the proxy still checks origin and the route rate-limits.
+    { methods: ['POST'], path: '/api/contact', match: 'exact' },
 ];
 
 function pathMatchesRule(pathname: string, rule: CsrfExemptionRule): boolean {
