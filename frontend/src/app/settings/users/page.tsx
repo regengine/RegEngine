@@ -43,14 +43,6 @@ export default function UserSettingsPage() {
     const [inviteRoleId, setInviteRoleId] = useState('');
     const [isInviting, setIsInviting] = useState(false);
 
-    useEffect(() => {
-        loadData();
-        // Mount-once load. loadData closes over inviteRoleId and then sets it,
-        // so adding it to the dependency array (directly or via useCallback)
-        // would re-fire this effect on its own result — an endless fetch loop.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     const loadData = async () => {
         setIsLoading(true);
         try {
@@ -80,6 +72,14 @@ export default function UserSettingsPage() {
             setIsLoading(false);
         }
     };
+
+    useEffect(() => {
+        loadData();
+        // Mount-once load. loadData closes over inviteRoleId and then sets it,
+        // so adding it to the dependency array (directly or via useCallback)
+        // would re-fire this effect on its own result — an endless fetch loop.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
