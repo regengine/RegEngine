@@ -174,10 +174,17 @@ LLM_IR = {
 
 
 class FakeLLM:
-    def __init__(self, parsed=None, refusal=None):
+    def __init__(self, parsed=None, refusal=None, embedding=(0.6, 0.8, 0.0)):
         self.kwargs = None
+        self.embed_kwargs = None
         self._message = SimpleNamespace(parsed=parsed, refusal=refusal)
+        self._embedding = list(embedding)
         self.beta = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(parse=self._parse)))
+        self.embeddings = SimpleNamespace(create=self._embed)
+
+    def _embed(self, **kwargs):
+        self.embed_kwargs = kwargs
+        return SimpleNamespace(data=[SimpleNamespace(embedding=self._embedding)])
 
     def _parse(self, **kwargs):
         self.kwargs = kwargs
@@ -299,6 +306,8 @@ def test_compiled_cartridge_package_and_status_key():
 
 
 class FakeConn:
+    """Records statements; every query returns no rows (so no copycats and no Neo4j write)."""
+
     def __init__(self):
         self.executed = []
 
@@ -310,6 +319,7 @@ class FakeConn:
 
     def execute(self, sql, params=None):
         self.executed.append((sql, params))
+        return SimpleNamespace(fetchall=lambda: [])
 
 
 def test_live_bill_run_persists_then_deploys(monkeypatch):
@@ -341,9 +351,12 @@ def test_live_bill_run_persists_then_deploys(monkeypatch):
     assert deployed["rego"].startswith("package cartridge.co_sb205_2061\n")
     assert [c[2] for c in deployed["cases"]] == ["NON_COMPLIANT_BREACH", "COMPLIANT_VIA_SAFE_HARBOR"]
 
-    (bill_sql, bill_params), (rule_sql, rule_params) = conn.executed
-    assert "INSERT INTO bill_versions" in bill_sql
+    (bill_sql, bill_params), (rule_sql, rule_params), (copycat_sql, _) = conn.executed
+    assert "INSERT INTO bill_versions" in bill_sql and "full_text_embedding" in bill_sql
     assert bill_params[:3] == ("CO_SB205_2061@300", "CO_SB205_2061", "US-CO") and bill_params[-1] == "Enrolled"
+    assert bill_params[-2] == "[0.6,0.8,0.0]"
+    assert "SHARES" not in copycat_sql and "vector_dims" in copycat_sql
+    assert out["copycats"] == [] and out["embedding_dims"] == 3
     assert "INSERT INTO extracted_rules" in rule_sql and "human_verified = false" in rule_sql
     z3_record = rule_params[4].obj
     assert z3_record["status"] == "UNSAT_DETERMINISTIC_AND_COMPLETE" and z3_record["verified"] is True
@@ -352,8 +365,10 @@ def test_live_bill_run_persists_then_deploys(monkeypatch):
     json.dumps(z3_record)
 
 
-def test_live_bill_run_skips_unverified_without_persisting(monkeypatch):
-    monkeypatch.setattr(lf, "pg_connect", lambda: pytest.fail("a skipped bill must not touch Postgres"))
+def test_live_bill_run_skips_unverified_stores_only_the_bill_version(monkeypatch):
+    conn = FakeConn()
+    monkeypatch.setattr(lf, "pg_connect", lambda: conn)
+    monkeypatch.setattr(lf, "ensure_schema", lambda c: None)
     monkeypatch.setattr(lf, "deploy_and_record", lambda *a, **k: pytest.fail("must not deploy"))
     bad = {
         **LLM_IR,
@@ -371,6 +386,9 @@ def test_live_bill_run_skips_unverified_without_persisting(monkeypatch):
     assert out["action"] == "SKIPPED" and out["cartridge"] is None
     assert out["z3_status"] == "UNSAT_BREACH_UNREACHABLE"
     assert out["reason"] == "Z3 status UNSAT_BREACH_UNREACHABLE"
+    statements = [sql for sql, _ in conn.executed]
+    assert "INSERT INTO bill_versions" in statements[0]
+    assert not any("extracted_rules" in sql for sql in statements)
 
 
 def test_bill_without_key_is_a_clear_error(monkeypatch, capsys):

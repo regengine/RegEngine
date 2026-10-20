@@ -187,10 +187,14 @@ def test_threshold_is_70_inclusive(fake_deploy, score, action):
         assert row["reason"] == "opportunity_score_vs 69 < 70"
 
 
-def test_skipped_bill_never_touches_postgres(monkeypatch):
-    monkeypatch.setattr(lf, "pg_connect", lambda: pytest.fail("a skipped bill must not touch Postgres"))
+def test_skipped_bill_stores_version_but_no_rule_or_deploy(monkeypatch):
+    conn = FakeConn()
+    monkeypatch.setattr(lf, "pg_connect", lambda: conn)
+    monkeypatch.setattr(lf, "ensure_schema", lambda c: None)
+    monkeypatch.setattr(lf, "deploy_and_record", lambda *a, **k: pytest.fail("must not deploy"))
     row = lf.process_single_bill(102, scan_legiscan(), llm_client=ScriptedLLM({"CO_HB2_2100": 10}))
-    assert row["action"] == "SKIPPED"
+    assert row["action"] == "SKIPPED" and row["copycats"] == []
+    assert not any("extracted_rules" in sql for sql, _ in conn.executed)
 
 
 def test_scan_reports_errors_and_continues(fake_deploy):
@@ -218,7 +222,8 @@ def test_main_scan_prints_matrix(monkeypatch, capsys):
     monkeypatch.setattr(lf, "LegiScanClient", lambda key: client)
     seen = []
 
-    def fake_process(bill_id, legiscan, tenant_id, llm_client, threshold):
+    def fake_process(bill_id, legiscan, tenant_id, llm_client, threshold, sim_threshold):
+        assert sim_threshold == 0.80
         seen.append(bill_id)
         if bill_id == 110:
             raise lf.LiveBillError("LegiScan getBill returned HTTP 500")
@@ -252,10 +257,16 @@ def test_single_bill_prints_threshold_skip(monkeypatch, capsys):
     monkeypatch.setenv("LEGISCAN_API_KEY", KEY)
     client = scan_legiscan()
     monkeypatch.setattr(lf, "LegiScanClient", lambda key: client)
-    monkeypatch.setattr(lf, "pg_connect", lambda: pytest.fail("must not persist"))
+    monkeypatch.setattr(lf, "pg_connect", FakeConn)
+    monkeypatch.setattr(lf, "ensure_schema", lambda c: None)
+    monkeypatch.setattr(lf, "deploy_and_record", lambda *a, **k: pytest.fail("must not deploy"))
     import openai
 
     monkeypatch.setattr(openai, "OpenAI", lambda **_: ScriptedLLM({"CO_HB2_2100": 55}))
     assert lf.main(["--bill-id", "102"]) == 0
     err = capsys.readouterr().err
-    assert "SKIPPED CO_HB2_2100: opportunity_score_vs 55 < 70; nothing stored or deployed" in err
+    assert "step 3 of 4: copycats >= 0.80: none" in err
+    assert (
+        "step 4 of 4: SKIPPED CO_HB2_2100: opportunity_score_vs 55 < 70; bill version and embedding stored, "
+        "no rule compiled or deployed"
+    ) in err

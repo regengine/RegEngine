@@ -104,15 +104,27 @@ With no arguments the script runs the fixture dry run exactly as before. With
    number, LegiScan session id).
 3. Runs the Z3 checks from `verify.py`, plus a check that a breach input exists.
    Z3 Optimize picks a synthetic payload sitting on each numeric threshold.
-4. Gates the bill. It continues only when `opportunity_score_vs` is 70 or more
-   and Z3 verifies it. Otherwise the run prints `SKIPPED <bill uid>: <reason>` to
-   stderr and stores and deploys nothing. A low score exits 0; a Z3 failure exits 1.
-5. Compiles `package cartridge.<slug>` to `cartridges/<slug>.rego`.
-6. Stores the bill version (`<bill uid>@<doc_id>`, with `version_stage`) and the rule
-   in Postgres with `human_verified = false`.
-7. Calls `pipeline.deploy_and_record()`: OPA load, evaluation of the boundary
+4. Embeds a regulatory fingerprint and checks for copycat bills (see Copycat
+   detection below). This runs for every bill, including ones the next step skips.
+5. Gates the bill. It continues only when `opportunity_score_vs` is 70 or more
+   and Z3 verifies it. Otherwise the bill version and its embedding stay stored,
+   but no rule is stored, compiled or deployed. A low score exits 0; a Z3
+   failure exits 1.
+6. Compiles `package cartridge.<slug>` to `cartridges/<slug>.rego`.
+7. Stores the bill version (`<bill uid>@<doc_id>`, with `version_stage` and the
+   embedding) and the rule in Postgres with `human_verified = false`.
+8. Calls `pipeline.deploy_and_record()`: OPA load, evaluation of the boundary
    breach and boundary safe harbor payloads at `/v1/data/cartridge/<slug>`, one
    signed receipt per case on the tenant's hash chain, and a full chain check.
+
+Single bill mode prints four progress lines to stderr after the JSON result:
+
+```text
+step 1 of 4: extracted CO_SB205_2061 (opportunity_score_vs 72)
+step 2 of 4: Z3 UNSAT_DETERMINISTIC_AND_COMPLETE
+step 3 of 4: copycats >= 0.80: CT_SB2_2140 0.91, TX_HB1709_2150 0.84
+step 4 of 4: GREENLIT cartridges/co_sb205_2061.rego, receipt chain ok=True
+```
 
 The system prompt gives the model a rubric for `opportunity_score_vs` (0 to 100):
 breadth of regulated entities (up to 30), enforcement severity (up to 25),
@@ -152,8 +164,11 @@ and Z3 gate. A bill that fails (LegiScan, LLM, Postgres or OPA error) becomes an
 rank  bill_uid      score  max fine  PRA  Z3 status                        action
 1     CA_SB7_2140   82     $20,000   no   UNSAT_DETERMINISTIC_AND_COMPLETE  GREENLIT cartridges/ca_sb7_2140.rego
 2     CA_AB12_2140  55     $7,500    yes  UNSAT_DETERMINISTIC_AND_COMPLETE  SKIPPED: opportunity_score_vs 55 < 70
+      copycats: CO_SB205_2061 0.88
 3     CA_AB40                                                               ERROR: LiveBillError: LegiScan getBill returned HTTP 500
 ```
+
+A bill with copycat matches gets an indented `copycats:` line under its row.
 
 The scan exits 1 when any bill errored or a greenlit chain check failed, else 0.
 
@@ -163,6 +178,7 @@ The scan exits 1 when any bill errored or a greenlit chain check failed, else 0.
 | `LLM_BASE_URL` | `http://localhost:11434/v1` (Ollama) |
 | `LLM_MODEL` | `qwen2.5-coder:14b` |
 | `OPENAI_API_KEY` | `ollama` |
+| `EMBEDDING_MODEL` | `nomic-embed-text` (same `LLM_BASE_URL` and `OPENAI_API_KEY`) |
 
 Postgres and OPA come from the same variables as the dry run (`FACTORY_PG_PORT`,
 `OPA_URL` or `FACTORY_OPA_PORT`). The LegiScan key is sent only as the API query
@@ -172,6 +188,49 @@ request log is raised to WARNING so the key is not printed.
 This path skips human review on purpose, like the dry run. `pipeline.py approve`
 does not accept these rules, because their package is `cartridge.<slug>` rather
 than `factory.<slug>` and the stored Rego check fails.
+
+### Copycat detection
+
+```bash
+ollama pull nomic-embed-text                                         # bootstrap.sh does this when ollama is installed
+.venv/bin/python app/local_factory.py --bill SB205 --sim-threshold 0.85
+.venv/bin/python app/local_factory.py --scan-state --state CA --sim-threshold 0.9
+```
+
+Model acts (ALEC style templates, the Colorado AI Act copied into other states)
+reuse the same duty structure with light rewording. Every processed bill gets a
+regulatory fingerprint embedding built from `TITLE`, `MODALITY`,
+`OBLIGATION_CONTROL` (the IR `action_required`), `SAFE_HARBOR`,
+`APPLICABILITY_PREDICATES` and the first 6000 characters of the bill text. It is
+stored in `bill_versions.full_text_embedding`.
+
+Postgres then returns up to 5 other bills (by `bill_uid`, best version each)
+whose cosine similarity is at or above `--sim-threshold` (default 0.80). Only
+embeddings with the same dimension are compared, so switching
+`EMBEDDING_MODEL` never mixes models. Each match is written to Neo4j:
+
+```cypher
+MERGE (a:Bill {bill_uid: $source})
+MERGE (b:Bill {bill_uid: $match})
+MERGE (a)-[r:SHARES_MODEL_DNA]->(b)
+SET r.cosine_similarity = $similarity, r.shared_pattern = $action_required,
+    r.detected_by = 'PGVECTOR_AUTO_SCAN'
+```
+
+Neo4j uses the same connection settings as `app/seed_neo4j.py`. When Neo4j is
+down or not configured the run logs a warning and carries on; the matches are
+still in the JSON output and the matrix. An embedding failure (for example the
+model is not pulled) is an error for that bill.
+
+The Postgres image is `pgvector/pgvector:pg16-trixie`, the same Postgres 16 and
+Debian base as the previous `postgres:16`, so an existing data volume keeps
+working. `db_init/03_pgvector.sql` creates the `vector` extension and the column.
+`ensure_schema` applies every `db_init` file on each run, so an already
+initialized database picks it up once the container runs the new image:
+
+```bash
+docker compose up -d --wait postgres   # recreates the container, keeps the data volume
+```
 
 `requirements.txt` is the editable spec; `requirements.lock` is generated from
 it with hashes (`uv pip compile --universal --python-version 3.12
@@ -239,8 +298,8 @@ key you kept, but new receipts start signing with a new key.
 - Bind mounts only work for paths the Docker VM shares. Colima shares only
   the directories listed under `mounts:` in `~/.colima/default/colima.yaml`,
   and a path that is not listed shows up empty inside the container. The
-  pipeline handles this: `run` applies `db_init/01_init.sql` itself (it is
-  idempotent), and `approve` waits 10 seconds for OPA `--watch` to load the
+  pipeline handles this: `run` applies every `db_init/*.sql` file itself (each
+  is idempotent), and `approve` waits 10 seconds for OPA `--watch` to load the
   cartridge. If OPA has not loaded it by then, `approve` pushes the same text
   through `PUT /v1/policies`. Either way it confirms that the loaded text
   matches the verified Rego exactly. `opa_loaded_via` in the output reports
@@ -250,4 +309,8 @@ key you kept, but new receipts start signing with a new key.
 - `approve` marks the rule `human_verified` before deployment finishes. If OPA
   or an assertion fails afterwards, the flag stays true and no receipt is
   written.
+- Copycat similarity mixes the IR fields with the text, so two bills the LLM
+  maps to the same control names score high even when their texts differ.
+  Treat a match as a lead to read, not a finding. Raise `--sim-threshold` if
+  the list is noisy.
 - Compose default credentials are local dev values. Do not reuse them.
