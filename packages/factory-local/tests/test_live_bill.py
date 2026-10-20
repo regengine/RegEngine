@@ -244,7 +244,7 @@ def test_llm_defaults(monkeypatch):
 
     monkeypatch.setattr(openai, "OpenAI", Recorder)
     lf.extract_deontic_ir_from_text(bill_meta())
-    assert seen == {"base_url": "http://localhost:11434/v1", "api_key": "ollama"}
+    assert seen == {"base_url": "http://localhost:11434/v1", "api_key": "ollama"}  # pragma: allowlist secret
     assert lf.llm_model() == "qwen2.5-coder:14b"
 
 
