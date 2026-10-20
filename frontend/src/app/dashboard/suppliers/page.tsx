@@ -120,6 +120,12 @@ export default function SupplierDashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [workbenchSummary, setWorkbenchSummary] = useState<WorkbenchReadinessSnapshot | null>(null);
+    const [now, setNow] = useState(Date.now);
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 60_000);
+        return () => clearInterval(timer);
+    }, []);
 
     // Portal link state
     const [portalLinks, setPortalLinks] = useState<PortalLink[]>([]);
@@ -337,7 +343,7 @@ export default function SupplierDashboardPage() {
     /* ---------- Relative time helper ------------------------------ */
     function relativeTime(iso: string | null): string | null {
         if (!iso) return null;
-        const diff = Date.now() - new Date(iso).getTime();
+        const diff = now - new Date(iso).getTime();
         const mins = Math.floor(diff / 60000);
         if (mins < 1) return 'just now';
         if (mins < 60) return `${mins}m ago`;

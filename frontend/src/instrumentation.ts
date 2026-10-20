@@ -9,6 +9,23 @@ import * as Sentry from "@sentry/nextjs";
 
 export const onRequestError = Sentry.captureRequestError;
 
+// Keep the restrictive v10 collection defaults in both server runtimes.
+const piiDenyList = ["forwarded", "-ip", "remote-", "via", "-user"];
+const dataCollection = {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: {
+        request: { deny: piiDenyList },
+        response: { deny: piiDenyList },
+    },
+    httpBodies: [],
+    urlQueryParams: { deny: piiDenyList },
+    genAI: { inputs: false, outputs: false },
+    databaseQueryData: false,
+    graphQL: { document: false, variables: false },
+    queues: false,
+} satisfies NonNullable<Parameters<typeof Sentry.init>[0]["dataCollection"]>;
+
 /**
  * Production startup assertion: CSRF_SECRET must be set and must not collide
  * with any legacy JWT signing material the deployment may still be carrying.
@@ -56,7 +73,8 @@ export async function register() {
                 environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
                 release: process.env.VERCEL_GIT_COMMIT_SHA || "local",
                 tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
-                sendDefaultPii: false,
+                traceLifecycle: "static",
+                dataCollection,
             });
         }
     }
@@ -71,6 +89,8 @@ export async function register() {
                 dsn,
                 environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
                 tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1.0,
+                traceLifecycle: "static",
+                dataCollection,
             });
         }
     }

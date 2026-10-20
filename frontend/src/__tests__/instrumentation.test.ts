@@ -34,6 +34,7 @@ async function freshRegister() {
 describe('instrumentation register() — secret separation assertions (RE-SEC-005)', () => {
     beforeEach(() => {
         resetEnv();
+        vi.clearAllMocks();
     });
 
     afterEach(() => {
@@ -77,5 +78,34 @@ describe('instrumentation register() — secret separation assertions (RE-SEC-00
         // No secrets set at all.
         const register = await freshRegister();
         await expect(register()).resolves.toBeUndefined();
+    });
+
+    it.each(['nodejs', 'edge'] as const)('%s Sentry init keeps v10 privacy defaults', async (runtime) => {
+        mutableEnv().NODE_ENV = 'development';
+        process.env.NEXT_RUNTIME = runtime;
+        process.env.SENTRY_DSN = 'test-dsn';
+
+        const register = await freshRegister();
+        await register();
+
+        const sentry = await import('@sentry/nextjs');
+        const piiDenyList = ['forwarded', '-ip', 'remote-', 'via', '-user'];
+        expect(sentry.init).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+            traceLifecycle: 'static',
+            dataCollection: {
+                userInfo: false,
+                cookies: false,
+                httpHeaders: {
+                    request: { deny: piiDenyList },
+                    response: { deny: piiDenyList },
+                },
+                httpBodies: [],
+                urlQueryParams: { deny: piiDenyList },
+                genAI: { inputs: false, outputs: false },
+                databaseQueryData: false,
+                graphQL: { document: false, variables: false },
+                queues: false,
+            },
+        }));
     });
 });
