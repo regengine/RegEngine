@@ -13,7 +13,7 @@ def test_rfc8785_canonical_form_and_hash():
     assert rfc8785.dumps({"b": 1, "a": [1.0, "é", True, None]}) == '{"a":[1,"é",true,null],"b":1}'.encode()
     assert canonical_hash({"b": 1, "a": 2}) == canonical_hash({"a": 2, "b": 1})
     assert canonical_hash({"a": 1.0}) == canonical_hash({"a": 1})
-    assert canonical_hash({"a": 1}) == "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"
+    assert canonical_hash({"a": 1}) == "015abd7f5cc57a2dd94b7590f04ad8084273905ee33ec5cebeae62276a97f862"  # pragma: allowlist secret
 
 
 @pytest.fixture

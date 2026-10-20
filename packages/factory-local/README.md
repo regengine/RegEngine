@@ -42,7 +42,9 @@ For `PROHIBITION` rules, "action done" means the control is not true.
 
 ```bash
 cd packages/factory-local
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install --require-hashes -r requirements.lock
+cp .env.example .env            # then replace the changeme placeholders
+set -a; . ./.env; set +a        # the Python commands read the same variables
 docker compose up -d --wait
 .venv/bin/python pipeline.py run
 .venv/bin/python pipeline.py approve --rule US_CO_SB205_V2
@@ -59,6 +61,11 @@ Without it, or if Ollama fails or returns invalid JSON, the pipeline uses
 `fixtures/co_sb205_ir.json` and records the reason as `extraction_source`.
 
 `fixtures/co_sb205_text.txt` is a paraphrase for the demo, not the statute.
+
+`requirements.txt` is the editable spec; `requirements.lock` is generated from
+it with hashes (`uv pip compile --universal --python-version 3.12
+--generate-hashes requirements.txt -o requirements.lock`). Regenerate the lock
+after editing `requirements.txt`.
 
 ## Keys
 

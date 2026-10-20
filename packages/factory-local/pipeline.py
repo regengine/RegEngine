@@ -56,7 +56,7 @@ def pg_connect() -> psycopg.Connection:
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=int(os.environ.get("FACTORY_PG_PORT", "5432")),
         user=os.environ.get("POSTGRES_USER", "factory"),
-        password=os.environ.get("POSTGRES_PASSWORD", "factory"),
+        password=os.environ["POSTGRES_PASSWORD"],
         dbname=os.environ.get("POSTGRES_DB", "factory"),
         autocommit=True,
         connect_timeout=5,
@@ -105,7 +105,7 @@ def run() -> dict:
 
     from graph import seed_graph
 
-    user, _, password = os.environ.get("NEO4J_AUTH", "neo4j/factorylocal").partition("/")
+    user, _, password = os.environ["NEO4J_AUTH"].partition("/")
     uri = os.environ.get("NEO4J_URI", f"bolt://localhost:{os.environ.get('FACTORY_NEO4J_BOLT_PORT', '7687')}")
     with GraphDatabase.driver(uri, auth=(user, password)) as driver:
         seed_graph(driver, ir.rule_id, VERSION_UID)
