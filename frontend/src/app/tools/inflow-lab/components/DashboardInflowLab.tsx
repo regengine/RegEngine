@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { inflowErrorMessage } from "@/lib/inflow-error";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
     ChevronRight,
@@ -42,6 +42,14 @@ import {
     buildInflowLabTutorialSteps,
     dismissInflowLabTutorialBanner,
 } from "./InflowLabTutorial";
+
+function useLatestAction(action: () => void) {
+    const actionRef = useRef(action);
+    useLayoutEffect(() => {
+        actionRef.current = action;
+    }, [action]);
+    return useCallback(() => actionRef.current(), []);
+}
 
 type CteState = "complete" | "missing";
 type LotReadinessState = "ready" | "warning" | "blocked";
@@ -1066,11 +1074,10 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     // The tutorial's "Run guided proof" action reads through a ref so the step
     // array can stay referentially stable while the action always sees fresh
     // component state.
-    const runGuidedProofRef = useRef(runGuidedProof);
-    runGuidedProofRef.current = runGuidedProof;
+    const runGuidedProofStep = useLatestAction(() => void runGuidedProof());
     const tutorialSteps = useMemo(
-        () => buildInflowLabTutorialSteps({ runGuidedProof: () => void runGuidedProofRef.current() }),
-        [],
+        () => buildInflowLabTutorialSteps({ runGuidedProof: runGuidedProofStep }),
+        [runGuidedProofStep],
     );
 
     const saveWorkbenchRun = async () => {

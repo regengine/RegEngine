@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { inflowErrorMessage } from "@/lib/inflow-error";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     AlertTriangle,
     ArrowDownToLine,
@@ -51,6 +51,14 @@ import {
     buildInflowLabClientTutorialSteps,
     dismissInflowLabTutorialBanner,
 } from "./InflowLabTutorial";
+
+function useLatestAction(action: () => void) {
+    const actionRef = useRef(action);
+    useLayoutEffect(() => {
+        actionRef.current = action;
+    }, [action]);
+    return useCallback(() => actionRef.current(), []);
+}
 
 type RunStage = "loaded" | "generating" | "delivering" | "validating" | "complete" | "exported";
 type EventStatus = "posted" | "validated" | "queued" | "generated" | "failed";
@@ -1254,15 +1262,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     // The tour's demo action reads through a ref so the step array stays
     // referentially stable while the action always sees fresh state.
-    const startMachineDemoRef = useRef(startMachineDemo);
-    startMachineDemoRef.current = startMachineDemo;
+    const runDemoStep = useLatestAction(() => void startMachineDemo());
     const tutorialSteps = useMemo(
         () =>
             buildInflowLabClientTutorialSteps({
-                runDemo: () => void startMachineDemoRef.current(),
+                runDemo: runDemoStep,
                 isStandalone,
             }),
-        [isStandalone],
+        [isStandalone, runDemoStep],
     );
 
     const startTutorial = () => {
@@ -1346,29 +1353,26 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         [backendFixQueue, feederResult, uniqueLots]
     );
     const unresolvedFixCount = fixQueue.filter((item) => item.status === "open" || item.status === "waiting").length;
-    const supplierReadiness = useMemo(
-        () => [
-            {
-                name: "Valley Fresh Farms",
-                status: exportReadyCount > 0 ? "Passing validation" : "Sample received",
-                score: Math.max(58, readinessScore - 3),
-                blocker: exceptionLots.length ? "Waiting on missing CTE handoffs" : "No open blockers",
-            },
-            {
-                name: "FreshPack Central",
-                status: feederResult ? (feederResult.submission_blocked ? "Sample received" : "Mapping configured") : "Invited",
-                score: feederResult ? Math.max(35, Math.round((feederResult.compliant_events / Math.max(1, feederResult.total_events)) * 100)) : 44,
-                blocker: feederResult?.submission_blocked ? "Sandbox blockers need correction" : "Mapping profile not promoted",
-            },
-            {
-                name: "Bay Area DC",
-                status: selectedIsExportReady ? "Export ready" : "Production feed active",
-                score: Math.min(98, readinessScore + 5),
-                blocker: selectedIsExportReady ? "No open blockers" : "Selected lot needs complete lineage",
-            },
-        ],
-        [exceptionLots.length, exportReadyCount, feederResult, readinessScore, selectedIsExportReady]
-    );
+    const supplierReadiness = [
+        {
+            name: "Valley Fresh Farms",
+            status: exportReadyCount > 0 ? "Passing validation" : "Sample received",
+            score: Math.max(58, readinessScore - 3),
+            blocker: exceptionLots.length ? "Waiting on missing CTE handoffs" : "No open blockers",
+        },
+        {
+            name: "FreshPack Central",
+            status: feederResult ? (feederResult.submission_blocked ? "Sample received" : "Mapping configured") : "Invited",
+            score: feederResult ? Math.max(35, Math.round((feederResult.compliant_events / Math.max(1, feederResult.total_events)) * 100)) : 44,
+            blocker: feederResult?.submission_blocked ? "Sandbox blockers need correction" : "Mapping profile not promoted",
+        },
+        {
+            name: "Bay Area DC",
+            status: selectedIsExportReady ? "Export ready" : "Production feed active",
+            score: Math.min(98, readinessScore + 5),
+            blocker: selectedIsExportReady ? "No open blockers" : "Selected lot needs complete lineage",
+        },
+    ];
     const supplierAverageScore = Math.round(
         supplierReadiness.reduce((total, supplier) => total + supplier.score, 0) / Math.max(1, supplierReadiness.length)
     );

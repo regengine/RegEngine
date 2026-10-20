@@ -104,12 +104,12 @@ export function DrillSimulatorClient() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleScenarioSelect = (scenarioId: string) => {
+    const handleScenarioSelect = (scenarioId: string, drillStartTime: number) => {
         setState({
             ...state,
             selectedScenario: scenarioId,
             phase: 'upload',
-            drillStartTime: Date.now(),
+            drillStartTime,
             uploadTime: null,
             validationResult: null,
         });
@@ -128,21 +128,6 @@ export function DrillSimulatorClient() {
         },
         []
     );
-
-    const handleDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setDragActive(false);
-
-        const files = e.dataTransfer.files;
-        if (files && files[0]) {
-            processFile(files[0]);
-        }
-        // processFile is a stable component-scope handler recreated each render;
-        // listing it here would give this drop handler a new identity on every
-        // render and defeat the useCallback that keeps the drop zone stable.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -176,6 +161,17 @@ export function DrillSimulatorClient() {
             ...state,
             uploadedFile: file,
         });
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+
+        const files = e.dataTransfer.files;
+        if (files && files[0]) {
+            processFile(files[0]);
+        }
     };
 
     const handleAnalyze = async () => {
@@ -350,7 +346,7 @@ STATUS: ${
                     <button
                         key={scenario.id}
                         type="button"
-                        onClick={() => handleScenarioSelect(scenario.id)}
+                        onClick={() => handleScenarioSelect(scenario.id, Date.now())}
                         className="rounded-lg border border-re-border bg-re-surface-card p-5 text-left transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-base motion-reduce:transition-none"
                     >
                         <div className="mb-3 flex items-start justify-between gap-3">

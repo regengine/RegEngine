@@ -1,19 +1,21 @@
 # Traceability file intake
 
-How three intake surfaces turn a file into FSMA Critical Tracking Events.
+How CSV, EPCIS, and EDI intake turn a file into FSMA Critical Tracking Events.
 All three are on the production router allowlist (`csv`, `edi`,
 `epcis_ingestion` in `server/router_policy.py`). Tenant identity comes from
 the authenticated principal. A caller-supplied tenant id is only an
 assertion and must match that principal.
 
-| Surface | Route | Permission | What changed |
+| Surface | Route | Permission | What it emits |
 | --- | --- | --- | --- |
 | Excel workbook on the CSV route | `POST /api/v1/ingest/csv` | `webhooks.ingest` | `.xlsx` is converted to CSV text, then the existing CSV path runs |
 | EPCIS 2.0 upload on `/ingest` | `POST /api/v1/epcis/events`, `/events/batch`, `/events/xml` | tenant context (`require_tenant_context`) | The dashboard tab posts JSON or XML to those routes |
+| ASN and receiving advice lines | `POST /api/v1/ingest/edi` and `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 856 and 861, one CTE per item line |
 | Warehouse advices | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 944 and 945, one CTE per item line |
+| Purchase order and invoice | `POST /api/v1/ingest/edi/document` | `edi.ingest` | X12 850 and 810, one event per ST/SE set, quantities summed |
 
-The dedicated `POST /api/v1/ingest/edi` route is still 856 only. 944 and 945
-belong on `/document`.
+`POST /api/v1/ingest/edi` accepts a single 856 transaction set. 861, 944,
+945, 850, and 810 belong on `/document`.
 
 ## Excel `.xlsx` on `POST /api/v1/ingest/csv`
 
@@ -121,14 +123,115 @@ enforce it before the request.
 A single-event POST is one event: HTTP 201, or the validation error for
 that event. It is not a batch.
 
+## X12 856 and 861, one CTE per item line
+
+An 856 ship notice and an 861 receiving advice used to collapse every item
+line into one event and add the quantities under one traceability lot code.
+Both routes now keep each line. A failure on any line rejects the
+interchange. 850 and 810 are unchanged: each ST/SE set is still one event,
+and PO1 or IT1 quantities on that set are summed.
+
+| | 856 ship notice | 861 receiving advice |
+| --- | --- | --- |
+| CTE | shipping | receiving |
+| Item line | One CTE per SN1. SLN is not a CTE. | One CTE per RCD. SLN is not a CTE. |
+| Quantity | SN102. Must be a finite number above 0 when the element is present. | RCD02, same rule |
+| Unit | SN103, X12 element 355 | RCD03 |
+| Lot | LIN `LT`, a `REF*LT` on that line, or an SLN `LT` pair | same |
+| Product | LIN qualifiers `SK`, `UP`, `EN`, `VP`, `BP`, else PID05 | same |
+| Date | BSN03, with BSN04 time when present | BRA02. BRA01 is the advice number. A purpose-code-first BRA (`BRA*00*...*date`) is HTTP 400 `invalid_edi_date`. |
+| Parties | Ship-from is N1 `SF`, `SU`, or `SH`. Ship-to is N1 `ST`, `BT`, or `OB`. | Ship-from is the same. The receiving location uses the ship-to codes. |
+
+A LIN before the quantity segment fills the next SN1 or RCD. A LIN after a
+quantity segment that still has no product and no lot fills that line. A
+later LIN starts the next item. PID text and `REF*LT` attach to the open
+line, or to the draft when no line is open yet.
+
+The line lot is the event TLC, copied verbatim. A GTIN or UPC on the line
+does not prefix it. A line with no lot uses the required form field
+`traceability_lot_code`. A lot that fails TLC format is HTTP 422
+`fsma_validation_failed`, including a one-character lot. Two lines that
+share a lot both persist. `edi_line_index` on the KDEs separates them.
+
+N104 is stored as the location id whether or not N103 is `UL`. The event
+`location_gln` is set only when that id is a 13-digit GS1 GLN with a valid
+check digit. The 856 event location is the ship-from GLN. The 861 event
+location is the receiving-location GLN.
+
+A missing date uses the ingest time. A date that is present and is not
+CCYYMMDD or YYMMDD is HTTP 400 `invalid_edi_date`. A parsed date older
+than 90 days, or more than 24 hours in the future, keeps that calendar
+date on the event and snaps the ingest timestamp to now.
+
+### `POST /api/v1/ingest/edi` (856 only)
+
+One ST/SE set. A second set is HTTP 422 `multiple_transaction_sets`. The
+error text still says `/document` emits one CTE per ST/SE pair. For 856
+and 861, `/document` emits one CTE per item line.
+
+Required segments are ISA, GS, ST, BSN, HL, SE, GE, and IEA. Each line
+must carry a positive quantity, a recognized unit, and a product id or
+description. The set must carry a ship-from name, a ship-to name, and a
+BSN date. A miss is HTTP 422 `edi_856_missing_required_kdes`, the
+rejection is logged, and nothing is persisted. The route does not fill
+quantity `1.0`, unit `units`, product `EDI 856 Shipment`, an unknown
+location, or today's date.
+
+`product_description`, `quantity_override`, `unit_of_measure_override`,
+`ship_from_location_override`, and `ship_to_location_override` apply to
+every line. More than one SN1 plus any of those fields is HTTP 422
+`edi_overrides_with_multiple_line_items`.
+
+A success body reports `extracted.event_count`. `extracted.quantity` and
+`extracted.unit_of_measure` describe the first line. The response
+`traceability_lot_code` is the first event's TLC.
+
+### `POST /api/v1/ingest/edi/document`
+
+856 and 861 join 944 and 945 as line-level sets. The same interchange
+rules below apply: one transaction-set type, GE01 must match the ST/SE
+count, and any FSMA failure keeps the whole interchange out of the
+canonical stream.
+
+On this route a present quantity that is zero or not numeric is HTTP 422
+`edi_non_positive_quantity`. A present unit is HTTP 422
+`edi_unmapped_unit_of_measure` unless it is an element-355 code this
+route maps (`CA` and `CS` cases, `CT` cartons, `BX` boxes, `BG` bags,
+`LB` lbs, `KG` kg, `EA` each, `UN` units, `PL` pallets, `PC` and `PK`
+pieces), a tolerated non-X12 alias (`CAS`, `CTN`, `BOX`, `LBR`,
+`KGM`), or a value that is already an FSMA unit name (`cases`,
+`cartons`, `lbs`, and the rest of `VALID_UNITS_OF_MEASURE`). A blank
+unit is stored as `units`. A set with no SN1 or RCD
+still produces one event: the quantity element is absent, so the
+persisted quantity is `1.0`, a missing product becomes `EDI 856 Item`
+or `EDI 861 Item`, and a missing location name becomes `Unknown`.
+
+Header KDEs are copied onto every line. 856 copies the ASN number
+(BSN02), carrier (TD5), and the reference document (`REF` `BM`, `SI`,
+`CN`, `PO`, or `PK`, else the ASN number). 861 copies the advice number,
+the PO when `REF*PO` is present, the condition code (RCD05), and the
+reference document (`PO`, `BM`, or `SI`, else the advice number).
+
+`extracted.event_count` and `extracted.events` list one summary per line
+(`line_index`, lot, quantity, TLC). `extracted.submitted_traceability_lot_code`
+echoes the form field. The response `traceability_lot_code` is the first
+event's TLC.
+
+```bash
+curl -X POST "$BASE/api/v1/ingest/edi/document" \
+  -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
+  -H "X-Partner-ID: $PARTNER_ID" \
+  -F "file=@asn_856.edi;type=application/edi-x12" \
+  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT"
+```
+
 ## X12 944 and 945 on `POST /api/v1/ingest/edi/document`
 
 The document route auto-detects the transaction set. Supported sets are
 856, 850, 810, 861, 944, and 945. 944 is a receiving CTE (warehouse stock
 transfer receipt advice). 945 is a shipping CTE (warehouse shipping
-advice). Other sets on this route still produce one event per ST/SE
-transaction set. 944 and 945 produce one CTE per item line, and a failure
-on any line rejects the interchange.
+advice). 944 and 945 produce one CTE per item line, and a failure on any
+line rejects the interchange. 850 and 810 stay one event per ST/SE set.
 
 ```bash
 curl -X POST "$BASE/api/v1/ingest/edi/document" \
@@ -185,8 +288,11 @@ assigned id and the GLN stays empty.
   if none of those appear, the depositor (N1*DE) is the ship-from.
 - 945 ship-from is N1*SF when present, otherwise the warehouse (N1*WH).
 - The event date prefers the header date (W1702 or W0603). A G62 date is
-  used only when that header date is empty. Unparseable dates fall back to
-  the ingest time.
+  used only when that header date is empty. A missing date uses the ingest
+  time. A date that is present and is not CCYYMMDD or YYMMDD is HTTP 400
+  `invalid_edi_date`. A parsed date older than 90 days, or more than 24
+  hours in the future, keeps that calendar date and snaps the ingest
+  timestamp to now.
 - 944 reference document number is the warehouse receipt number, else the
   shipment id. 945 uses the shipment id, else the depositor order number.
   N9 fills a blank reference (`BM`, `SI`, `PO`, `PK`, `CN`, in that order).
@@ -202,8 +308,12 @@ assigned id and the GLN stays empty.
   is 5 MB.
 - `product_description`, `quantity_override`, `unit_of_measure_override`,
   and `location_override` are refused (HTTP 422) when the interchange has
-  more than one transaction set, or when a 944/945 has more than one item
-  line. Post one line, or omit the overrides.
+  more than one transaction set
+  (`edi_overrides_with_multiple_transaction_sets`), or when an 856, 861,
+  944, or 945 has more item lines than transaction sets
+  (`edi_overrides_with_multiple_line_items`). The line-item error text
+  says "warehouse lines" for all four sets. Post one line, or omit the
+  overrides.
 - A 944/945 success body includes `extracted.event_count` and
   `extracted.events`, one summary per line (`line_index`, lot, quantity,
   GTIN, UPC). `document_type` is `X12_944` or `X12_945`.
@@ -213,7 +323,8 @@ assigned id and the GLN stays empty.
 ```bash
 python3 -m pytest services/ingestion/tests/test_csv_xlsx_upload.py -q --no-cov
 python3 -m pytest services/ingestion/tests/test_edi_warehouse_944_945.py \
-  services/ingestion/tests/test_edi_golden.py -q --no-cov
+  services/ingestion/tests/test_edi_golden.py \
+  services/ingestion/tests/test_edi_wire_format_2974_2976_2978.py -q --no-cov
 cd frontend && npm run test:run -- src/__tests__/lib/epcis-upload.test.ts \
   src/__tests__/pages/ingest-epcis.test.tsx
 ```
