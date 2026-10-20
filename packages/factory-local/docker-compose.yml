@@ -1,0 +1,47 @@
+# Local dev stack for factory-local. Credentials have no defaults: copy
+# .env.example to .env (gitignored) and set them. Host ports are overridable
+# (FACTORY_*_PORT) for machines where a local Postgres already holds 5432.
+# Images are pinned by digest (supply-chain gate, scripts/ci/check_supply_chain.py).
+services:
+  opa:
+    image: openpolicyagent/opa:1.21.3@sha256:22a9db16423b94d2acbd4a94da3bebeb79583ed6a52ac15cad459d3de2dbbc4d
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "--watch", "/cartridges"]
+    ports:
+      - "${FACTORY_OPA_PORT:-8181}:8181"
+    volumes:
+      - ./cartridges:/cartridges:ro
+    healthcheck:
+      # The opa image is distroless (no shell or curl); use the opa binary.
+      test: ["CMD", "/opa", "eval", "--fail", "true"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-factory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-factory}
+    ports:
+      - "${FACTORY_PG_PORT:-5432}:5432"
+    volumes:
+      - ./db_init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  neo4j:
+    image: neo4j:5.23-community@sha256:1c7b2197f0fcb5d9ed6456804121667262b3cd0cee8f9e6889d17e265c0b3cb9
+    environment:
+      NEO4J_AUTH: ${NEO4J_AUTH:?set NEO4J_AUTH in .env (see .env.example)}
+    ports:
+      - "${FACTORY_NEO4J_HTTP_PORT:-7474}:7474"
+      - "${FACTORY_NEO4J_BOLT_PORT:-7687}:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/7687' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
