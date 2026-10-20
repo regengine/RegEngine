@@ -218,12 +218,11 @@ echoes the form field. The response `traceability_lot_code` is the first
 event's TLC.
 
 ```bash
-TRACEABILITY_LOT_CODE="FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT"  # pragma: allowlist secret
 curl -X POST "$BASE/api/v1/ingest/edi/document" \
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \
   -H "X-Partner-ID: $PARTNER_ID" \
   -F "file=@asn_856.edi;type=application/edi-x12" \
-  -F "traceability_lot_code=$TRACEABILITY_LOT_CODE"
+  -F "traceability_lot_code=FALLBACK-TLC-WHEN-A-LINE-HAS-NO-LOT" # pragma: allowlist secret
 ```
 
 ## X12 944 and 945 on `POST /api/v1/ingest/edi/document`

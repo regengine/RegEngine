@@ -3,12 +3,26 @@ name: QA Pipeline
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - 'services/**'
+      - 'server/**'
+      - 'qa/**'
+      - 'tests/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - '.github/workflows/qa-pipeline.yml'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.github/ISSUE_TEMPLATE/**'
+    paths:
+      - 'frontend/**'
+      - 'services/**'
+      - 'server/**'
+      - 'qa/**'
+      - 'tests/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - '.github/workflows/qa-pipeline.yml'
 
 concurrency:
   group: qa-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}

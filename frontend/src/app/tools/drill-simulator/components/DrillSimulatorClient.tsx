@@ -279,7 +279,7 @@ ${idx + 1}. Gap: ${g.gapType}
 SELF-CHECK RESULT: ${result.scores.overallScore >= 70 ? 'No gaps indicated by this check' : 'Gaps indicated. Review below'}
 STATUS: ${
             result.scores.overallScore >= 70
-                ? 'Self-check found no gaps in the dimensions evaluated below. This is a self-reported indicator based on the columns you uploaded; it is not an FDA determination and does not evaluate all §1.1455 KDEs or CTEs.'
+                ? 'Self-check found no gaps in the dimensions evaluated below. This is a self reported indicator based on the columns you uploaded; it is not an FDA determination and does not evaluate all §1.1455 KDEs or CTEs.'
                 : 'Self reported gaps in the dimensions evaluated below. Review the items, then verify against the full §1.1455 record set.'
         }
 

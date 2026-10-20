@@ -12,6 +12,7 @@ import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toCsvLine } from '@/lib/csv-serialize';
 
 type CsvRow = Record<string, string>;
 
@@ -77,16 +78,16 @@ const HASH_STEPS = [
 
 // Sample CTE data for demo
 const SAMPLE_RECORDS = [
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B - California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C - Nevada' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E - Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F - Georgia' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H - Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J - Oklahoma' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A, California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B, California' },
+  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C, Nevada' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D, Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E, Florida' },
+  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F, Georgia' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H, Texas' },
+  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J, Oklahoma' },
 ];
 
 interface GeneratedPackage {
@@ -177,10 +178,12 @@ async function generatePackage(records: typeof SAMPLE_RECORDS): Promise<Generate
     previousHash = chainHash;
   }
 
-  // Generate manifest
+  // Generate manifest. Locations carry commas (for example "Farm A, California"),
+  // so fields are quoted per RFC 4180; a correctly quoted reconstruction hashes
+  // to the manifest's recorded CSV hash.
   const csvContent = [
-    Object.keys(csv[0]).join(','),
-    ...csv.map((row) => Object.values(row).join(',')),
+    toCsvLine(Object.keys(csv[0])),
+    ...csv.map((row) => toCsvLine(Object.values(row))),
   ].join('\n');
 
   const csvHash = await sha256(csvContent);
