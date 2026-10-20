@@ -12,6 +12,7 @@ import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { DataTable } from '@/components/ui/data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toCsvLine } from '@/lib/csv-serialize';
 
 type CsvRow = Record<string, string>;
 
@@ -177,10 +178,12 @@ async function generatePackage(records: typeof SAMPLE_RECORDS): Promise<Generate
     previousHash = chainHash;
   }
 
-  // Generate manifest
+  // Generate manifest. Locations carry commas (for example "Farm A, California"),
+  // so fields are quoted per RFC 4180; a correctly quoted reconstruction hashes
+  // to the manifest's recorded CSV hash.
   const csvContent = [
-    Object.keys(csv[0]).join(','),
-    ...csv.map((row) => Object.values(row).join(',')),
+    toCsvLine(Object.keys(csv[0])),
+    ...csv.map((row) => toCsvLine(Object.values(row))),
   ].join('\n');
 
   const csvHash = await sha256(csvContent);
