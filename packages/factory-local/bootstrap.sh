@@ -81,5 +81,11 @@ for port in ports:
             time.sleep(1)
 PY
 
+# Live bills embed with nomic-embed-text (EMBEDDING_MODEL) for copycat detection.
+if command -v ollama >/dev/null 2>&1; then
+  echo "==> ollama pull nomic-embed-text"
+  ollama pull nomic-embed-text || echo "ollama pull failed; live bills need the embedding model" >&2
+fi
+
 if [ "$#" -eq 0 ]; then echo "==> dry run"; else echo "==> live bill: $*"; fi
 .venv/bin/python app/local_factory.py "$@"
