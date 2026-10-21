@@ -30,8 +30,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: legacy-code-scan-${{ github.ref }}
-  cancel-in-progress: true
+  group: legacy-code-scan-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

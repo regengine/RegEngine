@@ -113,10 +113,12 @@ class _ItemLines:
 
     A LIN before the quantity segment fills the draft the next SN1/RCD
     copies. A LIN after a quantity segment that still has no product and
-    no lot fills that line (861 often sends RCD, then LIN). A later LIN
-    starts the next item. PID, REF*LT, and an SLN LT qualifier attach to
-    the open line, or to the draft when no line is open yet. SLN itself
-    is not a CTE.
+    no lot fills that line and leaves it open: 861 sends RCD, then LIN,
+    then PID and REF*LT, and those must stay on this line. Closing at
+    LIN parks the lot on the draft, and the next RCD copies it onto the
+    following line. A later LIN starts the next item. PID, REF*LT, and
+    an SLN LT qualifier attach to the open line, or to the draft when no
+    line is open yet. SLN itself is not a CTE.
     """
 
     def __init__(self) -> None:
@@ -132,8 +134,6 @@ class _ItemLines:
             line = self.lines[self._open]
             if not line["product_description"] and not line["lot_number"]:
                 _apply_id_pairs(line, segment, 2)
-                self._open = None
-                self.item = {"product_description": None, "lot_number": None}
                 return
             self.item = {"product_description": None, "lot_number": None}
             self._open = None
