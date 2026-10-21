@@ -196,6 +196,28 @@ def test_856_lot_is_read_from_lin_ref_or_sln() -> None:
     ]
 
 
+def test_861_ref_lot_after_lin_stays_on_its_line() -> None:
+    """861 item order is RCD, then LIN, then PID and REF*LT.
+
+    Closing the line when LIN arrived dropped the lot onto the next
+    draft. The following RCD then stored that lot under the next line's
+    quantity, and the last lot was discarded.
+    """
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000019*0*P*>~"
+    raw = (
+        isa
+        + "GS*RC*S*R*20260310*1200*1*X*004010~ST*861*0001~BRA*RA-1*20260312*00*1~"
+        + "RCD*1*10*CA**4~LIN**SK*ROMAINE~REF*LT*LOT-A~"
+        + "RCD*2*20*CA**5~LIN**LT*LOT-B~PID*F****Baby Spinach~"
+        + "SE*10*0001~GE*1*1~IEA*1*000000019~"
+    )
+    lines = _extract_fields_for_set("861", _parse_x12_segments(raw))["line_items"]
+    assert [(line["lot_number"], line["quantity"], line["product_description"]) for line in lines] == [
+        ("LOT-A", 10.0, "ROMAINE"),
+        ("LOT-B", 20.0, "Baby Spinach"),
+    ]
+
+
 def test_856_multi_sn1_keeps_each_line() -> None:
     """Each SN1 is its own line. 120 + 80 + 40 must not collapse to 240.
     """
@@ -547,6 +569,41 @@ def _three_line_document(transaction_set: str, lots: tuple[str, str, str], units
             "REF*PO*PO-ABC~SE*12*0001~GE*1*1~IEA*1*000000321~"
         )
     return (isa + body).encode("utf-8")
+
+
+def test_861_ref_lt_after_lin_is_that_lines_tlc(client: TestClient, captured_payload: dict) -> None:
+    """A receiving lot that follows LIN must not move onto the next CTE.
+
+    The operator-supplied form TLC is only the fallback for a line that
+    truly has no lot. Distinct REF*LT values stay on the RCD they follow.
+    """
+    lots = ("00012345678901-A", "00012345678901-B")
+    isa = "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000322*0*P*>~"
+    body = (
+        "GS*RC*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
+        "ST*861*0001~BRA*RA-ABC*20260312*00*1~"
+        "N1*SF*Valley Fresh Farms*92*6141410000014~"
+        "N1*ST*Metro Distribution Center*92*6141410000069~"
+        f"RCD*1*10*CA**4~LIN**SK*ROMAINE-12CT~REF*LT*{lots[0]}~"
+        f"RCD*2*20*LB**5~LIN**SK*SPINACH-6CT~REF*LT*{lots[1]}~"
+        "SE*12*0001~GE*1*1~IEA*1*000000322~"
+    )
+    response = client.post(
+        "/api/v1/ingest/edi/document",
+        data={"traceability_lot_code": _VALID_FSMA_TLC, "tenant_id": TEST_TENANT_ID},
+        files={"file": ("861.edi", (isa + body).encode("utf-8"), "application/edi-x12")},
+        headers={"X-Partner-ID": "WALMART"},
+    )
+    assert response.status_code == 201, response.text
+    events = captured_payload["payload"].events
+    assert [
+        (event.traceability_lot_code, event.quantity, event.unit_of_measure, event.product_description)
+        for event in events
+    ] == [
+        ("00012345678901-A", 10.0, "cases", "ROMAINE-12CT"),
+        ("00012345678901-B", 20.0, "lbs", "SPINACH-6CT"),
+    ]
+    assert _VALID_FSMA_TLC not in {event.traceability_lot_code for event in events}
 
 
 @pytest.mark.parametrize("transaction_set", ["856", "861"])
