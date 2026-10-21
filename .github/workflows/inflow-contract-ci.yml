@@ -1,10 +1,29 @@
 name: Inflow Lab Contract CI
 
+# "Contract Status Gate" is a required context (see workflow_inventory.txt and
+# docs/runbooks/BRANCH_PROTECTION.md), so the `pull_request:` trigger below is
+# deliberately UNFILTERED — required contexts MUST be able to post on every PR,
+# otherwise PRs that miss a path filter are structurally unmergeable.
+#
+# The contract test itself is gated by a "Contract Change Detection" job that
+# inspects git diff and skips when ingestion/shared/simulator code hasn't
+# changed, so docs-only PRs still produce the required "Contract Status Gate"
+# context (it passes vacuously) without running the full contract test.
+#
+# The `push:` trigger keeps its filter: main-branch runs are not gating merges.
 on:
   pull_request:
     branches: [main]
   push:
     branches: [main]
+    paths:
+      - 'services/ingestion/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'requirements.in'
+      - 'requirements.lock'
+      - 'scripts/inflow_lab/**'
+      - '.github/workflows/inflow-contract-ci.yml'
   workflow_dispatch:
     inputs:
       inflow_lab_ref:

@@ -3,6 +3,14 @@ name: Review Gates
 on:
   pull_request:
     branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'services/**'
+      - 'server/**'
+      - 'alembic/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/review-gates.yml'
 
 # Complements existing CI (security.yml, frontend-ci.yml, backend-ci.yml).
 # These checks enforce the code review checklist items that aren't covered
