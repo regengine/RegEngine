@@ -168,7 +168,7 @@ python-docx>=1.2.0
 docx2txt>=0.9
 pytesseract>=0.3.13
 pdf2image>=1.17.0
-Pillow>=12.3.0,<13
+Pillow>=13.0.0,<14
 pyzbar>=0.1.9,<1
 
 # Testing (included for CI — move to dev-requirements.txt if image size matters)
