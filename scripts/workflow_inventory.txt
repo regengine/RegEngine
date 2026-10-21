@@ -44,6 +44,7 @@ legacy-code-scan.yml
 openapi-public-spec.yml
 pr-gate.yml
 pr-quality.yml
+pr-secrets-non-main.yml
 production-uptime.yml
 proxy-smoke.yml
 public-api-surface.yml
@@ -58,11 +59,6 @@ test-suite-check.yml
 
 [required-contexts]
 CI Status Gate
-Contract Status Gate
-Privileged Workflow Tool Pinning
-Secrets Scan (gitleaks)
-Secrets Audit (detect-secrets)
-Browser Storage PII Guard
-SAST (Semgrep)
-Dependency Audit
-Pinned supply chain
+PR Gate: Backend
+PR Gate: Frontend
+PR Gate: Workflow Contract
