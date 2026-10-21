@@ -6,8 +6,7 @@
 # PR never produces "Frontend CI Status Gate". Making those job names required
 # contexts directly would leave cross-area PRs waiting forever on a check that
 # will never post. This workflow is NOT path-filtered: it always runs on every
-# PR to main and posts two checks — "PR Gate: Backend" and "PR Gate: Frontend" —
-# which are the names branch protection requires.
+# PR to main and posts the four contexts branch protection requires.
 #
 # For each area the gate either:
 #   * passes vacuously when that area's paths were not touched (the real
@@ -25,10 +24,10 @@
 # ---------------------------------------------------------------------------
 # REQUIRED CONTEXT — DO NOT RENAME THE `CI Status Gate` JOB
 # ---------------------------------------------------------------------------
-# `main` branch protection requires the context "CI Status Gate" (exact
-# string). The aggregate job at the bottom of this file is the ONLY job in the
-# repository that emits it — the per-area jobs are named "PR Gate: Backend" /
-# "PR Gate: Frontend" and are NOT required contexts.
+# `main` branch protection requires "CI Status Gate", "PR Gate: Backend",
+# "PR Gate: Frontend", and "PR Gate: Workflow Contract" (exact strings).
+# The aggregate job at the bottom of this file is the ONLY job in the
+# repository that emits "CI Status Gate".
 #
 # Before this file gained that aggregate job, "CI Status Gate" was required but
 # emitted by nothing (the real gates are "Backend CI Status Gate" and
@@ -75,6 +74,7 @@ jobs:
 
           # Mirror of backend-ci.yml `pull_request: paths:` — keep in sync.
           PATHS = [
+              "frontend/src/lib/public-openapi.ts", "frontend/package-lock.json",
               "alembic/**", "server/**", "services/**", "shared/**", "kernel/**",
               "plugins/fsma/**", "Dockerfile", "railway.toml", "requirements.in",
               "requirements.lock", "scripts/**", "tests/**", "sample_data/**",
@@ -221,29 +221,75 @@ jobs:
       - name: Check workflow inventory and required contexts
         run: python3 scripts/check_workflow_inventory.py
 
-  # The single required context. Aggregates the per-area jobs so branch
-  # protection has one always-posted check to require, on every PR, whatever
-  # paths it touches. `needs` + an explicit result check (not just implicit
-  # success) so a cancelled or skipped dependency fails closed rather than
-  # reporting green.
+  # security.yml skips docs-only PRs, so keep both secret scanners in this
+  # always-on workflow. Its aggregate gate fails if either scanner fails.
+  secrets:
+    name: "PR Gate: Secrets"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks CLI
+        env:
+          GITLEAKS_VERSION: v8.30.0
+          GITLEAKS_SHA256: 79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e  # pragma: allowlist secret
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz" -o /tmp/gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+      - name: Scan PR commits with gitleaks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          gitleaks detect \
+            --source . \
+            --config .gitleaks.toml \
+            --redact \
+            --verbose \
+            --log-opts="${BASE_SHA}..HEAD"
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install detect-secrets
+        run: pip install detect-secrets==1.5.0
+      - name: Scan for new secrets against baseline
+        run: |
+          # shellcheck disable=SC2046
+          detect-secrets-hook \
+            --baseline .secrets.baseline \
+            --exclude-files '.*\.lock$' \
+            --exclude-files '.*package-lock\.json$' \
+            --exclude-files '\.secrets\.baseline$' \
+            $(git ls-files)
+
+  # The aggregate required context. It combines the per-area, workflow
+  # contract, and secret-scan jobs on every PR. `needs` plus explicit result
+  # checks make a cancelled or skipped dependency fail closed.
   ci-status-gate:
     name: "CI Status Gate"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [backend, frontend, workflow-contract]
+    needs: [backend, frontend, workflow-contract, secrets]
     if: always()
     steps:
-      - name: Verify all area gates passed
+      - name: Verify all gate dependencies passed
         env:
           BACKEND: ${{ needs.backend.result }}
           FRONTEND: ${{ needs.frontend.result }}
           CONTRACT: ${{ needs.workflow-contract.result }}
+          SECRETS: ${{ needs.secrets.result }}
         run: |
           echo "PR Gate: Backend           = $BACKEND"
           echo "PR Gate: Frontend          = $FRONTEND"
           echo "PR Gate: Workflow Contract = $CONTRACT"
-          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ]; then
-            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT"
+          echo "PR Gate: Secrets          = $SECRETS"
+          if [ "$BACKEND" != "success" ] || [ "$FRONTEND" != "success" ] || [ "$CONTRACT" != "success" ] || [ "$SECRETS" != "success" ]; then
+            echo "::error::CI Status Gate failed — backend=$BACKEND frontend=$FRONTEND contract=$CONTRACT secrets=$SECRETS"
             exit 1
           fi
-          echo "All area gates green."
+          echo "All gate dependencies green."

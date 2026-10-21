@@ -13,8 +13,8 @@ on:
       - '.github/workflows/bundle-analysis.yml'
 
 concurrency:
-  group: bundle-analysis-${{ github.ref }}
-  cancel-in-progress: true
+  group: bundle-analysis-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Maximum total JS bundle size in bytes (10MB)
