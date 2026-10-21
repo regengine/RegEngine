@@ -11,6 +11,10 @@ on:
       - 'packages/factory-local/**'
       - '.github/workflows/factory-local-ci.yml'
 
+concurrency:
+  group: factory-local-ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
