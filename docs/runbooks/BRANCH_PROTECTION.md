@@ -1,26 +1,20 @@
 # Branch protection — required contexts and the rules around them
 
-Last verified: 2026-08-01 against the live `main` protection settings
-(`gh api repos/regengine/RegEngine/branches/main/protection`) and
-`.github/workflows/`. The eight required contexts and strict mode match
-the table below and `scripts/workflow_inventory.txt` exactly; see the
+Updated: 2026-10-20 from the four required contexts supplied for `main`.
+Live branch-protection settings were not independently queried in this update.
+The table matches `scripts/workflow_inventory.txt`; see the historical
 `enforce_admins` caveat under "No admin-override merges".
 
 ## Required contexts
 
-`main` requires these eight status-check contexts, with **strict** mode on
-(a PR must be up to date with `main` before merging):
+`main` requires these four status-check contexts:
 
 | Required context | Emitted by | Workflow file |
 | --- | --- | --- |
 | `CI Status Gate` | job `ci-status-gate` | `.github/workflows/pr-gate.yml` |
-| `Contract Status Gate` | job `contract-status-gate` | `.github/workflows/inflow-contract-ci.yml` |
-| `Privileged Workflow Tool Pinning` | job `workflow-tool-pinning` | `.github/workflows/security.yml` |
-| `Secrets Scan (gitleaks)` | job `secrets` | `.github/workflows/security.yml` |
-| `Secrets Audit (detect-secrets)` | job `detect-secrets` | `.github/workflows/security.yml` |
-| `Browser Storage PII Guard` | job `browser-storage-pii` | `.github/workflows/security.yml` |
-| `SAST (Semgrep)` | job `sast` | `.github/workflows/security.yml` |
-| `Dependency Audit` | job `deps` | `.github/workflows/security.yml` |
+| `PR Gate: Backend` | job `backend` | `.github/workflows/pr-gate.yml` |
+| `PR Gate: Frontend` | job `frontend` | `.github/workflows/pr-gate.yml` |
+| `PR Gate: Workflow Contract` | job `workflow-contract` | `.github/workflows/pr-gate.yml` |
 
 A context is a **bare string**. GitHub does not know which workflow is
 supposed to emit it and will not warn you when nothing does — it just
@@ -42,17 +36,18 @@ requiring those job names directly would leave cross-area PRs waiting
 forever on a check that will never post.
 
 `pr-gate.yml` is the shim. It is **not** path-filtered, so it runs on
-every PR, and for each area it either:
+every PR to `main`, and for each area it either:
 
 * passes vacuously when that area's paths were not touched (the real
   workflow legitimately did not run), or
 * waits for and mirrors that area's real gate when the paths were
   touched.
 
-Its `ci-status-gate` job aggregates both area jobs plus the workflow
-contract guard and emits the single required `CI Status Gate` context.
-The per-area jobs (`PR Gate: Backend`, `PR Gate: Frontend`) and the
-contract job are **not** required contexts — they exist for diagnosis.
+Its `ci-status-gate` job aggregates both area jobs, the workflow contract
+guard, and the always-on `PR Gate: Secrets` job (gitleaks and detect-secrets,
+including docs-only PRs); a failed scan fails the required `CI Status Gate`.
+All four required job contexts must remain available on every PR.
+`pr-secrets-non-main.yml` runs the same scans on PRs to other branches.
 
 The path lists inside `pr-gate.yml` must mirror the `pull_request: paths:`
 blocks in `backend-ci.yml` and `frontend-ci.yml`. Drift is biased safe:
@@ -68,21 +63,21 @@ under-detection.
 If a required check cannot pass, fix the check or fix branch protection —
 do not merge past it.
 
-> **Caveat (verified 2026-08-01): this rule is currently POLICY, not a
-> setting.** The live protection has `"enforce_admins": {"enabled": false}`
+> **Historical caveat (verified 2026-08-01): this rule was policy, not a
+> setting.** At that time, live protection had `"enforce_admins": {"enabled": false}`
 > (from `gh api repos/regengine/RegEngine/branches/main/protection`:
-> `{"strict": true, "contexts": [the 8 above], "enforce_admins": false,
+> `{"strict": true, "contexts": [the then-required 8], "enforce_admins": false,
 > "required_approving_review_count": 1, "allow_force_pushes": false,
-> "allow_deletions": false}`), so an admin CAN still merge past a red
-> required check. Turning `enforce_admins` on in the settings UI would
+> "allow_deletions": false}`). An admin could merge past a red required
+> check. Turning `enforce_admins` on in the settings UI would
 > make the rule mechanical — that is an operator decision, deliberately
 > not changed by the verification pass that recorded this.
 >
 > **Decision (2026-08-01): stays OFF for now.** The protection also
-> requires 1 approving review, and PR authors cannot approve their own
+> required 1 approving review, and PR authors cannot approve their own
 > PRs — with a single maintainer, every merge necessarily uses the admin
 > path to satisfy the review requirement (with green checks). Enabling
-> `enforce_admins` today would therefore hard-block ALL merges, not just
+> `enforce_admins` then would therefore have hard-blocked ALL merges, not just
 > overrides of red checks. Revisit when a second reviewer exists, or if
 > the review requirement is dropped to 0 (then `enforce_admins` can be
 > enabled and the no-override rule becomes fully mechanical).
@@ -94,16 +89,14 @@ Two incidents came from overrides:
   CI Status Gate` and `Frontend CI Status Gate`). Every PR in that window
   was merged via admin override, which also silenced every other required
   check on those merges.
-* **The unreachable context.** `security.yml` carried
+* **The unreachable context.** `security.yml` previously carried
   `paths-ignore: ['**/*.md', 'docs/**', ...]` on `pull_request`, so a
   docs-only PR never produced six of the eight required contexts and was
-  structurally unmergeable without an override. That filter is now
-  removed from the `pull_request` trigger (the `push` trigger keeps it —
-  main-branch runs do not gate merges), which also means secret scanning
-  now covers markdown and `docs/`, where secrets actually do get pasted.
+  structurally unmergeable without an override. That filter can now be
+  restored because those six contexts are no longer required.
 
-Both classes now fail CI loudly via the contract guard instead of being
-discovered at merge time.
+Both classes fail the contract guard when they affect a currently required
+context.
 
 ### One migration-bearing PR on `main` at a time
 

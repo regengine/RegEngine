@@ -13,6 +13,28 @@ name: Supply Chain Gate
 # The `push:` trigger keeps its filter: main-branch runs are not gating merges.
 on:
   pull_request:
+    paths:
+      - 'requirements*'
+      - '**/requirements*'
+      - '**/package*.json'
+      - '**/pyproject.toml'
+      - '**/uv.lock'
+      - '**/poetry.lock'
+      - '**/Pipfile.lock'
+      - 'Dockerfile*'
+      - '**/Dockerfile*'
+      - '**/*.Dockerfile'
+      - '**/compose*.yml'
+      - '**/compose*.yaml'
+      - '**/docker-compose*.yml'
+      - '**/docker-compose*.yaml'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      # The pinning script also inspects shell installs and infra images.
+      - '**/*.sh'
+      - 'infra/**'
+      - 'scripts/ci/check_supply_chain.py'
+      - 'scripts/ci/supply_chain_baseline.json'
   push:
     branches: [main]
     paths:
@@ -28,6 +50,10 @@ on:
 concurrency:
   group: supply-chain-${{ github.ref }}
   cancel-in-progress: true
+
+concurrency:
+  group: supply-chain-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

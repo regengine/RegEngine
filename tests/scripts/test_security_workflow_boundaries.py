@@ -15,9 +15,26 @@ def jobs():
     return yaml.safe_load((ROOT / ".github/workflows/security.yml").read_text())["jobs"]
 
 
-def test_tenant_job_is_unconditional_and_uses_only_disposable_role_targets():
+def test_secret_scans_cover_main_and_non_main_prs():
+    main = yaml.safe_load((ROOT / ".github/workflows/pr-gate.yml").read_text())
+    other = yaml.safe_load((ROOT / ".github/workflows/pr-secrets-non-main.yml").read_text())
+    main_pr = main.get("on", main.get(True))["pull_request"]
+    other_pr = other.get("on", other.get(True))["pull_request"]
+
+    assert main_pr == {"branches": ["main"]}
+    assert other_pr is None  # No branch or path filter can omit a non-main PR.
+    assert other["jobs"]["secrets"]["if"] == "github.base_ref != 'main'"
+    assert "secrets" in main["jobs"]["ci-status-gate"]["needs"]
+    for workflow in (main, other):
+        steps = workflow["jobs"]["secrets"]["steps"]
+        assert any("gitleaks detect" in step.get("run", "") for step in steps)
+        assert any("detect-secrets-hook" in step.get("run", "") for step in steps)
+
+
+def test_tenant_job_filters_pr_only_and_uses_only_disposable_role_targets():
     job = jobs()["tenant-isolation"]
-    assert "if" not in job
+    assert job["needs"] == "changes"
+    assert job["if"] == "${{ always() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.tenant == 'true') }}"
     assert "secrets." not in str(job)
     assert job["services"]["postgres"]["ports"] == ["5432:5432"]
     step = next(s for s in job["steps"] if s.get("name") == "Run tenant isolation tests")
