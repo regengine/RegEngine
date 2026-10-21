@@ -33,6 +33,7 @@ if (!isStatic && isDevServer) {
 }
 
 const nextConfig = {
+    poweredByHeader: false,
     output: isStatic ? 'export' : (isDocker ? 'standalone' : undefined),
     // (#558) Always enable Next.js image optimization.
     // sharp is installed (package.json) and handles build-time optimization for
