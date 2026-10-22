@@ -1,0 +1,167 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: false
+  high_level_summary_in_walkthrough: false
+  collapse_walkthrough: true
+  changed_files_summary: false
+  sequence_diagrams: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  in_progress_fortune: false
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+    ignore_title_keywords:
+      - WIP
+      - "[skip review]"
+    ignore_usernames:
+      - dependabot[bot]
+      - renovate[bot]
+
+  path_filters:
+    # Lockfiles
+    - "!**/uv.lock"
+    - "!**/package-lock.json"
+    - "!**/pnpm-lock.yaml"
+    - "!**/yarn.lock"
+    - "!**/poetry.lock"
+    - "!**/requirements.lock"
+    # Generated, build output, vendored code
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/build/**"
+    - "!**/.next/**"
+    - "!**/vendor/**"
+    - "!**/generated/**"
+    - "!**/*.generated.*"
+    - "!**/*_pb2.py"
+    - "!**/*_pb2_grpc.py"
+    - "!frontend/next-env.d.ts"
+    - "!build-sha.txt"
+    - "!**/*.min.js"
+    - "!**/*.min.css"
+    - "!**/*.map"
+    # Snapshots and fixtures
+    - "!**/__snapshots__/**"
+    - "!**/*.snap"
+    - "!**/fixtures/**"
+    - "!services/test_data/**"
+    - "!services/ingestion/tests/data/**"
+    # Demo, sample, and export artifacts
+    - "!demo_exports/**"
+    - "!sample_data/**"
+    - "!output/**"
+    - "!artifacts/**"
+    - "!production_bundle/**"
+    - "!docs/qa/**/artifacts/**"
+    # Large data and dumps
+    - "!**/*.csv"
+    - "!**/*.jsonl"
+    - "!**/*.parquet"
+    - "!**/*.dump"
+    - "!**/*.sql.gz"
+    # Backups and temp files
+    - "!**/*.bak"
+    - "!**/*.orig"
+    - "!**/backups/**"
+    - "!**/tmp/**"
+    - "!.ruff_noise_tmp_*"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        RegEngine is an FSMA 204 food traceability compliance platform. The production
+        spine is ingest -> normalize -> validate -> persist evidence -> export.
+        Flag any change that could drop, truncate, silently default, reorder, or corrupt
+        Key Data Elements (KDEs) or Critical Tracking Events (CTEs: harvesting, cooling,
+        initial packing, first land-based receiving, shipping, receiving, transformation).
+        Traceability lot codes (TLCs) must be preserved exactly as received (no trimming,
+        case-folding, or re-generation) and must stay linked to their source and
+        reference documents. Records must remain producible as a sortable spreadsheet
+        within 24 hours of an FDA request; flag anything that slows, breaks, or makes
+        incomplete the FDA export path. Validation failures must be recorded as
+        evidence, never swallowed. Audit and hash-chain records are append-only.
+        Ignore pure style nits; focus on correctness, data loss, and security.
+
+    - path: "frontend/**/*.{ts,tsx}"
+      instructions: |
+        Next.js 16 App Router with TypeScript.
+        - Check the server/client component boundary: "use client" files must not import
+          server-only modules, secrets, or database clients (frontend/src/lib/db.ts,
+          server-side Supabase clients).
+        - Only NEXT_PUBLIC_* env vars may reach client bundles. Flag any secret, service
+          role key, or API key referenced from client code.
+        - Route handlers, server actions, and frontend/src/proxy.ts must verify auth and
+          tenant scope server-side; never trust a tenant_id supplied by the client.
+        - State-changing requests must go through the existing CSRF helpers
+          (fetch-with-csrf.ts / csrf.ts) and respect the CSP in csp.ts.
+        - Flag UI that hides, rounds, or drops KDE/CTE fields or lot codes in
+          traceability views and CSV/FDA exports (csv-serialize.ts).
+
+    - path: "{services,server,regengine}/**/*.py"
+      instructions: |
+        Python FastAPI services, deployed as one consolidated process (server/main.py)
+        that mounts every service router.
+        - Validate all external input with Pydantic models; reject unknown or malformed
+          KDE fields rather than coercing them.
+        - Tenant isolation is load-bearing: every query must be scoped to the
+          authenticated tenant (tenant context via app.tenant_id / get_tenant_context()).
+          Flag any query, cache key, Neo4j traversal, Kafka/Redpanda message, or Redis key
+          that is not tenant-scoped, or any tenant_id taken from the request body instead
+          of the authenticated principal.
+        - New or changed routes need an explicit auth policy in
+          server/route_security_policy.py (public operations must be listed
+          deliberately); flag routes that become public by omission.
+        - Never log API keys, tokens, passwords, connection strings, or PII (names,
+          emails, phone numbers, addresses). Flag broad exception handlers that hide
+          ingestion or validation failures.
+        - Flag database fallbacks (e.g. SQLite or in-memory stores) on production paths.
+
+    - path: "{alembic,sql,supabase}/**"
+      instructions: |
+        PostgreSQL migrations (Alembic versions in alembic/versions, raw SQL in
+        alembic/sql and sql/prod-apply) and Supabase edge functions.
+        - Every new table holding tenant data must ENABLE (and FORCE) ROW LEVEL SECURITY
+          with tenant-scoped policies (tenant_id = get_tenant_context()) for both USING
+          and WITH CHECK. The only allowed bypass is the existing
+          regengine.is_sysadmin + regengine_sysadmin role pattern.
+        - Reject policies that fall back to a default/nil tenant, use USING (true), or
+          treat a missing tenant context as "allow".
+        - Migrations must be reversible: downgrade() must actually undo upgrade(), and
+          destructive steps (DROP COLUMN/TABLE, type narrowing) need explicit
+          justification because they can destroy KDE/CTE evidence.
+        - Flag lock-heavy operations on large tables without lock_timeout or
+          CONCURRENTLY, and anything that weakens hash-chain immutability triggers.
+        - Supabase functions must verify webhook signatures and never expose the service
+          role key.
+
+    - path: "**/{tests,__tests__}/**"
+      instructions: |
+        Tests (pytest for Python, Vitest/Playwright for frontend).
+        - Security-relevant changes need negative-path tests: unauthenticated access,
+          cross-tenant access, invalid input, and replay.
+        - Flag tests that were weakened, skipped, or loosened (broader asserts, removed
+          tenant checks, xfail) to make a change pass.
+        - Do not request coverage for trivial code.
+
+chat:
+  art: false
+
+knowledge_base:
+  opt_out: false
+  learnings:
+    scope: auto
+  issues:
+    scope: auto
+  pull_requests:
+    scope: auto
