@@ -108,4 +108,26 @@ describe('createSupabaseAdminClient', () => {
 
     expect(createClient).toHaveBeenCalledWith('https://example.supabase.co', 'legacy-service-role', expect.any(Object));
   });
+
+  it('treats empty or whitespace env values as unset so fallbacks apply', async () => {
+    vi.stubEnv('SUPABASE_URL', '   ');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('SUPABASE_SECRET_KEY', '');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'legacy-service-role');
+    const { createSupabaseAdminClient } = await import('@/lib/supabase/admin');
+
+    createSupabaseAdminClient();
+
+    expect(createClient).toHaveBeenCalledWith('https://example.supabase.co', 'legacy-service-role', expect.any(Object));
+  });
+
+  it('throws when every key value is blank', async () => {
+    vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
+    vi.stubEnv('SUPABASE_SECRET_KEY', ' ');
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '');
+    const { createSupabaseAdminClient } = await import('@/lib/supabase/admin');
+
+    expect(() => createSupabaseAdminClient()).toThrow('Supabase admin client is not configured.');
+    expect(createClient).not.toHaveBeenCalled();
+  });
 });

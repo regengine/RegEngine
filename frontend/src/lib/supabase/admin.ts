@@ -7,8 +7,9 @@ import { createClient } from '@supabase/supabase-js';
 // this module in, so the key can never ship in a browser bundle. Never read
 // the key from a NEXT_PUBLIC_ variable: those are inlined into client code.
 export function createSupabaseAdminClient() {
-  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  // Empty or whitespace-only values count as unset so the fallback still applies.
+  const url = process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SECRET_KEY?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
   if (!url || !key) {
     throw new Error('Supabase admin client is not configured.');
