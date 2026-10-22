@@ -4,9 +4,10 @@
 --
 -- WHY -------------------------------------------------------------------
 -- The public submit_assessment_lead RPC is the only write door for assessment
--- leads. Keep its 24-hour email dedupe/enrichment and insert behavior from
--- supabase-anon-lead-capture-lockdown.sql, while bounding input and request
--- volume. The global 60-per-10-minutes limit counts assessment submissions.
+-- leads. Keep its 24-hour email dedupe and insert behavior from
+-- supabase-anon-lead-capture-lockdown.sql, but leave existing rows unchanged
+-- on anonymous duplicates. The global 60-per-10-minutes limit counts
+-- assessment submissions.
 
 DROP TABLE IF EXISTS public.assessment_lead_throttle;
 
@@ -68,16 +69,7 @@ BEGIN
     LIMIT 1;
 
     IF v_existing_id IS NOT NULL THEN
-        UPDATE public.assessment_submissions SET
-            facility_count        = coalesce(nullif(payload->>'facility_count', ''), facility_count),
-            phone                 = coalesce(nullif(trim(payload->>'phone'), ''), phone),
-            annual_revenue        = coalesce(nullif(payload->>'annual_revenue', ''), annual_revenue),
-            current_system        = coalesce(nullif(payload->>'current_system', ''), current_system),
-            biggest_retailer      = coalesce(nullif(payload->>'biggest_retailer', ''), biggest_retailer),
-            compliance_deadline   = coalesce(nullif(payload->>'compliance_deadline', ''), compliance_deadline),
-            recent_fda_inspection = coalesce(nullif(payload->>'recent_fda_inspection', ''), recent_fda_inspection),
-            product_categories    = coalesce(nullif(payload->>'product_categories', ''), product_categories)
-        WHERE id = v_existing_id;
+        -- A supplied email does not prove ownership of the existing lead.
         RETURN;
     END IF;
 
