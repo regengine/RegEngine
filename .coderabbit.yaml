@@ -51,10 +51,9 @@ reviews:
     - "!**/*.min.js"
     - "!**/*.min.css"
     - "!**/*.map"
-    # Snapshots and fixtures
+    # Snapshots and bulk test data (fixtures stay in review scope)
     - "!**/__snapshots__/**"
     - "!**/*.snap"
-    - "!**/fixtures/**"
     - "!services/test_data/**"
     - "!services/ingestion/tests/data/**"
     # Demo, sample, and export artifacts
