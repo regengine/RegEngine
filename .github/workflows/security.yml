@@ -460,9 +460,9 @@ jobs:
             --ignore-vuln CVE-2026-54282
             --ignore-vuln CVE-2026-54283
           )
-          # Include root requirements.lock (pip-compile output, #1139) alongside
-          # any per-service requirements*.txt files still present.
-          python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
+          # Audit the lockfiles installed by the root and factory-local apps.
+          # The factory-local bootstrap uses its lock with --require-hashes.
+          python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; [ -f packages/factory-local/requirements.lock ] && echo ./packages/factory-local/requirements.lock; } | sort)
           if [ -n "$python_files" ]; then
             printf '%s\n' "$python_files" > pip-audit-targets.txt
             {
@@ -471,9 +471,14 @@ jobs:
               while IFS= read -r req_file; do
                 [ -n "$req_file" ] || continue
                 echo "Auditing $req_file" >&2
+                pip_audit_args=()
+                if [ "$req_file" = "./packages/factory-local/requirements.lock" ]; then
+                  # This fully pinned lock targets Python 3.12; the audit job uses 3.11.
+                  pip_audit_args=(--no-deps --disable-pip)
+                fi
                 audit_json=$(mktemp)
-                pip-audit -r "$req_file" --format json --output "$audit_json" "${pip_audit_ignores[@]}" || true
-                pip-audit -r "$req_file" "${pip_audit_ignores[@]}" >&2
+                pip-audit -r "$req_file" --format json --output "$audit_json" "${pip_audit_args[@]}" "${pip_audit_ignores[@]}" || true
+                pip-audit -r "$req_file" "${pip_audit_args[@]}" "${pip_audit_ignores[@]}" >&2
                 if [ $first -eq 0 ]; then
                   printf ',\n'
                 fi
