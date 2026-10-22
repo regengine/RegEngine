@@ -471,9 +471,14 @@ jobs:
               while IFS= read -r req_file; do
                 [ -n "$req_file" ] || continue
                 echo "Auditing $req_file" >&2
+                pip_audit_args=()
+                if [ "$req_file" = "./packages/factory-local/requirements.lock" ]; then
+                  # This fully pinned lock targets Python 3.12; the audit job uses 3.11.
+                  pip_audit_args=(--no-deps --disable-pip)
+                fi
                 audit_json=$(mktemp)
-                pip-audit -r "$req_file" --format json --output "$audit_json" "${pip_audit_ignores[@]}" || true
-                pip-audit -r "$req_file" "${pip_audit_ignores[@]}" >&2
+                pip-audit -r "$req_file" --format json --output "$audit_json" "${pip_audit_args[@]}" "${pip_audit_ignores[@]}" || true
+                pip-audit -r "$req_file" "${pip_audit_args[@]}" "${pip_audit_ignores[@]}" >&2
                 if [ $first -eq 0 ]; then
                   printf ',\n'
                 fi
