@@ -460,9 +460,9 @@ jobs:
             --ignore-vuln CVE-2026-54282
             --ignore-vuln CVE-2026-54283
           )
-          # Include root requirements.lock (pip-compile output, #1139) alongside
-          # any per-service requirements*.txt files still present.
-          python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; } | sort)
+          # Audit the lockfiles installed by the root and factory-local apps.
+          # The factory-local bootstrap uses its lock with --require-hashes.
+          python_files=$( { find . -name requirements.txt -not -path "./.venv/*" -not -path "./frontend/*"; [ -f requirements.lock ] && echo ./requirements.lock; [ -f packages/factory-local/requirements.lock ] && echo ./packages/factory-local/requirements.lock; } | sort)
           if [ -n "$python_files" ]; then
             printf '%s\n' "$python_files" > pip-audit-targets.txt
             {
