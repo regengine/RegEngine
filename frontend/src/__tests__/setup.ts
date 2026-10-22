@@ -15,6 +15,10 @@ afterEach(() => {
     cleanup()
 })
 
+// 'server-only' throws outside the react-server condition; vitest runs every
+// module as a client import, so neutralize it for tests.
+vi.mock('server-only', () => ({}))
+
 // Mock Next.js router
 vi.mock('next/navigation', () => ({
     useRouter: () => ({

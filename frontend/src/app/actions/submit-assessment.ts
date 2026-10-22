@@ -1,6 +1,6 @@
 'use server';
 
-import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { isValidEmail } from '@/lib/validation';
 
 export interface AssessmentFormData {
@@ -47,12 +47,12 @@ export async function submitAssessment(
       return { success: false, error: 'Please enter a valid email address.' };
     }
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
 
     // Dedupe-by-email and enrichment run inside submit_assessment_lead(), a
-    // SECURITY DEFINER function: the anon/authenticated roles hold INSERT and
-    // nothing else on assessment_submissions, so they cannot read or modify
-    // leads directly. The function returns void — it is a write-only door.
+    // SECURITY DEFINER function that returns void — a write-only door. The
+    // call runs with the server-only secret key (createSupabaseAdminClient),
+    // never the browser-exposed anon key.
     const { error } = await supabase.rpc('submit_assessment_lead', {
       payload: {
         name: data.name.trim(),
