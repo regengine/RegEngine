@@ -422,6 +422,54 @@ def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
     )
 
 
+def test_blank_quantity_element_is_present_and_not_synthesized() -> None:
+    """An empty quantity slot was sent. It must not become quantity 1.0.
+
+    ``SN1*1**CA`` parses as assigned id, blank quantity, unit CA.
+    Treating the blank as "no element" made ``_safe_float`` store 1.0.
+    A segment that stops before the quantity slot still counts as absent,
+    which is the historical default for a missing element.
+    """
+    from app.edi_ingestion.routes import _quantity_element_present
+
+    assert _quantity_element_present("856", [["SN1", "1", "", "CA"]]) is True
+    assert _quantity_element_present("856", [["SN1", "", "", "CA"]]) is True
+    assert _quantity_element_present("861", [["RCD", "1", "", "CA", "", "4"]]) is True
+    assert _quantity_element_present("944", [["W07", "", "CA"]]) is True
+    assert _quantity_element_present("945", [["W12", "CC", "80", "", "0", "CA"]]) is True
+    assert _quantity_element_present("856", [["SN1", "1"]]) is False
+    assert _quantity_element_present("856", [["BSN", "00", "ASN"]]) is False
+
+
+def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload: dict) -> None:
+    """POST a one-line ASN whose SN1 quantity element is empty.
+
+    The unit and the rest of the shipment are present, so the only defect
+    is the blank quantity. The document must be refused and must not be
+    persisted as one shipped unit.
+    """
+    raw = _interchange(
+        [
+            _856_set(
+                control="0001",
+                asn="ASN-BLANK-QTY",
+                ship_from="Valley Fresh Farms",
+                bol="BOL-BLANK-QTY",
+                sn1_lines=(("", "CA"),),
+            )
+        ],
+        isa13="000029744",
+    )
+    parsed = _parse_x12_segments(raw.decode("utf-8"))
+    sn1 = next(segment for segment in parsed if segment and segment[0] == "SN1")
+    assert sn1[2] == ""
+
+    response = _post(client, raw, name="blank-qty.edi")
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"]["error"] == "edi_non_positive_quantity"
+    assert "payload" not in captured_payload
+
+
 def test_sn1_lines_with_different_units_stay_separate_events(client: TestClient, captured_payload: dict) -> None:
     """120 cases and 80 pounds are two CTEs. They are not 200 of either unit.
     """
