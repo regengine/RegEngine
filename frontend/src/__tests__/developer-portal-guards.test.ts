@@ -116,9 +116,9 @@ describe('developer portal static guards', () => {
     });
 
     it('keeps what the rest of the app still uses', () => {
-        // lib/supabase/server.ts: app/actions/submit-assessment.ts.
-        expect(existsSync(path.join(SRC, 'lib', 'supabase', 'server.ts'))).toBe(true);
-        expect(read(path.join(SRC, 'app', 'actions', 'submit-assessment.ts'))).toContain('@/lib/supabase/server');
+        // lib/supabase/admin.ts: app/actions/submit-assessment.ts.
+        expect(existsSync(path.join(SRC, 'lib', 'supabase', 'admin.ts'))).toBe(true);
+        expect(read(path.join(SRC, 'app', 'actions', 'submit-assessment.ts'))).toContain('@/lib/supabase/admin');
         // DocSidebar / DocPrevNext: app/docs/layout.tsx.
         const docsLayout = read(path.join(SRC, 'app', 'docs', 'layout.tsx'));
         for (const name of ['DocSidebar', 'DocPrevNext']) {
