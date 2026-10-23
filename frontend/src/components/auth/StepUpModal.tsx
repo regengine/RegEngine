@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Fingerprint, Loader2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -17,20 +19,30 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { isValidEmail, performPasskeyLogin, seedPasswordlessClientUser } from '@/lib/passwordless-auth';
-import { STEP_UP_REQUIRED_EVENT } from '@/lib/step-up-events';
+import {
+  DEFAULT_STEP_UP_REASON,
+  STEP_UP_REQUIRED_EVENT,
+  type StepUpEventDetail,
+} from '@/lib/step-up-events';
 
 export function StepUpModal() {
   const { user } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState(DEFAULT_STEP_UP_REASON);
+  const [returnTo, setReturnTo] = useState<string | undefined>();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const onStepUpRequired = () => {
+    const onStepUpRequired = (event: Event) => {
+      const detail = (event as CustomEvent<StepUpEventDetail | null>).detail;
       if (user?.email) {
         setEmail(user.email);
       }
+      setReason(detail?.reason || DEFAULT_STEP_UP_REASON);
+      setReturnTo(detail?.returnTo);
       setOpen(true);
       setError(null);
     };
@@ -38,6 +50,14 @@ export function StepUpModal() {
     window.addEventListener(STEP_UP_REQUIRED_EVENT, onStepUpRequired);
     return () => window.removeEventListener(STEP_UP_REQUIRED_EVENT, onStepUpRequired);
   }, [user?.email]);
+
+  const handleCancel = () => {
+    setOpen(false);
+    setError(null);
+    if (returnTo) {
+      router.push(returnTo);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -65,17 +85,15 @@ export function StepUpModal() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : handleCancel())}>
       <DialogContent className="border-re-border bg-re-surface-card sm:max-w-md">
         <DialogHeader>
           <Badge tone="neutral" mono className="mb-2 w-fit uppercase">
             <Fingerprint className="h-3.5 w-3.5" aria-hidden="true" />
-            Step-up required
+            Passkey required
           </Badge>
-          <DialogTitle>Authenticate with your passkey</DialogTitle>
-          <DialogDescription>
-            This action requires a high-assurance session before it can continue.
-          </DialogDescription>
+          <DialogTitle>Confirm it&apos;s you</DialogTitle>
+          <DialogDescription>{reason}</DialogDescription>
         </DialogHeader>
 
         {error && (
@@ -111,6 +129,12 @@ export function StepUpModal() {
             )}
           </Button>
         </form>
+
+        <DialogFooter>
+          <Button type="button" variant="ghost" className="w-full" onClick={handleCancel}>
+            Cancel
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

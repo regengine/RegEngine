@@ -1,62 +1,69 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { StepUpModal } from '@/components/auth/StepUpModal';
 import { apiClient } from '@/lib/api-client';
-import { STEP_UP_REQUIRED_EVENT } from '@/lib/step-up-events';
+import { DEFAULT_STEP_UP_REASON, STEP_UP_REQUIRED_EVENT } from '@/lib/step-up-events';
+
+vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ user: null }) }));
+
+function stepUpResponse(envelope: 'detail' | 'error') {
+  return new Response(
+    JSON.stringify({
+      [envelope]: {
+        code: 'requires_step_up',
+        message: 'High assurance authentication required.',
+        auth_method: 'email_otp',
+      },
+    }),
+    {
+      status: 403,
+      statusText: 'Forbidden',
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+}
 
 describe('step-up interceptor', () => {
+  const listener = vi.fn();
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    listener.mockReset();
+    window.addEventListener(STEP_UP_REQUIRED_EVENT, listener);
   });
 
-  it('dispatches a global event for requires_step_up responses', async () => {
-    const listener = vi.fn();
-    window.addEventListener(STEP_UP_REQUIRED_EVENT, listener);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          detail: {
-            code: 'requires_step_up',
-            message: 'High assurance authentication required.',
-            auth_method: 'email_otp',
-          },
-        }),
-        {
-          status: 403,
-          statusText: 'Forbidden',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    ));
-
-    await expect(apiClient.getAdminHealth()).rejects.toThrow(/forbidden/i);
-
-    expect(listener).toHaveBeenCalledTimes(1);
+  afterEach(() => {
     window.removeEventListener(STEP_UP_REQUIRED_EVENT, listener);
+    vi.unstubAllGlobals();
   });
 
-  it('dispatches for the backend structured error envelope', async () => {
-    const listener = vi.fn();
-    window.addEventListener(STEP_UP_REQUIRED_EVENT, listener);
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          error: {
-            code: 'requires_step_up',
-            message: 'High assurance authentication required.',
-            auth_method: 'email_otp',
-          },
-        }),
-        {
-          status: 403,
-          statusText: 'Forbidden',
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    ));
+  it('does not prompt when a page-load read returns requires_step_up after a fresh sign in', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('detail')));
+    render(<StepUpModal />);
 
-    await expect(apiClient.getAdminHealth()).rejects.toThrow(/forbidden/i);
+    await expect(apiClient.getQAHealth()).rejects.toThrow(/forbidden/i);
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('prompts with the action reason when a write is blocked', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('detail')));
+    render(<StepUpModal />);
+
+    await expect(apiClient.revokeAPIKey('key-id')).rejects.toThrow(/forbidden/i);
 
     expect(listener).toHaveBeenCalledTimes(1);
-    window.removeEventListener(STEP_UP_REQUIRED_EVENT, listener);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe(DEFAULT_STEP_UP_REASON);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(DEFAULT_STEP_UP_REASON));
+  });
+
+  it('recognizes the backend structured error envelope on writes', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('error')));
+
+    await expect(apiClient.revokeAPIKey('key-id')).rejects.toThrow(/forbidden/i);
+
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });

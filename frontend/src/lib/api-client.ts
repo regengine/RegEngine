@@ -1,6 +1,6 @@
 import { getServiceURL } from './api-config';
 import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
-import { emitStepUpRequired } from './step-up-events';
+import { DEFAULT_STEP_UP_REASON, emitStepUpRequired } from './step-up-events';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -164,6 +164,12 @@ type RequestConfig = {
   params?: RequestParams;
   timeout?: number;
   responseType?: 'blob';
+  /**
+   * Opens the passkey step-up dialog with this sentence if the backend
+   * answers requires_step_up. GETs without it fail quietly so page loads
+   * never prompt; writes fall back to DEFAULT_STEP_UP_REASON.
+   */
+  stepUpReason?: string;
 };
 
 type ApiResponse<T = any> = {
@@ -312,8 +318,10 @@ class APIClient {
           };
           error.isAxiosError = true;
           error.response = { data: responseData, headers: responseHeaders, status: response.status };
-          if (response.status === 403) {
-            emitStepUpRequired(responseData);
+          const stepUpReason = config.stepUpReason
+            ?? (method.toUpperCase() === 'GET' ? undefined : DEFAULT_STEP_UP_REASON);
+          if (response.status === 403 && stepUpReason) {
+            emitStepUpRequired(responseData, { reason: stepUpReason });
           }
           throw error;
         }
