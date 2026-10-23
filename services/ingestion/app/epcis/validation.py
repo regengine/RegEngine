@@ -13,14 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from .extraction import _extract_event_lot, _lot_from_identifier
-
-# FSMAEvent requires a GTIN-14 TLC. A GS1 lot-level identifier (full LGTIN
-# URI, or a Digital Link /01/<gtin>/10/<lot>) is the TLC the partner sent
-# and does not match that pattern. The gate checks every other field
-# against this stand-in, then puts the real identifier back. A plain lot
-# string such as "ABC123" is not a lot-level GS1 id and still fails.
-_GS1_LOT_LEVEL_TLC_STANDIN = "00000000000000-GS1"
+from .extraction import _extract_event_lot
 
 logger = logging.getLogger("epcis-ingestion")
 
@@ -176,11 +169,7 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     "type": "value_error",
                 }
             ]
-            logger.warning(
-                "fsma_event_validation_failed tenant=%s error_count=%s",
-                tenant_id,
-                len(errors),
-            )
+            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
 
@@ -195,10 +184,10 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
         if normalized.get("product_description"):
             optional_fields["product_description"] = normalized["product_description"]
 
-        def _build(tlc_value: object) -> dict:
+        try:
             return FSMAEvent(
                 event_type=fsma_type,
-                tlc=tlc_value,
+                tlc=normalized.get("tlc"),
                 quantity=normalized.get("quantity"),
                 unit_of_measure=normalized.get("unit_of_measure"),
                 location_gln=normalized.get("location_id"),
@@ -210,31 +199,9 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                 tenant_id=tenant_id,
                 **optional_fields,
             ).model_dump()
-
-        try:
-            return _build(normalized.get("tlc"))
         except ValidationError as exc:
             errors = exc.errors()
-            only_tlc = bool(errors) and all((err.get("loc") or [None])[0] == "tlc" for err in errors)
-            received_tlc = normalized.get("tlc")
-            if only_tlc and _lot_from_identifier(received_tlc):
-                try:
-                    dumped = _build(_GS1_LOT_LEVEL_TLC_STANDIN)
-                except ValidationError as other:
-                    logger.warning(
-                        "fsma_event_validation_failed tenant=%s error_count=%s",
-                        tenant_id,
-                        len(other.errors()),
-                    )
-                    _audit_log_validation_failure(other.errors(), tenant_id, normalized)
-                    return None
-                dumped["tlc"] = received_tlc
-                return dumped
-            logger.warning(
-                "fsma_event_validation_failed tenant=%s error_count=%s",
-                tenant_id,
-                len(errors),
-            )
+            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
     except ImportError:
