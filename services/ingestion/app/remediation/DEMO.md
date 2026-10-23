@@ -6,18 +6,19 @@ API key with `remediation.read` / `remediation.write` / `remediation.export`
 scopes (or a wildcard key); supplier endpoints are token-scoped and
 unauthenticated. Tenants must have UUID ids.
 
-## One-command verified demo (no server needed)
+## Data-free checks (no server needed)
 
-The integration suite drives the entire loop against a real Postgres with
-FORCE RLS enforced through a non-superuser role:
+The current tests cover empty and header-only uploads. Row-level integration
+coverage requires real supplier data:
 
 ```bash
 cd services/ingestion && pytest tests/remediation -q
 ```
 
-`test_successful_correction_releases_record` is the PRD happy path end-to-end.
-
 ## Curl sequence (running monolith)
+
+Use an actual supplier manifest with a row that needs correction, and set
+`SUPPLIER_ORG` and `SUPPLIER_EMAIL` from that supplier's records.
 
 ```bash
 BASE=http://localhost:8000        # monolith
@@ -26,8 +27,8 @@ AUTH="X-RegEngine-API-Key: $API_KEY"
 # 1. Supplier CSV arrives; RegEngine preserves bytes + SHA-256, validates,
 #    stages rows, and opens exception + remediation cases for defects.
 curl -sf -X POST "$BASE/api/v1/remediation/manifests" -H "$AUTH" \
-  -F "file=@services/ingestion/tests/data/supplier_sprint/05_missing_tlc_source.csv" \
-  -F "supplier_org=Valley Farms LLC" | tee /tmp/upload.json
+  -F "file=@path/to/your-supplier-manifest.csv" \
+  -F "supplier_org=$SUPPLIER_ORG" | tee /tmp/upload.json
 RUN=$(jq -r .ingestion_run_id /tmp/upload.json)
 CASE=$(jq -r '.records[] | select(.blocking) | .remediation_case_id' /tmp/upload.json)
 
@@ -43,7 +44,7 @@ curl -sf -X POST "$BASE/api/v1/remediation/manifests/$RUN/release" -H "$AUTH" -d
 #    email delivery by the drainer (delivery.py).
 curl -sf -X POST "$BASE/api/v1/remediation/cases/$CASE/link" -H "$AUTH" \
   -H 'Content-Type: application/json' \
-  -d '{"supplier_email": "logistics@valleyfarms.example"}' | tee /tmp/link.json
+  -d "{\"supplier_email\": \"$SUPPLIER_EMAIL\"}" | tee /tmp/link.json
 TOKEN=$(jq -r .token /tmp/link.json)
 curl -sf "$BASE/api/v1/remediation/outbox" -H "$AUTH" | jq '.notifications[0]'
 
@@ -63,9 +64,9 @@ SESSION=$(curl -sf -X POST "$BASE/api/v1/remediation/supplier/exchange" \
 #    revalidates only this record, and releases it on pass.
 curl -sf -X POST "$BASE/api/v1/remediation/supplier/session/corrections" \
   -H "Authorization: Bearer $SESSION" -H 'Content-Type: application/json' -d '{
-    "changes": {"kdes.tlc_source_reference": "Valley Farms Packinghouse"},
-    "actor_name": "Jordan Lee",
-    "actor_role": "Logistics Coordinator",
+    "changes": {"kdes.tlc_source_reference": "YOUR_TLC_SOURCE_REFERENCE"},
+    "actor_name": "YOUR_NAME",
+    "actor_role": "YOUR_ROLE",
     "reason": "TLC source omitted from our export",
     "attestation": {"text": "I attest this correction is accurate.", "accepted": true}
   }' | jq .

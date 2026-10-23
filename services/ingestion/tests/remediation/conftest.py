@@ -31,9 +31,6 @@ APP_DSN = os.environ.get(
     "postgresql://regengine:regengine@localhost:55432/regengine",  # pragma: allowlist secret — throwaway scratch-DB role
 )
 
-DATA_DIR = Path(__file__).parent.parent / "data" / "supplier_sprint"
-
-
 def _connectable(dsn: str) -> bool:
     from sqlalchemy import create_engine, text
 
@@ -47,7 +44,7 @@ def _connectable(dsn: str) -> bool:
         return False
 
 
-_DB_AVAILABLE = _connectable(SUPERUSER_DSN)
+_DB_AVAILABLE = os.environ.get("REMEDIATION_TEST_NO_DB") != "1" and _connectable(SUPERUSER_DSN)
 
 # In CI the DB is provisioned by the workflow; an unreachable DB must FAIL
 # the gate, never turn it green by skipping (#2530).
@@ -121,34 +118,6 @@ def tenant_b(admin_engine):
     return _seed_tenant(admin_engine, "rem-buyer-b")
 
 
-@pytest.fixture()
-def approved_alias(admin_engine, tenant_a):
-    """Seed the previously-approved supplier product alias VF-ROM-23."""
-    from sqlalchemy import text
-
-    entity_id = str(uuid.uuid4())
-    with admin_engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO fsma.canonical_entities (entity_id, tenant_id, entity_type, canonical_name)
-                VALUES (CAST(:entity_id AS uuid), CAST(:tenant_id AS uuid), 'product', 'Romaine Hearts 24ct')
-                """
-            ),
-            {"entity_id": entity_id, "tenant_id": tenant_a},
-        )
-        conn.execute(
-            text(
-                """
-                INSERT INTO fsma.entity_aliases (tenant_id, entity_id, alias_type, alias_value, source_system)
-                VALUES (CAST(:tenant_id AS uuid), CAST(:entity_id AS uuid), 'internal_code', 'VF-ROM-23', 'test')
-                """
-            ),
-            {"entity_id": entity_id, "tenant_id": tenant_a},
-        )
-    return entity_id
-
-
 def _make_principal(tenant_id: str):
     from app.authz import IngestionPrincipal
 
@@ -201,14 +170,3 @@ def client(app_engine, tenant_a, monkeypatch):
     with TestClient(test_app) as tc:
         tc.tenant_a = tenant_a
         yield tc
-
-
-def upload_fixture(client, name: str, supplier_org: str = "Valley Farms LLC"):
-    csv_path = DATA_DIR / name
-    with open(csv_path, "rb") as fh:
-        response = client.post(
-            "/api/v1/remediation/manifests",
-            files={"file": (name, fh, "text/csv")},
-            data={"supplier_org": supplier_org},
-        )
-    return response
