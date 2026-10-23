@@ -198,7 +198,7 @@ describe('apiClient review queue contract', () => {
     it('fetches sysadmin QA health through the admin proxy', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({
             schema_version: '1.0',
-            generated_at: '2026-06-04T00:00:00Z',
+            generated_at: '',
             source: { kind: 'ci_artifact', path: 'qa/qa-health/latest.json' },
             overall: { status: 'failing', ready_percent: 28, blocking_count: 3, advisory_count: 1 },
             suites: [],
