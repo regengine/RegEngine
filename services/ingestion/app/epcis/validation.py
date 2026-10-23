@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from .extraction import _extract_lot_data
+from .extraction import _extract_event_lot
 
 logger = logging.getLogger("epcis-ingestion")
 
@@ -169,7 +169,7 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     "type": "value_error",
                 }
             ]
-            logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, errors)
+            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
 
@@ -184,25 +184,26 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
         if normalized.get("product_description"):
             optional_fields["product_description"] = normalized["product_description"]
 
-        fsma_event = FSMAEvent(
-            event_type=fsma_type,
-            tlc=normalized.get("tlc"),
-            quantity=normalized.get("quantity"),
-            unit_of_measure=normalized.get("unit_of_measure"),
-            location_gln=normalized.get("location_id"),
-            event_time=normalized.get("event_time"),
-            source_gln=normalized.get("source_location_id"),
-            destination_gln=normalized.get("dest_location_id"),
-            reference_document_type="EPCIS",
-            reference_document_number=None,
-            tenant_id=tenant_id,
-            **optional_fields,
-        )
-        return fsma_event.model_dump()
-    except ValidationError as exc:
-        logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, exc.errors())
-        _audit_log_validation_failure(exc.errors(), tenant_id, normalized)
-        return None
+        try:
+            return FSMAEvent(
+                event_type=fsma_type,
+                tlc=normalized.get("tlc"),
+                quantity=normalized.get("quantity"),
+                unit_of_measure=normalized.get("unit_of_measure"),
+                location_gln=normalized.get("location_id"),
+                event_time=normalized.get("event_time"),
+                source_gln=normalized.get("source_location_id"),
+                destination_gln=normalized.get("dest_location_id"),
+                reference_document_type="EPCIS",
+                reference_document_number=None,
+                tenant_id=tenant_id,
+                **optional_fields,
+            ).model_dump()
+        except ValidationError as exc:
+            errors = exc.errors()
+            logger.warning("fsma_event_validation_failed error_count=%d", len(errors))
+            _audit_log_validation_failure(errors, tenant_id, normalized)
+            return None
     except ImportError:
         logger.debug("shared.schemas not available for FSMAEvent validation")
         return None
@@ -265,7 +266,7 @@ def _validate_epcis(event: dict) -> list[str]:
     }:
         errors.append("Unsupported EPCIS event type")
 
-    lot_code, tlc = _extract_lot_data(event.get("ilmd") or event.get("extension", {}).get("ilmd"))
+    lot_code, tlc = _extract_event_lot(event)
     if not tlc and not lot_code:
         errors.append("Missing traceability lot code (fsma:traceabilityLotCode or cbvmda:lotNumber)")
     elif tlc and not _validate_tlc_format(tlc):
