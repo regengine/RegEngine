@@ -33,6 +33,7 @@ agent-sweep.yml
 api-surface-issue.yml
 backend-ci.yml
 bundle-analysis.yml
+copy-gate.yml
 dependabot-lock-sync.yml
 deploy.yml
 factory-local-ci.yml

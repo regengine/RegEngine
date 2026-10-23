@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // RegEngine copy rule check. Node only, no dependencies.
-// Usage: node check-copy.mjs [repoRoot] [--rules copy-rules.json] [--allow allowlist.json] [--json] [--github] [--strict]
+// Usage: node check-copy.mjs [repoRoot] [--rules copy-rules.json] [--allow allowlist.json] [--baseline baseline.json] [--json] [--github] [--strict] [--gate] [--update-baseline]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,11 +91,16 @@ const word = s => new RegExp(`(?<![A-Za-z0-9_/-])${escapeRegex(s)}(?![A-Za-z0-9_
 
 export function parseCapabilities(src) {
   const groups = {};
-  for (const name of ['live', 'preview', 'neverShown']) {
+  const seen = new Set();
+  for (const name of ['live', 'preview', 'planned', 'off']) {
     const match = src.match(new RegExp(`\\b${name}\\s*:\\s*\\[([^\\]]*)\\]`));
     if (!match) throw new Error(`Missing ${name} capability registry`);
     groups[name] = [...match[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
-    if (!groups[name].length) throw new Error(`Empty ${name} capability registry`);
+    if (name !== 'planned' && !groups[name].length) throw new Error(`Empty ${name} capability registry`);
+    for (const feature of groups[name]) {
+      if (seen.has(feature)) throw new Error(`Duplicate capability status for ${feature}`);
+      seen.add(feature);
+    }
   }
   return groups;
 }
@@ -122,7 +127,7 @@ export function check(seg, srcLine, cfg, capabilities, copyLine = '') {
     if (t.includes('\u2013')) add('en-dash', t);
   }
   if (/[A-Za-z0-9.,)"'%] - [A-Za-z0-9("'$]/.test(t) && !/calc\(/.test(t) && !(seg.kind === 'str' && looksLikeCode(t))) add('hyphen-dash', t);
-  if (capabilities.neverShown.some(name => new RegExp(`(^|[^A-Za-z0-9_])${escapeRegex(name)}(?![A-Za-z0-9_])`).test(t)) && !(seg.kind === 'str' && /^[A-Z_]+$/.test(t.trim()) && t.trim().length > 4)) add('edi-sftp', t);
+  if (capabilities.off.some(name => new RegExp(`(^|[^A-Za-z0-9_])${escapeRegex(name)}(?![A-Za-z0-9_])`).test(t)) && !(seg.kind === 'str' && /^[A-Z_]+$/.test(t.trim()) && t.trim().length > 4)) add('edi-sftp', t);
   const previewNames = [...new Set(capabilities.preview.map(name => name.split(/\s+/)[0]))];
   if (previewNames.some(name => new RegExp(`\\b${escapeRegex(name)}\\b`).test(t)) && !/Preview/i.test(t) && !/Preview/i.test(srcLine)) add('epcis-unlabeled', t);
   if ((seg.kind !== 'str' && /\b(NaN|undefined)\b/.test(t)) || (seg.kind === 'str' && /\b(NaN|undefined)\b/.test(t) && /\s/.test(t.trim()) && !/typeof|===|!==/.test(t))) add('nan-undefined', t);
@@ -130,7 +135,7 @@ export function check(seg, srcLine, cfg, capabilities, copyLine = '') {
   cfg.denylist.forEach(d => { if (low.includes(d.toLowerCase())) add('invented-entity', d); });
   const copy = copyText(seg, srcLine);
   if (copy) {
-    const nonLive = [...capabilities.preview, ...capabilities.neverShown];
+    const nonLive = [...capabilities.preview, ...capabilities.planned, ...capabilities.off];
     const capability = nonLive.find(name => word(name).test(copy) || (name.startsWith('EPCIS ') && word('EPCIS').test(copy)));
     if (capability && (/\b(?:Live|Implemented|GA|Available)\b/.test(copyLine || copy) || (/\bstatus\s*:\s*['"]available['"]/.test(srcLine) && /\bavailable\b/.test(copyLine || copy)))) add('live-claim', capability);
     if (copy.trim() === 'Pilot' && /\b(?:badge|status)\b/i.test(srcLine)) add('pilot-status', copy);
@@ -186,12 +191,39 @@ export function summarize(findings, filesScanned, cfg) {
   return { total: findings.length, filesWithFindings: new Set(findings.map(x => x.file)).size, filesScanned, byRule };
 }
 
+export function countsByFileRule(findings) {
+  const counts = {};
+  for (const { file, rule } of findings) {
+    counts[file] ??= {};
+    counts[file][rule] = (counts[file][rule] || 0) + 1;
+  }
+  return Object.fromEntries(Object.keys(counts).sort().map(file => [
+    file, Object.fromEntries(Object.keys(counts[file]).sort().map(rule => [rule, counts[file][rule]])),
+  ]));
+}
+
+export function compareBaseline(current, baseline) {
+  const regressions = [];
+  const reductions = [];
+  for (const file of [...new Set([...Object.keys(current), ...Object.keys(baseline)])].sort()) {
+    const actualRules = current[file] || {};
+    const baselineRules = baseline[file] || {};
+    for (const rule of [...new Set([...Object.keys(actualRules), ...Object.keys(baselineRules)])].sort()) {
+      const actual = actualRules[rule] || 0;
+      const previous = baselineRules[rule] || 0;
+      if (actual > previous) regressions.push({ file, rule, baseline: previous, current: actual });
+      if (actual < previous) reductions.push({ file, rule, baseline: previous, current: actual });
+    }
+  }
+  return { regressions, reductions };
+}
+
 const annotationEscape = s => String(s).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 const propertyEscape = s => annotationEscape(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
 
 function main(args) {
   const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-  const pos = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--rules', '--allow'].includes(args[i - 1])));
+  const pos = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--rules', '--allow', '--baseline'].includes(args[i - 1])));
   const repo = path.resolve(pos[0] || '.');
   const cfg = JSON.parse(fs.readFileSync(opt('--rules', path.join(here, 'copy-rules.json')), 'utf8'));
   const allowPath = opt('--allow', path.join(here, 'allowlist.json'));
@@ -202,6 +234,12 @@ function main(args) {
   const files = cfg.roots.flatMap(r => walk(path.join(repo, r), [], cfg));
   const findings = files.flatMap(f => scanSource(fs.readFileSync(f, 'utf8'), path.relative(repo, f), cfg, capabilities, allow));
   const summary = summarize(findings, files.length, cfg);
+  const baselinePath = path.resolve(repo, opt('--baseline', 'scripts/copy-lint/baseline.json'));
+  const current = countsByFileRule(findings);
+  if (args.includes('--update-baseline')) {
+    fs.writeFileSync(baselinePath, `${JSON.stringify(current, null, 2)}\n`);
+    console.log(`Updated copy baseline: ${baselinePath}`);
+  }
   if (args.includes('--json')) console.log(JSON.stringify({ summary, findings }, null, 1));
   else {
     for (const x of findings) {
@@ -212,6 +250,15 @@ function main(args) {
     }
     console.log(`\n${summary.total} copy rule violations in ${summary.filesWithFindings} files (${summary.filesScanned} scanned)`);
     for (const [rule, count] of Object.entries(summary.byRule)) console.log(`  ${rule}: ${count}  ${cfg.rules[rule].message}`);
+  }
+  if (args.includes('--gate')) {
+    const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+    const { regressions, reductions } = compareBaseline(current, baseline);
+    for (const { file, rule, baseline: previous, current: actual } of regressions) {
+      console.log(`Copy gate regression: ${file} ${rule}: ${previous} -> ${actual}`);
+    }
+    if (reductions.length) console.log('Copy findings decreased. Run --update-baseline to ratchet the baseline down.');
+    if (regressions.length) process.exitCode = 1;
   }
   if (summary.total && (args.includes('--strict') || process.env.COPY_LINT_STRICT === '1')) process.exitCode = 1;
 }
