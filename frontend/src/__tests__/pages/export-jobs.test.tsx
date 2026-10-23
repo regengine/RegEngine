@@ -65,10 +65,10 @@ describe('ExportJobsPage release boundary', () => {
         vi.stubGlobal('fetch', vi.fn());
     });
 
-    it('renders the FDA Export page', () => {
+    it('renders the Scheduled Exports page', () => {
         render(<ExportJobsPage />, { wrapper: createWrapper() });
 
-        expect(screen.getByRole('heading', { name: 'FDA Export' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Scheduled Exports' })).toBeInTheDocument();
     });
 
     it('renders the local unavailable state and disables scheduling', async () => {

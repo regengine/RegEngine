@@ -4,6 +4,7 @@ import { useSystemMetrics, useSystemStatus } from "@/hooks/use-api";
 import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
+import { isExperimentalPageEnabled } from "@/lib/experimental-features";
 
 /**
  * The dashboard's figure row: one hero stat and four KPIs.
@@ -27,6 +28,7 @@ export function MetricsOverviewWidget({
   const chainLen = metrics?.chain_length ?? 0;
   const chainOk = metrics?.chain_valid ?? false;
   const alerts = metrics?.open_alerts ?? 0;
+  const alertsEnabled = isExperimentalPageEnabled("/dashboard/alerts");
   const hasMetrics = Boolean(metrics) && !isLoading;
   const servicesDown =
     systemStatus?.overall_status && systemStatus.overall_status !== "healthy";
@@ -85,9 +87,9 @@ export function MetricsOverviewWidget({
       />
       <StatTile
         label="Open alerts"
-        value={alerts}
-        loading={isLoading}
-        emptyCaption="Compliance issues to resolve"
+        value={alertsEnabled ? alerts : "Alerts are off"}
+        loading={alertsEnabled && isLoading}
+        emptyCaption={alertsEnabled ? "Compliance issues to resolve" : undefined}
       />
       <StatTile
         label="Open fixes"
