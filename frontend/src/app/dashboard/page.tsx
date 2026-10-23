@@ -27,6 +27,8 @@ import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { GettingStartedCard } from "@/components/dashboard/getting-started-card";
 import { useOnboardingStatus } from "@/hooks/use-onboarding";
+import { useQASignal } from "@/hooks/use-qa-signal";
+import { TimedSkeleton } from "@/components/ui/timed-skeleton";
 
 /**
  * Dashboard overview.
@@ -58,7 +60,7 @@ type AttentionRow = {
 
 function DashboardPageSkeleton() {
   return (
-    <div aria-busy="true">
+    <TimedSkeleton>
       <PageContainer>
         <div className="space-y-6">
           <div className="space-y-2 border-b border-re-border-subtle pb-5">
@@ -79,7 +81,7 @@ function DashboardPageSkeleton() {
           </div>
         </div>
       </PageContainer>
-    </div>
+    </TimedSkeleton>
   );
 }
 
@@ -122,7 +124,10 @@ export default function DashboardPage() {
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
-  const { data: workbenchReadiness } = useQuery({
+  // Same selector the QA Health widget reads, so the two never disagree.
+  const qa = useQASignal();
+
+  const { data: workbenchReadiness, isError: readinessFailed } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
     enabled: !!effectiveTenantId && isAuthenticated && isTenantReady,
@@ -184,8 +189,18 @@ export default function DashboardPage() {
       });
     }
 
+    if (qa.status !== "disabled" && qa.status !== "loading" && !qa.passing) {
+      rows.push({
+        id: "qa-health",
+        state: qa.state,
+        item: qa.label,
+        source: "QA health",
+        href: "/dashboard/qa-health",
+      });
+    }
+
     return rows;
-  }, [systemStatus, workbenchReadiness, metrics]);
+  }, [systemStatus, workbenchReadiness, metrics, qa.status, qa.passing, qa.state, qa.label]);
 
   const attentionColumns: DataTableColumn<AttentionRow>[] = [
     {
@@ -261,7 +276,7 @@ export default function DashboardPage() {
           </Callout>
         )}
 
-        <MetricsOverviewWidget readiness={workbenchReadiness} />
+        <MetricsOverviewWidget readiness={workbenchReadiness} readinessFailed={readinessFailed} />
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section aria-labelledby="needs-attention-heading" className="space-y-3">
@@ -281,7 +296,7 @@ export default function DashboardPage() {
               rowHref={(row) => row.href}
               density="medium"
               minWidth="480px"
-              status={attentionRows.length === 0 ? "empty" : "idle"}
+              status={qa.status === "loading" ? "loading" : attentionRows.length === 0 ? "empty" : "idle"}
               empty={{
                 icon: CheckCircle2,
                 title: "Nothing needs attention",

@@ -67,4 +67,24 @@ describe('QAHealthWidget', () => {
     );
     expect(useQAHealth).toHaveBeenCalledWith(true);
   });
+
+  it('a failed QA load reads as failed with unknown readiness — not "0% ready"', () => {
+    vi.mocked(useAuth).mockReturnValue({
+      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+    } as ReturnType<typeof useAuth>);
+    vi.mocked(useQAHealth).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new Error('timeout'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useQAHealth>);
+
+    render(<QAHealthWidget />);
+
+    expect(screen.getByText('QA signal failed')).toBeInTheDocument();
+    expect(screen.getByText('Readiness unknown')).toBeInTheDocument();
+    expect(screen.queryByText(/0% ready/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
 });
