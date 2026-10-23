@@ -486,7 +486,7 @@ export const MAPPING_REVIEW_ITEMS: MappingReviewItem[] = [
     },
     {
         id: 'map_case_005',
-        source: 'EDI 856 ASN',
+        source: 'JSON events API',
         sourceField: 'Case Count',
         mappedField: null,
         status: 'needs_review',

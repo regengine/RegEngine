@@ -34,7 +34,7 @@ function getSecret(): string {
     const secret = process.env.CSRF_SECRET || '';
     if (!secret) {
         if (process.env.NODE_ENV === 'production') {
-            console.error('[csrf] CSRF_SECRET not set in production — all mutating requests will be rejected');
+            console.error('[csrf] CSRF_SECRET not set in production; all mutating requests will be rejected');
             return '';
         }
         return process.env.AUTH_SECRET_KEY || '';
@@ -79,7 +79,7 @@ export async function verifyCsrfToken(token: string, signature: string): Promise
     const secret = getSecret();
     if (!secret) {
         if (process.env.NODE_ENV === 'production') {
-            console.error('[csrf] CSRF_SECRET / AUTH_SECRET_KEY not set — rejecting mutating request');
+            console.error('[csrf] CSRF_SECRET / AUTH_SECRET_KEY not set; rejecting mutating request');
             return false;
         }
         return true;

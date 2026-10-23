@@ -102,20 +102,20 @@ const STATUS_CONFIG = {
     'compliant': {
         icon: Shield,
         label: 'FSMA 204 Ready',
-        desc: "Your traceability data meets RegEngine's readiness checks — an advisory indicator, not a legal determination.",
+        desc: "Your traceability data meets RegEngine's readiness checks. This is an advisory indicator, not a legal determination.",
         bg: 'bg-re-brand-muted border-re-brand/30',
         text: 'text-re-brand',
     },
     'at-risk': {
         icon: ShieldAlert,
-        label: 'At Risk — Action Needed',
+        label: 'At Risk: Action Needed',
         desc: 'Gaps in your traceability data could cause issues during an FDA inspection.',
         bg: 'bg-re-warning-muted0/10 border-re-warning/30',
         text: 'text-re-warning',
     },
     'critical': {
         icon: ShieldX,
-        label: 'Critical — Not Compliant',
+        label: 'Critical: Not Compliant',
         desc: 'Significant gaps exist. Prioritize the actions below before your next audit.',
         bg: 'bg-re-danger-muted0/10 border-re-danger/30',
         text: 'text-re-danger',

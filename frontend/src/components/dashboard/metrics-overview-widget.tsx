@@ -46,7 +46,7 @@ export function MetricsOverviewWidget({
         empty={!isLoading && score <= 0}
         emptyCaption={
           servicesDown
-            ? "No data — services unreachable"
+            ? "No data: services unreachable"
             : "No saved Inflow Workbench run yet"
         }
         status={

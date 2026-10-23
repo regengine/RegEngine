@@ -208,7 +208,7 @@ head -20 lot-export.csv`}
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
               { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
-              { title: 'Set up EPCIS or EDI', desc: 'Replace manual curl with your existing system-of-record', href: '/docs/connectors/inflow-lab' },
+              { title: 'EPCIS and EDI intake (on the roadmap)', desc: 'Planned connectors for your existing system-of-record. Today, use CSV upload or the JSON events API', href: '/docs/connectors/inflow-lab' },
             ]).map(({ title, desc, href }) => (
               <li key={href}>
                 <Link

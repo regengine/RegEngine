@@ -243,7 +243,7 @@ export default function TracePage() {
                   <CardDescription className="mt-1">
                     <span className="font-mono text-[0.8125rem]">{traceResult.tlc_code}</span>
                     {traceResult.product_description && (
-                      <span className="ml-2 text-re-text-secondary">— {traceResult.product_description}</span>
+                      <span className="ml-2 text-re-text-secondary">({traceResult.product_description})</span>
                     )}
                   </CardDescription>
                 </div>

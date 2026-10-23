@@ -138,7 +138,7 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             const queryString = new URL(request.url).search;
             const targetUrl = config.buildTargetUrl(path, queryString, request);
             if (!targetUrl) {
-                console.error(`[proxy/${config.serviceName}] 503 — backend not configured`);
+                console.error(`[proxy/${config.serviceName}] 503: backend not configured`);
                 return proxyError(`${config.serviceName} backend not configured`, 503);
             }
 
@@ -179,7 +179,7 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             if (!response.ok) {
                 const detail = extractDetail(data);
                 if (response.status >= 500) {
-                    console.error(`[proxy/${config.serviceName}] ${response.status} — upstream request failed`, {
+                    console.error(`[proxy/${config.serviceName}] ${response.status}: upstream request failed`, {
                         targetUrl,
                         detail: data,
                     });
@@ -196,7 +196,7 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
             }
             return NextResponse.json(data);
         } catch (error: unknown) {
-            console.error(`[proxy/${config.serviceName}] 500 — proxy request failed`, { error });
+            console.error(`[proxy/${config.serviceName}] 500: proxy request failed`, { error });
             return proxyError(`${config.serviceName} request failed`, 500);
         }
     };
@@ -369,7 +369,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
             const queryString = new URL(request.url).search;
             const bases = config.resolveTargetBases();
             if (bases.length === 0) {
-                console.error(`[proxy/${config.serviceName}] 503 — no upstream targets configured`);
+                console.error(`[proxy/${config.serviceName}] 503: no upstream targets configured`);
                 return proxyError(`${config.serviceName} backend not configured`, 503);
             }
 
@@ -413,7 +413,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                     }
 
                     if (response.status >= 500) {
-                        console.error(`[proxy/${config.serviceName}] ${response.status} — upstream request failed`, {
+                        console.error(`[proxy/${config.serviceName}] ${response.status}: upstream request failed`, {
                             targetUrl,
                             upstreamError: await readUpstreamErrorForLog(response),
                         });
@@ -446,10 +446,10 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                 }
             }
 
-            console.error(`[proxy/${config.serviceName}] 502 — all targets failed:`, attemptErrors);
+            console.error(`[proxy/${config.serviceName}] 502: all targets failed:`, attemptErrors);
             return proxyError(`Unable to reach ${config.serviceName} service`, 502);
         } catch (error: unknown) {
-            console.error(`[proxy/${config.serviceName}] 500 — proxy request failed`, { error });
+            console.error(`[proxy/${config.serviceName}] 500: proxy request failed`, { error });
             return proxyError(`${config.serviceName} request failed`, 500);
         }
     };

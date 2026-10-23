@@ -90,7 +90,7 @@ const HOW_IT_WORKS = [
     {
         step: '2',
         title: 'Select event type & scan item',
-        detail: 'Choose what you\'re doing: Receiving, Shipping, or Transforming. Point your camera at the barcode — product number, lot code, expiry, and serial are extracted automatically.',
+        detail: 'Choose what you\'re doing: Receiving, Shipping, or Transforming. Point your camera at the barcode; product number, lot code, expiry, and serial are extracted automatically.',
     },
     {
         step: '3',
@@ -195,7 +195,7 @@ function ScanPageContent() {
                             </CardHeader>
                             <CardContent>
                                 <p className="text-ui text-re-text-secondary">
-                                    Display this QR code on a tablet or print it. Floor operators scan it with their phone to open the capture tool — no app install required.
+                                    Display this QR code on a tablet or print it. Floor operators scan it with their phone to open the capture tool. No app install required.
                                 </p>
 
                                 {/* QR Code */}
@@ -282,7 +282,7 @@ function ScanPageContent() {
                             ))}
                         </div>
                         <p className="mt-3 text-small text-re-text-tertiary">
-                            Barcodes are parsed automatically — product number, lot code, serial, expiry, and pack date are extracted and mapped to the required data fields.
+                            Barcodes are parsed automatically: product number, lot code, serial, expiry, and pack date are extracted and mapped to the required data fields.
                         </p>
                     </CardContent>
                 </Card>

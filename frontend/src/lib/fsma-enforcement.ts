@@ -7,4 +7,4 @@
 export const FSMA_ENFORCEMENT_DATE = 'July 20, 2028';
 
 export const FSMA_ENFORCEMENT_FRAMING =
-    'FDA has been directed by Congress not to enforce the Food Traceability Rule before July 20, 2028, and has stated it intends to comply — the requirements are unchanged, only enforcement moved.';
+    'FDA has been directed by Congress not to enforce the Food Traceability Rule before July 20, 2028, and has stated it intends to comply. The requirements are unchanged; only enforcement moved.';

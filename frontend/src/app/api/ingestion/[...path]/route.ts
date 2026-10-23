@@ -40,7 +40,7 @@ function getIngestionTargets(): string[] {
             candidates.push(productionUrl);
         } else if (runningOnVercel) {
             console.error(
-                '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+                '[proxy/ingestion] No ingestion backend URL configured; set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
             );
         } else {
             candidates.push(DEFAULT_INGESTION_URL);

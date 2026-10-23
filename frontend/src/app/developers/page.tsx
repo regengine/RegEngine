@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-    ArrowRight, Webhook, Cog, Users, FileSpreadsheet,
+    ArrowRight, Braces, Cog, Users, FileSpreadsheet,
     BarChart3, GitBranch, Terminal, BookOpen,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -13,11 +13,11 @@ import { INGEST_CURL_SAMPLE, INGEST_ENV_SETUP } from '@/lib/api-samples/ingest-s
 export const metadata: Metadata = {
     title: 'Developers | RegEngine FSMA 204 Compliance API',
     description:
-        'Build on the RegEngine API: webhook ingestion with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
+        'Build on the RegEngine API: a JSON events API with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
     openGraph: {
         title: 'Developers | RegEngine FSMA 204 Compliance API',
         description:
-            'Build on the RegEngine API: webhook ingestion, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
+            'Build on the RegEngine API: JSON events API, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
         url: 'https://regengine.co/developers',
         type: 'website',
     },
@@ -26,9 +26,9 @@ export const metadata: Metadata = {
 /* ── API Capabilities ── */
 const capabilities = [
     {
-        Icon: Webhook,
-        title: 'Webhook Ingestion',
-        description: 'POST events with KDE validation. Inbound CTEs are validated against FSMA 204 Key Data Elements; failures surface as exceptions before package assembly.',
+        Icon: Braces,
+        title: 'JSON events API',
+        description: 'POST CTE events as JSON with KDE validation. Inbound events are validated against FSMA 204 Key Data Elements; failures surface as exceptions before package assembly.',
     },
     {
         Icon: Cog,
@@ -167,7 +167,7 @@ export default function DevelopersPage() {
                     <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">SDKs Coming Soon</h2>
                     <p className="mx-auto mb-6 max-w-[60ch] text-ui text-re-text-secondary">
                         Official client libraries for Python, Node.js, and Go are planned.
-                        In the meantime, use our REST API directly &mdash; all endpoints accept and return JSON.
+                        In the meantime, use our REST API directly. All endpoints accept and return JSON.
                     </p>
                     <Button asChild variant="secondary" size="lg">
                         <Link href="/docs/sdks" className="no-underline">

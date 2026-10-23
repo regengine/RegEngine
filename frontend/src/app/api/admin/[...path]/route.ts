@@ -37,7 +37,7 @@ function getAdminTargets(): string[] {
 
     if (candidates.length === 0 && runningOnVercel) {
         console.error(
-            '[proxy/admin] No admin backend URL configured — set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
+            '[proxy/admin] No admin backend URL configured; set NEXT_PUBLIC_ADMIN_URL, NEXT_PUBLIC_API_BASE_URL, or ADMIN_SERVICE_URL',
         );
     }
 

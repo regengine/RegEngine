@@ -49,7 +49,7 @@ export default function ExportJobsPage() {
     const createJobMutation = useMutation({
         mutationFn: async () => {
             throw new Error(
-                'Export job scheduling is not yet available — records remain exportable on demand.',
+                'Export job scheduling is not yet available. Records remain exportable on demand.',
             );
         },
     });
@@ -115,7 +115,7 @@ export default function ExportJobsPage() {
                         icon={Link2Off}
                         title={"Scheduled export jobs aren't available on this workspace yet."}
                     >
-                        Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
+                        Recurring archive scheduling is still in development. No amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
                     </Callout>
                 ) : (
                     <Callout tone="info" icon={Archive}>

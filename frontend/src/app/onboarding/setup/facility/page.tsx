@@ -109,7 +109,7 @@ export default function FacilityPage() {
       } else if (status === 400 || status === 422) {
         setError(
           apiError.response.data?.detail ||
-            'Validation failed — check your facility details and try again.',
+            'Validation failed. Check your facility details and try again.',
         );
       } else if (status === 409) {
         setError(
@@ -119,7 +119,7 @@ export default function FacilityPage() {
         setError('Too many requests. Please wait a moment and try again.');
       } else if (status !== undefined && status >= 500) {
         setError(
-          'Could not save facility — server error. Try again or email support@regengine.co.',
+          'Could not save facility (server error). Try again or email support@regengine.co.',
         );
       } else {
         setError(
@@ -260,7 +260,7 @@ export default function FacilityPage() {
           size="lg"
           onClick={() => router.push('/dashboard')}
         >
-          Skip for now — I&apos;ll set up later
+          Skip for now. I&apos;ll set up later
         </Button>
         <Button
           size="lg"

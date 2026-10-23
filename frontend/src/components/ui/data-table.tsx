@@ -240,7 +240,7 @@ export function DataTable<T>({
       {pagination && status === "idle" && data.length > 0 && (
         <div className="flex items-center justify-between border-t border-re-border-subtle px-4 py-2 text-small text-re-text-tertiary">
           <span>
-            {(pagination.page - 1) * pagination.pageSize + 1}–
+            {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
             {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total}
           </span>
           <div className="flex items-center gap-2">

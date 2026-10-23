@@ -40,7 +40,7 @@ export function validateSandboxFile(file: { name: string; size: number }): strin
     return `Unsupported file type ${ext}. Upload a .csv export of your traceability events.`;
   }
   if (file.size > MAX_CSV_BYTES) {
-    return `That file is ${(file.size / 1_000_000).toFixed(1)} MB. The sandbox evaluates up to 2 MB — contact us for unlimited evaluation.`;
+    return `That file is ${(file.size / 1_000_000).toFixed(1)} MB. The sandbox evaluates up to 2 MB. Contact us for unlimited evaluation.`;
   }
   return null;
 }
@@ -55,7 +55,7 @@ export function describeSandboxFailure(status: number, detail?: string): string 
   }
   if (detail) return detail;
   if (status === 503) {
-    return 'The sandbox evaluation service is temporarily unavailable. Nothing was stored — please try again shortly.';
+    return 'The sandbox evaluation service is temporarily unavailable. Nothing was stored. Please try again shortly.';
   }
   return `The sandbox could not evaluate that file (HTTP ${status}).`;
 }
@@ -103,7 +103,7 @@ export function SandboxClient() {
           non_compliant_events: data.non_compliant_events,
         });
       } catch {
-        setError('Could not reach the sandbox. Check your connection and try again — nothing was stored.');
+        setError('Could not reach the sandbox. Check your connection and try again. Nothing was stored.');
         posthog.capture('SANDBOX_EVALUATE_FAILED', { status: 0 });
       } finally {
         setBusy(false);
@@ -153,7 +153,7 @@ export function SandboxClient() {
         </h1>
         <p className="mt-4 max-w-2xl text-[0.95rem] leading-7 text-[var(--re-text-muted)]">
           Upload a CSV of traceability events and see which §1.1455 key data elements are missing,
-          which rules fail, and what to fix first. No signup. Nothing is stored — the evaluation is
+          which rules fail, and what to fix first. No signup. Nothing is stored; the evaluation is
           stateless and the file never leaves the request.
         </p>
         <p className="mt-2 text-[0.75rem] text-[var(--re-text-disabled)]">

@@ -76,7 +76,7 @@ export default function RecallDrillsPage() {
     const startDrillMutation = useMutation({
         mutationFn: async () => {
             throw new Error(
-                'Recall drill automation is not yet available — use the Requests workflow for a manual drill.',
+                'Recall drill automation is not yet available. Use the Requests workflow for a manual drill.',
             );
         },
     });

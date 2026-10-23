@@ -244,7 +244,7 @@ export default function ReceivingDockPage() {
                 quantity: item.quantity,
                 unit_of_measure: 'cases',
                 timestamp: item.scannedAt || new Date().toISOString(),
-                location_name: `Receiving Dock — ${session.supplier}`,
+                location_name: `Receiving Dock: ${session.supplier}`,
                 kdes: {
                     gtin: item.gtin || undefined,
                     lot_code: item.lotCode || undefined,
@@ -639,7 +639,7 @@ export default function ReceivingDockPage() {
                                 <div className="space-y-2 text-center">
                                     <h2 className="text-heading text-re-text-primary">Receiving Complete</h2>
                                     <p className="text-ui text-re-text-secondary">
-                                        {session.supplier} — PO {session.poNumber}
+                                        {session.supplier}, PO {session.poNumber}
                                     </p>
                                     <p className="font-mono text-small text-re-text-tertiary">{ts}</p>
                                 </div>

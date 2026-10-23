@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
     const backendUrl = getBackendUrl();
     if (process.env.VERCEL && !backendUrl) {
         console.error(
-            '[api/tools/verify] ADMIN_SERVICE_URL or NEXT_PUBLIC_API_BASE_URL must be set on Vercel — cannot reach localhost from serverless functions',
+            '[api/tools/verify] ADMIN_SERVICE_URL or NEXT_PUBLIC_API_BASE_URL must be set on Vercel; cannot reach localhost from serverless functions',
         );
         return NextResponse.json(
-            { error: 'Backend not configured — contact support' },
+            { error: 'Backend not configured. Contact support' },
             { status: 503 },
         );
     }

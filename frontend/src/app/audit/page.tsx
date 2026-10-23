@@ -156,7 +156,7 @@ function AuditReviewContent() {
     <PageContainer>
       <PageHeader
         title="Auditor Review"
-        description="Read-only compliance posture view — evidentiary chain, rule evaluations, exception history"
+        description="Read-only compliance posture view: evidentiary chain, rule evaluations, exception history"
         meta={
           <Badge>
             <Lock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />

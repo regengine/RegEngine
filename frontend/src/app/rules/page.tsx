@@ -66,7 +66,7 @@ export default function RulesDashboardPage() {
   const pageHeader = (
     <PageHeader
       title="Compliance Rules"
-      description="Versioned FSMA 204 compliance rules — every rule is citable, explainable, and independently deployable"
+      description="Versioned FSMA 204 compliance rules. Every rule is citable, explainable, and independently deployable"
       meta={<Badge>{ruleList.length} rules</Badge>}
       primaryAction={
         <Button onClick={() => seedRules.mutate()} disabled={seedRules.isPending}>

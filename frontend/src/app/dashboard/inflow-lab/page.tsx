@@ -6,7 +6,7 @@ import { isExperimentalPageEnabled } from "@/lib/experimental-features";
 export const metadata: Metadata = {
     title: "Inflow Lab | RegEngine Dashboard",
     description:
-        "Test supplier traceability data before it flows into production exports — sandbox-only diagnostics, grouped exceptions, and a sticky lot lifecycle.",
+        "Test supplier traceability data before it flows into production exports: sandbox-only diagnostics, grouped exceptions, and a sticky lot lifecycle.",
 };
 
 export default function DashboardInflowLabPage() {

@@ -108,7 +108,7 @@ export default function SecuritySettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <Callout tone="info">
-              You sign in with an email code or a passkey — there is no password to manage.
+              You sign in with an email code or a passkey. There is no password to manage.
               Use a passkey when prompted for high-assurance routes.
             </Callout>
             <Button

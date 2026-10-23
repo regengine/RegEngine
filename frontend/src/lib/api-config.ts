@@ -25,7 +25,7 @@ export function getServerServiceURL(service: ServiceName): string {
 
     if (process.env.VERCEL) {
         console.error(
-            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured — local dev fallback is unreachable from Vercel`,
+            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured; local dev fallback is unreachable from Vercel`,
         );
         return '';
     }

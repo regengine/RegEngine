@@ -86,7 +86,7 @@ export default function BuyerProgramsPage() {
                 <li>• FTL by that date; other products ASAP</li>
               </ul>
               <p className="mt-4 text-small leading-relaxed text-re-text-tertiary">
-                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks. EDI 856 / ASN mapping is scoped work.
+                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks. EDI 856 / ASN mapping is on the roadmap.
               </p>
             </Card>
 
@@ -137,7 +137,7 @@ export default function BuyerProgramsPage() {
                 <li>• Advisory coverage/completeness checklist</li>
                 <li>• Append-only commit</li>
                 <li>• FDA-oriented sortable spreadsheet</li>
-                <li>• EPCIS/CSV where enabled</li>
+                <li>• CSV upload, JSON events API (EPCIS export)</li>
                 <li>• Hash manifest re-checkable at /verify</li>
               </ul>
             </Card>

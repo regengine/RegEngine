@@ -215,7 +215,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
-    console.info('[auth] Migration complete — localStorage secrets removed.');
+    console.info('[auth] Migration complete; localStorage secrets removed.');
   }
 }
 

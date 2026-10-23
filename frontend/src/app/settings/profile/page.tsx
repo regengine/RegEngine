@@ -222,7 +222,7 @@ export default function ProfileSettingsPage() {
                                     Upload New Picture
                                 </Button>
                                 <p className="mt-2 text-small text-re-text-tertiary">
-                                    Coming soon — JPG, PNG or GIF. Max size 2MB.
+                                    Coming soon: JPG, PNG or GIF. Max size 2MB.
                                 </p>
                             </div>
                         </div>

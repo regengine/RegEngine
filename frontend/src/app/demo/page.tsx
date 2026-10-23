@@ -90,7 +90,7 @@ export default function DemoPage() {
         title="Compliance Dashboard"
         description={
           <>
-            DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
+            DEMO WORKSPACE: FreshCo Distribution is a fictional distributor. Numbers are illustrative.
           </>
         }
       />

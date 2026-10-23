@@ -14,11 +14,11 @@ import { isSandboxEnabled } from '@/lib/sandbox-cta';
 // allowlist in app/api/ingestion/[...path]/route.ts.
 
 export const metadata: Metadata = {
-  title: 'FSMA 204 Sandbox — Check your CSV | RegEngine',
+  title: 'FSMA 204 Sandbox: Check your CSV | RegEngine',
   description:
     'Upload a CSV of traceability events and see which FSMA 204 key data elements are missing. No signup, no data stored.',
   openGraph: {
-    title: 'FSMA 204 Sandbox — Check your CSV',
+    title: 'FSMA 204 Sandbox: Check your CSV',
     description: 'Upload a CSV of traceability events and see which FSMA 204 key data elements are missing. No signup, no data stored.',
     url: 'https://regengine.co/sandbox',
     type: 'website',
@@ -37,7 +37,7 @@ export default function SandboxPage() {
         <PageHeader title="The CSV sandbox is not enabled on this deployment" />
         <p className="text-body text-re-text-secondary">
           RegEngine&apos;s stateless CSV evaluation endpoint is part of the experimental router
-          surface and is turned off here. Nothing is broken on your end — the feature simply is
+          surface and is turned off here. Nothing is broken on your end; the feature simply is
           not switched on for this environment.
         </p>
         <p className="mt-4 text-body text-re-text-secondary">

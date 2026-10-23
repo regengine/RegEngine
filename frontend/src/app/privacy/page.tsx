@@ -424,8 +424,7 @@ export default function PrivacyPage() {
                     className={PROSE_LINK}
                   >
                     privacy@regengine.co
-                  </a>
-                  . You&apos;ll hear from the founder directly, not a legal department.
+                  </a>. You&apos;ll hear from the founder directly, not a legal department.
                 </p>
               </NoteCard>
             </div>

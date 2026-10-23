@@ -503,7 +503,7 @@ function HeartbeatPageContent() {
                                             <CardContent className="py-3">
                                                 <div className="flex items-center gap-2 text-re-danger">
                                                     <XCircle className="h-4 w-4 flex-shrink-0" />
-                                                    <p className="text-sm">{error} — showing cached data if available.</p>
+                                                    <p className="text-sm">{error}. Showing cached data if available.</p>
                                 </div>
                                             </CardContent>
                                         </Card>

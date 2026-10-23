@@ -57,7 +57,7 @@ const CTES_PLAIN = [
     name: "First Land-Based Receiving",
     icon: Anchor,
     who: "Receivers of seafood from a fishing vessel",
-    what: "Per §1.1330: record when seafood was received from a fishing vessel, the lot code, the harvest and landing location, and the receiving facility. This is distinct from generic imported-food entry.",
+    what: "Under §1.1335, record when seafood was received from a fishing vessel, the lot code, the harvest and landing location, and the receiving facility. This is distinct from generic imported-food entry.",
   },
   {
     name: "Shipping",

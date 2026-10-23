@@ -46,13 +46,13 @@ function guardUrl(envVar: string, fallback: string): string {
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (url) {
         if (onVercel && url.includes('.railway.internal')) {
-            console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL — unreachable from Vercel.`);
+            console.warn(`[proxy/fsma] ${envVar} points to internal Railway URL; unreachable from Vercel.`);
             return '';
         }
         return url;
     }
     if (onVercel) {
-        console.error(`[proxy/fsma] ${envVar} not configured — localhost is unreachable from Vercel`);
+        console.error(`[proxy/fsma] ${envVar} not configured; localhost is unreachable from Vercel`);
         return '';
     }
     return fallback;

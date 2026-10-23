@@ -190,7 +190,7 @@ export function SandboxResultView({
         {result.submission_blocked && (
           <Callout tone="danger" role="alert" icon={ShieldAlert}>
             <p className="font-medium text-re-text-primary">
-              TEST RUN NEEDS CORRECTION — {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
+              TEST RUN NEEDS CORRECTION: {result.blocking_reasons.length} blocker{result.blocking_reasons.length !== 1 ? 's' : ''}
             </p>
             <ul className="mt-2 space-y-1">
               {result.blocking_reasons.slice(0, 10).map((reason, i) => (
@@ -206,7 +206,7 @@ export function SandboxResultView({
         {!result.submission_blocked && result.non_compliant_events === 0 && (
           <Callout tone="success">
             <p className="font-medium text-re-text-primary">
-              SANDBOX CHECKS CLEAR — ready to save as a test run
+              SANDBOX CHECKS CLEAR: ready to save as a test run
             </p>
           </Callout>
         )}

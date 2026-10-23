@@ -18,7 +18,7 @@ function getComplianceUrl(): string {
     const url = process.env.COMPLIANCE_SERVICE_URL || getServerServiceURL('compliance');
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
-        console.warn('[proxy/fda-response] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+        console.warn('[proxy/fda-response] COMPLIANCE_SERVICE_URL points to internal Railway URL; unreachable from Vercel.');
         return getServerServiceURL('compliance');
     }
     return url;
@@ -66,7 +66,7 @@ export async function GET(
                 return NextResponse.json(fdaResponse);
             }
         }
-        console.error('[proxy/fda-response] 503 — compliance backend not configured');
+        console.error('[proxy/fda-response] 503: compliance backend not configured');
         return NextResponse.json(
             { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
             { status: 503 },

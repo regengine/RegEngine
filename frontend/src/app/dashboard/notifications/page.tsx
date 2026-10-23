@@ -348,7 +348,7 @@ export default function NotificationPrefsPage() {
                                         title="Quiet Hours"
                                         description={
                                             <>
-                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
+                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 to {effectivePrefs.quiet_hours.end_hour}:00
                                                 {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
                                             </>
                                         }

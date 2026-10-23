@@ -133,8 +133,8 @@ export default function AuthenticationDocsPage() {
                         <Callout tone="warning" title="Scopes do not make a key read-only">
                             <p className="text-ui text-re-text-secondary">
                                 Scopes limit which of the endpoints above a key can call. They are not a read-only guarantee: some other
-                                operations on the RegEngine backend, for example EPCIS ingest, compliance snapshots, SLA request updates
-                                and onboarding steps, accept any valid tenant key without checking a named scope. Treat every key as
+                                operations on the RegEngine backend, for example compliance snapshots, SLA request updates, onboarding steps
+                                and the EPCIS intake endpoint (on the roadmap, not a live intake channel), accept any valid tenant key without checking a named scope. Treat every key as
                                 read-write for its workspace. Keep it on your server, never in client-side code, and ask RegEngine to
                                 revoke it if it leaks.
                             </p>

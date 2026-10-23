@@ -48,8 +48,8 @@ const CASE_STATUS_LABEL: Record<string, string> = {
 // Delivery lifecycle of an outbox entry (fsma.notification_outbox.status).
 // 'pending'/'previewed' predate automatic delivery and are never emailed.
 const DELIVERY_LABEL: Record<string, string> = {
-  pending: 'Preview — not emailed',
-  previewed: 'Preview — not emailed',
+  pending: 'Preview (not emailed)',
+  previewed: 'Preview (not emailed)',
   queued: 'Email queued',
   sending: 'Sending',
   sent: 'Emailed',
@@ -103,7 +103,7 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
       {email ? (
         <>
           <p className="text-ui font-medium text-re-text-primary">
-            Link issued — being emailed to {email} automatically (usually within a minute).
+            Link issued. It is being emailed to {email} automatically (usually within a minute).
           </p>
           <p className="mt-1 text-small text-re-text-tertiary">
             Do not share the copy below: sending re-issues the link, so this copy stops working the
@@ -112,8 +112,8 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
         </>
       ) : (
         <p className="text-ui font-medium text-re-text-primary">
-          No supplier email given — this link will NOT be emailed. Copy it now and deliver it
-          yourself (shown once — only its hash is stored):
+          No supplier email given, so this link will NOT be emailed. Copy it now and deliver it
+          yourself (shown once; only its hash is stored):
         </p>
       )}
       <div className="mt-2 flex items-start gap-2">
@@ -166,7 +166,7 @@ export default function RemediationPage() {
   const pageHeader = (
     <PageHeader
       title="Supplier Remediation"
-      description="Manifest intake, blocked-line correction links, and evidence — suppliers fix their own data."
+      description="Manifest intake, blocked-line correction links, and evidence. Suppliers fix their own data."
     />
   );
 
@@ -372,7 +372,7 @@ export default function RemediationPage() {
       <Section
         spacing="app"
         title="Manifests"
-        description="A data hold withholds blocked lines from release — it never rejects physical shipments."
+        description="A data hold withholds blocked lines from release. It never rejects physical shipments."
       >
         <DataTable
           caption="Ingested supplier manifests"
@@ -392,7 +392,7 @@ export default function RemediationPage() {
             <div className="min-w-0">
               <CardTitle>{detail.data?.original_filename ?? 'Manifest detail'}</CardTitle>
               <CardDescription className="mt-1">
-                SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… — original bytes preserved verbatim
+                SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… (original bytes preserved verbatim)
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setSelectedRun(null)}>

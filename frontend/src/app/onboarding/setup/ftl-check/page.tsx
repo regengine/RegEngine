@@ -172,7 +172,7 @@ export default function FTLCheckPage() {
             size="lg"
             onClick={() => router.push('/dashboard')}
           >
-            Skip for now — I&apos;ll set up later
+            Skip for now. I&apos;ll set up later
           </Button>
           {!showResults ? (
             <Button

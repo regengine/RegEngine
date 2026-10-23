@@ -367,7 +367,7 @@ export default function SettingsPage() {
                                             size="lg"
                                             value={profile.fei_number}
                                             onChange={e => setProfile({ ...profile, fei_number: e.target.value })}
-                                            placeholder="Optional — used in FDA exports"
+                                            placeholder="Optional, used in FDA exports"
                                         />
                                     </Field>
                                 </div>

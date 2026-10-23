@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine — Retailer-Ready in 48 Hours',
+    title: 'Retailer Supplier FSMA 204 Compliance | RegEngine: Retailer-Ready in 48 Hours',
     description:
-        'Major retailers are signaling traceability expectations to suppliers ahead of the federal enforcement date — confirm directly with your buyer. API-first FSMA 204 traceability for food suppliers — automated CTEs and FDA-oriented sortable exports. Free self-check available.',
+        'Major retailers are signaling traceability expectations to suppliers ahead of the federal enforcement date; confirm directly with your buyer. API-first FSMA 204 traceability for food suppliers, with automated CTEs and FDA-oriented sortable exports. Free self-check available.',
     keywords: [
         'retailer FSMA 204 compliance',
         'food supplier traceability',

@@ -54,7 +54,7 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
         ],
         leadGate: {
             title: 'Your Illustrative Savings Estimate is Ready',
-            description: 'Enter your work email to see the illustrative breakdown. The numbers are not a forecast or commitment — book a call to model against your actual record volume.',
+            description: 'Enter your work email to see the illustrative breakdown. The numbers are not a forecast or commitment. Book a call to model against your actual record volume.',
             cta: 'View My Estimate'
         }
     }

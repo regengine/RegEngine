@@ -264,7 +264,7 @@ export default function DesignSystemPage() {
 
                         <div className="space-y-4">
                             <Card variant="inset" padding="spacious">
-                                <p className="text-ui text-re-text-secondary">Card variant <code className="font-mono text-[0.8125rem]">inset</code> — wells, code blocks and summary strips.</p>
+                                <p className="text-ui text-re-text-secondary">Card variant <code className="font-mono text-[0.8125rem]">inset</code>: wells, code blocks and summary strips.</p>
                             </Card>
                             <Tabs defaultValue="overview">
                                 <TabsList>

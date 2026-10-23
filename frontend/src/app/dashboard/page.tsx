@@ -348,7 +348,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-subheading text-re-text-primary">Daily Compliance Heartbeat</p>
                 <p className="text-ui text-re-text-tertiary">
-                  Score, alerts, chain status &amp; next actions — your morning check
+                  Score, alerts, chain status &amp; next actions: your morning check
                 </p>
               </div>
               <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />

@@ -89,7 +89,7 @@ const NOTICE_BASE =
 /* ── Demo Fallback Data (shown only when demo_mode=true from API) ── */
 
 const DEMO_INVESTIGATION = {
-    scenario: 'Romaine Lettuce — E. coli O157:H7',
+    scenario: 'Romaine Lettuce (E. coli O157:H7)',
     initiated: '2026-03-15T08:30:00Z',
     response_time_hours: 4.2,
     sla_target: 24,
@@ -111,10 +111,10 @@ const DEMO_AFFECTED_LOTS = [
 const DEMO_TIMELINE = [
     { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, done: true },
     { time: '08:35', label: 'Automated Trace Initiated', desc: 'RegEngine backward trace from retail to harvest across 8 facilities', icon: Zap, done: true },
-    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution — 3 supplier origins confirmed', icon: Package, done: true },
+    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution; 3 supplier origins confirmed', icon: Package, done: true },
     { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, done: true },
     { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, done: true },
-    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload — confirm specific format with each buyer', icon: ShoppingCart, done: false },
+    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload. Confirm specific format with each buyer', icon: ShoppingCart, done: false },
     { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, done: false },
 ];
 
@@ -366,7 +366,7 @@ export default function RecallReportPage() {
                                         </div>
                                         <Badge tone="success" size="sm" className="mt-3">
                                             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            SLA Met — {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare
+                                            SLA Met: {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare
                                         </Badge>
                                     </CardContent>
                                 </Card>

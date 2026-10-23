@@ -34,7 +34,7 @@ const FRAMEWORKS = [
         title: 'Seafood',
         icon: Fish,
         description: 'Finfish and shellfish chain-of-custody controls',
-        details: 'Reference scaffold for seafood obtained from a fishing vessel — uses §1.1335 First Land-Based Receiving as the entry CTE. Final CTE/KDE coverage is configured during onboarding.',
+        details: 'Reference scaffold for seafood obtained from a fishing vessel. Uses §1.1335 First Land-Based Receiving as the entry CTE. Final CTE/KDE coverage is configured during onboarding.',
         jsonSnippet: `{
   "profile": "seafood",
   "ftl_categories": ["Fresh Finfish", "Crustaceans"],

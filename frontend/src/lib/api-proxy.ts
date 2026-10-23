@@ -260,7 +260,7 @@ export function requireProxyAuth(request: NextRequest): NextResponse | null {
   }
 
   return NextResponse.json(
-    { error: 'Unauthorized — no valid credentials provided' },
+    { error: 'Unauthorized: no valid credentials provided' },
     { status: 401 },
   );
 }
@@ -374,7 +374,7 @@ export async function validateProxySession(
     const tokenPayload = decodeRegEngineClaims(regengineToken);
     if (!tokenPayload) {
       return NextResponse.json(
-        { error: 'Session expired or invalid — please log in again' },
+        { error: 'Session expired or invalid. Please log in again' },
         { status: 401 },
       );
     }
@@ -419,7 +419,7 @@ export async function validateProxySession(
   if (!hasSupabaseCookies) {
     if (options.requireSupabaseSession) {
       return NextResponse.json(
-        { error: 'Session expired or invalid — please log in again' },
+        { error: 'Session expired or invalid. Please log in again' },
         { status: 401 },
       );
     }
@@ -452,14 +452,14 @@ export async function validateProxySession(
 
     if (error || !user) {
       return NextResponse.json(
-        { error: 'Session expired or invalid — please log in again' },
+        { error: 'Session expired or invalid. Please log in again' },
         { status: 401 },
       );
     }
   } catch {
     if (options.requireSupabaseSession) {
       return NextResponse.json(
-        { error: 'Session expired or invalid — please log in again' },
+        { error: 'Session expired or invalid. Please log in again' },
         { status: 401 },
       );
     }
@@ -482,7 +482,7 @@ export async function validateProxySession(
  */
 export function staticExportGuard(serviceName: string): NextResponse | null {
   if (process.env.REGENGINE_DEPLOY_MODE === 'static') {
-    console.error(`[proxy/${serviceName}] 503 — proxy unavailable in static export mode`);
+    console.error(`[proxy/${serviceName}] 503: proxy unavailable in static export mode`);
     return proxyError(`${serviceName} proxy unavailable in static export mode`, 503);
   }
   return null;

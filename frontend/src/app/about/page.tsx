@@ -103,7 +103,7 @@ export default function AboutPage() {
           description={
             <>
               RegEngine is FSMA 204 compliance infrastructure built for mid-market
-              food companies&mdash;by someone who saw the gap from inside government,
+              food companies, by someone who saw the gap from inside government,
               enterprise sales, and the regulatory stack itself.
             </>
           }
@@ -135,8 +135,8 @@ export default function AboutPage() {
                 204 compliance tools priced for enterprises, sold through
                 six-month procurement cycles, and designed for teams with
                 dedicated compliance departments. The companies that actually
-                needed help&mdash;regional distributors, mid-size processors,
-                growing food brands&mdash;were stuck choosing between
+                needed help (regional distributors, mid-size processors,
+                growing food brands) were stuck choosing between
                 spreadsheets and software they couldn&apos;t afford.
               </p>
               <p className="mt-3 max-w-[68ch] text-ui text-re-text-secondary">
@@ -186,7 +186,7 @@ export default function AboutPage() {
               </h2>
               <p className="mt-2 max-w-[68ch] text-ui text-re-text-secondary">
                 RegEngine is built by one person leveraging modern AI tooling as
-                a development multiplier. This isn&apos;t a limitation&mdash;it&apos;s
+                a development multiplier. This isn&apos;t a limitation; it&apos;s
                 a feature.
               </p>
             </div>
@@ -258,7 +258,7 @@ export default function AboutPage() {
           <p className="mx-auto mt-4 max-w-[48ch] text-body text-re-text-secondary">
             Book a free gap analysis call. We&apos;ll review your current FSMA 204
             posture, identify coverage gaps, and show you exactly what RegEngine
-            handles&mdash;no commitment required.
+            handles. No commitment required.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">

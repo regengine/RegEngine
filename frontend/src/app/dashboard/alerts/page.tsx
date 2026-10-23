@@ -285,7 +285,7 @@ function AlertsDashboardPageContent() {
 
                         {ackError && (
                             <Callout tone="danger" role="alert">
-                                Couldn&apos;t acknowledge — retry.
+                                Couldn&apos;t acknowledge. Retry.
                             </Callout>
                         )}
 
@@ -445,7 +445,7 @@ function AlertsDashboardPageContent() {
                     <EmptyState
                         icon={CheckCircle2}
                         title="No alerts"
-                        description="Everything looks good — no active alerts"
+                        description="Everything looks good: no active alerts"
                     />
                 )}
             </div>

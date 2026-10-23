@@ -42,7 +42,7 @@ interface ComparisonRow {
 
 const COMPARISON_DATA: ComparisonRow[] = [
     {
-        feature: 'REST API + Webhooks',
+        feature: 'CSV upload + JSON events API',
         regengine: true,
         trustwell: false,
         safetychain: false,
@@ -70,7 +70,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
         repositrak: 'Verify with vendor',
     },
     {
-        feature: 'EPCIS 2.0 Native',
+        feature: 'EPCIS 2.0 export',
         regengine: true,
         trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
@@ -132,7 +132,7 @@ const DIFFERENTIATORS = [
         icon: Code2,
         title: 'API-First Architecture',
         description:
-            'REST APIs, webhooks, and CSV templates. Integrate RegEngine with your existing ERP, WMS, or custom systems. No rip-and-replace required.',
+            'CSV upload, a JSON events API, and EPCIS export. Integrate RegEngine with your existing ERP, WMS, or custom systems. No rip-and-replace required.',
         detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 compliance their way.',
     },
     {
@@ -158,9 +158,9 @@ const DIFFERENTIATORS = [
     },
     {
         icon: Workflow,
-        title: 'EPCIS 2.0 Native',
+        title: 'EPCIS 2.0 export',
         description:
-            "EPCIS 2.0 support for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
+            "EPCIS 2.0 export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
         detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
     },
     {
@@ -582,7 +582,7 @@ HTTP 201
                     <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
-                                EPCIS 2.0 Native
+                                EPCIS 2.0 export
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a supported schema where the enabled workflow and source data allow it.
