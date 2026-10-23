@@ -28,7 +28,6 @@ from urllib.request import HTTPSHandler, Request
 
 import httpx
 import pytest
-
 from shared import safe_http
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
