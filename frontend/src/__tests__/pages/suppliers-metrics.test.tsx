@@ -67,7 +67,8 @@ it('shows "No data yet" for lot codes when no facility has a count', async () =>
     mocks.tlcs.mockRejectedValue(new Error('boom'));
     render(<SupplierDashboardPage />);
     await waitFor(() => expect(screen.getAllByText('No lot code data yet')).toHaveLength(2));
-    expect(screen.getByText('No data yet')).toBeInTheDocument();
+    const tile = screen.getByText('Lot Codes Tracked').parentElement as HTMLElement;
+    expect(within(tile).getByText('No data yet')).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/NaN/);
 });
 
