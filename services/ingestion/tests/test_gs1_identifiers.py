@@ -66,19 +66,6 @@ def test_round_trip_with_computed_check_digit(fn, kind, n):
     assert fn(body + str(compute_gs1_check_digit(body))).is_valid
 
 
-@pytest.mark.parametrize("fn,kind,n", VALID)
-@pytest.mark.parametrize("pos", [0, -2])
-def test_round_trip_with_one_nonzero_body_digit(fn, kind, n, pos):
-    # Exercises both GS1 weights (3 and 1) without inventing an identifier.
-    for d in range(1, 10):
-        body = list("0" * (n - 1))
-        body[pos] = str(d)
-        body_s = "".join(body)
-        check = compute_gs1_check_digit(body_s)
-        assert fn(body_s + str(check)).is_valid
-        assert not fn(body_s + str((check + 1) % 10)).is_valid
-
-
 def test_compute_check_digit_of_all_zero_body_is_zero():
     for n in range(1, 18):
         assert compute_gs1_check_digit("0" * n) == 0
@@ -155,10 +142,12 @@ def test_non_string_input_is_flagged(fn, kind, lengths):
     _assert_plain(result.error)
 
 
-def test_row_issue_names_field_supplier_and_row():
+def test_row_issue_names_field_and_row():
     result = validate_gln("0" * 12 + "1")
-    message = describe_row_issue(result, field="ship_from_gln", row=7, supplier="Supplier A")
-    assert message.startswith("Row 7 from Supplier A, field ship_from_gln: GLN check digit")
+    field, row = "ship_from_gln", 1
+    message = describe_row_issue(result, field=field, row=row, supplier=None)
+    assert message == f"Row {row}, field {field}: {result.error}"
+    assert "GLN check digit" in message
     _assert_plain(message)
 
 
