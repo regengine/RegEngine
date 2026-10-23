@@ -163,26 +163,6 @@
    "baseline_msg": "AssertionError: a script named rotate_secrets_to_aws.py must not exist: it neither rotates nor contacts AWS"
   },
   {
-   "nodeid": "tests/scripts/test_regenerate_public_samples_gate.py::TestWorkflowInstallsTheLockfile::test_job_installs_requirements_lock",
-   "file": "tests/scripts/test_regenerate_public_samples_gate.py",
-   "class": "real-defect",
-   "rc_id": "RC-017",
-   "status": "open",
-   "owner": "anvil",
-   "evidence": "workflow yaml drift after lock policy change",
-   "baseline_msg": "assert 'requirements.lock' in '\\n    name: Regenerate public samples\\n    runs-on: ubuntu-latest\\n    timeout-minutes: 5\\n    steps:\\n      - uses: ...erated output. Re-run scripts/regenerate_public_s"
-  },
-  {
-   "nodeid": "tests/scripts/test_regenerate_public_samples_gate.py::TestWorkflowInstallsTheLockfile::test_job_no_longer_installs_three_hand_picked_packages",
-   "file": "tests/scripts/test_regenerate_public_samples_gate.py",
-   "class": "real-defect",
-   "rc_id": "RC-017",
-   "status": "open",
-   "owner": "anvil",
-   "evidence": "workflow yaml drift after lock policy change",
-   "baseline_msg": "AssertionError: assert 'pip install...i sqlalchemy' not in '\\n    name:...        fi\\n'"
-  },
-  {
    "nodeid": "tests/sdk/test_route_contract.py::test_experimental_declaration_matches_production_route_table",
    "file": "tests/sdk/test_route_contract.py",
    "class": "env-mark",

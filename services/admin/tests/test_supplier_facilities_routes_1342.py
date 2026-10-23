@@ -34,11 +34,12 @@ from app.sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
+    SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
     TenantModel,
     UserModel,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -68,6 +69,7 @@ def db_session() -> Session:
         SupplierFacilityFTLCategoryModel.__table__,
         SupplierTraceabilityLotModel.__table__,
         SupplierCTEEventModel.__table__,
+        SupplierFunnelEventModel.__table__,
     ]
     for t in tables:
         t.create(bind=engine)
@@ -111,6 +113,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
+    app.dependency_overrides[fac_routes.require_owner] = lambda: True
 
     monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kw: None)
@@ -139,6 +142,7 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
 
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
+    app.dependency_overrides[fac_routes.require_owner] = lambda: True
 
     monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: None)
 
@@ -527,3 +531,68 @@ class TestListTlcs:
         assert body["total"] == 1
         assert body["items"][0]["tlc_code"] == "TLC-FILTER-001"
         assert body["items"][0]["event_count"] == 0
+
+
+# ---------------------------------------------------------------------------
+# GET /facilities/{facility_id}/removal-check (SEL-421)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckSupplierFacilityRemoval:
+    def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
+        resp = client_no_tenant.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
+        assert resp.status_code == 400
+
+    def test_invalid_uuid_returns_400(self, client: TestClient):
+        resp = client.get("/v1/supplier/facilities/not-a-uuid/removal-check")
+        assert resp.status_code == 400
+        assert "Invalid facility id" in resp.json()["detail"]
+
+    def test_non_owner_forbidden_returns_403(self):
+        import app.supplier_facilities_routes as fac_routes
+
+        app = FastAPI()
+        app.include_router(fac_routes.router, prefix="/v1")
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: MagicMock()
+
+        def _deny_owner():
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        app.dependency_overrides[fac_routes.require_owner] = _deny_owner
+
+        with TestClient(app) as member_client:
+            resp = member_client.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
+            assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# DELETE /facilities/{facility_id} (SEL-421)
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteSupplierFacility:
+    def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
+        resp = client_no_tenant.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
+        assert resp.status_code == 400
+
+    def test_invalid_uuid_returns_400(self, client: TestClient):
+        resp = client.delete("/v1/supplier/facilities/not-a-uuid")
+        assert resp.status_code == 400
+        assert "Invalid facility id" in resp.json()["detail"]
+
+    def test_non_owner_forbidden_returns_403(self):
+        import app.supplier_facilities_routes as fac_routes
+
+        app = FastAPI()
+        app.include_router(fac_routes.router, prefix="/v1")
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: MagicMock()
+
+        def _deny_owner():
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        app.dependency_overrides[fac_routes.require_owner] = _deny_owner
+
+        with TestClient(app) as member_client:
+            resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
+            assert resp.status_code == 403
+

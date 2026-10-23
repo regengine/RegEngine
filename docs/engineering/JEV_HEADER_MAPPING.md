@@ -416,37 +416,13 @@ thresholds in force. The values shown are illustrative.
 | `--prompt-key` | Read the key from a hidden terminal prompt (or from stdin when there is no terminal), for this run only, instead of `TYPESAFE_API_KEY`. The script never prints, logs or saves it. |
 | `--cte-type CTE` | The CTE every row of the file records, as the route's `cte_type` form field: same accepted values and aliases (`_CTE_TYPE_ALIASES`), same normalisation, same withholding rule. An empty value (`--cte-type ""`) means not declared, like an empty form field; a blank-but-not-empty one is a usage error, as the route rejects it. When sent, it is shown on the `Sent:` line and as `request.file_cte_type` in `--json`. When withheld, `request.file_cte_type` is null, `request.file_cte_type_dropped` gives the reason, and the table prints a `CTE:` line. `request.file_cte_type` comes from the route helper's result: what was sent on `ok`, what was attempted on `unavailable:*` and `error` (the request may never have left), and null when nothing was built (for example without a key). Without a key the reason is still computed from the file with the same helper (`_file_cte_type_for_jev`), so the report says the `--cte-type` would be withheld. An unknown value is a usage error (exit 1) and nothing is sent. Omit it for mixed-type files. |
 
-### Demo file
+### Check your own file
 
-`docs/engineering/examples/jev_demo_shipping.csv` is a synthetic shipping
-file (fictional companies marked "(demo)", lot codes `DEMO-JEV-*`). It
-carries every column the parser needs, so it is valid on its own, plus seven
-extra headers the parser does not recognise. Those seven are what Jev is
-asked about; the intended answers are:
-
-| Header | Intended field |
-| --- | --- |
-| `Lot #` | `traceability_lot_code` |
-| `Item Desc` | `product_description` |
-| `Qty Shpd` | `quantity` |
-| `Ship Dt` | `ship_date` |
-| `Ship-To GLN` | `ship_to_gln` |
-| `Trucking Co` | `carrier` |
-| `Internal Notes` | `no_match` |
+Run the preview against a supplier CSV you are authorized to use. A header-only CSV can check column mapping without sending records. The preview reports unrecognised headers and does not save changes.
 
 ```bash
-python3 scripts/jev_header_preview.py docs/engineering/examples/jev_demo_shipping.csv --prompt-key
+python3 scripts/jev_header_preview.py /path/to/your-supplier.csv --prompt-key
 ```
-
-The demo file names each row's CTE in its own `cte_type` column, so it is
-a per-row file: adding `--cte-type shipping` sends no `file_cte_type` and
-the report shows `file has a per-row CTE column: cte_type`.
-
-With `--simulate-apply` and answers in the `auto_apply` band, the four
-headers whose canonical column is already in the file (`Lot #`, `Item Desc`,
-`Qty Shpd`, `Ship Dt`) stay blocked with `target_present`, and `Ship-To GLN`
-and `Trucking Co` show `would_apply: yes`, since the file has no
-`ship_to_gln` or `carrier` column. `Internal Notes` is never applied.
 
 Exit codes: `0` suggestions received, or no unrecognised headers (no request
 made); `1` bad usage (including an unknown `--cte-type`), an unreadable, oversized (over 5 MB) or non-UTF-8

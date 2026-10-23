@@ -1,0 +1,183 @@
+# All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
+
+name: Engine Review Pass
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+concurrency:
+  group: engine-review-pass-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  statuses: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  engine-review-pass:
+    name: Engine Review Pass
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify engine review pass
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
+
+            if (!pr) {
+              core.setFailed('Could not determine pull request from event payload.');
+              return;
+            }
+
+            const headSha = pr.head?.sha;
+            if (!headSha) {
+              core.setFailed('Could not determine head SHA from pull request.');
+              return;
+            }
+
+            let statusPosted = false;
+            async function setCommitStatus(state, description) {
+              if (statusPosted) {
+                core.info(`Commit status already posted. Skipping duplicate (${state}: ${description})`);
+                return;
+              }
+              statusPosted = true;
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner,
+                  repo,
+                  sha: headSha,
+                  state,
+                  context: 'Engine Review Pass',
+                  description: description.slice(0, 140),
+                  target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+                });
+                core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
+              } catch (err) {
+                core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
+              }
+            }
+
+            try {
+              const headRef = pr.head?.ref || '';
+              const slashIndex = headRef.indexOf('/');
+              if (slashIndex <= 0) {
+                const msg = 'cannot determine author engine';
+                await setCommitStatus('failure', msg);
+                core.setFailed(msg);
+                return;
+              }
+
+              const authorEngine = headRef.slice(0, slashIndex).trim();
+              if (!authorEngine) {
+                const msg = 'cannot determine author engine';
+                await setCommitStatus('failure', msg);
+                core.setFailed(msg);
+                return;
+              }
+
+              core.info(`Author engine: ${authorEngine} (from branch ${headRef})`);
+              core.info(`Head SHA: ${headSha}`);
+
+              const prNumber = pr.number;
+              core.info(`Fetching reviews for pull request #${prNumber}...`);
+
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+              });
+
+              core.info(`Total reviews retrieved: ${reviews.length}`);
+
+              const eligibleReviews = reviews.filter((r) => {
+                return r.state !== 'DISMISSED' && r.submitted_at && r.body;
+              });
+
+              eligibleReviews.sort((a, b) => {
+                const timeA = new Date(a.submitted_at).getTime();
+                const timeB = new Date(b.submitted_at).getTime();
+                if (timeA !== timeB) {
+                  return timeA - timeB;
+                }
+                return a.id - b.id;
+              });
+
+              const markerRegex = /^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
+              const headShaLower = headSha.toLowerCase();
+              const authorEngineLower = authorEngine.toLowerCase();
+
+              const latestMarkers = new Map();
+
+              for (const r of eligibleReviews) {
+                const lines = r.body.replace(/\r\n/g, '\n').split('\n');
+                for (const line of lines) {
+                  const match = line.match(markerRegex);
+                  if (!match) {
+                    continue;
+                  }
+
+                  const action = match[1];
+                  const reviewerEngine = match[2];
+                  const markerSha = match[3];
+
+                  if (!headShaLower.startsWith(markerSha.toLowerCase())) {
+                    core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
+                    continue;
+                  }
+
+                  const isAuthorEngine = reviewerEngine.toLowerCase() === authorEngineLower;
+                  if (action === 'PASS' && isAuthorEngine) {
+                    core.info(`Ignoring PASS from author engine '${reviewerEngine}'`);
+                    continue;
+                  }
+
+                  const engineKey = reviewerEngine.toLowerCase();
+                  latestMarkers.set(engineKey, {
+                    action,
+                    engine: reviewerEngine,
+                    sha: markerSha,
+                    submittedAt: r.submitted_at,
+                  });
+                  core.info(`Recorded marker: ${action} by ${reviewerEngine} (SHA: ${markerSha}, submitted: ${r.submitted_at})`);
+                }
+              }
+
+              const markers = Array.from(latestMarkers.values());
+              const blockedMarkers = markers.filter((m) => m.action === 'BLOCKED');
+              const nonAuthorPassMarkers = markers.filter((m) => {
+                return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
+              });
+
+              if (blockedMarkers.length > 0) {
+                const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
+                const msg = `Blocked by ${blockedEngines}`;
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass blocked: ${msg}`);
+                return;
+              }
+
+              if (nonAuthorPassMarkers.length === 0) {
+                const msg = 'No passing review from a non-author engine for current head SHA';
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass failed: ${msg}`);
+                return;
+              }
+
+              const passEngines = nonAuthorPassMarkers.map((m) => m.engine).join(', ');
+              const successMsg = `Passed by ${passEngines}`;
+              await setCommitStatus('success', successMsg);
+              core.info(`Engine Review Pass succeeded: ${successMsg}`);
+            } catch (err) {
+              core.error(`Unexpected error: ${err.message}`);
+              await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
+              core.setFailed(err.message);
+            }
