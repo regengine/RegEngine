@@ -29,10 +29,11 @@ import types
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterator, List
 from unittest.mock import MagicMock
 
 import pytest
+import structlog
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -119,6 +120,39 @@ def recorder(monkeypatch) -> _LogRecorder:
     return rec
 
 
+@pytest.fixture()
+def batch_log_capture(monkeypatch) -> Iterator[List[logging.LogRecord]]:
+    records: List[logging.LogRecord] = []
+
+    class _ListHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    stdlib_logger = logging.getLogger(f"test.ingest_batch_failure.{uuid.uuid4().hex}")
+    stdlib_logger.setLevel(logging.DEBUG)
+    stdlib_logger.propagate = False
+    handler = _ListHandler()
+    stdlib_logger.addHandler(handler)
+    monkeypatch.setattr(
+        wr,
+        "logger",
+        structlog.wrap_logger(
+            stdlib_logger,
+            processors=[
+                structlog.stdlib.add_log_level,
+                structlog.processors.format_exc_info,
+                structlog.processors.JSONRenderer(),
+            ],
+            wrapper_class=structlog.stdlib.BoundLogger,
+        ),
+    )
+    try:
+        yield records
+    finally:
+        stdlib_logger.removeHandler(handler)
+        handler.close()
+
+
 # ---------------------------------------------------------------------------
 # POST /api/v1/webhooks/ingest
 #
@@ -132,7 +166,7 @@ def recorder(monkeypatch) -> _LogRecorder:
 
 
 class TestIngestBatchFailureLogging:
-    def _post(self, monkeypatch, caplog):
+    def _post(self, monkeypatch):
         from app.subscription_gate import require_active_subscription
         from shared.database import get_db_session
 
@@ -181,23 +215,22 @@ class TestIngestBatchFailureLogging:
                 }
             ],
         }
-        with caplog.at_level(logging.DEBUG):
-            resp = TestClient(app).post(
-                "/api/v1/webhooks/ingest",
-                json=payload,
-                headers={"Idempotency-Key": uuid.uuid4().hex},
-            )
+        resp = TestClient(app).post(
+            "/api/v1/webhooks/ingest",
+            json=payload,
+            headers={"Idempotency-Key": uuid.uuid4().hex},
+        )
         return resp, source, (canary_tlc, canary_product, canary_location)
 
-    def _record(self, caplog) -> logging.LogRecord:
-        matches = [r for r in caplog.records if "ingest_batch_failed" in r.getMessage()]
-        assert matches, f"expected an ingest_batch_failed log line; got {[r.getMessage() for r in caplog.records]}"
+    def _record(self, records: List[logging.LogRecord]) -> logging.LogRecord:
+        matches = [r for r in records if "ingest_batch_failed" in r.getMessage()]
+        assert matches, f"expected an ingest_batch_failed log line; got {[r.getMessage() for r in records]}"
         return matches[0]
 
-    def test_logs_traceback_tenant_count_and_source(self, monkeypatch, caplog) -> None:
-        resp, source, _canaries = self._post(monkeypatch, caplog)
+    def test_logs_traceback_tenant_count_and_source(self, monkeypatch, batch_log_capture) -> None:
+        resp, source, _canaries = self._post(monkeypatch)
         assert resp.status_code == 500, resp.text
-        record = self._record(caplog)
+        record = self._record(batch_log_capture)
         fields = json.loads(record.getMessage())
         assert record.levelno == logging.ERROR
         assert "Traceback" in fields.get("exception", ""), "ingest_batch_failed must carry the traceback (#2868)"
@@ -207,12 +240,12 @@ class TestIngestBatchFailureLogging:
         assert fields["error_type"] == "SystemError"
         assert fields["correlation_id"]
 
-    def test_does_not_log_lot_code_or_product_text(self, monkeypatch, caplog) -> None:
+    def test_does_not_log_lot_code_or_product_text(self, monkeypatch, batch_log_capture) -> None:
         """Diagnostics only, never the payload (#2868)."""
-        resp, _source, canaries = self._post(monkeypatch, caplog)
+        resp, _source, canaries = self._post(monkeypatch)
         assert resp.status_code == 500
-        self._record(caplog)
-        logged = " ".join(r.getMessage() + (caplog.text or "") for r in caplog.records)
+        self._record(batch_log_capture)
+        logged = " ".join(r.getMessage() for r in batch_log_capture)
         for canary in canaries:
             assert canary not in logged, "request-body values must not reach the log (#2868)"
 
