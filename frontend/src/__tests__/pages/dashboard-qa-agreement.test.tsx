@@ -64,11 +64,11 @@ describe('Dashboard QA agreement', () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useSystemMetrics>);
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: true, status: 'active' },
       isHydrated: true,
     } as ReturnType<typeof useAuth>);
     vi.mocked(useTenant).mockReturnValue({
-      tenantId: 't1',
+      tenantId: '',
       isTenantReady: true,
     } as ReturnType<typeof useTenant>);
   });

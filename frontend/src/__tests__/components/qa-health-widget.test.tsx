@@ -42,7 +42,7 @@ describe('QAHealthWidget', () => {
 
   it('does not render for non-sysadmin users', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'user@example.com', is_sysadmin: false, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: false, status: 'active' },
     } as ReturnType<typeof useAuth>);
 
     const { container } = render(<QAHealthWidget />);
@@ -53,7 +53,7 @@ describe('QAHealthWidget', () => {
 
   it('renders release health for sysadmin users', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: true, status: 'active' },
     } as ReturnType<typeof useAuth>);
 
     render(<QAHealthWidget />);
@@ -69,7 +69,7 @@ describe('QAHealthWidget', () => {
 
   it('a failed QA load reads as failed with unknown readiness — not "0% ready"', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: true, status: 'active' },
     } as ReturnType<typeof useAuth>);
     vi.mocked(useQAHealth).mockReturnValue({
       data: undefined,
