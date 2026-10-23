@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "About RegEngine | FSMA 204 Compliance Infrastructure",
   description:
-    "RegEngine was built by Christopher Sellers — AmeriCorps alum, former Senate staffer, and solo technical founder — to make FSMA 204 compliance accessible to mid-market food companies without six-figure platforms.",
+    "RegEngine was built by Christopher Sellers (AmeriCorps alum, former Senate staffer, and solo technical founder) to make FSMA 204 compliance accessible to mid-market food companies without six-figure platforms.",
   openGraph: {
     title: "About RegEngine | FSMA 204 Compliance Infrastructure",
     description:

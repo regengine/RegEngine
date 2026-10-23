@@ -283,7 +283,7 @@ export default function DocsHomePage() {
               Ready to get started?
             </h3>
             <p className="text-ui text-re-text-tertiary">
-              Developer access is request-gated — tell us about your integration and we&apos;ll provision your API key.
+              Developer access is request-gated. Tell us about your integration and we&apos;ll provision your API key.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">

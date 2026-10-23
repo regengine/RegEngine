@@ -47,7 +47,7 @@ const STACK_LAYERS = [
         layer: 'Backend',
         technology: 'FastAPI monolith on Railway',
         detail:
-            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
+            'Single consolidated Python service for CTE ingestion, JSON events API validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
     },
     {
         Icon: Database,
@@ -69,7 +69,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before coverage checks.',
+        description: 'CTE events arrive via CSV upload or the JSON events API. Both paths run validation synchronously and persist before coverage checks. EPCIS, EDI, and SFTP intake are on the roadmap.',
     },
     {
         step: '2',
@@ -79,7 +79,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure — not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
+        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure; this is not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
     },
     {
         step: '4',
@@ -120,7 +120,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Globe,
         title: 'Source systems',
-        detail: 'ERP, WMS, supplier files, webhooks, or EPCIS feeds',
+        detail: 'ERP, WMS, and supplier data sent as CSV uploads or JSON events API calls',
         boundary: 'Customer-owned data quality',
     },
     {
