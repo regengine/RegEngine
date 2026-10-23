@@ -672,12 +672,12 @@ async def ingest_edi_856(
 
 
 def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -> bool:
-    """True when the set's line-item segment actually carried a quantity.
+    """True when a line-item segment included the quantity element.
 
-    #2974: lets the route tell "this document has no quantity element at
-    all" (leave today's behaviour alone) apart from "a quantity element
-    was sent but is zero or non-numeric" (fail closed rather than let
-    ``_safe_float``'s 1.0 fallback fabricate a KDE).
+    #2974: a document with no quantity element keeps the historical 1.0
+    default. An element that is present but blank, zero, or non-numeric
+    must fail closed. Requiring a non-blank value treated ``SN1*1**CA``
+    as "no element" and the route then stored quantity 1.0.
 
     The quantity element is not at index 2 on every set. 944 reads W0701
     (quantity received). 945 reads W1203 (units shipped, not ordered).
@@ -686,10 +686,7 @@ def _quantity_element_present(transaction_set: str, segments: list[list[str]]) -
     if not wanted:
         return False
     index = _QUANTITY_ELEMENT_INDEX_BY_SET.get(transaction_set, 2)
-    return any(
-        segment and segment[0].upper() == wanted and len(segment) > index and bool(segment[index].strip())
-        for segment in segments
-    )
+    return any(segment and segment[0].upper() == wanted and len(segment) > index for segment in segments)
 
 
 def _build_ingest_event_for_set(
