@@ -207,8 +207,8 @@ head -20 lot-export.csv`}
           <ul className="mt-3 list-none border-t border-re-border-subtle p-0">
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
-              { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
-              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/docs/connectors/inflow-lab' },
+              { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through the Data Import Hub', href: '/tools/data-import' },
+              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/ingest' },
             ]).map(({ title, desc, href }) => (
               <li key={href}>
                 <Link

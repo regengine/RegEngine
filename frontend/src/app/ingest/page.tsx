@@ -42,7 +42,6 @@ import {
   ArrowRight,
   Key,
   ClipboardCheck,
-  FlaskConical,
   Globe,
   Landmark,
   Scale
@@ -921,23 +920,6 @@ export default function IngestPage() {
                     Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 (Preview) for GS1 EPCIS JSON and XML files.
                   </p>
                 </div>
-                {experimentalFeaturesEnabled() && (
-                  <div className="border-t border-re-border-subtle pt-5">
-                    <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
-                      <FlaskConical className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                      Inflow Lab
-                    </div>
-                    <p className="mt-2 text-ui text-re-text-secondary">
-                      Use the lab for FSMA event simulation and event replay so test traffic stays tagged.
-                    </p>
-                    <Button size="sm" variant="secondary" className="mt-3" asChild>
-                      <Link href="/dashboard/inflow-lab">
-                        Open Inflow Lab
-                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                      </Link>
-                    </Button>
-                  </div>
-                )}
                 <div className="border-t border-re-border-subtle pt-5">
                   <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
                     <ClipboardCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />

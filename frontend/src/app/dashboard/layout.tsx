@@ -46,7 +46,6 @@ import {
     Fingerprint,
     ClipboardList,
     Route,
-    FlaskConical,
     Bot,
     ShieldAlert,
     Code2,
@@ -84,7 +83,6 @@ interface CollapsibleSection {
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
     { label: 'Trace', href: '/trace', icon: Route },
-    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimentalPage: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell, experimentalPage: true },
 ];
