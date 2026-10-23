@@ -1,6 +1,6 @@
 import { getServiceURL } from './api-config';
 import { getCsrfHeaders, CSRF_PROTECTED_METHODS } from './csrf';
-import { emitStepUpRequired } from './step-up-events';
+import { DEFAULT_STEP_UP_REASON, emitStepUpRequired } from './step-up-events';
 import type {
   HealthCheckResponse,
   APIKeyResponse,
@@ -23,6 +23,7 @@ import type {
   SupplierFacility,
   FacilityFTLScopingRequest,
   FacilityFTLScopingResponse,
+  FacilityRemovalCheck,
   SupplierCTEEventCreateRequest,
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
@@ -33,6 +34,7 @@ import type {
   SupplierBulkUploadValidateResponse,
   SupplierFDAExportPreviewResponse,
   SupplierTLC,
+  SupplierTLCListResponse,
   SupplierTLCUpsertRequest,
   CreateIntegrationProfileRequest,
   IntegrationProfile,
@@ -163,6 +165,12 @@ type RequestConfig = {
   params?: RequestParams;
   timeout?: number;
   responseType?: 'blob';
+  /**
+   * Opens the passkey step-up dialog with this sentence if the backend
+   * answers requires_step_up. GETs without it fail quietly so page loads
+   * never prompt; writes fall back to DEFAULT_STEP_UP_REASON.
+   */
+  stepUpReason?: string;
 };
 
 type ApiResponse<T = any> = {
@@ -311,8 +319,10 @@ class APIClient {
           };
           error.isAxiosError = true;
           error.response = { data: responseData, headers: responseHeaders, status: response.status };
-          if (response.status === 403) {
-            emitStepUpRequired(responseData);
+          const stepUpReason = config.stepUpReason
+            ?? (method.toUpperCase() === 'GET' ? undefined : DEFAULT_STEP_UP_REASON);
+          if (response.status === 403 && stepUpReason) {
+            emitStepUpRequired(responseData, { reason: stepUpReason });
           }
           throw error;
         }
@@ -410,7 +420,7 @@ class APIClient {
     return data;
   }
 
-  async ingestURL(apiKey: string, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
+  async ingestURL(apiKey: string | null | undefined, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
     const response = await this.ingestionClient.post<IngestURLResponse>(
       '/v1/ingest/url',
       { url, source_system: sourceSystem },
@@ -779,6 +789,24 @@ class APIClient {
     return data;
   }
 
+  async checkFacilityRemoval(facilityId: string): Promise<FacilityRemovalCheck> {
+    const { data } = await this.adminClient.get<FacilityRemovalCheck>(
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/removal-check`
+    );
+    return data;
+  }
+
+  async getFacilityRemovalCheck(facilityId: string): Promise<FacilityRemovalCheck> {
+    return this.checkFacilityRemoval(facilityId);
+  }
+
+  async deleteSupplierFacility(facilityId: string): Promise<{ status: string; id: string }> {
+    const { data } = await this.adminClient.delete<{ status: string; id: string }>(
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}`
+    );
+    return data;
+  }
+
   async setFacilityFTLCategories(
     facilityId: string,
     request: FacilityFTLScopingRequest,
@@ -813,11 +841,20 @@ class APIClient {
     return data;
   }
 
-  async listSupplierTLCs(facilityId?: string): Promise<SupplierTLC[]> {
-    const { data } = await this.adminClient.get<SupplierTLC[]>('/v1/supplier/tlcs', {
+  async listSupplierTLCs(facilityId?: string): Promise<SupplierTLCListResponse> {
+    // Paginated like /facilities ({ items, total, skip, limit }). Treating the
+    // envelope as an array made `.length` undefined and the Suppliers page
+    // render "Lot Codes Tracked: NaN". `total` is the full count; `items` is
+    // only the first page.
+    const { data } = await this.adminClient.get<
+      SupplierTLC[] | Partial<SupplierTLCListResponse>
+    >('/v1/supplier/tlcs', {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
-    return data || [];
+    if (Array.isArray(data)) return { items: data, total: data.length };
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const total = typeof data?.total === 'number' ? data.total : items.length;
+    return { items, total };
   }
 
   async getSupplierComplianceScore(facilityId?: string): Promise<SupplierComplianceScore> {
@@ -852,11 +889,13 @@ class APIClient {
   async downloadSupplierFDARecords(
     format: 'csv' | 'xlsx',
     facilityId?: string,
+    tlcCode?: string,
   ): Promise<{ blob: Blob; filename: string; recordCount: number }> {
     const response = await this.adminClient.get('/v1/supplier/export/fda-records', {
       params: {
         format,
         ...(facilityId ? { facility_id: facilityId } : {}),
+        ...(tlcCode ? { tlc_code: tlcCode } : {}),
       },
       responseType: 'blob',
     });
@@ -1026,10 +1065,12 @@ class APIClient {
   async updateOrganizationSsoPolicy(
     organizationId: string,
     payload: OrganizationSsoPolicyUpdate,
+    options: { stepUpReason?: string } = {},
   ): Promise<OrganizationSsoPolicyResponse> {
     const { data } = await this.adminClient.put<OrganizationSsoPolicyResponse>(
       `/admin/organizations/${encodeURIComponent(organizationId)}/sso-policy`,
       payload,
+      { stepUpReason: options.stepUpReason },
     );
     return data;
   }

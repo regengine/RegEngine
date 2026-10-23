@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Search, ArrowRight, AlertTriangle, Download } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
@@ -54,6 +54,34 @@ export default function TracePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+
+  // On-demand FDA 24-hour sortable spreadsheet (21 CFR 1.1455(c)) for one lot,
+  // from the same supplier export endpoint the Suppliers page downloads from.
+  const handleExport = async () => {
+    const code = tlcInput.trim();
+    if (!code || !hasTenantSession) return;
+
+    setIsExporting(true);
+    setError(null);
+    setExportStatus(null);
+
+    try {
+      const { blob, filename, recordCount } = await apiClient.downloadSupplierFDARecords('xlsx', undefined, code);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setExportStatus(`Downloaded ${filename} with ${recordCount} record${recordCount !== 1 ? 's' : ''} for TLC "${code}".`);
+    } catch {
+      setError('FDA spreadsheet export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleTrace = async () => {
     const code = tlcInput.trim();
@@ -179,7 +207,28 @@ export default function TracePage() {
               <Button onClick={handleTrace} disabled={!tlcInput.trim() || isLoading || !hasTenantSession}>
                 {isLoading ? <Spinner size="sm" /> : 'Trace'}
               </Button>
+              <Button
+                variant="secondary"
+                onClick={handleExport}
+                disabled={!tlcInput.trim() || isExporting || !hasTenantSession}
+              >
+                {isExporting ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+                    Export FDA spreadsheet
+                  </>
+                )}
+              </Button>
             </div>
+            <p className="mt-2 text-small text-re-text-tertiary">
+              Export downloads the FDA 24-hour sortable spreadsheet (.xlsx) for this lot now. Recurring
+              archives are set up under Scheduled Exports.
+            </p>
+            {exportStatus && (
+              <p role="status" className="mt-2 text-small text-re-text-secondary">{exportStatus}</p>
+            )}
             {!hasTenantSession && (
               <p className="mt-2 text-small text-re-text-tertiary">Sign in to run trace queries.</p>
             )}

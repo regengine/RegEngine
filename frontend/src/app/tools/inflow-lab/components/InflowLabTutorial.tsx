@@ -21,7 +21,7 @@ export const INFLOW_LAB_CLIENT_TUTORIAL_BANNER_KEY = "inflow-lab-client-tutorial
 //
 // A builder rather than a constant: the "run your first test" step carries a
 // real action button wired to the page's guided proof, so the walkthrough can
-// produce the data its later steps describe instead of narrating empty panels.
+// evaluate the user's own rows and fill the panels its later steps describe.
 export function buildInflowLabTutorialSteps({
     runGuidedProof,
 }: {
@@ -39,14 +39,14 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-load-data"]',
             title: "Bring supplier data in",
             content:
-                "Upload CSV takes your own supplier rows; Load realistic sample fills the editor with a believable farm-to-DC trace so you can explore safely. Both open the data editor below.",
+                "Upload CSV takes your own supplier rows and opens them in the data editor below, where you can also paste rows directly. Nothing is preloaded: until you add data, the panels show No data yet.",
             position: "bottom",
         },
         {
             target: '[data-tutorial="inflow-guided-proof"]',
             title: "Run your first test",
             content:
-                "This evaluates the built-in sample end to end. The highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results.",
+                "This evaluates the rows you uploaded or pasted, end to end. The highlighted button is live, or use the one right here. The chain, pipeline, score, and lot panels fill with the results. With no rows loaded, it opens the data editor instead.",
             position: "bottom",
             action: "Run trace",
             onAction: runGuidedProof,
@@ -69,7 +69,7 @@ export function buildInflowLabTutorialSteps({
             target: '[data-tutorial="inflow-exceptions"]',
             title: "Clear exceptions by pattern",
             content:
-                "Blocked lots are grouped by shared root cause: handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. The sample data passes cleanly, so this list is empty until your own data brings real exceptions.",
+                "Blocked lots are grouped by shared root cause: handoff, source, or mixed. Fix the pattern once (for example, map a missing handoff field) and the whole group unblocks. This list stays empty until your data brings real exceptions.",
             position: "top",
         },
         {

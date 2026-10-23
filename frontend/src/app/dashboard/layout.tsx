@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimedSkeleton } from '@/components/ui/timed-skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { useSystemStatus } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
@@ -44,7 +45,7 @@ import {
     Scale,
     Fingerprint,
     ClipboardList,
-    Eye,
+    Route,
     FlaskConical,
     Bot,
     ShieldAlert,
@@ -76,29 +77,38 @@ interface CollapsibleSection {
 // Navigation data
 // ---------------------------------------------------------------------------
 
-/** Always-visible top-level items (max 5) */
+/**
+ * Always-visible top-level items (max 5). Labels are kept short because they
+ * also fill the mobile tab bar; each is the leading words of its page title.
+ */
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
+    { label: 'Trace', href: '/trace', icon: Route },
     { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimentalPage: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell, experimentalPage: true },
-    { label: 'FDA Export', href: '/dashboard/export-jobs', icon: Archive },
 ];
 
-/** Collapsible sections (closed by default) */
+/**
+ * Collapsible sections (closed by default). Each label is the title of the
+ * page it opens, so a click never lands somewhere differently named.
+ * Curator Review (/review) validates ML regulatory extractions, not
+ * traceability records, so it is reachable by URL but not listed here.
+ */
 const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     {
         key: 'data-inflow',
         title: 'Intake',
         items: [
-            { label: 'Import files', href: '/ingest', icon: FileSpreadsheet },
-            { label: 'Integration registry', href: '/dashboard/integrations', icon: Link2 },
+            { label: 'Document Ingestion', href: '/ingest', icon: FileSpreadsheet },
+            { label: 'Integrations', href: '/dashboard/integrations', icon: Link2 },
         ],
     },
     {
         key: 'fda-response',
         title: 'Response',
         items: [
+            { label: 'Scheduled Exports', href: '/dashboard/export-jobs', icon: Archive },
             { label: 'Recall Drills', href: '/dashboard/recall-drills', icon: Zap },
             { label: 'Recall Report', href: '/dashboard/recall-report', icon: ShieldCheck },
         ],
@@ -107,39 +117,38 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
         key: 'supply-chain',
         title: 'Sources',
         items: [
-            { label: 'Suppliers', href: '/dashboard/suppliers', icon: Users },
-            { label: 'Products', href: '/dashboard/products', icon: Package },
-            { label: 'Receiving', href: '/dashboard/receiving', icon: Truck },
-            { label: 'Scan', href: '/dashboard/scan', icon: Scan, experimental: true },
+            { label: 'Supplier Management', href: '/dashboard/suppliers', icon: Users },
+            { label: 'Product Catalog', href: '/dashboard/products', icon: Package },
+            { label: 'Receiving Dock', href: '/dashboard/receiving', icon: Truck },
+            { label: 'Field Capture', href: '/dashboard/scan', icon: Scan, experimental: true },
         ],
     },
     {
         key: 'control-plane',
         title: 'Governance',
         items: [
-            { label: 'Rules', href: '/rules', icon: Scale },
-            { label: 'Records', href: '/records', icon: FileCheck },
-            { label: 'Exceptions', href: '/exceptions', icon: AlertTriangle },
-            { label: 'Requests', href: '/requests', icon: ClipboardList },
-            { label: 'Identity', href: '/identity', icon: Fingerprint, experimentalPage: true },
-            { label: 'Review', href: '/review', icon: Eye },
+            { label: 'Compliance Rules', href: '/rules', icon: Scale },
+            { label: 'Canonical Records', href: '/records', icon: FileCheck },
+            { label: 'Exception Queue', href: '/exceptions', icon: AlertTriangle },
+            { label: 'Request-Response Workflow', href: '/requests', icon: ClipboardList },
+            { label: 'Identity Resolution', href: '/identity', icon: Fingerprint, experimentalPage: true },
             { label: 'Agent reviews', href: '/dashboard/agent-reviews', icon: Bot },
             { label: 'QA Health', href: '/dashboard/qa-health', icon: ShieldAlert, sysadminOnly: true },
-            { label: 'Audit', href: '/dashboard/audit-log', icon: ScrollText },
-            { label: 'Readiness', href: '/fsma', icon: ShieldCheck, experimental: true },
+            { label: 'Audit Log', href: '/dashboard/audit-log', icon: ScrollText },
+            { label: 'FSMA 204 Dashboard', href: '/fsma', icon: ShieldCheck, experimental: true },
             { label: 'Issues', href: '/dashboard/issues', icon: AlertTriangle },
-            { label: 'Controls', href: '/compliance/profile', icon: FileText },
+            { label: 'Product Profile', href: '/compliance/profile', icon: FileText },
         ],
     },
     {
         key: 'settings',
         title: 'Settings',
         items: [
-            { label: 'Settings', href: '/dashboard/settings', icon: Settings },
-            { label: 'Team', href: '/settings/users', icon: UserCog },
-            { label: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-            { label: 'Heartbeat', href: '/dashboard/heartbeat', icon: Activity, experimentalPage: true },
-            { label: 'Developer Portal', href: '/developer/portal', icon: Code2 },
+            { label: 'Account Settings', href: '/dashboard/settings', icon: Settings },
+            { label: 'Team Management', href: '/dashboard/settings/users', icon: UserCog },
+            { label: 'Notification Preferences', href: '/dashboard/notifications', icon: Bell },
+            { label: 'Daily Heartbeat', href: '/dashboard/heartbeat', icon: Activity, experimentalPage: true },
+            { label: 'Developer portal', href: '/developer/portal', icon: Code2 },
         ],
     },
 ];
@@ -202,7 +211,9 @@ function sectionsWithActiveRoute(pathname: string, sections: CollapsibleSection[
 }
 
 function isNavItemActive(pathname: string, href: string): boolean {
-    if (href === '/dashboard') {
+    // Hubs whose sub-routes have their own nav items match exactly, so only
+    // one item is marked current (e.g. Team Management, not Account Settings).
+    if (href === '/dashboard' || href === '/dashboard/settings') {
         return pathname === href;
     }
 
@@ -411,13 +422,18 @@ function DashboardShellSkeleton() {
                         </div>
                     </div>
                     <div className="flex-1 pb-20 md:pb-0">
-                        <Container width="app" className="space-y-6 py-6">
-                            <Skeleton className="h-8 w-44" />
-                            <Skeleton className="h-[244px] rounded-lg" />
-                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
-                                <Skeleton className="h-[360px] rounded-lg" />
-                            </div>
+                        <Container width="app" className="py-6">
+                            {/* Session hydration can stall on a slow backend; never spin forever. */}
+                            <TimedSkeleton errorMessage="Your session check did not finish. Reload to try again.">
+                                <div className="space-y-6">
+                                    <Skeleton className="h-8 w-44" />
+                                    <Skeleton className="h-[244px] rounded-lg" />
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                        <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
+                                        <Skeleton className="h-[360px] rounded-lg" />
+                                    </div>
+                                </div>
+                            </TimedSkeleton>
                         </Container>
                     </div>
                 </div>

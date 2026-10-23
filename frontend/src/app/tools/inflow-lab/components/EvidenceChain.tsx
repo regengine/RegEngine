@@ -39,7 +39,7 @@ export type EvidenceChainProps = {
     /** Bumped on each evaluation so the reveal animation replays. */
     runKey: number;
     onRun: () => void;
-    onLoadSample: () => void;
+    onOpenEditor: () => void;
     onFocusDefect?: (() => void) | null;
 };
 
@@ -64,7 +64,7 @@ export function EvidenceChain({
     lotCount,
     runKey,
     onRun,
-    onLoadSample,
+    onOpenEditor,
     onFocusDefect,
 }: EvidenceChainProps) {
     const provenCount = hasData ? nodes.filter((node) => node.state === "complete").length : 0;
@@ -72,7 +72,7 @@ export function EvidenceChain({
         ? [lot.product, lot.cases ? `${lot.cases} cases` : null, lot.supplier]
               .filter(Boolean)
               .join(" · ")
-        : "No lot loaded yet";
+        : "No data yet";
 
     return (
         <section
@@ -114,10 +114,10 @@ export function EvidenceChain({
                     <Button
                         type="button"
                         variant="outline"
-                        onClick={onLoadSample}
+                        onClick={onOpenEditor}
                         className="h-8 border-slate-300 bg-white px-3 text-xs"
                     >
-                        Open sample in editor
+                        Open data editor
                     </Button>
                 </div>
             </div>
@@ -313,7 +313,7 @@ export function EvidenceChain({
                         </Badge>
                     </div>
                     <p className="mt-1.5 max-w-[60ch] text-sm leading-6 text-slate-600">
-                        {`${lot.product} lot ${lot.code.slice(-6)} has all five CTEs with complete KDE evidence. To watch a defect get caught, delete the receiving row from the sample CSV and run the trace again.`}
+                        {`${lot.product} lot ${lot.code.slice(-6)} has all five CTEs with complete KDE evidence. To watch a defect get caught, delete the receiving row from your CSV and run the trace again.`}
                     </p>
                 </div>
             )}

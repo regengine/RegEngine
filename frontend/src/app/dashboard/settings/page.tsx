@@ -33,7 +33,7 @@ import {
 const ACCOUNT_LINKS = [
     { label: 'Profile', desc: 'Name, email, and account details', href: '/settings/profile', icon: User },
     { label: 'Sign-in & Security', desc: 'Passkeys, sign-in codes, and sessions', href: '/settings/security', icon: Lock },
-    { label: 'People', desc: 'Invite teammates and manage roles', href: '/settings/users', icon: UserCog },
+    { label: 'Team Management', desc: 'Invite teammates and manage roles', href: '/dashboard/settings/users', icon: UserCog },
     { label: 'Notifications', desc: 'Alert channels and delivery preferences', href: '/dashboard/notifications', icon: Bell },
     { label: 'Support', desc: 'Response windows and recall escalation', href: '/settings/support', icon: LifeBuoy },
 ];

@@ -51,24 +51,25 @@ const CTE_TYPES = [
 const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "Idempotency-Key: <unique-request-id>" \\
   -d '{
     "source": "erp",
     "events": [
       {
         "cte_type": "shipping",
-        "traceability_lot_code": "TOM-0226-F3-001",
-        "product_description": "Roma Tomatoes 12ct",
-        "quantity": 200,
-        "unit_of_measure": "cases",
-        "location_gln": "0614141000005",
-        "location_name": "Valley Fresh Farms",
-        "timestamp": "2026-02-26T14:30:00Z",
+        "traceability_lot_code": "<traceability-lot-code>",
+        "product_description": "<product-description>",
+        "quantity": <quantity-number>,
+        "unit_of_measure": "<unit-of-measure>",
+        "location_gln": "<your-13-digit-gln>",
+        "location_name": "<your-location-name>",
+        "timestamp": "<iso-8601-timestamp>",
         "kdes": {
-          "ship_date": "2026-02-26",
-          "ship_from_location": "Valley Fresh Farms, Salinas CA",
-          "ship_to_location": "Metro Distribution, LA",
-          "carrier_name": "Cold Express Logistics",
-          "temperature_celsius": 3.2
+          "ship_date": "<yyyy-mm-dd>",
+          "ship_from_location": "<ship-from-location>",
+          "ship_to_location": "<ship-to-location>",
+          "reference_document": "<bol-or-invoice-number>",
+          "tlc_source_reference": "<tlc-source-location-or-gln>"
         }
       }
     ]

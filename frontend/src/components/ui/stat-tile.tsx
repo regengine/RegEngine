@@ -46,6 +46,10 @@ export interface StatTileProps {
   /** Renders an em-dash. `emptyCaption` is required so a blank tile explains itself. */
   empty?: boolean
   emptyCaption?: string
+  /** Replaces the em-dash with words (e.g. "No data yet"), set at body size. */
+  emptyLabel?: string
+  /** A link that fixes the empty state (e.g. go upload a CSV). */
+  emptyAction?: React.ReactNode
   className?: string
   children?: React.ReactNode
 }
@@ -98,6 +102,8 @@ export function StatTile({
   loading,
   empty,
   emptyCaption,
+  emptyLabel,
+  emptyAction,
   className,
   children,
 }: StatTileProps) {
@@ -114,6 +120,9 @@ export function StatTile({
         </>
       ) : (
         <>
+          {empty && emptyLabel ? (
+            <p className="text-subheading text-re-text-secondary">{emptyLabel}</p>
+          ) : (
           <div className="flex items-baseline gap-1.5">
             <span
               className={cn(
@@ -131,10 +140,12 @@ export function StatTile({
               </span>
             )}
           </div>
+          )}
 
           {empty && emptyCaption && (
             <p className="text-small text-re-text-tertiary">{emptyCaption}</p>
           )}
+          {empty && emptyAction && <div className="text-small">{emptyAction}</div>}
 
           {delta && !empty && DeltaIcon && (
             <p className="flex items-center gap-1 text-small text-re-text-secondary">

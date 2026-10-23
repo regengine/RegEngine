@@ -90,10 +90,26 @@ export default function ExportJobsPage() {
         },
     ]);
 
+    if (!exportResponse || notConnected) {
+        return (
+            <PageContainer>
+                <PageHeader
+                    title="Scheduled Exports"
+                    description="Scheduled export jobs are coming soon."
+                    primaryAction={<Button variant="secondary" disabled>Save export job (coming soon)</Button>}
+                />
+                <Callout tone="warning" icon={Link2Off} title="Scheduled export jobs aren't available on this workspace yet.">
+                    <p>Recurring archive scheduling is still in development. This workspace cannot create an export job here today.</p>
+                    <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
+                </Callout>
+            </PageContainer>
+        );
+    }
+
     return (
         <PageContainer>
             <PageHeader
-                title="FDA Export"
+                title="Scheduled Exports"
                 description="Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone."
                 primaryAction={
                     <Button

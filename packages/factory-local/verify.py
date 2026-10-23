@@ -52,6 +52,8 @@ def _make_vars(irs: list[DeonticIR]) -> dict[str, z3.ExprRef]:
     env = {fact: ctor[sort](fact) for fact, sort in _fact_sorts(irs).items()}
     for ir in irs:
         for control in (ir.action_required, ir.safe_harbor_control):
+            if control is None:
+                continue
             env.setdefault(f"controls.{control}", z3.Bool(f"controls.{control}"))
     return env
 
@@ -85,7 +87,7 @@ def status_bodies(ir: DeonticIR, env: dict | None = None) -> tuple[dict[str, z3.
     app = applicability(ir, env)
     control = env[f"controls.{ir.action_required}"]
     act = control if ir.modality == Modality.OBLIGATION else z3.Not(control)
-    sh = env[f"controls.{ir.safe_harbor_control}"]
+    sh = env[f"controls.{ir.safe_harbor_control}"] if ir.safe_harbor_control else z3.BoolVal(False)
     bodies = {
         "COMPLIANT": z3.And(app, act),
         "COMPLIANT_VIA_SAFE_HARBOR": z3.And(app, z3.Not(act), sh),

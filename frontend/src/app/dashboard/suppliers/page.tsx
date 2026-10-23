@@ -12,6 +12,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
     Users,
     Link2,
     CheckCircle2,
@@ -38,17 +46,25 @@ import type {
     SupplierFacility,
     PortalLink,
     IntegrationProfile,
+    FacilityRemovalCheck,
 } from '@/types/api';
-import { NO_DATA_YET } from '@/lib/empty-values';
+import {
+    NO_COMPLIANCE_DATA,
+    countOrNull,
+    deriveFacilityCompliance,
+    gapRequirement,
+    sumKnownCounts,
+    type FacilityCompliance,
+} from './supplier-metrics';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
 interface FacilityRow extends SupplierFacility {
-    complianceScore: number | null;
-    gapCount: number;
-    tlcCount: number;
+    compliance: FacilityCompliance;
+    /** null until the lot-code list has loaded for this facility. */
+    tlcCount: number | null;
     lastEvent: string | null;
 }
 
@@ -113,9 +129,10 @@ const POST_SETUP_ROWS = [
 /* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
+    const isOwner = user?.role_name?.toLowerCase() === 'owner';
 
     const [facilities, setFacilities] = useState<FacilityRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -127,6 +144,42 @@ export default function SupplierDashboardPage() {
         const timer = setInterval(() => setNow(Date.now()), 60_000);
         return () => clearInterval(timer);
     }, []);
+
+    // Remove facility state (Linear SEL-421)
+    const [checkingFacilityId, setCheckingFacilityId] = useState<string | null>(null);
+    const [removalTarget, setRemovalTarget] = useState<{
+        facility: FacilityRow;
+        check: FacilityRemovalCheck;
+    } | null>(null);
+    const [isRemoving, setIsRemoving] = useState(false);
+    const [removalError, setRemovalError] = useState<string | null>(null);
+
+    const handleOpenRemoval = async (facility: FacilityRow) => {
+        setCheckingFacilityId(facility.id);
+        setRemovalError(null);
+        try {
+            const check = await apiClient.checkFacilityRemoval(facility.id);
+            setRemovalTarget({ facility, check });
+        } catch (err: unknown) {
+            setError(friendlyError(err, 'Failed to check facility removal.'));
+        } finally {
+            setCheckingFacilityId(null);
+        }
+    };
+
+    const handleConfirmRemoval = async (facilityId: string) => {
+        setIsRemoving(true);
+        setRemovalError(null);
+        try {
+            await apiClient.deleteSupplierFacility(facilityId);
+            setFacilities((prev) => prev.filter((f) => f.id !== facilityId));
+            setRemovalTarget(null);
+        } catch (err: unknown) {
+            setRemovalError(friendlyError(err, 'Failed to remove facility.'));
+        } finally {
+            setIsRemoving(false);
+        }
+    };
 
     // Portal link state
     const [portalLinks, setPortalLinks] = useState<PortalLink[]>([]);
@@ -182,9 +235,8 @@ export default function SupplierDashboardPage() {
             const rawFacilities = await apiClient.listSupplierFacilities();
             const initial: FacilityRow[] = rawFacilities.map(f => ({
                 ...f,
-                complianceScore: null,
-                gapCount: 0,
-                tlcCount: 0,
+                compliance: NO_COMPLIANCE_DATA,
+                tlcCount: null,
                 lastEvent: null,
             }));
             setFacilities(initial);
@@ -196,29 +248,27 @@ export default function SupplierDashboardPage() {
                 const batch = rawFacilities.slice(i, i + BATCH_SIZE);
                 const enriched = await Promise.all(
                     batch.map(async (f) => {
-                        let complianceScore: number | null = null;
-                        let gapCount = 0;
-                        let tlcCount = 0;
+                        let compliance: FacilityCompliance = NO_COMPLIANCE_DATA;
+                        let tlcCount: number | null = null;
                         let lastEvent: string | null = null;
 
                         try {
                             const [score, gaps, tlcs] = await Promise.all([
                                 apiClient.getSupplierComplianceScore(f.id).catch(() => null),
                                 apiClient.getSupplierComplianceGaps(f.id).catch(() => null),
-                                apiClient.listSupplierTLCs(f.id).catch(() => []),
+                                apiClient.listSupplierTLCs(f.id).catch(() => null),
                             ]);
-                            if (score) complianceScore = score.score;
-                            if (gaps) gapCount = gaps.total;
-                            tlcCount = (tlcs || []).length;
-                            if (tlcs && tlcs.length > 0) {
-                                const sorted = [...tlcs].sort(
+                            compliance = deriveFacilityCompliance(score, gaps);
+                            if (tlcs) {
+                                tlcCount = countOrNull(tlcs.total);
+                                const sorted = [...tlcs.items].sort(
                                     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                                 );
-                                lastEvent = sorted[0].created_at;
+                                lastEvent = sorted[0]?.created_at ?? null;
                             }
                         } catch { /* swallow per-facility errors */ }
 
-                        return { id: f.id, complianceScore, gapCount, tlcCount, lastEvent };
+                        return { id: f.id, compliance, tlcCount, lastEvent };
                     })
                 );
 
@@ -337,14 +387,16 @@ export default function SupplierDashboardPage() {
 
     /* ---------- Summary stats ------------------------------------- */
     const totalFacilities = facilities.length;
-    const compliantCount = facilities.filter(f => f.complianceScore !== null && f.complianceScore >= 80).length;
-    const totalTLCs = facilities.reduce((sum, f) => sum + f.tlcCount, 0);
+    // Same derived state as each row's badge, so the tile and rows agree.
+    const compliantCount = facilities.filter(f => f.compliance.state === 'compliant').length;
+    const totalTLCs = sumKnownCounts(facilities.map(f => f.tlcCount));
     const complianceRate = totalFacilities > 0 ? Math.round((compliantCount / totalFacilities) * 100) : 0;
 
     /* ---------- Relative time helper ------------------------------ */
     function relativeTime(iso: string | null): string | null {
         if (!iso) return null;
         const diff = now - new Date(iso).getTime();
+        if (!Number.isFinite(diff)) return null;
         const mins = Math.floor(diff / 60000);
         if (mins < 1) return 'just now';
         if (mins < 60) return `${mins}m ago`;
@@ -417,7 +469,7 @@ export default function SupplierDashboardPage() {
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <StatTile label="Facilities" value={totalFacilities} loading={loading} />
                     <StatTile label="Compliant" value={compliantCount} loading={loading} />
-                    <StatTile label="Lot Codes Tracked" value={totalTLCs} loading={loading} />
+                    <StatTile label="Lot Codes Tracked" value={totalTLCs ?? 'No data yet'} loading={loading} />
                     <StatTile label="Compliance Rate" value={`${complianceRate}%`} loading={loading} />
                 </div>
 
@@ -775,7 +827,7 @@ export default function SupplierDashboardPage() {
                     <Card>
                         <ul className="divide-y divide-re-border-subtle">
                             {facilities.map((facility) => {
-                                const comp = complianceLabel(facility.complianceScore);
+                                const comp = facility.compliance;
 
                                 return (
                                     <li
@@ -788,11 +840,11 @@ export default function SupplierDashboardPage() {
                                                 <StatusBadge
                                                     state={comp.state}
                                                     size="sm"
-                                                    label={`${comp.label}${facility.complianceScore !== null ? ` (${facility.complianceScore})` : ''}`}
+                                                    label={`${comp.label}${comp.score !== null ? ` · score ${comp.score}` : ''}`}
                                                 />
-                                                {facility.gapCount > 0 && (
+                                                {comp.gapCount > 0 && (
                                                     <Badge tone="warning" size="sm">
-                                                        {facility.gapCount} gap{facility.gapCount !== 1 ? 's' : ''}
+                                                        {comp.gapCount} gap{comp.gapCount !== 1 ? 's' : ''}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -801,13 +853,38 @@ export default function SupplierDashboardPage() {
                                                     <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                                     {facility.city}, {facility.state} {facility.postal_code}
                                                 </span>
-                                                <span>{facility.tlcCount} lot code{facility.tlcCount !== 1 ? 's' : ''}</span>
+                                                <span>
+                                                    {facility.tlcCount === null
+                                                        ? 'No lot code data yet'
+                                                        : `${facility.tlcCount} lot code${facility.tlcCount !== 1 ? 's' : ''}`}
+                                                </span>
                                                 {facility.lastEvent && (
                                                     <span className="flex items-center gap-1">
                                                         <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" /> {relativeTime(facility.lastEvent)}
                                                     </span>
                                                 )}
                                             </div>
+                                            {comp.gaps.length > 0 && (
+                                                <ul className="mt-2 space-y-1 text-small text-re-text-secondary" aria-label={`Compliance gaps for ${facility.name}`}>
+                                                    {comp.gaps.map((gap, index) => {
+                                                        const requirement = gapRequirement(gap);
+                                                        return (
+                                                            <li key={`${gap.reason}-${gap.cte_type ?? 'none'}-${index}`} className="flex flex-wrap items-center gap-x-2">
+                                                                <span>{gap.issue}</span>
+                                                                <a
+                                                                    href={requirement.href}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 text-re-text-tertiary underline underline-offset-2 hover:text-re-text-primary"
+                                                                >
+                                                                    {requirement.label}
+                                                                    <ExternalLink className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+                                                                </a>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            )}
                                             {facility.roles && facility.roles.length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">
                                                     {facility.roles.map((role) => (
@@ -818,15 +895,29 @@ export default function SupplierDashboardPage() {
                                                 </div>
                                             )}
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full shrink-0 sm:w-auto"
-                                            onClick={() => handleFDAExport('xlsx', facility.id)}
-                                            leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
-                                        >
-                                            FDA Export
-                                        </Button>
+                                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full shrink-0 sm:w-auto"
+                                                onClick={() => handleFDAExport('xlsx', facility.id)}
+                                                leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
+                                            >
+                                                FDA Export
+                                            </Button>
+                                            {isOwner && (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    className="w-full shrink-0 text-re-danger hover:text-re-danger sm:w-auto"
+                                                    onClick={() => handleOpenRemoval(facility)}
+                                                    disabled={checkingFacilityId === facility.id}
+                                                    leadingIcon={<Trash2 strokeWidth={1.75} className="h-4 w-4" aria-hidden="true" />}
+                                                >
+                                                    {checkingFacilityId === facility.id ? 'Checking...' : 'Remove'}
+                                                </Button>
+                                            )}
+                                        </div>
                                     </li>
                                 );
                             })}
@@ -856,6 +947,103 @@ export default function SupplierDashboardPage() {
                     </div>
                 )}
             </div>
+
+            {/* Remove Facility Dialog (Linear SEL-421) */}
+            <Dialog open={removalTarget !== null} onOpenChange={(open) => { if (!open && !isRemoving) setRemovalTarget(null); }}>
+                <DialogContent>
+                    {removalTarget && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {removalTarget.check.allowed ? 'Remove facility?' : 'Facility Cannot Be Removed'}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {removalTarget.check.allowed
+                                        ? 'Review the facility details and configuration that will be permanently removed.'
+                                        : 'This facility has linked records and cannot be removed until all referencing records are resolved.'}
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            {removalError && (
+                                <Callout tone="danger">
+                                    {removalError}
+                                </Callout>
+                            )}
+
+                            {removalTarget.check.allowed ? (
+                                <div className="space-y-3 text-small text-re-text-secondary">
+                                    <p>The following will be permanently removed:</p>
+                                    <div className="rounded-lg border border-re-border bg-re-surface-card p-3 space-y-2">
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Facility Name: </span>
+                                            <span>{removalTarget.check.facility_name}</span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Address: </span>
+                                            <span>
+                                                {removalTarget.check.address.street}, {removalTarget.check.address.city}, {removalTarget.check.address.state} {removalTarget.check.address.postal_code}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Scoping Configuration: </span>
+                                            <span>
+                                                {removalTarget.check.scoping_config_count > 0
+                                                    ? `${removalTarget.check.scoping_config_count} FTL scoping category configuration(s)`
+                                                    : 'No FTL category scoping configurations'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-re-text-tertiary">
+                                        This action cannot be undone. Zero traceability lots, CTE events, or other records reference this facility.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 text-small text-re-text-secondary">
+                                    <p>
+                                        Facilities with active or historical records cannot be deleted. The facility is referenced by:
+                                    </p>
+                                    <div className="rounded-lg border border-re-border bg-re-surface-card p-3 space-y-2">
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">Traceability lots (TLCs):</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.lots_count}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">CTE events:</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.cte_events_count}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">Other records:</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.funnel_events_count}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-re-text-tertiary">
+                                        All referencing records must be removed before this facility can be deleted.
+                                    </p>
+                                </div>
+                            )}
+
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setRemovalTarget(null)}
+                                    disabled={isRemoving}
+                                >
+                                    {removalTarget.check.allowed ? 'Cancel' : 'Done'}
+                                </Button>
+                                {removalTarget.check.allowed && (
+                                    <Button
+                                        variant="danger"
+                                        onClick={() => handleConfirmRemoval(removalTarget.facility.id)}
+                                        disabled={isRemoving}
+                                    >
+                                        {isRemoving ? 'Removing...' : 'Remove facility'}
+                                    </Button>
+                                )}
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
         </PageContainer>
     );
 }

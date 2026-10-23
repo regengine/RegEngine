@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
@@ -91,6 +92,25 @@ export default function RecallDrillsPage() {
 
     function handleStartDrill() {
         startDrillMutation.mutate();
+    }
+
+    if (!drillsResponse || notConnected) {
+        return (
+            <PageContainer>
+                <PageHeader
+                    title="Recall Drills"
+                    description="Automated recall drills are coming soon."
+                    primaryAction={<Button variant="secondary" disabled>Start drill (coming soon)</Button>}
+                />
+                <div className={`${NOTICE_BASE} border-l-re-warning bg-re-surface-card`}>
+                    <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                    <div>
+                        <p>Automated drill scheduling is still in development. This workspace cannot start a drill here today.</p>
+                        <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
+                    </div>
+                </div>
+            </PageContainer>
+        );
     }
 
     return (
