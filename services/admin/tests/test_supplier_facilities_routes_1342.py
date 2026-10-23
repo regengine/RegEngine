@@ -26,6 +26,7 @@ Tracks GitHub issue #1342.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -595,4 +596,99 @@ class TestDeleteSupplierFacility:
         with TestClient(app) as member_client:
             resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
             assert resp.status_code == 403
+
+    def test_delete_empty_facility(self, client: TestClient, db_session: Session):
+        facility = _make_facility(db_session)
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is None
+
+    def test_linked_lot_returns_409(self, client: TestClient, db_session: Session):
+        facility = _make_facility(db_session)
+        db_session.add(
+            SupplierTraceabilityLotModel(
+                tenant_id=TEST_TENANT_ID,
+                supplier_user_id=TEST_USER_ID,
+                facility_id=facility.id,
+                tlc_code="TLC-KEEP",
+                product_description="Spinach",
+                status="active",
+            )
+        )
+        db_session.commit()
+
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is not None
+
+    def test_stale_empty_count_does_not_cascade_lot(self, client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch):
+        """A lot committed after the pre-check must not be deleted with the facility.
+
+        Lots use ON DELETE CASCADE. The pre-check and the DELETE used to be
+        separate statements, so a lot that landed in between was cascaded away.
+        """
+        import app.supplier_facilities_routes as fac_routes
+
+        facility = _make_facility(db_session)
+        lot = SupplierTraceabilityLotModel(
+            tenant_id=TEST_TENANT_ID,
+            supplier_user_id=TEST_USER_ID,
+            facility_id=facility.id,
+            tlc_code="TLC-RACE",
+            product_description="Spinach",
+            status="active",
+        )
+        db_session.add(lot)
+        db_session.commit()
+        monkeypatch.setattr(fac_routes, "_linked_record_counts", lambda *_args, **_kwargs: (0, 0, 0))
+
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is not None
+        assert db_session.get(SupplierTraceabilityLotModel, lot.id) is not None
+
+    def test_stale_empty_count_does_not_cascade_cte_event(
+        self, client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+    ):
+        """An event filed on this facility must survive even when its lot lives elsewhere."""
+        import app.supplier_facilities_routes as fac_routes
+
+        target = _make_facility(db_session, "Target")
+        other = _make_facility(db_session, "Other")
+        lot = SupplierTraceabilityLotModel(
+            tenant_id=TEST_TENANT_ID,
+            supplier_user_id=TEST_USER_ID,
+            facility_id=other.id,
+            tlc_code="TLC-OTHER",
+            product_description="Spinach",
+            status="active",
+        )
+        db_session.add(lot)
+        db_session.commit()
+        event = SupplierCTEEventModel(
+            tenant_id=TEST_TENANT_ID,
+            supplier_user_id=TEST_USER_ID,
+            facility_id=target.id,
+            lot_id=lot.id,
+            cte_type="shipping",
+            event_time=datetime.now(timezone.utc),
+            kde_data={},
+            payload_sha256="abc",
+            merkle_hash="def",
+            sequence_number=1,
+            obligation_ids=[],
+        )
+        db_session.add(event)
+        db_session.commit()
+        monkeypatch.setattr(fac_routes, "_linked_record_counts", lambda *_args, **_kwargs: (0, 0, 0))
+
+        resp = client.delete(f"/v1/supplier/facilities/{target.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, target.id) is not None
+        assert db_session.get(SupplierCTEEventModel, event.id) is not None
 
