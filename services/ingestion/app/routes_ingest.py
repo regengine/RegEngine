@@ -59,9 +59,11 @@ from regengine_ingestion.parsers import create_default_registry
 from regengine_ingestion.storage.database import DatabaseManager
 from shared.auth import APIKey, require_api_key
 from shared.database import SessionLocal
+from shared.permissions import has_permission
 from shared.task_queue import enqueue_task
 from shared.tenant_rate_limiting import consume_tenant_rate_limit, rate_limit_reset_epoch
 
+from .authz import IngestionPrincipal, get_ingestion_principal
 from .config import get_settings
 from .kafka_utils import send
 from .models import (
@@ -185,7 +187,7 @@ def get_db_manager() -> Optional[DatabaseManager]:
 # ---------------------------------------------------------------------------
 
 
-def _endpoint_rate_limit(bucket: str, rpm: int):
+def _endpoint_rate_limit(bucket: str, rpm: int, *, allow_session: bool = False):
     """FastAPI dependency factory enforcing a per-tenant, per-endpoint rate limit.
 
     Uses the same ``consume_tenant_rate_limit`` backend as the RBAC authz layer
@@ -195,8 +197,13 @@ def _endpoint_rate_limit(bucket: str, rpm: int):
     async def _check(
         request: Request,
         response: Response,
-        api_key: APIKey = Depends(require_api_key),
-    ) -> APIKey:
+        api_key: APIKey | IngestionPrincipal = Depends(
+            get_ingestion_principal if allow_session else require_api_key
+        ),
+    ) -> APIKey | IngestionPrincipal:
+        if isinstance(api_key, IngestionPrincipal) and api_key.auth_mode == "session":
+            if not has_permission(api_key.scopes, "webhooks.ingest"):
+                raise HTTPException(status_code=403, detail="Permission denied")
         tenant_id = api_key.tenant_id or "anonymous"
         window = 60
         allowed, remaining = consume_tenant_rate_limit(
@@ -766,7 +773,7 @@ async def ingest_file(
 @router.post("/v1/ingest/url", response_model=NormalizedEvent)
 async def ingest_url(
     payload: IngestRequest,
-    api_key: APIKey = Depends(_endpoint_rate_limit("ingest.url", 20)),
+    api_key: APIKey | IngestionPrincipal = Depends(_endpoint_rate_limit("ingest.url", 20, allow_session=True)),
 ) -> NormalizedEvent:
     """Ingest a single document from a URL."""
     url_str = str(payload.url)
