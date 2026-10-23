@@ -9,6 +9,16 @@ vi.mock('@/lib/csrf', () => ({
     getCsrfHeaders: () => ({ 'X-CSRF-Token': 'csrf-token' }),
 }));
 
+// Runtime-relative timestamps (no fixed calendar dates); order and gaps match the
+// original fixtures, and invites still expire 7 days after creation.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const NOW_MS = Date.now();
+const INGESTED_AT = new Date(NOW_MS - DAY_MS).toISOString();
+const KEY_CREATED_AT = new Date(NOW_MS - 29 * DAY_MS).toISOString();
+const INVITE_CREATED_AT = new Date(NOW_MS - 119.5 * DAY_MS).toISOString();
+const INVITE_EXPIRES_AT = new Date(NOW_MS - 119.5 * DAY_MS + 7 * DAY_MS).toISOString();
+const REVIEW_CREATED_AT = new Date(NOW_MS - 120 * DAY_MS).toISOString();
+
 const fetchMock = vi.fn();
 
 function jsonResponse(data: unknown): Response {
@@ -23,7 +33,7 @@ function csvResult(statuses: Array<'accepted' | 'rejected'>) {
         total: statuses.length,
         accepted: statuses.filter(status => status === 'accepted').length,
         rejected: statuses.filter(status => status === 'rejected').length,
-        ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+        ingestion_timestamp: INGESTED_AT,
         events: statuses.map((status, index) => ({
             traceability_lot_code: `LOT-${index + 1}`,
             cte_type: 'shipping',
@@ -56,7 +66,7 @@ describe('apiClient review queue contract', () => {
                     confidence_score: 0.42,
                     text_preview: 'Preview text',
                     extraction: { lot: 'LOT-1' },
-                    created_at: '2026-05-04T12:00:00.000Z',
+                    created_at: REVIEW_CREATED_AT,
                     status: 'pending',
                 },
             ],
@@ -83,8 +93,8 @@ describe('apiClient review queue contract', () => {
                 source_text: 'Preview text',
                 extracted_data: { lot: 'LOT-1' },
                 status: 'PENDING',
-                created_at: '2026-05-04T12:00:00.000Z',
-                updated_at: '2026-05-04T12:00:00.000Z',
+                created_at: REVIEW_CREATED_AT,
+                updated_at: REVIEW_CREATED_AT,
                 tenant_id: '',
             },
         ]);
@@ -140,7 +150,7 @@ describe('apiClient review queue contract', () => {
                     id: 'key-1',
                     key_id: 'key-1',
                     name: 'Deploy key',
-                    created_at: '2026-08-03T12:00:00Z',
+                    created_at: KEY_CREATED_AT,
                 }],
                 total: 1,
                 skip: 0,
@@ -159,7 +169,7 @@ describe('apiClient review queue contract', () => {
             id: 'key-1',
             key_id: 'key-1',
             name: 'Deploy key',
-            created_at: '2026-08-03T12:00:00Z',
+            created_at: KEY_CREATED_AT,
         }]);
 
         expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -250,7 +260,7 @@ describe('apiClient review queue contract', () => {
             total: 1,
             accepted: 1,
             rejected: 0,
-            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            ingestion_timestamp: INGESTED_AT,
             events: [{
                 traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
                 event_id: '', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64), errors: [],
@@ -260,7 +270,7 @@ describe('apiClient review queue contract', () => {
             total: 1,
             accepted: 1,
             rejected: 0,
-            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            ingestion_timestamp: INGESTED_AT,
             events: [{
                 traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
                 event_id: 'evt-1', sha256_hash: 'not-a-hash', chain_hash: 'b'.repeat(64), errors: [],
@@ -270,7 +280,7 @@ describe('apiClient review queue contract', () => {
             total: 1,
             accepted: 1,
             rejected: 0,
-            ingestion_timestamp: '2026-08-31T12:00:00+00:00',
+            ingestion_timestamp: INGESTED_AT,
             events: [{
                 traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
                 event_id: 'evt-1', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
@@ -321,8 +331,8 @@ describe('apiClient review queue contract', () => {
                         email: 'pending@example.com',
                         role_id: 'role-1',
                         status: 'pending',
-                        created_at: '2026-05-05T00:00:00.000Z',
-                        expires_at: '2026-05-12T00:00:00.000Z',
+                        created_at: INVITE_CREATED_AT,
+                        expires_at: INVITE_EXPIRES_AT,
                     },
                 ],
                 total: 1,
@@ -344,8 +354,8 @@ describe('apiClient review queue contract', () => {
                 email: 'pending@example.com',
                 role_id: 'role-1',
                 status: 'pending',
-                created_at: '2026-05-05T00:00:00.000Z',
-                expires_at: '2026-05-12T00:00:00.000Z',
+                created_at: INVITE_CREATED_AT,
+                expires_at: INVITE_EXPIRES_AT,
             },
         ]);
     });
