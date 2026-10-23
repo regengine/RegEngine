@@ -26,7 +26,7 @@ function renderChain(overrides: Partial<EvidenceChainProps> = {}) {
         hasData: true,
         isBlocked: true,
         isBusy: false,
-        lot: { code: 'TLC-20260508-000022', product: 'Green Leaf Lettuce', supplier: 'Valley Fresh Farms', cases: 156 },
+        lot: { code: 'lot-code', product: 'product-name', supplier: 'supplier-name', cases: 1 },
         missingEvidence: 'Shipping, DC receiving',
         patternLabel: 'Missing handoff evidence',
         fixPath: 'Map the missing handoff fields once, then re-run the lot group.',
@@ -35,7 +35,7 @@ function renderChain(overrides: Partial<EvidenceChainProps> = {}) {
         lotCount: 3,
         runKey: 1,
         onRun: vi.fn(),
-        onLoadSample: vi.fn(),
+        onOpenEditor: vi.fn(),
         onFocusDefect: null,
         ...overrides,
     };
@@ -138,22 +138,24 @@ describe('EvidenceChain', () => {
     });
 
     describe('controls', () => {
-        it('runs the trace and offers the sample', async () => {
+        it('runs the trace and opens the data editor, with no sample on offer', async () => {
             const onRun = vi.fn();
-            const onLoadSample = vi.fn();
-            renderChain({ onRun, onLoadSample });
+            const onOpenEditor = vi.fn();
+            renderChain({ onRun, onOpenEditor });
 
             await userEvent.click(screen.getByRole('button', { name: /Run trace again/ }));
             expect(onRun).toHaveBeenCalledOnce();
 
-            await userEvent.click(screen.getByRole('button', { name: 'Open sample in editor' }));
-            expect(onLoadSample).toHaveBeenCalledOnce();
+            await userEvent.click(screen.getByRole('button', { name: 'Open data editor' }));
+            expect(onOpenEditor).toHaveBeenCalledOnce();
+            expect(screen.queryByRole('button', { name: /sample/i })).not.toBeInTheDocument();
         });
 
         it('invites a first run before any data exists', () => {
             renderChain({ nodes: lineage(0), hasData: false, isBlocked: false, lot: null });
             expect(screen.getByRole('button', { name: /Run trace$/ })).toBeInTheDocument();
             expect(screen.getByText('Awaiting supplier rows')).toBeInTheDocument();
+            expect(screen.getByText('No data yet')).toBeInTheDocument();
         });
 
         it('locks the run control while a trace is in flight', () => {
