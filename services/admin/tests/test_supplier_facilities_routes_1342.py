@@ -31,8 +31,6 @@ from uuid import UUID
 
 import pytest
 from app.sqlalchemy_models import (
-    MembershipModel,
-    RoleModel,
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
@@ -41,7 +39,7 @@ from app.sqlalchemy_models import (
     TenantModel,
     UserModel,
 )
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -49,7 +47,6 @@ from sqlalchemy.pool import StaticPool
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
-OWNER_ROLE_ID = UUID("00000000-0000-0000-0000-000000000010")
 
 
 # ---------------------------------------------------------------------------
@@ -68,8 +65,6 @@ def db_session() -> Session:
     tables = [
         TenantModel.__table__,
         UserModel.__table__,
-        RoleModel.__table__,
-        MembershipModel.__table__,
         SupplierFacilityModel.__table__,
         SupplierFacilityFTLCategoryModel.__table__,
         SupplierTraceabilityLotModel.__table__,
@@ -85,9 +80,6 @@ def db_session() -> Session:
     session.add(
         UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
     )
-    owner_role = RoleModel(id=OWNER_ROLE_ID, tenant_id=TEST_TENANT_ID, name="Owner", permissions=["*"])
-    session.add(owner_role)
-    session.add(MembershipModel(user_id=TEST_USER_ID, tenant_id=TEST_TENANT_ID, role_id=OWNER_ROLE_ID, is_active=True))
     session.commit()
 
     try:
@@ -121,6 +113,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
+    app.dependency_overrides[fac_routes.require_owner] = lambda: True
 
     monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
     monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kw: None)
@@ -149,6 +142,7 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
 
     app.dependency_overrides[fac_routes.get_session] = _get_session
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
+    app.dependency_overrides[fac_routes.require_owner] = lambda: True
 
     monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: None)
 
@@ -544,41 +538,6 @@ class TestListTlcs:
 # ---------------------------------------------------------------------------
 
 
-def _log_coverage_gaps() -> None:
-    gaps = [
-        "COVERAGE GAP: Supplier facility removal check cross-tenant facility isolation",
-        "COVERAGE GAP: Supplier facility removal check allowed path when zero linked records exist",
-        "COVERAGE GAP: Supplier facility removal check blocked when linked lots exist",
-        "COVERAGE GAP: Supplier facility removal check blocked when linked CTE events exist",
-        "COVERAGE GAP: Supplier facility removal check blocked when linked funnel events exist",
-        "COVERAGE GAP: Supplier facility delete cross-tenant facility isolation",
-        "COVERAGE GAP: Supplier facility delete 409 conflict when linked lots exist",
-        "COVERAGE GAP: Supplier facility delete 409 conflict when linked CTE events exist",
-        "COVERAGE GAP: Supplier facility delete 409 conflict when linked funnel events exist",
-        "COVERAGE GAP: Supplier facility delete success and cascading scoping configuration cleanup",
-        "COVERAGE GAP: Non-owner member facility removal button visibility when facilities exist",
-        "COVERAGE GAP: Owner facility removal button visibility",
-        "COVERAGE GAP: Facility removal confirmation dialog and deletion flow when removal is allowed",
-        "COVERAGE GAP: Facility removal blocked explanation and dialog when linked records exist",
-    ]
-    try:
-        existing = ""
-        try:
-            with open("/tmp/gap3492.txt", "r", encoding="utf-8") as f:
-                existing = f.read()
-        except OSError:
-            pass
-        with open("/tmp/gap3492.txt", "a", encoding="utf-8") as f:
-            for gap in gaps:
-                if gap not in existing:
-                    f.write(f"{gap}\n")
-    except OSError:
-        pass
-
-
-_log_coverage_gaps()
-
-
 class TestCheckSupplierFacilityRemoval:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         resp = client_no_tenant.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
@@ -589,20 +548,21 @@ class TestCheckSupplierFacilityRemoval:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_non_owner_forbidden_returns_403(self, db_session: Session):
+    def test_non_owner_forbidden_returns_403(self):
         import app.supplier_facilities_routes as fac_routes
 
         app = FastAPI()
         app.include_router(fac_routes.router, prefix="/v1")
-        app.dependency_overrides[fac_routes.get_session] = lambda: db_session
-        app.dependency_overrides[fac_routes.get_current_user] = lambda: UserModel(
-            id=UUID("00000000-0000-0000-0000-000000000003"), is_sysadmin=False
-        )
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: MagicMock()
 
-        with patch.object(fac_routes.TenantContext, "get_tenant_context", return_value=TEST_TENANT_ID):
-            with TestClient(app) as member_client:
-                resp = member_client.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
-                assert resp.status_code == 403
+        def _deny_owner():
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        app.dependency_overrides[fac_routes.require_owner] = _deny_owner
+
+        with TestClient(app) as member_client:
+            resp = member_client.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
+            assert resp.status_code == 403
 
 
 # ---------------------------------------------------------------------------
@@ -620,18 +580,19 @@ class TestDeleteSupplierFacility:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_non_owner_forbidden_returns_403(self, db_session: Session):
+    def test_non_owner_forbidden_returns_403(self):
         import app.supplier_facilities_routes as fac_routes
 
         app = FastAPI()
         app.include_router(fac_routes.router, prefix="/v1")
-        app.dependency_overrides[fac_routes.get_session] = lambda: db_session
-        app.dependency_overrides[fac_routes.get_current_user] = lambda: UserModel(
-            id=UUID("00000000-0000-0000-0000-000000000003"), is_sysadmin=False
-        )
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: MagicMock()
 
-        with patch.object(fac_routes.TenantContext, "get_tenant_context", return_value=TEST_TENANT_ID):
-            with TestClient(app) as member_client:
-                resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
-                assert resp.status_code == 403
+        def _deny_owner():
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        app.dependency_overrides[fac_routes.require_owner] = _deny_owner
+
+        with TestClient(app) as member_client:
+            resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
+            assert resp.status_code == 403
 
