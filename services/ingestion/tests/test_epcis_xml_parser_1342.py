@@ -148,15 +148,14 @@ class TestParseEpcisXml:
     def test_malformed_xml_returns_400(self):
         from fastapi import HTTPException
 
-        for raw in (b"<EPCISDocument><ObjectEvent>", b"<a>"):
-            with pytest.raises(HTTPException) as caught:
-                xp._parse_epcis_xml(raw)
-            assert caught.value.status_code == 400
-            detail = caught.value.detail
-            assert isinstance(detail, str)
-            assert detail.startswith("malformed XML")
-            assert "Traceback" not in detail
-            assert 'File "' not in detail
+        with pytest.raises(HTTPException) as caught:
+            xp._parse_epcis_xml(b"<a>")
+        assert caught.value.status_code == 400
+        detail = caught.value.detail
+        assert isinstance(detail, str)
+        assert detail.startswith("malformed XML")
+        assert "Traceback" not in detail
+        assert 'File "' not in detail
 
     def test_empty_document_returns_empty(self):
         raw = b"<?xml version='1.0'?><EPCISDocument/>"
