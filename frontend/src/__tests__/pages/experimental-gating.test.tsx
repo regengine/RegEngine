@@ -89,8 +89,8 @@ describe('experimental feature gating (flag off)', () => {
             </DashboardLayout>,
         );
         expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
-        expect(screen.queryByText('Readiness')).not.toBeInTheDocument();
-        expect(screen.queryByText('Scan')).not.toBeInTheDocument();
+        expect(screen.queryByText('FSMA 204 Dashboard')).not.toBeInTheDocument();
+        expect(screen.queryByText('Field Capture')).not.toBeInTheDocument();
         // Stable items remain
         expect(screen.getAllByText('Compliance').length).toBeGreaterThan(0);
     });
@@ -129,8 +129,8 @@ describe('experimental feature gating (flag on)', () => {
             </DashboardLayout>,
         );
         expect(screen.getAllByText('Inflow Lab').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Readiness').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Scan').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('FSMA 204 Dashboard').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Field Capture').length).toBeGreaterThan(0);
     });
 
     it('renders the real dashboard Inflow Lab page', () => {
