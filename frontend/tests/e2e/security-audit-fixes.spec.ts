@@ -182,8 +182,8 @@ test.describe('Security Audit Fixes', () => {
 
             const routes = [
                 '/dashboard/settings',
-                // Team surface moved: /dashboard/team now redirects to /settings/users (copy PR-11)
-                '/settings/users',
+                // Team surface moved: /dashboard/team and /settings/users redirect here (SEL-412)
+                '/dashboard/settings/users',
                 '/dashboard/products',
                 '/dashboard/suppliers',
                 '/dashboard/scan',
