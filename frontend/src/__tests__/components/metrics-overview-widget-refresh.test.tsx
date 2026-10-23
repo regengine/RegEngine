@@ -15,19 +15,20 @@ vi.mock('@/lib/api-client', () => ({
 
 import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
 
-// Shape only: no business figures. The test compares what the widget rendered
-// before and after the failed refresh, never specific values.
+// Non-empty so every tile renders a figure. The test compares what the widget
+// rendered before and after the failed refresh, never specific values.
 const firstResponse = {
-  total_tenants: 0,
-  total_documents: 0,
+  total_tenants: 1,
+  total_documents: 1,
   active_jobs: 0,
-  compliance_score: 0,
-  compliance_grade: '',
-  events_ingested: 0,
-  chain_length: 0,
-  chain_valid: false,
-  open_alerts: 0,
+  compliance_score: 72,
+  compliance_grade: 'C',
+  events_ingested: 1500,
+  chain_length: 9,
+  chain_valid: true,
+  open_alerts: 2,
 };
+const readiness = { unresolved_fix_count: 3, export_eligible: false } as never;
 
 describe('MetricsOverviewWidget with the real useSystemMetrics hook', () => {
   let queryClient: QueryClient;
@@ -51,14 +52,16 @@ describe('MetricsOverviewWidget with the real useSystemMetrics hook', () => {
 
   it('a good load followed by a failed refresh leaves the rendered tiles unchanged', async () => {
     mocks.getSystemMetrics.mockResolvedValueOnce(firstResponse);
-    const { container } = render(<MetricsOverviewWidget readiness={undefined} />, { wrapper });
+    const { container } = render(<MetricsOverviewWidget readiness={readiness} />, { wrapper });
 
     // The loading skeleton also renders a .grid; capture only after the load settles.
     await waitFor(() =>
       expect(queryClient.getQueryState(['system', 'metrics'])?.status).toBe('success'),
     );
     const tilesBefore = container.querySelector('.grid')?.textContent;
+    // Every tile shows a figure, so an unchanged grid proves the figures survived.
     expect(tilesBefore).toBeTruthy();
+    expect(tilesBefore).not.toContain('No data yet');
 
     mocks.getSystemMetrics.mockRejectedValueOnce(new Error('Network Error'));
     await act(async () => {
