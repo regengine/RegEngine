@@ -23,6 +23,7 @@ import type {
   SupplierFacility,
   FacilityFTLScopingRequest,
   FacilityFTLScopingResponse,
+  FacilityRemovalCheck,
   SupplierCTEEventCreateRequest,
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
@@ -777,6 +778,24 @@ class APIClient {
 
   async createSupplierFacility(request: SupplierFacilityCreateRequest): Promise<SupplierFacility> {
     const { data } = await this.adminClient.post<SupplierFacility>('/v1/supplier/facilities', request);
+    return data;
+  }
+
+  async checkFacilityRemoval(facilityId: string): Promise<FacilityRemovalCheck> {
+    const { data } = await this.adminClient.get<FacilityRemovalCheck>(
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/removal-check`
+    );
+    return data;
+  }
+
+  async getFacilityRemovalCheck(facilityId: string): Promise<FacilityRemovalCheck> {
+    return this.checkFacilityRemoval(facilityId);
+  }
+
+  async deleteSupplierFacility(facilityId: string): Promise<{ status: string; id: string }> {
+    const { data } = await this.adminClient.delete<{ status: string; id: string }>(
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}`
+    );
     return data;
   }
 

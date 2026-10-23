@@ -15,12 +15,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .database import get_session
-from .dependencies import get_current_user
+from .dependencies import PermissionChecker, get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
+    SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
     UserModel,
 )
@@ -31,6 +32,7 @@ from .supplier_onboarding_routes import (
     FTL_CATEGORY_LOOKUP,
     FacilityFTLScopingRequest,
     FacilityFTLScopingResponse,
+    FacilityRemovalCheckResponse,
     SupplierCTEEventCreateRequest,
     SupplierCTEEventResponse,
     SupplierFacilityCreateRequest,
@@ -130,6 +132,150 @@ async def create_supplier_facility(
         fda_registration_number=facility.fda_registration_number,
         roles=facility.roles or [],
     )
+
+
+@router.get("/facilities/{facility_id}/removal-check", response_model=FacilityRemovalCheckResponse)
+async def check_supplier_facility_removal(
+    facility_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _perm: bool = Depends(PermissionChecker("owner")),
+    db: Session = Depends(get_session),
+) -> FacilityRemovalCheckResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    facility = db.get(SupplierFacilityModel, facility_uuid)
+    if facility is None or facility.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    lots_count = db.execute(
+        select(func.count()).select_from(SupplierTraceabilityLotModel).where(
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    cte_events_count = db.execute(
+        select(func.count()).select_from(SupplierCTEEventModel).where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    funnel_events_count = db.execute(
+        select(func.count()).select_from(SupplierFunnelEventModel).where(
+            SupplierFunnelEventModel.tenant_id == tenant_id,
+            SupplierFunnelEventModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    scoping_config_count = db.execute(
+        select(func.count()).select_from(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    allowed = (lots_count == 0 and cte_events_count == 0 and funnel_events_count == 0)
+
+    return FacilityRemovalCheckResponse(
+        facility_id=str(facility.id),
+        facility_name=facility.name,
+        allowed=allowed,
+        linked_counts={
+            "lots": lots_count,
+            "events": cte_events_count,
+            "cte_events": cte_events_count,
+            "records": funnel_events_count,
+            "funnel_events": funnel_events_count,
+            "scoping_config": scoping_config_count,
+        },
+        lots_count=lots_count,
+        cte_events_count=cte_events_count,
+        funnel_events_count=funnel_events_count,
+        scoping_config_count=scoping_config_count,
+        address={
+            "street": facility.street,
+            "city": facility.city,
+            "state": facility.state,
+            "postal_code": facility.postal_code,
+        },
+    )
+
+
+@router.delete("/facilities/{facility_id}")
+async def delete_supplier_facility(
+    facility_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _perm: bool = Depends(PermissionChecker("owner")),
+    db: Session = Depends(get_session),
+) -> dict[str, Any]:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    facility = db.get(SupplierFacilityModel, facility_uuid)
+    if facility is None or facility.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    lots_count = db.execute(
+        select(func.count()).select_from(SupplierTraceabilityLotModel).where(
+            SupplierTraceabilityLotModel.tenant_id == tenant_id,
+            SupplierTraceabilityLotModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    cte_events_count = db.execute(
+        select(func.count()).select_from(SupplierCTEEventModel).where(
+            SupplierCTEEventModel.tenant_id == tenant_id,
+            SupplierCTEEventModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    funnel_events_count = db.execute(
+        select(func.count()).select_from(SupplierFunnelEventModel).where(
+            SupplierFunnelEventModel.tenant_id == tenant_id,
+            SupplierFunnelEventModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    if lots_count > 0 or cte_events_count > 0 or funnel_events_count > 0:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot remove facility '{facility.name}' with linked records: "
+                f"{lots_count} lots/TLCs, {cte_events_count} CTE events, "
+                f"{funnel_events_count} other records. "
+                f"Delete only when zero linked rows."
+            ),
+        )
+
+    db.execute(
+        delete(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+        )
+    )
+
+    db.delete(facility)
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "id": str(facility_uuid),
+        "facility_name": facility.name,
+    }
 
 
 @router.put("/facilities/{facility_id}/ftl-categories", response_model=FacilityFTLScopingResponse)
