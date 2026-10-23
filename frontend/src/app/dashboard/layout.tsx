@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimedSkeleton } from '@/components/ui/timed-skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { useSystemStatus } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
@@ -411,13 +412,18 @@ function DashboardShellSkeleton() {
                         </div>
                     </div>
                     <div className="flex-1 pb-20 md:pb-0">
-                        <Container width="app" className="space-y-6 py-6">
-                            <Skeleton className="h-8 w-44" />
-                            <Skeleton className="h-[244px] rounded-lg" />
-                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
-                                <Skeleton className="h-[360px] rounded-lg" />
-                            </div>
+                        <Container width="app" className="py-6">
+                            {/* Session hydration can stall on a slow backend; never spin forever. */}
+                            <TimedSkeleton errorMessage="Your session check did not finish. Reload to try again.">
+                                <div className="space-y-6">
+                                    <Skeleton className="h-8 w-44" />
+                                    <Skeleton className="h-[244px] rounded-lg" />
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                        <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
+                                        <Skeleton className="h-[360px] rounded-lg" />
+                                    </div>
+                                </div>
+                            </TimedSkeleton>
                         </Container>
                     </div>
                 </div>
