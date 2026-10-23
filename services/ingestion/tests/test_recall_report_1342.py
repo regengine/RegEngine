@@ -5,8 +5,8 @@ Locks:
 - _query_scoring_data: happy path with gaps, chain_length=0 path
   (no max_seq query), SessionLocal raise → None, execute raise → None
 - Pydantic models — RecallDimension, RecallReport
-- GET /{tenant_id}/report: demo mode (None scoring), demo mode
-  (cte_count=0), real mode (low suppliers + no chain + no export),
+- GET /{tenant_id}/report: no data (None scoring or cte_count=0) → empty report,
+  real mode (low suppliers + no chain + no export),
   real mode (medium suppliers + chain gaps + has export), real mode
   (high suppliers + clean chain + has export)
 
@@ -16,6 +16,7 @@ Issue: #1342
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from app import recall_report as rr
@@ -292,35 +293,29 @@ class TestQueryScoringData:
 
 
 # ---------------------------------------------------------------------------
-# GET /{tenant_id}/report — demo mode
+# GET /{tenant_id}/report — tenant with no data gets an honest empty report
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateReportDemoMode:
-    def test_demo_mode_when_scoring_returns_none(self, client, monkeypatch):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: None)
+class TestGenerateReportNoData:
+    @pytest.mark.parametrize("scoring", [None, {"cte_count": 0}])
+    def test_no_data_returns_empty_report(self, client, monkeypatch, scoring):
+        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: scoring)
+        tenant_id = str(uuid4())
 
-        r = client.get("/api/v1/recall/acme/report")
+        r = client.get(f"/api/v1/recall/{tenant_id}/report")
         assert r.status_code == 200
         body = r.json()
-        assert body["demo_mode"] is True
-        assert body["demo_disclaimer"] is not None
-        assert body["tenant_id"] == "acme"
-        # Demo mode uses hardcoded "4.2 hours" estimate
-        assert "4.2 hours" in body["time_to_respond_estimate"]
-        # Demo dimensions total is (78+85+95+65+88+72)/6 = 80.5 → 80
-        assert body["overall_score"] == 80
-
-    def test_demo_mode_when_cte_count_zero(self, client, monkeypatch):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: {"cte_count": 0})
-
-        r = client.get("/api/v1/recall/empty-tenant/report")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["demo_mode"] is True
-        assert body["demo_disclaimer"] is not None
-        # Overall score is demo dimensions average
-        assert body["overall_grade"] in {"B", "C"}
+        assert body["tenant_id"] == tenant_id
+        assert body["demo_mode"] is False
+        assert body["demo_disclaimer"] is None
+        assert body["dimensions"] == []
+        assert body["action_items"] == []
+        assert body["overall_score"] == 0
+        assert body["overall_grade"] == "N/A"
+        assert body["overall_status"] == "no_data"
+        assert body["executive_summary"].startswith("No data yet")
+        assert body["time_to_respond_estimate"].startswith("Not yet measured")
 
 
 # ---------------------------------------------------------------------------
@@ -575,17 +570,31 @@ class TestGenerateReportRealMode:
 
 class TestReportShape:
     def test_summary_and_citations_present(self, client, monkeypatch):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: None)
-        r = client.get("/api/v1/recall/abc/report")
+        # Real-mode scoring with gaps; no data is invented by the report.
+        monkeypatch.setattr(
+            rr,
+            "_query_scoring_data",
+            lambda tid: {
+                "cte_count": 1,
+                "tlc_count": 0,
+                "cte_types": 0,
+                "has_export": False,
+                "supplier_count": 0,
+                "chain_length": 0,
+                "chain_gap_count": 0,
+            },
+        )
+        tenant_id = str(uuid4())
+        r = client.get(f"/api/v1/recall/{tenant_id}/report")
         body = r.json()
 
         # Executive summary mentions tenant id + score
-        assert "abc" in body["executive_summary"]
+        assert tenant_id in body["executive_summary"]
         assert "21 CFR 1.1455" in body["executive_summary"] or "21 CFR 1.1455" in " ".join(body["regulatory_citations"])
         # Regulatory citations fully populated
         assert len(body["regulatory_citations"]) == 4
-        # Action items populated
-        assert len(body["action_items"]) >= 5
+        # Action items derived from the tenant's own sub-80 dimensions
+        assert body["action_items"]
         # All action items have required fields
         for item in body["action_items"]:
             assert item["priority"] in {"HIGH", "MEDIUM", "LOW"}
