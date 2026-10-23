@@ -1,13 +1,11 @@
 """SEL-444: GS1-128 label encoding.
 
-Data free by design. Digit strings are built at runtime and their check
-digits come from compute_gs1_check_digit. Assertions check structure.
+Values are all-zero identifiers with computed check digits and no generated
+data. Assertions check structure.
 """
 
 from __future__ import annotations
 
-import calendar
-import random
 import sys
 from pathlib import Path
 
@@ -37,42 +35,50 @@ _CODE_C = 99
 _CODE_B = 100
 _STOP = 106
 
+# Day 00 means the whole month. Month 00 is not a month, so the day-zero
+# case is January. These six strings are the only dates the tests use.
+_DAY_ZERO = "000100"
+_LEAP_DAY = "000229"
+_NON_LEAP_DAY = "010229"
+_APRIL_31 = "000431"
+_MONTH_ZERO = "000001"
+_PLAIN_DATE = "000101"
 
-def _rng(*parts: object) -> random.Random:
-    return random.Random("sel444:" + ":".join(str(part) for part in parts))
 
-
-def _digits(rng: random.Random, length: int) -> str:
-    return "".join(str(rng.randrange(10)) for _ in range(length))
-
-
-def _with_check(rng: random.Random, body_length: int) -> str:
-    body = _digits(rng, body_length)
+def _zero_identifier(body_length: int) -> str:
+    """All-zero body plus the mod-10 digit from compute_gs1_check_digit."""
+    body = "0" * body_length
     return body + str(compute_gs1_check_digit(body))
 
 
-def _flip_check(rng: random.Random, value: str) -> str:
-    updated = (int(value[-1]) + rng.randrange(1, 10)) % 10
+def _bad_check(value: str) -> str:
+    """Change only the last digit, deterministically: (d + 1) mod 10."""
+    updated = (int(value[-1]) + 1) % 10
     return value[:-1] + str(updated)
 
 
-def _ymd(year: int, month: int, day: int) -> str:
-    return f"{year:02d}{month:02d}{day:02d}"
+_GTIN14 = _zero_identifier(13)
+_GTIN8 = _zero_identifier(7)
+_SSCC = _zero_identifier(17)
+_GLN = _zero_identifier(12)
 
-
-def _date(rng: random.Random, *, day_zero: bool = False) -> str:
-    year = rng.randrange(100)
-    month = rng.randrange(1, 13)
-    if day_zero:
-        return _ymd(year, month, 0)
-    # Years 2000 through 2099, the same calendar the encoder uses.
-    last = calendar.monthrange(2000 + year, month)[1]
-    return _ymd(year, month, rng.randrange(1, last + 1))
-
-
-def _letters(rng: random.Random, length: int) -> str:
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-    return "".join(rng.choice(alphabet) for _ in range(length))
+# Every supported AI. Input order is not fixed-then-variable, so the encoder
+# still has to regroup. Serial is "0>" so ZPL must latch to Code B (">6")
+# and escape ">" as ">0". An all-zero label would stay in Code C and emit neither.
+_ALL_AIS = [
+    ("21", "0>"),
+    ("17", _PLAIN_DATE),
+    ("10", "0"),
+    ("01", _GTIN14),
+    ("00", _SSCC),
+    ("37", "0"),
+    ("11", _DAY_ZERO),
+    ("02", _GTIN14),
+    ("13", _LEAP_DAY),
+    ("410", _GLN),
+    ("15", _PLAIN_DATE),
+    ("414", _GLN),
+]
 
 
 def _order(elements: list[tuple[str, str]]) -> list[tuple[str, str]]:
@@ -140,27 +146,6 @@ def _barcode_field(zpl: str) -> str:
     return zpl[start : zpl.index("^FS", start)]
 
 
-def _sample(rng: random.Random) -> list[tuple[str, str]]:
-    """One of every supported AI, shuffled. Values exist only at runtime."""
-    elements = [
-        ("00", _with_check(rng, 17)),
-        ("01", _with_check(rng, 13)),
-        ("02", _with_check(rng, 13)),
-        ("11", _date(rng, day_zero=True)),
-        ("13", _date(rng)),
-        ("15", _date(rng)),
-        ("17", _date(rng)),
-        ("410", _with_check(rng, 12)),
-        ("414", _with_check(rng, 12)),
-        ("10", _letters(rng, rng.randrange(1, 21))),
-        # The extra ">" must stay inside the 20-character serial limit.
-        ("21", _letters(rng, rng.randrange(1, 20)) + ">"),
-        ("37", _digits(rng, rng.randrange(1, 9))),
-    ]
-    rng.shuffle(elements)
-    return elements
-
-
 @pytest.mark.parametrize("fn", _ENTRYPOINTS)
 @pytest.mark.parametrize("raw", [None, [], ()])
 def test_empty_input_raises(fn, raw):
@@ -174,8 +159,7 @@ def test_error_is_a_value_error():
 
 @pytest.mark.parametrize("fn", _ENTRYPOINTS)
 def test_unknown_ai_raises_without_echoing_the_value(fn):
-    rng = _rng("unknown", fn.__name__)
-    value = _letters(rng, 8)
+    value = "0"
     with pytest.raises(Gs1LabelError) as caught:
         fn([("ZZ", value)])
     assert value not in str(caught.value)
@@ -184,11 +168,10 @@ def test_unknown_ai_raises_without_echoing_the_value(fn):
 
 @pytest.mark.parametrize("ai,body_length", [("01", 13), ("02", 13), ("00", 17), ("410", 12), ("414", 12)])
 def test_runtime_identifiers_pass_and_a_mutated_check_digit_raises(ai, body_length):
-    rng = _rng("check", ai, body_length)
-    good = _with_check(rng, body_length)
+    good = _zero_identifier(body_length)
     assert int(good[-1]) == compute_gs1_check_digit(good[:-1])
     assert human_readable([(ai, good)]) == f"({ai}){good}"
-    bad = _flip_check(rng, good)
+    bad = _bad_check(good)
     assert bad != good
     with pytest.raises(Gs1LabelError) as caught:
         encode_gs1_128([(ai, bad)])
@@ -199,45 +182,38 @@ def test_runtime_identifiers_pass_and_a_mutated_check_digit_raises(ai, body_leng
 
 
 def test_day_zero_is_allowed_and_impossible_dates_raise():
-    rng = _rng("dates")
-    gtin = _with_check(rng, 13)
-    human_readable([("11", _date(rng, day_zero=True)), ("01", gtin)])
-    leap = rng.randrange(0, 25) * 4
-    human_readable([("13", _ymd(leap, 2, 29))])
+    human_readable([("11", _DAY_ZERO), ("01", _GTIN14)])
+    human_readable([("13", _LEAP_DAY)])
+    human_readable([("17", _PLAIN_DATE)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("13", _ymd(leap + 1, 2, 29))])
+        human_readable([("13", _NON_LEAP_DAY)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("15", _ymd(rng.randrange(100), 4, 31))])
-    human_readable([("17", _ymd(rng.randrange(100), 4, 0))])
+        human_readable([("15", _APRIL_31)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("11", _ymd(rng.randrange(100), 0, 1))])
+        human_readable([("11", _MONTH_ZERO)])
 
 
 def test_variable_fields_accept_limits_and_reject_bad_shape():
-    rng = _rng("variable")
-    gtin = _with_check(rng, 13)
-    human_readable([("10", _letters(rng, 20)), ("01", gtin)])
-    human_readable([("37", _digits(rng, 8)), ("01", gtin)])
+    human_readable([("10", "0" * 20), ("01", _GTIN14)])
+    human_readable([("37", "0" * 8), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("10", _letters(rng, 21)), ("01", gtin)])
+        human_readable([("10", "0" * 21), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("10", " "), ("01", gtin)])
+        human_readable([("10", " "), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("37", _letters(rng, 2)), ("01", gtin)])
+        human_readable([("37", "0A"), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("37", _digits(rng, 9)), ("01", gtin)])
+        human_readable([("37", "0" * 9), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("21", ""), ("01", gtin)])
+        human_readable([("21", ""), ("01", _GTIN14)])
 
 
 def test_charset_is_exactly_82_printable_characters():
-    rng = _rng("charset")
-    gtin = _with_check(rng, 13)
     accepted = []
     for code in range(32, 127):
         character = chr(code)
         try:
-            human_readable([("10", character), ("01", gtin)])
+            human_readable([("10", character), ("01", _GTIN14)])
         except Gs1LabelError:
             continue
         accepted.append(character)
@@ -247,13 +223,12 @@ def test_charset_is_exactly_82_printable_characters():
 
 
 def test_ordering_puts_fixed_fields_first_and_gs_only_between_variable_fields():
-    rng = _rng("order")
     elements = [
-        ("21", _letters(rng, 4)),
-        ("17", _date(rng)),
-        ("10", _letters(rng, 6)),
-        ("01", _with_check(rng, 13)),
-        ("37", _digits(rng, 3)),
+        ("21", "0"),
+        ("17", _PLAIN_DATE),
+        ("10", "0"),
+        ("01", _GTIN14),
+        ("37", "0"),
     ]
     assert human_readable(elements) == _expect_human(elements)
     encoded = element_string(elements)
@@ -271,10 +246,8 @@ def test_ordering_puts_fixed_fields_first_and_gs_only_between_variable_fields():
     assert "\x1d" not in element_string(fixed_only)
 
 
-@pytest.mark.parametrize("salt", range(8))
-def test_code128_round_trip_checksum_start_and_stop(salt):
-    rng = _rng("code128", salt)
-    elements = _sample(rng)
+def test_code128_round_trip_checksum_start_and_stop():
+    elements = _ALL_AIS
     codewords = encode_gs1_128(elements)
     assert codewords[0] == _START_C
     assert codewords[1] == _FNC1
@@ -289,25 +262,19 @@ def test_code128_round_trip_checksum_start_and_stop(salt):
 
 
 def test_short_gtin_whitespace_and_repeats():
-    rng = _rng("shape")
-    gtin = _with_check(rng, 13)
-    short = _with_check(rng, 7)
-    assert len(short) == 8
-    assert int(short[-1]) == compute_gs1_check_digit(short[:-1])
+    assert len(_GTIN8) == 8
+    assert int(_GTIN8[-1]) == compute_gs1_check_digit(_GTIN8[:-1])
     with pytest.raises(Gs1LabelError) as caught:
-        encode_gs1_128([("01", short)])
-    assert short not in str(caught.value)
-    assert human_readable([("01", f"  {gtin}\n")]) == f"(01){gtin}"
-    other = _with_check(rng, 13)
+        encode_gs1_128([("01", _GTIN8)])
+    assert _GTIN8 not in str(caught.value)
+    assert human_readable([("01", f"  {_GTIN14}\n")]) == f"(01){_GTIN14}"
     with pytest.raises(Gs1LabelError) as repeated:
-        human_readable([("01", gtin), ("01", other)])
-    assert gtin not in str(repeated.value)
-    assert other not in str(repeated.value)
+        human_readable([("01", _GTIN14), ("01", _GTIN14)])
+    assert _GTIN14 not in str(repeated.value)
 
 
 def test_all_digit_label_stays_in_code_c_with_one_leading_fnc1():
-    rng = _rng("numeric")
-    elements = [("17", _date(rng)), ("01", _with_check(rng, 13))]
+    elements = [("17", _PLAIN_DATE), ("01", _GTIN14)]
     codewords = encode_gs1_128(elements)
     assert codewords[0] == _START_C
     assert codewords[1] == _FNC1
@@ -321,9 +288,9 @@ def test_all_digit_label_stays_in_code_c_with_one_leading_fnc1():
 
 def test_code_c_pair_matching_the_latch_value_stays_digits():
     """A Code C symbol equal to the latch value is still two digits in ZPL."""
-    rng = _rng("latch-pair")
-    pair = f"{_CODE_C:02d}"
-    body = pair + _digits(rng, 11)
+    pair = "99"
+    assert _CODE_C == int(pair)
+    body = pair + "0" * 11
     gtin = body + str(compute_gs1_check_digit(body))
     assert len(gtin) == 14
     assert str(compute_gs1_check_digit(gtin[:-1])) == gtin[-1]
@@ -341,18 +308,14 @@ def test_code_c_pair_matching_the_latch_value_stays_digits():
 
 
 def test_dict_elements_match_pairs():
-    rng = _rng("dict")
-    gtin = _with_check(rng, 13)
-    lot = _letters(rng, 5)
-    pairs = [("10", lot), ("01", gtin)]
+    pairs = [("10", "0"), ("01", _GTIN14)]
     as_dicts = [{"ai": ai, "value": value} for ai, value in pairs]
     assert human_readable(as_dicts) == human_readable(pairs)
     assert encode_gs1_128(as_dicts) == encode_gs1_128(pairs)
 
 
 def test_zpl_framing_and_fnc1_markers():
-    rng = _rng("zpl")
-    elements = _sample(rng)
+    elements = _ALL_AIS
     zpl = to_zpl(elements)
     assert zpl.startswith("^XA")
     assert zpl.endswith("^XZ")
@@ -364,6 +327,8 @@ def test_zpl_framing_and_fnc1_markers():
     variable_count = sum(1 for ai, _value in elements if ai in _VARIABLE)
     # Leading FNC1 plus one separator between each variable field, and none after the last.
     assert barcode.count(">8") == variable_count
+    # ">6" is the Code C to Code B latch. ">0" is subset B's encoding of ">".
+    # Both come from serial "0>". All-zero digits would not produce them.
     assert ">6" in barcode
     assert ">0" in barcode
     for ai, value in _order(elements):
@@ -377,8 +342,7 @@ def test_zpl_framing_and_fnc1_markers():
 
 
 def test_pdf_header_trailer_and_xref_offsets():
-    rng = _rng("pdf")
-    elements = _sample(rng)
+    elements = _ALL_AIS
     pdf = to_pdf(elements)
     assert pdf.startswith(b"%PDF-1.4")
     assert pdf.endswith(b"%%EOF")
