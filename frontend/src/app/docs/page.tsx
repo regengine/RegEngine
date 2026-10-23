@@ -306,7 +306,7 @@ export default function DocsHomePage() {
         <footer className="flex flex-col items-start justify-between gap-4 border-t border-re-border-subtle pt-8 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-4">
             <code className="rounded-md border border-re-border-subtle bg-re-surface-inset px-4 py-2 font-mono text-[0.8125rem] text-re-text-secondary">
-              python verify_chain.py audit-bundle.zip
+              python verify_chain.py your-bundle.zip
             </code>
             <span className="text-ui text-re-text-tertiary">
               Don&apos;t trust, verify.
