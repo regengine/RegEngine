@@ -1,10 +1,7 @@
 """Unit test for the agent_org suppression gate in ``NotificationOutboxDrainer``.
 
-Unit-level, no live DB (unlike ``test_remediation_outbox_delivery.py``, which
-really does need Postgres for RLS + SECURITY DEFINER token lookups). The
-suppression gate itself needs none of that: it is one parameterized SELECT
-plus a pure Python branch, so it is exercised here with a stub session
-instead of ``conftest.py``'s ``requires_db`` fixture.
+Unit-level, no live DB. The suppression gate is one parameterized SELECT
+plus a pure Python branch, so it is exercised here with a stub session.
 
 Per ``DESIGN_agent-org.md`` section 4: the gate must run unconditionally,
 before any token reminting or provider call, for every row the drainer would
@@ -21,8 +18,7 @@ from pathlib import Path
 
 import pytest
 
-# Mirrors conftest.py's sys.path shim so `app.remediation...` resolves the
-# same way it does for the live-DB delivery tests in this directory.
+# Ensure `app.remediation...` resolves from the ingestion service.
 service_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(service_dir))
 
