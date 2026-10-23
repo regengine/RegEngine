@@ -1,0 +1,28 @@
+name: Copy rules report
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-lint.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-lint.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --test scripts/copy-lint/check-copy.test.mjs
+      - run: node scripts/copy-lint/check-copy.mjs . --github
