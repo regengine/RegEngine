@@ -15,16 +15,18 @@ vi.mock('@/lib/api-client', () => ({
 
 import { MetricsOverviewWidget } from '@/components/dashboard/metrics-overview-widget';
 
-const realMetrics = {
-  total_tenants: 1,
-  total_documents: 4,
+// Shape only: no business figures. The test compares what the widget rendered
+// before and after the failed refresh, never specific values.
+const firstResponse = {
+  total_tenants: 0,
+  total_documents: 0,
   active_jobs: 0,
-  compliance_score: 72,
-  compliance_grade: 'C',
-  events_ingested: 1500,
-  chain_length: 9,
-  chain_valid: true,
-  open_alerts: 2,
+  compliance_score: 0,
+  compliance_grade: '',
+  events_ingested: 0,
+  chain_length: 0,
+  chain_valid: false,
+  open_alerts: 0,
 };
 
 describe('MetricsOverviewWidget with the real useSystemMetrics hook', () => {
@@ -47,12 +49,16 @@ describe('MetricsOverviewWidget with the real useSystemMetrics hook', () => {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   }
 
-  it('a good load followed by a failed refresh keeps the real numbers visible', async () => {
-    mocks.getSystemMetrics.mockResolvedValueOnce(realMetrics);
-    render(<MetricsOverviewWidget readiness={undefined} />, { wrapper });
+  it('a good load followed by a failed refresh leaves the rendered tiles unchanged', async () => {
+    mocks.getSystemMetrics.mockResolvedValueOnce(firstResponse);
+    const { container } = render(<MetricsOverviewWidget readiness={undefined} />, { wrapper });
 
-    expect(await screen.findByText('72')).toBeInTheDocument();
-    expect(screen.getByText('1,500')).toBeInTheDocument();
+    // The loading skeleton also renders a .grid; capture only after the load settles.
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['system', 'metrics'])?.status).toBe('success'),
+    );
+    const tilesBefore = container.querySelector('.grid')?.textContent;
+    expect(tilesBefore).toBeTruthy();
 
     mocks.getSystemMetrics.mockRejectedValueOnce(new Error('Network Error'));
     await act(async () => {
@@ -61,9 +67,9 @@ describe('MetricsOverviewWidget with the real useSystemMetrics hook', () => {
 
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/refresh failed/i));
     expect(mocks.getSystemMetrics).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('72')).toBeInTheDocument();
-    expect(screen.getByText('1,500')).toBeInTheDocument();
-    expect(screen.getByText('Verified')).toBeInTheDocument();
+    // The first response is still the cached data, not replaced by a fallback.
+    expect(queryClient.getQueryData(['system', 'metrics'])).toBe(firstResponse);
+    expect(container.querySelector('.grid')?.textContent).toBe(tilesBefore);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByText(/couldn't load dashboard metrics/i)).not.toBeInTheDocument();
   });

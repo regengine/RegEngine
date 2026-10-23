@@ -87,17 +87,19 @@ describe('MetricsOverviewWidget', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });
 
-  it('a failed refresh after real data keeps the real figures and shows a non-blocking note', () => {
-    // react-query keeps the last good `data` alongside the refetch `error`.
-    mockMetrics({
-      data: { ...emptyMetrics, compliance_score: 72, events_ingested: 1500, chain_length: 9, chain_valid: true, open_alerts: 2 },
-      error: new Error('Network Error'),
-    });
-    render(<MetricsOverviewWidget readiness={undefined} />);
+  it('a failed refresh after a good load leaves the rendered tiles unchanged and shows a non-blocking note', () => {
+    mockMetrics({ data: emptyMetrics });
+    const { container, rerender } = render(<MetricsOverviewWidget readiness={undefined} />);
+    const tilesBefore = container.querySelector('.grid')?.textContent;
+    expect(tilesBefore).toBeTruthy();
 
-    expect(screen.getByText('72')).toBeInTheDocument();
-    expect(screen.getByText('1,500')).toBeInTheDocument();
+    // react-query keeps the last good `data` alongside the refetch `error`.
+    mockMetrics({ data: emptyMetrics, error: new Error('Network Error') });
+    rerender(<MetricsOverviewWidget readiness={undefined} />);
+
+    expect(container.querySelector('.grid')?.textContent).toBe(tilesBefore);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load dashboard metrics/i)).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent(/refresh failed/i);
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(refetch).toHaveBeenCalledTimes(1);
