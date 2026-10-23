@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -216,7 +217,14 @@ export function SupplyChainKnowledgeGraphBuilder() {
                 <EmptyState
                     title="No supply chain data yet"
                     titleAs="h2"
-                    description="This builder maps the suppliers, facilities, products, lots, and Critical Tracking Events from your traceability records. Once your data is connected, the interactive graph, trace controls, and inspector appear here."
+                    description="This view has no data source connected yet. It renders suppliers, facilities, products, lots, and Critical Tracking Events only when traceability records are provided to it; it does not fetch data on its own."
+                    action={
+                        <Button variant="secondary" size="sm" asChild>
+                            <Link href="/tools/data-import" className="no-underline">
+                                Import traceability data
+                            </Link>
+                        </Button>
+                    }
                 />
             </div>
         );
