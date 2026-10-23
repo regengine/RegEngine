@@ -47,13 +47,6 @@ const FTL_CATEGORIES = [
     { id: "cheese", label: "Cheeses (other than hard cheeses)", icon: Package },
 ];
 
-const MAJOR_RETAILERS = [
-    "National Retailer A", "Wholesale Club", "Regional Grocery Chain", "Multi-Banner Group", "Southeast Grocer",
-    "Organic Market", "Mass Merchant", "Specialty Grocer", "West Coast Chain", "Discount Grocer",
-];
-
-const slug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
 export default function ProductProfilePage() {
     const { tenantId } = useTenant();
     const { isAuthenticated } = useAuth();
@@ -70,6 +63,7 @@ export default function ProductProfilePage() {
         retailer_relationships: [],
     });
     const [supplierInput, setSupplierInput] = useState("");
+    const [retailerInput, setRetailerInput] = useState("");
     const profileEndpoint = `${getServiceURL('admin')}/v1/compliance/profile/${tenantId}`;
 
     const fetchProfile = useCallback(async () => {
@@ -152,12 +146,21 @@ export default function ProductProfilePage() {
         }));
     };
 
-    const toggleRetailer = (retailer: string) => {
+    const addRetailer = () => {
+        const retailer = retailerInput.trim();
+        if (retailer && !profile.retailer_relationships.includes(retailer)) {
+            setProfile(prev => ({
+                ...prev,
+                retailer_relationships: [...prev.retailer_relationships, retailer],
+            }));
+            setRetailerInput("");
+        }
+    };
+
+    const removeRetailer = (retailer: string) => {
         setProfile(prev => ({
             ...prev,
-            retailer_relationships: prev.retailer_relationships.includes(retailer)
-                ? prev.retailer_relationships.filter(r => r !== retailer)
-                : [...prev.retailer_relationships, retailer],
+            retailer_relationships: prev.retailer_relationships.filter(r => r !== retailer),
         }));
     };
 
@@ -383,33 +386,40 @@ export default function ProductProfilePage() {
                                 Retailer Relationships
                             </CardTitle>
                             <CardDescription>
-                                Which retailers do you supply?
+                                Add the retailers you supply
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                                {MAJOR_RETAILERS.map(retailer => {
-                                    const checked = profile.retailer_relationships.includes(retailer);
-                                    const controlId = `retailer-${slug(retailer)}`;
-                                    return (
-                                        <label
-                                            key={retailer}
-                                            htmlFor={controlId}
-                                            className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-ui transition-colors duration-120 motion-reduce:transition-none ${checked
-                                                ? "border-re-border-strong bg-re-surface-inset text-re-text-primary"
-                                                : "border-transparent text-re-text-secondary hover:bg-re-surface-inset"
-                                                }`}
-                                        >
-                                            <Checkbox
-                                                id={controlId}
-                                                checked={checked}
-                                                onCheckedChange={() => toggleRetailer(retailer)}
-                                            />
-                                            <span>{retailer}</span>
-                                        </label>
-                                    );
-                                })}
+                            <div className="mb-4 flex gap-2">
+                                <label htmlFor="retailer-name" className="sr-only">
+                                    Retailer name
+                                </label>
+                                <Input
+                                    id="retailer-name"
+                                    placeholder="Enter retailer name..."
+                                    value={retailerInput}
+                                    onChange={(e) => setRetailerInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && addRetailer()}
+                                />
+                                <Button variant="secondary" onClick={addRetailer}>Add</Button>
                             </div>
+                            {profile.retailer_relationships.length === 0 ? (
+                                <p className="text-small text-re-text-tertiary">No data yet</p>
+                            ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {profile.retailer_relationships.map(retailer => (
+                                        <Button
+                                            key={retailer}
+                                            variant="secondary"
+                                            size="sm"
+                                            title={`Remove ${retailer}`}
+                                            onClick={() => removeRetailer(retailer)}
+                                        >
+                                            {retailer} ×
+                                        </Button>
+                                    ))}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

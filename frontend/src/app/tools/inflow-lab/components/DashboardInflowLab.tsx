@@ -185,12 +185,6 @@ type WorkbenchRequestError = Error & { status?: number };
 const INFLOW_API = "/api/inflow-lab";
 const WORKBENCH_API = "/api/ingestion/api/v1/inflow-workbench";
 const REQUIRED_CTES = ["harvesting", "cooling", "initial_packing", "shipping", "receiving"];
-const REALISTIC_SAMPLE_CSV = `cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,location_name,timestamp,ship_from_location,ship_to_location,reference_document
-harvesting,TLC-SBX-20260506-021,Spring Mix,184,cases,Riverbend Organics,2026-05-06T11:52:00Z,,,HARV-021
-cooling,TLC-SBX-20260506-021,Spring Mix,184,cases,Salinas Cooling Hub,2026-05-06T12:49:00Z,,,COOL-021
-initial_packing,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Packing House,2026-05-06T14:31:00Z,,,PACK-021
-shipping,TLC-SBX-20260506-021,Spring Mix,182,cases,GreenLeaf Shipping Dock,2026-05-06T18:06:00Z,GreenLeaf Packing House,North Bay DC,BOL-021
-receiving,TLC-SBX-20260506-021,Spring Mix,182,cases,North Bay DC,2026-05-07T01:14:00Z,GreenLeaf Shipping Dock,North Bay DC,REC-021`;
 const FILTER_CHIPS: { id: "all" | ExceptionPatternId; label: string }[] = [
     { id: "all", label: "all" },
     { id: "handoff", label: "handoff" },
@@ -753,7 +747,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
             setServiceLineage(previewLineages);
             setServiceError(null);
             setSelectedLot("TLC-20260508-000022");
-            setFeederCsv((current) => current || REALISTIC_SAMPLE_CSV);
             return;
         }
 
@@ -969,12 +962,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
         });
     };
 
-    const loadRealisticSample = () => {
-        setFeederCsv(REALISTIC_SAMPLE_CSV);
-        resetFeederPreview();
-        openCsvDrawer();
-    };
-
     const handleFeederFile = (file: File | null) => {
         if (!file) return;
         const reader = new FileReader();
@@ -1060,7 +1047,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
     const runGuidedProof = async () => {
         resetFeederPreview();
         setShowCsvDrawer(true);
-        await evaluateFeederData(REALISTIC_SAMPLE_CSV);
+        await evaluateFeederData();
         // Outside the walkthrough (which handles its own scrolling per step),
         // bring the newly lit pipeline into view so the click has a visible
         // consequence.
@@ -1254,14 +1241,6 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                             <Upload className="mr-2 h-4 w-4" />
                             Upload CSV
                         </Button>
-                        <Button
-                            variant="outline"
-                            className="h-9 border-slate-300 bg-white"
-                            onClick={loadRealisticSample}
-                        >
-                            <ClipboardList className="mr-2 h-4 w-4" />
-                            Load realistic sample
-                        </Button>
                     </div>
                 </header>
 
@@ -1321,7 +1300,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                     lotCount={totalLotCount}
                     runKey={chainRunKey}
                     onRun={() => void runGuidedProof()}
-                    onLoadSample={loadRealisticSample}
+                    onOpenEditor={openCsvDrawer}
                     onFocusDefect={
                         hasBlockedLead && leadProofGroup ? () => focusProofLead("exceptions") : null
                     }
@@ -1421,7 +1400,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                     <p className="mt-1 text-xs text-slate-500">
                                         {hasAnyRunData
                                             ? "Lowest factor sets the next fix."
-                                            : "Load data or run the guided proof to measure readiness."}
+                                            : "No data yet. Upload a CSV of your own supplier rows to measure readiness."}
                                     </p>
                                 </div>
                                 <div className="text-right text-xs text-slate-500">
@@ -1633,9 +1612,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                                             group.id === "source" ? sourceSupplierBreakdown : null
                                                         }
                                                         lotCount={group.lots.length}
-                                                        onUploadCsv={() => fileInputRef.current?.click()}
-                                                        onViewExample={loadRealisticSample}
-                                                        activeSort={mixedLotSort}
+                                                        onUploadCsv={() => fileInputRef.current?.click()}                                                        activeSort={mixedLotSort}
                                                         onSortChange={setMixedLotSort}
                                                         onExportCsv={() => exportGroupCsv(group.id, group.lots)}
                                                     />
@@ -1865,7 +1842,7 @@ export function DashboardInflowLab({ previewMode = false }: { previewMode?: bool
                                     </>
                                 ) : (
                                     <div className="mt-3 text-xs text-slate-500">
-                                        No lots loaded yet. Upload a CSV or load test data.
+                                        No data yet. Upload a CSV of your own supplier rows.
                                     </div>
                                 )}
                             </div>
@@ -2053,7 +2030,6 @@ function GroupRootCausePanel({
     sourceSupplierBreakdown,
     lotCount,
     onUploadCsv,
-    onViewExample,
     activeSort,
     onSortChange,
     onExportCsv,
@@ -2064,7 +2040,6 @@ function GroupRootCausePanel({
         | null;
     lotCount: number;
     onUploadCsv: () => void;
-    onViewExample: () => void;
     activeSort: "cases" | "recency" | null;
     onSortChange: (sort: "cases" | "recency") => void;
     onExportCsv: () => void;
@@ -2088,13 +2063,6 @@ function GroupRootCausePanel({
                                 onClick={onUploadCsv}
                             >
                                 Upload corrected CSV
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="h-7 px-2 text-xs text-slate-500"
-                                onClick={onViewExample}
-                            >
-                                View a complete example
                             </Button>
                         </div>
                     </div>
