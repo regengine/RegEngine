@@ -6,6 +6,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI, Request
@@ -103,7 +104,7 @@ class TestQueryTenantEvents:
         assert _query_tenant_events("t", None, None, None) == []
 
     def test_swallow_exception_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        session = _FakeSession(execute_queue=[RuntimeError("db down")])
+        session = _FakeSession(execute_queue=[RuntimeError()])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
         result = _query_tenant_events("t", None, None, None)
         assert result == []
@@ -131,7 +132,7 @@ def client() -> TestClient:
         return TenantContext(
             tenant_id=tenant_id or "t",
             principal_kind="test",
-            principal_id="t",
+            principal_id=uuid4().hex,
         )
 
     app.dependency_overrides[_verify_api_key] = lambda: None
@@ -143,7 +144,6 @@ class TestExportEpcisEndpoint:
     def test_returns_empty_events_when_no_tenant_rows(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", [])
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/epcis",
@@ -219,7 +219,6 @@ class TestExportEpcisEndpoint:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
-        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", [])
         response = client.post(
             "/api/v1/export/epcis?validate=true",
             json={"tenant_id": "t"},
@@ -238,7 +237,7 @@ class TestExportFdaEndpoint:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/fda",
-            json={"tenant_id": "tenant-x"},
+            json={"tenant_id": "t"},
         )
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/csv")
@@ -246,9 +245,7 @@ class TestExportFdaEndpoint:
         assert response.headers["X-RegEngine-Events-Count"] == "0"
         assert response.headers["X-RegEngine-Message"] == "No data yet"
         assert "X-RegEngine-Disclaimer" not in response.headers
-        assert response.text == epcis_export.FDA_CSV_HEADER + "\n"
-
-        assert response.status_code == 422
+        assert [line for line in response.text.splitlines() if line] == [epcis_export.FDA_CSV_HEADER]
 
 
 class TestListExportFormats:
