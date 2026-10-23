@@ -418,7 +418,7 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
     {
         id: 'job_epcis_weekly',
         name: 'Sample: Weekly EPCIS outbound bundle (Preview)',
-        format: 'GS1 EPCIS 2.0 (Preview)',
+        format: 'GS1 EPCIS 2.0',
         cadence: 'Weekly',
         destination: 'Downloadable bundle',
         status: 'active',
