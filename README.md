@@ -223,12 +223,6 @@ DATABASE_URL="postgresql://regengine:${POSTGRES_PASSWORD}@localhost:5432/regengi
   --output-dir /tmp/regengine-inflow-e2e
 ```
 
-For the fast golden contract without Postgres persistence, use:
-
-```bash
-./venv/bin/python scripts/run_full_fsma_simulation.py --json
-```
-
 Run the consolidated backend:
 
 ```bash

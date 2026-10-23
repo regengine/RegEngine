@@ -10,7 +10,7 @@ timelines, canonical events with a hash chain, manifest with per-source last
 sync time) and reconciles it against ``answer_key.json``. Exit code is 0 only
 when every case reconciles.
 
-DB-free by design, like ``scripts/run_full_fsma_simulation.py``.
+DB-free by design.
 """
 
 from __future__ import annotations
