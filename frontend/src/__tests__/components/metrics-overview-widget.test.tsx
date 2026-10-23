@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 import { MetricsOverviewWidget, CSV_UPLOAD_HREF } from '@/components/dashboard/metrics-overview-widget';
@@ -34,8 +34,12 @@ const emptyMetrics = {
 };
 
 describe('MetricsOverviewWidget', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Alerts page is flag-gated; these cases cover the alerts-enabled tile.
+    vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
     vi.mocked(useSystemStatus).mockReturnValue({
       data: { overall_status: 'healthy', services: [] },
     } as unknown as ReturnType<typeof useSystemStatus>);
@@ -97,6 +101,26 @@ describe('MetricsOverviewWidget', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/refresh failed/i);
     screen.getByRole('button', { name: 'Retry' }).click();
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('alerts disabled: the open alerts tile says "Alerts are off" with no count or CSV link', () => {
+    vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
+    mockMetrics({ data: { ...emptyMetrics, open_alerts: 7 } });
+    render(<MetricsOverviewWidget readiness={undefined} />);
+
+    expect(screen.getByText('Alerts are off')).toBeInTheDocument();
+    expect(screen.queryByText('7')).not.toBeInTheDocument();
+    // Only score, CTE events, hash chain and open fixes are empty tiles.
+    expect(screen.getAllByRole('link', { name: 'Upload a CSV' })).toHaveLength(4);
+  });
+
+  it('alerts enabled but no alert count: "No data yet", never a demo zero', () => {
+    mockMetrics({ data: { ...emptyMetrics, compliance_score: 50, events_ingested: 1, chain_length: 1, chain_valid: true, open_alerts: undefined } });
+    render(<MetricsOverviewWidget readiness={{ unresolved_fix_count: 1, export_eligible: true } as never} />);
+
+    expect(screen.getAllByText('No data yet')).toHaveLength(1);
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText('Alerts are off')).not.toBeInTheDocument();
   });
 
   it('a failed readiness load says so on the open fixes tile instead of "No data yet"', () => {
