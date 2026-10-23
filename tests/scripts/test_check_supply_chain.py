@@ -85,6 +85,24 @@ def test_action_pin_rejects_branch_ref(repo: Path) -> None:
     assert _rules(mod.check_action_pin(path, "bad.yml")) == {"action-pin"}
 
 
+@pytest.mark.parametrize("access", ["read", "write"])
+def test_action_pin_ignores_status_permissions_but_checks_uses(repo: Path, access: str) -> None:
+    path = _write(
+        repo,
+        ".github/workflows/bad.yml",
+        f"permissions:\n  statuses: {access}\nsteps:\n  - uses: actions/checkout@v4\n",
+    )
+    violations = mod.check_action_pin(path, "bad.yml")
+    assert len(violations) == 1
+    assert violations[0].line == 4
+    assert violations[0].text == "- uses: actions/checkout@v4"
+
+
+def test_action_pin_checks_uses_in_flow_mapping(repo: Path) -> None:
+    path = _write(repo, ".github/workflows/bad.yml", "steps: [{ uses: actions/checkout@v4 }]\n")
+    assert _rules(mod.check_action_pin(path, "bad.yml")) == {"action-pin"}
+
+
 def test_action_pin_allows_local_reusable_workflow(repo: Path) -> None:
     path = _write(
         repo,
