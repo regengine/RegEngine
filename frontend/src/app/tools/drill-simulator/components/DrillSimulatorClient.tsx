@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import {
-    Play, CheckCircle2, AlertTriangle, FileText,
+    Play, CheckCircle2, AlertTriangle,
     ArrowRight, Clock, Loader2, Network, Upload, Download,
     ChevronDown, ChevronRight, Timer, Shield, Zap,
     TrendingUp, RotateCcw,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
-    parseCSV, validateRecords, generateSampleCSV, getScoreColor,
+    parseCSV, validateRecords, generateCsvTemplate, getScoreColor,
     getSeverityColor, getSeverityBadgeColor,
     type ValidationResult,
 } from '../lib/record-validator';
@@ -25,37 +25,12 @@ import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-eve
 type Phase = 'scenario' | 'upload' | 'analyzing' | 'results' | 'report';
 
 interface DrillState {
-    selectedScenario: string | null;
     uploadedFile: File | null;
     validationResult: ValidationResult | null;
     phase: Phase;
     drillStartTime: number | null;
     uploadTime: number | null;
 }
-
-const scenarios = [
-    {
-        id: 'produce',
-        title: 'Fresh Produce Supplier',
-        description: 'Multi-state leafy greens distributor with 500+ retail customers',
-        complexity: 'High',
-        recordCount: '2,000+',
-    },
-    {
-        id: 'dairy',
-        title: 'Dairy Processing Facility',
-        description: 'Fluid milk processor with complex ingredients and co-packers',
-        complexity: 'Medium',
-        recordCount: '800+',
-    },
-    {
-        id: 'supplements',
-        title: 'Supplement Manufacturer',
-        description: 'Multi-ingredient dietary supplements with international suppliers',
-        complexity: 'Very High',
-        recordCount: '5,000+',
-    },
-];
 
 const analysisStages = [
     { name: 'Parsing records...', duration: 500 },
@@ -67,7 +42,6 @@ const analysisStages = [
 
 export function DrillSimulatorClient() {
     const [state, setState] = useState<DrillState>({
-        selectedScenario: null,
         uploadedFile: null,
         validationResult: null,
         phase: 'scenario',
@@ -104,10 +78,9 @@ export function DrillSimulatorClient() {
         return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const handleScenarioSelect = (scenarioId: string, drillStartTime: number) => {
+    const handleStartDrill = (drillStartTime: number) => {
         setState({
             ...state,
-            selectedScenario: scenarioId,
             phase: 'upload',
             drillStartTime,
             uploadTime: null,
@@ -209,20 +182,13 @@ export function DrillSimulatorClient() {
         }
     };
 
-    const handleLoadSampleData = async () => {
-        const csv = generateSampleCSV();
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const file = new File([blob], 'sample-records.csv', { type: 'text/csv' });
-        setState({ ...state, uploadedFile: file });
-    };
-
-    const handleDownloadSample = () => {
-        const csv = generateSampleCSV();
+    const handleDownloadTemplate = () => {
+        const csv = generateCsvTemplate();
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'sample-traceability-records.csv';
+        a.download = 'traceability-records-template.csv';
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -231,14 +197,10 @@ export function DrillSimulatorClient() {
         if (!state.validationResult) return;
 
         const result = state.validationResult;
-        const scenarioName =
-            scenarios.find((s) => s.id === state.selectedScenario)?.title ||
-            'Drill';
 
         const report = `FDA RECALL DRILL SIMULATOR: FULL REPORT
 Generated: ${new Date().toISOString()}
 
-SCENARIO: ${scenarioName}
 RECORDS ANALYZED: ${result.totalRecords}
 OVERALL SCORE: ${result.scores.overallScore.toFixed(1)}/100 (${result.scores.grade})
 
@@ -297,7 +259,6 @@ STATUS: ${
 
     const handleReset = () => {
         setState({
-            selectedScenario: null,
             uploadedFile: null,
             validationResult: null,
             phase: 'scenario',
@@ -341,42 +302,21 @@ STATUS: ${
                 </p>
             </div>
 
-            <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-                {scenarios.map((scenario) => (
-                    <button
-                        key={scenario.id}
-                        type="button"
-                        onClick={() => handleScenarioSelect(scenario.id, Date.now())}
-                        className="rounded-lg border border-re-border bg-re-surface-card p-5 text-left transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-re-focus-ring focus-visible:ring-offset-2 focus-visible:ring-offset-re-surface-base motion-reduce:transition-none"
-                    >
-                        <div className="mb-3 flex items-start justify-between gap-3">
-                            <h3 className="text-subheading text-re-text-primary">
-                                {scenario.title}
-                            </h3>
-                            <Badge tone="neutral" size="sm">{scenario.complexity}</Badge>
-                        </div>
-                        <p className="mb-4 text-ui text-re-text-secondary">
-                            {scenario.description}
-                        </p>
-                        <div className="flex items-center gap-2 text-small text-re-text-muted">
-                            <FileText size={14} strokeWidth={1.75} aria-hidden="true" />
-                            {scenario.recordCount} records
-                        </div>
-                    </button>
-                ))}
-            </div>
-
             <div className="mb-8 flex flex-col justify-center gap-4 sm:flex-row">
-                <Button size="lg" leadingIcon={<Play size={18} strokeWidth={1.75} aria-hidden="true" />}>
+                <Button
+                    size="lg"
+                    onClick={() => handleStartDrill(Date.now())}
+                    leadingIcon={<Play size={18} strokeWidth={1.75} aria-hidden="true" />}
+                >
                     Start Drill: Upload Your Records
                 </Button>
                 <Button
                     size="lg"
                     variant="secondary"
-                    onClick={handleDownloadSample}
+                    onClick={handleDownloadTemplate}
                     leadingIcon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    Download Sample CSV
+                    Download CSV Template
                 </Button>
             </div>
 
@@ -403,15 +343,6 @@ STATUS: ${
                     {formatTime(timeRemaining)}
                 </div>
             </div>
-
-            <Card className="mb-6" padding="compact">
-                <h3 className="text-subheading text-re-text-primary">
-                    Scenario: {scenarios.find((s) => s.id === state.selectedScenario)?.title}
-                </h3>
-                <p className="mt-1 text-ui text-re-text-secondary">
-                    {scenarios.find((s) => s.id === state.selectedScenario)?.description}
-                </p>
-            </Card>
 
             <div
                 className={cn(
@@ -485,13 +416,6 @@ STATUS: ${
                     leadingIcon={<Zap size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
                     Analyze My Records
-                </Button>
-                <Button
-                    size="lg"
-                    variant="secondary"
-                    onClick={handleLoadSampleData}
-                >
-                    Load Sample Data
                 </Button>
             </div>
         </motion.div>
@@ -585,7 +509,7 @@ STATUS: ${
                             </div>
                             <Badge tone="info">{gapSummary}</Badge>
                             <p className="mt-2 text-small text-re-text-tertiary">
-                                Self-check on synthetic drill data. Not a compliance verdict.
+                                Self-check on the records you uploaded. Not a compliance verdict.
                             </p>
                         </div>
                     </Card>
@@ -663,7 +587,7 @@ STATUS: ${
                                 <ScoreCircle score={result.scores.overallScore} />
                                 <Badge tone="info" className="mt-3">{gapSummary}</Badge>
                                 <p className="mt-2 text-center text-small text-re-text-tertiary">
-                                    Self-check on synthetic drill data. Not a compliance verdict.
+                                    Self-check on the records you uploaded. Not a compliance verdict.
                                 </p>
                             </div>
                             <div className="space-y-4">
@@ -892,7 +816,7 @@ STATUS: ${
                 headline="Get Your Drill Findings"
                 subheadline="Unlock detailed findings, gap analysis, and a downloadable self-check report."
                 ctaText="Unlock Findings"
-                toolContext={{ toolInputs: { score: result.scores.overallScore, grade: result.scores.grade, scenario: state.selectedScenario } }}
+                toolContext={{ toolInputs: { score: result.scores.overallScore, grade: result.scores.grade } }}
                 teaser={teaser}
                 onUnlock={() => {}}
             >

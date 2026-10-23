@@ -10,33 +10,33 @@ import { Card } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "Proof: CSV → CTE → FDA row | RegEngine",
   description:
-    "Watch a real supplier CSV become an FDA-oriented sortable record. Three CTEs, three transformations, real production code, synthetic data.",
+    "How a supplier CSV becomes an FDA-oriented sortable record. Three CTEs, three transformations, real production code.",
   openGraph: {
     title: "How a supplier CSV becomes an FDA-oriented sortable record | RegEngine",
     description:
-      "Three CTEs, three transformations. Real production code, synthetic data.",
+      "Three CTEs, three transformations. Real production code.",
     url: "https://regengine.co/proof/transformation",
     type: "website",
   },
 };
 
 // ---------------------------------------------------------------------------
-// Data: hand-curated, faithful to production shapes
+// Structural walkthrough — no records, only shapes and field mappings
 // ---------------------------------------------------------------------------
-// CSV rows are direct copies from sample_data/0X_*.csv on main.
-// Canonical JSON matches the TraceabilityEvent shape from
-// services/shared/canonical_event.py.
-// FDA rows match the column spec in
-// services/ingestion/app/fda_export_service.py (FDA_COLUMNS, _NAMED_KDE_COLUMNS).
-// PII columns shown unredacted here for demonstration; in a real export
-// they pass through _redact_location_value when include_pii=False (#1219).
+// CSV headers match the column spec the ingestion pipeline accepts.
+// Canonical JSON shows the TraceabilityEvent shape from
+// services/shared/canonical_event.py with field-level placeholders, not values.
+// FDA rows name the column spec in
+// services/ingestion/app/fda_export_service.py (FDA_COLUMNS, _NAMED_KDE_COLUMNS)
+// and note where each column's value comes from. PII columns pass through
+// _redact_location_value when include_pii=False (#1219).
 
 type Step = {
   cte: string;
   title: string;
   subtitle: string;
   csvHeader: string;
-  csvRows: string[];
+  csvNote: string;
   canonical: string;
   canonicalAnnotation: string;
   fdaRow: Array<[string, string]>;
@@ -48,62 +48,53 @@ const STEPS: Step[] = [
     cte: "§1.1330",
     title: "Harvesting",
     subtitle:
-      "Origination event. Defines the Traceability Lot Code that follows romaine through every downstream CTE.",
+      "Origination event. Defines the Traceability Lot Code that follows the product through every downstream CTE.",
     csvHeader:
       "traceability_lot_code,product_description,quantity,unit_of_measure,harvest_date,location_name,location_gln,field_id,harvester_name,reference_document",
-    csvRows: [
-      "LOT-ROM-2026-0312A,Organic Romaine Hearts,5000,lbs,2026-03-12,Salinas Valley Farms,0061414100014,FIELD-SVF-7,Salinas Valley Farms LLC,HARV-SVF-2026-0312-001",
-      "LOT-ROM-2026-0312B,Chopped Romaine Mix,3200,lbs,2026-03-12,Salinas Valley Farms,0061414100014,FIELD-SVF-12,Salinas Valley Farms LLC,HARV-SVF-2026-0312-002",
-      "LOT-ROM-2026-0311C,Romaine Hearts 3-Pack,4100,lbs,2026-03-11,Pacific Coast Growers,0061414100021,FIELD-PCG-3,Pacific Coast Growers Inc,HARV-SVF-2026-0312-003",
-    ],
+    csvNote:
+      "One row per harvesting event. Your values populate these columns; nothing is pre-filled.",
     canonical: `{
-  "event_id": "8f3c2e6a-4d11-4a0b-9b2e-5c0a1f4a2c10",
-  "tenant_id": "9d2b1c4f-7e88-4f12-9c1a-6f0e2d3a8b71",
+  "event_id": "<uuid, generated on ingest>",
+  "tenant_id": "<your tenant id>",
   "schema_version": 1,
   "source_system": "csv",
   "event_type": "harvesting",
-  "event_timestamp": "2026-03-12T00:00:00+00:00",
-  "traceability_lot_code": "LOT-ROM-2026-0312A",
-  "product_reference": "Organic Romaine Hearts",
-  "quantity": 5000,
-  "unit_of_measure": "lbs",
-  "from_facility_reference": "0061414100014",
+  "event_timestamp": "<harvest_date, ISO 8601>",
+  "traceability_lot_code": "<traceability_lot_code>",
+  "product_reference": "<product_description>",
+  "quantity": <quantity>,
+  "unit_of_measure": "<unit_of_measure>",
+  "from_facility_reference": "<location_gln>",
   "kdes": {
-    "harvest_date": "2026-03-12",
-    "growing_area_name": "FIELD-SVF-7",
-    "harvester_name": "Salinas Valley Farms LLC",
-    "reference_document_number": "HARV-SVF-2026-0312-001",
-    "location_name": "Salinas Valley Farms"
+    "harvest_date": "<harvest_date>",
+    "growing_area_name": "<field_id>",
+    "harvester_name": "<harvester_name>",
+    "reference_document_number": "<reference_document>",
+    "location_name": "<location_name>"
   },
   "confidence_score": 1.0,
   "status": "active",
-  "sha256_hash": "9c4e1b7a2f8d5630ae914c2b0f7e6a18c3d5f9b2e0a7d4c1f8b3e6a9d2c5f0b7",
-  "chain_hash": "f0a2b5c8d1e4f7a0b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7c0d3e6f9a2"
+  "sha256_hash": "<SHA-256 of the canonical record>",
+  "chain_hash": "<hash chained to the previous event>"
 }`,
     canonicalAnnotation:
       "KDE validation against §1.1330 (a)(1) through (a)(7). Hash chained to previous event.",
     fdaRow: [
-      ["Traceability Lot Code (TLC)", "LOT-ROM-2026-0312A"],
-      ["Product Description", "Organic Romaine Hearts"],
-      ["Quantity", "5000"],
-      ["Unit of Measure", "lbs"],
+      ["Traceability Lot Code (TLC)", "← traceability_lot_code"],
+      ["Product Description", "← product_description"],
+      ["Quantity", "← quantity"],
+      ["Unit of Measure", "← unit_of_measure"],
       ["Event Type (CTE)", "harvesting"],
-      ["Event Date", "2026-03-12"],
-      ["Event Time", "00:00:00 UTC"],
-      ["Location GLN", "0061414100014"],
-      ["Location Name", "Salinas Valley Farms"],
-      ["Harvest Date", "2026-03-12"],
-      ["Growing Area", "FIELD-SVF-7"],
-      ["Reference Document Number", "HARV-SVF-2026-0312-001"],
-      ["Source Document", "01_harvesting.csv"],
-      [
-        "Record Hash (SHA-256)",
-        "9c4e1b7a2f8d5630ae914c2b0f7e6a18c3d5f9b2e0a7d4c1f8b3e6a9d2c5f0b7",
-      ],
-      [
-        "Chain Hash",
-        "f0a2b5c8d1e4f7a0b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7c0d3e6f9a2",
-      ],
+      ["Event Date", "← harvest_date"],
+      ["Event Time", "from event_timestamp"],
+      ["Location GLN", "← location_gln"],
+      ["Location Name", "← location_name"],
+      ["Harvest Date", "← harvest_date"],
+      ["Growing Area", "← field_id"],
+      ["Reference Document Number", "← reference_document"],
+      ["Source Document", "your uploaded file name"],
+      ["Record Hash (SHA-256)", "computed from the canonical record"],
+      ["Chain Hash", "chains this record to the previous one"],
     ],
     fdaAnnotation:
       "Mapped to FDA harvesting columns (TLC, Harvest Date, Growing Area). Cells pass through sanitize_cell to neutralize spreadsheet-formula injection (#1081).",
@@ -115,61 +106,52 @@ const STEPS: Step[] = [
       "Pre-shipment temperature event. Carries the same TLC. Adds the cooling KDE the FDA requires for produce.",
     csvHeader:
       "traceability_lot_code,product_description,quantity,unit_of_measure,cooling_date,location_name,location_gln,temperature_celsius,reference_document",
-    csvRows: [
-      "LOT-ROM-2026-0312A,Organic Romaine Hearts,5000,lbs,2026-03-12,Salinas Valley Cooler #1,0061414100014,1.8,COOL-SVF-2026-0312-001",
-      "LOT-ROM-2026-0312B,Chopped Romaine Mix,3200,lbs,,Salinas Valley Cooler #1,0061414100014,2.3,COOL-SVF-2026-0312-002",
-      "LOT-ROM-2026-0311C,Romaine Hearts 3-Pack,4100,lbs,2026-03-11,Pacific Coast Cold Storage,0061414100021,2.0,COOL-SVF-2026-0312-003",
-    ],
+    csvNote:
+      "One row per cooling event. The TLC column links each row back to its harvesting event.",
     canonical: `{
-  "event_id": "1a7d4e8b-2c93-4f67-a510-3b8e4c9f0a25",
-  "tenant_id": "9d2b1c4f-7e88-4f12-9c1a-6f0e2d3a8b71",
+  "event_id": "<uuid, generated on ingest>",
+  "tenant_id": "<your tenant id>",
   "schema_version": 1,
   "source_system": "csv",
   "event_type": "cooling",
-  "event_timestamp": "2026-03-12T00:00:00+00:00",
-  "traceability_lot_code": "LOT-ROM-2026-0312A",
-  "product_reference": "Organic Romaine Hearts",
-  "quantity": 5000,
-  "unit_of_measure": "lbs",
-  "from_facility_reference": "0061414100014",
+  "event_timestamp": "<cooling_date, ISO 8601>",
+  "traceability_lot_code": "<traceability_lot_code>",
+  "product_reference": "<product_description>",
+  "quantity": <quantity>,
+  "unit_of_measure": "<unit_of_measure>",
+  "from_facility_reference": "<location_gln>",
   "kdes": {
-    "cooling_date": "2026-03-12",
-    "temperature": 35.24,
-    "location_name": "Salinas Valley Cooler #1",
-    "reference_document_number": "COOL-SVF-2026-0312-001"
+    "cooling_date": "<cooling_date>",
+    "temperature": "<temperature_celsius, normalized to °F>",
+    "location_name": "<location_name>",
+    "reference_document_number": "<reference_document>"
   },
   "confidence_score": 1.0,
   "status": "active",
-  "sha256_hash": "2e8c5a1b4d7f0936e2a5b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1",
-  "chain_hash": "a4b7c0d3e6f9a2b5c8d1e4f7a0b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7"
+  "sha256_hash": "<SHA-256 of the canonical record>",
+  "chain_hash": "<hash chained to the previous event>"
 }`,
     canonicalAnnotation:
-      "Celsius normalized to Fahrenheit (1.8°C → 35.24°F). TLC linkage proves continuity from harvest.",
+      "Celsius normalized to Fahrenheit. TLC linkage proves continuity from harvest.",
     fdaRow: [
-      ["Traceability Lot Code (TLC)", "LOT-ROM-2026-0312A"],
-      ["Product Description", "Organic Romaine Hearts"],
-      ["Quantity", "5000"],
-      ["Unit of Measure", "lbs"],
+      ["Traceability Lot Code (TLC)", "← traceability_lot_code"],
+      ["Product Description", "← product_description"],
+      ["Quantity", "← quantity"],
+      ["Unit of Measure", "← unit_of_measure"],
       ["Event Type (CTE)", "cooling"],
-      ["Event Date", "2026-03-12"],
-      ["Event Time", "00:00:00 UTC"],
-      ["Location GLN", "0061414100014"],
-      ["Location Name", "Salinas Valley Cooler #1"],
-      ["Cooling Date", "2026-03-12"],
-      ["Temperature (°F)", "35.24"],
-      ["Reference Document Number", "COOL-SVF-2026-0312-001"],
-      ["Source Document", "02_cooling.csv"],
-      [
-        "Record Hash (SHA-256)",
-        "2e8c5a1b4d7f0936e2a5b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1",
-      ],
-      [
-        "Chain Hash",
-        "a4b7c0d3e6f9a2b5c8d1e4f7a0b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7",
-      ],
+      ["Event Date", "← cooling_date"],
+      ["Event Time", "from event_timestamp"],
+      ["Location GLN", "← location_gln"],
+      ["Location Name", "← location_name"],
+      ["Cooling Date", "← cooling_date"],
+      ["Temperature (°F)", "← temperature_celsius, normalized"],
+      ["Reference Document Number", "← reference_document"],
+      ["Source Document", "your uploaded file name"],
+      ["Record Hash (SHA-256)", "computed from the canonical record"],
+      ["Chain Hash", "chains this record to the previous one"],
     ],
     fdaAnnotation:
-      "Mapped to FDA Cooling Date and Temperature columns. Same TLC links this row to the harvesting row above for sortable recall scope.",
+      "Mapped to FDA Cooling Date and Temperature columns. The shared TLC links this row to the harvesting row above for sortable recall scope.",
   },
   {
     cte: "§1.1340",
@@ -178,65 +160,56 @@ const STEPS: Step[] = [
       "Transfer event. Adds Ship-From / Ship-To facilities with GLN identifiers, the FDA's expected join keys.",
     csvHeader:
       "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,ship_from_gln,ship_to_gln,carrier_name,po_number,reference_document",
-    csvRows: [
-      "LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100038,0061414100045,FedEx Freight,PO-MM-2026-7201,BOL-CFS-2026-0313-001",
-      "LOT-ROM-2026-0312A-PK,Organic Romaine Hearts 3ct,800,cases,2026-03-14,FreshCut Processing,Premier Grocery Warehouse,0061414100038,0061414100052,Cold Express Logistics,PO-PG-2026-3388,BOL-CFS-2026-0313-002",
-      "LOT-ROM-2026-0312B-PK,Chopped Romaine 12oz Bag,2800,bags,2026-03-14,FreshCut Processing,MegaMart Distribution Center,0061414100038,0061414100045,FedEx Freight,PO-MM-2026-7202,BOL-CFS-2026-0313-003",
-    ],
+    csvNote:
+      "One row per shipment. Ship-from and ship-to GLNs are the join keys an auditor uses to follow the lot.",
     canonical: `{
-  "event_id": "5b2f8c1e-7d40-4a9b-8e15-2c7a0f4b9d63",
-  "tenant_id": "9d2b1c4f-7e88-4f12-9c1a-6f0e2d3a8b71",
+  "event_id": "<uuid, generated on ingest>",
+  "tenant_id": "<your tenant id>",
   "schema_version": 1,
   "source_system": "csv",
   "event_type": "shipping",
-  "event_timestamp": "2026-03-14T00:00:00+00:00",
-  "traceability_lot_code": "LOT-ROM-2026-0312A-PK",
-  "product_reference": "Organic Romaine Hearts 3ct",
-  "quantity": 800,
-  "unit_of_measure": "cases",
-  "from_facility_reference": "0061414100038",
-  "to_facility_reference": "0061414100045",
+  "event_timestamp": "<ship_date, ISO 8601>",
+  "traceability_lot_code": "<traceability_lot_code>",
+  "product_reference": "<product_description>",
+  "quantity": <quantity>,
+  "unit_of_measure": "<unit_of_measure>",
+  "from_facility_reference": "<ship_from_gln>",
+  "to_facility_reference": "<ship_to_gln>",
   "kdes": {
-    "ship_date": "2026-03-14",
-    "ship_from_gln": "0061414100038",
-    "ship_from_location": "FreshCut Processing",
-    "ship_to_gln": "0061414100045",
-    "ship_to_location": "MegaMart Distribution Center",
-    "carrier": "FedEx Freight",
-    "po_number": "PO-MM-2026-7201",
-    "reference_document_number": "BOL-CFS-2026-0313-001"
+    "ship_date": "<ship_date>",
+    "ship_from_gln": "<ship_from_gln>",
+    "ship_from_location": "<ship_from_location>",
+    "ship_to_gln": "<ship_to_gln>",
+    "ship_to_location": "<ship_to_location>",
+    "carrier": "<carrier_name>",
+    "po_number": "<po_number>",
+    "reference_document_number": "<reference_document>"
   },
   "confidence_score": 1.0,
   "status": "active",
-  "sha256_hash": "7f3a0c5d8e1b4f7a0c3d6e9f2a5b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a90",
-  "chain_hash": "b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4a7b0c3d6e9f2a5b8c1"
+  "sha256_hash": "<SHA-256 of the canonical record>",
+  "chain_hash": "<hash chained to the previous event>"
 }`,
     canonicalAnnotation:
       "Both Ship-From and Ship-To GLNs preserved as structured KDEs. Carrier and PO travel in the kdes map.",
     fdaRow: [
-      ["Traceability Lot Code (TLC)", "LOT-ROM-2026-0312A-PK"],
-      ["Product Description", "Organic Romaine Hearts 3ct"],
-      ["Quantity", "800"],
-      ["Unit of Measure", "cases"],
+      ["Traceability Lot Code (TLC)", "← traceability_lot_code"],
+      ["Product Description", "← product_description"],
+      ["Quantity", "← quantity"],
+      ["Unit of Measure", "← unit_of_measure"],
       ["Event Type (CTE)", "shipping"],
-      ["Event Date", "2026-03-14"],
-      ["Event Time", "00:00:00 UTC"],
-      ["Ship From GLN", "0061414100038"],
-      ["Ship From Name", "FreshCut Processing"],
-      ["Ship To GLN", "0061414100045"],
-      ["Ship To Name", "MegaMart Distribution Center"],
-      ["Ship Date", "2026-03-14"],
-      ["Carrier", "FedEx Freight"],
-      ["Reference Document Number", "BOL-CFS-2026-0313-001"],
-      ["Source Document", "04_shipping.csv"],
-      [
-        "Record Hash (SHA-256)",
-        "7f3a0c5d8e1b4f7a0c3d6e9f2a5b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a90",
-      ],
-      [
-        "Chain Hash",
-        "b8c1d4e7f0a3b6c9d2e5f8a1b4c7d0e3f6a9b2c5d8e1f4a7b0c3d6e9f2a5b8c1",
-      ],
+      ["Event Date", "← ship_date"],
+      ["Event Time", "from event_timestamp"],
+      ["Ship From GLN", "← ship_from_gln"],
+      ["Ship From Name", "← ship_from_location"],
+      ["Ship To GLN", "← ship_to_gln"],
+      ["Ship To Name", "← ship_to_location"],
+      ["Ship Date", "← ship_date"],
+      ["Carrier", "← carrier_name"],
+      ["Reference Document Number", "← reference_document"],
+      ["Source Document", "your uploaded file name"],
+      ["Record Hash (SHA-256)", "computed from the canonical record"],
+      ["Chain Hash", "chains this record to the previous one"],
     ],
     fdaAnnotation:
       "Mapped to FDA Ship From / Ship To GLN + Name columns (auditor join keys). Facility names redact to [REDACTED] in the default export (#1219); GLNs always emit.",
@@ -280,9 +253,8 @@ function StepBlock({ step, index }: { step: Step; index: number }) {
         <Pane label="A · Raw supplier CSV" Icon={FileSpreadsheet}>
           <pre className="whitespace-pre font-mono text-small leading-5 text-re-text-secondary">
             <span className="text-re-text-muted">{step.csvHeader}</span>
-            {"\n"}
-            {step.csvRows.join("\n")}
           </pre>
+          <p className="mt-2 text-small text-re-text-tertiary">{step.csvNote}</p>
         </Pane>
 
         <Arrow note={step.canonicalAnnotation} />
@@ -330,13 +302,13 @@ export default function TransformationProofPage() {
             className="mb-0 mt-4 border-b-0 pb-0"
           />
           <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-            Three CTEs, three transformations. Real production code, synthetic
-            data. Every row you see comes from{" "}
+            Three CTEs, three transformations, running on real production code.
+            Each step shows the CSV column spec, the canonical event shape from{" "}
             <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem]">
-              sample_data/
-            </code>{" "}
-            and matches the canonical event shape and FDA spreadsheet column
-            spec used in production.
+              services/shared/canonical_event.py
+            </code>
+            , and the FDA spreadsheet column mapping used in production. Your
+            records supply the values; the pipeline supplies the structure.
           </p>
         </Container>
       </header>
@@ -352,13 +324,14 @@ export default function TransformationProofPage() {
             Verify this for yourself.
           </h2>
           <p className="mt-2 max-w-[68ch] text-body text-re-text-secondary">
-            Download the same sample CSVs, run the canonical pipeline, and
-            verify the SHA-256 + chain hashes with our open verifier.
+            Upload your own supplier CSV, run it through the canonical
+            pipeline, and verify the SHA-256 and chain hashes with our open
+            verifier.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <Link href="/proof">
-                Download sample data
+                Explore the proof library
                 <ArrowRight aria-hidden="true" strokeWidth={1.75} />
               </Link>
             </Button>
