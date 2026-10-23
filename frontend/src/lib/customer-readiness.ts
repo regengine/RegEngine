@@ -245,7 +245,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'RegEngine can prepare EPCIS-oriented export packages for retailer submission workflows.',
+        customer_copy: 'RegEngine can prepare EPCIS (Preview) export packages for retailer submission workflows.',
         evidence_url: '/trust',
     },
     {
@@ -310,12 +310,12 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
     },
     {
         id: 'epcis',
-        name: 'GS1 EPCIS 2.0',
+        name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {
@@ -417,8 +417,8 @@ export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
     },
     {
         id: 'job_epcis_weekly',
-        name: 'Sample: Weekly EPCIS outbound bundle',
-        format: 'GS1 EPCIS 2.0',
+        name: 'Sample: Weekly EPCIS outbound bundle (Preview)',
+        format: 'GS1 EPCIS 2.0 (Preview)',
         cadence: 'Weekly',
         destination: 'Downloadable bundle',
         status: 'active',
@@ -492,7 +492,7 @@ export const RECALL_DRILL_RUNS: RecallDrillRun[] = [
         dateRange: '2026-02-01 to 2026-02-28',
         status: 'completed',
         elapsed: '18m 24s',
-        artifacts: ['FDA package', 'EPCIS export', 'drill report'],
+        artifacts: ['FDA package', 'EPCIS export (Preview)', 'drill report'],
         warnings: [],
     },
     {

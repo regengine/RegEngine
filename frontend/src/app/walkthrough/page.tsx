@@ -97,7 +97,7 @@ const TIMELINE = [
       { label: 'Exceptions resolved', value: '3 of 3' },
       { label: 'Package version', value: 'v1 (immutable)' },
       { label: 'SHA-256 manifest hash', value: 'a7c3e9f2...d1b84c' },
-      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD' },
+      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD (Preview)' },
     ],
   },
   {

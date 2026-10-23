@@ -403,8 +403,8 @@ export default function IngestPage() {
     ? epcisResult.accepted === 0
       ? 'No events accepted'
       : epcisResult.rejected > 0
-        ? 'EPCIS partially accepted'
-        : 'EPCIS processed'
+        ? 'EPCIS (Preview) partially accepted'
+        : 'EPCIS (Preview) processed'
     : '';
   const epcisTone = epcisResult
     ? epcisResult.accepted === 0

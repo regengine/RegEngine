@@ -182,7 +182,7 @@ export default function ExportJobsPage() {
                                 className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="FDA Package">FDA Package</option>
-                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
+                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0 (Preview)</option>
                                 <option value="Audit Bundle">Audit Bundle</option>
                             </select>
                         </Field>
@@ -250,7 +250,7 @@ export default function ExportJobsPage() {
                             <EmptyState
                                 icon={Archive}
                                 title="No export jobs yet"
-                                description="Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
+                                description="Export jobs package accepted traceability records into FDA, EPCIS (Preview), or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
                             />
                             <div className="grid gap-4 md:grid-cols-3">
                                 {exportPrereqs.map((step) => (
@@ -279,7 +279,7 @@ export default function ExportJobsPage() {
                                     <dl className="divide-y divide-re-border-subtle">
                                         {[
                                             ['Cadence', 'Weekly / Daily / Monthly'],
-                                            ['Bundle', 'FDA or EPCIS'],
+                                            ['Bundle', 'FDA or EPCIS (Preview)'],
                                             ['Integrity', 'Manifest hash'],
                                         ].map(([term, detail]) => (
                                             <div key={term} className="flex items-center justify-between gap-4 px-5 py-3 text-ui">

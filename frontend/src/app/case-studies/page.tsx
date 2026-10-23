@@ -453,7 +453,7 @@ export default function CaseStudy() {
                                 'Date range filtering for targeted FDA requests',
                                 'Chain verification JSON (SHA-256 + Merkle proof)',
                                 'KDE completeness validation log',
-                                'EPCIS 2.0 JSON-LD (GS1 business step mapping)',
+                                'EPCIS 2.0 JSON-LD (Preview, GS1 business step mapping)',
                                 'Package manifest with file checksums',
                             ].map((item) => (
                                 <li key={item} className="flex items-start gap-2">
