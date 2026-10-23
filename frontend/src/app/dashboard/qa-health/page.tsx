@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Fingerprint,
   RefreshCw,
   WifiOff,
   XCircle,
@@ -23,6 +24,7 @@ import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQAHealth } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth-context";
+import { isRequiresStepUpPayload, requestStepUp } from "@/lib/step-up-events";
 import type {
   QAHealthArtifactRef,
   QADecisionStatus,
@@ -33,6 +35,8 @@ import type {
   QASeverity,
   QASuiteStatus,
 } from "@/types/api";
+
+const QA_HEALTH_STEP_UP_REASON = "Confirm it's you to view QA Health, a sysadmin page with internal release and test-run details.";
 
 const SUMMARY_SUITE_ORDER = [
   "backend-pytest",
@@ -265,7 +269,29 @@ export default function QAHealthPage() {
 
   if (isLoading) return <QAPageSkeleton />;
 
-  if (error) {
+  const errorPayload = (error as { response?: { data?: unknown } } | null)?.response?.data;
+  if (error && !data && isRequiresStepUpPayload(errorPayload)) {
+    return (
+      <PageContainer>
+        <PageHeader title="Passkey confirmation required" />
+        <Callout
+          tone="info"
+          action={
+            <Button
+              onClick={() => requestStepUp({ reason: QA_HEALTH_STEP_UP_REASON, returnTo: "/dashboard" })}
+              leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
+            >
+              Confirm with passkey
+            </Button>
+          }
+        >
+          QA Health is a sysadmin page. Your current session was not signed in with a passkey.
+        </Callout>
+      </PageContainer>
+    );
+  }
+
+  if (error && !data) {
     return (
       <PageContainer>
         <PageHeader title="QA health request failed" />

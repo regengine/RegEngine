@@ -72,7 +72,6 @@ FILE_MAP = {
     "services/ingestion/tests/test_supplier_portal_1342.py": ("real-defect", "RC-014", "open", "anvil", "per-link rate limiting not enforced"),
     "tests/migrations/test_destructive_downgrade_documented_2827.py": ("real-defect", "RC-015", "open", "anvil", "v116 destroys rows without acknowledgement guard"),
     "tests/migrations/test_migration_fresh_db.py": ("real-defect", "RC-016", "open", "anvil", "policy resolver gap"),
-    "tests/scripts/test_regenerate_public_samples_gate.py": ("real-defect", "RC-017", "open", "anvil", "workflow yaml drift after lock policy change"),
     "tests/scripts/test_export_env_bundle_no_disk_secrets.py": ("real-defect", "RC-018", "open", "anvil", "script named for what it doesn't do; rename"),
     "services/scheduler/tests/test_deadline_monitor_2908.py": ("real-defect", "RC-019", "open", "anvil", "#2908 hardening constants/registration not on tree"),
 }

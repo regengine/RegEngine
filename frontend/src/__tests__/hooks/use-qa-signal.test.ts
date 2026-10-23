@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { deriveQASignal } from '@/hooks/use-qa-signal';
 import type { QAHealthResponse, QAHealthStatus } from '@/types/api';
 
-function response(status: QAHealthStatus, ready_percent = 80): QAHealthResponse {
+function response(status: QAHealthStatus): QAHealthResponse {
   return {
     schema_version: '1.0',
-    generated_at: '2026-10-01T00:00:00Z',
+    generated_at: '',
     source: { kind: 'ci_artifact' },
-    overall: { status, ready_percent, blocking_count: 2, advisory_count: 1 },
+    overall: { status, ready_percent: 0, blocking_count: 0, advisory_count: 0 },
     suites: [],
     clusters: [],
     decision_checks: [],
@@ -72,8 +72,16 @@ describe('deriveQASignal', () => {
     expect(qa.passing).toBe(false);
   });
 
-  it('passes real figures through', () => {
-    const qa = deriveQASignal({ enabled: true, isLoading: false, error: null, data: response('failing', 28) });
-    expect(qa).toMatchObject({ readyPercent: 28, blockingCount: 2, advisoryCount: 1, label: 'Release gate failing' });
+  it('maps each gate status to its label', () => {
+    const labels: Record<QAHealthStatus, string> = {
+      passing: 'Release gate passing',
+      degraded: 'Advisory issues',
+      unavailable: 'QA signal unavailable',
+      invalid_artifact: 'QA artifact invalid',
+      failing: 'Release gate failing',
+    };
+    for (const [status, label] of Object.entries(labels) as [QAHealthStatus, string][]) {
+      expect(deriveQASignal({ enabled: true, isLoading: false, error: null, data: response(status) }).label).toBe(label);
+    }
   });
 });

@@ -89,7 +89,6 @@ jobs:
               - 'plugins/fsma/**'
               - 'scripts/**'
               - 'tests/**'
-              - 'sample_data/**'
               - '**/requirements*'
               - 'pyproject.toml'
               - 'Dockerfile*'

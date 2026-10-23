@@ -1,0 +1,83 @@
+# Report-only visual regression + page monitoring for Vercel Preview deploys.
+#
+# Non-required, never blocks merges (continue-on-error). GET-only page visits
+# plus blank-submit validation screenshots (VISUAL_ALLOW_FORM_SUBMIT=1: clicks
+# submit on EMPTY login/signup forms, fills nothing, creates nothing).
+#
+# NOTE — Vercel protection bypass: if preview deploys sit behind Vercel
+# Deployment Protection (SSO/password), these checks will screenshot the
+# auth wall instead of the app. The config sends an
+# x-vercel-protection-bypass header ONLY when the
+# VERCEL_AUTOMATION_BYPASS_SECRET env var is set at runtime. This workflow
+# deliberately does NOT set it and references NO secret; wiring one up is
+# an optional follow-up for Christopher to approve — see
+# frontend/tests/visual/README.md ("Vercel protection").
+name: Visual Preview Report
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Preview URL to check (e.g. https://regengine-git-branch.vercel.app)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  visual-report:
+    name: visual-report (non-required)
+    # Preview deploys only: Vercel names the environment 'Preview' (exact,
+    # case-sensitive). Railway environments ('production', 'staging',
+    # 'RegEngine-Prod', ...) never match, so Railway deploys never run this.
+    # The URL host is validated by the first step below (must be *.vercel.app).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment.environment == 'Preview')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Validate preview URL host (*.vercel.app only)
+        # Runs before checkout/install so a non-preview URL fails fast and the
+        # test step below never runs. URLs arrive via env, never interpolated
+        # into the script. Rejects: empty URL, non-http(s) scheme, userinfo
+        # ('user@host') tricks, and any host not ending in '.vercel.app'.
+        # Uses the preinstalled node on ubuntu-latest (before setup-node).
+        env:
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+          DISPATCH_URL: ${{ inputs.url }}
+          EVENT_NAME: ${{ github.event_name }}
+        # Override the job's frontend/ default: this runs before checkout.
+        working-directory: .
+        run: |
+          node -e "try{const u=new URL(process.env.EVENT_NAME==='workflow_dispatch'?process.env.DISPATCH_URL||'':process.env.DEPLOYMENT_URL||'');const h=u.hostname.toLowerCase();if((u.protocol!=='https:'&&u.protocol!=='http:')||u.username||u.password||!h.endsWith('.vercel.app')||h==='vercel.app'){console.error('::error::Preview URL host must be *.vercel.app with http(s) scheme and no userinfo.');process.exit(1)}console.log('Preview host OK: '+h)}catch(e){console.error('::error::Invalid preview URL: '+(e&&e.message||e));process.exit(1)}"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run visual suite
+        env:
+          VISUAL_BASE_URL: ${{ github.event.deployment_status.environment_url || inputs.url }}
+          VISUAL_ALLOW_FORM_SUBMIT: '1'
+        run: npx playwright test --config=playwright.visual.config.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        if: always()
+        with:
+          name: visual-report-preview
+          path: |
+            frontend/playwright-visual-report
+            frontend/test-results-visual

@@ -23,14 +23,17 @@ describe('isRequiresStepUpPayload', () => {
 });
 
 describe('emitStepUpRequired', () => {
-    it('dispatches the step-up event carrying the backend payload', () => {
+    it('dispatches the step-up event carrying the reason and backend payload', () => {
         const listener = vi.fn();
         window.addEventListener(STEP_UP_REQUIRED_EVENT, listener);
         try {
             const payload = { detail: { code: 'requires_step_up' } };
-            emitStepUpRequired(payload);
+            emitStepUpRequired(payload, { reason: "Confirm it's you to revoke this API key." });
             expect(listener).toHaveBeenCalledTimes(1);
-            expect((listener.mock.calls[0][0] as CustomEvent).detail).toBe(payload);
+            expect((listener.mock.calls[0][0] as CustomEvent).detail).toEqual({
+                reason: "Confirm it's you to revoke this API key.",
+                payload,
+            });
         } finally {
             window.removeEventListener(STEP_UP_REQUIRED_EVENT, listener);
         }
@@ -40,7 +43,7 @@ describe('emitStepUpRequired', () => {
         const listener = vi.fn();
         window.addEventListener(STEP_UP_REQUIRED_EVENT, listener);
         try {
-            emitStepUpRequired({ detail: 'plain 403' });
+            emitStepUpRequired({ detail: 'plain 403' }, { reason: "Confirm it's you." });
             expect(listener).not.toHaveBeenCalled();
         } finally {
             window.removeEventListener(STEP_UP_REQUIRED_EVENT, listener);

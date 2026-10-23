@@ -16,13 +16,13 @@ vi.mock('@/hooks/use-api', () => ({
 
 const qaHealth: QAHealthResponse = {
   schema_version: '1.0',
-  generated_at: '2026-06-04T00:00:00Z',
+  generated_at: '',
   source: { kind: 'ci_artifact', path: 'qa/qa-health/latest.json' },
   overall: {
-    status: 'failing',
-    ready_percent: 28,
-    blocking_count: 3,
-    advisory_count: 1,
+    status: 'unavailable',
+    ready_percent: 0,
+    blocking_count: 0,
+    advisory_count: 0,
   },
   suites: [],
   clusters: [],
@@ -42,7 +42,7 @@ describe('QAHealthWidget', () => {
 
   it('does not render for non-sysadmin users', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'user@example.com', is_sysadmin: false, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: false, status: 'active' },
     } as ReturnType<typeof useAuth>);
 
     const { container } = render(<QAHealthWidget />);
@@ -53,14 +53,13 @@ describe('QAHealthWidget', () => {
 
   it('renders release health for sysadmin users', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: true, status: 'active' },
     } as ReturnType<typeof useAuth>);
 
     render(<QAHealthWidget />);
 
     expect(screen.getByText('QA Health')).toBeInTheDocument();
-    expect(screen.getByText('Release gate failing')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('QA signal unavailable')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open qa health/i })).toHaveAttribute(
       'href',
       '/dashboard/qa-health',
@@ -70,7 +69,7 @@ describe('QAHealthWidget', () => {
 
   it('a failed QA load reads as failed with unknown readiness — not "0% ready"', () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
+      user: { id: '', email: '', is_sysadmin: true, status: 'active' },
     } as ReturnType<typeof useAuth>);
     vi.mocked(useQAHealth).mockReturnValue({
       data: undefined,

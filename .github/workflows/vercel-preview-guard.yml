@@ -1,0 +1,138 @@
+name: Vercel Preview Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: vercel-preview-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Vercel Preview Built
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    permissions:
+      deployments: read
+      statuses: read
+      checks: read
+    outputs:
+      preview_url: ${{ steps.wait.outputs.preview_url }}
+    steps:
+      - name: Wait for the regengine preview
+        id: wait
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = process.env.HEAD_SHA;
+            // Vercel suffixes environments and commit contexts in multi-project repos.
+            const environment = 'Preview – regengine';
+            const statusContext = 'Vercel – regengine';
+            const deadline = Date.now() + 25 * 60 * 1000;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const rejected = /\b(skip(?:ped)?|ignor(?:e|ed)|cancel(?:ed|led)|error|fail(?:ed|ure)?)\b/i;
+
+            while (Date.now() < deadline) {
+              const { data: deployments } = await github.rest.repos.listDeployments({
+                owner, repo, sha, environment, per_page: 100,
+              });
+              // Use only the newest deployment for this SHA and project.
+              const deployment = deployments.find(d =>
+                d.sha === sha && d.environment === environment);
+              if (deployment) {
+                const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
+                  owner, repo, deployment_id: deployment.id, per_page: 100,
+                });
+                const latest = statuses[0];
+                if (latest) {
+                  const detail = latest.description || '';
+                  if (rejected.test(detail) || ['error', 'failure', 'inactive'].includes(latest.state)) {
+                    throw new Error(`Vercel preview ended ${latest.state}: ${detail || 'no detail'}`);
+                  }
+                  if (latest.state === 'success') {
+                    const url = latest.environment_url || latest.target_url;
+                    const preview = url && new URL(url);
+                    // Reject dashboard links and other projects' deployments.
+                    if (preview?.protocol === 'https:' &&
+                        preview.hostname.startsWith('regengine-') &&
+                        preview.hostname.endsWith('-petrefiedthunders-projects.vercel.app')) {
+                      core.setOutput('preview_url', url);
+                      core.info('Vercel preview is ready for the PR head SHA.');
+                      return;
+                    }
+                  }
+                }
+              }
+
+              // An ignored build can produce a green commit status and no ready
+              // deployment. Inspect its description and the Vercel check conclusion.
+              const { data: commitStatuses } = await github.rest.repos.listCommitStatusesForRef({
+                owner, repo, ref: sha, per_page: 100,
+              });
+              const vercelStatus = commitStatuses.find(s => s.context === statusContext);
+              if (vercelStatus && (rejected.test(vercelStatus.description || '') ||
+                  ['error', 'failure'].includes(vercelStatus.state))) {
+                throw new Error(`Vercel preview status ended ${vercelStatus.state}: ${vercelStatus.description || 'no detail'}`);
+              }
+
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner, repo, ref: sha, per_page: 100,
+              });
+              const vercelCheck = checks.check_runs.find(c =>
+                c.app?.slug === 'vercel' && c.name === statusContext);
+              if (vercelCheck && ['skipped', 'cancelled', 'failure', 'timed_out', 'action_required', 'neutral', 'stale'].includes(vercelCheck.conclusion)) {
+                throw new Error(`Vercel preview check ended ${vercelCheck.conclusion}`);
+              }
+              await sleep(15000);
+            }
+            throw new Error(`No ready regengine Vercel preview for ${sha} after 25 minutes`);
+
+  access-link:
+    name: Preview Access Link
+    needs: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Create or update preview access comment
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PREVIEW_URL: ${{ needs.preview.outputs.preview_url }}
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = '<!-- vercel-preview-access -->';
+            const secret = process.env.BYPASS_SECRET;
+            if (secret) core.setSecret(secret); // Emits ::add-mask:: before using it.
+            const preview = process.env.PREVIEW_URL;
+            if (!preview) throw new Error('The preview job did not return an access URL');
+            const url = new URL(preview);
+            if (secret) {
+              url.searchParams.set('x-vercel-protection-bypass', secret);
+              url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
+            }
+            const body = `${marker}\nVercel preview: ${url.toString()}` +
+              (secret ? '' : '\n\nThe bypass secret is not configured.');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+            core.info('Preview access comment updated.');
