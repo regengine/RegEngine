@@ -39,15 +39,23 @@ import type {
     PortalLink,
     IntegrationProfile,
 } from '@/types/api';
+import {
+    NO_COMPLIANCE_DATA,
+    countOrNull,
+    deriveFacilityCompliance,
+    gapRequirement,
+    sumKnownCounts,
+    type FacilityCompliance,
+} from './supplier-metrics';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
 interface FacilityRow extends SupplierFacility {
-    complianceScore: number | null;
-    gapCount: number;
-    tlcCount: number;
+    compliance: FacilityCompliance;
+    /** null until the lot-code list has loaded for this facility. */
+    tlcCount: number | null;
     lastEvent: string | null;
 }
 
@@ -181,9 +189,8 @@ export default function SupplierDashboardPage() {
             const rawFacilities = await apiClient.listSupplierFacilities();
             const initial: FacilityRow[] = rawFacilities.map(f => ({
                 ...f,
-                complianceScore: null,
-                gapCount: 0,
-                tlcCount: 0,
+                compliance: NO_COMPLIANCE_DATA,
+                tlcCount: null,
                 lastEvent: null,
             }));
             setFacilities(initial);
@@ -195,29 +202,27 @@ export default function SupplierDashboardPage() {
                 const batch = rawFacilities.slice(i, i + BATCH_SIZE);
                 const enriched = await Promise.all(
                     batch.map(async (f) => {
-                        let complianceScore: number | null = null;
-                        let gapCount = 0;
-                        let tlcCount = 0;
+                        let compliance: FacilityCompliance = NO_COMPLIANCE_DATA;
+                        let tlcCount: number | null = null;
                         let lastEvent: string | null = null;
 
                         try {
                             const [score, gaps, tlcs] = await Promise.all([
                                 apiClient.getSupplierComplianceScore(f.id).catch(() => null),
                                 apiClient.getSupplierComplianceGaps(f.id).catch(() => null),
-                                apiClient.listSupplierTLCs(f.id).catch(() => []),
+                                apiClient.listSupplierTLCs(f.id).catch(() => null),
                             ]);
-                            if (score) complianceScore = score.score;
-                            if (gaps) gapCount = gaps.total;
-                            tlcCount = (tlcs || []).length;
-                            if (tlcs && tlcs.length > 0) {
-                                const sorted = [...tlcs].sort(
+                            compliance = deriveFacilityCompliance(score, gaps);
+                            if (tlcs) {
+                                tlcCount = countOrNull(tlcs.total);
+                                const sorted = [...tlcs.items].sort(
                                     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                                 );
-                                lastEvent = sorted[0].created_at;
+                                lastEvent = sorted[0]?.created_at ?? null;
                             }
                         } catch { /* swallow per-facility errors */ }
 
-                        return { id: f.id, complianceScore, gapCount, tlcCount, lastEvent };
+                        return { id: f.id, compliance, tlcCount, lastEvent };
                     })
                 );
 
@@ -336,14 +341,16 @@ export default function SupplierDashboardPage() {
 
     /* ---------- Summary stats ------------------------------------- */
     const totalFacilities = facilities.length;
-    const compliantCount = facilities.filter(f => f.complianceScore !== null && f.complianceScore >= 80).length;
-    const totalTLCs = facilities.reduce((sum, f) => sum + f.tlcCount, 0);
+    // Same derived state as each row's badge, so the tile and rows agree.
+    const compliantCount = facilities.filter(f => f.compliance.state === 'compliant').length;
+    const totalTLCs = sumKnownCounts(facilities.map(f => f.tlcCount));
     const complianceRate = totalFacilities > 0 ? Math.round((compliantCount / totalFacilities) * 100) : 0;
 
     /* ---------- Relative time helper ------------------------------ */
     function relativeTime(iso: string | null): string | null {
         if (!iso) return null;
         const diff = now - new Date(iso).getTime();
+        if (!Number.isFinite(diff)) return null;
         const mins = Math.floor(diff / 60000);
         if (mins < 1) return 'just now';
         if (mins < 60) return `${mins}m ago`;
@@ -416,7 +423,7 @@ export default function SupplierDashboardPage() {
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     <StatTile label="Facilities" value={totalFacilities} loading={loading} />
                     <StatTile label="Compliant" value={compliantCount} loading={loading} />
-                    <StatTile label="Lot Codes Tracked" value={totalTLCs} loading={loading} />
+                    <StatTile label="Lot Codes Tracked" value={totalTLCs ?? 'No data yet'} loading={loading} />
                     <StatTile label="Compliance Rate" value={`${complianceRate}%`} loading={loading} />
                 </div>
 
@@ -774,7 +781,7 @@ export default function SupplierDashboardPage() {
                     <Card>
                         <ul className="divide-y divide-re-border-subtle">
                             {facilities.map((facility) => {
-                                const comp = complianceLabel(facility.complianceScore);
+                                const comp = facility.compliance;
 
                                 return (
                                     <li
@@ -787,11 +794,11 @@ export default function SupplierDashboardPage() {
                                                 <StatusBadge
                                                     state={comp.state}
                                                     size="sm"
-                                                    label={`${comp.label}${facility.complianceScore !== null ? ` (${facility.complianceScore})` : ''}`}
+                                                    label={`${comp.label}${comp.score !== null ? ` · score ${comp.score}` : ''}`}
                                                 />
-                                                {facility.gapCount > 0 && (
+                                                {comp.gapCount > 0 && (
                                                     <Badge tone="warning" size="sm">
-                                                        {facility.gapCount} gap{facility.gapCount !== 1 ? 's' : ''}
+                                                        {comp.gapCount} gap{comp.gapCount !== 1 ? 's' : ''}
                                                     </Badge>
                                                 )}
                                             </div>
@@ -800,13 +807,38 @@ export default function SupplierDashboardPage() {
                                                     <Mail className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                                                     {facility.city}, {facility.state} {facility.postal_code}
                                                 </span>
-                                                <span>{facility.tlcCount} lot code{facility.tlcCount !== 1 ? 's' : ''}</span>
+                                                <span>
+                                                    {facility.tlcCount === null
+                                                        ? 'No lot code data yet'
+                                                        : `${facility.tlcCount} lot code${facility.tlcCount !== 1 ? 's' : ''}`}
+                                                </span>
                                                 {facility.lastEvent && (
                                                     <span className="flex items-center gap-1">
                                                         <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" /> {relativeTime(facility.lastEvent)}
                                                     </span>
                                                 )}
                                             </div>
+                                            {comp.gaps.length > 0 && (
+                                                <ul className="mt-2 space-y-1 text-small text-re-text-secondary" aria-label={`Compliance gaps for ${facility.name}`}>
+                                                    {comp.gaps.map((gap, index) => {
+                                                        const requirement = gapRequirement(gap);
+                                                        return (
+                                                            <li key={`${gap.reason}-${gap.cte_type ?? 'none'}-${index}`} className="flex flex-wrap items-center gap-x-2">
+                                                                <span>{gap.issue}</span>
+                                                                <a
+                                                                    href={requirement.href}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1 text-re-text-tertiary underline underline-offset-2 hover:text-re-text-primary"
+                                                                >
+                                                                    {requirement.label}
+                                                                    <ExternalLink className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
+                                                                </a>
+                                                            </li>
+                                                        );
+                                                    })}
+                                                </ul>
+                                            )}
                                             {facility.roles && facility.roles.length > 0 && (
                                                 <div className="mt-2 flex flex-wrap gap-1">
                                                     {facility.roles.map((role) => (
