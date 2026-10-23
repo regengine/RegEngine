@@ -60,7 +60,7 @@ describe('use-api adversarial: auth failures must not render as demo zeros', () 
         expect(result.current.data).toBeUndefined();
     });
 
-    it('still substitutes demo data for a 503 so dashboards degrade gracefully', async () => {
+    it('returns no placeholder data for a 503 — real metrics only', async () => {
         const err = new Error('Service Unavailable') as Error & {
             response: { status: number };
         };
@@ -70,7 +70,8 @@ describe('use-api adversarial: auth failures must not render as demo zeros', () 
             wrapper: createWrapper(),
         });
         await waitFor(() => expect(result.current.isError).toBe(true));
-        expect(result.current.data).toMatchObject({ total_tenants: 0 });
+        expect(result.current.data).toBeUndefined();
+        expect(result.current.error).toBeTruthy();
     });
 
     it('surfaces proxy 401s from health checks instead of demo degraded status', async () => {

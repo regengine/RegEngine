@@ -133,6 +133,8 @@ async function clearSessionCookies(): Promise<void> {
   }
 }
 
+const SESSION_CHECK_TIMEOUT_MS = 10_000;
+
 /** Check current session via /api/session GET — never returns raw tokens. */
 async function getSessionInfo(): Promise<{
   authenticated: boolean;
@@ -144,7 +146,15 @@ async function getSessionInfo(): Promise<{
 } | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const res = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+    // Bounded: the route calls the admin backend's /auth/me with no timeout,
+    // and a hung check left every dashboard-layout page (/ingest,
+    // /dashboard/integrations, ...) on the shell skeleton forever. A timeout
+    // takes the same "indeterminate" path as a network error below.
+    const res = await fetch('/api/session', {
+      method: 'GET',
+      credentials: 'include',
+      signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
