@@ -83,11 +83,14 @@ export interface APIKeyResponse {
     key_id?: string;      // alternative ID field
     key?: string;         // the actual key value (on creation)
     api_key?: string;     // alternative key field name from some endpoints
+    key_prefix?: string;
     name: string;
     description?: string;
     tenant_id?: string;
     created_at: string;
     expires_at?: string;
+    last_used_at?: string | null;
+    last_used?: string | null;
     is_active?: boolean;
 }
 
