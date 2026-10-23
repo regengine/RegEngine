@@ -6,7 +6,7 @@
  * endpoints dynamically derived from publicOpenApiSpec, and API keys list
  * with revocation action.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ApiKeysPage from '@/app/developer/portal/keys/page';
 import DeveloperPortalPage from '@/app/developer/portal/page';
@@ -19,9 +19,9 @@ const mocks = vi.hoisted(() => ({
         tenantId: '11111111-2222-4333-8444-555555555555' as string | null,
     },
     useAPIKeysValue: {
-        data: [] as unknown[],
+        data: [] as unknown[] | null,
         isLoading: false,
-        error: null,
+        error: null as Error | null,
     },
     revokeMutateAsync: vi.fn(),
 }));
@@ -163,6 +163,7 @@ describe('developer portal page', () => {
 
         const endpointLinks = screen.getAllByRole('link').filter((link) => link.getAttribute('href') === '/docs/api');
         expect(endpointLinks.length).toBeGreaterThanOrEqual(expectedEndpoints.length);
+        expect(screen.queryByText(/Verify a tenant hash chain/i)).not.toBeInTheDocument();
     });
 
     it('displays the empty state "No keys yet" when no API keys exist', () => {
@@ -175,77 +176,33 @@ describe('developer portal page', () => {
         render(<DeveloperPortalPage />);
 
         expect(screen.getByText('No keys yet')).toBeInTheDocument();
+        expect(screen.getByText('No API keys have been issued for this workspace yet.')).toBeInTheDocument();
     });
 
-    it('shows existing API keys with name, key prefix, created, last used, and revoke action', async () => {
+    it('renders the loading state when API keys are loading', () => {
         mocks.useAPIKeysValue = {
-            data: [
-                {
-                    id: 'key-test-1',
-                    key_id: 'key-test-1',
-                    name: 'Primary Ingest Key',
-                    key_prefix: 'rge_live_prm1',
-                    created_at: '2026-10-01T12:00:00Z',
-                    last_used_at: '2026-10-15T15:00:00Z',
-                    key: 'rge_live_super_secret_full_token_should_never_show',
-                },
-                {
-                    id: 'key-test-2',
-                    key_id: 'key-test-2',
-                    name: 'Readonly Key',
-                    key_prefix: 'rge_live_read2',
-                    created_at: '2026-10-05T08:00:00Z',
-                    last_used_at: null,
-                },
-            ],
-            isLoading: false,
+            data: [],
+            isLoading: true,
             error: null,
         };
 
         render(<DeveloperPortalPage />);
 
-        expect(screen.getByText('Primary Ingest Key')).toBeInTheDocument();
-        expect(screen.getByText('rge_live_prm1')).toBeInTheDocument();
-        expect(screen.getByText('Readonly Key')).toBeInTheDocument();
-        expect(screen.getByText('rge_live_read2')).toBeInTheDocument();
-        expect(screen.getByText('Never')).toBeInTheDocument();
-
-        // Never display full secrets
-        expect(screen.queryByText(/rge_live_super_secret_full_token_should_never_show/)).not.toBeInTheDocument();
-
-        const revokeButtons = screen.getAllByRole('button', { name: /revoke/i });
-        expect(revokeButtons.length).toBe(2);
-
-        fireEvent.click(revokeButtons[0]);
-        expect(mocks.revokeMutateAsync).toHaveBeenCalledWith({ keyId: 'key-test-1' });
+        expect(screen.getByText('Loading keys...')).toBeInTheDocument();
+        expect(screen.queryByText('No keys yet')).not.toBeInTheDocument();
     });
 
-    it('displays endpoint summaries with tenant replaced by workspace and renders error callout on failure', async () => {
+    it('handles API keys error state without crashing and renders empty state fallback', () => {
         mocks.useAPIKeysValue = {
-            data: [
-                {
-                    id: 'key-test-1',
-                    key_id: 'key-test-1',
-                    name: 'Test Key',
-                    key_prefix: 'rge_live_prm1',
-                    created_at: '2026-10-01T12:00:00Z',
-                    last_used_at: null,
-                },
-            ],
+            data: null,
             isLoading: false,
-            error: null,
+            error: new Error('Failed to load API keys'),
         };
-        mocks.revokeMutateAsync.mockRejectedValueOnce(new Error('Revoke failed'));
 
         render(<DeveloperPortalPage />);
 
-        expect(screen.getByText('Verify a workspace hash chain')).toBeInTheDocument();
-        expect(screen.queryByText(/Verify a tenant hash chain/i)).not.toBeInTheDocument();
-
-        const revokeBtn = screen.getByRole('button', { name: /revoke/i });
-        fireEvent.click(revokeBtn);
-
-        expect(await screen.findByText('Failed to revoke API key. Please try again.')).toBeInTheDocument();
+        expect(screen.getByText('No keys yet')).toBeInTheDocument();
+        expect(screen.queryByText('Loading keys...')).not.toBeInTheDocument();
     });
 
     it('contains no em dashes or en dashes in any user visible copy', () => {

@@ -57,9 +57,9 @@ const endpoints: SpecEndpoint[] = Object.entries(publicOpenApiSpec.paths).flatMa
 );
 
 function formatDateSafe(dateString?: string | null): string {
-    if (!dateString) return 'Never';
+    if (!dateString) return 'Not set';
     const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Never';
+    if (isNaN(date.getTime())) return 'Not set';
     return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
@@ -171,8 +171,10 @@ export default function DeveloperPortalPage() {
                                 </thead>
                                 <tbody className="divide-y divide-re-border-subtle">
                                     {apiKeys.map((key) => {
-                                        const keyId = key.key_id || key.id;
-                                        const prefix = key.key_prefix || (keyId ? keyId.slice(0, 12) : '') || 'rge_live_...';
+                                        const keyId = key.key_id || key.id || '';
+                                        const prefix = key.key_prefix?.trim() ? key.key_prefix : 'Not set';
+                                        const createdAt = key.created_at || (key as { created?: string }).created;
+                                        const lastUsed = key.last_used_at || key.last_used;
                                         return (
                                             <tr key={keyId} className="transition-colors hover:bg-re-surface-inset">
                                                 <td className="px-5 py-3 font-medium text-re-text-primary">
@@ -182,10 +184,10 @@ export default function DeveloperPortalPage() {
                                                     {prefix}
                                                 </td>
                                                 <td className="px-5 py-3 text-small text-re-text-tertiary">
-                                                    {formatDateSafe(key.created_at)}
+                                                    {formatDateSafe(createdAt)}
                                                 </td>
                                                 <td className="px-5 py-3 text-small text-re-text-tertiary">
-                                                    {key.last_used_at || key.last_used ? formatDateSafe(key.last_used_at || key.last_used) : 'Never'}
+                                                    {formatDateSafe(lastUsed)}
                                                 </td>
                                                 <td className="px-5 py-3 text-right">
                                                     <Button
