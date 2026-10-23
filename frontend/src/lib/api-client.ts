@@ -33,6 +33,7 @@ import type {
   SupplierBulkUploadValidateResponse,
   SupplierFDAExportPreviewResponse,
   SupplierTLC,
+  SupplierTLCListResponse,
   SupplierTLCUpsertRequest,
   CreateIntegrationProfileRequest,
   IntegrationProfile,
@@ -813,11 +814,20 @@ class APIClient {
     return data;
   }
 
-  async listSupplierTLCs(facilityId?: string): Promise<SupplierTLC[]> {
-    const { data } = await this.adminClient.get<SupplierTLC[]>('/v1/supplier/tlcs', {
+  async listSupplierTLCs(facilityId?: string): Promise<SupplierTLCListResponse> {
+    // Paginated like /facilities ({ items, total, skip, limit }). Treating the
+    // envelope as an array made `.length` undefined and the Suppliers page
+    // render "Lot Codes Tracked: NaN". `total` is the full count; `items` is
+    // only the first page.
+    const { data } = await this.adminClient.get<
+      SupplierTLC[] | Partial<SupplierTLCListResponse>
+    >('/v1/supplier/tlcs', {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
-    return data || [];
+    if (Array.isArray(data)) return { items: data, total: data.length };
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const total = typeof data?.total === 'number' ? data.total : items.length;
+    return { items, total };
   }
 
   async getSupplierComplianceScore(facilityId?: string): Promise<SupplierComplianceScore> {
@@ -852,11 +862,13 @@ class APIClient {
   async downloadSupplierFDARecords(
     format: 'csv' | 'xlsx',
     facilityId?: string,
+    tlcCode?: string,
   ): Promise<{ blob: Blob; filename: string; recordCount: number }> {
     const response = await this.adminClient.get('/v1/supplier/export/fda-records', {
       params: {
         format,
         ...(facilityId ? { facility_id: facilityId } : {}),
+        ...(tlcCode ? { tlc_code: tlcCode } : {}),
       },
       responseType: 'blob',
     });

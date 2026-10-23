@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useState } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,24 +13,22 @@ import SettingsPage from '@/app/dashboard/settings/page';
 import { AgentReviewDashboard } from '@/components/dashboard/agent-review-dashboard';
 import { CuratorReview } from '@/components/dashboard/curator-review';
 
-const queryOverride = vi.hoisted(() => ({ current: null as null | (() => unknown) }));
-const queryRefetchMock = vi.hoisted(() => vi.fn());
+const fetchWithCsrfMock = vi.hoisted(() => vi.fn());
 const reviewRefetchMock = vi.hoisted(() => vi.fn());
 const useReviewItemsMock = vi.hoisted(() => vi.fn());
 const authMock = vi.hoisted(() => vi.fn());
 const useQAHealthMock = vi.hoisted(() => vi.fn());
 const useCuratorItemsMock = vi.hoisted(() => vi.fn());
 const useSubscriptionMock = vi.hoisted(() => vi.fn());
-vi.mock('@tanstack/react-query', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@tanstack/react-query')>();
-    return {
-        ...actual,
-        useQuery: (options: Parameters<typeof actual.useQuery>[0]) =>
-            queryOverride.current ? queryOverride.current() : actual.useQuery(options),
-    };
-});
+const fetchComplianceScoreMock = vi.hoisted(() => vi.fn());
+const fetchWorkbenchSummaryMock = vi.hoisted(() => vi.fn());
+const fetchRecallReportMock = vi.hoisted(() => vi.fn());
+const tenantMock = vi.hoisted(() => ({ tenantId: 't' as string | null }));
+
+vi.mock('@/lib/fetch-with-csrf', () => ({ fetchWithCsrf: (...args: unknown[]) => fetchWithCsrfMock(...args) }));
+vi.mock('@/lib/api-config', () => ({ getServiceURL: () => '/api/ingestion' }));
 vi.mock('@/lib/auth-context', () => ({ useAuth: () => authMock() }));
-vi.mock('@/lib/tenant-context', () => ({ useTenant: () => ({ tenantId: null, isSystemTenant: false }) }));
+vi.mock('@/lib/tenant-context', () => ({ useTenant: () => ({ tenantId: tenantMock.tenantId, isSystemTenant: false }) }));
 vi.mock('@/hooks/use-api', () => ({ useQAHealth: () => useQAHealthMock() }));
 vi.mock('@/hooks/use-review', () => ({
     useReviewItems: () => useCuratorItemsMock(),
@@ -39,6 +36,11 @@ vi.mock('@/hooks/use-review', () => ({
     useRejectReviewItem: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 vi.mock('@/hooks/use-billing', () => ({ useCurrentSubscription: () => useSubscriptionMock() }));
+vi.mock('@/lib/api-hooks', () => ({
+    fetchComplianceScore: () => fetchComplianceScoreMock(),
+    fetchWorkbenchReadinessSummary: () => fetchWorkbenchSummaryMock(),
+    fetchRecallReport: () => fetchRecallReportMock(),
+}));
 vi.mock('@/hooks/use-agent-reviews', () => ({
     useAgentReviewItems: () => useReviewItemsMock(),
     useAgentReviewDecision: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -55,51 +57,44 @@ function renderWithQuery(ui: React.ReactElement) {
     return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-function useProductQuery() {
-    const [data, setData] = useState<{ products: never[]; categories: never[] } | undefined>();
-    return {
-        data,
-        error: data ? null : new Error('request failed'),
-        isLoading: false,
-        refetch: () => setData({ products: [], categories: [] }),
-    };
-}
-
-function useAuditQuery() {
-    const [data, setData] = useState<{ entries: never[] } | undefined>();
-    return {
-        data,
-        error: data ? null : new Error('request failed'),
-        isLoading: false,
-        refetch: () => setData({ entries: [] }),
-    };
-}
+const failedResponse = Response.error();
 
 beforeEach(() => {
-    queryOverride.current = null;
-    queryRefetchMock.mockReset();
-    reviewRefetchMock.mockReset();
+    fetchWithCsrfMock.mockReset();
+    fetchComplianceScoreMock.mockReset();
+    fetchWorkbenchSummaryMock.mockReset();
+    fetchRecallReportMock.mockReset();
+    tenantMock.tenantId = 't';
     authMock.mockReturnValue({ isAuthenticated: true, hasTenantSession: true, hasAdminSession: true, isHydrated: true, user: { is_sysadmin: false } });
+    fetchWorkbenchSummaryMock.mockResolvedValue(null);
 });
 
 describe('shared dashboard load errors', () => {
-    it('offers in-page retry and support when no request ID is available', async () => {
+    it('offers in-page retry, support, and an available request ID', async () => {
         const onRetry = vi.fn();
         const user = userEvent.setup();
-        const { rerender } = render(<ErrorState message="We could not load this page." onRetry={onRetry} />);
+        const requestId = crypto.randomUUID();
+        const { rerender } = render(<ErrorState message="We could not load this page." onRetry={onRetry} requestId={requestId} />);
 
         expect(screen.getByRole('alert')).toHaveTextContent('We could not load this page.');
-        expect(screen.queryByText(/Request ID:/)).not.toBeInTheDocument();
+        expect(screen.getByText(`Request ID: ${requestId}`)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/settings/support');
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         expect(onRetry).toHaveBeenCalledOnce();
 
-        rerender(<ErrorState message="We could not load this page." onRetry={onRetry} retrying />);
+        rerender(<ErrorState message="We could not load this page." onRetry={onRetry} requestId={requestId} retrying />);
         expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled();
     });
 
+    it('omits the request ID when none is available', () => {
+        render(<ErrorState message="We could not load this page." onRetry={vi.fn()} />);
+        expect(screen.queryByText(/Request ID:/)).not.toBeInTheDocument();
+    });
+
     it('keeps Add Product unavailable until a failed catalog request succeeds on Retry', async () => {
-        queryOverride.current = useProductQuery;
+        fetchWithCsrfMock
+            .mockResolvedValueOnce(failedResponse)
+            .mockResolvedValueOnce(Response.json({ products: [], categories: [] }));
         const user = userEvent.setup();
         renderWithQuery(<ProductsPage />);
 
@@ -107,10 +102,26 @@ describe('shared dashboard load errors', () => {
         expect(screen.getByRole('button', { name: 'Add Product' })).toBeDisabled();
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         await waitFor(() => expect(screen.getByRole('button', { name: 'Add Product' })).toBeEnabled());
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);
     });
 
     it('hides audit integrity claims and export until the log loads on Retry', async () => {
-        queryOverride.current = useAuditQuery;
+        const entry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            event_type: 'api_call',
+            category: '',
+            actor: '',
+            action: '',
+            resource: '',
+            details: {},
+            ip_address: '',
+            hash: '',
+        };
+        const entries = [entry];
+        fetchWithCsrfMock
+            .mockResolvedValueOnce(failedResponse)
+            .mockResolvedValueOnce(Response.json({ tenant_id: 't', entries, total: entries.length }));
         const user = userEvent.setup();
         renderWithQuery(<AuditLogPage />);
 
@@ -120,10 +131,15 @@ describe('shared dashboard load errors', () => {
         expect(screen.queryByRole('link', { name: 'Export' })).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         await waitFor(() => expect(screen.getByText(/Immutable, SHA-256 verified/)).toBeInTheDocument());
+        expect(screen.getByText('Hash-chained')).toBeInTheDocument();
+        expect(screen.getByRole('searchbox', { name: 'Search actions, actors, resources' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Export' })).toBeInTheDocument();
+        expect(screen.getByText('API Call').closest('li')).toBeInTheDocument();
+        expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);
     });
 
     it('offers Retry and support for notification preferences without Save Changes', async () => {
-        queryOverride.current = () => ({ data: null, error: new Error('request failed'), isLoading: false, isFetching: false, refetch: queryRefetchMock });
+        fetchWithCsrfMock.mockResolvedValue(failedResponse);
         const user = userEvent.setup();
         renderWithQuery(<NotificationsPage />);
 
@@ -131,7 +147,7 @@ describe('shared dashboard load errors', () => {
         expect(screen.getByRole('link', { name: 'Contact support' })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'Save Changes' })).not.toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(queryRefetchMock).toHaveBeenCalledOnce();
+        await waitFor(() => expect(fetchWithCsrfMock).toHaveBeenCalledTimes(3), { timeout: 5000 });
     });
 
     it('does not show zero review metrics when the dashboard queue fails', async () => {
@@ -153,23 +169,23 @@ describe('shared dashboard load errors', () => {
     });
 
     it('lets compliance retry its failed score request in place', async () => {
-        queryOverride.current = () => ({ data: null, error: new Error('server error'), isLoading: false, refetch: queryRefetchMock });
+        fetchComplianceScoreMock.mockRejectedValue(new Error('server error'));
         const user = userEvent.setup();
         renderWithQuery(<CompliancePage />);
 
         expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this page.');
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(queryRefetchMock).toHaveBeenCalled();
+        await waitFor(() => expect(fetchComplianceScoreMock).toHaveBeenCalledTimes(2));
     });
 
     it('lets recall report retry a failed request in place', async () => {
-        queryOverride.current = () => ({ data: null, error: new Error('server error'), isLoading: false, refetch: queryRefetchMock });
+        fetchRecallReportMock.mockRejectedValue(new Error('server error'));
         const user = userEvent.setup();
         renderWithQuery(<RecallReportPage />);
 
         expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this page.');
         await user.click(screen.getByRole('button', { name: 'Retry' }));
-        expect(queryRefetchMock).toHaveBeenCalledOnce();
+        await waitFor(() => expect(fetchRecallReportMock.mock.calls.length).toBeGreaterThan(1));
     });
 
     it('lets a sysadmin retry QA health without showing stale data', async () => {
@@ -200,7 +216,7 @@ describe('shared dashboard load errors', () => {
     it('blocks Manage Plan when billing data fails and offers a retry', async () => {
         const refetch = vi.fn();
         useSubscriptionMock.mockReturnValue({ data: null, isLoading: false, isError: true, refetch, isFetching: false });
-        queryOverride.current = () => ({ data: null, error: null, isLoading: false, refetch: queryRefetchMock });
+        fetchWithCsrfMock.mockResolvedValue(failedResponse);
         const user = userEvent.setup();
         renderWithQuery(<SettingsPage />);
 

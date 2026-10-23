@@ -461,7 +461,7 @@ export default function ProductCatalogPage() {
                             </p>
                         )}
 
-                        {/* Product List: hairline ledger rows. Each row keeps its
+                        {/* Product List — hairline ledger rows. Each row keeps its
                             role="region" + aria-label, which the authenticated e2e
                             journey scopes its Open/Edit/Delete clicks to. */}
                         <Card className="overflow-hidden">

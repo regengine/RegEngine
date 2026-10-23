@@ -246,7 +246,7 @@ export default function AuditLogPage() {
                 {/* Error */}
                 {error && <ErrorState message="We could not load this page." onRetry={() => loadLog()} />}
 
-                {/* Event list shell: toolbar, rows, pagination */}
+                {/* Event list shell — toolbar, rows, pagination */}
                 {isLoggedIn && !error && entries.length > 0 && (
                     <div className="rounded-lg border border-re-border bg-re-surface-card">
                         {/* Toolbar */}

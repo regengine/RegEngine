@@ -7,6 +7,7 @@ import { StatTile } from "@/components/ui/stat-tile";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { TimedSkeleton } from "@/components/ui/timed-skeleton";
 import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
+import { isExperimentalPageEnabled } from "@/lib/experimental-features";
 
 /** Where an empty tile sends the operator: the CSV tab of the import page. */
 export const CSV_UPLOAD_HREF = "/ingest?tab=file";
@@ -73,6 +74,7 @@ export function MetricsOverviewWidget({
   const chainLen = metrics?.chain_length ?? 0;
   const chainOk = metrics?.chain_valid ?? false;
   const alerts = metrics?.open_alerts;
+  const alertsEnabled = isExperimentalPageEnabled("/dashboard/alerts");
   const servicesDown =
     systemStatus?.overall_status && systemStatus.overall_status !== "healthy";
 
@@ -133,11 +135,11 @@ export function MetricsOverviewWidget({
       />
       <StatTile
         label="Open alerts"
-        value={alerts ?? ""}
-        empty={typeof alerts !== "number"}
-        emptyLabel={EMPTY_LABEL}
-        emptyAction={<UploadCsvLink />}
-        emptyCaption="Compliance issues to resolve"
+        value={alertsEnabled ? alerts ?? "" : "Alerts are off"}
+        empty={alertsEnabled && typeof alerts !== "number"}
+        emptyLabel={alertsEnabled ? EMPTY_LABEL : undefined}
+        emptyAction={alertsEnabled ? <UploadCsvLink /> : undefined}
+        emptyCaption={alertsEnabled ? "Compliance issues to resolve" : undefined}
       />
       <StatTile
         label="Open fixes"

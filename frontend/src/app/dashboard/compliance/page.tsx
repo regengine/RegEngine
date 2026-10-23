@@ -80,7 +80,7 @@ function scoreColor(score: number) {
     return 'var(--re-danger)';
 }
 
-/** For DOM nodes, a class keeps the colour out of an inline style (SPEC §4). */
+/** For DOM nodes — a class keeps the colour out of an inline style (SPEC §4). */
 function scoreTextClass(score: number) {
     if (score >= 80) return 'text-re-brand';
     if (score >= 60) return 'text-re-warning';
@@ -601,15 +601,15 @@ export default function ComplianceDashboardPage() {
                                     <Link href="/ingest">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Upload className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs font-medium">Import Data</span>
+                                            <span className="text-xs font-medium">Document Ingestion</span>
                                             <span className="text-label text-muted-foreground">CSV / spreadsheet</span>
                                         </Button>
                                     </Link>
-                                    <Link href="/dashboard/export-jobs">
+                                    <Link href="/trace">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Download className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs font-medium">FDA Report</span>
-                                            <span className="text-label text-muted-foreground">24-hr response</span>
+                                            <span className="text-xs font-medium">Trace</span>
+                                            <span className="text-label text-muted-foreground">24-hr FDA spreadsheet</span>
                                         </Button>
                                     </Link>
                                     <Link href="/dashboard/export-jobs">
@@ -768,7 +768,7 @@ export default function ComplianceDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Empty state: no score and not loading */}
+                {/* Empty state — no score and not loading */}
                 {!score && !loading && !error && isLoggedIn && (
                     <motion.div
                         initial={{ opacity: 0 }}

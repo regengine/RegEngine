@@ -154,7 +154,7 @@ export default function RecallReportPage() {
         queryKey: ['recall-report', tenantId],
         queryFn: () => fetchRecallReport(tenantId!) as Promise<RecallReport>,
         enabled: !!tenantId && isAuthenticated,
-        staleTime: 5 * 60 * 1000, // 5 min, report is expensive to compute
+        staleTime: 5 * 60 * 1000, // 5 min — report is expensive to compute
     });
 
     if (error || (!isLoading && !report)) {
@@ -192,7 +192,7 @@ export default function RecallReportPage() {
             );
             if (!res.ok) {
                 // Surface the real reason instead of a bare status
-                // code: 402 is the billing gate, and users saw
+                // code — 402 is the billing gate, and users saw
                 // "Export failed: Export failed: 402" with no way
                 // to tell what to do about it.
                 if (res.status === 402) {
@@ -228,7 +228,7 @@ export default function RecallReportPage() {
     return (
         <PageContainer>
             {/* The dashboard shell owns the breadcrumb and the service-health
-                badge; this page only renders its own header. */}
+                badge — this page only renders its own header. */}
             <PageHeader
                 title="Recall Report"
                 description={<>FSMA 204 Traceability Response &amp; Readiness Assessment</>}

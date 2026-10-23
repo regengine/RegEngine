@@ -43,14 +43,12 @@ infra-k8s-ci.yml
 legacy-code-scan.yml
 openapi-public-spec.yml
 pr-gate.yml
-pr-quality.yml
 pr-secrets-non-main.yml
 production-uptime.yml
 proxy-smoke.yml
 public-api-surface.yml
 qa-health.yml
 qa-pipeline.yml
-review-gates.yml
 sdk-ci.yml
 security.yml
 sentinel.yml
