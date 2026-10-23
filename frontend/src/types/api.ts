@@ -426,6 +426,11 @@ export interface SupplierTLC {
     created_at: string;
 }
 
+export interface SupplierTLCListResponse {
+    items: SupplierTLC[];
+    total: number;
+}
+
 export interface SupplierComplianceScore {
     score: number;
     coverage_ratio: number;

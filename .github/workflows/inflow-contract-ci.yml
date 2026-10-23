@@ -65,7 +65,9 @@ env:
   # controller, mock_service, schemas/*) inflow-lab's scheduled Contract Pin
   # Drift check would otherwise report as a breach against the older pin.
   # Both sides advertise INFLOW_CONTRACT_VERSION "2".
-  INFLOW_LAB_REF: 78050ae78c72a348a518b6d48bdeae7424d772da  # pragma: allowlist secret
+  # Bumped to inflow-lab main 919b5282 (SEL-335) after the Contract Pin Drift
+  # check found the pin 18 commits behind; contract version is still 2.
+  INFLOW_LAB_REF: 919b5282852313479c8eb7fbacf4d79d55bed909  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret
@@ -81,16 +83,20 @@ jobs:
     outputs:
       configured: ${{ steps.check.outputs.configured }}
     steps:
-      - name: Check INFLOW_LAB_READ_TOKEN
+      - name: Check Inflow Lab access
         id: check
         env:
           INFLOW_LAB_READ_TOKEN: ${{ secrets.INFLOW_LAB_READ_TOKEN }}
+          INFLOW_LAB_PUBLIC: ${{ vars.INFLOW_LAB_PUBLIC }}
         run: |
-          if [ -n "${INFLOW_LAB_READ_TOKEN:-}" ]; then
+          if [ -n "${INFLOW_LAB_READ_TOKEN:-}" ] || [ "${INFLOW_LAB_PUBLIC:-}" = "true" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
+            if [ -z "${INFLOW_LAB_READ_TOKEN:-}" ]; then
+              echo "::notice::public-repo mode uses github.token"
+            fi
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::INFLOW_LAB_READ_TOKEN is not configured — the Inflow Lab contract test will be SKIPPED, not passed. Configure this secret with read-only Contents access to the private regengine/inflow-lab simulator repository."
+            echo "::notice::INFLOW_LAB_READ_TOKEN is not configured — the Inflow Lab contract test will be SKIPPED, not passed. Configure this secret with read-only Contents access to the private regengine/inflow-lab simulator repository, or set repository variable INFLOW_LAB_PUBLIC=true if regengine/inflow-lab is public."
           fi
 
   changes:
@@ -215,7 +221,7 @@ jobs:
           repository: ${{ env.INFLOW_LAB_REPOSITORY }}
           ref: ${{ needs.changes.outputs.inflow_lab_ref }}
           path: inflow-lab
-          token: ${{ secrets.INFLOW_LAB_READ_TOKEN }}
+          token: ${{ secrets.INFLOW_LAB_READ_TOKEN || github.token }}
           persist-credentials: false
 
       - name: Setup Python
@@ -439,11 +445,12 @@ jobs:
           fi
 
           # When the private simulator is not accessible (INFLOW_LAB_READ_TOKEN
-          # not configured), skip contract enforcement entirely. The contract
-          # test cannot run without simulator access, so both change detection
-          # and the contract test will be skipped.
+          # not configured; set INFLOW_LAB_PUBLIC=true as an alternative if
+          # regengine/inflow-lab is public), skip contract enforcement entirely.
+          # The contract test cannot run without simulator access, so both
+          # change detection and the contract test will be skipped.
           if [ "${{ needs.preflight.outputs.configured }}" != "true" ]; then
-            echo "::notice::INFLOW_LAB_READ_TOKEN not configured — contract test skipped. Configure this secret with read-only Contents access to regengine/inflow-lab to enable contract validation."
+            echo "::notice::INFLOW_LAB_READ_TOKEN not configured — contract test skipped. Configure this secret with read-only Contents access to regengine/inflow-lab to enable contract validation, or set repository variable INFLOW_LAB_PUBLIC=true if regengine/inflow-lab is public."
             exit 0
           fi
 
