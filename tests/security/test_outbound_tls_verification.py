@@ -169,9 +169,7 @@ def test_gate_urllib_transport_uses_verifying_https_handler(monkeypatch):
 
 def test_gate_no_redirect_refuses_https_to_http_downgrade():
     request = Request("https://staging.example.invalid/api", method="GET")
-    result = _GATE._NoRedirect().redirect_request(
-        request, None, 302, "Found", {}, "http://staging.example.invalid/api"
-    )
+    result = _GATE._NoRedirect().redirect_request(request, None, 302, "Found", {}, "http://staging.example.invalid/api")
     assert result is None
 
 
@@ -181,10 +179,9 @@ def test_gate_no_redirect_refuses_https_to_http_downgrade():
 
 
 def _write_self_signed_cert(tmp_path: Path) -> tuple[Path, Path]:
-    x509 = pytest.importorskip("cryptography.x509")
-    hashes = pytest.importorskip("cryptography.hazmat.primitives.hashes")
-    serialization = pytest.importorskip("cryptography.hazmat.primitives.serialization")
-    ec = pytest.importorskip("cryptography.hazmat.primitives.asymmetric.ec")
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.x509.oid import NameOID
 
     key = ec.generate_private_key(ec.SECP256R1())
@@ -200,9 +197,7 @@ def _write_self_signed_cert(tmp_path: Path) -> tuple[Path, Path]:
         .not_valid_after(now + datetime.timedelta(hours=1))
         # SANs match the hostname so only the untrusted issuer causes refusal.
         .add_extension(
-            x509.SubjectAlternativeName(
-                [x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]
-            ),
+            x509.SubjectAlternativeName([x509.DNSName("localhost"), x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
             critical=False,
         )
         .sign(key, hashes.SHA256())
