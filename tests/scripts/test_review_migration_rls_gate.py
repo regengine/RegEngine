@@ -7,7 +7,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/review-gates.yml").read_text())
+WORKFLOW = yaml.safe_load((ROOT / ".github/workflows/pr-gate.yml").read_text())
 GATE = next(
     step["run"]
     for job in WORKFLOW["jobs"].values()
