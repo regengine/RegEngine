@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -60,6 +62,8 @@ def _query_tenant_events(
                     e.epcis_event_type,
                     e.epcis_action,
                     e.epcis_biz_step,
+                    k_epcis.kde_value AS epcis_document_json,
+                    k_gtin.kde_value AS gtin,
                     k_from.kde_value AS ship_from,
                     k_from_gln.kde_value AS ship_from_gln,
                     k_to.kde_value AS ship_to,
@@ -68,6 +72,8 @@ def _query_tenant_events(
                     k_temp.kde_value AS temperature_c
                 FROM fsma.cte_events e
                 LEFT JOIN fsma.cte_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
+                LEFT JOIN fsma.cte_kdes k_epcis ON k_epcis.cte_event_id = e.id AND k_epcis.tenant_id = e.tenant_id AND k_epcis.kde_key = 'epcis_document_json'
+                LEFT JOIN fsma.cte_kdes k_gtin ON k_gtin.cte_event_id = e.id AND k_gtin.tenant_id = e.tenant_id AND k_gtin.kde_key = 'gtin'
                 LEFT JOIN fsma.cte_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
                 LEFT JOIN fsma.cte_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
                 LEFT JOIN fsma.cte_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
@@ -90,12 +96,103 @@ def _query_tenant_events(
 _CTE_TO_BIZSTEP = {
     "receiving": "urn:epcglobal:cbv:bizstep:receiving",
     "shipping": "urn:epcglobal:cbv:bizstep:shipping",
-    "transformation": "urn:epcglobal:cbv:bizstep:transforming",
+    "transformation": "urn:epcglobal:cbv:bizstep:commissioning",
     "initial_packing": "urn:epcglobal:cbv:bizstep:packing",
-    "harvesting": "urn:epcglobal:cbv:bizstep:harvesting",
+    "harvesting": "urn:epcglobal:cbv:bizstep:collecting",
     "cooling": "urn:epcglobal:cbv:bizstep:storing",
-    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:landing",
+    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:receiving",
 }
+
+_CBV_BIZSTEPS = {
+    "accepting", "arriving", "assembling", "collecting", "commissioning",
+    "consigning", "creating_class_instance", "cycle_counting", "decommissioning",
+    "departing", "destroying", "disassembling", "dispensing", "encoding",
+    "entering_exiting", "holding", "inspecting", "installing", "killing",
+    "loading", "other", "packing", "picking", "receiving", "removing",
+    "repackaging", "repairing", "replacing", "reserving", "retail_selling",
+    "sampling", "sensor_reporting", "shipping", "staging_outbound",
+    "stock_taking", "stocking", "storing", "transporting", "unloading",
+    "unpacking", "void_shipping",
+}
+_CBV_DISPOSITIONS = {
+    "active", "available", "container_closed", "damaged", "destroyed",
+    "dispensed", "disposed", "encoded", "expired", "in_progress", "in_transit",
+    "inactive", "no_pedigree_match", "non_sellable_other",
+    "partially_dispensed", "recalled", "reserved", "retail_sold", "returned",
+    "sellable_accessible", "sellable_not_accessible", "stolen", "unknown",
+}
+
+
+def _gs1_check_digit_valid(digits: str) -> bool:
+    if not digits.isdigit():
+        return False
+    total = sum(int(digit) * (3 if offset % 2 else 1) for offset, digit in enumerate(reversed(digits[:-1])))
+    return (10 - total % 10) % 10 == int(digits[-1])
+
+
+def _cbv_term(value: str | None, kind: str) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    value = value.removeprefix(f"urn:epcglobal:cbv:{kind}:")
+    web_prefix = f"https://ref.gs1.org/cbv/{'BizStep' if kind == 'bizstep' else 'Disp'}-"
+    value = value.removeprefix(web_prefix)
+    allowed = _CBV_BIZSTEPS if kind == "bizstep" else _CBV_DISPOSITIONS
+    return value if value in allowed else None
+
+
+def _valid_class_uri(value: object) -> bool:
+    if not isinstance(value, str) or "0000000.000000" in value:
+        return False
+    match = re.fullmatch(
+        r"urn:epc:class:lgtin:(\d{6,12})\.(\d+)\.([A-Za-z0-9_~!$&'()*+,;=:@%\-]+)",
+        value,
+    )
+    if match:
+        return len(match[1]) + len(match[2]) == 13
+    match = re.fullmatch(r"https://id\.gs1\.org/01/(\d{14})/10/[^/?#]+", value)
+    return bool(match and _gs1_check_digit_valid(match[1]))
+
+
+def _epc_class(row: dict) -> str | None:
+    """Use an existing class URI, or a GTIN Digital Link when both keys exist.
+
+    GTIN/GLN digits do not reveal the company-prefix split required by EPC
+    URNs. A lot code alone cannot identify an EPC class.
+    """
+    value = row.get("epc_class")
+    if _valid_class_uri(value):
+        return value
+    raw = row.get("epcis_document_json")
+    if raw:
+        try:
+            original = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(original, dict):
+                for field in ("quantityList", "outputQuantityList"):
+                    for item in original.get(field) or []:
+                        candidate = item.get("epcClass") if isinstance(item, dict) else None
+                        if _valid_class_uri(candidate):
+                            return candidate
+        except (TypeError, ValueError):
+            pass
+    gtin = str(row.get("gtin") or "")
+    lot = str(row.get("traceability_lot_code") or "")
+    if re.fullmatch(r"\d{14}", gtin) and _gs1_check_digit_valid(gtin) and lot:
+        return f"https://id.gs1.org/01/{gtin}/10/{quote(lot, safe='-._~')}"
+    return None
+
+
+def _location_uri(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    if "0000000000000" in value or "0000000.00000" in value:
+        return None
+    if re.fullmatch(r"urn:epc:id:sgln:\d{6,12}\.\d+\.[A-Za-z0-9_-]+", value):
+        return value
+    if re.fullmatch(r"\d{6,12}\.\d+\.[A-Za-z0-9_-]+", value):
+        return f"urn:epc:id:sgln:{value}"
+    if re.fullmatch(r"\d{13}", value) and _gs1_check_digit_valid(value):
+        return f"https://id.gs1.org/414/{value}"
+    return None
 
 
 def _validate_epcis_document(doc: dict) -> list[str]:
@@ -132,8 +229,6 @@ def _validate_epcis_document(doc: dict) -> list[str]:
         "AssociationEvent",
     }
     valid_actions = {"ADD", "OBSERVE", "DELETE"}
-    bizstep_prefix = "urn:epcglobal:cbv:bizstep:"
-
     for i, event in enumerate(event_list):
         prefix = f"event[{i}]"
         etype = event.get("type")
@@ -144,9 +239,18 @@ def _validate_epcis_document(doc: dict) -> list[str]:
         action = event.get("action")
         if action and action not in valid_actions:
             errors.append(f"{prefix}: invalid action '{action}'")
-        biz_step = event.get("bizStep", "")
-        if biz_step and not biz_step.startswith(bizstep_prefix):
-            errors.append(f"{prefix}: bizStep '{biz_step}' is not a valid GS1 CBV URI")
+        if "extension" in event:
+            errors.append(f"{prefix}: EPCIS 1.x extension wrapper")
+        for field, kind in (("bizStep", "bizstep"), ("disposition", "disp")):
+            value = event.get(field)
+            allowed = _CBV_BIZSTEPS if kind == "bizstep" else _CBV_DISPOSITIONS
+            web_prefix = f"https://ref.gs1.org/cbv/{'BizStep' if kind == 'bizstep' else 'Disp'}-"
+            if value and value not in allowed and not (
+                isinstance(value, str)
+                and value.startswith(web_prefix)
+                and value.removeprefix(web_prefix) in allowed
+            ):
+                errors.append(f"{prefix}: {field} '{value}' is not a valid GS1 CBV URI")
 
     return errors
 
@@ -171,22 +275,20 @@ SAMPLE_EPCIS_EVENTS = [
         "eventTime": "2026-02-26T14:30:00.000Z",
         "eventTimeZoneOffset": "-08:00",
         "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "disposition": "urn:epcglobal:cbv:disp:in_transit",
+        "bizStep": "shipping",
+        "disposition": "in_transit",
         "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
         "readPoint": {"id": "urn:epc:id:sgln:0614141.00000.0"},
         "bizLocation": {"id": "urn:epc:id:sgln:0614141.00000.0"},
-        "extension": {
-            "quantityList": [
+        "quantityList": [
                 {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-            ],
-            "sourceList": [
-                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}
-            ],
-            "destinationList": [
-                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}
-            ],
-        },
+        ],
+        "sourceList": [
+                {"type": "possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}
+        ],
+        "destinationList": [
+                {"type": "possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}
+        ],
         "regengine:sha256": "a3f8c1d2e4b5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
         "regengine:chainHash": "b4c9e2c7d5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
     },
@@ -194,18 +296,16 @@ SAMPLE_EPCIS_EVENTS = [
         "type": "ObjectEvent",
         "eventTime": "2026-02-27T09:15:00.000Z",
         "eventTimeZoneOffset": "-08:00",
-        "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-        "disposition": "urn:epcglobal:cbv:disp:in_progress",
+        "action": "ADD",
+        "bizStep": "receiving",
+        "disposition": "in_progress",
         "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
         "readPoint": {"id": "urn:epc:id:sgln:0614141.00001.0"},
         "bizLocation": {"id": "urn:epc:id:sgln:0614141.00001.0"},
-        "extension": {
-            "quantityList": [
+        "quantityList": [
                 {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-            ],
-            "ilmd": {"regengine:temperatureCelsius": 3.2, "regengine:inspectionResult": "PASS"},
-        },
+        ],
+        "ilmd": {"https://regengine.co/ns/temperatureCelsius": 3.2, "https://regengine.co/ns/inspectionResult": "PASS"},
         "regengine:sha256": "c5dae3d8e6f7a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4",
         "regengine:chainHash": "d6ebf4e9f7a8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5",
     },
@@ -234,37 +334,59 @@ async def export_epcis(
 
     if rows:
         event_list = []
+        skipped = 0
         for r in rows:
+            epc_class = _epc_class(r)
+            if (
+                not epc_class
+                or not r.get("event_timestamp")
+                or r.get("epcis_event_type") not in (None, "ObjectEvent")
+                or r.get("event_type") == "transformation"
+                or r.get("epcis_action") not in (None, "ADD", "OBSERVE", "DELETE")
+            ):
+                skipped += 1
+                continue
             ts = r["event_timestamp"]
             event = {
-                "type": r["epcis_event_type"] or "ObjectEvent",
-                "eventTime": ts.isoformat() if ts else now.isoformat(),
-                "eventTimeZoneOffset": "-08:00",
+                "type": "ObjectEvent",
+                "eventTime": ts.isoformat(),
+                "eventTimeZoneOffset": ts.strftime("%z")[:3] + ":" + ts.strftime("%z")[3:] if ts.tzinfo else "+00:00",
                 "action": r["epcis_action"] or "OBSERVE",
-                "bizStep": r["epcis_biz_step"]
-                or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
-                "readPoint": {"id": f"urn:epc:id:sgln:{r['location_gln'] or '0000000000000'}.0"},
-                "extension": {
-                    "quantityList": [
-                        {
-                            "epcClass": f"urn:epc:class:lgtin:0000000.000000.{r['traceability_lot_code'] or 'UNKNOWN'}",
-                            "quantity": r["quantity"] or 0,
-                            "uom": r["unit_of_measure"] or "EA",
-                        }
-                    ],
-                },
-                "regengine:sha256": r["sha256_hash"] or "",
+                "quantityList": [{"epcClass": epc_class}],
             }
+            biz_step = _cbv_term(r.get("epcis_biz_step") or _CTE_TO_BIZSTEP.get(r.get("event_type") or ""), "bizstep")
+            if biz_step:
+                event["bizStep"] = biz_step
+            location = _location_uri(r.get("location_gln"))
+            if location:
+                event["readPoint"] = {"id": location}
+            quantity = r.get("quantity")
+            if quantity is not None:
+                event["quantityList"][0]["quantity"] = quantity
+                if r.get("unit_of_measure"):
+                    event["quantityList"][0]["uom"] = r["unit_of_measure"]
+            if r.get("sha256_hash"):
+                event["regengine:sha256"] = r["sha256_hash"]
             event_list.append(event)
     else:
         event_list = SAMPLE_EPCIS_EVENTS
+        skipped = 0
 
     epcis_document = {
         "@context": [
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
-            {"regengine": "https://regengine.co/ns/"},
+            {
+                "regengine": "https://regengine.co/ns/",
+                **{
+                    key: f"regengine:{key}"
+                    for key in (
+                        "tenantId", "exportFormat", "generatedAt", "eventsCount",
+                        "skippedEventsCount", "dataSource", "integrityVerified",
+                        "chainHashVerified", "valid", "errors", "checkedAt",
+                    )
+                },
+            },
         ],
-        "id": f"urn:uuid:regengine-export-{tenant_id}-{now.strftime('%Y%m%d')}",
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": now.isoformat(),
@@ -276,6 +398,7 @@ async def export_epcis(
             "exportFormat": "EPCIS_2.0_JSON-LD",
             "generatedAt": now.isoformat(),
             "eventsCount": len(event_list),
+            "skippedEventsCount": skipped,
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
