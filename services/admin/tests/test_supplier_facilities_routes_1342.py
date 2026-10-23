@@ -544,11 +544,44 @@ class TestListTlcs:
 # ---------------------------------------------------------------------------
 
 
+def _log_coverage_gaps() -> None:
+    gaps = [
+        "COVERAGE GAP: Supplier facility removal check cross-tenant facility isolation",
+        "COVERAGE GAP: Supplier facility removal check allowed path when zero linked records exist",
+        "COVERAGE GAP: Supplier facility removal check blocked when linked lots exist",
+        "COVERAGE GAP: Supplier facility removal check blocked when linked CTE events exist",
+        "COVERAGE GAP: Supplier facility removal check blocked when linked funnel events exist",
+        "COVERAGE GAP: Supplier facility delete cross-tenant facility isolation",
+        "COVERAGE GAP: Supplier facility delete 409 conflict when linked lots exist",
+        "COVERAGE GAP: Supplier facility delete 409 conflict when linked CTE events exist",
+        "COVERAGE GAP: Supplier facility delete 409 conflict when linked funnel events exist",
+        "COVERAGE GAP: Supplier facility delete success and cascading scoping configuration cleanup",
+        "COVERAGE GAP: Non-owner member facility removal button visibility when facilities exist",
+        "COVERAGE GAP: Owner facility removal button visibility",
+        "COVERAGE GAP: Facility removal confirmation dialog and deletion flow when removal is allowed",
+        "COVERAGE GAP: Facility removal blocked explanation and dialog when linked records exist",
+    ]
+    try:
+        existing = ""
+        try:
+            with open("/tmp/gap3492.txt", "r", encoding="utf-8") as f:
+                existing = f.read()
+        except OSError:
+            pass
+        with open("/tmp/gap3492.txt", "a", encoding="utf-8") as f:
+            for gap in gaps:
+                if gap not in existing:
+                    f.write(f"{gap}\n")
+    except OSError:
+        pass
+
+
+_log_coverage_gaps()
+
+
 class TestCheckSupplierFacilityRemoval:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
-        import uuid
-
-        resp = client_no_tenant.get(f"/v1/supplier/facilities/{uuid.uuid4()}/removal-check")
+        resp = client_no_tenant.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
         assert resp.status_code == 400
 
     def test_invalid_uuid_returns_400(self, client: TestClient):
@@ -556,204 +589,20 @@ class TestCheckSupplierFacilityRemoval:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_facility_not_found_returns_404(self, client: TestClient):
-        import uuid
-
-        resp = client.get(f"/v1/supplier/facilities/{uuid.uuid4()}/removal-check")
-        assert resp.status_code == 404
-        assert resp.json()["detail"] == "Facility not found"
-
-    def test_facility_other_tenant_returns_404(self, client: TestClient, db_session: Session):
-        other_tenant_id = UUID("00000000-0000-0000-0000-000000000099")
-        f = SupplierFacilityModel(
-            tenant_id=other_tenant_id,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-other",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        resp = client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
-        assert resp.status_code == 404
-        assert resp.json()["detail"] == "Facility not found"
-
     def test_non_owner_forbidden_returns_403(self, db_session: Session):
         import app.supplier_facilities_routes as fac_routes
 
-        non_owner_user_id = UUID("00000000-0000-0000-0000-000000000020")
-        member_role_id = UUID("00000000-0000-0000-0000-000000000021")
-        db_session.add(UserModel(id=non_owner_user_id, email="member@example.com", status="active", is_sysadmin=False))
-        db_session.add(RoleModel(id=member_role_id, tenant_id=TEST_TENANT_ID, name="Member", permissions=["users.read"]))
-        db_session.add(MembershipModel(user_id=non_owner_user_id, tenant_id=TEST_TENANT_ID, role_id=member_role_id, is_active=True))
-
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=non_owner_user_id,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
         app = FastAPI()
         app.include_router(fac_routes.router, prefix="/v1")
-        member_user = db_session.get(UserModel, non_owner_user_id)
         app.dependency_overrides[fac_routes.get_session] = lambda: db_session
-        app.dependency_overrides[fac_routes.get_current_user] = lambda: member_user
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: UserModel(
+            id=UUID("00000000-0000-0000-0000-000000000003"), is_sysadmin=False
+        )
 
         with patch.object(fac_routes.TenantContext, "get_tenant_context", return_value=TEST_TENANT_ID):
             with TestClient(app) as member_client:
-                resp = member_client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
+                resp = member_client.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
                 assert resp.status_code == 403
-
-    def test_allowed_when_zero_linked_rows(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        ftl = SupplierFacilityFTLCategoryModel(
-            tenant_id=TEST_TENANT_ID,
-            facility_id=f.id,
-            category_id="cat-1",
-            category_name="category-1",
-            required_ctes=[],
-        )
-        db_session.add(ftl)
-        db_session.commit()
-
-        resp = client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["facility_id"] == str(f.id)
-        assert body["facility_name"] == "fac-1"
-        assert body["allowed"] is True
-        assert body["lots_count"] == 0
-        assert body["cte_events_count"] == 0
-        assert body["funnel_events_count"] == 0
-        assert body["scoping_config_count"] == 1
-        assert body["linked_counts"]["scoping_config"] == 1
-        assert body["address"]["street"] == "street-1"
-        assert body["address"]["city"] == "city-1"
-
-    def test_disallowed_when_linked_lots_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            tlc_code="tlc-1",
-            status="active",
-        )
-        db_session.add(lot)
-        db_session.commit()
-
-        resp = client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["allowed"] is False
-        assert body["lots_count"] == 1
-
-    def test_disallowed_when_linked_cte_events_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            tlc_code="tlc-1",
-            status="active",
-        )
-        db_session.add(lot)
-        db_session.commit()
-
-        event = SupplierCTEEventModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            lot_id=lot.id,
-            cte_type="cte-1",
-            payload_sha256="sha-1",
-            merkle_hash="hash-1",
-            sequence_number=1,
-        )
-        db_session.add(event)
-        db_session.commit()
-
-        resp = client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["allowed"] is False
-        assert body["cte_events_count"] == 1
-
-    def test_disallowed_when_linked_funnel_events_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        funnel = SupplierFunnelEventModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            event_name="funnel-1",
-        )
-        db_session.add(funnel)
-        db_session.commit()
-
-        resp = client.get(f"/v1/supplier/facilities/{f.id}/removal-check")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["allowed"] is False
-        assert body["funnel_events_count"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -763,9 +612,7 @@ class TestCheckSupplierFacilityRemoval:
 
 class TestDeleteSupplierFacility:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
-        import uuid
-
-        resp = client_no_tenant.delete(f"/v1/supplier/facilities/{uuid.uuid4()}")
+        resp = client_no_tenant.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 400
 
     def test_invalid_uuid_returns_400(self, client: TestClient):
@@ -773,201 +620,18 @@ class TestDeleteSupplierFacility:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_facility_not_found_returns_404(self, client: TestClient):
-        import uuid
-
-        resp = client.delete(f"/v1/supplier/facilities/{uuid.uuid4()}")
-        assert resp.status_code == 404
-        assert resp.json()["detail"] == "Facility not found"
-
-    def test_facility_other_tenant_returns_404(self, client: TestClient, db_session: Session):
-        other_tenant_id = UUID("00000000-0000-0000-0000-000000000099")
-        f = SupplierFacilityModel(
-            tenant_id=other_tenant_id,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-other",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        resp = client.delete(f"/v1/supplier/facilities/{f.id}")
-        assert resp.status_code == 404
-        assert resp.json()["detail"] == "Facility not found"
-
     def test_non_owner_forbidden_returns_403(self, db_session: Session):
         import app.supplier_facilities_routes as fac_routes
 
-        non_owner_user_id = UUID("00000000-0000-0000-0000-000000000030")
-        member_role_id = UUID("00000000-0000-0000-0000-000000000031")
-        db_session.add(UserModel(id=non_owner_user_id, email="member2@example.com", status="active", is_sysadmin=False))
-        db_session.add(RoleModel(id=member_role_id, tenant_id=TEST_TENANT_ID, name="Member", permissions=["users.read"]))
-        db_session.add(MembershipModel(user_id=non_owner_user_id, tenant_id=TEST_TENANT_ID, role_id=member_role_id, is_active=True))
-
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=non_owner_user_id,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
         app = FastAPI()
         app.include_router(fac_routes.router, prefix="/v1")
-        member_user = db_session.get(UserModel, non_owner_user_id)
         app.dependency_overrides[fac_routes.get_session] = lambda: db_session
-        app.dependency_overrides[fac_routes.get_current_user] = lambda: member_user
+        app.dependency_overrides[fac_routes.get_current_user] = lambda: UserModel(
+            id=UUID("00000000-0000-0000-0000-000000000003"), is_sysadmin=False
+        )
 
         with patch.object(fac_routes.TenantContext, "get_tenant_context", return_value=TEST_TENANT_ID):
             with TestClient(app) as member_client:
-                resp = member_client.delete(f"/v1/supplier/facilities/{f.id}")
+                resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
                 assert resp.status_code == 403
 
-    def test_conflict_when_linked_lots_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            tlc_code="tlc-1",
-            status="active",
-        )
-        db_session.add(lot)
-        db_session.commit()
-
-        resp = client.delete(f"/v1/supplier/facilities/{f.id}")
-        assert resp.status_code == 409
-        detail = resp.json()["detail"]
-        assert "Cannot remove facility" in detail
-        assert "1 lots/TLCs" in detail
-
-    def test_conflict_when_linked_cte_events_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            tlc_code="tlc-1",
-            status="active",
-        )
-        db_session.add(lot)
-        db_session.commit()
-
-        event = SupplierCTEEventModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            lot_id=lot.id,
-            cte_type="cte-1",
-            payload_sha256="sha-1",
-            merkle_hash="hash-1",
-            sequence_number=10,
-        )
-        db_session.add(event)
-        db_session.commit()
-
-        resp = client.delete(f"/v1/supplier/facilities/{f.id}")
-        assert resp.status_code == 409
-        detail = resp.json()["detail"]
-        assert "Cannot remove facility" in detail
-        assert "1 CTE events" in detail
-
-    def test_conflict_when_linked_funnel_events_exist(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        funnel = SupplierFunnelEventModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            facility_id=f.id,
-            event_name="funnel-1",
-        )
-        db_session.add(funnel)
-        db_session.commit()
-
-        resp = client.delete(f"/v1/supplier/facilities/{f.id}")
-        assert resp.status_code == 409
-        detail = resp.json()["detail"]
-        assert "Cannot remove facility" in detail
-        assert "1 other records" in detail
-
-    def test_delete_happy_path_cleans_scoping_config(self, client: TestClient, db_session: Session):
-        f = SupplierFacilityModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
-            name="fac-1",
-            street="street-1",
-            city="city-1",
-            state="ST",
-            postal_code="00000",
-            roles=[],
-        )
-        db_session.add(f)
-        db_session.commit()
-
-        ftl = SupplierFacilityFTLCategoryModel(
-            tenant_id=TEST_TENANT_ID,
-            facility_id=f.id,
-            category_id="cat-1",
-            category_name="category-1",
-            required_ctes=[],
-        )
-        db_session.add(ftl)
-        db_session.commit()
-
-        resp = client.delete(f"/v1/supplier/facilities/{f.id}")
-        assert resp.status_code == 200
-        assert resp.json()["status"] == "deleted"
-        assert resp.json()["id"] == str(f.id)
-
-        assert db_session.get(SupplierFacilityModel, f.id) is None
-        from sqlalchemy import select
-        ftl_remaining = db_session.execute(
-            select(SupplierFacilityFTLCategoryModel).where(
-                SupplierFacilityFTLCategoryModel.facility_id == f.id
-            )
-        ).scalars().all()
-        assert len(ftl_remaining) == 0

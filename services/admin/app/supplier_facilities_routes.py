@@ -15,7 +15,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .database import get_session
-from .dependencies import PermissionChecker, get_current_user
+from .dependencies import PermissionChecker, get_current_user, require_owner
 from .models import TenantContext
 from .sqlalchemy_models import (
     SupplierCTEEventModel,
@@ -138,7 +138,7 @@ async def create_supplier_facility(
 async def check_supplier_facility_removal(
     facility_id: str,
     current_user: UserModel = Depends(get_current_user),
-    _perm: bool = Depends(PermissionChecker("owner")),
+    _perm: bool = Depends(require_owner),
     db: Session = Depends(get_session),
 ) -> FacilityRemovalCheckResponse:
     tenant_id = TenantContext.get_tenant_context(db)
@@ -213,7 +213,7 @@ async def check_supplier_facility_removal(
 async def delete_supplier_facility(
     facility_id: str,
     current_user: UserModel = Depends(get_current_user),
-    _perm: bool = Depends(PermissionChecker("owner")),
+    _perm: bool = Depends(require_owner),
     db: Session = Depends(get_session),
 ) -> dict[str, Any]:
     tenant_id = TenantContext.get_tenant_context(db)

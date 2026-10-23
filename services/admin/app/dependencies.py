@@ -586,7 +586,9 @@ class PermissionChecker:
                 detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID",
             )
 
-        # Get Membership and Role
+        # Resolve user's role for the current tenant/workspace (the tenant of
+        # the request, via the same membership lookup the existing permission path uses),
+        # never a global or other-tenant role.
         stmt = (
             select(RoleModel)
             .join(MembershipModel)
