@@ -32,7 +32,7 @@ re-introduces the silent-accept path would fail ``test_xml_ingest_*``.
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
@@ -196,10 +196,14 @@ class TestXmlPayloadShape_Issue1151:
 
 
 class TestXmlParseStrictness_Issue1151:
-    def test_malformed_xml_returns_422_not_201(self, client):
-        """Pre-fix: parser returned [] and router happily reported an
-        empty-batch success. Post-fix: router must signal '0 events'
-        with 422 -- the parse failure itself surfaces to the client."""
+    def test_malformed_xml_returns_400(self, client):
+        """Unparseable XML is a client error, not an empty document.
+
+        The old parser returned [] and the router answered 422
+        "No EPCIS events found". A document that is not well-formed
+        XML is 400 with a "malformed XML" detail. A well-formed
+        document that contains no events stays 422.
+        """
         resp = client.post(
             "/api/v1/epcis/events/xml",
             headers={
@@ -208,9 +212,12 @@ class TestXmlParseStrictness_Issue1151:
             },
             content=_malformed_xml(),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 400
         detail = resp.json().get("detail", "")
-        assert "No EPCIS events" in detail or "no events" in detail.lower()
+        assert isinstance(detail, str)
+        assert "malformed XML" in detail
+        assert "Traceback" not in resp.text
+        assert 'File "' not in resp.text
 
     def test_well_formed_but_empty_document_returns_422(self, client):
         resp = client.post(
@@ -352,13 +359,15 @@ class TestParseXmlUnit_Issue1151:
     lock in that the parser itself doesn't crash on bad input and produces
     dicts that flow cleanly into the validation pipeline downstream."""
 
-    def test_parse_returns_empty_on_malformed_xml(self):
-        """The parser's own contract: return [] rather than raise. The
-        router is responsible for turning [] into a 422."""
+    def test_parse_raises_400_on_malformed_xml(self):
+        """The parser reports malformed XML itself. Returning [] made
+        the router describe a parse failure as "No EPCIS events found"."""
         from app.epcis.xml_parser import _parse_epcis_xml
 
-        events = _parse_epcis_xml(_malformed_xml())
-        assert events == []
+        with pytest.raises(HTTPException) as caught:
+            _parse_epcis_xml(_malformed_xml())
+        assert caught.value.status_code == 400
+        assert "malformed XML" in str(caught.value.detail)
 
     def test_parse_valid_xml_extracts_biz_step(self):
         """Round-trip check: a valid ObjectEvent comes out with bizStep

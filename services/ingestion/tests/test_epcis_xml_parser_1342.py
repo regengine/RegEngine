@@ -16,7 +16,8 @@ Locks:
 - ILMD and bizTransaction extraction incl. FSMA extension blocks.
 - _xml_event_to_dict assembles the canonical dict.
 - _parse_epcis_xml handles bytes/str input, bare and namespaced XML,
-  returns [] on parse failure, and respects the defusedxml import
+  raises HTTP 400 on malformed XML, returns [] when the document is
+  well-formed but has no events, and respects the defusedxml import
   fallback when lxml is unavailable.
 
 Issue: #1342
@@ -573,10 +574,21 @@ class TestParseEpcisXml:
         events = xp._parse_epcis_xml(raw_str)
         assert len(events) == 1
 
-    def test_malformed_xml_returns_empty_list(self):
-        # Missing closing tag
-        raw = b"<EPCISDocument><ObjectEvent>"
-        assert xp._parse_epcis_xml(raw) == []
+    @pytest.mark.parametrize("raw", [b"<EPCISDocument><ObjectEvent>", b"<a>"])
+    def test_malformed_xml_returns_400(self, raw):
+        # These used to return [] and the router answered 422
+        # "No EPCIS events found". That encoded the bug: unparseable
+        # XML is a 400 "malformed XML", including the reported ``b"<a>"``.
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as caught:
+            xp._parse_epcis_xml(raw)
+        assert caught.value.status_code == 400
+        detail = caught.value.detail
+        assert isinstance(detail, str)
+        assert detail.startswith("malformed XML")
+        assert "Traceback" not in detail
+        assert 'File "' not in detail
 
     def test_empty_document_returns_empty(self):
         raw = b"<?xml version='1.0'?><EPCISDocument/>"

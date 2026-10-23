@@ -9,15 +9,17 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from hashlib import sha256
 from typing import Any
 
 from fastapi import HTTPException
 
 from .extraction import (
+    _extract_event_lot,
     _extract_location_id,
-    _extract_lot_data,
     _extract_party_id,
+    _lot_from_identifier,
 )
 
 logger = logging.getLogger("epcis-ingestion")
@@ -51,6 +53,41 @@ _EVENT_TYPE_MAP: dict[str, str] = {
 }
 
 
+_CBV_BIZSTEP_PREFIX = "urn:epcglobal:cbv:bizstep:"
+# CBV 2.0 bare names are a single token (underscores, no spaces).
+_BARE_BIZSTEP_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+
+
+def _canonical_bizstep(value: object) -> str:
+    """Map a bizStep to the ``urn:epcglobal:cbv:bizstep:<name>`` lookup key.
+
+    EPCIS 2.0 JSON-LD leaves CBV names unexpanded (``receiving``). The GS1
+    Web vocabulary writes ``https://ref.gs1.org/cbv/BizStep-receiving``.
+    Both are the same CBV bizStep as the URN. FSMA URIs and anything else
+    are returned unchanged so an unknown value still fails the lookup.
+    """
+    if value is None:
+        return ""
+    raw = str(value).strip()
+    if not raw:
+        return ""
+    lowered = raw.lower()
+    if lowered.startswith(_CBV_BIZSTEP_PREFIX):
+        return _CBV_BIZSTEP_PREFIX + lowered[len(_CBV_BIZSTEP_PREFIX) :]
+    if lowered.startswith("urn:"):
+        return raw
+    for scheme in ("https://", "http://"):
+        marker = f"{scheme}ref.gs1.org/cbv/bizstep-"
+        if lowered.startswith(marker):
+            name = lowered[len(marker) :].split("/", 1)[0].split("?", 1)[0].split("#", 1)[0]
+            if name:
+                return _CBV_BIZSTEP_PREFIX + name
+            return raw
+    if _BARE_BIZSTEP_RE.fullmatch(raw):
+        return _CBV_BIZSTEP_PREFIX + lowered
+    return raw
+
+
 def _event_idempotency_key(event: dict) -> str:
     explicit = event.get("eventID")
     if explicit:
@@ -59,21 +96,65 @@ def _event_idempotency_key(event: dict) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _quantity_list(event: dict) -> list:
+    """First populated quantity list, in the same order as the canonical writer.
+
+    ``extension.quantityList`` is the EPCIS 1.x wrapper. The 2.0 member is
+    top-level ``quantityList``. An AggregationEvent puts the same elements
+    on ``childQuantityList`` and has no ``quantityList``. A
+    TransformationEvent has neither; its quantity is the output list, with
+    the input list only when the output list is absent (#2970).
+
+    The first *truthy* candidate wins, including a wrong-shaped value, so
+    a non-list does not silently fall through to a later list.
+    """
+    extension = event.get("extension")
+    extension_list = extension.get("quantityList") if isinstance(extension, dict) else None
+    for candidate in (
+        extension_list,
+        event.get("quantityList"),
+        event.get("childQuantityList"),
+        event.get("outputQuantityList"),
+        event.get("inputQuantityList"),
+    ):
+        if candidate:
+            return candidate if isinstance(candidate, list) else []
+    return []
+
+
+def _quantity_element(event: dict) -> dict | None:
+    """Quantity element for the CTE.
+
+    When the list contains a lot-level class (LGTIN or Digital Link), use
+    that element's quantity: it is the quantity of the lot being traced.
+    A leading serialized class (an SGTIN pattern with a count and no unit)
+    is a different identifier and is not the lot quantity. Otherwise the
+    first element, matching the historical ``quantityList[0]`` rule.
+    """
+    quantity_list = _quantity_list(event)
+    if not quantity_list or not isinstance(quantity_list[0], dict):
+        return None
+    for element in quantity_list:
+        if isinstance(element, dict) and _lot_from_identifier(element.get("epcClass")):
+            return element
+    return quantity_list[0]
+
+
 def _normalize_epcis_to_cte(event: dict) -> dict:
-    ilmd = event.get("ilmd") or event.get("extension", {}).get("ilmd") or {}
-    lot_code, tlc = _extract_lot_data(ilmd)
+    lot_code, tlc = _extract_event_lot(event)
     epc_list = event.get("epcList", [])
     product_id = epc_list[0] if isinstance(epc_list, list) and epc_list else None
-    biz_step = str(event.get("bizStep") or "")
+    received_biz_step = event.get("bizStep")
+    biz_step = _canonical_bizstep(received_biz_step)
 
     event_type = _EVENT_TYPE_MAP.get(biz_step)
     if event_type is None:
-        logger.warning("unmapped_epcis_bizstep uri=%s", biz_step)
+        logger.warning("unmapped_epcis_bizstep uri=%s", received_biz_step)
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "unmapped_bizstep",
-                "bizStep": biz_step,
+                "bizStep": "" if received_biz_step is None else received_biz_step,
                 "message": (
                     "bizStep has no FSMA 204 CTE mapping. Supply a CBV or "
                     "FSMA URI for one of: growing, harvesting, cooling, "
@@ -86,24 +167,10 @@ def _normalize_epcis_to_cte(event: dict) -> dict:
 
     quantity = None
     unit = None
-    # #2968: the GS1 EPCIS 2.0 JSON/JSON-LD binding carries ``quantityList``
-    # as a direct member of the event — the ``extension`` wrapper is the
-    # EPCIS 1.x XML construct that ``xml_parser`` still writes. Read both,
-    # extension first, so this agrees with
-    # ``shared.canonical_event._extract_epcis_quantity`` on every event.
-    # #2970: TransformationEvent has no ``quantityList`` at all; its
-    # quantities live in the input/output lists. Prefer the output list —
-    # for a transformation CTE the FSMA quantity is the lot it creates.
-    quantity_list = (
-        event.get("extension", {}).get("quantityList")
-        or event.get("quantityList")
-        or event.get("outputQuantityList")
-        or event.get("inputQuantityList")
-        or []
-    )
-    if quantity_list and isinstance(quantity_list, list) and isinstance(quantity_list[0], dict):
-        quantity = quantity_list[0].get("quantity")
-        unit = quantity_list[0].get("uom")
+    element = _quantity_element(event)
+    if element is not None:
+        quantity = element.get("quantity")
+        unit = element.get("uom")
 
     return {
         "event_type": event_type,

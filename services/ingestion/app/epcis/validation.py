@@ -13,7 +13,14 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from .extraction import _extract_lot_data
+from .extraction import _extract_event_lot, _lot_from_identifier
+
+# FSMAEvent requires a GTIN-14 TLC. A GS1 lot-level identifier (full LGTIN
+# URI, or a Digital Link /01/<gtin>/10/<lot>) is the TLC the partner sent
+# and does not match that pattern. The gate checks every other field
+# against this stand-in, then puts the real identifier back. A plain lot
+# string such as "ABC123" is not a lot-level GS1 id and still fails.
+_GS1_LOT_LEVEL_TLC_STANDIN = "00000000000000-GS1"
 
 logger = logging.getLogger("epcis-ingestion")
 
@@ -184,25 +191,44 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
         if normalized.get("product_description"):
             optional_fields["product_description"] = normalized["product_description"]
 
-        fsma_event = FSMAEvent(
-            event_type=fsma_type,
-            tlc=normalized.get("tlc"),
-            quantity=normalized.get("quantity"),
-            unit_of_measure=normalized.get("unit_of_measure"),
-            location_gln=normalized.get("location_id"),
-            event_time=normalized.get("event_time"),
-            source_gln=normalized.get("source_location_id"),
-            destination_gln=normalized.get("dest_location_id"),
-            reference_document_type="EPCIS",
-            reference_document_number=None,
-            tenant_id=tenant_id,
-            **optional_fields,
-        )
-        return fsma_event.model_dump()
-    except ValidationError as exc:
-        logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, exc.errors())
-        _audit_log_validation_failure(exc.errors(), tenant_id, normalized)
-        return None
+        def _build(tlc_value: object) -> dict:
+            return FSMAEvent(
+                event_type=fsma_type,
+                tlc=tlc_value,
+                quantity=normalized.get("quantity"),
+                unit_of_measure=normalized.get("unit_of_measure"),
+                location_gln=normalized.get("location_id"),
+                event_time=normalized.get("event_time"),
+                source_gln=normalized.get("source_location_id"),
+                destination_gln=normalized.get("dest_location_id"),
+                reference_document_type="EPCIS",
+                reference_document_number=None,
+                tenant_id=tenant_id,
+                **optional_fields,
+            ).model_dump()
+
+        try:
+            return _build(normalized.get("tlc"))
+        except ValidationError as exc:
+            errors = exc.errors()
+            only_tlc = bool(errors) and all((err.get("loc") or [None])[0] == "tlc" for err in errors)
+            received_tlc = normalized.get("tlc")
+            if only_tlc and _lot_from_identifier(received_tlc):
+                try:
+                    dumped = _build(_GS1_LOT_LEVEL_TLC_STANDIN)
+                except ValidationError as other:
+                    logger.warning(
+                        "fsma_event_validation_failed tenant=%s errors=%s",
+                        tenant_id,
+                        other.errors(),
+                    )
+                    _audit_log_validation_failure(other.errors(), tenant_id, normalized)
+                    return None
+                dumped["tlc"] = received_tlc
+                return dumped
+            logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, errors)
+            _audit_log_validation_failure(errors, tenant_id, normalized)
+            return None
     except ImportError:
         logger.debug("shared.schemas not available for FSMAEvent validation")
         return None
@@ -265,7 +291,7 @@ def _validate_epcis(event: dict) -> list[str]:
     }:
         errors.append("Unsupported EPCIS event type")
 
-    lot_code, tlc = _extract_lot_data(event.get("ilmd") or event.get("extension", {}).get("ilmd"))
+    lot_code, tlc = _extract_event_lot(event)
     if not tlc and not lot_code:
         errors.append("Missing traceability lot code (fsma:traceabilityLotCode or cbvmda:lotNumber)")
     elif tlc and not _validate_tlc_format(tlc):
