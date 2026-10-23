@@ -29,8 +29,6 @@ on:
       - 'requirements.lock'
       - 'scripts/**'
       - 'tests/**'
-      - 'sample_data/**'
-      - 'demo_exports/**'
   workflow_dispatch:
 
 permissions:
