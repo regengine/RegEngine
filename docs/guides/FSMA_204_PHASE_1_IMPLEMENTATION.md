@@ -216,9 +216,8 @@ This document breaks down the 8 critical compliance gaps identified in the audit
    )
    ```
 2. Update recall_report.py to use standardized disclaimer (already compliant, just refactor)
-3. Update epcis_export.py:
-   - Add `is_sample_data` flag to response when using SAMPLE_EPCIS_EVENTS (line 273)
-   - Include disclaimer in response when flagged
+3. epcis_export.py: no change needed. #3520 removed SAMPLE_EPCIS_EVENTS; the export now
+   returns an honest empty state (`data_source: "empty"`) when a tenant has no events.
 4. Update recall_simulations.py:
    - Rename `is_illustrative` → `uses_synthetic_metrics`
    - Always include SYNTHETIC_METRICS_DISCLAIMER in response
