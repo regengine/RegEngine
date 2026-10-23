@@ -135,7 +135,7 @@ function Toggle({
     );
 }
 
-/** One label / description / control row — the shape repeated eight times here. */
+/** One label / description / control row, the shape repeated eight times here. */
 function SettingRow({
     id,
     title,
@@ -237,7 +237,7 @@ export default function NotificationPrefsPage() {
             />
 
             {/* Settings surfaces keep a readable form column inside the app width
-                (SPEC §6.10) — a toggle 1,100px from its label is unusable. */}
+                (SPEC §6.10), a toggle 1,100px from its label is unusable. */}
             <div className="max-w-[760px] space-y-6">
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>

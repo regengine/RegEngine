@@ -40,7 +40,7 @@ const ACCOUNT_LINKS = [
 ];
 
 /* ── Available Integrations Catalog ── */
-// Integration catalog — status is updated from API if available
+// Integration catalog: status is updated from API if available
 const INTEGRATIONS = [
     { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'available', desc: 'Cold-chain temperature monitoring' },
     { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
@@ -227,7 +227,7 @@ export default function SettingsPage() {
     return (
         <PageContainer>
             {/* The dashboard shell owns the breadcrumb and the service-health
-                badge — this page only renders its own header. */}
+                badge; this page only renders its own header. */}
             <PageHeader
                 title="Account Settings"
                 description="Manage your organization, account, team, and integrations"
