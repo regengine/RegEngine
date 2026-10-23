@@ -1,0 +1,398 @@
+name: PR Blocker Checklist
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+
+concurrency:
+  group: pr-blocker-checklist-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-blocker-checklist:
+    name: PR Blocker Checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR Blocker Checklist
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const pr = context.payload.pull_request;
+              const prNumber = pr?.number || context.issue?.number;
+              if (!prNumber) {
+                console.log('No pull request number in event payload. Skipping.');
+                return;
+              }
+
+              const isFork = Boolean(
+                pr?.head?.repo?.fork ||
+                (pr?.head?.repo?.full_name && pr?.base?.repo?.full_name && pr.head.repo.full_name !== pr.base.repo.full_name)
+              );
+
+              const query = `
+                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      id
+                      headRefOid
+                      isCrossRepository
+                      reviewThreads(first: 100) {
+                        nodes {
+                          id
+                          isResolved
+                          path
+                          comments(first: 100) {
+                            nodes {
+                              id
+                              databaseId
+                              url
+                              body
+                              createdAt
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                      reviews(first: 100) {
+                        nodes {
+                          id
+                          author {
+                            login
+                          }
+                          state
+                          submittedAt
+                          url
+                          body
+                        }
+                      }
+                      comments(first: 100) {
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let prData;
+              try {
+                const response = await github.graphql(query, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  prNumber: prNumber,
+                });
+                prData = response?.repository?.pullRequest;
+              } catch (gqlErr) {
+                console.error('GraphQL query failed:', gqlErr.message);
+                return;
+              }
+
+              if (!prData) {
+                console.log(`Could not load PR #${prNumber} data via GraphQL.`);
+                return;
+              }
+
+              const headSha = pr?.head?.sha || prData.headRefOid || 'unknown';
+              const isCrossRepo = Boolean(isFork || prData.isCrossRepository);
+              const MARKER = '<!-- pr-blocker-checklist -->';
+
+              function cleanText(text, maxLen = 80) {
+                if (!text) return '';
+                let clean = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+                clean = clean.replace(/[\u2013\u2014]/g, '-');
+                if (clean.length > maxLen) {
+                  clean = clean.slice(0, maxLen) + '...';
+                }
+                return clean;
+              }
+
+              function hasFailLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('FAIL') || trimmed.startsWith('Verdict: FAIL')) {
+                    return true;
+                  }
+                  const stripped = trimmed.replace(/^#+\s*/, '').replace(/^\*+/, '').trim();
+                  return stripped.startsWith('FAIL') || stripped.startsWith('Verdict: FAIL');
+                });
+              }
+
+              function extractFailLine(body, maxLen = 100) {
+                if (!body) return '';
+                const lines = body.split(/\r?\n/);
+                for (const line of lines) {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('FAIL') || trimmed.startsWith('Verdict: FAIL')) {
+                    return cleanText(trimmed, maxLen);
+                  }
+                  const stripped = trimmed.replace(/^#+\s*/, '').replace(/^\*+/, '').trim();
+                  if (stripped.startsWith('FAIL') || stripped.startsWith('Verdict: FAIL')) {
+                    return cleanText(stripped, maxLen);
+                  }
+                }
+                return '';
+              }
+
+              function hasPassLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const trimmed = line.trim();
+                  if (trimmed.startsWith('PASS') || trimmed.startsWith('Verdict: PASS')) {
+                    return true;
+                  }
+                  const stripped = trimmed.replace(/^#+\s*/, '').replace(/^\*+/, '').trim();
+                  return stripped.startsWith('PASS') || stripped.startsWith('Verdict: PASS');
+                });
+              }
+
+              // 1. Unresolved Review Threads
+              const unresolvedThreads = [];
+              for (const thread of prData.reviewThreads?.nodes || []) {
+                if (thread.isResolved) continue;
+                const firstComment = thread.comments?.nodes?.[0];
+                const author = firstComment?.author?.login || 'unknown';
+                const url = firstComment?.url || `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
+                const snippet = cleanText(firstComment?.body, 80);
+                unresolvedThreads.push({
+                  id: thread.id,
+                  path: thread.path,
+                  author,
+                  url,
+                  snippet,
+                });
+              }
+
+              // 2. Reviews requesting changes (latest opinionated review is CHANGES_REQUESTED)
+              const reviewsByAuthor = new Map();
+              for (const review of prData.reviews?.nodes || []) {
+                const login = review.author?.login;
+                if (!login || review.state === 'PENDING') continue;
+                if (!reviewsByAuthor.has(login)) {
+                  reviewsByAuthor.set(login, []);
+                }
+                reviewsByAuthor.get(login).push(review);
+              }
+
+              const changesRequestedReviews = [];
+              for (const [login, authorReviews] of reviewsByAuthor.entries()) {
+                authorReviews.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
+                const opinionated = authorReviews.filter(r =>
+                  ['CHANGES_REQUESTED', 'APPROVED', 'DISMISSED'].includes(r.state)
+                );
+                const latestOpinionated = opinionated[opinionated.length - 1];
+                if (latestOpinionated && latestOpinionated.state === 'CHANGES_REQUESTED') {
+                  changesRequestedReviews.push({
+                    author: login,
+                    url: latestOpinionated.url,
+                    submittedAt: latestOpinionated.submittedAt,
+                  });
+                }
+              }
+
+              // 3. Review and issue comments with FAIL not followed by later PASS from same author
+              const allComments = [];
+              const seenCommentIds = new Set();
+
+              for (const c of prData.comments?.nodes || []) {
+                if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                if (c.body.includes(MARKER)) continue;
+                seenCommentIds.add(c.id);
+                allComments.push({
+                  id: c.id,
+                  databaseId: c.databaseId,
+                  url: c.url,
+                  body: c.body,
+                  author: c.author?.login || 'unknown',
+                  createdAt: new Date(c.createdAt),
+                  type: 'issue_comment',
+                });
+              }
+
+              for (const thread of prData.reviewThreads?.nodes || []) {
+                for (const c of thread.comments?.nodes || []) {
+                  if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                  if (c.body.includes(MARKER)) continue;
+                  seenCommentIds.add(c.id);
+                  allComments.push({
+                    id: c.id,
+                    databaseId: c.databaseId,
+                    url: c.url,
+                    body: c.body,
+                    author: c.author?.login || 'unknown',
+                    createdAt: new Date(c.createdAt),
+                    type: 'review_comment',
+                    path: thread.path,
+                  });
+                }
+              }
+
+              for (const r of prData.reviews?.nodes || []) {
+                if (!r || !r.body || r.state === 'PENDING' || seenCommentIds.has(r.id)) continue;
+                if (r.body.includes(MARKER)) continue;
+                seenCommentIds.add(r.id);
+                allComments.push({
+                  id: r.id,
+                  url: r.url,
+                  body: r.body,
+                  author: r.author?.login || 'unknown',
+                  createdAt: new Date(r.submittedAt),
+                  type: 'review_body',
+                });
+              }
+
+              const openFailComments = [];
+              for (const c of allComments) {
+                if (!hasFailLine(c.body)) continue;
+                const author = c.author;
+                const hasLaterPass = allComments.some(other =>
+                  other.author === author &&
+                  other.createdAt > c.createdAt &&
+                  hasPassLine(other.body)
+                );
+                if (!hasLaterPass) {
+                  const failLine = extractFailLine(c.body, 100);
+                  openFailComments.push({
+                    id: c.id,
+                    author: c.author,
+                    url: c.url,
+                    failLine,
+                    path: c.path,
+                  });
+                }
+              }
+
+              const totalBlockers = unresolvedThreads.length + changesRequestedReviews.length + openFailComments.length;
+
+              const lines = [];
+              lines.push(MARKER);
+              lines.push('## PR Blocker Checklist');
+              lines.push('');
+              lines.push(`**Head SHA:** \`${headSha}\``);
+              lines.push('');
+
+              if (totalBlockers === 0) {
+                lines.push('### Status: Ready');
+                lines.push('');
+                lines.push('- [x] All review threads resolved');
+                lines.push('- [x] No reviews requesting changes');
+                lines.push('- [x] No failing review or issue comments');
+              } else {
+                const blockerWord = totalBlockers === 1 ? 'blocker' : 'blockers';
+                lines.push(`### Status: Blocked (${totalBlockers} open ${blockerWord})`);
+                lines.push('');
+
+                lines.push(`#### Review Threads (${unresolvedThreads.length} unresolved)`);
+                if (unresolvedThreads.length === 0) {
+                  lines.push('- [x] All review threads resolved');
+                } else {
+                  for (const t of unresolvedThreads) {
+                    const snippetPart = t.snippet ? `: "${t.snippet}"` : '';
+                    lines.push(`- [ ] [\`${t.path}\`](${t.url}) by @${t.author}${snippetPart}`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Changes Requested (${changesRequestedReviews.length})`);
+                if (changesRequestedReviews.length === 0) {
+                  lines.push('- [x] No reviews requesting changes');
+                } else {
+                  for (const r of changesRequestedReviews) {
+                    lines.push(`- [ ] Review by @${r.author}: [View changes requested](${r.url})`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Failing Comments (${openFailComments.length})`);
+                if (openFailComments.length === 0) {
+                  lines.push('- [x] No failing review or issue comments');
+                } else {
+                  for (const c of openFailComments) {
+                    const detail = c.failLine ? `: \`${c.failLine}\`` : '';
+                    const pathInfo = c.path ? ` on \`${c.path}\`` : '';
+                    lines.push(`- [ ] Comment by @${c.author}${pathInfo}: [View comment](${c.url})${detail}`);
+                  }
+                }
+              }
+
+              const markdownBody = lines.join('\n');
+
+              if (core && core.summary) {
+                await core.summary.addRaw(markdownBody).write();
+              }
+
+              if (isCrossRepo) {
+                console.log('Pull request is from a fork. Skipped PR comment creation or update (written to step summary).');
+                return;
+              }
+
+              let existingCommentId = null;
+              for (const c of prData.comments?.nodes || []) {
+                if (c.body && c.body.includes(MARKER)) {
+                  existingCommentId = c.databaseId;
+                  break;
+                }
+              }
+
+              if (!existingCommentId) {
+                try {
+                  const { data: comments } = await github.rest.issues.listComments({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    per_page: 100,
+                  });
+                  const found = comments.find(c => c.body && c.body.includes(MARKER));
+                  if (found) {
+                    existingCommentId = found.id;
+                  }
+                } catch (err) {
+                  console.log('Note: listComments error:', err.message);
+                }
+              }
+
+              if (existingCommentId) {
+                console.log(`Updating existing blocker checklist comment #${existingCommentId}`);
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existingCommentId,
+                  body: markdownBody,
+                });
+              } else {
+                console.log(`Creating new blocker checklist comment on PR #${prNumber}`);
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: markdownBody,
+                });
+              }
+            } catch (err) {
+              console.error('Non-fatal error in PR Blocker Checklist:', err);
+              if (core && core.warning) {
+                core.warning(`PR Blocker Checklist encountered a non-fatal error: ${err.message}`);
+              }
+            }
