@@ -176,7 +176,11 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     "type": "value_error",
                 }
             ]
-            logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, errors)
+            logger.warning(
+                "fsma_event_validation_failed tenant=%s errors=%s",
+                tenant_id,
+                [{"loc": err.get("loc"), "type": err.get("type")} for err in errors],
+            )
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
 
@@ -220,13 +224,17 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     logger.warning(
                         "fsma_event_validation_failed tenant=%s errors=%s",
                         tenant_id,
-                        other.errors(),
+                        [{"loc": err.get("loc"), "type": err.get("type")} for err in other.errors()],
                     )
                     _audit_log_validation_failure(other.errors(), tenant_id, normalized)
                     return None
                 dumped["tlc"] = received_tlc
                 return dumped
-            logger.warning("fsma_event_validation_failed tenant=%s errors=%s", tenant_id, errors)
+            logger.warning(
+                "fsma_event_validation_failed tenant=%s errors=%s",
+                tenant_id,
+                [{"loc": err.get("loc"), "type": err.get("type")} for err in errors],
+            )
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
     except ImportError:
