@@ -133,22 +133,24 @@ def test_all_four_extractors_populate_envelope():
 
 def test_warehouse_extractors_populate_envelope():
     """944 and 945 carry the same ISA and GS envelope keys as 856."""
-    from pathlib import Path
-
+    # Coverage gap: 944/945 envelope extraction from a real recorded warehouse advice is not covered
+    # because no real recorded 944/945 file exists in the repo (fixtures removed in #3500).
     from app.edi_ingestion.extractors import _extract_944_fields, _extract_945_fields
 
-    corpus = Path(__file__).parent / "fixtures" / "edi_corpus"
-    for name, extractor in (
-        ("receipt_944.edi", _extract_944_fields),
-        ("advice_945.edi", _extract_945_fields),
-    ):
-        segments = _parse_x12_segments((corpus / name).read_text(encoding="utf-8"))
+    raw = _build_isa() + _GS_BASE
+    segments = _parse_x12_segments(raw)
+    expected_env = _extract_envelope_ids(segments)
+
+    for extractor in (_extract_944_fields, _extract_945_fields):
         data = extractor(segments)
-        assert data["isa13"]
-        assert data["gs_sender_id"] == "SENDERID"
-        assert data["sender_id"] == "SENDERID"
-        assert data["receiver_id"] == "RECEIVERID"
-        assert data["envelope_mismatch"] is False
+        for key in ("isa13", "gs_sender_id", "sender_id", "receiver_id", "envelope_mismatch"):
+            assert key in data
+        assert data["sender_id"] == data["gs_sender_id"]
+        assert data["isa13"] == expected_env["isa13"]
+        assert data["gs_sender_id"] == expected_env["gs_sender_id"]
+        assert data["sender_id"] == expected_env["sender_id"]
+        assert data["receiver_id"] == expected_env["receiver_id"]
+        assert data["envelope_mismatch"] == expected_env["envelope_mismatch"]
 
 
 # ---------------------------------------------------------------------------
