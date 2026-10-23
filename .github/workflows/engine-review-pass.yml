@@ -42,6 +42,19 @@ jobs:
               return;
             }
 
+            const ALLOWED_ENGINES = new Set([
+              'claude',
+              'codex',
+              'gemini',
+              'grok',
+              'muse',
+              'kimi',
+              'visual-designer',
+              'product-designer',
+            ]);
+
+            const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+
             let statusPosted = false;
             async function setCommitStatus(state, description) {
               if (statusPosted) {
@@ -68,16 +81,11 @@ jobs:
             try {
               const headRef = pr.head?.ref || '';
               const slashIndex = headRef.indexOf('/');
-              if (slashIndex <= 0) {
-                const msg = 'cannot determine author engine';
-                await setCommitStatus('failure', msg);
-                core.setFailed(msg);
-                return;
-              }
+              const rawPrefix = slashIndex > 0 ? headRef.slice(0, slashIndex).trim() : '';
+              const authorEngine = rawPrefix.toLowerCase();
 
-              const authorEngine = headRef.slice(0, slashIndex).trim();
-              if (!authorEngine) {
-                const msg = 'cannot determine author engine';
+              if (!ALLOWED_ENGINES.has(authorEngine)) {
+                const msg = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
                 await setCommitStatus('failure', msg);
                 core.setFailed(msg);
                 return;
@@ -99,7 +107,17 @@ jobs:
               core.info(`Total reviews retrieved: ${reviews.length}`);
 
               const eligibleReviews = reviews.filter((r) => {
-                return r.state !== 'DISMISSED' && r.submitted_at && r.body;
+                if (r.state === 'DISMISSED' || !r.submitted_at || !r.body) {
+                  return false;
+                }
+                const assoc = (r.author_association || '').toUpperCase();
+                if (!ALLOWED_ASSOCIATIONS.has(assoc)) {
+                  core.info(
+                    `Ignoring review #${r.id} from user '${r.user?.login || 'unknown'}' with author_association '${r.author_association}'`
+                  );
+                  return false;
+                }
+                return true;
               });
 
               eligibleReviews.sort((a, b) => {
@@ -111,7 +129,8 @@ jobs:
                 return a.id - b.id;
               });
 
-              const markerRegex = /^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
+              // The marker must be alone on its own line.
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
@@ -128,6 +147,11 @@ jobs:
                   const action = match[1];
                   const reviewerEngine = match[2];
                   const markerSha = match[3];
+
+                  if (!ALLOWED_ENGINES.has(reviewerEngine.toLowerCase())) {
+                    core.info(`Ignoring marker with unapproved reviewer engine '${reviewerEngine}'`);
+                    continue;
+                  }
 
                   if (!headShaLower.startsWith(markerSha.toLowerCase())) {
                     core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
@@ -152,7 +176,7 @@ jobs:
               }
 
               const markers = Array.from(latestMarkers.values());
-              const blockedMarkers = markers.filter((m) => m.action === 'BLOCKED');
+              const blockedMarkers = markers.filter((m) => m.action === 'BLOCKED' || m.action === 'FAIL');
               const nonAuthorPassMarkers = markers.filter((m) => {
                 return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
               });
