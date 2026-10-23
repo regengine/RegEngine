@@ -22,9 +22,12 @@ The corrected contract asserted here:
 
 from __future__ import annotations
 
+import json
+import logging
 import sys
 import types
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
@@ -40,9 +43,13 @@ pytest.importorskip("fastapi")
 
 import app.webhook_router_v2 as wr  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
+from app.webhook_models import WebhookCTEType  # noqa: E402
 from app.webhook_router_v2.routes import _failure_diagnostics  # noqa: E402
 
-TENANT_ID = "tenant-a"
+# Identifiers are minted per test run with uuid4; nothing here is a recorded
+# or invented customer value.
+TENANT_ID = str(uuid.uuid4())
+KEY_ID = str(uuid.uuid4())
 
 
 def _build_app() -> FastAPI:
@@ -50,7 +57,7 @@ def _build_app() -> FastAPI:
     app.include_router(wr.router)
     app.dependency_overrides[wr._verify_api_key] = lambda: None
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key",
+        key_id=KEY_ID,
         scopes=["*"],
         tenant_id=TENANT_ID,
         auth_mode="test",
@@ -110,6 +117,104 @@ def recorder(monkeypatch) -> _LogRecorder:
     rec = _LogRecorder()
     monkeypatch.setattr(wr, "logger", rec)
     return rec
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/webhooks/ingest
+#
+# WebhookPayload requires at least one structurally valid event, so the
+# request carries exactly one. Its lot code, product text and location are uuid4
+# canaries minted at runtime (not invented supply-chain records); they exist
+# only so the redaction assertion has something concrete to look for. The
+# persistence stub is a MagicMock whose batch store raises, which is the
+# smallest path into the handler's ``except Exception`` block.
+# ---------------------------------------------------------------------------
+
+
+class TestIngestBatchFailureLogging:
+    def _post(self, monkeypatch, caplog):
+        from app.subscription_gate import require_active_subscription
+        from shared.database import get_db_session
+
+        session = MagicMock()
+        persistence = MagicMock()
+        persistence.store_events_batch.side_effect = SystemError("store unavailable")
+        fake_cte = types.ModuleType("shared.cte_persistence")
+        fake_cte.CTEPersistence = lambda _s: persistence
+        monkeypatch.setitem(sys.modules, "shared.cte_persistence", fake_cte)
+
+        monkeypatch.setattr(wr, "consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        monkeypatch.setattr("app.authz.consume_tenant_rate_limit", lambda **_kw: (True, 999))
+        # KDE completeness and alert generation are covered elsewhere; skip
+        # them so the one event reaches the batch store without extra fields.
+        monkeypatch.setattr(wr, "_validate_event_kdes", lambda _e: [])
+        monkeypatch.setattr(wr, "_generate_alerts", lambda _e: [])
+        monkeypatch.setattr(wr, "_rules_preeval_reject", lambda *_a, **_kw: (False, None, None))
+        for var in ("API_KEY", "REGENGINE_API_KEY", "WEBHOOK_HMAC_SECRET"):
+            monkeypatch.delenv(var, raising=False)
+
+        app = _build_app()
+        app.dependency_overrides[wr._verify_webhook_signature] = lambda: None
+        app.dependency_overrides[require_active_subscription] = lambda: None
+
+        def _db():
+            yield session
+
+        app.dependency_overrides[get_db_session] = _db
+
+        canary_tlc = uuid.uuid4().hex
+        canary_product = uuid.uuid4().hex
+        canary_location = uuid.uuid4().hex
+        source = uuid.uuid4().hex
+        payload = {
+            "source": source,
+            "events": [
+                {
+                    "cte_type": WebhookCTEType.SHIPPING.value,
+                    "traceability_lot_code": canary_tlc,
+                    "product_description": canary_product,
+                    "location_name": canary_location,
+                    "quantity": 1,
+                    "unit_of_measure": "",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "kdes": {},
+                }
+            ],
+        }
+        with caplog.at_level(logging.DEBUG):
+            resp = TestClient(app).post(
+                "/api/v1/webhooks/ingest",
+                json=payload,
+                headers={"Idempotency-Key": uuid.uuid4().hex},
+            )
+        return resp, source, (canary_tlc, canary_product, canary_location)
+
+    def _record(self, caplog) -> logging.LogRecord:
+        matches = [r for r in caplog.records if "ingest_batch_failed" in r.getMessage()]
+        assert matches, f"expected an ingest_batch_failed log line; got {[r.getMessage() for r in caplog.records]}"
+        return matches[0]
+
+    def test_logs_traceback_tenant_count_and_source(self, monkeypatch, caplog) -> None:
+        resp, source, _canaries = self._post(monkeypatch, caplog)
+        assert resp.status_code == 500, resp.text
+        record = self._record(caplog)
+        fields = json.loads(record.getMessage())
+        assert record.levelno == logging.ERROR
+        assert "Traceback" in fields.get("exception", ""), "ingest_batch_failed must carry the traceback (#2868)"
+        assert fields["tenant_id"] == TENANT_ID, "without tenant_id there is no way to tell whose batch failed (#2868)"
+        assert fields["event_count"] == 1
+        assert fields["source"] == source
+        assert fields["error_type"] == "SystemError"
+        assert fields["correlation_id"]
+
+    def test_does_not_log_lot_code_or_product_text(self, monkeypatch, caplog) -> None:
+        """Diagnostics only, never the payload (#2868)."""
+        resp, _source, canaries = self._post(monkeypatch, caplog)
+        assert resp.status_code == 500
+        self._record(caplog)
+        logged = " ".join(r.getMessage() + (caplog.text or "") for r in caplog.records)
+        for canary in canaries:
+            assert canary not in logged, "request-body values must not reach the log (#2868)"
 
 
 # ---------------------------------------------------------------------------
