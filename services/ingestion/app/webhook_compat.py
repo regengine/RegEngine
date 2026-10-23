@@ -1,8 +1,8 @@
 """Compatibility helpers for webhook auth and ingestion.
 
 This module is the stable import surface for non-router ingestion modules.
-All auth logic delegates to ``shared.auth.require_api_key`` — the single
-canonical auth path for every RegEngine service.
+API-key callers delegate to ``shared.auth.require_api_key``. The EPCIS app
+path also accepts the existing verified workspace session.
 
 Legacy ``webhook_router.py`` has been retired; ``webhook_router_v2.py``
 remains the mounted HTTP router.
@@ -26,8 +26,10 @@ from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
 from shared.database import get_db_session as _get_db_session
+from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
 
+from .authz import IngestionPrincipal, get_ingestion_principal
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
@@ -64,15 +66,31 @@ def _batch_dedup_key(event: IngestEvent) -> str:
 async def _verify_api_key(
     request: Request,
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-) -> Union[APIKey, APIKeyResponse]:
-    """Auth gate — delegates to shared.auth.require_api_key.
+) -> Union[APIKey, APIKeyResponse, IngestionPrincipal]:
+    """Auth gate for API keys and EPCIS workspace sessions.
 
     This is the stable import surface for ingestion sub-routers.
-    All auth logic (preshared key, scoped keys, test bypass) lives
-    in ``shared/auth.py``. The accepted key is stored on ``request.state``
-    and resolved through the shared tenant context so legacy routers cannot
-    use path/query/header tenant claims to pivot across tenants.
+    API-key logic lives in ``shared/auth.py``. The accepted key or session
+    principal is stored on ``request.state`` and resolved through the shared
+    tenant context so legacy routers cannot use caller tenant claims to pivot.
     """
+    # EPCIS is an app import surface as well as a key-backed integration.
+    # Keep other webhook callers on their established API-key path.
+    if (
+        request.url.path.startswith("/api/v1/epcis/")
+        and not x_regengine_api_key
+        and (
+            request.cookies.get("__Host-regengine_session")
+            or request.headers.get("authorization", "").lower().startswith("bearer ")
+        )
+    ):
+        principal = await get_ingestion_principal(request=request, x_regengine_api_key=None)
+        if not has_permission(principal.scopes, "webhooks.ingest"):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        request.state.principal = principal
+        request.state.tenant_context = await resolve_tenant_context(request)
+        return principal
+
     api_key = await require_api_key(
         request=request,
         x_regengine_api_key=x_regengine_api_key,

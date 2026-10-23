@@ -87,31 +87,31 @@ export default function ExceptionQueuePage() {
       title="Exception Queue"
       description="Manage compliance exceptions — resolve defects before they block response packages"
       meta={
-        blockingCount > 0 ? (
+        !exceptions.error && !blocking.error && blocking.data ? (blockingCount > 0 ? (
           <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />
         ) : (
           <StatusBadge state="compliant" label="No Blockers" />
-        )
+        )) : undefined
       }
     />
   );
 
 
-  if (exceptions.error) {
+  if (exceptions.error || blocking.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"
           role="alert"
           title="Unable to load data from the control plane API."
           action={
-            <Button variant="secondary" size="sm" onClick={() => exceptions.refetch()}>
+            <Button variant="secondary" size="sm" onClick={() => { void exceptions.refetch(); void blocking.refetch(); }}>
               Retry
             </Button>
           }
         >
-          {(exceptions.error as Error).message}
+          {((exceptions.error || blocking.error) as Error).message}
         </Callout>
       </PageContainer>
     );

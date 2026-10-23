@@ -88,6 +88,13 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         // with the cookie token — preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
 
+        // Browser workspace sessions use their own verified identity even if
+        // a legacy API-key cookie remains from an earlier developer flow.
+        if (request.cookies.get('__Host-regengine_session')?.value) {
+            headers.delete('authorization');
+            headers.delete('x-regengine-api-key');
+        }
+
         return headers;
     },
 });

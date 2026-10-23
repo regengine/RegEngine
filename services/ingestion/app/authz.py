@@ -86,6 +86,7 @@ class IngestionPrincipal(BaseModel):
     scopes: list[str] = Field(default_factory=list)
     tenant_id: Optional[str] = None
     auth_mode: str = "scoped_key"
+    allowed_jurisdictions: list[str] = Field(default_factory=list)
 
 
 _ACTION_BASE_RPM: dict[str, int] = {
@@ -237,6 +238,39 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
         scopes=list(api_key.scopes or []),
         tenant_id=api_key.tenant_id,
         auth_mode="scoped_key",
+        allowed_jurisdictions=list(getattr(api_key, "allowed_jurisdictions", None) or []),
+    )
+
+
+async def _principal_from_user_session(request: Request) -> IngestionPrincipal:
+    """Use the admin verifier and live tenant role permissions for a user session."""
+    from shared.tenant_context import get_rls_tenant_id, set_rls_tenant_id
+
+    from services.admin.app.auth_routes import _resolve_session_permissions
+    from services.admin.app.database import SessionLocal, arm_global_admin_context, disarm_global_admin_context
+    from services.admin.app.dependencies import _optional_bearer_token, get_current_user
+
+    # get_current_user sets this only after a verified token or active cookie
+    # session has been bound to an active membership. Clear any prior context.
+    set_rls_tenant_id(None)
+    with SessionLocal() as db:
+        user = await get_current_user(
+            request=request, token=_optional_bearer_token(request), db=db, session_store=None
+        )
+        tenant_id = get_rls_tenant_id()
+        if not tenant_id:
+            raise HTTPException(status_code=401, detail="Tenant selection required")
+        arm_global_admin_context(db)
+        try:
+            scopes = _resolve_session_permissions(user_id=user.id, tenant_id=tenant_id, db=db)
+        finally:
+            disarm_global_admin_context(db)
+
+    return IngestionPrincipal(
+        key_id=f"session:{user.id}",
+        scopes=scopes,
+        tenant_id=str(tenant_id),
+        auth_mode="session",
     )
 
 
@@ -247,7 +281,7 @@ async def get_ingestion_principal(
     """
     Authenticate caller and return principal context.
 
-    Production accepts only database-backed, credential-bound API keys.
+    Production accepts database-backed tenant keys or verified browser sessions.
     Explicit development/test mode retains the historical open fallback.
     """
     client_ip = request.client.host if request.client else "unknown"
@@ -257,6 +291,15 @@ async def get_ingestion_principal(
 
     _dev = _is_dev_env()
     if not x_regengine_api_key:
+        if request.cookies.get("__Host-regengine_session") or request.headers.get(
+            "authorization", ""
+        ).lower().startswith("bearer "):
+            try:
+                return await _principal_from_user_session(request)
+            except HTTPException as exc:
+                if exc.status_code == 401:
+                    _record_auth_failure(client_ip)
+                raise
         if not _dev:
             _record_auth_failure(client_ip)
             raise HTTPException(status_code=401, detail="Invalid or missing API key")

@@ -410,7 +410,7 @@ class APIClient {
     return data;
   }
 
-  async ingestURL(apiKey: string, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
+  async ingestURL(apiKey: string | null | undefined, url: string, sourceSystem: string = 'generic'): Promise<IngestURLResponse> {
     const response = await this.ingestionClient.post<IngestURLResponse>(
       '/v1/ingest/url',
       { url, source_system: sourceSystem },

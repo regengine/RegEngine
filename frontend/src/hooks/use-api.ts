@@ -196,7 +196,7 @@ export const useRevokeAPIKey = () => {
 // Ingestion
 export const useIngestURL = () => {
   return useMutation({
-    mutationFn: ({ apiKey, url, sourceSystem }: { apiKey: string; url: string; sourceSystem?: string }) =>
+    mutationFn: ({ apiKey, url, sourceSystem }: { apiKey?: string; url: string; sourceSystem?: string }) =>
       apiClient.ingestURL(apiKey, url, sourceSystem),
   });
 };
