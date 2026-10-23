@@ -110,24 +110,36 @@ test.beforeEach(async ({ page, context }, testInfo) => {
 test('non-admin is blocked from /sysadmin', async ({ page }, testInfo) => {
     const bad = watchRequests(page);
     await page.goto('/sysadmin', { waitUntil: 'domcontentloaded' });
-    // proxy.ts redirects non-sysadmin sessions to /dashboard.
-    await expect(page).toHaveURL(/\/dashboard/);
+    // Non-sysadmin sessions always end on /dashboard, via one of two paths:
+    // - JWT/Supabase sessions: proxy.ts requireAppAuth() redirects to
+    //   /dashboard (src/proxy.ts:276, :435, :446).
+    // - Opaque __Host-regengine_session (what this spec injects): proxy.ts
+    //   Strategy 1 passes through with no sysadmin check (src/proxy.ts:244),
+    //   then SysAdminDashboard pushes /login for !user?.is_sysadmin
+    //   (src/app/sysadmin/page.tsx:73-77), and the login page forwards the
+    //   still-authenticated user to safeNextPath(null) = /dashboard
+    //   (src/app/login/PasswordlessEntryClient.tsx:46-54).
+    await expect
+        .poll(() => new URL(page.url()).pathname, {
+            message: 'non-admin /sysadmin visit lands on /dashboard',
+            timeout: 15_000,
+        })
+        .toBe('/dashboard');
     await attachRequests(testInfo.title, bad);
 });
 
 test('non-admin is blocked from /admin', async ({ page }, testInfo) => {
     const bad = watchRequests(page);
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(2000);
-    const pathname = new URL(page.url()).pathname;
-    const bodyText = await page.locator('body').innerText().catch(() => '');
-    const denied = /access denied|not authorized|forbidden|[^a-z]403[^a-z]|permission/i.test(
-        ` ${bodyText} `,
-    );
-    expect(
-        pathname !== '/admin' && !pathname.startsWith('/admin/') ? true : denied,
-        `non-admin reached ${page.url()} with no access denial`,
-    ).toBe(true);
+    // /admin has no proxy-level denial: non-high-assurance sessions stay on
+    // the page and see the exact denial card below (src/app/admin/page.tsx:
+    // canManageKeys at :42 requires is_sysadmin + WebAuthn/SSO; denial card
+    // at :142-169).
+    await expect(page).toHaveURL(/\/admin\/?$/);
+    await expect(page.getByText('High-assurance sign-in required')).toBeVisible();
+    await expect(
+        page.getByText('Live credential management requires a WebAuthn or SSO sysadmin session.'),
+    ).toBeVisible();
     await attachRequests(testInfo.title, bad);
 });
 

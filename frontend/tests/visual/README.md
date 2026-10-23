@@ -18,7 +18,7 @@ workflow sets automatically (see below).
 | `pages.visual.spec.ts` | Full-page screenshots per public route (desktop+mobile), redirect/404 assertions, header/nav bbox drift |
 | `priority-extras.visual.spec.ts` | Mobile nav-open, CTA focus ring, tablet home+pricing |
 | `content.spec.ts` | Copy rules (all `expect.soft`): no em/en dashes, no lone `-`, banned demo words, EPCIS→Preview, Live-label and trust rules |
-| `smoke.spec.ts` | Page/console errors, same-origin ≥400s, empty pages; third-party failures attached, never fail |
+| `smoke.spec.ts` | Page/same-origin console errors, same-origin ≥400s, empty pages; third-party failures attached + annotated, never fail |
 | `preview-forms.spec.ts` | Blank-submit validation screenshots, login+signup (preview only) |
 | `signed-in.spec.ts` | Read-only signed-in checks (manual only, `VISUAL_AUTH=1`) |
 | `layout-boxes.json` | Expected header/nav boxes (empty: `_note` only — see below) |
@@ -131,6 +131,10 @@ Comparison tolerances live in the config: `maxDiffPixelRatio: 0.001`,
 `threshold: 0.2`, `scale: 'css'`, `deviceScaleFactor: 1`, animations
 disabled, light scheme, reduced motion, `locale: en-US`,
 `timezoneId: America/Los_Angeles`.
+
+`maxDiffPixelRatio: 0.001` is intentionally strict for the first baseline
+run. It can be relaxed (e.g. to `0.005`–`0.01`) after that run if the only
+diffs are noise-level (subpixel antialiasing, font hinting).
 
 ## Layout boxes
 

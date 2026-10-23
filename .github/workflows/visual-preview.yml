@@ -30,10 +30,14 @@ permissions:
 jobs:
   visual-report:
     name: visual-report (non-required)
+    # Preview deploys only: Vercel names the environment 'Preview' (exact,
+    # case-sensitive). Railway environments ('production', 'staging',
+    # 'RegEngine-Prod', ...) never match, so Railway deploys never run this.
+    # The URL host is validated by the first step below (must be *.vercel.app).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.deployment_status.state == 'success' &&
-       github.event.deployment_status.environment != 'Production')
+       github.event.deployment.environment == 'Preview')
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 30
@@ -41,6 +45,54 @@ jobs:
       run:
         working-directory: frontend
     steps:
+      - name: Validate preview URL host (*.vercel.app only)
+        # Runs before checkout/install so a non-preview URL fails fast and the
+        # test step below never runs. URLs arrive via env, never interpolated
+        # into the script. Rejects: empty URL, non-http(s) scheme, userinfo
+        # ('user@host') tricks, and any host not ending in '.vercel.app'.
+        env:
+          DEPLOYMENT_URL: ${{ github.event.deployment_status.environment_url }}
+          DISPATCH_URL: ${{ inputs.url }}
+          EVENT_NAME: ${{ github.event_name }}
+        # Override the job's frontend/ default: this runs before checkout.
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            url="$DISPATCH_URL"
+          else
+            url="$DEPLOYMENT_URL"
+          fi
+          if [ -z "$url" ]; then
+            echo "::error::No preview URL to check (deployment_status.environment_url / inputs.url is empty)."
+            exit 1
+          fi
+          rest="${url#http://}"
+          rest="${rest#https://}"
+          if [ "$rest" = "$url" ]; then
+            echo "::error::Preview URL must start with http(s)://."
+            exit 1
+          fi
+          authority="${rest%%/*}"
+          authority="${authority%%\?*}"
+          authority="${authority%%\#*}"
+          case "$authority" in
+            *@*)
+              echo "::error::Preview URL authority must not contain userinfo."
+              exit 1
+              ;;
+          esac
+          host="${authority%%:*}"
+          host="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+          case "$host" in
+            *.vercel.app)
+              echo "Preview host OK: $host"
+              ;;
+            *)
+              echo "::error::Preview URL host must end with .vercel.app."
+              exit 1
+              ;;
+          esac
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
         with:

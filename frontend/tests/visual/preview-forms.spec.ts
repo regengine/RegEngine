@@ -16,6 +16,25 @@ test.skip(
 
 test.describe.configure({ mode: 'parallel' });
 
+// Blank submits run ONLY against Vercel Preview deploys. This guard fails
+// the test (never skips) when the baseURL host is anything else — including
+// production — regardless of VISUAL_ALLOW_FORM_SUBMIT.
+test.beforeEach(() => {
+    const baseURL = test.info().project.use.baseURL ?? '';
+    let hostname = '';
+    try {
+        hostname = new URL(baseURL).hostname;
+    } catch {
+        hostname = '';
+    }
+    if (!hostname.endsWith('.vercel.app')) {
+        throw new Error(
+            `preview-forms refuses to submit: baseURL host "${hostname || baseURL || '(empty)'}" ` +
+                'does not end with .vercel.app. Blank submits run only against Vercel Preview deploys.',
+        );
+    }
+});
+
 test('blank submit on login shows validation', async ({ page }) => {
     await stabilize(page, '/login');
     await page.getByRole('button', { name: /^continue/i }).first().click();
