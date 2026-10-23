@@ -195,9 +195,9 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 **Owner:** Any engineer
 
 **Current State:**
-- Hardcoded demo data in 3 modules with inconsistent disclaimer handling
+- Hardcoded demo data in recall_report.py, recall_simulations.py and fda_export/router.py, with inconsistent disclaimer handling
 - recall_report.py shows disclaimer when demo_mode=true
-- epcis_export.py has sample data but no disclaimer in response
+- epcis_export.py has no sample data (#3520): an empty tenant gets an honest empty export, so it needs no disclaimer
 - recall_simulations.py always illustrative but disclaimer buried in response
 - `services/ingestion/app/fda_export/router.py` shows warning in README but not in JSON
 
@@ -216,8 +216,11 @@ This document breaks down the 8 critical compliance gaps identified in the audit
    )
    ```
 2. Update recall_report.py to use standardized disclaimer (already compliant, just refactor)
-3. epcis_export.py: no change needed. #3520 removed SAMPLE_EPCIS_EVENTS; the export now
-   returns an honest empty state (`data_source: "empty"`) when a tenant has no events.
+3. epcis_export.py: no change needed. #3520 removed SAMPLE_EPCIS_EVENTS. For a tenant with no events, the EPCIS export
+   returns an empty `epcisBody.eventList`, and `regengine:exportMetadata` has `dataSource: "empty"`,
+   `integrityVerified: false`, `chainHashVerified: false` and `regengine:message: "No data yet"`.
+   The FDA export returns a CSV with only the header row (`FDA_CSV_HEADER`), plus the response headers
+   `X-RegEngine-Data-Source: empty` and `X-RegEngine-Message: No data yet`.
 4. Update recall_simulations.py:
    - Rename `is_illustrative` → `uses_synthetic_metrics`
    - Always include SYNTHETIC_METRICS_DISCLAIMER in response
@@ -227,13 +230,13 @@ This document breaks down the 8 critical compliance gaps identified in the audit
 6. Create UI component (frontend integration task):
    - Any response with disclaimer flag should show warning banner
    - Make banner dismissible but persistent per session
-7. Test: Export from tenant with 0 events → verify disclaimer present; with 1000 events → no disclaimer
+7. Test: demo responses from recall_report.py, recall_simulations.py and fda_export/router.py include the disclaimer; tenant-data responses do not. Do not add a disclaimer to the EPCIS export: a tenant with 0 events gets the empty state from step 3, not demo data
 
 **Acceptance Criteria:**
-- [ ] All demo/sample data exports include standardized disclaimer
+- [ ] All demo/sample data exports (recall_report, recall_simulations, fda_export/router) include standardized disclaimer
 - [ ] Disclaimer appears in JSON response (not just files)
 - [ ] Frontend shows warning banner for demo data
-- [ ] Test: Demo export response includes `demo_mode: true, disclaimer: "⚠ DEMO/SAMPLE DATA..."`
+- [ ] Test: demo responses from those modules include `demo_mode: true, disclaimer: "⚠ DEMO/SAMPLE DATA..."`; the EPCIS empty-tenant response has no `demo_mode` or disclaimer
 
 **Blockers:** None
 **Dependencies:** None
