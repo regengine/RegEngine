@@ -68,7 +68,10 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # +1 public: admin:POST:/api/v1/tools/check-access, the lead-capture
         # tool-access token check the Next.js gate calls (#3318).
         # +1 global-sysadmin: admin:PATCH:/admin/organizations/{org_id} (rename).
-        "enabled_operation_count": 252,
+        # +2 tenant-scoped (SEL-421, #3492): admin:GET:/v1/supplier/facilities/
+        # {facility_id}/removal-check and admin:DELETE:/v1/supplier/facilities/
+        # {facility_id}, both dual-session + CSRF on the tenant boundary.
+        "enabled_operation_count": 254,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
         # eager route copies of fastapi < 0.137 (under which the previous
@@ -92,7 +95,7 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         "enabled_by_classification": {
             "global-sysadmin": 16,
             "public": 30,
-            "tenant-scoped": 199,
+            "tenant-scoped": 201,
             "workload-only": 7,
         },
     }
@@ -185,8 +188,9 @@ def test_dual_session_routes_record_cookie_tenancy_and_csrf_adapter(manifest):
     dual = [item for item in manifest["enabled_operations"] if item["test_adapter"] == "tenant_dual_session_csrf"]
     mutations = [item for item in dual if item["method"] in {"POST", "PUT", "PATCH", "DELETE"}]
 
-    assert len(dual) == 49
-    assert len(mutations) == 22
+    # 51/23 includes SEL-421's removal-check (GET) and facility DELETE.
+    assert len(dual) == 51
+    assert len(mutations) == 23
     assert all(item["authentication"] == "bearer-token-or-opaque-session-cookie" for item in dual)
     assert all(item["storage_boundary"] == "admin-postgres:jwt-tenant-or-session-membership-tenant" for item in dual)
 
