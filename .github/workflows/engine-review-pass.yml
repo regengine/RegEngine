@@ -200,7 +200,7 @@ jobs:
 
               core.info(`Eligible items created/updated after head commit date: ${candidateItems.length}`);
 
-              const passRegex = /^Review: PASS by (\S+) at ([0-9a-f]{7,40})\s*$/;
+              const passRegex = /^REVIEW: PASS ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
@@ -233,7 +233,7 @@ jobs:
                         reasons.push(`engine '${reviewerEngine}' matches Author-Engine '${authorEngine}' (must differ, case-insensitive)`);
                       }
                       if (!shaMatches) {
-                        reasons.push(`sha '${reviewerSha}' is not a prefix of current head sha '${headSha}'`);
+                        reasons.push(`sha '${reviewerSha}' is not equal to or a prefix of current head sha '${headSha}'`);
                       }
                       evaluatedMatches.push({
                         line,
@@ -243,7 +243,7 @@ jobs:
                         reasons: reasons.join('; '),
                       });
                     }
-                  } else if (/^Review:\s*/i.test(line)) {
+                  } else if (/^REVIEW:\s*/i.test(line)) {
                     otherReviewLines.push({
                       line,
                       itemType: item.type,
@@ -258,7 +258,7 @@ jobs:
               }
 
               if (passingReview) {
-                const successMsg = `Review: PASS by ${passingReview.engine} at ${passingReview.sha}`;
+                const successMsg = `REVIEW: PASS ${passingReview.engine} ${passingReview.sha}`;
                 core.info(`Engine review passed! Found passing review in ${passingReview.item.type} by ${passingReview.item.user}:`);
                 core.info(`  ${passingReview.line}`);
                 await setCommitStatus(headSha, 'success', successMsg);
@@ -290,7 +290,7 @@ jobs:
 
               if (evaluatedMatches.length > 0) {
                 failureLines.push('');
-                failureLines.push('Candidate Review: PASS lines evaluated but rejected:');
+                failureLines.push('Candidate REVIEW: PASS lines evaluated but rejected:');
                 for (const m of evaluatedMatches) {
                   failureLines.push(`  - [${m.itemType} by ${m.user} on ${m.date}] "${m.line}": ${m.reasons}`);
                 }
@@ -298,7 +298,7 @@ jobs:
 
               if (otherReviewLines.length > 0) {
                 failureLines.push('');
-                failureLines.push('Other Review: lines found after head commit date:');
+                failureLines.push('Other REVIEW: lines found after head commit date:');
                 for (const r of otherReviewLines) {
                   failureLines.push(`  - [${r.itemType} by ${r.user} on ${r.date}] "${r.line}"`);
                 }
@@ -306,7 +306,7 @@ jobs:
 
               if (staleReviewLines.length > 0) {
                 failureLines.push('');
-                failureLines.push('Stale Review: PASS lines found before head commit date (ignored):');
+                failureLines.push('Stale REVIEW: PASS lines found before head commit date (ignored):');
                 for (const s of staleReviewLines) {
                   failureLines.push(`  - [${s.itemType} by ${s.user} on ${s.date}] "${s.line}" (before head commit)`);
                 }
@@ -314,12 +314,12 @@ jobs:
 
               if (evaluatedMatches.length === 0 && otherReviewLines.length === 0 && staleReviewLines.length === 0) {
                 failureLines.push('');
-                failureLines.push('No Review lines found in PR reviews or comments.');
+                failureLines.push('No REVIEW lines found in PR reviews or comments.');
               }
 
               const detailedMsg = failureLines.join('\n');
               const statusDesc = evaluatedMatches.length > 0
-                ? 'Review: PASS rejected (engine or SHA mismatch)'
+                ? 'REVIEW: PASS rejected (engine or SHA mismatch)'
                 : 'No passing review found for current head SHA';
 
               await setCommitStatus(headSha, 'failure', statusDesc);
