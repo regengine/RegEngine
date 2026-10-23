@@ -852,11 +852,13 @@ class APIClient {
   async downloadSupplierFDARecords(
     format: 'csv' | 'xlsx',
     facilityId?: string,
+    tlcCode?: string,
   ): Promise<{ blob: Blob; filename: string; recordCount: number }> {
     const response = await this.adminClient.get('/v1/supplier/export/fda-records', {
       params: {
         format,
         ...(facilityId ? { facility_id: facilityId } : {}),
+        ...(tlcCode ? { tlc_code: tlcCode } : {}),
       },
       responseType: 'blob',
     });
