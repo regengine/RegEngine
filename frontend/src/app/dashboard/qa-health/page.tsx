@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { ErrorState } from "@/components/ui/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -264,25 +265,11 @@ export default function QAHealthPage() {
 
   if (isLoading) return <QAPageSkeleton />;
 
-  if (error && !data) {
+  if (error) {
     return (
       <PageContainer>
         <PageHeader title="QA health request failed" />
-        <Callout
-          tone="danger"
-          role="alert"
-          action={
-            <Button
-              onClick={() => refetch()}
-              variant="outline"
-              leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />}
-            >
-              Retry
-            </Button>
-          }
-        >
-          The sysadmin QA endpoint did not return a dashboard summary.
-        </Callout>
+        <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isRefetching} />
       </PageContainer>
     );
   }

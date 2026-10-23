@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -168,7 +169,7 @@ export default function NotificationPrefsPage() {
     const isLoggedIn = isAuthenticated;
     const rowIdPrefix = useId();
 
-    const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
+    const { data: prefs = null, isLoading: loading, error: prefsError, refetch: refetchPrefs, isFetching } = useQuery({
         queryKey: ['notification-prefs', tenantId],
         queryFn: () => apiFetchPrefs(tenantId),
         enabled: isLoggedIn && !!tenantId,
@@ -242,16 +243,7 @@ export default function NotificationPrefsPage() {
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {fetchFailed && (
-                    <Callout
-                        tone="danger"
-                        role="alert"
-                        icon={AlertTriangle}
-                        title="Notification preferences are currently unavailable."
-                    >
-                        Please try again later. If this persists, contact support.
-                    </Callout>
-                )}
+                {fetchFailed && <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} />}
 
                 {saveError && (
                     <Callout tone="danger" role="alert" icon={AlertTriangle}>

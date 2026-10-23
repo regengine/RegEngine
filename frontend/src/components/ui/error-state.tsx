@@ -12,6 +12,8 @@ export interface ErrorStateProps {
   message: string
   onRetry?: () => void
   retryLabel?: string
+  retrying?: boolean
+  requestId?: string
   className?: string
 }
 
@@ -20,6 +22,8 @@ export function ErrorState({
   message,
   onRetry,
   retryLabel = "Retry",
+  retrying = false,
+  requestId,
   className,
 }: ErrorStateProps) {
   return (
@@ -30,13 +34,15 @@ export function ErrorState({
       className={className}
       action={
         onRetry ? (
-          <Button variant="secondary" size="sm" onClick={onRetry}>
+          <Button variant="secondary" size="sm" onClick={onRetry} disabled={retrying}>
             {retryLabel}
           </Button>
         ) : undefined
       }
     >
-      {message}
+      <p>{message}</p>
+      {requestId && <p className="mt-2 text-xs">Request ID: {requestId}</p>}
+      <a href="/settings/support" className="mt-2 inline-block text-sm underline">Contact support</a>
     </Callout>
   )
 }
