@@ -75,4 +75,18 @@ describe('disabled dashboard features', () => {
         expect(screen.getByRole('button', { name: new RegExp(`${disabledAction} \\(coming soon\\)`, 'i') })).toBeDisabled();
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     });
+
+    it('keeps the manual Internal Drill path available', async () => {
+        renderPage(<RecallDrillsPage />);
+
+        expect(await screen.findByRole('link', { name: 'Requests (Internal Drill)' })).toHaveAttribute('href', '/requests');
+        expect(screen.getByText(/create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit/)).toBeInTheDocument();
+    });
+
+    it('keeps the on-demand tenant CSV export path available', async () => {
+        renderPage(<ExportJobsPage />);
+
+        expect(await screen.findByRole('link', { name: 'Recall Report' })).toHaveAttribute('href', '/dashboard/recall-report');
+        expect(screen.getByText(/on-demand tenant CSV export/)).toBeInTheDocument();
+    });
 });

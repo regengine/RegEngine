@@ -106,6 +106,7 @@ export default function RecallDrillsPage() {
                     <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
                     <div>
                         <p>Automated drill scheduling is still in development. This workspace cannot start a drill here today.</p>
+                        <p className="mt-2">You can run a full manual drill today: open <Link href="/requests" className="underline">Requests (Internal Drill)</Link>, create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit.</p>
                         <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
                     </div>
                 </div>
