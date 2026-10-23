@@ -83,7 +83,7 @@ describe('shared dashboard load errors', () => {
         expect(onRetry).toHaveBeenCalledOnce();
 
         rerender(<ErrorState message="We could not load this page." onRetry={onRetry} requestId={requestId} retrying />);
-        expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
     });
 
     it('omits the request ID when none is available', () => {
