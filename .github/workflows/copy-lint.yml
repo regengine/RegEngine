@@ -23,6 +23,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
       - run: node --test scripts/copy-lint/check-copy.test.mjs
       - run: node scripts/copy-lint/check-copy.mjs . --github
