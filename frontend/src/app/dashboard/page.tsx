@@ -189,7 +189,9 @@ export default function DashboardPage() {
       });
     }
 
-    if (qa.status !== "disabled" && qa.status !== "loading" && !qa.passing) {
+    // While QA health loads, its row shows "Checking QA signal" (in-progress)
+    // instead of the whole panel going to a loading state.
+    if (qa.status !== "disabled" && !qa.passing) {
       rows.push({
         id: "qa-health",
         state: qa.state,
@@ -201,6 +203,9 @@ export default function DashboardPage() {
 
     return rows;
   }, [systemStatus, workbenchReadiness, metrics, qa.status, qa.passing, qa.state, qa.label]);
+
+  // A QA row that is still loading is not an item needing attention yet.
+  const attentionCount = attentionRows.filter((row) => row.state !== "in-progress").length;
 
   const attentionColumns: DataTableColumn<AttentionRow>[] = [
     {
@@ -282,9 +287,9 @@ export default function DashboardPage() {
           <section aria-labelledby="needs-attention-heading" className="space-y-3">
             <h2 id="needs-attention-heading" className="text-subheading text-re-text-primary">
               Needs attention
-              {attentionRows.length > 0 && (
+              {attentionCount > 0 && (
                 <Badge tone="neutral" size="sm" className="ml-2">
-                  {attentionRows.length}
+                  {attentionCount}
                 </Badge>
               )}
             </h2>
@@ -296,7 +301,7 @@ export default function DashboardPage() {
               rowHref={(row) => row.href}
               density="medium"
               minWidth="480px"
-              status={qa.status === "loading" ? "loading" : attentionRows.length === 0 ? "empty" : "idle"}
+              status={attentionRows.length === 0 ? "empty" : "idle"}
               empty={{
                 icon: CheckCircle2,
                 title: "Nothing needs attention",

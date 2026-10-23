@@ -73,14 +73,30 @@ describe('MetricsOverviewWidget', () => {
   });
 
   it('a failed metrics load shows the error state with Retry, not placeholder zeros', () => {
-    // useSystemMetrics substitutes zeroed demo metrics on error.
-    mockMetrics({ data: emptyMetrics, error: new Error('Network Error') });
+    // Nothing real has ever loaded: no data, only an error.
+    mockMetrics({ data: undefined, error: new Error('Network Error') });
     render(<MetricsOverviewWidget readiness={undefined} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn't load dashboard metrics/i);
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
     expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
+  });
+
+  it('a failed refresh after real data keeps the real figures and shows a non-blocking note', () => {
+    // react-query keeps the last good `data` alongside the refetch `error`.
+    mockMetrics({
+      data: { ...emptyMetrics, compliance_score: 72, events_ingested: 1500, chain_length: 9, chain_valid: true, open_alerts: 2 },
+      error: new Error('Network Error'),
+    });
+    render(<MetricsOverviewWidget readiness={undefined} />);
+
+    expect(screen.getByText('72')).toBeInTheDocument();
+    expect(screen.getByText('1,500')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(/refresh failed/i);
+    screen.getByRole('button', { name: 'Retry' }).click();
+    expect(refetch).toHaveBeenCalledTimes(1);
   });
 
   it('a failed readiness load says so on the open fixes tile instead of "No data yet"', () => {

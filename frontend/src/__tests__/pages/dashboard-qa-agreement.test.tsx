@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardPage from '@/app/dashboard/page';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { useQAHealth } from '@/hooks/use-api';
+import { useQAHealth, useSystemMetrics } from '@/hooks/use-api';
 import type { QAHealthResponse } from '@/types/api';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn(() => ({ push: vi.fn() })) }));
@@ -57,6 +57,12 @@ const passing: QAHealthResponse = {
 describe('Dashboard QA agreement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useSystemMetrics).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSystemMetrics>);
     vi.mocked(useAuth).mockReturnValue({
       user: { id: 'u1', email: 'admin@example.com', is_sysadmin: true, status: 'active' },
       isHydrated: true,
@@ -83,6 +89,30 @@ describe('Dashboard QA agreement', () => {
     // The card says the same thing.
     expect(screen.getAllByText('QA signal failed').length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText(/0% ready/)).not.toBeInTheDocument();
+  });
+
+  it('while QA health loads, rows already known stay visible and only the QA row is loading', () => {
+    vi.mocked(useSystemMetrics).mockReturnValue({
+      data: { open_alerts: 3, events_ingested: 10, chain_length: 0, chain_valid: true },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useSystemMetrics>);
+    vi.mocked(useQAHealth).mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useQAHealth>);
+
+    renderPage();
+
+    const panel = attentionPanel();
+    expect(within(panel).getByText('3 open compliance alerts')).toBeInTheDocument();
+    expect(within(panel).getByText('Checking QA signal')).toBeInTheDocument();
+    expect(within(panel).queryByText('Nothing needs attention')).not.toBeInTheDocument();
+    // The count badge covers only real items, not the pending QA check.
+    expect(within(panel).getByRole('heading', { name: /needs attention/i })).toHaveTextContent(/1$/);
   });
 
   it('a passing gate is passing in both', () => {
