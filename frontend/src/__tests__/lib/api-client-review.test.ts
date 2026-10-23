@@ -19,6 +19,29 @@ const INVITE_CREATED_AT = new Date(NOW_MS - 119.5 * DAY_MS).toISOString();
 const INVITE_EXPIRES_AT = new Date(NOW_MS - 119.5 * DAY_MS + 7 * DAY_MS).toISOString();
 const REVIEW_CREATED_AT = new Date(NOW_MS - 120 * DAY_MS).toISOString();
 
+// Runtime-generated identifiers and text (no invented names, emails or IDs).
+// Each expected value reuses the same constant as its input.
+const uid = () => crypto.randomUUID();
+const REVIEW_ID = uid();
+const REVIEW_PREVIEW_TEXT = uid();
+const REVIEW_LOT_CODE = uid();
+const KEY_ID = uid();
+const KEY_NAME = uid();
+const RAW_API_KEY = uid();
+const TENANT_ID = uid();
+const TENANT_NAME = uid();
+const SELECTED_TENANT_ID = uid();
+const LEGACY_JOB_ID = uid();
+const EVENT_ID = uid();
+const USER_ID = uid();
+const ROLE_ID = uid();
+const INVITE_ID = uid();
+// .invalid is a reserved TLD (RFC 2606), so these can never be real addresses.
+const USER_EMAIL = `${uid()}@example.invalid`;
+const INVITE_EMAIL = `${uid()}@example.invalid`;
+// Real system role label from services/ingestion/app/team_mgmt.py ("viewer" -> "Viewer").
+const SYSTEM_ROLE_NAME = 'Viewer';
+
 const fetchMock = vi.fn();
 
 function jsonResponse(data: unknown): Response {
@@ -35,10 +58,10 @@ function csvResult(statuses: Array<'accepted' | 'rejected'>) {
         rejected: statuses.filter(status => status === 'rejected').length,
         ingestion_timestamp: INGESTED_AT,
         events: statuses.map((status, index) => ({
-            traceability_lot_code: `LOT-${index + 1}`,
+            traceability_lot_code: uid(),
             cte_type: 'shipping',
             status,
-            event_id: status === 'accepted' ? `evt-${index + 1}` : null,
+            event_id: status === 'accepted' ? uid() : null,
             sha256_hash: status === 'accepted' ? 'a'.repeat(64) : null,
             chain_hash: status === 'accepted' ? 'b'.repeat(64) : null,
             errors: status === 'rejected' ? [`Row ${index + 2}: rejected`] : [],
@@ -62,10 +85,10 @@ describe('apiClient review queue contract', () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({
             items: [
                 {
-                    review_id: 'rev-1',
+                    review_id: REVIEW_ID,
                     confidence_score: 0.42,
-                    text_preview: 'Preview text',
-                    extraction: { lot: 'LOT-1' },
+                    text_preview: REVIEW_PREVIEW_TEXT,
+                    extraction: { lot: REVIEW_LOT_CODE },
                     created_at: REVIEW_CREATED_AT,
                     status: 'pending',
                 },
@@ -88,10 +111,10 @@ describe('apiClient review queue contract', () => {
         );
         expect(items).toEqual([
             {
-                id: 'rev-1',
+                id: REVIEW_ID,
                 confidence_score: 0.42,
-                source_text: 'Preview text',
-                extracted_data: { lot: 'LOT-1' },
+                source_text: REVIEW_PREVIEW_TEXT,
+                extracted_data: { lot: REVIEW_LOT_CODE },
                 status: 'PENDING',
                 created_at: REVIEW_CREATED_AT,
                 updated_at: REVIEW_CREATED_AT,
@@ -106,12 +129,12 @@ describe('apiClient review queue contract', () => {
             .mockResolvedValueOnce(jsonResponse({}));
 
         const { apiClient } = await importFreshClient();
-        await apiClient.approveReviewItem('rev-1');
-        await apiClient.rejectReviewItem('rev-1');
+        await apiClient.approveReviewItem(REVIEW_ID);
+        await apiClient.rejectReviewItem(REVIEW_ID);
 
         expect(fetchMock).toHaveBeenNthCalledWith(
             1,
-            '/api/admin/v1/admin/review/flagged-extractions/rev-1/approve',
+            `/api/admin/v1/admin/review/flagged-extractions/${REVIEW_ID}/approve`,
             expect.objectContaining({
                 method: 'POST',
                 headers: {
@@ -124,7 +147,7 @@ describe('apiClient review queue contract', () => {
         );
         expect(fetchMock).toHaveBeenNthCalledWith(
             2,
-            '/api/admin/v1/admin/review/flagged-extractions/rev-1/reject',
+            `/api/admin/v1/admin/review/flagged-extractions/${REVIEW_ID}/reject`,
             expect.objectContaining({
                 method: 'POST',
                 headers: {
@@ -144,12 +167,12 @@ describe('apiClient review queue contract', () => {
 
     it('manages tenants and live keys through the opaque browser session contract', async () => {
         fetchMock
-            .mockResolvedValueOnce(jsonResponse({ key_id: 'key-1', api_key: 'raw-once' }))
+            .mockResolvedValueOnce(jsonResponse({ key_id: KEY_ID, api_key: RAW_API_KEY }))
             .mockResolvedValueOnce(jsonResponse({
                 items: [{
-                    id: 'key-1',
-                    key_id: 'key-1',
-                    name: 'Deploy key',
+                    id: KEY_ID,
+                    key_id: KEY_ID,
+                    name: KEY_NAME,
                     created_at: KEY_CREATED_AT,
                 }],
                 total: 1,
@@ -157,25 +180,25 @@ describe('apiClient review queue contract', () => {
                 limit: 100,
             }))
             .mockResolvedValueOnce(new Response(null, { status: 204 }))
-            .mockResolvedValueOnce(jsonResponse({ id: 'tenant-1', name: 'Acme' }));
+            .mockResolvedValueOnce(jsonResponse({ id: TENANT_ID, name: TENANT_NAME }));
 
         const { apiClient } = await importFreshClient();
-        await apiClient.createAPIKey({ name: 'Deploy key', tenantId: 'tenant-1' });
+        await apiClient.createAPIKey({ name: KEY_NAME, tenantId: TENANT_ID });
         const keys = await apiClient.listAPIKeys();
-        await apiClient.revokeAPIKey('key-1');
-        await apiClient.createTenant('Acme');
+        await apiClient.revokeAPIKey(KEY_ID);
+        await apiClient.createTenant(TENANT_NAME);
 
         expect(keys).toEqual([{
-            id: 'key-1',
-            key_id: 'key-1',
-            name: 'Deploy key',
+            id: KEY_ID,
+            key_id: KEY_ID,
+            name: KEY_NAME,
             created_at: KEY_CREATED_AT,
         }]);
 
         expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
             '/api/admin/v1/admin/keys',
             '/api/admin/v1/admin/keys',
-            '/api/admin/v1/admin/keys/key-1',
+            `/api/admin/v1/admin/keys/${KEY_ID}`,
             '/api/admin/v1/admin/tenants',
         ]);
         for (const [, init] of fetchMock.mock.calls) {
@@ -250,7 +273,7 @@ describe('apiClient review queue contract', () => {
     });
 
     it.each([
-        { job_id: 'legacy-job-1' },
+        { job_id: LEGACY_JOB_ID },
         { total: 2, accepted: 2, rejected: 1, events: [] },
         { total: 1, accepted: -1, rejected: 2, events: [] },
         { total: 1, accepted: 0, rejected: 1, events: [null] },
@@ -262,7 +285,7 @@ describe('apiClient review queue contract', () => {
             rejected: 0,
             ingestion_timestamp: INGESTED_AT,
             events: [{
-                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
+                traceability_lot_code: uid(), cte_type: 'shipping', status: 'accepted',
                 event_id: '', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64), errors: [],
             }],
         },
@@ -272,8 +295,8 @@ describe('apiClient review queue contract', () => {
             rejected: 0,
             ingestion_timestamp: INGESTED_AT,
             events: [{
-                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
-                event_id: 'evt-1', sha256_hash: 'not-a-hash', chain_hash: 'b'.repeat(64), errors: [],
+                traceability_lot_code: uid(), cte_type: 'shipping', status: 'accepted',
+                event_id: EVENT_ID, sha256_hash: 'not-a-hash', chain_hash: 'b'.repeat(64), errors: [],
             }],
         },
         {
@@ -282,8 +305,8 @@ describe('apiClient review queue contract', () => {
             rejected: 0,
             ingestion_timestamp: INGESTED_AT,
             events: [{
-                traceability_lot_code: 'LOT-1', cte_type: 'shipping', status: 'accepted',
-                event_id: 'evt-1', sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
+                traceability_lot_code: uid(), cte_type: 'shipping', status: 'accepted',
+                event_id: EVENT_ID, sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
                 errors: ['persistence warning'],
             }],
         },
@@ -297,10 +320,10 @@ describe('apiClient review queue contract', () => {
         const result = csvResult(['rejected', 'rejected']);
         fetchMock.mockResolvedValueOnce(jsonResponse(result));
         const { apiClient } = await importFreshClient();
-        apiClient.setCurrentTenant('tenant-123');
+        apiClient.setCurrentTenant(SELECTED_TENANT_ID);
         await expect(apiClient.ingestFile('cookie-managed', new File([''], 'events.csv'), 'fsma', 'shipping')).resolves.toEqual(result);
         const [, init] = fetchMock.mock.calls[0];
-        expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token', 'X-Tenant-ID': 'tenant-123' });
+        expect(init.headers).toEqual({ 'X-CSRF-Token': 'csrf-token', 'X-Tenant-ID': SELECTED_TENANT_ID });
         expect(init.body.get('source')).toBe('fsma');
         expect(init.body.get('cte_type')).toBe('shipping');
         expect(init.body.has('tenant_id')).toBe(false);
@@ -310,7 +333,7 @@ describe('apiClient review queue contract', () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({
                 items: [
-                    { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
+                    { id: USER_ID, email: USER_EMAIL, is_sysadmin: false, status: 'active' },
                 ],
                 total: 1,
                 skip: 0,
@@ -318,7 +341,7 @@ describe('apiClient review queue contract', () => {
             }))
             .mockResolvedValueOnce(jsonResponse({
                 items: [
-                    { id: 'role-1', name: 'Viewer', is_system: true },
+                    { id: ROLE_ID, name: SYSTEM_ROLE_NAME, is_system: true },
                 ],
                 total: 1,
                 skip: 0,
@@ -327,9 +350,9 @@ describe('apiClient review queue contract', () => {
             .mockResolvedValueOnce(jsonResponse({
                 items: [
                     {
-                        id: 'invite-1',
-                        email: 'pending@example.com',
-                        role_id: 'role-1',
+                        id: INVITE_ID,
+                        email: INVITE_EMAIL,
+                        role_id: ROLE_ID,
                         status: 'pending',
                         created_at: INVITE_CREATED_AT,
                         expires_at: INVITE_EXPIRES_AT,
@@ -343,16 +366,16 @@ describe('apiClient review queue contract', () => {
         const { apiClient } = await importFreshClient();
 
         await expect(apiClient.getUsers()).resolves.toEqual([
-            { id: 'user-1', email: 'owner@example.com', is_sysadmin: false, status: 'active' },
+            { id: USER_ID, email: USER_EMAIL, is_sysadmin: false, status: 'active' },
         ]);
         await expect(apiClient.getRoles()).resolves.toEqual([
-            { id: 'role-1', name: 'Viewer', is_system: true },
+            { id: ROLE_ID, name: SYSTEM_ROLE_NAME, is_system: true },
         ]);
         await expect(apiClient.getInvites()).resolves.toEqual([
             {
-                id: 'invite-1',
-                email: 'pending@example.com',
-                role_id: 'role-1',
+                id: INVITE_ID,
+                email: INVITE_EMAIL,
+                role_id: ROLE_ID,
                 status: 'pending',
                 created_at: INVITE_CREATED_AT,
                 expires_at: INVITE_EXPIRES_AT,
