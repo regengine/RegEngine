@@ -32,20 +32,19 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
-            // Vercel suffixes environments and commit contexts in multi-project repos.
-            const environment = 'Preview – regengine';
-            const statusContext = 'Vercel – regengine';
+            const environments = ['Preview – regengine', 'Preview'];
+            const statusContexts = ['Vercel – regengine', 'Vercel'];
             const deadline = Date.now() + 25 * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const rejected = /\b(skip(?:ped)?|ignor(?:e|ed)|cancel(?:ed|led)|error|fail(?:ed|ure)?)\b/i;
 
             while (Date.now() < deadline) {
               const { data: deployments } = await github.rest.repos.listDeployments({
-                owner, repo, sha, environment, per_page: 100,
+                owner, repo, sha, per_page: 100,
               });
               // Use only the newest deployment for this SHA and project.
               const deployment = deployments.find(d =>
-                d.sha === sha && d.environment === environment);
+                d.sha === sha && environments.includes(d.environment));
               if (deployment) {
                 const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
                   owner, repo, deployment_id: deployment.id, per_page: 100,
@@ -76,7 +75,7 @@ jobs:
               const { data: commitStatuses } = await github.rest.repos.listCommitStatusesForRef({
                 owner, repo, ref: sha, per_page: 100,
               });
-              const vercelStatus = commitStatuses.find(s => s.context === statusContext);
+              const vercelStatus = commitStatuses.find(s => statusContexts.includes(s.context));
               if (vercelStatus && (rejected.test(vercelStatus.description || '') ||
                   ['error', 'failure'].includes(vercelStatus.state))) {
                 throw new Error(`Vercel preview status ended ${vercelStatus.state}: ${vercelStatus.description || 'no detail'}`);
@@ -86,7 +85,7 @@ jobs:
                 owner, repo, ref: sha, per_page: 100,
               });
               const vercelCheck = checks.check_runs.find(c =>
-                c.app?.slug === 'vercel' && c.name === statusContext);
+                c.app?.slug === 'vercel' && statusContexts.includes(c.name));
               if (vercelCheck && ['skipped', 'cancelled', 'failure', 'timed_out', 'action_required', 'neutral', 'stale'].includes(vercelCheck.conclusion)) {
                 throw new Error(`Vercel preview check ended ${vercelCheck.conclusion}`);
               }
