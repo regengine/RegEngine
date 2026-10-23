@@ -8,9 +8,10 @@ on:
   pull_request_review:
     types: [submitted, dismissed]
 
+# Review bursts must not cancel in-progress runs.
 concurrency:
   group: engine-review-pass-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   statuses: write
