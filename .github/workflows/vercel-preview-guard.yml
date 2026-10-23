@@ -110,7 +110,7 @@ jobs:
           BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         with:
           github-token: ${{ github.token }}
-          script: |
+          script: | # pragma: allowlist secret
             const marker = '<!-- vercel-preview-access -->';
             const secret = process.env.BYPASS_SECRET;
             if (secret) core.setSecret(secret); // Emits ::add-mask:: before using it.
