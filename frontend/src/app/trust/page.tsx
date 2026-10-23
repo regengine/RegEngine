@@ -63,7 +63,7 @@ const STATUS_SUMMARY = [
     },
     {
         label: 'File Import Supported',
-        detail: 'Customer data can be onboarded through CSV or SFTP with mapping review and exception handling.',
+        detail: 'Customer data can be onboarded through CSV upload with mapping review and exception handling. SFTP delivery is on the roadmap.',
     },
     {
         label: 'Custom Scoped',
@@ -250,7 +250,7 @@ export default function TrustCenterPage() {
                 <PageHeader
                     size="hero"
                     title="Trust Center"
-                    description="Product status, data ownership, retention terms, and diligence materials in one place. Specific commitments — SLAs, retention, security obligations — live in your contract; this page is a starting point for diligence, not a substitute for it."
+                    description="Product status, data ownership, retention terms, and diligence materials in one place. Specific commitments (SLAs, retention, security obligations) live in your contract; this page is a starting point for diligence, not a substitute for it."
                     className="mb-0 border-b-0 pb-0"
                 />
                 <Callout tone="warning" className="mt-6">

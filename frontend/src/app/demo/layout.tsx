@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Interactive Demo — RegEngine FSMA 204 Compliance Platform",
+  title: "Interactive Demo: RegEngine FSMA 204 Compliance Platform",
   description:
     "See RegEngine in action with real compliance data. No signup required. Explore the dashboard, rule engine, supplier portal, and recall simulation.",
   openGraph: {
-    title: 'Interactive Demo — RegEngine FSMA 204 Compliance Platform',
+    title: 'Interactive Demo: RegEngine FSMA 204 Compliance Platform',
     description: 'See RegEngine in action with real compliance data. No signup required. Explore the dashboard, rule engine, supplier portal, and recall simulation.',
     url: 'https://regengine.co/demo',
     type: 'website',

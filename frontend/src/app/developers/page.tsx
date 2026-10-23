@@ -11,11 +11,11 @@ import { Container } from '@/components/layout/container';
 import { INGEST_CURL_SAMPLE, INGEST_ENV_SETUP } from '@/lib/api-samples/ingest-samples';
 
 export const metadata: Metadata = {
-    title: 'Developers | RegEngine — FSMA 204 Compliance API',
+    title: 'Developers | RegEngine FSMA 204 Compliance API',
     description:
         'Build on the RegEngine API: webhook ingestion with KDE validation, 36 FSMA 204 rules, identity resolution, FDA export, compliance scoring, and request workflow management.',
     openGraph: {
-        title: 'Developers | RegEngine — FSMA 204 Compliance API',
+        title: 'Developers | RegEngine FSMA 204 Compliance API',
         description:
             'Build on the RegEngine API: webhook ingestion, rules engine, identity resolution, FDA export, compliance scoring, and request workflow.',
         url: 'https://regengine.co/developers',

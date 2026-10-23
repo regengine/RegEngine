@@ -46,10 +46,10 @@ export default function FSMA204MidMarketGuide() {
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-body text-re-text-secondary mb-6">
-              Mid-market food companies—those with 10 to 500 employees—occupy a unique position in the food supply chain. You're large enough that spreadsheets and manual processes are breaking down. You're small enough that you can't afford the enterprise-scale compliance platforms built for Fortune 500 companies. And you're caught in the middle: complex enough to have multiple suppliers and customers, but lean enough that compliance can't become a full-time job for an entire team.
+              Mid-market food companies (those with 10 to 500 employees) occupy a unique position in the food supply chain. You're large enough that spreadsheets and manual processes are breaking down. You're small enough that you can't afford the enterprise-scale compliance platforms built for Fortune 500 companies. And you're caught in the middle: complex enough to have multiple suppliers and customers, but lean enough that compliance can't become a full-time job for an entire team.
             </p>
             <p className="text-body text-re-text-secondary">
-              FSMA 204 compliance by July 2028 is non-negotiable. But implementing it right—efficiently, affordably, and without grinding your operations to a halt—requires a different approach than either a small startup or a multinational corporation. This guide walks mid-market food businesses through the unique challenges you face and practical strategies to meet FSMA 204 requirements.
+              FSMA 204 compliance by July 2028 is non-negotiable. But implementing it right (efficiently, affordably, and without grinding your operations to a halt) requires a different approach than either a small startup or a multinational corporation. This guide walks mid-market food businesses through the unique challenges you face and practical strategies to meet FSMA 204 requirements.
             </p>
           </div>
 
@@ -148,7 +148,7 @@ export default function FSMA204MidMarketGuide() {
                   </ul>
                   <p className="text-subheading text-re-text-primary pt-2">Cons:</p>
                   <ul className="space-y-2 pl-4">
-                    <li>• Workflow compromise—features may not fit perfectly</li>
+                    <li>• Workflow compromise: features may not fit perfectly</li>
                     <li>• Vendor lock-in (data portability concerns)</li>
                     <li>• Ongoing licensing costs ($5K-$50K annually)</li>
                   </ul>
@@ -281,37 +281,37 @@ export default function FSMA204MidMarketGuide() {
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>ERP/WMS Integration</strong> — Does it connect to your existing systems without expensive consulting?
+                  <strong>ERP/WMS Integration:</strong> Does it connect to your existing systems without expensive consulting?
                 </span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>Supplier Portal</strong> — Can your suppliers easily submit traceability data without needing accounts?
+                  <strong>Supplier Portal:</strong> Can your suppliers easily submit traceability data without needing accounts?
                 </span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>Real-Time Response</strong> — Can you generate a 24-hour response in under 10 minutes?
+                  <strong>Real-Time Response:</strong> Can you generate a 24-hour response in under 10 minutes?
                 </span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>Pricing Predictability</strong> — No per-user or per-transaction fees. Fixed annual cost that scales with your business.
+                  <strong>Pricing Predictability:</strong> No per-user or per-transaction fees. Fixed annual cost that scales with your business.
                 </span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>Implementation Support</strong> — Does the vendor provide onboarding, training, and compliance validation?
+                  <strong>Implementation Support:</strong> Does the vendor provide onboarding, training, and compliance validation?
                 </span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
                 <span>
-                  <strong>Data Portability</strong> — Can you export your data in open formats if you ever need to switch vendors?
+                  <strong>Data Portability:</strong> Can you export your data in open formats if you ever need to switch vendors?
                 </span>
               </li>
             </ul>
@@ -333,7 +333,7 @@ export default function FSMA204MidMarketGuide() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span>Plan for 18-24 months of implementation, starting now. Early assessment and pilot are critical. That timeline covers the full organization-wide compliance program — supplier onboarding, process changes, and data cleanup — while getting a traceability tool like RegEngine running takes days.</span>
+                <span>Plan for 18-24 months of implementation, starting now. Early assessment and pilot are critical. That timeline covers the full organization-wide compliance program (supplier onboarding, process changes, and data cleanup), while getting a traceability tool like RegEngine running takes days.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />

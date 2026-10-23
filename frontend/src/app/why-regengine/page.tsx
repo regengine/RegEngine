@@ -146,7 +146,7 @@ const DIFFERENTIATORS = [
         icon: Zap,
         title: 'Self-serve, days not months',
         description:
-            'Get from signup to a first FSMA 204 export in days. CSV upload or API payload → validation → export. No 3–6 month enterprise implementation.',
+            'Get from signup to a first FSMA 204 export in days. CSV upload or API payload → validation → export. No 3 to 6 month enterprise implementation.',
         detail: 'Major retailers and FDA enforcement deadlines arrive on calendar dates; teams ship sooner when the platform is self-serve.',
     },
     {
@@ -444,7 +444,7 @@ HTTP 201
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Standard Plan</p>
                                     <p className="text-title tabular-nums text-re-text-primary">$549/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,099/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2 to 3 facilities • Unlimited CTEs</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Premium Plan</p>
@@ -465,7 +465,7 @@ HTTP 201
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Simple design-partner agreements — no multi-year lock-in',
+                                    'Simple design-partner agreements with no multi-year lock-in',
                                     'API access for contracted workspaces',
                                     'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
@@ -633,7 +633,7 @@ HTTP 201
                             <p className="mb-4 text-ui text-re-text-tertiary">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
-                                    'Regional produce distributors ($5M–$50M annual revenue)',
+                                    'Regional produce distributors ($5M to $50M annual revenue)',
                                     'Specialty food brands and co-packers',
                                     'Organic/specialty retailers and wholesalers',
                                     'Small farms and grower cooperatives',
@@ -700,7 +700,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We do NOT lock you in',
-                                    detail: 'Simple design-partner agreements — no multi-year lock-in. Export all your data anytime. Your data is yours.',
+                                    detail: 'Simple design-partner agreements with no multi-year lock-in. Export all your data anytime. Your data is yours.',
                                 },
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
@@ -767,7 +767,7 @@ HTTP 201
                         Ready to Get Compliant?
                     </h2>
                     <p className="mx-auto mb-8 max-w-[68ch] text-body text-re-text-secondary">
-                        Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements — no multi-year lock-in.
+                        Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements with no multi-year lock-in.
                     </p>
                     <div className="flex flex-col justify-center gap-3 sm:flex-row">
                         <Button asChild size="lg">

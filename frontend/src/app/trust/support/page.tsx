@@ -47,7 +47,7 @@ const ESCALATION_PATH = [
     {
         step: '3',
         title: 'Priority queue',
-        description: 'Faster response for production issues affecting compliance workflows — ingestion failures, scoring errors, export failures, or integration breakages.',
+        description: 'Faster response for production issues affecting compliance workflows, such as ingestion failures, scoring errors, export failures, or integration breakages.',
         icon: Zap,
         availability: 'Standard and Premium',
     },
@@ -159,7 +159,7 @@ export default function SupportPage() {
             <Section
                 width="marketing"
                 title="During a live recall"
-                description="This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response — your recall-readiness plan owns that."
+                description="This page describes capabilities, not commitments. Customers should not rely on ad hoc vendor intervention to meet statutory retention or a live recall response. Your recall-readiness plan owns that."
             >
                 <Callout tone="danger" icon={ShieldAlert}>
                     <h3 className="mb-2 text-subheading text-re-text-primary">What RegEngine does during a recall</h3>

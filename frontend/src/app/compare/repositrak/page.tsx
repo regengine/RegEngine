@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, ShoppingCart, Zap, Code } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison",
+  title: "RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.",
   openGraph: {
-    title: 'RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison',
+    title: 'RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison',
     description: 'Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.',
     url: 'https://regengine.co/compare/repositrak',
     type: 'website',
@@ -29,7 +29,7 @@ const FEATURES = [
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom retailer quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout; request access" },
 ];
 
 const WHY_SWITCH = [

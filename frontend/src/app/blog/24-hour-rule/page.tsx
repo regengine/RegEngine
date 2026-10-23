@@ -42,7 +42,7 @@ const COMMON_MISTAKES = [
   },
   {
     mistake: "Not testing your recall readiness",
-    fix: "Run a mock recall drill quarterly — the FDA recommends this",
+    fix: "Run a mock recall drill quarterly, as the FDA recommends",
   },
   {
     mistake: "Waiting for an FDA request to organize records",
@@ -100,7 +100,7 @@ export default function TwentyFourHourRulePage() {
               </p>
             </Callout>
             <p className="text-body text-re-text-secondary">
-              The clock starts when the FDA sends the request — not when you read it.
+              The clock starts when the FDA sends the request, not when you read it.
               Weekends and holidays are not excluded. This means your traceability system
               needs to be accessible and queryable at any time.
             </p>

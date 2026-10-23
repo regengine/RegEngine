@@ -103,12 +103,12 @@ export default function CaseStudy() {
                     Product validation · synthetic data modeled on industry patterns. Not a named-customer case study.
                 </Callout>
                 <p className="mb-6 text-ui text-re-text-secondary">
-                    These metrics are reproducible — try the same recall drill at{' '}
+                    These metrics are reproducible. Try the same recall drill at{' '}
                     <Link href="/proof/recall-drill" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">/proof/recall-drill</Link>.
                 </p>
                 <p className="mb-10 max-w-[68ch] text-body text-re-text-secondary">
-                    We ran a synthetic validation workflow modeled on leafy-greens supply chains — from Salinas Valley
-                    harvest to grocery DC receiving — and measured every step. These are not customer ROI, SLA,
+                    We ran a synthetic validation workflow modeled on leafy-greens supply chains (from Salinas Valley
+                    harvest to grocery DC receiving) and measured every step. These are not customer ROI, SLA,
                     or production-performance commitments.
                 </p>
 
@@ -314,7 +314,7 @@ export default function CaseStudy() {
                                 </div>
                                 <p className="text-small text-re-text-tertiary">
                                     OCR artifacts where O/0 or I/1 swap could change lot identity.
-                                    System flags but doesn't auto-correct — lot codes are too critical.
+                                    System flags but doesn't auto-correct, because lot codes are too critical.
                                 </p>
                             </Card>
                             <Card variant="inset" padding="compact">
@@ -324,7 +324,7 @@ export default function CaseStudy() {
                                 </div>
                                 <p className="text-small text-re-text-tertiary">
                                     Records where a required field (e.g., origin location) was blank.
-                                    Cannot be inferred — requires source data correction.
+                                    Cannot be inferred; requires source data correction.
                                 </p>
                             </Card>
                             <div className="flex items-center justify-between gap-4 border-t border-re-border-strong pt-4">
@@ -347,7 +347,7 @@ export default function CaseStudy() {
                         </p>
                         <Callout tone="warning">
                             We intentionally don't auto-correct lot codes. A wrong lot code
-                            in an FDA trace means tracing the wrong product — the cost of
+                            in an FDA trace means tracing the wrong product, and the cost of
                             a false positive exceeds the cost of a human review.
                         </Callout>
                     </Card>
@@ -486,7 +486,7 @@ export default function CaseStudy() {
                         },
                         {
                             title: 'Short Shelf Life',
-                            description: '7-14 day product life means recall speed is existential. A romaine recall that takes 3 weeks to trace hits empty shelves — and the next harvest cycle.',
+                            description: '7-14 day product life means recall speed is existential. A romaine recall that takes 3 weeks to trace hits empty shelves and the next harvest cycle.',
                             metric: '< 1 second full trace latency',
                         },
                         {
@@ -534,7 +534,7 @@ export default function CaseStudy() {
                     <h2 className="mx-auto mb-6 max-w-[24ch] font-display text-heading-lg text-re-text-primary">Run This Validation on Your Data</h2>
                     <p className="mx-auto mb-10 max-w-[68ch] text-body text-re-text-secondary">
                         Upload a sample CSV. See your auto-normalization rate, KDE completeness score,
-                        and time to FDA-oriented sortable export — measured on your actual supply chain data.
+                        and time to FDA-oriented sortable export, measured on your actual supply chain data.
                     </p>
                     <div className="flex flex-col justify-center gap-3 sm:flex-row">
                         <Button asChild size="lg">

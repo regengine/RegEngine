@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison",
+  title: "RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
   openGraph: {
-    title: 'RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison',
+    title: 'RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison',
     description: 'Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
     url: 'https://regengine.co/compare/foodlogiq',
     type: 'website',
@@ -29,14 +29,14 @@ const FEATURES = [
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom enterprise quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout; request access" },
 ];
 
 const WHY_SWITCH = [
   // #2757 — this used to assert the sandbox returns results "in seconds" regardless of
   // whether the sandbox surface is enabled on the deployment. Reworded to the claim the
   // product makes unconditionally: rule evaluation runs on the first CSV you upload.
-  { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload — no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
+  { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload, with no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
   { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },

@@ -71,7 +71,7 @@ const collectItems = [
   {
     Icon: Database,
     subtitle: 'Compliance Data',
-    text: 'When you use RegEngine to manage FSMA 204 compliance, we process and store the traceability data you submit — including Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs). This data belongs to you. We store it to provide the service.',
+    text: 'When you use RegEngine to manage FSMA 204 compliance, we process and store the traceability data you submit, including Critical Tracking Events (CTEs), Key Data Elements (KDEs), and Traceability Lot Codes (TLCs). This data belongs to you. We store it to provide the service.',
   },
   {
     Icon: MonitorSmartphone,
@@ -111,7 +111,7 @@ const storageItems = [
   {
     Icon: Lock,
     subtitle: 'Isolation',
-    text: "Tenant data is scoped by PostgreSQL row-level policies and authenticated tenant context, designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in active rollout — see the DPA for the full subprocessor list.",
+    text: "Tenant data is scoped by PostgreSQL row-level policies and authenticated tenant context, designed and tested to restrict cross-tenant access on core PostgreSQL-backed paths. Identity-resolution and graph-layer hardening is in active rollout. See the DPA for the full subprocessor list.",
   },
   {
     Icon: Hash,
@@ -424,8 +424,8 @@ export default function PrivacyPage() {
                     className={PROSE_LINK}
                   >
                     privacy@regengine.co
-                  </a>{' '}
-                  — you&apos;ll hear from the founder directly, not a legal department.
+                  </a>
+                  . You&apos;ll hear from the founder directly, not a legal department.
                 </p>
               </NoteCard>
             </div>
@@ -437,7 +437,7 @@ export default function PrivacyPage() {
       <Container width="prose" className="pb-12 sm:pb-16">
         <Card className="p-5 text-center sm:p-8">
           <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">
-            Your data belongs to you — always
+            Your data belongs to you, always
           </h2>
           <p className="mx-auto mb-6 max-w-[520px] text-ui text-re-text-secondary">
             Become a Founding Design Partner to review the current tenant-isolation posture and

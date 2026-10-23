@@ -131,7 +131,7 @@ export default function ChangelogPage() {
                 </Release>
 
                 {/* v1.2.0 — Phase 4: Accessibility Polish */}
-                <Release version="v1.2.0" date="March 4, 2026" title="Accessibility Polish — WCAG 2.1 AA">
+                <Release version="v1.2.0" date="March 4, 2026" title="Accessibility Polish (WCAG 2.1 AA)">
                     <div>
                         <h4 className={GROUP}>♿ Accessibility</h4>
                         <ul className={LIST}>
@@ -166,7 +166,7 @@ export default function ChangelogPage() {
                         <h4 className={GROUP}>✨ Features</h4>
                         <ul className={LIST}>
                             <li>FSMA 204 compliance module with CTEs and KDEs</li>
-                            <li>FDA Request Mode — produces a §1.1455(c) sortable spreadsheet to support your 24-hour response obligation</li>
+                            <li>FDA Request Mode: produces a §1.1455(c) sortable spreadsheet to support your 24-hour response obligation</li>
                             <li>Graph-based supply chain tracing (forward/backward)</li>
                             <li>SHA-256 chained record hashing for tamper detection</li>
                             <li>FTL Checker tool for Food Traceability List verification</li>

@@ -21,7 +21,7 @@ const SDKS = [
     { title: 'Python SDK', badge: 'Planned', planned: true },
     { title: 'Node.js SDK', badge: 'Planned', planned: true },
     { title: 'Go SDK', badge: 'Planned', planned: true },
-    { title: 'REST Client', badge: 'Available now — OpenAPI 3.0 spec', planned: false },
+    { title: 'REST Client', badge: 'Available now (OpenAPI 3.0 spec)', planned: false },
 ];
 
 const CHROME_LINK =

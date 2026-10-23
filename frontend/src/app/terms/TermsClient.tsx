@@ -14,7 +14,7 @@ const sections = [
 
 Features may change without notice, and we may suspend or modify access during staged rollouts, maintenance windows, or broader service updates.
 
-We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data — they do not constitute legal advice or promise regulatory compliance. You are responsible for your own compliance decisions.`,
+We are a software tool. We are not a law firm, compliance consultancy, or government agency. Our tools help you organize and manage compliance data. They do not constitute legal advice or promise regulatory compliance. You are responsible for your own compliance decisions.`,
     },
     {
         id: 'accounts',
@@ -53,7 +53,7 @@ Free tools may be modified, updated, or discontinued at any time.`,
         title: '5. Paid Services',
         content: `Unless otherwise stated in a signed order form or customer agreement, paid plans are billed monthly or annually as selected. Prices are listed on our pricing page and may change with reasonable advance notice.
 
-You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time — no cancellation fees.
+You can upgrade at any time (prorated). You can downgrade at the end of your current billing cycle. You can cancel at any time, with no cancellation fees.
 
 Unless your signed order form or customer agreement states otherwise, if you exceed your CTE limit, we charge $0.002 per additional CTE. We will notify you by email before any overage charges are applied.
 

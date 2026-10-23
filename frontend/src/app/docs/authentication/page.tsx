@@ -109,7 +109,7 @@ export default function AuthenticationDocsPage() {
                             <p className="mb-3 text-ui text-re-text-secondary">
                                 Keys carry scopes in a <code className={CODE}>resource.action</code> vocabulary.
                                 The <code className={CODE}>.</code> and <code className={CODE}>:</code> separators
-                                are equivalent — <code className={CODE}>records.read</code> and{' '}
+                                are equivalent: <code className={CODE}>records.read</code> and{' '}
                                 <code className={CODE}>records:read</code> name the same scope. A key only needs the scopes for the
                                 endpoints you call:
                             </p>

@@ -29,12 +29,12 @@ import { Container } from "@/components/layout/container";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
-  title: "Integrations - Supplier Data Intake | RegEngine",
+  title: "Integrations: Supplier Data Intake | RegEngine",
   description:
-    "RegEngine accepts supplier data via CSV, API, webhook, EPCIS, and SFTP, with custom-scoped connectors for ERP, food-safety, and retailer systems.",
+    "RegEngine accepts supplier data via CSV upload and the JSON events API, with custom-scoped connectors for ERP, food-safety, and retailer systems. EPCIS, EDI, and SFTP intake are on the roadmap.",
   openGraph: {
-    title: 'Integrations — Supplier Data Intake | RegEngine',
-    description: 'CSV, API, webhook, EPCIS, and SFTP intake, plus custom-scoped connectors for ERP, food-safety, and retailer systems.',
+    title: 'Integrations: Supplier Data Intake | RegEngine',
+    description: 'CSV upload and JSON events API intake, plus custom-scoped connectors for ERP, food-safety, and retailer systems. EPCIS, EDI, and SFTP intake are on the roadmap.',
     url: 'https://regengine.co/integrations',
     type: 'website',
   },
@@ -52,7 +52,7 @@ const CATEGORY_META: Record<
   CapabilityCategory,
   { title: string; eyebrow: string; icon: typeof Shield }
 > = {
-  developer_api: { title: "Developer APIs", eyebrow: "Webhook, REST, EPCIS", icon: Code },
+  developer_api: { title: "Developer APIs", eyebrow: "REST, JSON events, EPCIS export", icon: Code },
   erp_warehouse: { title: "ERP & warehouse", eyebrow: "Files, extracts, mapping", icon: FileSpreadsheet },
   food_safety_iot: { title: "Food safety & IoT", eyebrow: "Audits, sensors, cold chain", icon: Thermometer },
   retailer_network: { title: "Retailer exports", eyebrow: "Outbound packages", icon: ShoppingCart },
@@ -77,7 +77,7 @@ const proofStats = [
 
 const inflowPath = [
   ["Simulator", "Generates FSMA 204 CTE batches"],
-  ["Signed webhook", "POST /api/v1/webhooks/ingest"],
+  ["JSON events API", "POST /api/v1/webhooks/ingest"],
   ["Registry alias", "inflow-lab -> inflow_lab"],
   ["RegEngine", "Validates, stores, and tags events"],
 ];
@@ -119,7 +119,7 @@ export default function IntegrationsPage() {
             Know which sources are ready, guided, or custom scoped.
           </h1>
           <p className="mt-5 max-w-[68ch] text-body text-re-text-secondary">
-            A compact view of available intake modes, guided workflows, and custom-scoped implementation paths. Named vendor and retailer workflows require scope confirmation and evidence review before being treated as production connectors. Inflow Lab is the live simulator path for webhook demos and contract CI.
+            A compact view of available intake modes, guided workflows, and custom-scoped implementation paths. Named vendor and retailer workflows require scope confirmation and evidence review before being treated as production connectors. Live intake today is CSV upload and the JSON events API; EPCIS, EDI, and SFTP intake are on the roadmap. Inflow Lab is the simulator path for JSON events API demos and contract CI.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">

@@ -59,12 +59,12 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
                     { name: 'events', type: 'CTE[]', required: true, desc: 'Array of Critical Tracking Events (max 500 per batch)' },
                     { name: 'events[].cte_type', type: 'enum', required: true, desc: '"harvesting" | "cooling" | "initial_packing" | "first_land_based_receiving" | "shipping" | "receiving" | "transformation"' },
                     { name: 'events[].traceability_lot_code', type: 'string', required: true, desc: 'TLC per FSMA 204 (e.g. GTIN + lot, min 3 chars)' },
-                    { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name (1–500 chars)' },
+                    { name: 'events[].product_description', type: 'string', required: true, desc: 'Human-readable product name (1 to 500 chars)' },
                     { name: 'events[].quantity', type: 'number', required: true, desc: 'Quantity (> 0)' },
-                    { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets" | "each" — full list in docs' },
+                    { name: 'events[].unit_of_measure', type: 'string', required: true, desc: '"cases" | "lbs" | "kg" | "pallets" | "each" (full list in docs)' },
                     { name: 'events[].location_name', type: 'string', required: false, desc: 'Facility name. Each event needs at least one location: location_name, events[].location_gln (a 13-digit GLN), or a location KDE. harvesting, cooling, initial_packing and transformation events also require location_name itself.' },
                     { name: 'events[].timestamp', type: 'ISO 8601', required: true, desc: 'Event time with timezone. An event older than 90 days comes back with status "rejected" inside a 200. An event more than 24 hours ahead fails the whole request with a 422 and nothing is stored.' },
-                    { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325–1.1350. Each cte_type has its own required keys; see Required KDEs by event type, below the endpoint list.' },
+                    { name: 'events[].kdes', type: 'object', required: true, desc: 'CTE-specific Key Data Elements per 21 CFR §§1.1325 to 1.1350. Each cte_type has its own required keys; see Required KDEs by event type, below the endpoint list.' },
                 ],
                 body: ingestSamplePayload('"<current UTC time, ISO 8601>"', '"<today, YYYY-MM-DD>"'),
                 response: INGEST_RESPONSE_SAMPLE,
@@ -75,12 +75,12 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
         name: 'Records API',
         baseUrl: '/api/v1/records',
         icon: Database,
-        description: 'Read canonical traceability events with full provenance — what it is, where it came from, what rules were applied, what failed, what must happen next',
+        description: 'Read canonical traceability events with full provenance: what it is, where it came from, what rules were applied, what failed, what must happen next',
         endpoints: [
             {
                 method: 'GET',
                 path: '',
-                description: 'List and search canonical traceability events. Requires an API key with the records.read scope. Keys are tenant-bound — results are always scoped to your workspace, and no tenant_id or X-Tenant-ID is needed.',
+                description: 'List and search canonical traceability events. Requires an API key with the records.read scope. Keys are tenant-bound, so results are always scoped to your workspace, and no tenant_id or X-Tenant-ID is needed.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params_table: [
@@ -125,7 +125,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/{event_id}/history',
-                description: 'Amendment chain for a record — every correction with who, when, and why',
+                description: 'Amendment chain for a record: every correction with who, when, and why',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 response: '{ "event_id": "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab", "amendment_chain": [...] }',
@@ -141,7 +141,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/trace/{tlc}',
-                description: 'Trace the transformation graph for a traceability lot code — upstream sources and downstream products. Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
+                description: 'Trace the transformation graph for a traceability lot code (upstream sources and downstream products). Requires the fda.read scope. Unlike the Records API, FDA endpoints take tenant_id as an explicit query parameter (it must match your key’s workspace).',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params: ['tenant_id={your-workspace-uuid}'],
@@ -168,7 +168,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/export/v2',
-                description: 'Generate an FDA export from the canonical record model (v2) — includes provenance and rule-evaluation status per row. Requires the fda.export scope.',
+                description: 'Generate an FDA export from the canonical record model (v2), with provenance and rule-evaluation status per row. Requires the fda.export scope.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params: ['tenant_id={your-workspace-uuid}', 'start_date=2026-01-01', 'end_date=2026-01-31'],
@@ -177,7 +177,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
             {
                 method: 'GET',
                 path: '/export/recall',
-                description: 'Recall-filtered FDA export — only events matching the product, location, lot code, or event type you filter on. Requires the fda.export scope.',
+                description: 'Recall-filtered FDA export: only events matching the product, location, lot code, or event type you filter on. Requires the fda.export scope.',
                 auth: true,
                 headers: ['X-RegEngine-API-Key'],
                 params: ['tenant_id={your-workspace-uuid}', 'tlc=TEST-00012345678901-LOT-001'],
@@ -536,7 +536,7 @@ export function ApiReferenceClient() {
                                         <TableRow key={cteType}>
                                             <TableCell className="break-all font-mono text-[0.8125rem]">{cteType}</TableCell>
                                             <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">
-                                                {row.top_level.length > 0 ? row.top_level.join(', ') : '—'}
+                                                {row.top_level.length > 0 ? row.top_level.join(', ') : 'None'}
                                             </TableCell>
                                             <TableCell className="font-mono text-[0.8125rem] text-re-text-tertiary">
                                                 {row.kdes.join(', ')}
