@@ -2,9 +2,9 @@
  * Recall Report Page Tests
  *
  * Tests for the recall investigation / readiness report:
- * - Renders heading and demo scenario
+ * - Renders heading
  * - Renders dimension scores
- * - Falls back to demo data when API is unavailable
+ * - Shows the empty state instead of fabricated demo data in demo mode
  * - Auth guard (skips fetch without credentials)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -45,7 +45,6 @@ const MOCK_DEMO_REPORT = {
     { priority: 'MEDIUM', action: 'Run mock recall drill', impact: 'Team readiness', effort: 'Low' },
   ],
   demo_mode: true,
-  demo_disclaimer: 'Sample Scenario — Explore a realistic recall investigation.',
 };
 
 // ── Mocks ──
@@ -157,11 +156,14 @@ describe('RecallReportPage', () => {
     });
   });
 
-  it('renders demo investigation scenario data', async () => {
+  it('shows the empty state instead of fabricated demo data in demo mode', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText(/Romaine Lettuce/)).toBeInTheDocument();
+      expect(screen.getByText('No data yet')).toBeInTheDocument();
     });
+    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Salinas Valley Farms/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/SLA Met/)).not.toBeInTheDocument();
   });
 
   it('renders readiness dimension scores', async () => {
@@ -174,20 +176,22 @@ describe('RecallReportPage', () => {
     expect(screen.getByText('Supplier Coverage')).toBeInTheDocument();
   });
 
-  it('renders affected lots table', async () => {
+  it('does not render fabricated affected lots', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText(/LOT-ROM-2026-0312A/)).toBeInTheDocument();
+      expect(screen.getByText('No data yet')).toBeInTheDocument();
     });
+    expect(screen.queryByText(/LOT-ROM-2026/)).not.toBeInTheDocument();
   });
 
-  it('falls back to demo when API returns empty data', async () => {
+  it('shows the empty state with a next-step link in demo mode', async () => {
     mockFetchRecallReport.mockResolvedValue({ ...MOCK_DEMO_REPORT, demo_mode: true });
     render(<RecallReportPage />, { wrapper: createWrapper() });
-    // Should still show the demo scenario since demo_mode is true
     await waitFor(() => {
-      expect(screen.getByText(/Romaine Lettuce/)).toBeInTheDocument();
+      expect(screen.getByText('No data yet')).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /import records/i })).toHaveAttribute('href', '/tools/data-import');
+    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
   });
 
   it('shows an error without fabricated results when the API fails', async () => {
