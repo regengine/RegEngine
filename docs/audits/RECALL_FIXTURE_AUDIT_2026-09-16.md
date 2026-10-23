@@ -6,8 +6,7 @@ two destinations; two lots; six pallets; run with complete records, with one
 3PL pallet-content record withheld, and with the ERP unavailable). Every row
 below was verified by reading the cited code, not from documentation claims.
 
-The companion implementation is `services/shared/recall_reconstruction/`,
-`scripts/run_recall_fixture.py`, and `sample_data/recall_fixture/`.
+This is a historical audit. The invented recall scenario and its runner were removed under SEL-447; the generic reconstruction engine remains in `services/shared/recall_reconstruction/`.
 
 ## Summary
 

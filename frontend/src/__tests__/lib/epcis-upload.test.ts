@@ -82,6 +82,6 @@ describe('epcisErrorMessage', () => {
 
   it('falls back to the error message and then to a default', () => {
     expect(epcisErrorMessage(new Error('Network Error'))).toBe('Network Error');
-    expect(epcisErrorMessage(null)).toBe('EPCIS upload failed');
+    expect(epcisErrorMessage(null)).toBe('EPCIS upload (Preview) failed');
   });
 });

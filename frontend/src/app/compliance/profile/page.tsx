@@ -257,7 +257,7 @@ export default function ProductProfilePage() {
                         </p>
                         <p className="mt-1">
                             RegEngine monitors FDA recalls and alerts. By setting your product categories and supply regions,
-                            we can automatically alert you when a recall might affect your business — before it becomes a crisis.
+                            we can automatically alert you when a recall might affect your business, before it becomes a crisis.
                         </p>
                     </div>
                 </div>

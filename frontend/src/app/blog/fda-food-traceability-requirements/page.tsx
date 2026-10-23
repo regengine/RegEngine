@@ -134,15 +134,15 @@ export default function FDAFoodTraceabilityRequirements() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span>Retailers and wholesalers (for FTL foods they receive). Restaurants and other retail food establishments selling food directly to consumers may be exempt under §1.1305(j) — confirm scope with counsel.</span>
+                <span>Retailers and wholesalers (for FTL foods they receive). Restaurants and other retail food establishments selling food directly to consumers may be exempt under §1.1305(j). Confirm scope with counsel.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span>First land-based receivers of food obtained from a fishing vessel (seafood) — §1.1335</span>
+                <span>First land-based receivers of food obtained from a fishing vessel (seafood), under §1.1335</span>
               </li>
             </ul>
             <p className="text-body text-re-text-secondary">
-              §1.1305 lists multiple narrow exemptions, including very small farms, certain retail food establishments selling directly to consumers, and entities meeting specific size and revenue thresholds that vary by category. There is no single "less than $1M" carve-out — confirm against the rule for your specific operation.
+              §1.1305 lists multiple narrow exemptions, including very small farms, certain retail food establishments selling directly to consumers, and entities meeting specific size and revenue thresholds that vary by category. There is no single "less than $1M" carve-out. Confirm against the rule for your specific operation.
             </p>
           </div>
 
@@ -202,7 +202,7 @@ export default function FDAFoodTraceabilityRequirements() {
               ))}
             </div>
             <p className="text-body text-re-text-secondary">
-              Not every CTE applies to every business — you only record CTEs that occur at your operation. A farm typically records Harvesting and Cooling (§1.1325) and possibly Initial Packing (§1.1330). A manufacturer records Receiving (§1.1345), Transformation (§1.1350), and Shipping (§1.1340). A seafood receiver from a fishing vessel records First Land-Based Receiving (§1.1335) — non-seafood importers record Receiving instead. Use RegEngine&apos;s <Link href="/tools/cte-mapper" className="text-re-brand hover:text-re-brand underline transition-colors duration-120">CTE Mapper</Link> to walk through which CTEs apply to your role.
+              Not every CTE applies to every business; you only record CTEs that occur at your operation. A farm typically records Harvesting and Cooling (§1.1325) and possibly Initial Packing (§1.1330). A manufacturer records Receiving (§1.1345), Transformation (§1.1350), and Shipping (§1.1340). A seafood receiver from a fishing vessel records First Land-Based Receiving (§1.1335). Non-seafood importers record Receiving instead. Use RegEngine&apos;s <Link href="/tools/cte-mapper" className="text-re-brand hover:text-re-brand underline transition-colors duration-120">CTE Mapper</Link> to walk through which CTEs apply to your role.
             </p>
           </div>
 

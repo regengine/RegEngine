@@ -14,9 +14,7 @@ This is a pre-production application with deployed public proof surfaces. The ca
 
 You don't have to take our word for any of this — try it yourself:
 
-- [regengine.co/proof](https://regengine.co/proof) — download a synthetic FSMA CSV, EPCIS 2.0 JSON-LD bundle, and audit evidence ZIP.
-- [regengine.co/verify](https://regengine.co/verify) — drop the public audit bundle into the verifier and confirm file-hash and Merkle-root integrity.
-- [regengine.co/proof/recall-drill](https://regengine.co/proof/recall-drill) — call the public recall-drill endpoint against a frozen synthetic dataset and reproduce the case-study metrics.
+- [regengine.co/verify](https://regengine.co/verify) — drop an audit bundle exported from your own workspace into the verifier and confirm file-hash and Merkle-root integrity.
 
 This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 

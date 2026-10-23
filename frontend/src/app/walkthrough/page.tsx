@@ -56,7 +56,7 @@ const TIMELINE = [
     color: 'red',
     defects: [
       { lot: 'R-2026-0312', issue: 'Missing required KDE: cooling_date', severity: 'critical' },
-      { lot: 'R-2026-0312', issue: 'Identity conflict: "Valley Fresh Farms LLC" vs "Valley Fresh" — >=85% match, unresolved', severity: 'critical' },
+      { lot: 'R-2026-0312', issue: 'Identity conflict: "Valley Fresh Farms LLC" vs "Valley Fresh" (>=85% match, unresolved)', severity: 'critical' },
       { lot: 'R-2026-0314', issue: 'Invalid unit_of_measure: "bushels" not in FSMA standard units', severity: 'critical' },
     ],
   },
@@ -65,7 +65,7 @@ const TIMELINE = [
     title: 'Exception cases created',
     icon: AlertTriangle,
     description: 'Each blocking defect becomes an Exception Case with severity, owner assignment, and remediation guidance. The operator sees exactly what needs fixing and why.',
-    detail: 'Exception cases track resolution status, signoffs, and waiver history. Nothing gets swept under the rug — every decision is recorded in the audit trail.',
+    detail: 'Exception cases track resolution status, signoffs, and waiver history. Nothing gets swept under the rug: every decision is recorded in the audit trail.',
     color: 'amber',
   },
   {
@@ -78,7 +78,7 @@ const TIMELINE = [
   },
   {
     time: 'T+1:30',
-    title: 'All defects resolved — submission unblocked',
+    title: 'All defects resolved, submission unblocked',
     icon: Shield,
     description: 'The blocking defect check runs again: 0 blocking defects remain. The package can now be assembled.',
     detail: 'RegEngine checks 7 blocker categories: critical rule failures, unresolved exceptions, unevaluated events, missing signoffs, identity ambiguity, stale evaluations, and deadline monitoring.',
@@ -126,7 +126,7 @@ export default function WalkthroughPage() {
               <span>Here&apos;s how you respond in&nbsp;2.</span>
             </>
           }
-          description="A step-by-step walkthrough of an illustrative FDA records-request scenario — from messy supplier data to a hash-manifested response package anyone can re-check."
+          description="A step-by-step walkthrough of an illustrative FDA records-request scenario, from messy supplier data to a hash-manifested response package anyone can re-check."
           className="border-b-0 pb-0"
         />
         <ul className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -222,7 +222,7 @@ export default function WalkthroughPage() {
         <Container width="marketing">
           <h2 className="mb-3 font-display text-heading-lg text-re-text-primary">You cannot submit if:</h2>
           <p className="mb-6 max-w-[68ch] text-ui text-re-text-secondary">
-            RegEngine surfaces these checks at package assembly time. Rule enforcement is configurable per workflow — in production today, rule failures are recorded as exceptions and surfaced in the dashboard rather than blocking ingest.
+            RegEngine surfaces these checks at package assembly time. Rule enforcement is configurable per workflow. In production today, rule failures are recorded as exceptions and surfaced in the dashboard rather than blocking ingest.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {[

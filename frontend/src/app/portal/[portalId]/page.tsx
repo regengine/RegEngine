@@ -323,7 +323,7 @@ export default function PortalSubmissionPage() {
                 </Card>
 
                 <p className="mt-4 text-center text-small text-re-text-tertiary">
-                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link> — FSMA 204 Compliance
+                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link>, FSMA 204 Compliance
                 </p>
             </Container>
         );
@@ -635,7 +635,7 @@ export default function PortalSubmissionPage() {
             {/* Footer */}
             <div className="mt-6 space-y-2 text-center">
                 <p className="text-small text-re-text-tertiary">
-                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link> — FSMA 204 Compliance Infrastructure
+                    Powered by <Link href="/" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">RegEngine</Link>, FSMA 204 Compliance Infrastructure
                 </p>
                 <Link
                     href="/supplier-compliance"

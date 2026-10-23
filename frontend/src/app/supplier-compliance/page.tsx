@@ -11,7 +11,7 @@ import { Container } from '@/components/layout/container';
 
 export const metadata: Metadata = {
     title: 'Your Buyer Asked About FSMA 204 Traceability | RegEngine',
-    description: 'Major retailers are increasingly asking suppliers for FSMA 204 traceability data. Start submitting in minutes — full FSMA 204 program coverage takes longer. No rip-and-replace required.',
+    description: 'Major retailers are increasingly asking suppliers for FSMA 204 traceability data. Start submitting in minutes; full FSMA 204 program coverage takes longer. No rip-and-replace required.',
     openGraph: {
         title: 'Your Buyer Asked About FSMA 204 Traceability | RegEngine',
         description: 'Major retailers are asking suppliers for traceability data. Start submitting in minutes with RegEngine.',
@@ -44,11 +44,11 @@ const COMPLIANCE_STEPS = [
     },
 ];
 
-// Generic, hedged framing — we don't claim insider knowledge of specific
+// Generic, hedged framing - we don't claim insider knowledge of specific
 // retailer contracting terms. If a buyer mandate is publicly cited, link
 // to the source rather than asserting it here.
 const RETAILERS_ENFORCING = [
-    { name: 'Major retailers', detail: 'Multiple top-10 grocers have publicly signaled supplier traceability expectations ahead of the 2028 deadline. Specific requirements vary by buyer — confirm directly with your buyer.' },
+    { name: 'Major retailers', detail: 'Multiple top-10 grocers have publicly signaled supplier traceability expectations ahead of the 2028 deadline. Specific requirements vary by buyer, so confirm directly with your buyer.' },
 ];
 
 const FAQ = [
@@ -183,7 +183,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: FileCheck,
                                 title: 'Who it applies to',
-                                body: 'Any business that manufactures, processes, packs, or holds foods on the Food Traceability List (FTL) — including fresh produce, seafood, dairy, eggs, deli salads, nut butters, and more. This includes domestic and foreign suppliers.',
+                                body: 'Any business that manufactures, processes, packs, or holds foods on the Food Traceability List (FTL), including fresh produce, seafood, dairy, eggs, deli salads, nut butters, and more. This includes domestic and foreign suppliers.',
                             },
                             {
                                 icon: Truck,
@@ -224,7 +224,7 @@ export default function SupplierCompliancePage() {
                         Need your suppliers to submit traceability data?
                     </h2>
                     <p className="mx-auto mb-6 max-w-[56ch] text-body leading-relaxed text-re-text-secondary">
-                        Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly — no account needed, no training required. Data flows into your workspace automatically.
+                        Generate portal links from your RegEngine dashboard and share them with suppliers. They submit data directly, with no account needed and no training required. Data flows into your workspace automatically.
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">

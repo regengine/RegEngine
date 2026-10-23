@@ -27,6 +27,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useTenant } from '@/lib/tenant-context';
+import { NOT_SET } from '@/lib/empty-values';
 
 /* ── Types ── */
 
@@ -172,7 +173,7 @@ export default function IssuesPage() {
             header: 'Case',
             cell: (c) => (
                 <span className="font-medium text-re-text-primary">
-                    {c.requesting_party} — {c.scope_description || c.package_status}
+                    {c.requesting_party}: {c.scope_description || c.package_status}
                 </span>
             ),
         },
@@ -224,7 +225,7 @@ export default function IssuesPage() {
             header: 'Citation',
             width: '12rem',
             mono: true,
-            cell: (b) => b.citation ?? '—',
+            cell: (b) => b.citation ?? NOT_SET,
         },
     ];
 
@@ -232,7 +233,7 @@ export default function IssuesPage() {
         <PageContainer>
             <PageHeader
                 title="Issues"
-                description="Everything preventing compliant submission — fix these first."
+                description="Everything preventing compliant submission. Fix these first."
                 secondaryActions={
                     <Button
                         variant="ghost"
@@ -288,7 +289,7 @@ export default function IssuesPage() {
                 {blockers.length > 0 && (
                     <section className="space-y-3">
                         <h3 className="text-subheading text-re-text-primary">
-                            Blocking Defects — Must Fix Before Submission
+                            Blocking Defects: Must Fix Before Submission
                         </h3>
                         <DataTable
                             caption="Blocking defects that must be fixed before submission"
@@ -305,7 +306,7 @@ export default function IssuesPage() {
                 {warnings.length > 0 && (
                     <Card>
                         <CardHeader>
-                            <CardTitle>Warnings — Non-Blocking</CardTitle>
+                            <CardTitle>Warnings (Non-Blocking)</CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
                             <ul className="divide-y divide-re-border-subtle">

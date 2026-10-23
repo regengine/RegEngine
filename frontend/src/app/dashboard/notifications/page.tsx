@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -134,7 +135,7 @@ function Toggle({
     );
 }
 
-/** One label / description / control row — the shape repeated eight times here. */
+/** One label / description / control row - the shape repeated eight times here. */
 function SettingRow({
     id,
     title,
@@ -168,7 +169,7 @@ export default function NotificationPrefsPage() {
     const isLoggedIn = isAuthenticated;
     const rowIdPrefix = useId();
 
-    const { data: prefs = null, isLoading: loading, error: prefsError } = useQuery({
+    const { data: prefs = null, isLoading: loading, error: prefsError, refetch: refetchPrefs, isFetching } = useQuery({
         queryKey: ['notification-prefs', tenantId],
         queryFn: () => apiFetchPrefs(tenantId),
         enabled: isLoggedIn && !!tenantId,
@@ -236,22 +237,13 @@ export default function NotificationPrefsPage() {
             />
 
             {/* Settings surfaces keep a readable form column inside the app width
-                (SPEC §6.10) — a toggle 1,100px from its label is unusable. */}
+                (SPEC §6.10) - a toggle 1,100px from its label is unusable. */}
             <div className="max-w-[760px] space-y-6">
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {fetchFailed && (
-                    <Callout
-                        tone="danger"
-                        role="alert"
-                        icon={AlertTriangle}
-                        title="Notification preferences are currently unavailable."
-                    >
-                        Please try again later. If this persists, contact support.
-                    </Callout>
-                )}
+                {fetchFailed && <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} />}
 
                 {saveError && (
                     <Callout tone="danger" role="alert" icon={AlertTriangle}>
@@ -348,7 +340,7 @@ export default function NotificationPrefsPage() {
                                         title="Quiet Hours"
                                         description={
                                             <>
-                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
+                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 to {effectivePrefs.quiet_hours.end_hour}:00
                                                 {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
                                             </>
                                         }

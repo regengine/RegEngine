@@ -471,12 +471,7 @@ agent-inbox outbound send) reuses it instead of re-querying
 ### 4.1 Test: `services/ingestion/tests/remediation/test_suppression_gate.py`
 
 Unit-level, no live DB (per the "avoid live DB in unit tests" instruction) —
-uses a stub session object rather than
-`services/ingestion/tests/remediation/conftest.py`'s `requires_db` fixture
-(that fixture backs the existing `test_remediation_outbox_delivery.py`,
-which really does need Postgres for RLS + SECURITY DEFINER token lookups;
-the suppression gate itself needs none of that, so it's tested at the unit
-level instead):
+uses a stub session object (the test needs no live database):
 
 ```python
 class _StubSession:

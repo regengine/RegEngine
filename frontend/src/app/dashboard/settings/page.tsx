@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -39,7 +40,7 @@ const ACCOUNT_LINKS = [
 ];
 
 /* ── Available Integrations Catalog ── */
-// Integration catalog — status is updated from API if available
+// Integration catalog - status is updated from API if available
 const INTEGRATIONS = [
     { id: 'sensitech', name: 'Sensitech TempTale', category: 'IoT', status: 'available', desc: 'Cold-chain temperature monitoring' },
     { id: 'tive', name: 'Tive Trackers', category: 'IoT', status: 'available', desc: 'Real-time shipment visibility' },
@@ -47,8 +48,8 @@ const INTEGRATIONS = [
     { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'available', desc: 'Cloud ERP and financials' },
     { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'coming_soon', desc: 'Global Data Synchronization' },
     { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'coming_soon', desc: 'Retailer data exchange' },
-    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'available', desc: 'GS1 event format bridge' },
-    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'available', desc: 'Push events to your endpoints' },
+    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'epcis_preview', desc: 'GS1 event format bridge; ingest in Preview' },
+    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'preview', desc: 'Push events to your endpoints' },
 ];
 /**
  * Integration status. `state` promotes the operational statuses to the
@@ -61,6 +62,8 @@ const STATUS_CONFIG: Record<string, { state?: ComplianceState; label: string }> 
     available: { label: 'Available' },
     disconnected: { label: 'Available' },
     coming_soon: { label: 'Coming Soon' },
+    preview: { label: 'Preview / contact us' },
+    epcis_preview: { label: 'Preview' },
 };
 
 const TABS = [
@@ -102,7 +105,7 @@ export default function SettingsPage() {
     const { user, isAuthenticated } = useAuth();
     const { tenantId, isSystemTenant } = useTenant();
     const effectiveTenantId = isSystemTenant ? null : tenantId;
-    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(effectiveTenantId ?? undefined);
+    const { data: subscriptionData, isLoading: subLoading, isError: subError, refetch: refetchSubscription, isFetching: subFetching } = useCurrentSubscription(effectiveTenantId ?? undefined);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
@@ -226,7 +229,7 @@ export default function SettingsPage() {
     return (
         <PageContainer>
             {/* The dashboard shell owns the breadcrumb and the service-health
-                badge — this page only renders its own header. */}
+                badge: this page only renders its own header. */}
             <PageHeader
                 title="Account Settings"
                 description="Manage your organization, account, team, and integrations"
@@ -268,7 +271,7 @@ export default function SettingsPage() {
                                 ) : subError ? (
                                     <div className="min-w-0">
                                         <span className="text-ui font-medium text-re-text-secondary">{planName}</span>
-                                        <p className="mt-0.5 text-small text-re-text-tertiary">Unable to reach the billing service. Your plan is not affected.</p>
+                                        <ErrorState message="We could not load this page." onRetry={() => refetchSubscription()} retrying={subFetching} className="mt-2" />
                                     </div>
                                 ) : (
                                     <>
@@ -280,7 +283,7 @@ export default function SettingsPage() {
                                 )}
                             </div>
                         </div>
-                        <Link href="/pricing" className="shrink-0">
+                        {!subError && subscriptionData && <Link href="/pricing" className="shrink-0">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -288,7 +291,7 @@ export default function SettingsPage() {
                             >
                                 Manage Plan
                             </Button>
-                        </Link>
+                        </Link>}
                     </CardContent>
                 </Card>
 
@@ -367,7 +370,7 @@ export default function SettingsPage() {
                                             size="lg"
                                             value={profile.fei_number}
                                             onChange={e => setProfile({ ...profile, fei_number: e.target.value })}
-                                            placeholder="Optional — used in FDA exports"
+                                            placeholder="Optional, used in FDA exports"
                                         />
                                     </Field>
                                 </div>

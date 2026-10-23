@@ -6,16 +6,6 @@ The RegEngine golden path is the narrow story we expect demos, tests, and produc
 simulate data -> ingest -> validate -> show failures -> export evidence
 ```
 
-## Recall Reconstruction Fixture
-
-The recall fixture proves one narrower claim: that a lot can be followed through pallets, splits, relabels, a DC, and a 3PL, and that missing evidence is reported as `unresolved` rather than read as exclusion.
-
-```bash
-python3 scripts/run_recall_fixture.py --case all --output-dir /tmp/regengine-recall-fixture
-```
-
-It runs the same synthetic scenario three ways (complete records, a withheld 3PL pallet-content record, and an unreachable ERP served from its retained snapshot), writes an evidence package per case, and reconciles each against `sample_data/recall_fixture/answer_key.json`. It is DB-free and reuses the canonical event model and hash chain. See `sample_data/recall_fixture/README.md`.
-
 For the heavier live-service scenario, export the service secret first, then use:
 
 ```bash

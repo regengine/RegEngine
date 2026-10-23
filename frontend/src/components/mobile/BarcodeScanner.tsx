@@ -167,7 +167,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
 
             <p className="text-xs text-muted-foreground text-center max-w-xs">
                 Supports QR (GS1 Digital Link), GS1-128, DataMatrix, EAN-13, and UPC-A.
-                {continuous ? ' Keep scanning — each new code is captured automatically.' : ' Ensure good lighting and hold steady.'}
+                {continuous ? ' Keep scanning. Each new code is captured automatically.' : ' Ensure good lighting and hold steady.'}
             </p>
         </div>
     );

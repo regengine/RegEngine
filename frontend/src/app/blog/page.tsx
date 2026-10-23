@@ -9,12 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 export const metadata: Metadata = {
-  title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
+  title: 'Blog: FSMA 204 Compliance Guides | RegEngine',
   description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
   openGraph: {
     url: 'https://regengine.co/blog',
     siteName: 'RegEngine',
-    title: 'Blog — FSMA 204 Compliance Guides | RegEngine',
+    title: 'Blog: FSMA 204 Compliance Guides | RegEngine',
     description: 'Learn about FSMA 204 compliance, food traceability software, CTEs, KDEs, and how to prepare for FDA food traceability deadlines.',
     type: 'website',
   },
@@ -30,7 +30,7 @@ type BlogPost = {
 
 // Slugs are typed against BLOG_POST_SLUGS so a post added here without being
 // added to the shared list (and therefore the sitemap) fails typecheck.
-// Titles live in that shared list too — the social cards render from them.
+// Titles live in that shared list too - the social cards render from them.
 const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'fsma-204-compliance-guide',

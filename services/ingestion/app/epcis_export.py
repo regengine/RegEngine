@@ -20,11 +20,16 @@ from shared.database import get_db_safe
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
-from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from .shared.csv_safety import sanitize_cell
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("epcis-export")
+
+FDA_CSV_HEADER = (
+    "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,"
+    "Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,"
+    "Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
+)
 
 
 def _query_tenant_events(
@@ -164,54 +169,6 @@ class ExportRequest(BaseModel):
     date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
 
-# Sample EPCIS 2.0 event data (in production, pulled from database)
-SAMPLE_EPCIS_EVENTS = [
-    {
-        "type": "ObjectEvent",
-        "eventTime": "2026-02-26T14:30:00.000Z",
-        "eventTimeZoneOffset": "-08:00",
-        "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-        "disposition": "urn:epcglobal:cbv:disp:in_transit",
-        "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
-        "readPoint": {"id": "urn:epc:id:sgln:0614141.00000.0"},
-        "bizLocation": {"id": "urn:epc:id:sgln:0614141.00000.0"},
-        "extension": {
-            "quantityList": [
-                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-            ],
-            "sourceList": [
-                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}
-            ],
-            "destinationList": [
-                {"type": "urn:epcglobal:cbv:sdt:possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}
-            ],
-        },
-        "regengine:sha256": "a3f8c1d2e4b5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
-        "regengine:chainHash": "b4c9e2c7d5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
-    },
-    {
-        "type": "ObjectEvent",
-        "eventTime": "2026-02-27T09:15:00.000Z",
-        "eventTimeZoneOffset": "-08:00",
-        "action": "OBSERVE",
-        "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-        "disposition": "urn:epcglobal:cbv:disp:in_progress",
-        "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
-        "readPoint": {"id": "urn:epc:id:sgln:0614141.00001.0"},
-        "bizLocation": {"id": "urn:epc:id:sgln:0614141.00001.0"},
-        "extension": {
-            "quantityList": [
-                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-            ],
-            "ilmd": {"regengine:temperatureCelsius": 3.2, "regengine:inspectionResult": "PASS"},
-        },
-        "regengine:sha256": "c5dae3d8e6f7a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4",
-        "regengine:chainHash": "d6ebf4e9f7a8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5",
-    },
-]
-
-
 @router.post(
     "/epcis",
     summary="Export in GS1 EPCIS 2.0 JSON-LD format",
@@ -230,10 +187,10 @@ async def export_epcis(
     tenant_id = ctx.tenant_id
 
     rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
-    data_source = "tenant" if rows else "sample"
+    data_source = "tenant" if rows else "empty"
 
+    event_list = []
     if rows:
-        event_list = []
         for r in rows:
             ts = r["event_timestamp"]
             event = {
@@ -256,9 +213,6 @@ async def export_epcis(
                 "regengine:sha256": r["sha256_hash"] or "",
             }
             event_list.append(event)
-    else:
-        event_list = SAMPLE_EPCIS_EVENTS
-
     epcis_document = {
         "@context": [
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
@@ -279,7 +233,7 @@ async def export_epcis(
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
-            **({"regengine:disclaimer": SAMPLE_EXPORT_DISCLAIMER} if data_source == "sample" else {}),
+            **({"regengine:message": "No data yet"} if data_source == "empty" else {}),
         },
     }
 
@@ -331,13 +285,11 @@ async def export_fda(
     tenant_id = ctx.tenant_id
 
     rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
-    data_source = "tenant" if rows else "sample"
+    data_source = "tenant" if rows else "empty"
 
     if rows:
         # Build CSV from real data
-        lines = [
-            "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
-        ]
+        lines = [FDA_CSV_HEADER]
         for r in rows:
             ts = r["event_timestamp"]
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
@@ -365,16 +317,8 @@ async def export_fda(
         csv_content = "\n".join(lines) + "\n"
         event_count = len(rows)
     else:
-        # Sample data fallback for tenants with no events yet
-        csv_content = """CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash
-SHIPPING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-26,14:30:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000012,Cold Express Logistics,3.2,a3f8c1d2e4b5...
-RECEIVING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-27,09:15:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000012,,3.5,c5dae3d8e6f7...
-SHIPPING,LET-0226-A2-003,Romaine Lettuce Hearts 12ct,150,cases,2026-02-26,16:00:00Z,Green Valley Farms Salinas CA,0614141000029,Metro Distribution Center LA,0614141000012,Fresh Fleet Inc,2.8,e7f0a1b2c3d4...
-HARVESTING,CUC-0226-F2-015,English Cucumbers,500,cases,2026-02-25,08:00:00Z,Sunrise Farms Field 2,,,,,,f8a1b2c3d4e5...
-COOLING,SAL-0226-B1-007,Atlantic Salmon Fillets,300,lbs,2026-02-26,06:00:00Z,Pacific Seafood Portland OR,0614141000036,,,,-1.5,a9b0c1d2e3f4...
-TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:00Z,Metro Processing Plant LA,0614141000012,,,,,b0c1d2e3f4a5...
-"""
-        event_count = 6
+        csv_content = FDA_CSV_HEADER + "\n"
+        event_count = 0
 
     # EPIC-L (#1655): route filename through the shared safe_filename
     # builder so tenant_id can't carry CRLF / quotes into the header value.
@@ -394,8 +338,8 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
         "X-RegEngine-Format": "FDA_21CFR1.1455",
         "X-RegEngine-Data-Source": data_source,
     }
-    if data_source == "sample":
-        fda_headers["X-RegEngine-Disclaimer"] = SAMPLE_EXPORT_DISCLAIMER
+    if data_source == "empty":
+        fda_headers["X-RegEngine-Message"] = "No data yet"
 
     return StreamingResponse(
         iter([csv_content]),

@@ -42,7 +42,7 @@ interface ComparisonRow {
 
 const COMPARISON_DATA: ComparisonRow[] = [
     {
-        feature: 'REST API + Webhooks',
+        feature: 'CSV upload + JSON events API',
         regengine: true,
         trustwell: false,
         safetychain: false,
@@ -70,7 +70,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
         repositrak: 'Verify with vendor',
     },
     {
-        feature: 'EPCIS 2.0 Native',
+        feature: 'EPCIS 2.0 export',
         regengine: true,
         trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
@@ -132,7 +132,7 @@ const DIFFERENTIATORS = [
         icon: Code2,
         title: 'API-First Architecture',
         description:
-            'REST APIs, webhooks, and CSV templates. Integrate RegEngine with your existing ERP, WMS, or custom systems. No rip-and-replace required.',
+            'CSV upload and the JSON events API. Integrate RegEngine with your existing ERP, WMS, or custom systems through those two live paths. No rip-and-replace required.',
         detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 compliance their way.',
     },
     {
@@ -146,7 +146,7 @@ const DIFFERENTIATORS = [
         icon: Zap,
         title: 'Self-serve, days not months',
         description:
-            'Get from signup to a first FSMA 204 export in days. CSV upload or API payload → validation → export. No 3–6 month enterprise implementation.',
+            'Get from signup to a first FSMA 204 export in days. CSV upload or API payload → validation → export. No 3 to 6 month enterprise implementation.',
         detail: 'Major retailers and FDA enforcement deadlines arrive on calendar dates; teams ship sooner when the platform is self-serve.',
     },
     {
@@ -158,9 +158,9 @@ const DIFFERENTIATORS = [
     },
     {
         icon: Workflow,
-        title: 'EPCIS 2.0 Native',
+        title: 'EPCIS 2.0 export',
         description:
-            "EPCIS 2.0 support for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
+            "EPCIS 2.0 export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
         detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
     },
     {
@@ -390,7 +390,7 @@ export default function WhyRegEnginePage() {
                                 API-First, Not UI-Only
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Every feature in RegEngine has an API. REST endpoints. Webhooks for real-time events. CSV templates for ops teams. Your developers can integrate in hours, not months.
+                                REST endpoints, CSV templates for ops teams, and outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine). API coverage for every feature is on the roadmap. Your developers can integrate in hours, not months.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 RegEngine started with APIs and added the dashboard on top, so every dashboard action is reachable programmatically. Verify API surface depth with each vendor for your stack.
@@ -398,7 +398,7 @@ export default function WhyRegEnginePage() {
                             <ul className="space-y-2">
                                 {[
                                     'Full REST API for CTEs, suppliers, compliance status',
-                                    'Event webhooks for recall triggers and compliance alerts',
+                                    'Outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine); broader compliance alerts on the roadmap',
                                     'CSV import with smart field mapping',
                                     'Native integrations with Shopify, WooCommerce (coming soon)',
                                 ].map((item, idx) => (
@@ -444,7 +444,7 @@ HTTP 201
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Standard Plan</p>
                                     <p className="text-title tabular-nums text-re-text-primary">$549/mo <span className="text-ui font-normal text-re-text-tertiary line-through">$1,099/mo</span></p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2–3 facilities • Unlimited CTEs</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Founding rate, billed annually ($649/mo monthly) • 2 to 3 facilities • Unlimited CTEs</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Premium Plan</p>
@@ -465,7 +465,7 @@ HTTP 201
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Simple design-partner agreements — no multi-year lock-in',
+                                    'Simple design-partner agreements with no multi-year lock-in',
                                     'API access for contracted workspaces',
                                     'Founding Design Partner rate never increases',
                                 ].map((item, idx) => (
@@ -582,7 +582,7 @@ HTTP 201
                     <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
-                                EPCIS 2.0 Native
+                                EPCIS 2.0 export
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
                                 EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a supported schema where the enabled workflow and source data allow it.
@@ -633,7 +633,7 @@ HTTP 201
                             <p className="mb-4 text-ui text-re-text-tertiary">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
-                                    'Regional produce distributors ($5M–$50M annual revenue)',
+                                    'Regional produce distributors ($5M to $50M annual revenue)',
                                     'Specialty food brands and co-packers',
                                     'Organic/specialty retailers and wholesalers',
                                     'Small farms and grower cooperatives',
@@ -700,7 +700,7 @@ HTTP 201
                                 },
                                 {
                                     title: 'We do NOT lock you in',
-                                    detail: 'Simple design-partner agreements — no multi-year lock-in. Export all your data anytime. Your data is yours.',
+                                    detail: 'Simple design-partner agreements with no multi-year lock-in. Export all your data anytime. Your data is yours.',
                                 },
                             ].map((item, idx) => (
                                 <div key={idx} className="flex gap-4">
@@ -730,7 +730,7 @@ HTTP 201
                             {
                                 Icon: Code2,
                                 title: 'Technical Buyers',
-                                detail: 'Your team owns integrations. You want APIs, webhooks, and source control. RegEngine gives you that.',
+                                detail: 'Your team owns integrations. You want APIs, outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine), and source control. RegEngine gives you that.',
                             },
                             {
                                 Icon: Workflow,
@@ -767,7 +767,7 @@ HTTP 201
                         Ready to Get Compliant?
                     </h2>
                     <p className="mx-auto mb-8 max-w-[68ch] text-body text-re-text-secondary">
-                        Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements — no multi-year lock-in.
+                        Request access in minutes. Start with the onboarding path that fits your team. Simple design-partner agreements with no multi-year lock-in.
                     </p>
                     <div className="flex flex-col justify-center gap-3 sm:flex-row">
                         <Button asChild size="lg">

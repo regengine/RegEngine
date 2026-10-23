@@ -51,6 +51,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 // Empty state shown before a trace is run
 const EMPTY_FACILITIES: Facility[] = [];
@@ -166,12 +167,12 @@ function FSMADashboardContent() {
             <StatTile
               label="Total Lots"
               loading={dashboard.isLoading}
-              value={dashboard.data?.total_lots?.toLocaleString() || '—'}
+              value={dashboard.data?.total_lots?.toLocaleString() || NO_DATA_YET}
             />
             <StatTile
               label="Facilities"
               loading={dashboard.isLoading}
-              value={dashboard.data?.total_facilities?.toLocaleString() || '—'}
+              value={dashboard.data?.total_facilities?.toLocaleString() || NO_DATA_YET}
             />
             <StatTile
               label="KDE Complete"
@@ -179,7 +180,7 @@ function FSMADashboardContent() {
               value={
                 dashboard.data?.kde_completeness_percent
                   ? `${dashboard.data.kde_completeness_percent}%`
-                  : '—'
+                  : NO_DATA_YET
               }
             />
             <StatTile

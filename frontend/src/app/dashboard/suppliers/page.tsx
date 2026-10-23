@@ -12,6 +12,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
     Users,
     Link2,
     CheckCircle2,
@@ -38,6 +46,7 @@ import type {
     SupplierFacility,
     PortalLink,
     IntegrationProfile,
+    FacilityRemovalCheck,
 } from '@/types/api';
 import {
     NO_COMPLIANCE_DATA,
@@ -120,9 +129,10 @@ const POST_SETUP_ROWS = [
 /* ------------------------------------------------------------------ */
 
 export default function SupplierDashboardPage() {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const { tenantId } = useTenant();
     const isLoggedIn = isAuthenticated;
+    const isOwner = user?.role_name?.toLowerCase() === 'owner';
 
     const [facilities, setFacilities] = useState<FacilityRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -134,6 +144,42 @@ export default function SupplierDashboardPage() {
         const timer = setInterval(() => setNow(Date.now()), 60_000);
         return () => clearInterval(timer);
     }, []);
+
+    // Remove facility state (Linear SEL-421)
+    const [checkingFacilityId, setCheckingFacilityId] = useState<string | null>(null);
+    const [removalTarget, setRemovalTarget] = useState<{
+        facility: FacilityRow;
+        check: FacilityRemovalCheck;
+    } | null>(null);
+    const [isRemoving, setIsRemoving] = useState(false);
+    const [removalError, setRemovalError] = useState<string | null>(null);
+
+    const handleOpenRemoval = async (facility: FacilityRow) => {
+        setCheckingFacilityId(facility.id);
+        setRemovalError(null);
+        try {
+            const check = await apiClient.checkFacilityRemoval(facility.id);
+            setRemovalTarget({ facility, check });
+        } catch (err: unknown) {
+            setError(friendlyError(err, 'Failed to check facility removal.'));
+        } finally {
+            setCheckingFacilityId(null);
+        }
+    };
+
+    const handleConfirmRemoval = async (facilityId: string) => {
+        setIsRemoving(true);
+        setRemovalError(null);
+        try {
+            await apiClient.deleteSupplierFacility(facilityId);
+            setFacilities((prev) => prev.filter((f) => f.id !== facilityId));
+            setRemovalTarget(null);
+        } catch (err: unknown) {
+            setRemovalError(friendlyError(err, 'Failed to remove facility.'));
+        } finally {
+            setIsRemoving(false);
+        }
+    };
 
     // Portal link state
     const [portalLinks, setPortalLinks] = useState<PortalLink[]>([]);
@@ -287,7 +333,7 @@ export default function SupplierDashboardPage() {
             setInviteSupplierEmail('');
             setInviteProfileId('');
             setShowInviteForm(false);
-            // Auto-copy the link — best-effort only. clipboard.writeText
+            // Auto-copy the link - best-effort only. clipboard.writeText
             // rejects whenever the document is unfocused or permission is
             // denied; sharing the API call's catch made a SUCCESSFUL link
             // creation render as "Unable to create portal link", inviting
@@ -432,7 +478,7 @@ export default function SupplierDashboardPage() {
                     <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-4">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-re-border bg-re-surface-inset text-subheading tabular-nums text-re-text-primary">
-                                {workbenchSummary?.score ?? '—'}
+                                {workbenchSummary?.score ?? NO_DATA_YET}
                             </div>
                             <div className="min-w-0">
                                 <div className="text-ui font-medium text-re-text-primary">Inflow Workbench readiness</div>
@@ -460,7 +506,7 @@ export default function SupplierDashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Portal Links — Invite Suppliers */}
+                {/* Portal Links - Invite Suppliers */}
                 <Card>
                     <CardHeader>
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -776,7 +822,7 @@ export default function SupplierDashboardPage() {
                     </Card>
                 )}
 
-                {/* Facility List — hairline ledger rows */}
+                {/* Facility List - hairline ledger rows */}
                 {!loading && facilities.length > 0 && (
                     <Card>
                         <ul className="divide-y divide-re-border-subtle">
@@ -849,15 +895,29 @@ export default function SupplierDashboardPage() {
                                                 </div>
                                             )}
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full shrink-0 sm:w-auto"
-                                            onClick={() => handleFDAExport('xlsx', facility.id)}
-                                            leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
-                                        >
-                                            FDA Export
-                                        </Button>
+                                        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full shrink-0 sm:w-auto"
+                                                onClick={() => handleFDAExport('xlsx', facility.id)}
+                                                leadingIcon={<Download strokeWidth={1.75} aria-hidden="true" />}
+                                            >
+                                                FDA Export
+                                            </Button>
+                                            {isOwner && (
+                                                <Button
+                                                    variant="secondary"
+                                                    size="sm"
+                                                    className="w-full shrink-0 text-re-danger hover:text-re-danger sm:w-auto"
+                                                    onClick={() => handleOpenRemoval(facility)}
+                                                    disabled={checkingFacilityId === facility.id}
+                                                    leadingIcon={<Trash2 strokeWidth={1.75} className="h-4 w-4" aria-hidden="true" />}
+                                                >
+                                                    {checkingFacilityId === facility.id ? 'Checking...' : 'Remove'}
+                                                </Button>
+                                            )}
+                                        </div>
                                     </li>
                                 );
                             })}
@@ -887,6 +947,103 @@ export default function SupplierDashboardPage() {
                     </div>
                 )}
             </div>
+
+            {/* Remove Facility Dialog (Linear SEL-421) */}
+            <Dialog open={removalTarget !== null} onOpenChange={(open) => { if (!open && !isRemoving) setRemovalTarget(null); }}>
+                <DialogContent>
+                    {removalTarget && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>
+                                    {removalTarget.check.allowed ? 'Remove facility?' : 'Facility Cannot Be Removed'}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {removalTarget.check.allowed
+                                        ? 'Review the facility details and configuration that will be permanently removed.'
+                                        : 'This facility has linked records and cannot be removed until all referencing records are resolved.'}
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            {removalError && (
+                                <Callout tone="danger">
+                                    {removalError}
+                                </Callout>
+                            )}
+
+                            {removalTarget.check.allowed ? (
+                                <div className="space-y-3 text-small text-re-text-secondary">
+                                    <p>The following will be permanently removed:</p>
+                                    <div className="rounded-lg border border-re-border bg-re-surface-card p-3 space-y-2">
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Facility Name: </span>
+                                            <span>{removalTarget.check.facility_name}</span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Address: </span>
+                                            <span>
+                                                {removalTarget.check.address.street}, {removalTarget.check.address.city}, {removalTarget.check.address.state} {removalTarget.check.address.postal_code}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-re-text-primary">Scoping Configuration: </span>
+                                            <span>
+                                                {removalTarget.check.scoping_config_count > 0
+                                                    ? `${removalTarget.check.scoping_config_count} FTL scoping category configuration(s)`
+                                                    : 'No FTL category scoping configurations'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-re-text-tertiary">
+                                        This action cannot be undone. Zero traceability lots, CTE events, or other records reference this facility.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 text-small text-re-text-secondary">
+                                    <p>
+                                        Facilities with active or historical records cannot be deleted. The facility is referenced by:
+                                    </p>
+                                    <div className="rounded-lg border border-re-border bg-re-surface-card p-3 space-y-2">
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">Traceability lots (TLCs):</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.lots_count}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">CTE events:</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.cte_events_count}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-re-text-primary">Other records:</span>
+                                            <span className="font-mono font-medium">{removalTarget.check.funnel_events_count}</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-re-text-tertiary">
+                                        All referencing records must be removed before this facility can be deleted.
+                                    </p>
+                                </div>
+                            )}
+
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
+                                    variant="secondary"
+                                    onClick={() => setRemovalTarget(null)}
+                                    disabled={isRemoving}
+                                >
+                                    {removalTarget.check.allowed ? 'Cancel' : 'Done'}
+                                </Button>
+                                {removalTarget.check.allowed && (
+                                    <Button
+                                        variant="danger"
+                                        onClick={() => handleConfirmRemoval(removalTarget.facility.id)}
+                                        disabled={isRemoving}
+                                    >
+                                        {isRemoving ? 'Removing...' : 'Remove facility'}
+                                    </Button>
+                                )}
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
         </PageContainer>
     );
 }

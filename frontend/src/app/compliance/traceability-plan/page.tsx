@@ -195,7 +195,7 @@ export default function TraceabilityPlanPage() {
       <PageContainer width="tool">
         <PageHeader
           title="Traceability Plan Generated"
-          description={`${firmData.firm_name} — FSMA 204 Traceability Plan`}
+          description={`FSMA 204 Traceability Plan for ${firmData.firm_name}`}
           secondaryActions={
             <>
               <Button variant="secondary" onClick={handleDownload}>

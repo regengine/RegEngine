@@ -1,0 +1,6 @@
+{
+  "comment": "Justified exceptions only. Each entry needs file, rule, match (substring of the flagged text) and reason. Optional line pins it to one line. Review every entry in PR.",
+  "entries": [
+    { "file": "frontend/src/lib/api-proxy.ts", "rule": "nan-undefined", "match": "bearer undefined", "reason": "Auth header guard that rejects a malformed token. Never rendered." }
+  ]
+}

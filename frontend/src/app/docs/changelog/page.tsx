@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     },
 };
 
-/** Inline identifier — SPEC §2.3. */
+/** Inline identifier - SPEC §2.3. */
 const CODE =
     'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
 
@@ -24,7 +24,7 @@ const LIST = 'mt-3 list-disc space-y-1.5 pl-5 text-ui text-re-text-secondary mar
 const GROUP = 'font-mono text-label uppercase text-re-text-muted';
 
 /**
- * One release. A hairline rule separates releases — a tinted band per version
+ * One release. A hairline rule separates releases - a tinted band per version
  * would turn the page into a colour field (SPEC §3.2), and the version stamp is
  * mono because it is a recorded identifier (SPEC §2.3).
  */
@@ -78,7 +78,7 @@ export default function ChangelogPage() {
             />
 
             <div className="space-y-8">
-                {/* v1.6.0 — Proof Bundle Verification */}
+                {/* v1.6.0 - Proof Bundle Verification */}
                 <Release version="v1.6.0" date="May 10, 2026" title="Proof Bundle Verification">
                     <div>
                         <h4 className={GROUP}>Verification</h4>
@@ -90,7 +90,7 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.5.0 — Trust and Safety Copy Sweep */}
+                {/* v1.5.0 - Trust and Safety Copy Sweep */}
                 <Release version="v1.5.0" date="May 9, 2026" title="Trust and Safety Sweep">
                     <div>
                         <h4 className={GROUP}>Product Copy</h4>
@@ -103,7 +103,7 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.4.0 — Security and Tenant Isolation Hardening */}
+                {/* v1.4.0 - Security and Tenant Isolation Hardening */}
                 <Release version="v1.4.0" date="May 9, 2026" title="Security and Tenant Isolation Hardening">
                     <div>
                         <h4 className={GROUP}>Security</h4>
@@ -117,7 +117,7 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.3.0 — Production Auth and Architecture Cleanup */}
+                {/* v1.3.0 - Production Auth and Architecture Cleanup */}
                 <Release version="v1.3.0" date="April 21, 2026" title="Production Auth and API Cleanup">
                     <div>
                         <h4 className={GROUP}>Platform</h4>
@@ -130,8 +130,8 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.2.0 — Phase 4: Accessibility Polish */}
-                <Release version="v1.2.0" date="March 4, 2026" title="Accessibility Polish — WCAG 2.1 AA">
+                {/* v1.2.0 - Phase 4: Accessibility Polish */}
+                <Release version="v1.2.0" date="March 4, 2026" title="Accessibility Polish (WCAG 2.1 AA)">
                     <div>
                         <h4 className={GROUP}>♿ Accessibility</h4>
                         <ul className={LIST}>
@@ -146,7 +146,7 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.1.0 — Phase 3: Onboarding UX Redesign */}
+                {/* v1.1.0 - Phase 3: Onboarding UX Redesign */}
                 <Release version="v1.1.0" date="February 20, 2026" title="Onboarding UX Redesign">
                     <div>
                         <h4 className={GROUP}>✨ Features</h4>
@@ -160,13 +160,13 @@ export default function ChangelogPage() {
                     </div>
                 </Release>
 
-                {/* v1.0.0 — Initial Public Release */}
+                {/* v1.0.0 - Initial Public Release */}
                 <Release version="v1.0.0" date="February 5, 2026" title="Initial Public Release">
                     <div>
                         <h4 className={GROUP}>✨ Features</h4>
                         <ul className={LIST}>
                             <li>FSMA 204 compliance module with CTEs and KDEs</li>
-                            <li>FDA Request Mode — produces a §1.1455(c) sortable spreadsheet to support your 24-hour response obligation</li>
+                            <li>FDA Request Mode: produces a §1.1455(c) sortable spreadsheet to support your 24-hour response obligation</li>
                             <li>Graph-based supply chain tracing (forward/backward)</li>
                             <li>SHA-256 chained record hashing for tamper detection</li>
                             <li>FTL Checker tool for Food Traceability List verification</li>
