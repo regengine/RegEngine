@@ -1,5 +1,7 @@
 #!/bin/sh
 
+case "${VERCEL_GIT_COMMIT_REF:-}" in dependabot/*) echo 'Dependabot branch, skipping preview'; exit 0;; esac
+
 if [ "${VERCEL_ENV:-}" = "production" ]; then
   echo "Production build, building"
   exit 1
