@@ -95,6 +95,7 @@ jobs:
 
             const summary = {
               alerted: [],
+              unchanged: [],
               upToDate: [],
               errors: [],
             };
@@ -159,71 +160,97 @@ jobs:
                 );
 
                 if (needsAlert) {
-                  let alertReason = '';
+                  let state = '';
                   if (isBehind && hasConflict) {
-                    alertReason = `This pull request is behind \`main\` (by ${behindBy} commit${behindBy === 1 ? '' : 's'}) and has a conflict. It needs an update from \`main\`.`;
+                    state = 'behind-and-conflict';
                   } else if (hasConflict) {
-                    alertReason = `This pull request has a conflict with \`main\` (mergeable: ${mergeable}, mergeable_state: \`${mergeableState}\`). It needs an update from \`main\`.`;
+                    state = 'conflict';
                   } else {
-                    alertReason = `This pull request is behind \`main\` (by ${behindBy} commit${behindBy === 1 ? '' : 's'}). It needs an update from \`main\`.`;
+                    state = 'behind';
                   }
 
-                  core.warning(`PR #${prNumber} (${branchName}): ${alertReason}`);
+                  let alertReason = '';
+                  if (state === 'behind-and-conflict') {
+                    alertReason = 'This pull request is behind `main` and has a conflict. It needs an update from `main`.';
+                  } else if (state === 'conflict') {
+                    alertReason = 'This pull request has a conflict with `main`. It needs an update from `main`.';
+                  } else {
+                    alertReason = 'This pull request is behind `main`. It needs an update from `main`.';
+                  }
 
-                  const commentBody = [
-                    ALERT_MARKER,
-                    '### Branch update needed from main',
-                    '',
-                    alertReason,
-                    '',
-                    'Please update your branch with the latest changes from `main`:',
-                    '```bash',
-                    `git checkout ${branchName}`,
-                    'git fetch origin main',
-                    'git merge origin/main',
-                    '# resolve any merge conflicts if present and commit',
-                    `git push origin ${branchName}`,
-                    '```',
-                    '',
-                    `*Last checked: ${new Date().toISOString()}*`,
-                  ].join('\n');
+                  const primaryComment = existingAlertComments.length > 0 ? existingAlertComments[0] : null;
+                  const stateMatch = primaryComment && primaryComment.body
+                    ? primaryComment.body.match(/<!--\s*sync-main-alert\s+state=([a-z-]+)\s*-->/)
+                    : null;
+                  const existingState = stateMatch ? stateMatch[1] : null;
 
-                  if (existingAlertComments.length > 0) {
-                    const primaryComment = existingAlertComments[0];
-                    core.info(`PR #${prNumber}: updating existing alert comment (id: ${primaryComment.id}).`);
-                    await github.rest.issues.updateComment({
-                      owner,
-                      repo,
-                      comment_id: primaryComment.id,
-                      body: commentBody,
+                  if (existingAlertComments.length > 0 && existingState === state) {
+                    core.info(`PR #${prNumber} (${branchName}): alert comment state '${state}' is unchanged, skipping.`);
+                    summary.unchanged.push({
+                      number: prNumber,
+                      branch: branchName,
+                      title: prTitle,
+                      reason: alertReason,
+                      state,
                     });
-                    for (let i = 1; i < existingAlertComments.length; i++) {
-                      try {
-                        await github.rest.issues.deleteComment({
-                          owner,
-                          repo,
-                          comment_id: existingAlertComments[i].id,
-                        });
-                      } catch (dupErr) {
-                        core.warning(`PR #${prNumber}: could not delete duplicate comment: ${dupErr.message}`);
+                  } else {
+                    core.warning(`PR #${prNumber} (${branchName}): ${alertReason}`);
+
+                    const stateMarker = `<!-- sync-main-alert state=${state} -->`;
+                    const commentBody = [
+                      ALERT_MARKER,
+                      stateMarker,
+                      '### Branch update needed from main',
+                      '',
+                      alertReason,
+                      '',
+                      'Please update your branch with the latest changes from `main`:',
+                      '```bash',
+                      `git checkout ${branchName}`,
+                      'git fetch origin main',
+                      'git merge origin/main',
+                      '# resolve any merge conflicts if present and commit',
+                      `git push origin ${branchName}`,
+                      '```',
+                    ].join('\n');
+
+                    if (existingAlertComments.length > 0) {
+                      core.info(`PR #${prNumber}: updating existing alert comment (id: ${primaryComment.id}, state: ${state}).`);
+                      await github.rest.issues.updateComment({
+                        owner,
+                        repo,
+                        comment_id: primaryComment.id,
+                        body: commentBody,
+                      });
+                      for (let i = 1; i < existingAlertComments.length; i++) {
+                        try {
+                          await github.rest.issues.deleteComment({
+                            owner,
+                            repo,
+                            comment_id: existingAlertComments[i].id,
+                          });
+                        } catch (dupErr) {
+                          core.warning(`PR #${prNumber}: could not delete duplicate comment: ${dupErr.message}`);
+                        }
                       }
+                    } else {
+                      core.info(`PR #${prNumber}: creating new alert comment (state: ${state}).`);
+                      await github.rest.issues.createComment({
+                        owner,
+                        repo,
+                        issue_number: prNumber,
+                        body: commentBody,
+                      });
                     }
-                  } else {
-                    core.info(`PR #${prNumber}: creating new alert comment.`);
-                    await github.rest.issues.createComment({
-                      owner,
-                      repo,
-                      issue_number: prNumber,
-                      body: commentBody,
+
+                    summary.alerted.push({
+                      number: prNumber,
+                      branch: branchName,
+                      title: prTitle,
+                      reason: alertReason,
+                      state,
                     });
                   }
-
-                  summary.alerted.push({
-                    number: prNumber,
-                    branch: branchName,
-                    title: prTitle,
-                    reason: alertReason,
-                  });
                 } else {
                   core.info(`PR #${prNumber} (${branchName}): up to date with main and has no conflicts.`);
 
@@ -238,7 +265,11 @@ jobs:
                         });
                         core.info(`PR #${prNumber}: deleted previous alert comment (id: ${comment.id}).`);
                       } catch (delError) {
-                        if (!comment.body.includes('Resolved: Branch up to date with main')) {
+                        const isAlreadyResolved =
+                          comment.body.includes('Resolved: Branch up to date with main') ||
+                          comment.body.includes('state=resolved') ||
+                          /\bresolved\b/i.test(comment.body);
+                        if (!isAlreadyResolved) {
                           core.warning(`PR #${prNumber}: deleteComment failed (${delError.message}), updating to resolved.`);
                           await github.rest.issues.updateComment({
                             owner,
@@ -246,6 +277,7 @@ jobs:
                             comment_id: comment.id,
                             body: [
                               ALERT_MARKER,
+                              '<!-- sync-main-alert state=resolved -->',
                               '### Resolved: Branch up to date with main',
                               '',
                               `Branch \`${branchName}\` is no longer behind \`main\` and has no merge conflicts.`,
@@ -253,6 +285,8 @@ jobs:
                               `*Resolved: ${new Date().toISOString()}*`,
                             ].join('\n'),
                           });
+                        } else {
+                          core.info(`PR #${prNumber}: alert comment already says resolved (id: ${comment.id}), skipping edit.`);
                         }
                       }
                     }
@@ -285,6 +319,7 @@ jobs:
             core.info(`Total open PRs checked: ${pulls.length}`);
             core.info(`Candidate PRs evaluated: ${candidatePRs.length}`);
             core.info(`Alerts posted or updated: ${summary.alerted.length}`);
+            core.info(`Alerts unchanged: ${summary.unchanged.length}`);
             core.info(`Up to date with main: ${summary.upToDate.length}`);
             core.info(`Errors encountered: ${summary.errors.length}`);
             core.info('========================================');
@@ -294,6 +329,7 @@ jobs:
             summaryMd += `| Total open PRs evaluated | ${pulls.length} |\n`;
             summaryMd += `| Candidates eligible for alert check | ${candidatePRs.length} |\n`;
             summaryMd += `| Alerts posted or updated | ${summary.alerted.length} |\n`;
+            summaryMd += `| Alerts unchanged | ${summary.unchanged.length} |\n`;
             summaryMd += `| Up to date with main | ${summary.upToDate.length} |\n`;
             summaryMd += `| Errors | ${summary.errors.length} |\n\n`;
 
@@ -301,6 +337,14 @@ jobs:
               summaryMd += '### PRs Needing Update from Main\n\n';
               for (const p of summary.alerted) {
                 summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.reason}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            if (summary.unchanged.length > 0) {
+              summaryMd += '### PRs with Unchanged Alert State\n\n';
+              for (const p of summary.unchanged) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.reason} (state: \`${p.state}\`)\n`;
               }
               summaryMd += '\n';
             }
