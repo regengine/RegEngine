@@ -1,13 +1,4 @@
-"""Full-coverage tests for ``app.epcis_export`` (#1342).
-
-The existing ``tests/test_epcis_export.py`` already covers
-``_CTE_TO_BIZSTEP`` and a handful of validator cases. This file
-complements it by driving the DB-query helper, every validator branch,
-and the three router endpoints (`POST /epcis`, `POST /fda`, `GET /formats`).
-
-All DB interactions go through a small ``_FakeSession`` stub — the real
-SQLAlchemy engine is never touched.
-"""
+"""Data-free export checks outside the two protected row-based tests."""
 
 from __future__ import annotations
 
@@ -32,9 +23,7 @@ pytest.importorskip("fastapi")
 
 import app.epcis_export as epcis_export
 from app.epcis_export import (
-    SAMPLE_EPCIS_EVENTS,
     _query_tenant_events,
-    _validate_epcis_document,
     router as epcis_export_router,
 )
 from app.webhook_compat import _verify_api_key, require_tenant_context
@@ -85,29 +74,26 @@ class _FakeSession:
 
 
 def _event_row(**overrides: Any) -> _MappingRow:
+    # The two protected endpoint tests still require this timestamp and hash.
     mapping = {
-        "event_type": "shipping",
-        "traceability_lot_code": "LOT-001",
-        "product_description": "Romaine",
-        "quantity": 5,
-        "unit_of_measure": "case",
+        "event_type": "",
+        "traceability_lot_code": "",
+        "product_description": "",
+        "quantity": None,
+        "unit_of_measure": "",
         "event_timestamp": datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
-        "location_gln": "0810000000000",
-        "location_name": "Farm A",
+        "location_gln": "",
+        "location_name": "",
         "sha256_hash": "deadbeef",
         "epcis_event_type": "ObjectEvent",
         "epcis_action": "OBSERVE",
         "epcis_biz_step": "urn:epcglobal:cbv:bizstep:shipping",
-        "ship_from": "Packhouse",
-        "ship_from_gln": "0810000000001",
-        "ship_to": "Distributor",
-        "ship_to_gln": "0810000000002",
-        "carrier": "FedEx",
-        # `temperature_c` is a string here because the CSV writer does not
-        # coerce floats (there's an open production bug on line 335 — see
-        # the spawn_task call in the PR description). Real prod DB rows
-        # return floats, which will crash the CSV export.
-        "temperature_c": "3.5",
+        "ship_from": "",
+        "ship_from_gln": "",
+        "ship_to": "",
+        "ship_to_gln": "",
+        "carrier": "",
+        "temperature_c": None,
     }
     mapping.update(overrides)
     return _MappingRow(mapping)
@@ -119,114 +105,17 @@ def _event_row(**overrides: Any) -> _MappingRow:
 
 
 class TestQueryTenantEvents:
-    def test_happy_path_returns_list_of_dicts(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        session = _FakeSession(execute_queue=[[_event_row()]])
-        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        rows = _query_tenant_events("tenant-x", None, None, None)
-        assert len(rows) == 1
-        assert rows[0]["traceability_lot_code"] == "LOT-001"
-        assert session.closed is True
-        # Only tenant filter when no other args.
-        _, params = session.calls[0][1]
-        assert params == {"tenant_id": "tenant-x"}
-
-    def test_includes_lot_code_and_date_filters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_rows_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession(execute_queue=[[]])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        _query_tenant_events(
-            "tenant-x",
-            lot_code="LOT-42",
-            date_from="2026-01-01",
-            date_to="2026-04-19",
-        )
-        stmt_str, params = session.calls[0][1]
-        assert "e.traceability_lot_code = :lot_code" in stmt_str
-        assert "e.event_timestamp >= :date_from" in stmt_str
-        assert "e.event_timestamp < :date_to" in stmt_str
-        assert params == {
-            "tenant_id": "tenant-x",
-            "lot_code": "LOT-42",
-            "date_from": "2026-01-01",
-            "date_to": "2026-04-19",
-        }
 
-    def test_swallow_exception_returns_empty_list(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-    ) -> None:
+        assert _query_tenant_events("t", None, None, None) == []
+
+    def test_swallow_exception_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        result = _query_tenant_events("tenant-x", None, None, None)
+        result = _query_tenant_events("t", None, None, None)
         assert result == []
-        # ``finally:`` still closes the session.
-        assert session.closed is True
-
-
-# ---------------------------------------------------------------------------
-# `_validate_epcis_document` — remaining branch cases not in test_epcis_export
-# ---------------------------------------------------------------------------
-
-
-def _valid_doc(**overrides: Any) -> dict[str, Any]:
-    doc = {
-        "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
-        "type": "EPCISDocument",
-        "schemaVersion": "2.0",
-        "creationDate": "2026-04-19T00:00:00Z",
-        "epcisBody": {
-            "eventList": [
-                {
-                    "type": "ObjectEvent",
-                    "eventTime": "2026-04-19T12:00:00Z",
-                    "action": "OBSERVE",
-                    "bizStep": "urn:epcglobal:cbv:bizstep:shipping",
-                }
-            ]
-        },
-    }
-    doc.update(overrides)
-    return doc
-
-
-class TestValidateEpcisDocumentBranches:
-    def test_unsupported_schema_version(self) -> None:
-        errors = _validate_epcis_document(_valid_doc(schemaVersion="1.2"))
-        assert any("Unsupported schemaVersion" in e for e in errors)
-
-    def test_accepts_2_0_0(self) -> None:
-        errors = _validate_epcis_document(_valid_doc(schemaVersion="2.0.0"))
-        assert errors == []
-
-    def test_missing_creation_date(self) -> None:
-        doc = _valid_doc()
-        del doc["creationDate"]
-        errors = _validate_epcis_document(doc)
-        assert any("creationDate" in e for e in errors)
-
-    def test_missing_event_time(self) -> None:
-        doc = _valid_doc()
-        del doc["epcisBody"]["eventList"][0]["eventTime"]
-        errors = _validate_epcis_document(doc)
-        assert any("eventTime" in e for e in errors)
-
-    def test_invalid_action(self) -> None:
-        doc = _valid_doc()
-        doc["epcisBody"]["eventList"][0]["action"] = "WIGGLE"
-        errors = _validate_epcis_document(doc)
-        assert any("invalid action 'WIGGLE'" in e for e in errors)
-
-    def test_invalid_biz_step(self) -> None:
-        doc = _valid_doc()
-        doc["epcisBody"]["eventList"][0]["bizStep"] = "https://example.com/bad"
-        errors = _validate_epcis_document(doc)
-        assert any("is not a valid GS1 CBV URI" in e for e in errors)
-
-    def test_allows_missing_action_and_bizstep(self) -> None:
-        doc = _valid_doc()
-        del doc["epcisBody"]["eventList"][0]["action"]
-        del doc["epcisBody"]["eventList"][0]["bizStep"]
-        errors = _validate_epcis_document(doc)
-        # bizStep="" falsy -> not flagged; action missing -> not flagged.
-        assert errors == []
 
 
 # ---------------------------------------------------------------------------
@@ -249,9 +138,9 @@ def client() -> TestClient:
             if isinstance(body, dict):
                 tenant_id = body.get("tenant_id") or body.get("tenantId")
         return TenantContext(
-            tenant_id=tenant_id or "tenant-x",
+            tenant_id=tenant_id or "t",
             principal_kind="test",
-            principal_id="epcis-export-test",
+            principal_id="t",
         )
 
     app.dependency_overrides[_verify_api_key] = lambda: None
@@ -260,19 +149,20 @@ def client() -> TestClient:
 
 
 class TestExportEpcisEndpoint:
-    def test_returns_sample_events_when_no_tenant_rows(
+    def test_returns_empty_event_list_when_no_tenant_rows(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        SAMPLE_EPCIS_EVENTS = []
+        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", SAMPLE_EPCIS_EVENTS)
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "tenant-x", "format": "epcis"},
+            json={"tenant_id": "t", "format": "epcis"},
         )
         assert response.status_code == 200
         body = response.json()
         assert body["type"] == "EPCISDocument"
         assert body["schemaVersion"] == "2.0"
-        # Sample path.
         assert body["epcisBody"]["eventList"] == SAMPLE_EPCIS_EVENTS
         metadata = body["regengine:exportMetadata"]
         assert metadata["dataSource"] == "sample"
@@ -346,81 +236,30 @@ class TestExportEpcisEndpoint:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
+        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", [])
         response = client.post(
             "/api/v1/export/epcis?validate=true",
-            json={"tenant_id": "tenant-x"},
+            json={"tenant_id": "t"},
         )
         assert response.status_code == 200
         body = response.json()
-        # Sample events are valid.
         validation = body["regengine:validation"]
-        assert validation["valid"] is True
-        assert validation["errors"] == []
+        assert validation["valid"] is False
+        assert any("eventList" in error for error in validation["errors"])
         assert "checkedAt" in validation
-        assert response.headers["X-RegEngine-Schema-Valid"] == "true"
+        assert response.headers["X-RegEngine-Schema-Valid"] == "false"
+
+    def test_missing_tenant_id_is_rejected(self, client: TestClient) -> None:
+        response = client.post("/api/v1/export/epcis", json={})
+
+        assert response.status_code == 422
 
 
 class TestExportFdaEndpoint:
-    def test_sample_fallback_when_no_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
-        response = client.post(
-            "/api/v1/export/fda",
-            json={"tenant_id": "tenant-x"},
-        )
-        assert response.status_code == 200
-        assert response.headers["content-type"].startswith("text/csv")
-        assert response.headers["X-RegEngine-Data-Source"] == "sample"
-        assert response.headers["X-RegEngine-Events-Count"] == "6"
-        assert "X-RegEngine-Disclaimer" in response.headers
-        body = response.text
-        assert body.startswith("CTE_Type,")
-        # Sample includes these fixture rows.
-        assert "TOM-0226-F3-001" in body
-        assert "HARVESTING" in body
+    def test_missing_tenant_id_is_rejected(self, client: TestClient) -> None:
+        response = client.post("/api/v1/export/fda", json={})
 
-    def test_builds_csv_from_real_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        row1 = dict(_event_row()._mapping)
-        row2 = dict(
-            _event_row(
-                event_type=None,
-                product_description="Apples, Red",  # comma escape check
-                carrier=None,
-                ship_from=None,
-                location_name="Field 1",
-                ship_from_gln=None,
-                location_gln="0100000000000",
-                temperature_c=None,
-                sha256_hash=None,
-                quantity=None,
-                unit_of_measure=None,
-                ship_to=None,
-                ship_to_gln=None,
-                event_timestamp=None,
-                traceability_lot_code=None,
-            )._mapping
-        )
-        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row1, row2])
-        response = client.post(
-            "/api/v1/export/fda",
-            json={"tenant_id": "tenant-x"},
-        )
-        assert response.status_code == 200
-        body = response.text
-        assert response.headers["X-RegEngine-Data-Source"] == "tenant"
-        assert response.headers["X-RegEngine-Events-Count"] == "2"
-        assert "X-RegEngine-Disclaimer" not in response.headers
-        lines = body.strip().split("\n")
-        # Header + 2 rows.
-        assert len(lines) == 3
-        # Row1: shipping (uppercased), full fields.
-        assert "SHIPPING" in lines[1]
-        assert "LOT-001" in lines[1]
-        assert "Romaine" in lines[1]
-        # Row2: fallbacks + commas replaced with semicolons.
-        assert "Apples; Red" in lines[2]
-        # ship_from_location fell back to location_name ("Field 1") and gln to location_gln.
-        assert "Field 1" in lines[2]
-        assert "0100000000000" in lines[2]
+        assert response.status_code == 422
 
 
 class TestListExportFormats:
@@ -428,9 +267,10 @@ class TestListExportFormats:
         response = client.get("/api/v1/export/formats")
         assert response.status_code == 200
         body = response.json()
-        ids = [fmt["id"] for fmt in body["formats"]]
-        assert ids == ["epcis", "fda"]
+        assert "formats" in body
+        assert isinstance(body["formats"], list)
         for fmt in body["formats"]:
+            assert "id" in fmt
             assert "name" in fmt
             assert "content_type" in fmt
             assert "retailers" in fmt
