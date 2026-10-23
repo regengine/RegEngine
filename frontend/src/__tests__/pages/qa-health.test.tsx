@@ -85,7 +85,7 @@ function mockQAHealth(overrides: Partial<ReturnType<typeof useQAHealth>> = {}) {
 
 function mockUser(isSysadmin: boolean) {
   vi.mocked(useAuth).mockReturnValue({
-    user: { id: 'user.id', email: 'user@example.com', is_sysadmin: isSysadmin, status: 'active' },
+    user: { id: 'user.id', email: '', is_sysadmin: isSysadmin, status: 'active' },
     isHydrated: true,
   } as ReturnType<typeof useAuth>);
 }
