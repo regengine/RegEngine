@@ -13,7 +13,7 @@ describe("HomePage Compliance OS foundation", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/ingest supply-chain data through csv upload or the json events api\. epcis intake is in preview; edi and sftp intake are on the roadmap\./i),
+      screen.getByText(/send records by csv upload or the json events api\. epcis 2\.0 is in preview\./i),
     ).toBeInTheDocument();
   });
 

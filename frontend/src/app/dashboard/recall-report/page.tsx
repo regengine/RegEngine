@@ -36,6 +36,7 @@ import {
     ChevronUp,
     RefreshCw,
 } from 'lucide-react';
+import { NOT_SET } from '@/lib/empty-values';
 
 /* ── API Response Types ── */
 
@@ -114,8 +115,8 @@ const DEMO_TIMELINE = [
     { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution; 3 supplier origins confirmed', icon: Package, done: true },
     { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, done: true },
     { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, done: true },
-    { time: '—', label: 'Retailer EPCIS Notification', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload. Confirm specific format with each buyer', icon: ShoppingCart, done: false },
-    { time: '—', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, done: false },
+    { time: 'Pending', label: 'Retailer EPCIS Notification (Preview)', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload. Confirm specific format with each buyer', icon: ShoppingCart, done: false },
+    { time: 'Pending', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, done: false },
 ];
 
 /* ── Helpers ── */
@@ -180,7 +181,7 @@ export default function RecallReportPage() {
     const actionItems = report?.action_items ?? [];
     const overallScore = report?.overall_score ?? 0;
     const overallGrade = report?.overall_grade ?? '—';
-    const responseTimeStr = report?.time_to_respond_estimate ?? '—';
+    const responseTimeStr = report?.time_to_respond_estimate ?? NOT_SET;
 
     // Demo-mode fallback stats for summary banner
     const demoSlaPercent = Math.round((DEMO_INVESTIGATION.response_time_hours / DEMO_INVESTIGATION.sla_target) * 100);

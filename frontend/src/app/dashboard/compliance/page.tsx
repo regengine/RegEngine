@@ -33,6 +33,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
 import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
 
@@ -531,7 +532,7 @@ export default function ComplianceDashboardPage() {
                                             <div
                                                 className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
                                             >
-                                                {workbenchSummary?.score ?? '—'}
+                                                {workbenchSummary?.score ?? NO_DATA_YET}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground mt-1">
                                                 {workbenchSummary?.label ?? 'No saved preflight run yet'}

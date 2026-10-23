@@ -39,6 +39,7 @@ import type {
     PortalLink,
     IntegrationProfile,
 } from '@/types/api';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -425,7 +426,7 @@ export default function SupplierDashboardPage() {
                     <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-4">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-re-border bg-re-surface-inset text-subheading tabular-nums text-re-text-primary">
-                                {workbenchSummary?.score ?? '—'}
+                                {workbenchSummary?.score ?? NO_DATA_YET}
                             </div>
                             <div className="min-w-0">
                                 <div className="text-ui font-medium text-re-text-primary">Inflow Workbench readiness</div>

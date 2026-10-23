@@ -31,6 +31,7 @@ import {
 } from '@/hooks/use-remediation';
 
 import { Check, Copy, FileWarning, Link2, Mail, PackageCheck } from 'lucide-react';
+import { NOT_SET, NO_DATA_YET } from '@/lib/empty-values';
 
 const CASE_STATUS_LABEL: Record<string, string> = {
   detected: 'Detected',
@@ -77,7 +78,7 @@ function DeliveryBadge({ status, reason }: { status: string; reason?: string | n
 }
 
 function pct(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return NO_DATA_YET;
   return `${Math.round(value * 100)}%`;
 }
 
@@ -264,7 +265,7 @@ export default function RemediationPage() {
       header: 'Case',
       width: '12.5rem',
       cell: (record) => {
-        if (!record.case) return <span className="text-re-text-muted">—</span>;
+        if (!record.case) return <span className="text-re-text-muted">{NOT_SET}</span>;
         const delivery = outboxByCase.get(record.case.case_id);
         return (
           <span className="flex flex-wrap items-center gap-2 text-ui text-re-text-secondary">
@@ -289,7 +290,7 @@ export default function RemediationPage() {
       width: '7rem',
       cell: (record) => (
         <span className="text-re-text-tertiary">
-          {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : '—'}
+          {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : NOT_SET}
         </span>
       ),
     },
@@ -298,7 +299,7 @@ export default function RemediationPage() {
       header: 'Why blocked',
       cell: (record) => (
         <span className="block max-w-[20ch] text-re-text-tertiary">
-          {(record.failures ?? []).map((f) => f.why_failed).join('; ') || '—'}
+          {(record.failures ?? []).map((f) => f.why_failed).join('; ') || NOT_SET}
         </span>
       ),
     },

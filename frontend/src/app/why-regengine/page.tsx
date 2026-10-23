@@ -132,7 +132,7 @@ const DIFFERENTIATORS = [
         icon: Code2,
         title: 'API-First Architecture',
         description:
-            'CSV upload, a JSON events API, and EPCIS export. Integrate RegEngine with your existing ERP, WMS, or custom systems. No rip-and-replace required.',
+            'CSV upload and the JSON events API. Integrate RegEngine with your existing ERP, WMS, or custom systems through those two live paths. No rip-and-replace required.',
         detail: 'Technical teams can be live in hours. Sales ops teams use our CSV templates. Everyone gets FSMA 204 compliance their way.',
     },
     {
@@ -390,7 +390,7 @@ export default function WhyRegEnginePage() {
                                 API-First, Not UI-Only
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Every feature in RegEngine has an API. REST endpoints. Webhooks for real-time events. CSV templates for ops teams. Your developers can integrate in hours, not months.
+                                REST endpoints, CSV templates for ops teams, and outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine). API coverage for every feature is on the roadmap. Your developers can integrate in hours, not months.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 RegEngine started with APIs and added the dashboard on top, so every dashboard action is reachable programmatically. Verify API surface depth with each vendor for your stack.
@@ -398,7 +398,7 @@ export default function WhyRegEnginePage() {
                             <ul className="space-y-2">
                                 {[
                                     'Full REST API for CTEs, suppliers, compliance status',
-                                    'Event webhooks for recall triggers and compliance alerts',
+                                    'Outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine); broader compliance alerts on the roadmap',
                                     'CSV import with smart field mapping',
                                     'Native integrations with Shopify, WooCommerce (coming soon)',
                                 ].map((item, idx) => (
@@ -730,7 +730,7 @@ HTTP 201
                             {
                                 Icon: Code2,
                                 title: 'Technical Buyers',
-                                detail: 'Your team owns integrations. You want APIs, webhooks, and source control. RegEngine gives you that.',
+                                detail: 'Your team owns integrations. You want APIs, outbound webhooks for FDA recall/enforcement alerts (enabled by RegEngine), and source control. RegEngine gives you that.',
                             },
                             {
                                 Icon: Workflow,

@@ -37,6 +37,7 @@ import {
     FileText,
     ShieldCheck,
 } from 'lucide-react';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 // ── Types ──
 
@@ -686,7 +687,7 @@ function HeartbeatPageContent() {
                                         <StatusRow
                                             icon={FileText}
                                             label="CTE Events"
-                                            value={compliance?.events_analyzed?.toLocaleString() ?? '—'}
+                                            value={compliance?.events_analyzed?.toLocaleString() ?? NO_DATA_YET}
                                             status={compliance && compliance.events_analyzed > 0 ? 'good' : 'neutral'}
                                         />
                                         <StatusRow

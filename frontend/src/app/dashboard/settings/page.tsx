@@ -47,8 +47,8 @@ const INTEGRATIONS = [
     { id: 'netsuite', name: 'Oracle NetSuite', category: 'ERP', status: 'available', desc: 'Cloud ERP and financials' },
     { id: 'walmart', name: 'Walmart GDSN', category: 'Retailer', status: 'coming_soon', desc: 'Global Data Synchronization' },
     { id: 'kroger', name: 'Kroger 84.51\u00b0', category: 'Retailer', status: 'coming_soon', desc: 'Retailer data exchange' },
-    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'available', desc: 'GS1 event format bridge; ingest in Preview' },
-    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'available', desc: 'Push events to your endpoints' },
+    { id: 'epcis', name: 'EPCIS 2.0 Gateway', category: 'Standards', status: 'epcis_preview', desc: 'GS1 event format bridge; ingest in Preview' },
+    { id: 'webhook', name: 'Custom Webhooks', category: 'Custom', status: 'preview', desc: 'Push events to your endpoints' },
 ];
 /**
  * Integration status. `state` promotes the operational statuses to the
@@ -61,6 +61,8 @@ const STATUS_CONFIG: Record<string, { state?: ComplianceState; label: string }> 
     available: { label: 'Available' },
     disconnected: { label: 'Available' },
     coming_soon: { label: 'Coming Soon' },
+    preview: { label: 'Preview / contact us' },
+    epcis_preview: { label: 'Preview' },
 };
 
 const TABS = [

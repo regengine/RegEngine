@@ -929,7 +929,7 @@ export default function IngestPage() {
                     Normal import
                   </div>
                   <p className="mt-2 text-ui text-re-text-secondary">
-                    Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 for GS1 EPCIS JSON and XML files.
+                    Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 (Preview) for GS1 EPCIS JSON and XML files.
                   </p>
                 </div>
                 {experimentalFeaturesEnabled() && (
@@ -939,7 +939,7 @@ export default function IngestPage() {
                       Inflow Lab
                     </div>
                     <p className="mt-2 text-ui text-re-text-secondary">
-                      Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
+                      Use the lab for FSMA event simulation and event replay so test traffic stays tagged.
                     </p>
                     <Button size="sm" variant="secondary" className="mt-3" asChild>
                       <Link href="/dashboard/inflow-lab">
@@ -981,7 +981,6 @@ export default function IngestPage() {
                   {SUPPORTED_FORMATS.map((format) => (
                     <Badge key={format} size="sm">{format}</Badge>
                   ))}
-                  <Badge size="sm">EDI (X12/EDIFACT)</Badge>
                 </div>
                 <p className="mt-3 text-ui text-re-text-secondary">
                   URL ingestion requires the document to be publicly accessible. For private documents, use the File Upload tab above.

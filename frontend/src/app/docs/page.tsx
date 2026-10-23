@@ -80,7 +80,7 @@ const subPages = [
   { title: 'Quickstart', href: '/docs/quickstart', icon: Zap, description: 'Your first API call in about 5 minutes' },
   { title: 'Authentication', href: '/docs/authentication', icon: Key, description: 'The key header, scopes, and what a key can reach' },
   { title: 'API Reference', href: '/docs/api', icon: Code2, description: 'Full endpoint reference with schemas' },
-  { title: 'Outbound webhooks (planned)', href: '/docs/webhooks', icon: Webhook, description: 'Notifications from RegEngine. To send events in, use POST /webhooks/ingest.' },
+  { title: 'Outbound webhooks (planned)', href: '/docs/webhooks', icon: Webhook, description: 'Notifications from RegEngine. To send events in, use the JSON events API (POST /webhooks/ingest).' },
   { title: 'Inflow Lab', href: '/docs/connectors/inflow-lab', icon: Terminal, description: 'Preflight, readiness scoring, fix queue, and commit gates' },
   { title: 'Error Codes', href: '/docs/errors', icon: AlertTriangle, description: 'Error responses and troubleshooting' },
   { title: 'Rate Limits', href: '/docs/rate-limits', icon: Clock, description: 'What to do when you get a 429' },

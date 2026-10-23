@@ -204,7 +204,7 @@ export default function HomePage() {
             FSMA 204 recordkeeping for the Food Traceability Rule.
           </h1>
           <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-            Ingest supply-chain data through CSV upload or the JSON events API. EPCIS intake is in Preview; EDI and SFTP intake are on the roadmap. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
+            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
           </p>
           <Callout tone="neutral" className="mt-6 max-w-[68ch]">
             <p>

@@ -36,7 +36,7 @@ export const publicOpenApiSpec = {
     },
   ],
   tags: [
-    { name: 'Webhook Ingestion', description: 'Create tenant-scoped CTE/KDE records.' },
+    { name: 'JSON Events API', description: 'Create tenant-scoped CTE/KDE records.' },
     { name: 'Records', description: 'Read canonical ingestion-run records.' },
     { name: 'FDA Export', description: 'Export FDA-oriented sortable records where configured data supports the request.' },
   ],
@@ -44,7 +44,7 @@ export const publicOpenApiSpec = {
   paths: {
     '/api/v1/webhooks/ingest': {
       post: {
-        tags: ['Webhook Ingestion'],
+        tags: ['JSON Events API'],
         operationId: 'ingestWebhookEvents',
         summary: 'Ingest traceability events',
         description:
@@ -84,7 +84,7 @@ export const publicOpenApiSpec = {
     },
     '/api/v1/webhooks/recent': {
       get: {
-        tags: ['Webhook Ingestion'],
+        tags: ['JSON Events API'],
         operationId: 'listRecentWebhookEvents',
         summary: 'List recent traceability events',
         description: 'Requires the webhooks.read scope.',
@@ -116,7 +116,7 @@ export const publicOpenApiSpec = {
     },
     '/api/v1/webhooks/chain/verify': {
       get: {
-        tags: ['Webhook Ingestion'],
+        tags: ['JSON Events API'],
         operationId: 'verifyWebhookChain',
         summary: 'Verify a tenant hash chain',
         description: 'Requires the webhooks.read scope.',

@@ -63,7 +63,7 @@ const STATUS_SUMMARY = [
     },
     {
         label: 'File Import Supported',
-        detail: 'Customer data can be onboarded through CSV upload with mapping review and exception handling. SFTP delivery is on the roadmap.',
+        detail: 'Customer data can be onboarded through CSV upload with mapping review and exception handling.',
     },
     {
         label: 'Custom Scoped',

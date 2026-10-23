@@ -212,7 +212,7 @@ export default function ProofPage() {
                     <Transcript title="Tampered output">
                         <p>$ python verify_chain.py audit-bundle-tampered.zip</p>
                         <p className="mt-3 text-re-success">manifest: ok</p>
-                        <p className="text-re-danger">verify: FAILED — fsma-204-sample.csv: sha256 mismatch</p>
+                        <p className="text-re-danger">verify: FAILED: fsma-204-sample.csv sha256 mismatch</p>
                         <p className="text-re-danger">result: bundle TAMPERED</p>
                         <p className="mt-3">$ echo $?</p>
                         <p>1</p>

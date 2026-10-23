@@ -106,7 +106,7 @@ function InflowImpactDiagram() {
             <div>
               <p className="font-mono text-label uppercase text-re-text-muted">Raw supplier feed</p>
               <p className="mt-1 text-subheading text-re-text-primary">
-                CSV, portal, API, or EPCIS-shaped records (EPCIS in Preview)
+                CSV/XLSX upload or supplier portal, the JSON events API, or EPCIS-shaped records (EPCIS in Preview)
               </p>
             </div>
           </div>

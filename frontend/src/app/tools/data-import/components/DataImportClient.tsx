@@ -251,7 +251,7 @@ export function DataImportClient() {
             trackToolRunCompleted('data-import', result.accepted > 0 ? 'success' : 'error');
         } catch (err: unknown) {
             const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Webhook ingest failed';
+            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'JSON events API ingest failed';
             addStep('Batch ingest', false, msg);
             setSampleState('error');
             trackToolRunCompleted('data-import', 'error');
@@ -269,19 +269,19 @@ export function DataImportClient() {
     return (
         <FreeToolPageShell
             title="Data Import Hub"
-            subtitle="Get your traceability data into RegEngine. Upload CSV, import IoT logs, or connect via API."
+            subtitle="Get your traceability data into RegEngine. Upload CSV or XLSX files (including Sensitech TempTale logs), or connect via the JSON events API."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <LeadGate
                 source="data-import"
                 headline="Unlock the Data Import Hub"
-                subheadline="Upload CSV files, import IoT temperature logs, and connect via API to start building your traceability records."
+                subheadline="Upload CSV or XLSX files (including IoT temperature logs), or connect via the JSON events API to start building your traceability records."
                 ctaText="Access Import Tools"
                 teaser={
                     <Card padding="spacious" className="text-center">
                         <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                         <p className="text-subheading text-re-text-primary">Three Ways to Import</p>
-                        <p className="mt-2 text-ui text-re-text-secondary">CSV Upload with templates for every Critical Tracking Event (CTE) type, IoT Sensitech TempTale import, and a full REST webhook API.</p>
+                        <p className="mt-2 text-ui text-re-text-secondary">CSV and XLSX upload with templates for every Critical Tracking Event (CTE) type, Sensitech TempTale CSV import, and the JSON events API.</p>
                     </Card>
                 }
             >
@@ -604,7 +604,7 @@ export function DataImportClient() {
                                 <div className="flex items-center gap-3">
                                     <Code2 className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                     <div>
-                                        <CardTitle>Webhook Ingestion API</CardTitle>
+                                        <CardTitle>JSON Events API</CardTitle>
                                         <CardDescription>
                                             Push CTE events from any system using a single REST endpoint.
                                         </CardDescription>

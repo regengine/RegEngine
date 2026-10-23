@@ -28,7 +28,7 @@ const jsonLd = {
 
 const relatedTools = [
     { href: '/tools/scan', title: 'GS1 Barcode Scanner', description: 'Scan or paste GS1 barcodes to decode GTIN, lot codes, and expiry into traceability records.' },
-    { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data via CSV, IoT temperature logs, or webhook API.' },
+    { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data via CSV or XLSX (including IoT temperature logs), or the JSON events API.' },
     { href: '/tools/kde-checker', title: 'KDE Field Checklist', description: 'Generate the full Key Data Element (KDE) checklist required for your FTL product and Critical Tracking Event (CTE) type.' },
 ];
 

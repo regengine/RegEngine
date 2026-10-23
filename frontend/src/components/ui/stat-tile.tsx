@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { NO_DATA_YET } from "@/lib/empty-values"
 
 /**
  * StatTile — SPEC §4, following the data-viz rules.
@@ -121,7 +122,7 @@ export function StatTile({
                 empty && "text-re-text-disabled"
               )}
             >
-              {empty ? "—" : value}
+              {empty ? NO_DATA_YET : value}
             </span>
             {unit && !empty && <span className="text-ui text-re-text-tertiary">{unit}</span>}
             {trend && trend.length > 1 && !empty && (

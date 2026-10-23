@@ -195,7 +195,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'file_import_supported',
         delivery_mode: 'csv_sftp_import',
         integration_type: 'file_based_import',
-        customer_copy: 'Upload CSV files for ERP and warehouse data that is not available over API. Scheduled SFTP delivery is on the roadmap.',
+        customer_copy: 'Upload CSV files for ERP and warehouse data that is not available over API.',
         evidence_url: '/tools/data-import',
     },
     {
@@ -317,16 +317,6 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         integration_type: 'one_way_export',
         customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
-    },
-    {
-        id: 'edi-856',
-        name: 'EDI 856',
-        category: 'developer_api',
-        status: 'preparation',
-        delivery_mode: 'custom_scoped',
-        integration_type: 'file_based_import',
-        customer_copy: 'EDI 856 (ASN) inbound processing is on the roadmap. It is not available as a live intake channel.',
-        evidence_url: '/trust',
     },
     {
         id: 'design-partner',

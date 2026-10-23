@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
 import { scanMatchesItem } from '@/lib/scan-match';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
+import { NOT_SET } from '@/lib/empty-values';
 
 /* ─── Types ─── */
 interface LineItem {
@@ -65,9 +66,9 @@ const EXPECTED_FIELD_HINTS: readonly (readonly [string, string])[] = [
 ];
 
 const RECEIPT_COLUMNS: DataTableColumn<LineItem>[] = [
-    { key: 'productName', header: 'Product', cell: (item) => item.productName || '—' },
-    { key: 'gtin', header: 'Barcode', mono: true, cell: (item) => item.gtin || '—' },
-    { key: 'lotCode', header: 'Lot', mono: true, cell: (item) => item.lotCode || '—' },
+    { key: 'productName', header: 'Product', cell: (item) => item.productName || NOT_SET },
+    { key: 'gtin', header: 'Barcode', mono: true, cell: (item) => item.gtin || NOT_SET },
+    { key: 'lotCode', header: 'Lot', mono: true, cell: (item) => item.lotCode || NOT_SET },
     { key: 'quantity', header: 'Qty', align: 'right', cell: (item) => item.quantity },
 ];
 

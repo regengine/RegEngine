@@ -27,6 +27,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import { useTenant } from '@/lib/tenant-context';
+import { NOT_SET } from '@/lib/empty-values';
 
 /* ── Types ── */
 
@@ -224,7 +225,7 @@ export default function IssuesPage() {
             header: 'Citation',
             width: '12rem',
             mono: true,
-            cell: (b) => b.citation ?? '—',
+            cell: (b) => b.citation ?? NOT_SET,
         },
     ];
 
