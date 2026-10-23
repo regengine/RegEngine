@@ -2,7 +2,8 @@
 # Build the public /proof audit bundle ZIP.
 #
 # Packages:
-#   - fsma-204-sample.csv  (the FSMA 204 sortable sample)
+#   - fsma-204-sample.csv  (source CSV; removed from frontend/public/proof, so this
+#     script now exits with "not found" until a real export is placed there)
 #   - manifest.json        (per-file SHA-256 + Merkle root over those leaves)
 #
 # Merkle algorithm matches services/shared/merkle_tree.py:

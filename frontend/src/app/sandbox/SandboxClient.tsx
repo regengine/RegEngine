@@ -13,7 +13,6 @@ import { usePostHog } from '@/lib/posthog-provider';
 import { SandboxResultView, type SandboxResult } from '@/components/marketing/sandbox-grid/SandboxResultView';
 
 const EVALUATE_URL = '/api/ingestion/api/v1/sandbox/evaluate';
-const SAMPLE_URL = '/samples/sandbox_sample_ftl.csv';
 
 /** Backend rejects >2 MB with a 413; fail locally so the user isn't waiting on a round trip. */
 const MAX_CSV_BYTES = 2_000_000;
@@ -126,18 +125,6 @@ export function SandboxClient() {
     [evaluate],
   );
 
-  const onSample = useCallback(async () => {
-    setBusy(true);
-    try {
-      const res = await fetch(SAMPLE_URL);
-      const csv = await res.text();
-      await evaluate(csv, 'sandbox_sample_ftl.csv');
-    } catch {
-      setBusy(false);
-      setError('Could not load the sample file. Try uploading your own CSV.');
-    }
-  }, [evaluate]);
-
   function reset() {
     setResult(null);
     setError(null);
@@ -183,17 +170,6 @@ export function SandboxClient() {
             }}
             className="mt-4 mx-auto block text-[0.8rem] text-[var(--re-text-muted)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--re-brand)] file:px-4 file:py-2 file:text-[0.8rem] file:font-semibold file:text-[var(--re-brand-foreground)] hover:file:bg-[var(--re-brand-dark)] disabled:opacity-50"
           />
-          <div className="mt-5 text-[0.75rem] text-[var(--re-text-muted)]">
-            No file handy?{' '}
-            <button
-              type="button"
-              onClick={() => void onSample()}
-              disabled={busy}
-              className="font-semibold text-[var(--re-brand)] underline underline-offset-2 disabled:opacity-50"
-            >
-              Run a sample FTL chain
-            </button>
-          </div>
         </div>
 
         {busy && (
