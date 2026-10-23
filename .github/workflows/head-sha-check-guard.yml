@@ -5,27 +5,25 @@ on:
     types: [opened, synchronize, reopened]
   check_suite:
     types: [completed]
-  check_run:
-    types: [completed]
   workflow_run:
-    workflows: ['*']
+    workflows: ['PR Gate']
     types: [completed]
 
 concurrency:
-  group: head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
-  cancel-in-progress: true
+  group: head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   checks: read
-  statuses: read
+  statuses: write
   pull-requests: read
 
 jobs:
   head-sha-check-guard:
     name: "Head SHA Check Guard"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 10
     steps:
       - name: Verify Head SHA Checks
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
@@ -41,59 +39,72 @@ jobs:
               'PR Gate: Workflow Contract',
             ];
 
+            const targetUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
             // Prevent self-trigger loops
-            if (context.eventName === 'check_run' && context.payload.check_run?.name === 'Head SHA Check Guard') {
-              core.info('Skipping run triggered by own check_run completion.');
-              return;
-            }
             if (context.eventName === 'workflow_run' && context.payload.workflow_run?.name === 'Head SHA Check Guard') {
               core.info('Skipping run triggered by own workflow_run completion.');
               return;
             }
 
-            // Resolve PR number across all supported triggers
-            let prNumber = null;
-            if (context.payload.pull_request?.number) {
-              prNumber = context.payload.pull_request.number;
-            } else if (context.payload.workflow_run?.pull_requests?.length > 0) {
-              prNumber = context.payload.workflow_run.pull_requests[0].number;
-            } else if (context.payload.check_run?.pull_requests?.length > 0) {
-              prNumber = context.payload.check_run.pull_requests[0].number;
-            } else if (context.payload.check_suite?.pull_requests?.length > 0) {
-              prNumber = context.payload.check_suite.pull_requests[0].number;
+            // Resolve evaluated SHA from event payload
+            const evaluatedSha =
+              context.payload.pull_request?.head?.sha ||
+              context.payload.workflow_run?.head_sha ||
+              context.payload.check_suite?.head_sha ||
+              context.sha;
+
+            if (!evaluatedSha) {
+              core.setFailed('Could not determine head SHA to evaluate.');
+              return;
             }
 
-            if (!prNumber) {
-              const commitSha =
-                context.payload.workflow_run?.head_sha ||
-                context.payload.check_run?.head_sha ||
-                context.payload.check_suite?.head_sha ||
-                context.sha;
+            core.info(`Evaluating checks for head SHA: ${evaluatedSha} (event: ${context.eventName})`);
 
-              if (commitSha) {
-                try {
-                  const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    commit_sha: commitSha,
+            // Resolve the PR(s) from the event's head_sha
+            let targetPrs = [];
+            if (context.eventName === 'pull_request' && context.payload.pull_request) {
+              targetPrs = [{
+                number: context.payload.pull_request.number,
+                headSha: context.payload.pull_request.head?.sha,
+              }];
+            } else {
+              try {
+                const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: evaluatedSha,
+                });
+                const openPrs = prs.filter((p) => p.state === 'open');
+                for (const p of openPrs) {
+                  targetPrs.push({
+                    number: p.number,
+                    headSha: p.head?.sha,
                   });
-                  const openPr = prs.find(p => p.state === 'open');
-                  if (openPr) {
-                    prNumber = openPr.number;
-                  }
-                } catch (err) {
-                  core.warning(`Could not find PR for commit ${commitSha}: ${err.message}`);
+                }
+              } catch (err) {
+                core.warning(`Error finding PR associated with commit ${evaluatedSha}: ${err.message}`);
+              }
+
+              if (targetPrs.length === 0) {
+                const payloadPrs = context.payload.workflow_run?.pull_requests ||
+                                   context.payload.check_suite?.pull_requests || [];
+                for (const p of payloadPrs) {
+                  targetPrs.push({
+                    number: p.number,
+                    headSha: p.head?.sha,
+                  });
                 }
               }
             }
 
-            if (!prNumber) {
-              core.info('No open pull request associated with this event or commit. Guard skipped.');
+            if (targetPrs.length === 0) {
+              core.info(`No open pull request associated with commit ${evaluatedSha}. Guard skipped.`);
               if (process.env.GITHUB_STEP_SUMMARY) {
                 const skipSummary = [
                   '### Head SHA Check Guard Summary',
                   '',
-                  'No open pull request associated with this event or commit. Guard skipped.',
+                  `No open pull request associated with commit \`${evaluatedSha}\`. Guard skipped.`,
                   '',
                 ].join('\n');
                 fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, skipSummary, 'utf8');
@@ -101,56 +112,216 @@ jobs:
               return;
             }
 
-            // Fetch the PR to ensure it is open and read its current head SHA
-            let pr;
-            try {
-              const res = await github.rest.pulls.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: prNumber,
-              });
-              pr = res.data;
-            } catch (err) {
-              core.setFailed(`Failed to fetch PR #${prNumber}: ${err.message}`);
-              return;
-            }
-
-            if (pr.state !== 'open') {
-              core.info(`PR #${prNumber} is not open (state: ${pr.state}). Guard skipped.`);
-              if (process.env.GITHUB_STEP_SUMMARY) {
-                const skipSummary = [
-                  '### Head SHA Check Guard Summary',
-                  '',
-                  `PR #${prNumber} is not open (state: ${pr.state}). Guard skipped.`,
-                  '',
-                ].join('\n');
-                fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, skipSummary, 'utf8');
+            // Fetch latest PR state to check if head moved
+            let matchedPr = null;
+            for (const p of targetPrs) {
+              try {
+                const { data: prData } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: p.number,
+                });
+                if (prData.state === 'open') {
+                  if (prData.head?.sha === evaluatedSha) {
+                    matchedPr = prData;
+                    break;
+                  } else if (!matchedPr) {
+                    matchedPr = prData;
+                  }
+                }
+              } catch (err) {
+                core.warning(`Failed to fetch PR #${p.number}: ${err.message}`);
               }
+            }
+
+            if (!matchedPr) {
+              core.info(`No open pull request found for commit ${evaluatedSha}. Guard skipped.`);
               return;
             }
 
-            let currentHeadSha = pr.head?.sha;
-            if (!currentHeadSha) {
+            const prNumber = matchedPr.number;
+            const prHeadSha = matchedPr.head?.sha;
+
+            if (!prHeadSha) {
               core.setFailed(`PR #${prNumber} has no head SHA.`);
               return;
             }
 
-            core.info(`Guarding PR #${prNumber} at current head SHA: ${currentHeadSha}`);
+            // (c) If the PR head SHA differs from the SHA being evaluated,
+            // set failure on the evaluated SHA ('head moved') and do not switch to the new commit.
+            if (prHeadSha !== evaluatedSha) {
+              core.info(`PR #${prNumber} head SHA (${prHeadSha}) differs from evaluated SHA (${evaluatedSha}).`);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'failure',
+                context: 'Head SHA Check Guard',
+                description: 'Head moved',
+                target_url: targetUrl,
+              });
+              core.setFailed(`Head moved: PR #${prNumber} head is ${prHeadSha}, evaluated commit was ${evaluatedSha}`);
+              return;
+            }
 
-            const MAX_DURATION_MS = 40 * 60 * 1000;
-            const INTERVAL_MS = 30 * 1000;
+            core.info(`Guarding PR #${prNumber} at head SHA: ${evaluatedSha}`);
+
+            async function evaluateChecks(sha) {
+              const checkRuns = await github.paginate(
+                github.rest.checks.listForRef,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                  per_page: 100,
+                }
+              );
+
+              let commitStatuses = [];
+              try {
+                const statusRes = await github.rest.repos.getCombinedStatusForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                  per_page: 100,
+                });
+                commitStatuses = statusRes.data.statuses || [];
+              } catch (statusErr) {
+                core.warning(`Error fetching commit statuses for ${sha}: ${statusErr.message}`);
+              }
+
+              const results = {};
+              for (const name of REQUIRED_CHECKS) {
+                const matchingRuns = checkRuns.filter(
+                  (cr) => cr.name === name && cr.head_sha === sha
+                );
+                matchingRuns.sort((a, b) => {
+                  const timeA = new Date(a.completed_at || a.started_at || 0).getTime();
+                  const timeB = new Date(b.completed_at || b.started_at || 0).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                  return b.id - a.id;
+                });
+                const latestRun = matchingRuns[0];
+
+                const matchingStatuses = commitStatuses.filter(
+                  (cs) => cs.context === name
+                );
+                matchingStatuses.sort((a, b) => {
+                  const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+                  const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                  return b.id - a.id;
+                });
+                const latestStatus = matchingStatuses[0];
+
+                if (latestRun) {
+                  if (latestRun.status === 'completed') {
+                    const isSuccess = latestRun.conclusion === 'success';
+                    results[name] = {
+                      name,
+                      type: 'Check Run',
+                      headSha: latestRun.head_sha,
+                      status: latestRun.status,
+                      conclusion: latestRun.conclusion,
+                      passed: isSuccess,
+                      pending: false,
+                    };
+                  } else {
+                    results[name] = {
+                      name,
+                      type: 'Check Run',
+                      headSha: latestRun.head_sha,
+                      status: latestRun.status,
+                      conclusion: latestRun.conclusion || 'pending',
+                      passed: false,
+                      pending: true,
+                    };
+                  }
+                } else if (latestStatus) {
+                  if (latestStatus.state === 'success') {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'completed',
+                      conclusion: 'success',
+                      passed: true,
+                      pending: false,
+                    };
+                  } else if (latestStatus.state === 'pending') {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'pending',
+                      conclusion: 'pending',
+                      passed: false,
+                      pending: true,
+                    };
+                  } else {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'completed',
+                      conclusion: latestStatus.state,
+                      passed: false,
+                      pending: false,
+                    };
+                  }
+                } else {
+                  results[name] = {
+                    name,
+                    type: 'Not Found',
+                    headSha: 'none',
+                    status: 'pending',
+                    conclusion: 'not reported',
+                    passed: false,
+                    pending: true,
+                  };
+                }
+              }
+
+              const allPassed = REQUIRED_CHECKS.every((name) => results[name]?.passed);
+              const anyFailed = REQUIRED_CHECKS.some((name) => !results[name]?.passed && !results[name]?.pending);
+              const hasPending = REQUIRED_CHECKS.some((name) => results[name]?.pending);
+
+              return { results, allPassed, anyFailed, hasPending };
+            }
+
             const startTime = Date.now();
-            const deadline = startTime + MAX_DURATION_MS;
-            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            let evalResult = await evaluateChecks(evaluatedSha);
 
-            let checkResults = {};
-            let allPassed = false;
-            let anyFailed = false;
-            let hasPending = false;
-            let attempt = 0;
-            let consecutiveErrors = 0;
+            // Single evaluation per run with no long polling (at most one short re-read)
+            if (evalResult.hasPending && !evalResult.anyFailed) {
+              core.info('Required checks are pending on initial evaluation. Waiting 10s for a short re-read...');
+              await new Promise((resolve) => setTimeout(resolve, 10000));
 
-            function writeStepSummary({ headSha, results, passed, durationSeconds }) {
+              // Re-verify that PR head did not move during the wait
+              const { data: latestPrAfterWait } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              if (latestPrAfterWait.head?.sha !== evaluatedSha) {
+                core.info(`PR head moved during wait. Evaluated: ${evaluatedSha}, Current: ${latestPrAfterWait.head?.sha}`);
+                await github.rest.repos.createCommitStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  sha: evaluatedSha,
+                  state: 'failure',
+                  context: 'Head SHA Check Guard',
+                  description: 'Head moved',
+                  target_url: targetUrl,
+                });
+                core.setFailed(`Head moved: PR #${prNumber} head is ${latestPrAfterWait.head?.sha}, evaluated commit was ${evaluatedSha}`);
+                return;
+              }
+
+              evalResult = await evaluateChecks(evaluatedSha);
+            }
+
+            function writeStepSummary({ headSha, results, allPassed, hasPending, anyFailed, durationSeconds }) {
               if (!process.env.GITHUB_STEP_SUMMARY) return;
 
               const rows = [];
@@ -159,7 +330,8 @@ jobs:
               rows.push(`- Pull Request: #${prNumber}`);
               rows.push(`- Current PR Head SHA: \`${headSha}\``);
               rows.push(`- Elapsed Time: ${durationSeconds}s`);
-              rows.push(`- Overall Result: **${passed ? 'PASSED' : 'FAILED'}**`);
+              const overallResult = allPassed ? 'PASSED' : (hasPending ? 'PENDING' : 'FAILED');
+              rows.push(`- Overall Result: **${overallResult}**`);
               rows.push('');
               rows.push('| Required Check | Type | Head SHA | Status | Conclusion | Result |');
               rows.push('| :--- | :--- | :--- | :--- | :--- | :--- |');
@@ -182,192 +354,65 @@ jobs:
               fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, rows.join('\n'), 'utf8');
             }
 
-            while (Date.now() < deadline) {
-              attempt++;
-
-              try {
-                // Re-verify current head SHA of the PR
-                const { data: latestPr } = await github.rest.pulls.get({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  pull_number: prNumber,
-                });
-
-                if (latestPr.head.sha !== currentHeadSha) {
-                  core.info(`PR head SHA changed from ${currentHeadSha} to ${latestPr.head.sha}. Tracking new head SHA.`);
-                  currentHeadSha = latestPr.head.sha;
-                }
-
-                // List check runs for current head SHA
-                const checkRuns = await github.paginate(
-                  github.rest.checks.listForRef,
-                  {
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    ref: currentHeadSha,
-                    per_page: 100,
-                  }
-                );
-
-                // List commit statuses for current head SHA
-                let commitStatuses = [];
-                try {
-                  const statusRes = await github.rest.repos.getCombinedStatusForRef({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    ref: currentHeadSha,
-                    per_page: 100,
-                  });
-                  commitStatuses = statusRes.data.statuses || [];
-                } catch (statusErr) {
-                  core.warning(`Error fetching commit statuses for ${currentHeadSha}: ${statusErr.message}`);
-                }
-
-                // Evaluate each required check against current head SHA
-                checkResults = {};
-                for (const name of REQUIRED_CHECKS) {
-                  // Only check runs matching this name whose head_sha strictly equals currentHeadSha
-                  const matchingRuns = checkRuns.filter(
-                    (cr) => cr.name === name && cr.head_sha === currentHeadSha
-                  );
-                  matchingRuns.sort((a, b) => {
-                    const timeA = new Date(a.completed_at || a.started_at || 0).getTime();
-                    const timeB = new Date(b.completed_at || b.started_at || 0).getTime();
-                    if (timeA !== timeB) return timeB - timeA;
-                    return b.id - a.id;
-                  });
-                  const latestRun = matchingRuns[0];
-
-                  const matchingStatuses = commitStatuses.filter(
-                    (cs) => cs.context === name
-                  );
-                  matchingStatuses.sort((a, b) => {
-                    const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
-                    const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
-                    if (timeA !== timeB) return timeB - timeA;
-                    return b.id - a.id;
-                  });
-                  const latestStatus = matchingStatuses[0];
-
-                  if (latestRun) {
-                    if (latestRun.status === 'completed') {
-                      const isSuccess = latestRun.conclusion === 'success';
-                      checkResults[name] = {
-                        name,
-                        type: 'Check Run',
-                        headSha: latestRun.head_sha,
-                        status: latestRun.status,
-                        conclusion: latestRun.conclusion,
-                        passed: isSuccess,
-                        pending: false,
-                      };
-                    } else {
-                      checkResults[name] = {
-                        name,
-                        type: 'Check Run',
-                        headSha: latestRun.head_sha,
-                        status: latestRun.status,
-                        conclusion: latestRun.conclusion || 'pending',
-                        passed: false,
-                        pending: true,
-                      };
-                    }
-                  } else if (latestStatus) {
-                    if (latestStatus.state === 'success') {
-                      checkResults[name] = {
-                        name,
-                        type: 'Commit Status',
-                        headSha: currentHeadSha,
-                        status: 'completed',
-                        conclusion: 'success',
-                        passed: true,
-                        pending: false,
-                      };
-                    } else if (latestStatus.state === 'pending') {
-                      checkResults[name] = {
-                        name,
-                        type: 'Commit Status',
-                        headSha: currentHeadSha,
-                        status: 'pending',
-                        conclusion: 'pending',
-                        passed: false,
-                        pending: true,
-                      };
-                    } else {
-                      checkResults[name] = {
-                        name,
-                        type: 'Commit Status',
-                        headSha: currentHeadSha,
-                        status: 'completed',
-                        conclusion: latestStatus.state,
-                        passed: false,
-                        pending: false,
-                      };
-                    }
-                  } else {
-                    checkResults[name] = {
-                      name,
-                      type: 'Not Found',
-                      headSha: 'none',
-                      status: 'pending',
-                      conclusion: 'not reported',
-                      passed: false,
-                      pending: true,
-                    };
-                  }
-                }
-
-                allPassed = REQUIRED_CHECKS.every((name) => checkResults[name]?.passed);
-                hasPending = REQUIRED_CHECKS.some((name) => checkResults[name]?.pending);
-                anyFailed = REQUIRED_CHECKS.some((name) => !checkResults[name]?.passed && !checkResults[name]?.pending);
-
-                const statusLog = REQUIRED_CHECKS.map(
-                  (name) => `${name}=${checkResults[name]?.status}/${checkResults[name]?.conclusion}`
-                ).join(', ');
-                const elapsedSec = Math.round((Date.now() - startTime) / 1000);
-                core.info(`[+${elapsedSec}s, attempt ${attempt}] Status: ${statusLog}`);
-
-                consecutiveErrors = 0;
-
-                if (allPassed) {
-                  core.info(`All required checks have passed on head SHA ${currentHeadSha}.`);
-                  break;
-                }
-
-                if (anyFailed) {
-                  core.info(`One or more required checks failed on head SHA ${currentHeadSha}.`);
-                  break;
-                }
-              } catch (err) {
-                consecutiveErrors++;
-                core.warning(`Error polling checks for ${currentHeadSha} (attempt ${attempt}): ${err.message}`);
-                if (consecutiveErrors >= 5) {
-                  throw err;
-                }
-              }
-
-              if (Date.now() + INTERVAL_MS < deadline) {
-                core.info(`Checks pending on ${currentHeadSha}. Sleeping ${INTERVAL_MS / 1000}s...`);
-                await sleep(INTERVAL_MS);
-              } else {
-                core.info(`Reached 40 minute polling deadline.`);
-                break;
-              }
-            }
-
             const durationSeconds = Math.round((Date.now() - startTime) / 1000);
             writeStepSummary({
-              headSha: currentHeadSha,
-              results: checkResults,
-              passed: allPassed,
+              headSha: evaluatedSha,
+              results: evalResult.results,
+              allPassed: evalResult.allPassed,
+              hasPending: evalResult.hasPending,
+              anyFailed: evalResult.anyFailed,
               durationSeconds,
             });
 
-            if (allPassed) {
-              core.info(`Successfully verified all required checks on head SHA ${currentHeadSha}.`);
-            } else {
-              const unmet = REQUIRED_CHECKS.filter((name) => !checkResults[name]?.passed)
-                .map((name) => `${name} (${checkResults[name]?.status}/${checkResults[name]?.conclusion})`)
-                .join(', ');
-              core.setFailed(`Head SHA Check Guard failed on head SHA ${currentHeadSha}. Unmet checks: ${unmet}`);
+            if (evalResult.allPassed) {
+              core.info(`All required checks have passed on head SHA ${evaluatedSha}.`);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'success',
+                context: 'Head SHA Check Guard',
+                description: 'All required checks passed on head SHA',
+                target_url: targetUrl,
+              });
+              return;
+            }
+
+            if (evalResult.anyFailed) {
+              const failedList = REQUIRED_CHECKS.filter(
+                (name) => !evalResult.results[name]?.passed && !evalResult.results[name]?.pending
+              ).map((name) => `${name} (${evalResult.results[name]?.conclusion})`).join(', ');
+
+              core.info(`One or more required checks failed on head SHA ${evaluatedSha}: ${failedList}`);
+              const statusDesc = `Checks failed: ${failedList}`.substring(0, 140);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'failure',
+                context: 'Head SHA Check Guard',
+                description: statusDesc,
+                target_url: targetUrl,
+              });
+              core.setFailed(`Head SHA Check Guard failed on head SHA ${evaluatedSha}. Failed checks: ${failedList}`);
+              return;
+            }
+
+            if (evalResult.hasPending) {
+              const pendingNames = REQUIRED_CHECKS.filter(
+                (name) => evalResult.results[name]?.pending
+              ).join(', ');
+
+              core.info(`Required checks still pending on head SHA ${evaluatedSha}: ${pendingNames}. Reporting pending and exiting 0.`);
+              const statusDesc = `Checks pending: ${pendingNames}`.substring(0, 140);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'pending',
+                context: 'Head SHA Check Guard',
+                description: statusDesc,
+                target_url: targetUrl,
+              });
+              return;
             }
