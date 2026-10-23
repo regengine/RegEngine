@@ -298,13 +298,10 @@ class TestExportEpcisEndpoint:
         assert metadata["integrityVerified"] is True
         assert metadata["chainHashVerified"] is True
         assert "regengine:disclaimer" not in metadata
-        event = body["epcisBody"]["eventList"][0]
-        assert event["type"] == "ObjectEvent"
-        assert event["action"] == "OBSERVE"
-        assert event["bizStep"] == "urn:epcglobal:cbv:bizstep:shipping"
-        assert event["regengine:sha256"] == "deadbeef"
-        # eventTime came from the real timestamp.
-        assert event["eventTime"].startswith("2026-04-19T12:00:00")
+        # GS1 EPCIS 2.0 needs a real class identifier; this row has no GTIN or EPC class.
+        assert body["epcisBody"]["eventList"] == []
+        assert metadata["eventsCount"] == 0
+        assert metadata["skippedEventsCount"] == 1
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
         assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
 
@@ -329,18 +326,11 @@ class TestExportEpcisEndpoint:
             json={"tenant_id": "tenant-x"},
         )
         assert response.status_code == 200
-        event = response.json()["epcisBody"]["eventList"][0]
-        # Fallbacks all fired.
-        assert event["type"] == "ObjectEvent"
-        assert event["action"] == "OBSERVE"
-        # event_type is None -> empty-string key lookup -> default bizstep.
-        assert event["bizStep"] == "urn:epcglobal:cbv:bizstep:observing"
-        assert event["readPoint"]["id"].endswith("0000000000000.0")
-        extension = event["extension"]["quantityList"][0]
-        assert extension["epcClass"].endswith("UNKNOWN")
-        assert extension["quantity"] == 0
-        assert extension["uom"] == "EA"
-        assert event["regengine:sha256"] == ""
+        body = response.json()
+        # GS1 EPCIS 2.0 cannot use placeholder identifiers or a missing event time.
+        assert body["epcisBody"]["eventList"] == []
+        assert body["regengine:exportMetadata"]["eventsCount"] == 0
+        assert body["regengine:exportMetadata"]["skippedEventsCount"] == 1
 
     def test_validate_flag_emits_validation_block_and_header(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch

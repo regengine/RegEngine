@@ -243,13 +243,7 @@ def _validate_epcis_document(doc: dict) -> list[str]:
             errors.append(f"{prefix}: EPCIS 1.x extension wrapper")
         for field, kind in (("bizStep", "bizstep"), ("disposition", "disp")):
             value = event.get(field)
-            allowed = _CBV_BIZSTEPS if kind == "bizstep" else _CBV_DISPOSITIONS
-            web_prefix = f"https://ref.gs1.org/cbv/{'BizStep' if kind == 'bizstep' else 'Disp'}-"
-            if value and value not in allowed and not (
-                isinstance(value, str)
-                and value.startswith(web_prefix)
-                and value.removeprefix(web_prefix) in allowed
-            ):
+            if value and _cbv_term(value, kind) is None:
                 errors.append(f"{prefix}: {field} '{value}' is not a valid GS1 CBV URI")
 
     return errors

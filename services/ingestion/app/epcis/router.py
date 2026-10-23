@@ -298,61 +298,6 @@ async def export_epcis_events(
             filtered_records.append(entry)
         events = [entry["epcis_document"] for entry in filtered_records]
 
-    from ..epcis_export import _cbv_term
-
-    def clean(value):
-        if isinstance(value, list):
-            return [item for entry in value if (item := clean(entry)) is not None] or None
-        if isinstance(value, dict):
-            result = {}
-            for key, entry in value.items():
-                if key == "extension" and isinstance(entry, dict):
-                    result.update(clean(entry) or {})
-                    continue
-                if key in ("bizStep", "disposition"):
-                    entry = _cbv_term(entry, "bizstep" if key == "bizStep" else "disp")
-                elif key == "type" and isinstance(entry, str):
-                    entry = entry.removeprefix("urn:epcglobal:cbv:sdt:")
-                # A stored event can outlive its document-level context. Keep
-                # its extension data under our declared namespace.
-                if ":" in key and not key.startswith(
-                    ("regengine:", "cbvmda:", "epcis:", "gs1:", "https:", "http:", "@")
-                ):
-                    key = "regengine:" + key.replace(":", "_", 1)
-                item = clean(entry)
-                if item is not None:
-                    result[key] = item
-            return result or None
-        return value
-
-    cleaned_events = []
-    for event in events:
-        candidate = clean(event)
-        if not candidate or not candidate.get("eventTime") or not candidate.get("eventTimeZoneOffset"):
-            continue
-        if candidate.get("type") == "ObjectEvent" and (
-            not candidate.get("action")
-            or not (candidate.get("epcList") or candidate.get("quantityList"))
-        ):
-            continue
-        if candidate.get("type") == "TransformationEvent" and not (
-            (candidate.get("inputEPCList") or candidate.get("inputQuantityList"))
-            and (candidate.get("outputEPCList") or candidate.get("outputQuantityList"))
-        ) and not (
-            candidate.get("transformationID")
-            and (
-                candidate.get("inputEPCList")
-                or candidate.get("inputQuantityList")
-                or candidate.get("outputEPCList")
-                or candidate.get("outputQuantityList")
-            )
-        ):
-            continue
-        if candidate.get("type") in {
-            "ObjectEvent", "AggregationEvent", "TransactionEvent",
-            "TransformationEvent", "AssociationEvent",
-        }:
-            cleaned_events.append(candidate)
     filters = {
         f"regengine:{key}": value
         for key, value in (("start_date", start_date), ("end_date", end_date), ("product_id", product_id))
@@ -366,11 +311,11 @@ async def export_epcis_events(
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": datetime.now(timezone.utc).isoformat(),
-        "epcisBody": {"eventList": cleaned_events},
+        "epcisBody": {"eventList": events},
         "regengine:metadata": {
             "regengine:source": "regengine-epcis-ingestion",
-            "regengine:event_count": len(cleaned_events),
-            "regengine:skipped_event_count": len(events) - len(cleaned_events),
+            "regengine:event_count": len(events),
+            "regengine:skipped_event_count": 0,
             **({"regengine:filters": filters} if filters else {}),
         },
     }

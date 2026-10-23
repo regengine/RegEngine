@@ -180,7 +180,7 @@ def test_export_endpoint(client: TestClient) -> None:
     )
     assert filtered_response.status_code == 200
     filtered_payload = filtered_response.json()
-    assert filtered_payload["metadata"]["filters"]["product_id"] == "non-existent"
+    assert filtered_payload["regengine:metadata"]["regengine:filters"]["regengine:product_id"] == "non-existent"
 
 
 def test_unmapped_bizstep_rejected(client: TestClient) -> None:
