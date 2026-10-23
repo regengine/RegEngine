@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // RegEngine copy rule check. Node only, no dependencies.
-// Usage: node check-copy.mjs [repoRoot] [--rules copy-rules.json] [--allow allowlist.json] [--baseline baseline.json] [--json] [--github] [--strict] [--gate] [--update-baseline]
+// Usage: node check-copy.mjs [repoRoot] [--rules copy-rules.json] [--allow allowlist.json] [--baseline baseline.json] [--base-baseline main-baseline.json] [--json] [--github] [--strict] [--gate] [--update-baseline]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -218,12 +218,32 @@ export function compareBaseline(current, baseline) {
   return { regressions, reductions };
 }
 
+function flatCounts(counts) {
+  return Object.fromEntries(Object.entries(counts).flatMap(([file, rules]) =>
+    Object.entries(rules).map(([rule, count]) => [`${file}|${rule}`, count])));
+}
+
+export function gateCompare(base, pr, actual) {
+  const errors = [];
+  for (const key of [...new Set([...Object.keys(base), ...Object.keys(pr), ...Object.keys(actual)])].sort()) {
+    const [file, rule] = key.split('|');
+    const mainCount = base[key] ?? 0;
+    const prCount = pr[key] ?? 0;
+    const actualCount = actual[key] ?? 0;
+    const counts = `main=${mainCount}, PR baseline=${prCount}, actual=${actualCount}`;
+    if (actualCount > mainCount) errors.push(`file=${file}, rule=${rule}: count went up vs main (${counts})`);
+    if (prCount > mainCount) errors.push(`file=${file}, rule=${rule}: PR baseline loosened vs main (${counts})`);
+    if (prCount !== actualCount) errors.push(`file=${file}, rule=${rule}: baseline.json is stale, run --update-baseline (${counts})`);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 const annotationEscape = s => String(s).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
 const propertyEscape = s => annotationEscape(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
 
 function main(args) {
   const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-  const pos = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--rules', '--allow', '--baseline'].includes(args[i - 1])));
+  const pos = args.filter((a, i) => !a.startsWith('--') && !(i > 0 && ['--rules', '--allow', '--baseline', '--base-baseline'].includes(args[i - 1])));
   const repo = path.resolve(pos[0] || '.');
   const cfg = JSON.parse(fs.readFileSync(opt('--rules', path.join(here, 'copy-rules.json')), 'utf8'));
   const allowPath = opt('--allow', path.join(here, 'allowlist.json'));
@@ -252,13 +272,15 @@ function main(args) {
     for (const [rule, count] of Object.entries(summary.byRule)) console.log(`  ${rule}: ${count}  ${cfg.rules[rule].message}`);
   }
   if (args.includes('--gate')) {
-    const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-    const { regressions, reductions } = compareBaseline(current, baseline);
-    for (const { file, rule, baseline: previous, current: actual } of regressions) {
-      console.log(`Copy gate regression: ${file} ${rule}: ${previous} -> ${actual}`);
-    }
-    if (reductions.length) console.log('Copy findings decreased. Run --update-baseline to ratchet the baseline down.');
-    if (regressions.length) process.exitCode = 1;
+    const pr = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
+    const basePath = opt('--base-baseline');
+    const resolvedBasePath = basePath && path.resolve(repo, basePath);
+    const baseText = resolvedBasePath && fs.existsSync(resolvedBasePath) ? fs.readFileSync(resolvedBasePath, 'utf8') : '';
+    if (!baseText.trim()) console.log('Main has no baseline yet (bootstrap); using the PR baseline as main.');
+    const base = baseText.trim() ? JSON.parse(baseText) : pr;
+    const result = gateCompare(flatCounts(base), flatCounts(pr), flatCounts(current));
+    for (const error of result.errors) console.log(`Copy gate: ${error}`);
+    if (!result.ok) process.exitCode = 1;
   }
   if (summary.total && (args.includes('--strict') || process.env.COPY_LINT_STRICT === '1')) process.exitCode = 1;
 }

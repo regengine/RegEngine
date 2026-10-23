@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { check, compareBaseline, countsByFileRule, parseCapabilities, scanSource, summarize } from './check-copy.mjs';
+import { check, compareBaseline, countsByFileRule, gateCompare, parseCapabilities, scanSource, summarize } from './check-copy.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(fs.readFileSync(path.join(here, 'copy-rules.json'), 'utf8'));
@@ -99,4 +99,49 @@ test('copy gate detects regressions, accepts equal counts and reductions', () =>
     [{ file, rule, baseline: 1, current: 0 }]);
   assert.deepEqual(compareBaseline(baseline, {}).regressions,
     [{ file, rule, baseline: 0, current: 1 }]);
+});
+
+const gateFile = path.relative(path.resolve(here, '../..'), path.resolve(here, '../../frontend/src/lib/capabilities.ts'));
+const gateRule = Object.keys(cfg.rules)[0];
+const gateFinding = { file: gateFile, rule: gateRule };
+const gateCounts = findings => Object.fromEntries(Object.entries(countsByFileRule(findings)).flatMap(([file, rules]) =>
+  Object.entries(rules).map(([rule, count]) => [`${file}|${rule}`, count])));
+const noFindings = gateCounts([]);
+const oneFinding = gateCounts([gateFinding]);
+const twoFindings = gateCounts([gateFinding, gateFinding]);
+
+test('gateCompare fails when actual count rises', () => {
+  const result = gateCompare(oneFinding, oneFinding, twoFindings);
+  const key = `${gateFile}|${gateRule}`;
+  const counts = `main=${oneFinding[key]}, PR baseline=${oneFinding[key]}, actual=${twoFindings[key]}`;
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(error => error.includes('count went up vs main')), true);
+  assert.equal(result.errors.every(error => error.includes(gateFile) && error.includes(gateRule)
+    && error.includes(counts)), true);
+});
+
+test('gateCompare fails for a new key absent from main', () => {
+  const result = gateCompare(noFindings, oneFinding, oneFinding);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(error => error.includes('count went up vs main')), true);
+});
+
+test('gateCompare rejects a PR baseline loosened above main', () => {
+  const result = gateCompare(noFindings, oneFinding, noFindings);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(error => error.includes('PR baseline loosened vs main')), true);
+});
+
+test('gateCompare requires a baseline update after a drop', () => {
+  const result = gateCompare(oneFinding, oneFinding, noFindings);
+  assert.equal(result.ok, false);
+  assert.equal(result.errors.some(error => error.includes('baseline.json is stale, run --update-baseline')), true);
+});
+
+test('gateCompare accepts equal counts', () => {
+  assert.deepEqual(gateCompare(oneFinding, oneFinding, oneFinding), { ok: true, errors: [] });
+});
+
+test('gateCompare accepts a drop with a matching baseline update', () => {
+  assert.deepEqual(gateCompare(oneFinding, noFindings, noFindings), { ok: true, errors: [] });
 });

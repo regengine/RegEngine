@@ -24,8 +24,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
         with:
           node-version: '20'
       - run: node --test scripts/copy-lint/check-copy.test.mjs
-      - run: node scripts/copy-lint/check-copy.mjs . --gate --github
+      - name: Read base copy baseline
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git show "origin/${BASE_REF}:scripts/copy-lint/baseline.json" > "$RUNNER_TEMP/base-baseline.json" 2>/dev/null || :
+          else
+            git show "HEAD^:scripts/copy-lint/baseline.json" > "$RUNNER_TEMP/base-baseline.json" 2>/dev/null || :
+          fi
+      - run: node scripts/copy-lint/check-copy.mjs . --gate --github --base-baseline "$RUNNER_TEMP/base-baseline.json"
