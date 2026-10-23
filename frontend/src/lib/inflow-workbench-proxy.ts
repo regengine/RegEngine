@@ -6,7 +6,7 @@ import {
     resolveOpaqueSessionTenantId,
     validateUuid,
 } from './api-proxy';
-import { finalizeCallerServiceCredentials } from './proxy-factory';
+import { appendOpaqueSessionCookies, finalizeCallerServiceCredentials } from './proxy-factory';
 
 const READINESS_SUMMARY_PATH = 'api/v1/inflow-workbench/readiness/summary';
 const AUTH_SESSION_COOKIE = '__Host-regengine_session';
@@ -15,9 +15,8 @@ const AUTH_SESSION_COOKIE = '__Host-regengine_session';
  * Finalize caller-owned credentials for every ingestion route other than the
  * readiness summary.
  *
- * The ingestion service cannot validate the opaque `__Host-regengine_session`
- * cookie, so when that cookie is the caller's only credential the proxy must
- * prove it against backend `/auth/me` before contacting the upstream. The
+ * The proxy proves the opaque `__Host-regengine_session` cookie against
+ * backend `/auth/me` before contacting the upstream. The
  * client-writable `re_tenant_id` cookie and caller-supplied `x-tenant-id` /
  * `tenant_id` are never the tenant authority for an opaque session: the
  * forwarded tenant is bound to the `/auth/me` response and any conflicting
@@ -73,6 +72,7 @@ export async function finalizeIngestionCallerCredentials(
     }
 
     headers.set('x-tenant-id', authenticatedTenant);
+    appendOpaqueSessionCookies(headers, request);
     return null;
 }
 

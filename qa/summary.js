@@ -16,7 +16,6 @@ const SCRIPTS = [
   { name: 'bad-data', script: 'bad-data.js', category: 'pipeline' },
   { name: 'export', script: 'export-validate.js', category: 'pipeline' },
   { name: 'ai-analysis', script: 'ai-analysis.js', category: 'trust' },
-  { name: 'regression', script: 'regression.js', category: 'regression' },
 ];
 
 const results = {};

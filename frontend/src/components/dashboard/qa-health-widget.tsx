@@ -4,57 +4,40 @@ import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge";
-import { useAuth } from "@/lib/auth-context";
-import { useQAHealth } from "@/hooks/use-api";
-import type { QAHealthStatus } from "@/types/api";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { TimedSkeleton } from "@/components/ui/timed-skeleton";
+import { useQASignal } from "@/hooks/use-qa-signal";
 
 /**
- * Each QA status maps onto the shared compliance-state vocabulary, so the same
- * state looks identical here and everywhere else in the app.
+ * QA Health card. Status, label and figures all come from useQASignal(), the
+ * same selector the dashboard's "Needs attention" panel reads, so the two can
+ * never contradict each other. Unknown figures render as unknown, not 0.
  */
-function statusConfig(status: QAHealthStatus | undefined): { label: string; state: ComplianceState } {
-  switch (status) {
-    case "passing":
-      return { label: "Release gate passing", state: "compliant" };
-    case "degraded":
-      return { label: "Advisory issues", state: "at-risk" };
-    case "unavailable":
-      return { label: "QA signal unavailable", state: "unknown" };
-    case "invalid_artifact":
-      return { label: "QA artifact invalid", state: "non-compliant" };
-    case "failing":
-    default:
-      return { label: "Release gate failing", state: "non-compliant" };
-  }
-}
-
 export function QAHealthWidget() {
-  const { user } = useAuth();
-  const isSysadmin = Boolean(user?.is_sysadmin);
-  const { data, isLoading, error } = useQAHealth(isSysadmin);
+  const qa = useQASignal();
 
-  if (!isSysadmin) return null;
+  if (qa.status === "disabled") return null;
 
-  if (isLoading) {
+  if (qa.status === "loading") {
     return (
       <Card>
         <CardHeader>
           <CardTitle>QA Health</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Skeleton className="h-7 w-36" />
-          <Skeleton className="h-2 w-full" />
-          <Skeleton className="h-10 w-full" />
+        <CardContent>
+          <TimedSkeleton onRetry={() => void qa.refetch()} errorMessage="The QA signal did not respond.">
+            <div className="space-y-3">
+              <Skeleton className="h-7 w-36" />
+              <Skeleton className="h-2 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </TimedSkeleton>
         </CardContent>
       </Card>
     );
   }
 
-  const config = statusConfig(data?.overall.status);
-  const readyPercent = data?.overall.ready_percent ?? 0;
-  const blockingCount = data?.overall.blocking_count ?? 0;
-  const advisoryCount = data?.overall.advisory_count ?? 0;
+  const readyPercent = qa.readyPercent;
 
   return (
     <Card>
@@ -63,40 +46,44 @@ export function QAHealthWidget() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <StatusBadge
-            state={error ? "unknown" : config.state}
-            label={error ? "QA signal failed" : config.label}
-            size="sm"
-          />
+          <StatusBadge state={qa.state} label={qa.label} size="sm" />
           <span className="text-small tabular-nums text-re-text-tertiary">
-            {readyPercent}% ready
+            {readyPercent === null ? "Readiness unknown" : `${readyPercent}% ready`}
           </span>
         </div>
 
-        <div
-          className="h-1.5 overflow-hidden rounded-full bg-re-surface-inset"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={readyPercent}
-          aria-label="QA release readiness"
-        >
+        {readyPercent !== null && (
           <div
-            className="h-full bg-re-text-primary transition-all duration-180 motion-reduce:transition-none"
-            style={{ width: `${readyPercent}%` }}
-          />
-        </div>
+            className="h-1.5 overflow-hidden rounded-full bg-re-surface-inset"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={readyPercent}
+            aria-label="QA release readiness"
+          >
+            <div
+              className="h-full bg-re-text-primary transition-all duration-180 motion-reduce:transition-none"
+              style={{ width: `${readyPercent}%` }}
+            />
+          </div>
+        )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-title tabular-nums text-re-text-primary">{blockingCount}</p>
-            <p className="text-label text-re-text-muted">Blocking</p>
+        {qa.status === "failed" ? (
+          <Button variant="secondary" size="sm" onClick={() => void qa.refetch()}>
+            Retry
+          </Button>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-title tabular-nums text-re-text-primary">{qa.blockingCount ?? "Unknown"}</p>
+              <p className="text-label text-re-text-muted">Blocking</p>
+            </div>
+            <div>
+              <p className="text-title tabular-nums text-re-text-primary">{qa.advisoryCount ?? "Unknown"}</p>
+              <p className="text-label text-re-text-muted">Advisory</p>
+            </div>
           </div>
-          <div>
-            <p className="text-title tabular-nums text-re-text-primary">{advisoryCount}</p>
-            <p className="text-label text-re-text-muted">Advisory</p>
-          </div>
-        </div>
+        )}
 
         <Button variant="secondary" className="w-full justify-between" asChild>
           <Link href="/dashboard/qa-health">

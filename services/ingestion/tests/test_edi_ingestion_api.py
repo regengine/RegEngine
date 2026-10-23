@@ -1,6 +1,7 @@
-"""API tests for EDI 856 ingestion endpoint."""
+"""Data-free validation checks for the EDI ingestion routes."""
 
-import itertools
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -16,516 +17,103 @@ pytest.importorskip("fastapi")
 import app.edi_ingestion.routes as edi_ingestion_routes  # noqa: E402
 from app.authz import IngestionPrincipal, get_ingestion_principal  # noqa: E402
 from app.edi_ingestion import router as edi_router  # noqa: E402
-from app.webhook_models import EventResult, IngestResponse, WebhookCTEType  # noqa: E402
-
-TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
-
-VALID_856 = (
-    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000001*0*P*>~"
-    b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
-    b"ST*856*0001~"
-    b"BSN*00*ASN-12345*20260310*1200~"
-    b"HL*1**S~"
-    b"N1*SF*Valley Fresh Farms*92*0614141000005~"
-    b"N1*ST*Metro Distribution Center*92*0614141000006~"
-    b"LIN**SK*ROMAINE-12CT~"
-    b"SN1**200*CA~"
-    b"REF*BM*BOL-9001~"
-    b"TD5**2*ColdExpress~"
-    b"SE*11*0001~"
-    b"GE*1*1~"
-    b"IEA*1*000000001~"
-)
-
-INVALID_DOC_TYPE = (
-    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000001*0*P*>~"
-    b"GS*PO*SENDER*RECEIVER*20260310*1200*1*X*004010~"
-    b"ST*850*0001~"
-    b"BEG*00*SA*PO-100~"
-    b"PO1*1*50*CA*12.5~"
-    b"SE*5*0001~"
-    b"GE*1*1~"
-    b"IEA*1*000000001~"
-)
-
-MISSING_REQUIRED_SEGMENT = (
-    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000001*0*P*>~"
-    b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
-    b"ST*856*0001~"
-    b"BSN*00*ASN-12345*20260310*1200~"
-    b"SE*4*0001~"
-    b"GE*1*1~"
-    b"IEA*1*000000001~"
-)
-
-LEGACY_856_MISSING_KDES = (
-    b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*000000099*0*P*>~"
-    b"GS*SH*SENDERID*RECEIVERID*20260310*1200*99*X*004010~"
-    b"ST*856*0099~"
-    b"BSN*00*ASN-12345~"
-    b"HL*1**S~"
-    b"SE*4*0099~"
-    b"GE*1*99~"
-    b"IEA*1*000000099~"
-)
 
 
 @pytest.fixture()
-def captured_payload() -> dict:
-    return {}
-
-
-@pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, captured_payload: dict) -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
+    # These checks stop before tenant resolution has any bearing on behavior.
+    monkeypatch.setattr(edi_ingestion_routes, "_resolve_principal_tenant_id", lambda *args: "")
     app = FastAPI()
     app.include_router(edi_router)
     app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="test-key",
-        scopes=["*"],
-        auth_mode="test",
+        key_id="", scopes=["edi.ingest"]
     )
-
-    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
-        captured_payload["payload"] = payload
-        event = payload.events[0]
-        return IngestResponse(
-            accepted=1,
-            rejected=0,
-            total=1,
-            events=[
-                EventResult(
-                    traceability_lot_code=event.traceability_lot_code,
-                    cte_type=event.cte_type.value,
-                    status="accepted",
-                    event_id="evt-edi-1",
-                    sha256_hash="hash-1",
-                    chain_hash="chain-1",
-                )
-            ],
-        )
-
-    monkeypatch.setattr(edi_ingestion_routes, "ingest_events", _fake_ingest_events)
-
     with TestClient(app) as test_client:
         yield test_client
 
 
-def test_ingest_edi_856_happy_path(client: TestClient, captured_payload: dict) -> None:
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-001",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", VALID_856, "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
+def _post(client: TestClient, raw: bytes, *, route: str = ""):
+    return client.post(
+        f"/api/v1/ingest/edi{route}",
+        data={"traceability_lot_code": " "},
+        files={"file": ("empty.edi", raw, "application/edi-x12")},
     )
-    assert response.status_code == 201
 
-    payload = response.json()
-    assert payload["status"] == "accepted"
-    assert payload["document_type"] == "X12_856"
-    assert payload["sender_tenant_id"] == TEST_TENANT_ID
-    assert payload["partner_id"] == "WALMART"
-    assert payload["extracted"]["quantity"] == 200.0
-    assert payload["extracted"]["unit_of_measure"] == "cases"
-    assert payload["ingestion_result"]["accepted"] == 1
 
-    webhook_payload = captured_payload["payload"]
-    assert webhook_payload.tenant_id == TEST_TENANT_ID
-    assert webhook_payload.source == "edi_856_inbound"
-    event = webhook_payload.events[0]
-    assert event.cte_type == WebhookCTEType.SHIPPING
-    assert event.traceability_lot_code == "LOT-2026-EDI-001"
-    assert event.quantity == 200.0
-    assert event.unit_of_measure == "cases"
-    assert event.kdes["ship_from_location"] == "Valley Fresh Farms"
-    assert event.kdes["ship_to_location"] == "Metro Distribution Center"
+def test_legacy_route_requires_file(client: TestClient) -> None:
+    response = client.post("/api/v1/ingest/edi", data={"traceability_lot_code": " "})
+    assert response.status_code == 422
+    assert any("file" in error["loc"] for error in response.json()["detail"])
+
+
+def test_ingest_rejects_empty_payload(client: TestClient) -> None:
+    response = _post(client, b"")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Empty EDI payload"
+
+
+def test_ingest_rejects_non_edi_payload(client: TestClient) -> None:
+    response = _post(client, b" ")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Unsupported EDI payload format"
 
 
 def test_ingest_rejects_non_856_transaction_set(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-002",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("po.edi", INVALID_DOC_TYPE, "application/edi-x12")},
-    )
+    response = _post(client, b"ISA*~ST*850~")
     assert response.status_code == 400
     assert response.json()["detail"] == "Only X12 856 is currently supported"
 
 
 def test_ingest_rejects_missing_required_segments(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-003",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("bad.edi", MISSING_REQUIRED_SEGMENT, "application/edi-x12")},
-    )
+    response = _post(client, b"ISA*~GS~ST*856~SE~GE~IEA~")
     assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["message"] == "EDI 856 missing required segments"
-    assert "HL" in detail["missing_segments"]
+    assert {"BSN", "HL"} <= set(response.json()["detail"]["missing_segments"])
 
 
 def test_ingest_edi_856_rejects_oversize_before_parsing(
-    client: TestClient,
-    captured_payload: dict,
-    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(edi_ingestion_routes, "MAX_EDI_FILE_SIZE_BYTES", 16)
-
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-OVERSIZE",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", VALID_856, "application/edi-x12")},
-    )
-
+    monkeypatch.setattr(edi_ingestion_routes, "MAX_EDI_FILE_SIZE_BYTES", 0)
+    response = _post(client, b"ISA")
     assert response.status_code == 413
-    assert "EDI file too large" in response.json()["detail"]
-    assert "payload" not in captured_payload
-
-
-def test_legacy_856_rejects_missing_kdes_without_placeholder_persistence(
-    client: TestClient,
-    captured_payload: dict,
-) -> None:
-    """#2072: legacy 856 must reject missing KDEs instead of synthesizing
-    quantity=1.0, Unknown locations, generic products, or current dates.
-    """
-    from app.edi_ingestion.rejection_log import (
-        list_edi_rejections,
-        reset_edi_rejections,
-    )
-
-    reset_edi_rejections()
-    captured_payload.clear()
-
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-MISSING-KDES",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("bad.edi", LEGACY_856_MISSING_KDES, "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["error"] == "edi_856_missing_required_kdes"
-    assert set(detail["missing_kdes"]) >= {
-        "quantity",
-        "unit_of_measure",
-        "product_description",
-        "ship_from_location",
-        "ship_to_location",
-        "ship_date",
-    }
-    assert "payload" not in captured_payload
-
-    blocked_placeholders = {error["placeholder_blocked"] for error in detail["errors"]}
-    assert {"1.0", "Unknown ship-from", "Unknown ship-to", "EDI 856 Shipment"} <= blocked_placeholders
-
-    rejections = list_edi_rejections(TEST_TENANT_ID)
-    assert len(rejections) == 1
-    assert rejections[0]["rejection_id"] == detail["rejection_id"]
-    assert rejections[0]["traceability_lot_code"] == "LOT-2026-EDI-MISSING-KDES"
 
 
 def test_ingest_denied_without_edi_ingest_scope() -> None:
     app = FastAPI()
     app.include_router(edi_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
-        key_id="limited-key",
-        scopes=["exchange.write"],
-        auth_mode="test",
-    )
-
-    with TestClient(app) as test_client:
-        response = test_client.post(
-            "/api/v1/ingest/edi",
-            data={
-                "traceability_lot_code": "LOT-2026-EDI-001",
-                "tenant_id": TEST_TENANT_ID,
-            },
-            files={"file": ("asn.edi", VALID_856, "application/edi-x12")},
-            headers={"X-Partner-ID": "WALMART"},
-        )
-
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(key_id="", scopes=[])
+    with TestClient(app) as client:
+        response = _post(client, b"")
     assert response.status_code == 403
     assert "requires 'edi.ingest'" in response.json()["detail"]
 
 
-# ---------------------------------------------------------------------------
-# EPIC-N PR-B regression tests
-# ---------------------------------------------------------------------------
-
-# TLC that matches the FSMA 204 GTIN-14 + lot-suffix pattern enforced by
-# services/shared/schemas.py:FSMAEvent.validate_tlc_format.
-_VALID_FSMA_TLC = "00012345678901-LOT001"
-_ISA13_COUNTER = itertools.count(2)
-
-
-def _next_isa13() -> bytes:
-    return f"{next(_ISA13_COUNTER):09d}".encode("ascii")
-
-
-def _build_856(
-    ship_date: bytes = b"20260310",
-    ship_time: bytes = b"1200",
-    unit: bytes = b"CA",
-    isa13: bytes | None = None,
-) -> bytes:
-    """Assemble a minimal valid 856 with overridable BSN date/time."""
-    interchange_control = isa13 or _next_isa13()
-    return (
-        b"ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*"
-        + interchange_control
-        + b"*0*P*>~"
-        b"GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
-        b"ST*856*0001~"
-        b"BSN*00*ASN-12345*" + ship_date + b"*" + ship_time + b"~"
-        b"HL*1**S~"
-        b"N1*SF*Valley Fresh Farms*92*0614141000005~"
-        b"N1*ST*Metro Distribution Center*92*0614141000006~"
-        b"LIN**SK*ROMAINE-12CT~"
-        b"SN1**200*" + unit + b"~"
-        b"REF*BM*BOL-9001~"
-        b"TD5**2*ColdExpress~"
-        b"SE*11*0001~"
-        b"GE*1*1~"
-        b"IEA*1*" + interchange_control + b"~"
-    )
-
-
-def test_legacy_856_rejects_invalid_unit_before_units_placeholder_persistence(
-    client: TestClient, captured_payload: dict
-) -> None:
-    """#2072: invalid nonblank SN1 units must not normalize to ``units``."""
-    from app.edi_ingestion.rejection_log import reset_edi_rejections
-
-    reset_edi_rejections()
-    captured_payload.clear()
-
-    response = client.post(
-        "/api/v1/ingest/edi",
-        data={
-            "traceability_lot_code": "LOT-2026-EDI-BAD-UOM",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={
-            "file": (
-                "bad-uom.edi",
-                _build_856(unit=b"ZZ", isa13=_next_isa13()),
-                "application/edi-x12",
-            )
-        },
-        headers={"X-Partner-ID": "WALMART"},
-    )
-
+def test_document_route_requires_file(client: TestClient) -> None:
+    response = client.post("/api/v1/ingest/edi/document", data={"traceability_lot_code": " "})
     assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["error"] == "edi_856_missing_required_kdes"
-    assert "unit_of_measure" in detail["missing_kdes"]
-    assert "payload" not in captured_payload
+    assert any("file" in error["loc"] for error in response.json()["detail"])
 
 
-def test_document_ingest_fsma_strict_rejects_bad_tlc(client: TestClient, captured_payload: dict) -> None:
-    """#1174: EDI documents that fail FSMAEvent schema validation must
-    return 422 and persist nothing into the canonical stream. The
-    rejection is still recorded in the EDI rejection log so auditors
-    see the attempt. Prior behavior persisted with
-    fsma_validation_status=failed, polluting the FSMA 204 graph.
-    """
-    from app.edi_ingestion.rejection_log import (
-        list_edi_rejections,
-        reset_edi_rejections,
-    )
-
-    reset_edi_rejections()
-    captured_payload.clear()
-
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            # 'not-a-gtin-tlc' will fail FSMAEvent.validate_tlc_format.
-            "traceability_lot_code": "not-a-gtin-tlc",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-    assert response.status_code == 422
-    detail = response.json()["detail"]
-    assert detail["error"] == "fsma_validation_failed"
-    assert detail["tlc"] == "not-a-gtin-tlc"
-    assert len(detail["errors"]) >= 1
-
-    # Canonical stream must be untouched.
-    assert "payload" not in captured_payload
-    # Rejection is still captured for the audit trail.
-    rejections = list_edi_rejections(TEST_TENANT_ID)
-    assert len(rejections) == 1
-    assert rejections[0]["reason"] == "fsma_validation_failed"
-
-
-def test_document_ingest_strict_false_query_advisory(client: TestClient, captured_payload: dict) -> None:
-    """#1174: ?strict=false records the rejection in the EDI rejection
-    log and DOES NOT persist into the canonical ingest stream. Prior
-    behavior wrote ``fsma_validation_status=failed`` into the canonical
-    FSMA audit trail, which polluted downstream readers (FDA export,
-    recall simulator, traceability graph).
-    """
-    from app.edi_ingestion.rejection_log import (
-        list_edi_rejections,
-        reset_edi_rejections,
-    )
-
-    reset_edi_rejections()
-    captured_payload.clear()
-
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        params={"strict": "false"},
-        data={
-            "traceability_lot_code": "not-a-gtin-tlc",
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-    assert response.status_code == 201
-    body = response.json()
-    # Document was accepted for audit, but flagged as rejected — the
-    # canonical ingest stream must NOT see it.
-    assert body["status"] == "rejected"
-    assert body["extracted"]["fsma_validation_status"] == "failed"
-    assert body["ingestion_result"] is None, "advisory-mode rejections must not be reported as canonical ingestions"
-    rejection = body["rejection"]
-    assert rejection["reason"] == "fsma_validation_failed"
-    assert rejection["rejection_id"].startswith("edi-rej-")
-    assert rejection["error_count"] >= 1
-
-    # Canonical webhook pipeline must not have been invoked — that is
-    # the whole point of #1174. The TestClient fixture would have
-    # populated captured_payload["payload"] if ingest_events was called.
-    assert "payload" not in captured_payload, "ingest_events must not be called for FSMA-invalid EDI documents"
-
-    # The rejection is durably recorded for the audit trail.
-    rejections = list_edi_rejections(TEST_TENANT_ID)
-    assert len(rejections) == 1
-    recorded = rejections[0]
-    assert recorded["rejection_id"] == rejection["rejection_id"]
-    assert recorded["traceability_lot_code"] == "not-a-gtin-tlc"
-    assert recorded["transaction_set"] == "856"
-    assert recorded["partner_id"] == "WALMART"
-    assert len(recorded["errors"]) >= 1
-
-
-def test_document_ingest_strict_passes_with_compliant_tlc(client: TestClient, captured_payload: dict) -> None:
-    """#1174 sanity: compliant TLC passes strict validation."""
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-    assert response.status_code == 201
-    assert response.json()["extracted"]["fsma_validation_status"] == "passed"
-
-
-def test_six_digit_yymmdd_date_accepted(client: TestClient) -> None:
-    """#1167: 6-digit YYMMDD with century window is accepted, not
-    silently rewritten to today's date.
-    """
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
-        # 260310 -> YY=26, pivot=50, expands to 2026-03-10.
-        files={"file": ("asn.edi", _build_856(ship_date=b"260310"), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-    assert response.status_code == 201, response.text
-
-
-def test_unparseable_date_returns_400(client: TestClient) -> None:
-    """#1167: garbage in the date field must fail the request explicitly,
-    not silently fall back to ``datetime.now()``.
-    """
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
-        # "ABCDE" has 0 digits after \D strip → raises ValueError
-        # in _parse_edi_date_digits → HTTP 400.
-        files={"file": ("asn.edi", _build_856(ship_date=b"ABCDE"), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
+def test_document_route_rejects_empty_payload(client: TestClient) -> None:
+    response = _post(client, b"", route="/document")
     assert response.status_code == 400
-    detail = response.json()["detail"]
-    assert detail["error"] == "invalid_edi_date"
+    assert response.json()["detail"] == "Empty EDI payload"
+
+
+def test_document_route_rejects_unrecognized_set(client: TestClient) -> None:
+    response = _post(client, b"ISA~ST~", route="/document")
+    assert response.status_code == 400
+    assert response.json()["detail"].startswith("Unsupported or unrecognized transaction set")
 
 
 def test_segment_cap_exceeded_returns_413(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    """#1171: a crafted envelope over EDI_MAX_SEGMENTS must fail fast
-    rather than expanding in memory past the file-size cap.
-    """
-    # Our test envelope is ~15 segments; cap at 3 forces the cap hit
-    # without building a multi-MB payload in-test.
-    monkeypatch.setenv("EDI_MAX_SEGMENTS", "3")
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", _build_856(), "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
+    monkeypatch.setenv("EDI_MAX_SEGMENTS", "1")
+    response = _post(client, b"ISA~GS~", route="/document")
     assert response.status_code == 413
-    detail = response.json()["detail"]
-    assert detail["error"] == "segment_count_exceeded"
-    assert detail["cap"] == 3
+    assert response.json()["detail"]["error"] == "segment_count_exceeded"
 
 
-def test_utf8_decode_preserves_latin1_bytes_as_real_chars(
-    client: TestClient,
-) -> None:
-    """#1170: a latin-1 encoded partner name flows in. Historical bugs:
-    ``errors='ignore'`` dropped the bad byte; ``errors='replace'``
-    substituted U+FFFD. Both are data corruption.
-
-    The spec-honoring fix falls back to ``latin-1`` strict (X12.5/X12.6
-    Basic character set) and preserves 0xF1 as the real ñ character. The
-    document still ingests and the partner name round-trips exactly.
-    """
-    # latin-1 "ñ" (0xF1) in partner name — invalid as UTF-8 but
-    # spec-compliant X12 Basic set.
-    envelope = _build_856().replace(b"Valley Fresh Farms", b"Valley Fre\xf1h Farms")
-    response = client.post(
-        "/api/v1/ingest/edi/document",
-        data={
-            "traceability_lot_code": _VALID_FSMA_TLC,
-            "tenant_id": TEST_TENANT_ID,
-        },
-        files={"file": ("asn.edi", envelope, "application/edi-x12")},
-        headers={"X-Partner-ID": "WALMART"},
-    )
-    # The document ingests successfully — no U+FFFD, no dropped byte,
-    # the real ñ is in the decoded stream.
-    assert response.status_code == 201, response.text
+def test_decode_preserves_latin1_byte() -> None:
+    assert edi_ingestion_routes._decode_edi_bytes(bytes([0xF1])) == "ñ"

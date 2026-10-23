@@ -1508,6 +1508,7 @@ async def ingest_csv(
         payload,
         principal_tenant_id=tenant_id,
         x_regengine_api_key=x_regengine_api_key,
+        principal=principal,
         source_file=receipt,
     )
 

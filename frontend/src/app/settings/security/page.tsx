@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ArrowLeft, Clock, Fingerprint } from 'lucide-react';
 
+import { PasskeyRequiredNotice } from '@/components/auth/PasskeyRequiredNotice';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,8 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { registerPasskey } from '@/lib/passwordless-auth';
+
+const ADMIN_POLICY_STEP_UP_REASON = "Confirm it's you to change your organization's SSO and admin policy.";
 
 const SECURITY_CAPABILITIES = [
   {
@@ -39,6 +42,7 @@ const SECURITY_CAPABILITIES = [
 export default function SecuritySettingsPage() {
   const { authMethod, isHighAssuranceSession, tenantId, user } = useAuth();
   const [policyStatus, setPolicyStatus] = useState<string | null>(null);
+  const [policyBlocked, setPolicyBlocked] = useState(false);
   const [passkeyStatus, setPasskeyStatus] = useState<string | null>(null);
   const [isCheckingPolicy, setIsCheckingPolicy] = useState(false);
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
@@ -65,15 +69,20 @@ export default function SecuritySettingsPage() {
 
     setIsCheckingPolicy(true);
     setPolicyStatus(null);
+    setPolicyBlocked(false);
     try {
-      await apiClient.updateOrganizationSsoPolicy(tenantId, {
-        domain_name: domainName,
-        domain_verified: false,
-        enforced_auth_policy: 'standard',
-      });
+      await apiClient.updateOrganizationSsoPolicy(
+        tenantId,
+        {
+          domain_name: domainName,
+          domain_verified: false,
+          enforced_auth_policy: 'standard',
+        },
+        { stepUpReason: ADMIN_POLICY_STEP_UP_REASON },
+      );
       setPolicyStatus('High-assurance organization policy access confirmed.');
     } catch {
-      setPolicyStatus('Passkey authentication is required to change organization policy.');
+      setPolicyBlocked(true);
     } finally {
       setIsCheckingPolicy(false);
     }
@@ -165,6 +174,12 @@ export default function SecuritySettingsPage() {
               <Callout tone="info" role="status">
                 {policyStatus}
               </Callout>
+            )}
+
+            {policyBlocked && (
+              <PasskeyRequiredNotice>
+                Passkey authentication is required to change organization policy.
+              </PasskeyRequiredNotice>
             )}
 
             <Button

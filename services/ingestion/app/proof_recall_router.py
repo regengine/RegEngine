@@ -194,9 +194,8 @@ async def run_recall_drill(request: Request) -> RecallDrillResponse:
 
     This endpoint MUST NOT read any tenant data: it operates entirely
     against module-level constants derived from
-    ``frontend/public/samples/sample_recall_drill.csv`` and the
-    7-CTE ``sample_data/`` fixtures. No database, queue, or tenant
-    store is touched.
+    ``frontend/public/samples/sample_recall_drill.csv``. No database,
+    queue, or tenant store is touched.
     """
     ip_hash = _hash_ip(request.client.host if request.client else None)
     response = _build_response()

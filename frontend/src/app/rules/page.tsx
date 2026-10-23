@@ -67,18 +67,18 @@ export default function RulesDashboardPage() {
     <PageHeader
       title="Compliance Rules"
       description="Versioned FSMA 204 compliance rules — every rule is citable, explainable, and independently deployable"
-      meta={<Badge>{ruleList.length} rules</Badge>}
-      primaryAction={
+      meta={!rules.error && rules.data ? <Badge>{ruleList.length} rules</Badge> : undefined}
+      primaryAction={!rules.error ? (
         <Button onClick={() => seedRules.mutate()} disabled={seedRules.isPending}>
           {seedRules.isPending ? 'Loading...' : 'Load Rules'}
         </Button>
-      }
+      ) : undefined}
     />
   );
 
   if (rules.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"

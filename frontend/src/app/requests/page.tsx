@@ -95,7 +95,7 @@ export default function RequestWorkflowPage() {
     <PageHeader
       title="Request-Response Workflow"
       description="24-hour FDA response readiness — from request intake to sealed package submission"
-      primaryAction={
+      primaryAction={!requests.error ? (
         <Button
           variant={showCreate ? 'secondary' : 'primary'}
           onClick={() => setShowCreate(!showCreate)}
@@ -103,13 +103,13 @@ export default function RequestWorkflowPage() {
         >
           New Request Case
         </Button>
-      }
+      ) : undefined}
     />
   );
 
   if (requests.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"

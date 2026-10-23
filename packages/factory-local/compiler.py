@@ -57,6 +57,8 @@ def compile_ir_to_rego(ir: DeonticIR, pkg: str) -> str:
         raise ValueError(f"unsafe package name: {pkg!r}")
     applicable = [_predicate(p) for p in ir.applicability_predicates] or ["true"]
     penalty = _literal(ir.max_penalty_usd)
+    safe_harbor = _control(ir.safe_harbor_control, True) if ir.safe_harbor_control else "false"
+    no_safe_harbor = _control(ir.safe_harbor_control, False) if ir.safe_harbor_control else "true"
 
     def body(*lines: str) -> str:
         return "\n".join(f"\t{line}" for line in lines)
@@ -85,11 +87,11 @@ compliance_status := "COMPLIANT" if {{
 }}
 
 compliance_status := "COMPLIANT_VIA_SAFE_HARBOR" if {{
-{body("is_applicable", action_test(ir, False), _control(ir.safe_harbor_control, True))}
+{body("is_applicable", action_test(ir, False), safe_harbor)}
 }}
 
 compliance_status := "NON_COMPLIANT_BREACH" if {{
-{body("is_applicable", action_test(ir, False), _control(ir.safe_harbor_control, False))}
+{body("is_applicable", action_test(ir, False), no_safe_harbor)}
 }}
 
 violation_exposure_usd := input.affected_consumer_count * {penalty} if {{

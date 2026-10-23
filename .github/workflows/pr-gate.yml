@@ -49,13 +49,14 @@ concurrency:
   group: pr-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  checks: read
-  actions: read
+permissions: {}
 
 jobs:
   backend:
+    permissions:
+      contents: read
+      checks: read
+      actions: read
     name: "PR Gate: Backend"
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -77,8 +78,8 @@ jobs:
               "frontend/src/lib/public-openapi.ts", "frontend/package-lock.json",
               "alembic/**", "server/**", "services/**", "shared/**", "kernel/**",
               "plugins/fsma/**", "Dockerfile", "railway.toml", "requirements.in",
-              "requirements.lock", "scripts/**", "tests/**", "sample_data/**",
-              "demo_exports/**", "docs/security/route-security-manifest.json",
+              "requirements.lock", "scripts/**", "tests/**",
+              "docs/security/route-security-manifest.json",
               "docs/security/release-evidence/**",
               ".github/workflows/backend-ci.yml",
               ".github/workflows/deploy.yml",
@@ -129,6 +130,10 @@ jobs:
         run: echo "No backend-relevant paths changed; Backend CI legitimately did not run. Gate vacuously green."
 
   frontend:
+    permissions:
+      contents: read
+      checks: read
+      actions: read
     name: "PR Gate: Frontend"
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -207,6 +212,8 @@ jobs:
   # so the guard would not run on exactly the PR that breaks the contract.
   # pr-gate.yml is unfiltered by construction.
   workflow-contract:
+    permissions:
+      contents: read
     name: "PR Gate: Workflow Contract"
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -216,6 +223,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/workflows/pr-gate.yml
       - name: Install PyYAML
         run: pip install --disable-pip-version-check "pyyaml==6.0.2"
       - name: Check workflow inventory and required contexts
@@ -224,6 +233,8 @@ jobs:
   # security.yml skips docs-only PRs, so keep both secret scanners in this
   # always-on workflow. Its aggregate gate fails if either scanner fails.
   secrets:
+    permissions:
+      contents: read
     name: "PR Gate: Secrets"
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -255,6 +266,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: "3.11"
+          cache: pip
+          cache-dependency-path: .github/workflows/pr-gate.yml
       - name: Install detect-secrets
         run: pip install detect-secrets==1.5.0
       - name: Scan for new secrets against baseline
@@ -293,3 +306,557 @@ jobs:
             exit 1
           fi
           echo "All gate dependencies green."
+
+  # Shared PR file detection. Required gate jobs above remain unconditional.
+  changes:
+    name: "PR Gate: Path Detection"
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      quality: ${{ steps.filter.outputs.quality }}
+      tools: ${{ steps.filter.outputs.tools }}
+      review: ${{ steps.filter.outputs.review }}
+    steps:
+      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3.0.4
+        id: filter
+        with:
+          filters: |
+            # PR size, commit messages, and labels apply to every changed file.
+            quality:
+              - '**'
+            tools:
+              - 'frontend/src/app/tools/**'
+              - '.github/workflows/pr-gate.yml'
+            # Original Review Gates pull_request paths, with its merged file.
+            review:
+              - 'frontend/**'
+              - 'services/**'
+              - 'server/**'
+              - 'alembic/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - '.github/workflows/pr-gate.yml'
+
+  # Jobs migrated from PR Quality Gate.
+  # ── PR Size Check ───────────────────────────────────────
+  pr-size:
+    needs: changes
+    permissions:
+      contents: read
+      pull-requests: read
+    name: PR Size Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.quality == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        if: needs.changes.outputs.quality == 'true'
+        run: |
+          ADDITIONS=$(gh pr view ${{ github.event.pull_request.number }} --json additions --jq '.additions')
+          DELETIONS=$(gh pr view ${{ github.event.pull_request.number }} --json deletions --jq '.deletions')
+          TOTAL=$((ADDITIONS + DELETIONS))
+          FILES=$(gh pr view ${{ github.event.pull_request.number }} --json files --jq '.files | length')
+
+          echo "### 📊 PR Size" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lines changed:** +$ADDITIONS / -$DELETIONS ($TOTAL total)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files changed:** $FILES" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TOTAL" -gt 1000 ]; then
+            echo "::warning::Large PR detected ($TOTAL lines). Consider splitting into smaller PRs."
+            echo "- ⚠️ **Large PR** — consider splitting" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ✅ Size is manageable" >> $GITHUB_STEP_SUMMARY
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: No relevant changes
+        if: needs.changes.outputs.quality != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ── Conventional Commits ────────────────────────────────
+
+  commit-lint:
+    needs: changes
+    permissions:
+      contents: read
+    name: Commit Message Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.quality == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Check commit messages
+        if: needs.changes.outputs.quality == 'true'
+        run: |
+          echo "### 📝 Commit Messages" >> $GITHUB_STEP_SUMMARY
+          # --no-merges: merge commits ("Merge branch 'main' into …") are not
+          # conventional-commit shaped, and a branch-updated PR must not fail
+          # this gate because of them.
+          COMMITS=$(git log --no-merges --format="%s" origin/main..HEAD)
+          VALID=true
+          while IFS= read -r msg; do
+            [ -z "$msg" ] && continue
+            if echo "$msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?:"; then
+              echo "- ✅ \`$msg\`" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "- ⚠️ \`$msg\` — not conventional" >> $GITHUB_STEP_SUMMARY
+              VALID=false
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$VALID" = false ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> 💡 Use [Conventional Commits](https://www.conventionalcommits.org/) format: \`type(scope): description\`" >> $GITHUB_STEP_SUMMARY
+            # CONTRIBUTING.md:47 states conventional commits are required. This
+            # step previously computed VALID and discarded it, so the check
+            # could never fail despite continue-on-error: false.
+            echo "::error::One or more commit messages are not Conventional Commits (see CONTRIBUTING.md)."
+            exit 1
+          fi
+        continue-on-error: false
+
+      - name: No relevant changes
+        if: needs.changes.outputs.quality != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ── Copy Lint: Ban A-F Grade / Verdict UIs in /tools ────
+
+  copy-lint-tools-grade-verdicts:
+    needs: changes
+    permissions:
+      contents: read
+    name: Copy Lint — ban A-F grade/verdict UIs in /tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.tools == 'true'
+
+      - name: Grep for banned grade/verdict copy in frontend/src/app/tools
+        if: needs.changes.outputs.tools == 'true'
+        run: |
+          set -o pipefail
+          SCOPE="frontend/src/app/tools"
+          if [ ! -d "$SCOPE" ]; then
+            echo "Scope directory $SCOPE missing; skipping."
+            exit 0
+          fi
+          PATTERN='Compliance Score|Compliance Grade|Get Your.*Compliance Report|Grade your ability'
+          echo "### 🚫 Banned grade/verdict copy in $SCOPE" >> "$GITHUB_STEP_SUMMARY"
+          HITS=$(grep -rnE "$PATTERN" "$SCOPE" --include='*.tsx' --include='*.ts' || true)
+          if [ -n "$HITS" ]; then
+            echo "Banned phrases found in $SCOPE:"
+            echo "$HITS"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$HITS" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Self-check tools must not present A-F grades or pass/fail verdicts. See issue #2314." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "- ✅ No banned grade/verdict phrases found" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: No relevant changes
+        if: needs.changes.outputs.tools != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ── Label PR ────────────────────────────────────────────
+
+  label:
+    needs: changes
+    permissions:
+      contents: read
+      pull-requests: write
+    name: Auto-Label PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.quality == 'true'
+
+      - name: Label by files changed
+        if: needs.changes.outputs.quality == 'true'
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13  # v7.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+
+      - name: No relevant changes
+        if: needs.changes.outputs.quality != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # Jobs migrated from Review Gates.
+  # ──────────────────────────────────────────────
+  # Supabase Query Patterns (Checklist §2, §3)
+  # ──────────────────────────────────────────────
+
+  supabase-patterns:
+    needs: changes
+    permissions:
+      contents: read
+    name: Supabase Query Patterns
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+
+      - name: Audit .single() usage
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          MATCHES=$(grep -rn '\.single()' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found .single() — verify each should not be .maybeSingle()"
+            echo "  .single() throws on 0 or 2+ rows. Use .maybeSingle() when the row might not exist."
+          fi
+
+      - name: Audit getSession vs getUser
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Flag getSession in middleware or server components — should use getUser
+          MATCHES=$(grep -rn 'getSession\b' frontend/src/middleware.ts frontend/src/app/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found getSession() in server code — use getUser() for auth validation"
+            echo "  getSession() reads from the cookie and can be spoofed. getUser() validates against the auth server."
+          fi
+
+      - name: Check for select('*')
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          COUNT=$(grep -rn "select('\*')\|select(\"\*\")" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | wc -l)
+          if [ "$COUNT" -gt 0 ]; then
+            grep -rn "select('\*')\|select(\"\*\")" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null
+            echo "::warning::Found $COUNT select('*') calls — consider selecting only needed columns"
+          fi
+
+      - name: Check for missing error handling on Supabase calls
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          MATCHES=$(grep -rn 'const { data } = await supabase\|const {data} = await supabase' \
+            frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found Supabase calls that don't destructure { error } — always check for errors"
+            exit 1
+          fi
+
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ──────────────────────────────────────────────
+  # Source Code Hygiene (Checklist §1, §5)
+  # ──────────────────────────────────────────────
+
+  source-hygiene:
+    needs: changes
+    permissions:
+      contents: read
+    name: Source Hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+
+      - name: No secrets or placeholders in source
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          FOUND=0
+          # Check frontend source
+          if grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
+            frontend/src/ --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" 2>/dev/null; then
+            echo "::error::Found potential secrets or placeholder values in frontend source"
+            FOUND=1
+          fi
+          # Check backend source (exclude test files — they use fake keys for mocking)
+          BACKEND_MATCHES=$(grep -rn 'sk_test_\|sk_live_\|your-api-key\|your_password' \
+            services/ --include="*.py" 2>/dev/null \
+            | grep -v '/tests/\|test_\|conftest\|_test\.py' || true)
+          if [ -n "$BACKEND_MATCHES" ]; then
+            echo "$BACKEND_MATCHES"
+            echo "::error::Found potential secrets or placeholder values in backend source"
+            FOUND=1
+          fi
+          # Check for NEXT_PUBLIC_ env vars that shouldn't be public
+          if grep -rn 'NEXT_PUBLIC_.*SERVICE_ROLE\|NEXT_PUBLIC_.*SECRET' \
+            frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null; then
+            echo "::error::Found service_role or secret key exposed via NEXT_PUBLIC_"
+            FOUND=1
+          fi
+          exit $FOUND
+
+      - name: dangerouslySetInnerHTML audit
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          MATCHES=$(grep -rn "dangerouslySetInnerHTML" frontend/src/ --include="*.tsx" --include="*.jsx" 2>/dev/null || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::warning::Found dangerouslySetInnerHTML usage — verify XSS safety (JSON.stringify is OK, user content is not)"
+          fi
+
+      - name: Check TODO/FIXME count
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          COUNT=$(grep -rn 'TODO\|FIXME' frontend/src/ services/ --include="*.ts" --include="*.tsx" --include="*.py" 2>/dev/null | wc -l)
+          echo "Found $COUNT TODO/FIXME comments"
+          if [ "$COUNT" -gt 20 ]; then
+            echo "::warning::$COUNT unresolved TODOs across frontend + backend"
+          fi
+
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ──────────────────────────────────────────────
+  # Audit Trail Protection (Checklist §6)
+  # ──────────────────────────────────────────────
+
+  audit-trail:
+    needs: changes
+    permissions:
+      contents: read
+    name: Audit Trail Protection
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+        with:
+          # Issue #2810: migration gates diff against origin/main; the default
+          # shallow clone leaves origin/main absent and the diff silently no-ops.
+          fetch-depth: 0
+
+      - name: No mutations on append-only tables (frontend)
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          AUDIT_TABLES="audit_logs\|pcos_audit_events\|pcos_task_events\|compliance_status_log\|evidence_logs"
+          MATCHES=$(grep -rn '\.update(\|\.delete(\|\.upsert(' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -i "$AUDIT_TABLES" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found UPDATE/DELETE/UPSERT on audit trail table in frontend — audit tables must be append-only"
+            exit 1
+          fi
+
+      - name: No mutations on append-only tables (backend)
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Check Python services for UPDATE/DELETE on audit tables
+          AUDIT_TABLES="audit_logs\|pcos_audit_events\|pcos_task_events\|compliance_status_log\|evidence_logs"
+          MATCHES=$(grep -rn '\.update(\|\.delete(\|DELETE FROM\|UPDATE.*SET' services/ --include="*.py" 2>/dev/null | grep -i "$AUDIT_TABLES" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "$MATCHES"
+            echo "::error::Found UPDATE/DELETE on audit trail table in backend — audit tables must be append-only"
+            exit 1
+          fi
+
+      - name: No compliance snapshot mutations
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          SNAPSHOT_TABLES="compliance_snapshot\|pcos_compliance_snapshot"
+          # Frontend
+          FE=$(grep -rn '\.update(\|\.delete(\|\.upsert(' frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null | grep -i "$SNAPSHOT_TABLES" || true)
+          # Backend
+          BE=$(grep -rn '\.update(\|\.delete(\|UPDATE.*SET\|DELETE FROM' services/ --include="*.py" 2>/dev/null | grep -i "$SNAPSHOT_TABLES" || true)
+          if [ -n "$FE" ] || [ -n "$BE" ]; then
+            echo "${FE}${BE}"
+            echo "::error::Found mutation on compliance snapshot table — snapshots must be immutable (new snapshot = new row)"
+            exit 1
+          fi
+
+      - name: No destructive migrations on audit tables
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Issue #2810: migrations live in alembic/versions/*.py (Python), not
+          # migrations/*.sql. A missing origin/main must fail loudly, not no-op.
+          git rev-parse --verify origin/main >/dev/null
+          # Only check migration files changed in this PR (not all historical migrations)
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
+          if [ -z "$CHANGED_MIGRATIONS" ]; then
+            echo "No migration files changed — skipping"
+            exit 0
+          fi
+          # Destructive Alembic operations, plus raw DDL inside op.execute(...).
+          # Matched per-LINE so the destructive op and the audit table have to be
+          # the same statement — a file-wide AND flags almost every migration.
+          DESTRUCTIVE_RE='op\.drop_table|op\.drop_column|op\.drop_constraint|DROP +TABLE|DROP +COLUMN|TRUNCATE'
+          AUDIT_RE='audit|evidence_log|compliance_status_log|task_event'
+          # Statements that merely contain a destructive keyword but destroy no data.
+          BENIGN_RE='REVOKE|DROP +TRIGGER|DROP +POLICY|DROP +INDEX|^[0-9]+:[[:space:]]*#'
+          # Blank out the downgrade() body — a downgrade dropping what its own
+          # upgrade created is expected. Lines are blanked, not deleted, so the
+          # line numbers reported below still match the real file. Helper
+          # functions defined after downgrade() are still scanned.
+          # Keep awk's $0 literal for awk, not shell expansion.
+          # shellcheck disable=SC2016
+          UPGRADE_ONLY='/^def downgrade/{d=1} d && /^[A-Za-z@_]/ && !/^def downgrade/{d=0} {print (d ? "" : $0)}'
+          FAILED=0
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            HITS=$(awk "$UPGRADE_ONLY" "$f" | grep -Eni "$DESTRUCTIVE_RE" | grep -Ei "$AUDIT_RE" | grep -Eiv "$BENIGN_RE" || true)
+            if [ -n "$HITS" ]; then
+              echo "$f:"
+              echo "$HITS"
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::Found destructive migration on audit tables — requires manual review"
+            exit 1
+          fi
+
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ──────────────────────────────────────────────
+  # SQL Injection Defense (Checklist §5 — backend)
+  # ──────────────────────────────────────────────
+
+  sql-safety:
+    needs: changes
+    permissions:
+      contents: read
+    name: SQL Injection Defense
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+
+      - name: No f-string SQL in Python services
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Flag f-strings containing SQL keywords — high-confidence pattern for SQL injection
+          MATCHES=$(grep -rn 'f".*SELECT\|f".*INSERT\|f".*UPDATE\|f".*DELETE\|f".*DROP' \
+            services/ --include="*.py" 2>/dev/null || true)
+          # Filter out comments and test files
+          FILTERED=$(echo "$MATCHES" | grep -v '^\s*#\|test_\|_test\.py\|conftest' || true)
+          if [ -n "$FILTERED" ]; then
+            echo "$FILTERED"
+            echo "::error::Found f-string SQL in Python services — use parameterized queries via text() with bound params"
+            exit 1
+          fi
+
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ──────────────────────────────────────────────
+  # Tenant Isolation (Checklist §7)
+  # ──────────────────────────────────────────────
+
+  tenant-isolation:
+    needs: changes
+    permissions:
+      contents: read
+    name: Tenant Isolation Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+        with:
+          # Issue #2810: migration gates diff against origin/main; the default
+          # shallow clone leaves origin/main absent and the diff silently no-ops.
+          fetch-depth: 0
+
+      - name: New migrations include tenant_id where expected
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Issue #2810: migrations are alembic/versions/*.py. In Alembic the table
+          # name usually sits on the line AFTER op.create_table(, so match the
+          # operation and the quoted table name independently.
+          git rev-parse --verify origin/main >/dev/null
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
+          CREATE_RE='op\.create_table\(|CREATE TABLE'
+          SCOPED_TABLE_RE="[\"'](fsma\.)?(pcos_|compliance_|evidence_)[a-z0-9_]*[\"']|CREATE TABLE +[a-z0-9_.\"']*(pcos_|compliance_|evidence_)"
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            if grep -Eq "$CREATE_RE" "$f" && grep -Eqi "$SCOPED_TABLE_RE" "$f"; then
+              if ! grep -q "tenant_id" "$f"; then
+                echo "::error::Migration $f creates a compliance/pcos table without tenant_id column"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: New migrations enable RLS on new tables
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Issue #2810: RLS is turned on from Alembic via
+          # op.execute("ALTER TABLE ... ENABLE ROW LEVEL SECURITY").
+          git rev-parse --verify origin/main >/dev/null
+          CHANGED_MIGRATIONS=$(git diff --name-only origin/main...HEAD -- 'alembic/versions/*.py')
+          CREATE_RE='op\.create_table\(|CREATE TABLE'
+          for f in $CHANGED_MIGRATIONS; do
+            [ -f "$f" ] || continue
+            # Repairs to historical data backfills do not create tables.
+            # Check newly added create operations, including additions to an
+            # existing migration, instead of every old operation in the file.
+            ADDED=$(git diff --unified=0 origin/main...HEAD -- "$f" | grep '^+[^+]' || true)
+            if echo "$ADDED" | grep -Eq "$CREATE_RE"; then
+              if ! grep -qi "ENABLE ROW LEVEL SECURITY" "$f"; then
+                echo "::error::Migration $f creates a table without enabling RLS — add op.execute(\"ALTER TABLE ... ENABLE ROW LEVEL SECURITY\")"
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Flag direct pcos table access without tenant filter
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          PCOS_CALLS=$(grep -rn "\.from(['\"]pcos_" frontend/src/ --include="*.ts" --include="*.tsx" 2>/dev/null || true)
+          if [ -n "$PCOS_CALLS" ]; then
+            echo "$PCOS_CALLS"
+            echo "::warning::Found direct pcos_* table access — verify tenant_id filtering is applied (via RLS or explicit .eq())"
+          fi
+
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'
+
+  # ──────────────────────────────────────────────
+  # React Patterns (Checklist §4)
+  # ──────────────────────────────────────────────
+
+  react-patterns:
+    needs: changes
+    permissions:
+      contents: read
+    name: React Patterns
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        if: needs.changes.outputs.review == 'true'
+
+      - name: Check for useEffect async patterns
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Rough heuristic: useEffect with [] and await inside (potential stale closure)
+          if grep -rn -A8 'useEffect.*\[\]' frontend/src/ --include="*.tsx" --include="*.ts" 2>/dev/null | grep -q 'await\|\.then('; then
+            echo "::warning::Found useEffect with empty deps [] containing async calls — verify no stale data issues"
+          fi
+
+      - name: Check for setState during render
+        if: needs.changes.outputs.review == 'true'
+        run: |
+          # Flag obvious cases: setState outside useEffect/callbacks at component top level
+          # This is a rough heuristic — manual review still needed
+          MATCHES=$(grep -rn 'useState\|setState' frontend/src/ --include="*.tsx" 2>/dev/null | wc -l)
+          echo "Found $MATCHES state-related patterns (manual review for render-phase setState)"
+      - name: No relevant changes
+        if: needs.changes.outputs.review != 'true'
+        run: echo 'No relevant paths changed; check passes.'

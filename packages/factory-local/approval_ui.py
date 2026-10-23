@@ -1,12 +1,11 @@
-"""Human approval screen.  streamlit run approval_ui.py --server.port 8501"""
+"""Read-only rule review screen. streamlit run approval_ui.py --server.port 8501"""
 
 from __future__ import annotations
 
 import json
 
 import streamlit as st
-
-from pipeline import approve, pg_connect
+from pipeline import pg_connect
 
 st.set_page_config(page_title="factory-local approvals", layout="wide")
 st.title("Rules awaiting human verification")
@@ -19,7 +18,7 @@ with pg_connect() as conn:
     ).fetchall()
 
 if not rows:
-    st.info("No unverified rules. Run `python pipeline.py run` to extract one.")
+    st.info("No data yet")
 
 for rule_uid, source, rego, z3_result, ir_json, statutory_text in rows:
     st.header(rule_uid)
@@ -36,11 +35,4 @@ for rule_uid, source, rego, z3_result, ir_json, statutory_text in rows:
         st.subheader("Z3 result")
         st.code(json.dumps(z3_result, indent=2), language="json")
 
-    if st.button("Approve & Deploy", key=f"approve-{rule_uid}", type="primary"):
-        try:
-            with st.spinner("Deploying to OPA and writing receipts"):
-                result = approve(rule_uid)
-            st.success("Deployed and receipts written")
-            st.json(result)
-        except Exception as exc:  # surface any failure to the reviewer
-            st.error(f"{type(exc).__name__}: {exc}")
+    st.info("No data yet: evaluation cases required before approval and deployment")

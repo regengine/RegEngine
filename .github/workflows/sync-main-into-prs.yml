@@ -1,0 +1,300 @@
+# GITHUB_TOKEN pushes do not trigger other workflows, so CI on the merged commit needs a later push or re-run.
+#
+# This workflow updates open, non-draft PR branches within this repository
+# whenever changes land on main, using GitHub's REST endpoint to create
+# a merge commit (never rebasing or force-pushing).
+
+name: Sync main into PRs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: sync-main-into-prs
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-main-into-prs:
+    name: Sync main into PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Sync main into open pull requests
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repoFullName = `${owner}/${repo}`.toLowerCase();
+            const CONFLICT_MARKER = '<!-- sync-main-conflict -->';
+            const UPDATED_MARKER = '<!-- sync-main-updated -->';
+
+            async function postOrUpdateComment(issueNumber, marker, body) {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+
+              const existingComment = comments.find(
+                (c) => c.body && c.body.includes(marker)
+              );
+
+              if (existingComment) {
+                core.info(`PR #${issueNumber}: updating existing comment for marker '${marker}' (id: ${existingComment.id}).`);
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existingComment.id,
+                  body,
+                });
+              } else {
+                core.info(`PR #${issueNumber}: creating new comment for marker '${marker}'.`);
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: issueNumber,
+                  body,
+                });
+              }
+            }
+
+            core.info(`Fetching open pull requests targeting main for ${owner}/${repo}...`);
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
+
+            core.info(`Found ${pulls.length} total open pull request(s) targeting main.`);
+
+            const candidatePRs = pulls.filter((pr) => {
+              if (pr.draft) {
+                core.info(`Skipping PR #${pr.number}: draft PR.`);
+                return false;
+              }
+              if (!pr.base || pr.base.ref !== 'main') {
+                core.info(`Skipping PR #${pr.number}: base is '${pr.base ? pr.base.ref : 'unknown'}', not 'main'.`);
+                return false;
+              }
+              if (!pr.head || !pr.head.repo) {
+                core.info(`Skipping PR #${pr.number}: head repository is missing or deleted.`);
+                return false;
+              }
+              const headFullName = (pr.head.repo.full_name || '').toLowerCase();
+              if (headFullName !== repoFullName) {
+                core.info(`Skipping PR #${pr.number}: head repo '${headFullName}' is a fork (not '${repoFullName}').`);
+                return false;
+              }
+              const userType = (pr.user?.type || '').toLowerCase();
+              const userLogin = (pr.user?.login || '').toLowerCase();
+              const isBot =
+                userType === 'bot' ||
+                userLogin.endsWith('[bot]') ||
+                userLogin.includes('dependabot');
+              if (isBot) {
+                core.info(`Skipping PR #${pr.number}: author '${pr.user?.login}' is a bot.`);
+                return false;
+              }
+              const hasNoAutoSync = Array.isArray(pr.labels) && pr.labels.some((label) => {
+                const name = typeof label === 'string' ? label : label?.name;
+                return (name || '').trim().toLowerCase() === 'no-auto-sync';
+              });
+              if (hasNoAutoSync) {
+                core.info(`Skipping PR #${pr.number}: labeled with 'no-auto-sync'.`);
+                return false;
+              }
+              return true;
+            });
+
+            core.info(`Identified ${candidatePRs.length} candidate PR(s) to synchronize.`);
+
+            const summary = {
+              updated: [],
+              upToDate: [],
+              conflicts: [],
+              errors: [],
+            };
+
+            for (const pr of candidatePRs) {
+              const prNumber = pr.number;
+              const branchName = pr.head.ref;
+              const currentHeadSha = pr.head.sha;
+              const prTitle = pr.title;
+
+              core.info(`Processing PR #${prNumber} (${branchName})...`);
+
+              try {
+                await github.rest.pulls.updateBranch({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                  expected_head_sha: currentHeadSha,
+                });
+
+                core.info(`PR #${prNumber} (${branchName}): branch successfully updated.`);
+                summary.updated.push({ number: prNumber, branch: branchName, title: prTitle });
+
+                let newHeadSha = '';
+                try {
+                  const updatedPr = await github.rest.pulls.get({
+                    owner,
+                    repo,
+                    pull_number: prNumber,
+                  });
+                  newHeadSha = updatedPr.data?.head?.sha || '';
+                } catch (fetchErr) {
+                  core.warning(`PR #${prNumber}: could not fetch updated head SHA: ${fetchErr.message}`);
+                }
+
+                const headShaText = newHeadSha ? ` (\`${newHeadSha}\`)` : '';
+                const updatedCommentBody = [
+                  UPDATED_MARKER,
+                  '### Branch updated with main',
+                  '',
+                  `Main was merged into \`${branchName}\` at the new head${headShaText}.`,
+                  '',
+                  'Because merge commits created with GITHUB_TOKEN do not trigger workflows, a push to this branch or a manual CI re-run is needed for checks to run on it.',
+                  '',
+                  `*Last synced: ${new Date().toISOString()}*`,
+                ].join('\n');
+
+                try {
+                  await postOrUpdateComment(prNumber, UPDATED_MARKER, updatedCommentBody);
+                } catch (commentErr) {
+                  core.error(`PR #${prNumber}: failed to post or update sync comment: ${commentErr.message}`);
+                  summary.errors.push({
+                    number: prNumber,
+                    branch: branchName,
+                    title: prTitle,
+                    status: commentErr.status || 500,
+                    message: commentErr.message,
+                  });
+                }
+              } catch (error) {
+                const status = error.status;
+                const errorData = error.response?.data;
+                const errorMessage = errorData?.message || error.message || '';
+                const rawError = JSON.stringify(errorData || errorMessage);
+
+                const isAlreadyUpToDate =
+                  status === 422 &&
+                  (/not behind|no new commits|already up to date/i.test(errorMessage) ||
+                   /not behind|no new commits|already up to date/i.test(rawError));
+
+                const isConflict =
+                  status === 422 &&
+                  !isAlreadyUpToDate &&
+                  (/merge conflict/i.test(errorMessage) || /merge conflict/i.test(rawError));
+
+                if (isAlreadyUpToDate) {
+                  core.info(`PR #${prNumber} (${branchName}): already up to date with main.`);
+                  summary.upToDate.push({ number: prNumber, branch: branchName, title: prTitle });
+                } else if (isConflict) {
+                  core.warning(`PR #${prNumber} (${branchName}): merge conflict detected.`);
+                  summary.conflicts.push({ number: prNumber, branch: branchName, title: prTitle, message: errorMessage });
+
+                  const commentBody = [
+                    CONFLICT_MARKER,
+                    '### Merge Conflict with main',
+                    '',
+                    `Branch \`${branchName}\` encountered a merge conflict when attempting to automatically sync with \`main\`.`,
+                    '',
+                    'Main conflicts with this branch, and a person must resolve it.',
+                    '',
+                    'Please resolve the conflict manually and push an updated branch:',
+                    '```bash',
+                    `git checkout ${branchName}`,
+                    'git fetch origin main',
+                    'git merge origin/main',
+                    '# resolve conflicts and commit',
+                    `git push origin ${branchName}`,
+                    '```',
+                    '',
+                    `*Last attempted sync: ${new Date().toISOString()}*`,
+                  ].join('\n');
+
+                  try {
+                    await postOrUpdateComment(prNumber, CONFLICT_MARKER, commentBody);
+                  } catch (commentError) {
+                    core.error(`PR #${prNumber}: failed to post or update conflict comment: ${commentError.message}`);
+                    summary.errors.push({
+                      number: prNumber,
+                      branch: branchName,
+                      title: prTitle,
+                      status: commentError.status || 500,
+                      message: commentError.message,
+                    });
+                  }
+                } else {
+                  core.error(`PR #${prNumber} (${branchName}): failed to update branch (status ${status}): ${errorMessage}`);
+                  summary.errors.push({ number: prNumber, branch: branchName, title: prTitle, status, message: errorMessage });
+                }
+              }
+            }
+
+            core.info('');
+            core.info('========================================');
+            core.info('       Sync Main into PRs Summary       ');
+            core.info('========================================');
+            core.info(`Total open PRs checked: ${pulls.length}`);
+            core.info(`Candidate PRs evaluated: ${candidatePRs.length}`);
+            core.info(`Successfully updated: ${summary.updated.length}`);
+            core.info(`Already up to date: ${summary.upToDate.length}`);
+            core.info(`Merge conflicts: ${summary.conflicts.length}`);
+            core.info(`Errors encountered: ${summary.errors.length}`);
+            core.info('========================================');
+
+            let summaryMd = '## Sync Main into PRs Summary\n\n';
+            summaryMd += '| Metric | Count |\n|---|---|\n';
+            summaryMd += `| Total open PRs evaluated | ${pulls.length} |\n`;
+            summaryMd += `| Candidates eligible for sync | ${candidatePRs.length} |\n`;
+            summaryMd += `| Successfully updated | ${summary.updated.length} |\n`;
+            summaryMd += `| Already up to date | ${summary.upToDate.length} |\n`;
+            summaryMd += `| Merge conflicts | ${summary.conflicts.length} |\n`;
+            summaryMd += `| Errors | ${summary.errors.length} |\n\n`;
+
+            if (summary.updated.length > 0) {
+              summaryMd += '### Updated Branches\n\n';
+              for (const p of summary.updated) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.title}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            if (summary.conflicts.length > 0) {
+              summaryMd += '### Conflicts Alerted\n\n';
+              for (const p of summary.conflicts) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.title}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            if (summary.errors.length > 0) {
+              summaryMd += '### Errors Encountered\n\n';
+              for (const p of summary.errors) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.message || p.status}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            await core.summary.addRaw(summaryMd).write();
+
+            if (summary.errors.length > 0) {
+              core.setFailed(`Sync main into PRs completed with ${summary.errors.length} error(s).`);
+            }
+
