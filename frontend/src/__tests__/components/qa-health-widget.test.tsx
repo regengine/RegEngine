@@ -16,7 +16,7 @@ vi.mock('@/hooks/use-api', () => ({
 
 const qaHealth: QAHealthResponse = {
   schema_version: '1.0',
-  generated_at: '2026-06-04T00:00:00Z',
+  generated_at: '',
   source: { kind: 'ci_artifact', path: 'qa/qa-health/latest.json' },
   overall: {
     status: 'unavailable',

@@ -45,7 +45,7 @@ function attentionPanel() {
 
 const passing: QAHealthResponse = {
   schema_version: '1.0',
-  generated_at: '2026-10-01T00:00:00Z',
+  generated_at: '',
   source: { kind: 'ci_artifact' },
   overall: { status: 'passing', ready_percent: 0, blocking_count: 0, advisory_count: 0 },
   suites: [],
