@@ -64,7 +64,7 @@ function csvResult(statuses: Array<'accepted' | 'rejected'>) {
             event_id: status === 'accepted' ? uid() : null,
             sha256_hash: status === 'accepted' ? 'a'.repeat(64) : null,
             chain_hash: status === 'accepted' ? 'b'.repeat(64) : null,
-            errors: status === 'rejected' ? [`Row ${index + 2}: rejected`] : [],
+            errors: status === 'rejected' ? [`Row ${index + 2}: quantity is required`] : [],
         })),
     };
 }
@@ -307,7 +307,7 @@ describe('apiClient review queue contract', () => {
             events: [{
                 traceability_lot_code: uid(), cte_type: 'shipping', status: 'accepted',
                 event_id: EVENT_ID, sha256_hash: 'a'.repeat(64), chain_hash: 'b'.repeat(64),
-                errors: ['persistence warning'],
+                errors: [uid()],
             }],
         },
     ])('rejects a CSV response without trustworthy counts: %j', async (result) => {
