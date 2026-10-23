@@ -307,54 +307,9 @@ curl -H "X-RegEngine-API-Key: $API_KEY" \
 
 ---
 
-## Run FSMA 204 Demo
+## Review FSMA 204 records
 
-RegEngine includes a complete FDA Food Safety Modernization Act (FSMA) 204 compliance module for food supply chain traceability.
-
-### Step 1: Run the Mock Recall Demo
-
-```bash
-./scripts/demo/fsma_mock_recall.sh
-```
-
-This demonstrates:
-- **Forward tracing** (find all downstream products from a contaminated lot)
-- **Backward tracing** (find all upstream suppliers)
-- **FDA-oriented CSV export** (24-hour recall requirement)
-- **Contact list generation** (notify affected facilities)
-
-### Step 2: Test FSMA API Endpoints
-
-```bash
-# Validate a GTIN (Global Trade Item Number)
-curl -X POST http://localhost:8200/v1/fsma/validate/gtin \
-  -H "Content-Type: application/json" \
-  -H "X-RegEngine-API-Key: $API_KEY" \
-  -d '{
-    "gtin": "01234567890128"
-  }' | jq
-
-# Forward trace (find downstream customers)
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8200/v1/fsma/trace/forward/SV-20240115-001 | jq
-
-# Backward trace (find upstream suppliers)
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8200/v1/fsma/trace/backward/FC-20240116-A | jq
-
-# Export FDA-oriented CSV
-curl -H "X-RegEngine-API-Key: $API_KEY" \
-  http://localhost:8200/v1/fsma/export/trace/SV-20240115-001
-```
-
-### Step 3: Review Generated Reports
-
-Check the `demo_exports/` directory for generated CSV files:
-
-```bash
-ls -lh demo_exports/
-cat demo_exports/fsma_recall_SV-20240115-001_*.csv
-```
+Upload supplier records you are authorized to use, then inspect their validation results and traceability evidence in the application. Exports are available only after the workspace contains accepted records.
 
 ---
 

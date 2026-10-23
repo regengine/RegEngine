@@ -1,3 +1,0 @@
-# Synthetic Data Notice
-
-All data in this directory is **fully synthetic**. It was generated for demonstration, onboarding, and end-to-end ingestion testing only. Entity names (growers, processors, distributors, retailers, carriers), addresses, GLNs, lot codes, reference document numbers, and any other identifiers are invented and modeled on industry patterns from public FSMA 204 / FDA 21 CFR 1.1455 guidance. None of the records are derived from, attributable to, or otherwise based on any real RegEngine customer, supplier, lot, shipment, or third-party business. Any resemblance to a real registered business is coincidental.

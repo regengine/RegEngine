@@ -78,6 +78,18 @@ class SupplierFacilityResponse(BaseModel):
     roles: list[str]
 
 
+class FacilityRemovalCheckResponse(BaseModel):
+    facility_id: str
+    facility_name: str
+    allowed: bool
+    linked_counts: dict[str, int]
+    lots_count: int
+    cte_events_count: int
+    funnel_events_count: int
+    scoping_config_count: int
+    address: dict[str, str]
+
+
 class FacilityFTLScopingRequest(BaseModel):
     category_ids: list[str] = Field(default_factory=list)
 

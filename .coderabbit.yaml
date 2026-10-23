@@ -57,8 +57,6 @@ reviews:
     - "!services/test_data/**"
     - "!services/ingestion/tests/data/**"
     # Demo, sample, and export artifacts
-    - "!demo_exports/**"
-    - "!sample_data/**"
     - "!output/**"
     - "!artifacts/**"
     - "!production_bundle/**"

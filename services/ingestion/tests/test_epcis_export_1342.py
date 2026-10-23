@@ -140,7 +140,7 @@ def client() -> TestClient:
 
 
 class TestExportEpcisEndpoint:
-    def test_returns_empty_event_list_when_no_tenant_rows(
+    def test_returns_empty_events_when_no_tenant_rows(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", [])
@@ -151,7 +151,20 @@ class TestExportEpcisEndpoint:
         )
         assert response.status_code == 200
         body = response.json()
+        assert body["type"] == "EPCISDocument"
+        assert body["schemaVersion"] == "2.0"
         assert body["epcisBody"]["eventList"] == []
+        metadata = body["regengine:exportMetadata"]
+        assert metadata["eventsCount"] == 0
+        assert metadata["dataSource"] == "empty"
+        assert metadata["integrityVerified"] is False
+        assert metadata["chainHashVerified"] is False
+        assert metadata["regengine:message"] == "No data yet"
+        assert "regengine:disclaimer" not in metadata
+        assert response.headers["X-RegEngine-Data-Source"] == "empty"
+        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
+        assert response.headers["X-RegEngine-Events-Count"] == "0"
+        assert "X-RegEngine-Schema-Valid" not in response.headers
 
     def test_returns_tenant_events_when_db_has_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row = dict(_event_row()._mapping)
@@ -215,19 +228,25 @@ class TestExportEpcisEndpoint:
         body = response.json()
         validation = body["regengine:validation"]
         assert validation["valid"] is False
-        assert any("eventList" in error for error in validation["errors"])
+        assert validation["errors"] == ["epcisBody.eventList is empty or missing"]
         assert "checkedAt" in validation
         assert response.headers["X-RegEngine-Schema-Valid"] == "false"
 
-    def test_missing_tenant_id_is_rejected(self, client: TestClient) -> None:
-        response = client.post("/api/v1/export/epcis", json={})
-
-        assert response.status_code == 422
-
 
 class TestExportFdaEndpoint:
-    def test_missing_tenant_id_is_rejected(self, client: TestClient) -> None:
-        response = client.post("/api/v1/export/fda", json={})
+    def test_header_only_when_no_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
+        response = client.post(
+            "/api/v1/export/fda",
+            json={"tenant_id": "tenant-x"},
+        )
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert response.headers["X-RegEngine-Data-Source"] == "empty"
+        assert response.headers["X-RegEngine-Events-Count"] == "0"
+        assert response.headers["X-RegEngine-Message"] == "No data yet"
+        assert "X-RegEngine-Disclaimer" not in response.headers
+        assert response.text == epcis_export.FDA_CSV_HEADER + "\n"
 
         assert response.status_code == 422
 

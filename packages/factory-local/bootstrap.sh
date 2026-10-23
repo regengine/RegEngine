@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# One command local setup and dry run. Safe to re-run.
+# One command local setup for an explicitly selected live bill or state scan.
 #   ./bootstrap.sh
-#   ./bootstrap.sh --bill SB205 [--state CO]   live LegiScan bill (needs LEGISCAN_API_KEY in .env)
+#   ./bootstrap.sh --bill BILL [--state STATE]
 # requirements.lock carries every dependency (including beautifulsoup4, pypdf, openai).
 # Host ports: export FACTORY_PG_PORT / FACTORY_OPA_PORT / FACTORY_NEO4J_BOLT_PORT /
 # FACTORY_NEO4J_HTTP_PORT first if the defaults are taken. PYTHON picks the interpreter.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+if [ "$#" -eq 0 ]; then
+  echo "No data yet"
+  exit 0
+fi
 
 if [ -z "${PYTHON:-}" ]; then
   if command -v python3.12 >/dev/null 2>&1; then PYTHON=python3.12; else PYTHON=python3; fi
@@ -87,5 +92,5 @@ if command -v ollama >/dev/null 2>&1; then
   ollama pull nomic-embed-text || echo "ollama pull failed; live bills need the embedding model" >&2
 fi
 
-if [ "$#" -eq 0 ]; then echo "==> dry run"; else echo "==> live bill: $*"; fi
+echo "==> live input selected"
 .venv/bin/python app/local_factory.py "$@"
