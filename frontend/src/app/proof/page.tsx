@@ -28,7 +28,7 @@ export default function ProofPage() {
                     size="hero"
                     eyebrow={<span className="font-mono uppercase">Proof</span>}
                     title="Verify RegEngine bundles yourself."
-                    description="We don't publish sample artifacts. To check RegEngine's output, export an audit bundle from your own workspace and run the open-source verifier on it."
+                    description="RegEngine doesn't publish its own artifacts here. To check RegEngine's output, export an audit bundle from your own workspace and run the open-source verifier on it."
                     className="mb-0 border-b-0 pb-0"
                 />
             </Container>
