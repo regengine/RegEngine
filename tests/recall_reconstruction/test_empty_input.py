@@ -1,7 +1,6 @@
 """A recall reconstruction requires source evidence before it can run."""
 
 import pytest
-
 from shared.recall_reconstruction import load_fixture
 
 
