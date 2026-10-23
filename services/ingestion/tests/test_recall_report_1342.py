@@ -3,9 +3,9 @@
 Locks:
 - _grade / _status helpers — all threshold bands
 - _query_scoring_data: happy path with gaps, chain_length=0 path
-  (no max_seq query), SessionLocal raise → None, execute raise → None
+  (no max_seq query), SessionLocal raise and execute raise propagate (not None)
 - Pydantic models — RecallDimension, RecallReport
-- GET /{tenant_id}/report: no data (None scoring or cte_count=0) → empty report,
+- GET /{tenant_id}/report: cte_count=0 → empty report; DB error → 503 (never no_data),
   real mode (low suppliers + no chain + no export),
   real mode (medium suppliers + chain gaps + has export), real mode
   (high suppliers + clean chain + has export)
@@ -207,7 +207,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data is not None
         assert data["cte_count"] == 50
         assert data["tlc_count"] == 8
@@ -225,7 +225,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["chain_gap_count"] == 0
 
     def test_has_export_false_when_count_zero(self, monkeypatch):
@@ -234,7 +234,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["has_export"] is False
 
     def test_chain_length_zero_skips_max_seq(self, monkeypatch):
@@ -250,7 +250,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["chain_length"] == 0
         assert data["chain_gap_count"] == 0
 
@@ -262,24 +262,25 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data is not None
         assert data["cte_count"] == 0
         assert data["chain_length"] == 0
         assert data["chain_gap_count"] == 0
 
-    def test_sessionlocal_raises_returns_none(self, monkeypatch):
-        """SessionLocal() itself raising is caught and returns None."""
+    def test_sessionlocal_raises_propagates(self, monkeypatch):
+        """SessionLocal() raising is NOT swallowed into None/no-data."""
         import shared.database as db_mod
 
         def _boom():
             raise RuntimeError("connection refused")
 
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
-        assert _query_scoring_data("t1") is None
+        with pytest.raises(RuntimeError):
+            _query_scoring_data(str(uuid4()))
 
-    def test_execute_raises_returns_none(self, monkeypatch):
-        """An execute() exception is caught and returns None."""
+    def test_execute_raises_propagates_and_closes(self, monkeypatch):
+        """An execute() exception propagates; db.close() still runs."""
         sess = _ScoringSession(
             raise_on={"COUNT(*) FROM fsma.traceability_events": ValueError("boom")},
         )
@@ -287,8 +288,8 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        assert _query_scoring_data("t1") is None
-        # db.close() was still called via finally
+        with pytest.raises(ValueError):
+            _query_scoring_data(str(uuid4()))
         assert sess.closed is True
 
 
@@ -298,9 +299,8 @@ class TestQueryScoringData:
 
 
 class TestGenerateReportNoData:
-    @pytest.mark.parametrize("scoring", [None, {"cte_count": 0}])
-    def test_no_data_returns_empty_report(self, client, monkeypatch, scoring):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: scoring)
+    def test_zero_ctes_returns_empty_report(self, client, monkeypatch):
+        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: {"cte_count": 0})
         tenant_id = str(uuid4())
 
         r = client.get(f"/api/v1/recall/{tenant_id}/report")
@@ -316,6 +316,38 @@ class TestGenerateReportNoData:
         assert body["overall_status"] == "no_data"
         assert body["executive_summary"].startswith("No data yet")
         assert body["time_to_respond_estimate"].startswith("Not yet measured")
+
+
+# ---------------------------------------------------------------------------
+# GET /{tenant_id}/report — a DB error is a 5xx, never an empty "no_data" report
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateReportDbError:
+    @pytest.mark.parametrize("exc_type", [RuntimeError, OSError, ValueError])
+    def test_db_error_returns_5xx_not_no_data(self, client, monkeypatch, exc_type):
+        def _fail(tid):
+            raise exc_type(str(uuid4()))
+
+        monkeypatch.setattr(rr, "_query_scoring_data", _fail)
+
+        r = client.get(f"/api/v1/recall/{uuid4()}/report")
+        assert r.status_code == 503
+        body = r.json()
+        assert "overall_status" not in body
+        assert "no_data" not in r.text
+        assert "No data yet" not in r.text
+
+    def test_sessionlocal_failure_end_to_end_is_5xx(self, client, monkeypatch):
+        import shared.database as db_mod
+
+        def _boom():
+            raise RuntimeError(str(uuid4()))
+
+        monkeypatch.setattr(db_mod, "SessionLocal", _boom)
+        r = client.get(f"/api/v1/recall/{uuid4()}/report")
+        assert r.status_code == 503
+        assert "no_data" not in r.text
 
 
 # ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from shared.tenant_context import TenantContext
 
@@ -21,99 +21,99 @@ from .webhook_compat import require_tenant_context
 logger = logging.getLogger("recall-report")
 
 
-def _query_scoring_data(tenant_id: str) -> dict | None:
-    """Query actual tenant data for recall readiness scoring."""
+def _query_scoring_data(tenant_id: str) -> dict:
+    """Query actual tenant data for recall readiness scoring.
+
+    Database errors propagate to the caller; they are never turned into an
+    empty result, so only a real ``cte_count == 0`` means "no data".
+    """
+    from shared.database import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
     try:
-        from shared.database import SessionLocal
-        from sqlalchemy import text
+        # Count events from the canonical store of record (#2506). The
+        # legacy ``fsma.cte_events`` table is a dual-write copy being
+        # retired; the hash-chain verifier now anchors on
+        # ``fsma.traceability_events``, so these scoring readers read the
+        # same source of truth. Columns ``traceability_lot_code`` and
+        # ``event_type`` are identical on both tables, and no status
+        # filter is applied here (matching the prior legacy behavior,
+        # which counted every row regardless of validation status).
+        cte_count = (
+            db.execute(
+                text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid"), {"tid": tenant_id}
+            ).scalar()
+            or 0
+        )
 
-        db = SessionLocal()
-        try:
-            # Count events from the canonical store of record (#2506). The
-            # legacy ``fsma.cte_events`` table is a dual-write copy being
-            # retired; the hash-chain verifier now anchors on
-            # ``fsma.traceability_events``, so these scoring readers read the
-            # same source of truth. Columns ``traceability_lot_code`` and
-            # ``event_type`` are identical on both tables, and no status
-            # filter is applied here (matching the prior legacy behavior,
-            # which counted every row regardless of validation status).
-            cte_count = (
+        # Count distinct TLCs
+        tlc_count = (
+            db.execute(
+                text(
+                    "SELECT COUNT(DISTINCT traceability_lot_code) "
+                    "FROM fsma.traceability_events WHERE tenant_id = :tid"
+                ),
+                {"tid": tenant_id},
+            ).scalar()
+            or 0
+        )
+
+        # Count CTE types covered
+        cte_types = (
+            db.execute(
+                text("SELECT COUNT(DISTINCT event_type) FROM fsma.traceability_events WHERE tenant_id = :tid"),
+                {"tid": tenant_id},
+            ).scalar()
+            or 0
+        )
+
+        # Check FDA export capability
+        has_export = (
+            db.execute(
+                text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"), {"tid": tenant_id}
+            ).scalar()
+            or 0
+        )
+
+        # Count suppliers
+        supplier_count = (
+            db.execute(
+                text("SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"), {"tid": tenant_id}
+            ).scalar()
+            or 0
+        )
+
+        # Chain integrity: count chain entries and detect sequence gaps
+        chain_length = (
+            db.execute(
+                text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
+            ).scalar()
+            or 0
+        )
+
+        chain_gap_count = 0
+        if chain_length > 0:
+            max_seq = (
                 db.execute(
-                    text("SELECT COUNT(*) FROM fsma.traceability_events WHERE tenant_id = :tid"), {"tid": tenant_id}
+                    text("SELECT MAX(sequence_num) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
                 ).scalar()
                 or 0
             )
+            # Gaps = expected entries minus actual entries
+            chain_gap_count = max(0, max_seq - chain_length)
 
-            # Count distinct TLCs
-            tlc_count = (
-                db.execute(
-                    text(
-                        "SELECT COUNT(DISTINCT traceability_lot_code) "
-                        "FROM fsma.traceability_events WHERE tenant_id = :tid"
-                    ),
-                    {"tid": tenant_id},
-                ).scalar()
-                or 0
-            )
-
-            # Count CTE types covered
-            cte_types = (
-                db.execute(
-                    text("SELECT COUNT(DISTINCT event_type) FROM fsma.traceability_events WHERE tenant_id = :tid"),
-                    {"tid": tenant_id},
-                ).scalar()
-                or 0
-            )
-
-            # Check FDA export capability
-            has_export = (
-                db.execute(
-                    text("SELECT COUNT(*) FROM fsma.fda_export_log WHERE tenant_id = :tid"), {"tid": tenant_id}
-                ).scalar()
-                or 0
-            )
-
-            # Count suppliers
-            supplier_count = (
-                db.execute(
-                    text("SELECT COUNT(*) FROM fsma.tenant_suppliers WHERE tenant_id = :tid"), {"tid": tenant_id}
-                ).scalar()
-                or 0
-            )
-
-            # Chain integrity: count chain entries and detect sequence gaps
-            chain_length = (
-                db.execute(
-                    text("SELECT COUNT(*) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
-                ).scalar()
-                or 0
-            )
-
-            chain_gap_count = 0
-            if chain_length > 0:
-                max_seq = (
-                    db.execute(
-                        text("SELECT MAX(sequence_num) FROM fsma.hash_chain WHERE tenant_id = :tid"), {"tid": tenant_id}
-                    ).scalar()
-                    or 0
-                )
-                # Gaps = expected entries minus actual entries
-                chain_gap_count = max(0, max_seq - chain_length)
-
-            return {
-                "cte_count": cte_count,
-                "tlc_count": tlc_count,
-                "cte_types": cte_types,
-                "has_export": has_export > 0,
-                "supplier_count": supplier_count,
-                "chain_length": chain_length,
-                "chain_gap_count": chain_gap_count,
-            }
-        finally:
-            db.close()
-    except (RuntimeError, OSError, AttributeError, TypeError, ValueError) as exc:
-        logger.warning("recall_scoring_query_failed error=%s", str(exc))
-        return None
+        return {
+            "cte_count": cte_count,
+            "tlc_count": tlc_count,
+            "cte_types": cte_types,
+            "has_export": has_export > 0,
+            "supplier_count": supplier_count,
+            "chain_length": chain_length,
+            "chain_gap_count": chain_gap_count,
+        }
+    finally:
+        db.close()
 
 
 router = APIRouter(prefix="/api/v1/recall", tags=["Recall Readiness"])
@@ -221,9 +221,16 @@ async def generate_report(
     tenant_id = ctx.tenant_id
     now = datetime.now(timezone.utc)
 
-    # Try to query real data
-    scoring_data = _query_scoring_data(tenant_id)
-    has_data = scoring_data is not None and scoring_data.get("cte_count", 0) > 0
+    # Query real data. A query failure is a server error, not "no data".
+    try:
+        scoring_data = _query_scoring_data(tenant_id)
+    except Exception as exc:
+        logger.error("recall_scoring_query_failed error_type=%s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Recall readiness data is temporarily unavailable; please retry.",
+        ) from exc
+    has_data = scoring_data.get("cte_count", 0) > 0
 
     if has_data:
         # Compute real scores based on actual data
