@@ -1,18 +1,9 @@
 name: QA Pipeline
 
 on:
+  schedule:
+    - cron: '17 7 * * *'
   push:
-    branches: [main, develop]
-    paths:
-      - 'frontend/**'
-      - 'services/**'
-      - 'server/**'
-      - 'qa/**'
-      - 'tests/**'
-      - 'requirements.in'
-      - 'requirements.lock'
-      - '.github/workflows/qa-pipeline.yml'
-  pull_request:
     branches: [main]
     paths:
       - 'frontend/**'
