@@ -404,18 +404,6 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
 // `lastRun` / `nextRun` / `manifestHash`, label the area "Sample data".
 export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
     {
-        id: 'job_fda_daily',
-        name: 'Sample: Daily FDA package archive',
-        format: 'FDA Package',
-        cadence: 'Daily',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
         id: 'job_epcis_weekly',
         name: 'Sample: Weekly EPCIS outbound bundle (Preview)',
         format: 'GS1 EPCIS 2.0',

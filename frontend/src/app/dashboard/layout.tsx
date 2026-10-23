@@ -566,9 +566,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {demoMode && (
                 <Callout tone="warning" className="rounded-none border-r-0 border-t-0 px-4 py-2 text-small">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span>Sandbox mode: using sample data for demonstration.</span>
+                        <span>No data yet. This workspace has no live records connected.</span>
                         <Link href="/ingest" className="underline hover:no-underline">
-                            Connect real data to exit sample mode
+                            Connect real data to get started
                         </Link>
                     </span>
                 </Callout>
