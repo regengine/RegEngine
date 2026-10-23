@@ -1,12 +1,14 @@
 """SEL-444: GS1-128 label encoding.
 
-Values are all-zero identifiers with computed check digits and no generated
-data. Assertions check structure.
+Identifiers are all zeros plus computed check digits. Dates come from
+today's date and lot values from the length limits. No randomness. Assertions check structure.
 """
 
 from __future__ import annotations
 
+import calendar
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -35,14 +37,36 @@ _CODE_C = 99
 _CODE_B = 100
 _STOP = 106
 
-# Day 00 means the whole month. Month 00 is not a month, so the day-zero
-# case is January. These six strings are the only dates the tests use.
-_DAY_ZERO = "000100"
-_LEAP_DAY = "000229"
-_NON_LEAP_DAY = "010229"
-_APRIL_31 = "000431"
-_MONTH_ZERO = "000001"
-_PLAIN_DATE = "000101"
+# Dates are built from today's date. Nothing below is a fixed calendar date.
+_TODAY = date.today()
+_YY = _TODAY.strftime("%y")
+_LEAP_YEAR = next(y for y in range(_TODAY.year, _TODAY.year + 8) if calendar.isleap(y))
+_NON_LEAP_YEAR = next(y for y in range(_TODAY.year, _TODAY.year + 8) if not calendar.isleap(y))
+
+
+def _yymmdd(year: int, month: int, day: int) -> str:
+    return f"{year % 100:02d}{month:02d}{day:02d}"
+
+
+# Day 00 means the whole month and is allowed.
+_PLAIN_DATE = _TODAY.strftime("%y%m%d")
+_DAY_ZERO = _yymmdd(_TODAY.year, _TODAY.month, 0)
+_LEAP_DAY = _yymmdd(_LEAP_YEAR, 2, calendar.monthrange(_LEAP_YEAR, 2)[1])
+# One day past the end of the month: Feb 29 in a non-leap year, and the
+# day after the last day of this month.
+_NON_LEAP_DAY = _yymmdd(_NON_LEAP_YEAR, 2, calendar.monthrange(_LEAP_YEAR, 2)[1])
+_PAST_MONTH_END = _yymmdd(_TODAY.year, _TODAY.month, calendar.monthrange(_TODAY.year, _TODAY.month)[1] + 1)
+_MONTH_ZERO = _yymmdd(_TODAY.year, 0, 1)
+
+# Lot, serial and count values are built from the AI length limits.
+_TEXT_MAX = 20  # AI 10 and AI 21
+_COUNT_MAX = 8  # AI 37
+_LOT = "0"
+# ">" is ZPL's escape character. A serial ending in it forces a Code B latch
+# (">6") and the escape (">0") in the ZPL field.
+_ZPL_ESCAPE = ">"
+_SERIAL_WITH_ESCAPE = "0" + _ZPL_ESCAPE
+_NON_DIGIT = next(c for c in map(chr, range(33, 127)) if not c.isdigit())
 
 
 def _zero_identifier(body_length: int) -> str:
@@ -63,15 +87,15 @@ _SSCC = _zero_identifier(17)
 _GLN = _zero_identifier(12)
 
 # Every supported AI. Input order is not fixed-then-variable, so the encoder
-# still has to regroup. Serial is "0>" so ZPL must latch to Code B (">6")
+# still has to regroup. Serial ends in ">" so ZPL must latch to Code B (">6")
 # and escape ">" as ">0". An all-zero label would stay in Code C and emit neither.
 _ALL_AIS = [
-    ("21", "0>"),
+    ("21", _SERIAL_WITH_ESCAPE),
     ("17", _PLAIN_DATE),
-    ("10", "0"),
+    ("10", _LOT),
     ("01", _GTIN14),
     ("00", _SSCC),
-    ("37", "0"),
+    ("37", _LOT),
     ("11", _DAY_ZERO),
     ("02", _GTIN14),
     ("13", _LEAP_DAY),
@@ -159,7 +183,7 @@ def test_error_is_a_value_error():
 
 @pytest.mark.parametrize("fn", _ENTRYPOINTS)
 def test_unknown_ai_raises_without_echoing_the_value(fn):
-    value = "0"
+    value = _LOT
     with pytest.raises(Gs1LabelError) as caught:
         fn([("ZZ", value)])
     assert value not in str(caught.value)
@@ -188,22 +212,22 @@ def test_day_zero_is_allowed_and_impossible_dates_raise():
     with pytest.raises(Gs1LabelError):
         human_readable([("13", _NON_LEAP_DAY)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("15", _APRIL_31)])
+        human_readable([("15", _PAST_MONTH_END)])
     with pytest.raises(Gs1LabelError):
         human_readable([("11", _MONTH_ZERO)])
 
 
 def test_variable_fields_accept_limits_and_reject_bad_shape():
-    human_readable([("10", "0" * 20), ("01", _GTIN14)])
-    human_readable([("37", "0" * 8), ("01", _GTIN14)])
+    human_readable([("10", "0" * _TEXT_MAX), ("01", _GTIN14)])
+    human_readable([("37", "0" * _COUNT_MAX), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("10", "0" * 21), ("01", _GTIN14)])
+        human_readable([("10", "0" * (_TEXT_MAX + 1)), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
         human_readable([("10", " "), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("37", "0A"), ("01", _GTIN14)])
+        human_readable([("37", "0" + _NON_DIGIT), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
-        human_readable([("37", "0" * 9), ("01", _GTIN14)])
+        human_readable([("37", "0" * (_COUNT_MAX + 1)), ("01", _GTIN14)])
     with pytest.raises(Gs1LabelError):
         human_readable([("21", ""), ("01", _GTIN14)])
 
@@ -224,11 +248,11 @@ def test_charset_is_exactly_82_printable_characters():
 
 def test_ordering_puts_fixed_fields_first_and_gs_only_between_variable_fields():
     elements = [
-        ("21", "0"),
+        ("21", _LOT),
         ("17", _PLAIN_DATE),
-        ("10", "0"),
+        ("10", _LOT),
         ("01", _GTIN14),
-        ("37", "0"),
+        ("37", _LOT),
     ]
     assert human_readable(elements) == _expect_human(elements)
     encoded = element_string(elements)
@@ -308,7 +332,7 @@ def test_code_c_pair_matching_the_latch_value_stays_digits():
 
 
 def test_dict_elements_match_pairs():
-    pairs = [("10", "0"), ("01", _GTIN14)]
+    pairs = [("10", _LOT), ("01", _GTIN14)]
     as_dicts = [{"ai": ai, "value": value} for ai, value in pairs]
     assert human_readable(as_dicts) == human_readable(pairs)
     assert encode_gs1_128(as_dicts) == encode_gs1_128(pairs)
@@ -328,7 +352,7 @@ def test_zpl_framing_and_fnc1_markers():
     # Leading FNC1 plus one separator between each variable field, and none after the last.
     assert barcode.count(">8") == variable_count
     # ">6" is the Code C to Code B latch. ">0" is subset B's encoding of ">".
-    # Both come from serial "0>". All-zero digits would not produce them.
+    # Both come from the serial ending in ">". All-zero digits would not produce them.
     assert ">6" in barcode
     assert ">0" in barcode
     for ai, value in _order(elements):
