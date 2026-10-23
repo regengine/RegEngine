@@ -46,7 +46,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/buyer-programs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/supplier-compliance`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/compare/foodlogiq`, changeFrequency: 'monthly' as const, priority: 0.8 },

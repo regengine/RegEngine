@@ -459,7 +459,7 @@ export default async function CTELandingPage({
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/demo">
+              <Link href="/sandbox">
                 Try it now, free
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>

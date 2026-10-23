@@ -338,7 +338,7 @@ export function generateComplianceReport(result: SandboxResult): void {
     doc.setFontSize(7);
     doc.setTextColor(BRAND.r, BRAND.g, BRAND.b);
     doc.text(
-      'Ready to improve traceability workflows? Visit regengine.co/demo',
+      'Ready to improve traceability workflows? Visit regengine.co/pricing',
       pageWidth / 2, pageH - 9, { align: 'center' },
     );
   }

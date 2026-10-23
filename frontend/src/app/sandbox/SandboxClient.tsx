@@ -219,10 +219,10 @@ export function SandboxClient() {
             <div>
               <p className="text-[0.8rem] text-re-danger">{error}</p>
               <Link
-                href="/demo"
+                href="/walkthrough"
                 className="mt-2 inline-flex items-center gap-1.5 text-[0.75rem] font-semibold text-[var(--re-brand)] hover:underline"
               >
-                Explore the interactive demo instead <ArrowRight className="h-3 w-3" />
+                See the walkthrough instead <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
           </div>

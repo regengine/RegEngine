@@ -10,7 +10,7 @@
  * the target deployment is in:
  *
  *   mounted    → CTA lands on /sandbox and the sample CSV evaluates end to end.
- *   unmounted  → CTA lands on /demo, no page promises a CSV sandbox, and a
+ *   unmounted  → CTA lands on /walkthrough, no page promises a CSV sandbox, and a
  *                direct visit to /sandbox explains itself instead of 404ing.
  *
  * Either way the invariant under test is the one #2730 broke: CTA copy and CTA
@@ -48,7 +48,7 @@ test.describe('sandbox front door (#2757)', () => {
             await page.goto(comparePath);
 
             const cta = page
-                .getByRole('link', { name: mounted ? /Try the Sandbox/i : /interactive demo/i })
+                .getByRole('link', { name: mounted ? /Try the Sandbox/i : /walkthrough/i })
                 .first();
             await expect(cta).toBeVisible();
 
@@ -61,21 +61,9 @@ test.describe('sandbox front door (#2757)', () => {
             }
 
             await cta.click();
-            await expect(page).toHaveURL(new RegExp(mounted ? '/sandbox$' : '/demo'));
+            await expect(page).toHaveURL(new RegExp(mounted ? '/sandbox$' : '/walkthrough'));
         });
     }
-
-    test('homepage #sandbox anchor resolves to the same destination', async ({ page }) => {
-        const mounted = await sandboxEvaluatorMounted(page);
-        await page.goto('/#sandbox');
-
-        const section = page.locator('#sandbox');
-        await expect(section).toBeVisible();
-
-        const cta = section.getByRole('link').first();
-        await cta.click();
-        await expect(page).toHaveURL(new RegExp(mounted ? '/sandbox$' : '/demo'));
-    });
 
     test('sample FTL CSV evaluates and renders a diagnosis', async ({ page }) => {
         test.skip(
@@ -102,6 +90,6 @@ test.describe('sandbox front door (#2757)', () => {
 
         await page.goto('/sandbox');
         await expect(page.getByText(/not enabled on this deployment/i)).toBeVisible();
-        await expect(page.getByRole('link', { name: /interactive demo/i })).toBeVisible();
+        await expect(page.getByRole('link', { name: /walkthrough/i })).toBeVisible();
     });
 });

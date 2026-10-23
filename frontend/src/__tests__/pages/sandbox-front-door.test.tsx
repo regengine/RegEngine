@@ -90,13 +90,14 @@ describe('sandbox CTA resolver (#2757)', () => {
     });
 
     it('marks the destination as a real route in both states', () => {
-        expect(['/sandbox', '/demo']).toContain(sandboxCta().href);
+        expect(['/sandbox', '/walkthrough']).toContain(sandboxCta().href);
     });
 
-    it('labels the fallback dataset synthetic rather than implying live data', () => {
+    it('fallback copy matches the walkthrough destination', () => {
         const cta = sandboxCta();
         if (!cta.enabled) {
-            expect(cta.blurb).toMatch(/synthetic/i);
+            expect(cta.href).toBe('/walkthrough');
+            expect(cta.blurb).not.toMatch(/sandbox|csv/i);
         }
     });
 
@@ -112,13 +113,13 @@ describe('sandbox CTA resolver (#2757)', () => {
         }
     });
 
-    it('falls back to the demo when the surface is off', () => {
+    it('falls back to the walkthrough when the surface is off', () => {
         vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
         vi.stubEnv('NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS', '');
         try {
             const cta = sandboxCta();
             expect(cta.enabled).toBe(false);
-            expect(cta.href).toBe('/demo');
+            expect(cta.href).toBe('/walkthrough');
             expect(cta.blurb).not.toMatch(/drop your csv/i);
         } finally {
             vi.unstubAllEnvs();

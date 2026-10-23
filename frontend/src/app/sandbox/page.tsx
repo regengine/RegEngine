@@ -41,19 +41,13 @@ export default function SandboxPage() {
           not switched on for this environment.
         </p>
         <p className="mt-4 text-body text-re-text-secondary">
-          The interactive demo covers the same rule evaluation against a synthetic dataset, and
-          the walkthrough shows the ingest-to-export path end to end.
+          The walkthrough shows the ingest-to-export path end to end.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
           <Button size="lg" asChild>
-            <Link href="/demo">
-              Explore the interactive demo
-              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
-          </Button>
-          <Button size="lg" variant="secondary" asChild>
             <Link href="/walkthrough">
               See the walkthrough
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
           </Button>
         </div>
