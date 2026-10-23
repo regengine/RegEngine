@@ -77,6 +77,19 @@ export interface TrustArtifact {
     href: string;
 }
 
+export interface ArchiveExportJob {
+    id: string;
+    name: string;
+    format: 'FDA Package' | 'GS1 EPCIS 2.0' | 'Audit Bundle';
+    cadence: 'Daily' | 'Weekly' | 'Monthly';
+    destination: 'Downloadable bundle' | 'Object storage archive';
+    status: 'active' | 'paused';
+    lastRun: string;
+    nextRun: string;
+    manifestHash: string;
+    tenantId: string;
+}
+
 export interface MappingReviewItem {
     id: string;
     source: string;
