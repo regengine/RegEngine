@@ -40,14 +40,14 @@ import { TimedSkeleton } from "@/components/ui/timed-skeleton";
  * used to sit up here.
  */
 
-/** The six quick actions, unchanged in label and href — now one link row. */
+/** The six quick actions, labelled as in the sidebar nav — one link row. */
 const QUICK_LINKS = [
-  { title: "FSMA Readiness Score", href: "/dashboard/compliance" },
+  { title: "Compliance", href: "/dashboard/compliance" },
   { title: "Alerts", href: "/dashboard/alerts" },
-  { title: "Import Data", href: "/ingest" },
-  { title: "Supplier Network", href: "/dashboard/suppliers" },
+  { title: "Document Ingestion", href: "/ingest" },
+  { title: "Supplier Management", href: "/dashboard/suppliers" },
   { title: "Product Catalog", href: "/dashboard/products" },
-  { title: "Recall Readiness", href: "/dashboard/recall-report" },
+  { title: "Recall Report", href: "/dashboard/recall-report" },
 ];
 
 type AttentionRow = {

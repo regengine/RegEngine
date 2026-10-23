@@ -5,6 +5,7 @@ import TracePage from '@/app/trace/page';
 
 const mockUseAuth = vi.hoisted(() => vi.fn());
 const getSupplierFDAExportPreviewMock = vi.hoisted(() => vi.fn());
+const downloadSupplierFDARecordsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/auth-context', () => ({
     useAuth: () => mockUseAuth(),
@@ -13,6 +14,7 @@ vi.mock('@/lib/auth-context', () => ({
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         getSupplierFDAExportPreview: (...args: any[]) => getSupplierFDAExportPreviewMock(...args),
+        downloadSupplierFDARecords: (...args: any[]) => downloadSupplierFDARecordsMock(...args),
     },
 }));
 
@@ -63,6 +65,7 @@ vi.mock('lucide-react', () => {
         Calendar: Stub,
         Package: Stub,
         AlertTriangle: Stub,
+        Download: Stub,
     };
 });
 
@@ -118,6 +121,56 @@ describe('TracePage', () => {
         await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
 
         expect(button).toBeDisabled();
+        expect(screen.getByRole('button', { name: /export fda spreadsheet/i })).toBeDisabled();
         expect(getSupplierFDAExportPreviewMock).not.toHaveBeenCalled();
+        expect(downloadSupplierFDARecordsMock).not.toHaveBeenCalled();
+    });
+
+    it('exports the FDA sortable spreadsheet for the entered lot on demand', async () => {
+        mockUseAuth.mockReturnValue({ hasTenantSession: true });
+        downloadSupplierFDARecordsMock.mockResolvedValue({
+            blob: new Blob(['x']),
+            filename: 'fda_traceability_records_20261022T000000Z.xlsx',
+            recordCount: 3,
+        });
+        const createObjectURL = vi.fn(() => 'blob:fda');
+        const revokeObjectURL = vi.fn();
+        vi.stubGlobal('URL', { ...window.URL, createObjectURL, revokeObjectURL });
+        const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+        const user = userEvent.setup();
+        render(<TracePage />);
+
+        const exportButton = screen.getByRole('button', { name: /export fda spreadsheet/i });
+        expect(exportButton).toBeDisabled();
+
+        await user.type(screen.getByPlaceholderText(/enter tlc/i), ' TLC-2026-SAL-0001 ');
+        await user.click(exportButton);
+
+        await waitFor(() => {
+            expect(downloadSupplierFDARecordsMock).toHaveBeenCalledWith('xlsx', undefined, 'TLC-2026-SAL-0001');
+        });
+        expect(clickSpy).toHaveBeenCalled();
+        expect(revokeObjectURL).toHaveBeenCalledWith('blob:fda');
+        expect(await screen.findByRole('status')).toHaveTextContent(
+            'Downloaded fda_traceability_records_20261022T000000Z.xlsx with 3 records for TLC "TLC-2026-SAL-0001".',
+        );
+        // Export does not run the trace query.
+        expect(getSupplierFDAExportPreviewMock).not.toHaveBeenCalled();
+        clickSpy.mockRestore();
+        vi.unstubAllGlobals();
+    });
+
+    it('shows an error when the FDA spreadsheet export fails', async () => {
+        mockUseAuth.mockReturnValue({ hasTenantSession: true });
+        downloadSupplierFDARecordsMock.mockRejectedValue(new Error('500'));
+
+        const user = userEvent.setup();
+        render(<TracePage />);
+
+        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TLC-2026-SAL-0001');
+        await user.click(screen.getByRole('button', { name: /export fda spreadsheet/i }));
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('FDA spreadsheet export failed. Please try again.');
     });
 });

@@ -151,12 +151,35 @@ const nextConfig = {
             // /tools/retailer-readiness redirects TO /retailer-readiness via page.tsx
             // (removed redirect that caused infinite loop with /tools/retailer-readiness/page.tsx)
             // Canonical path for settings is /dashboard/settings.
-            // Only the bare /settings path is redirected. Sub-paths like /settings/users,
+            // Only the bare /settings path is redirected. Sub-paths like
             // /settings/security, /settings/profile etc. have their own pages and must
             // NOT be redirected — the wildcard catch-all was incorrectly masking them.
             {
                 source: '/settings',
                 destination: '/dashboard/settings',
+                permanent: true,
+            },
+            // Team management moved under the settings hub (SEL-412).
+            {
+                source: '/settings/users',
+                destination: '/dashboard/settings/users',
+                permanent: true,
+            },
+            // Lot trace lives at /trace. These are the dashboard paths people
+            // guess for it; send them there instead of a 404 (SEL-412).
+            {
+                source: '/dashboard/traceability',
+                destination: '/trace',
+                permanent: true,
+            },
+            {
+                source: '/dashboard/lot-trace',
+                destination: '/trace',
+                permanent: true,
+            },
+            {
+                source: '/dashboard/trace',
+                destination: '/trace',
                 permanent: true,
             },
             {
