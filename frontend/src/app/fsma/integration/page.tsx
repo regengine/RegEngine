@@ -71,7 +71,7 @@ export default function IntegrationHubPage() {
                             <Code className="mb-6 h-5 w-5 text-re-cat-1" strokeWidth={1.75} aria-hidden="true" />
                             <h4 className="mb-2 text-subheading text-re-text-primary">API &amp; EPCIS 2.0</h4>
                             <p className="mb-6 text-ui text-re-text-secondary">
-                                For enterprise systems (SAP, Oracle, NetSuite). Push events directly to our endpoints via Webhooks or standard GS1 EPCIS 2.0 XML/JSON payloads.
+                                For enterprise systems (SAP, Oracle, NetSuite). Push events directly to our endpoints via the JSON events API; GS1 EPCIS 2.0 XML/JSON upload is in Preview.
                             </p>
 
                             <div className="mb-6 rounded-md border border-re-border-subtle bg-re-surface-inset p-4">

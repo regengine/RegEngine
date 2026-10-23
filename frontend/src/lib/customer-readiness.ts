@@ -315,7 +315,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is on the roadmap. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {

@@ -421,7 +421,7 @@ export default function IngestPage() {
 
   const demoBanner = (
     <Callout tone="warning">
-      Simulated walkthrough — sample output
+      Simulated walkthrough: sample output
     </Callout>
   );
 
@@ -595,7 +595,7 @@ export default function IngestPage() {
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
-                        <TabsTrigger value="epcis">EPCIS 2.0</TabsTrigger>
+                        <TabsTrigger value="epcis">EPCIS 2.0 <Badge size="sm">Preview</Badge></TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="url" className="space-y-4">
@@ -678,6 +678,7 @@ export default function IngestPage() {
                             className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                           >
                             <span>Select EPCIS file</span>
+                            <Badge size="sm">Preview</Badge>
                             <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
                           </label>
                           <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-8 text-center transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none">

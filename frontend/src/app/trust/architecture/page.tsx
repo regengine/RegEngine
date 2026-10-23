@@ -69,7 +69,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload or the JSON events API. Both paths run validation synchronously and persist before coverage checks. EPCIS, EDI, and SFTP intake are on the roadmap.',
+        description: 'CTE events arrive via CSV upload or the JSON events API. Both paths run validation synchronously and persist before coverage checks. EPCIS intake is in Preview; EDI and SFTP intake are on the roadmap.',
     },
     {
         step: '2',
