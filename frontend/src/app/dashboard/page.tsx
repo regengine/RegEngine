@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
+import { experimentalFeaturesEnabled, filterExperimentalLinks, isExperimentalPageEnabled } from "@/lib/experimental-features";
 import { FSMA_ENFORCEMENT_DATE } from "@/lib/fsma-enforcement";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
@@ -38,14 +38,14 @@ import { useOnboardingStatus } from "@/hooks/use-onboarding";
  * used to sit up here.
  */
 
-/** The six quick actions, unchanged in label and href — now one link row. */
+/** The six quick actions, labelled as in the sidebar nav — one link row. */
 const QUICK_LINKS = [
-  { title: "FSMA Readiness Score", href: "/dashboard/compliance" },
+  { title: "Compliance", href: "/dashboard/compliance" },
   { title: "Alerts", href: "/dashboard/alerts" },
-  { title: "Import Data", href: "/ingest" },
-  { title: "Supplier Network", href: "/dashboard/suppliers" },
+  { title: "Document Ingestion", href: "/ingest" },
+  { title: "Supplier Management", href: "/dashboard/suppliers" },
   { title: "Product Catalog", href: "/dashboard/products" },
-  { title: "Recall Readiness", href: "/dashboard/recall-report" },
+  { title: "Recall Report", href: "/dashboard/recall-report" },
 ];
 
 type AttentionRow = {
@@ -164,7 +164,7 @@ export default function DashboardPage() {
     }
 
     const openAlerts = metrics?.open_alerts ?? 0;
-    if (openAlerts > 0) {
+    if (isExperimentalPageEnabled("/dashboard/alerts") && openAlerts > 0) {
       rows.push({
         id: "open-alerts",
         state: "at-risk",
@@ -209,13 +209,13 @@ export default function DashboardPage() {
         cta: "Open",
       });
     }
-    if ((metrics?.open_alerts ?? 0) > 0) {
+    if (isExperimentalPageEnabled("/dashboard/alerts") && (metrics?.open_alerts ?? 0) > 0) {
       actions.push({ label: "Review open compliance alerts", href: "/dashboard/alerts", cta: "Review" });
     }
     if ((metrics?.events_ingested ?? 0) === 0) {
       actions.push({ label: "Import your first traceability records", href: "/ingest", cta: "Import" });
     }
-    actions.push({ label: "Run a recall drill", href: "/dashboard/recall-drills" });
+    actions.push({ label: "Recall drills (coming soon)", href: "/dashboard/recall-drills" });
     return actions.slice(0, 4);
   }, [workbenchReadiness, metrics]);
 
@@ -324,7 +324,7 @@ export default function DashboardPage() {
           </h2>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <span className="text-label text-re-text-muted">Go to</span>
-            {QUICK_LINKS.map((link) => (
+            {filterExperimentalLinks(QUICK_LINKS).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -342,7 +342,7 @@ export default function DashboardPage() {
           <ScanHistoryWidget />
         </div>
 
-        <Card variant="interactive">
+        {isExperimentalPageEnabled("/dashboard/heartbeat") && <Card variant="interactive">
           <Link href="/dashboard/heartbeat" className="block no-underline">
             <CardContent className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <div>
@@ -354,7 +354,7 @@ export default function DashboardPage() {
               <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />
             </CardContent>
           </Link>
-        </Card>
+        </Card>}
 
         {experimentalFeaturesEnabled() && (
           <Card>
