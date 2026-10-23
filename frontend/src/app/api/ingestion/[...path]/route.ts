@@ -7,6 +7,7 @@ import {
     stripTrailingSlash,
 } from '@/lib/proxy-factory';
 import { applyInflowWorkbenchReadCredentials } from '@/lib/inflow-workbench-proxy';
+import { acceptsWorkspaceSession } from '@/lib/ingestion-session-routes';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
@@ -60,10 +61,11 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         return Boolean(portalMatch && portalMatch[1] !== 'links');
     },
     prepareHeaders: (headers: Headers, request: NextRequest, path: string) => {
-        // Product catalog still requires the caller's API key even when a
-        // workspace session cookie is present. Other routes keep session forwarding.
-        if (request.cookies.get('__Host-regengine_session')?.value && !path.startsWith('api/v1/products/')) {
+        // Session-capable routes use the verified session. Key-only routes
+        // retain caller credentials even when the browser also has a session.
+        if (request.cookies.get('__Host-regengine_session')?.value && acceptsWorkspaceSession(path)) {
             headers.delete('authorization');
+            headers.delete('x-api-key');
             headers.delete('x-regengine-api-key');
         }
         return applyInflowWorkbenchReadCredentials(headers, request, path);

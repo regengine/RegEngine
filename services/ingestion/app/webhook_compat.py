@@ -77,7 +77,7 @@ async def _verify_api_key(
     # EPCIS is an app import surface as well as a key-backed integration.
     # Keep other webhook callers on their established API-key path.
     if (
-        request.url.path.startswith("/api/v1/epcis/")
+        getattr(request, "scope", {}).get("path", "").startswith("/api/v1/epcis/")
         and not x_regengine_api_key
         and (
             request.cookies.get("__Host-regengine_session")
@@ -87,6 +87,8 @@ async def _verify_api_key(
         principal = await get_ingestion_principal(request=request, x_regengine_api_key=None)
         if not has_permission(principal.scopes, "webhooks.ingest"):
             raise HTTPException(status_code=403, detail="Permission denied")
+        # The session principal must win over any stale key state on this request.
+        request.state.api_key = None
         request.state.principal = principal
         request.state.tenant_context = await resolve_tenant_context(request)
         return principal
@@ -101,7 +103,7 @@ async def _verify_api_key(
 
 async def require_tenant_context(
     request: Request,
-    _api_key: Union[APIKey, APIKeyResponse] = Depends(_verify_api_key),
+    _api_key: Union[APIKey, APIKeyResponse, IngestionPrincipal] = Depends(_verify_api_key),
 ) -> TenantContext:
     """Return the authenticated tenant context for legacy route handlers."""
     ctx = getattr(request.state, "tenant_context", None)
@@ -227,6 +229,7 @@ async def ingest_events(
     *,
     principal_tenant_id: str,
     x_regengine_api_key: Optional[str] = None,
+    principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
@@ -251,7 +254,13 @@ async def ingest_events(
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
 
-    _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
+    if principal is not None and principal.tenant_id != principal_tenant_id:
+        raise PermissionError("principal tenant does not match authenticated context")
+    if principal is not None and principal.auth_mode == "session":
+        if not has_permission(principal.scopes, "webhooks.ingest"):
+            raise PermissionError("session lacks webhooks.ingest")
+    else:
+        _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
 
     payload_tenant_id = payload.tenant_id
     if not payload_tenant_id:

@@ -97,7 +97,7 @@ export default function ExceptionQueuePage() {
   );
 
 
-  if (exceptions.error || blocking.error) {
+  if (exceptions.error) {
     return (
       <PageContainer className="workspace-load-error">
         {pageHeader}
@@ -111,7 +111,7 @@ export default function ExceptionQueuePage() {
             </Button>
           }
         >
-          {((exceptions.error || blocking.error) as Error).message}
+          {(exceptions.error as Error).message}
         </Callout>
       </PageContainer>
     );
@@ -238,6 +238,17 @@ export default function ExceptionQueuePage() {
   return (
     <PageContainer>
       {pageHeader}
+
+      {blocking.error && (
+        <Callout
+          tone="danger"
+          role="alert"
+          title="Unable to load blocking exception count."
+          action={<Button variant="secondary" size="sm" onClick={() => { void blocking.refetch(); }}>Retry count</Button>}
+        >
+          {(blocking.error as Error).message}
+        </Callout>
+      )}
 
       <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
 

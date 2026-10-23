@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Optional
 
@@ -242,6 +243,42 @@ def _principal_from_api_key(api_key: APIKey | APIKeyResponse) -> IngestionPrinci
     )
 
 
+async def _tenant_jurisdictions(tenant_id: str) -> list[str]:
+    """Read active jurisdiction grants from this tenant's key entitlement records."""
+    from shared.api_key_store import DatabaseAPIKeyStore
+
+    from services.admin.app.api_key_admin_store import get_admin_api_key_store
+
+    # Runtime key lookup RLS exposes only a presented key. The admin store
+    # can list tenant keys without weakening that policy.
+    store = get_admin_api_key_store()
+    if isinstance(store, DatabaseAPIKeyStore):
+        keys = []
+        offset = 0
+        while True:
+            page = await store.list_keys(tenant_id=tenant_id, offset=offset)
+            keys.extend(page)
+            if len(page) < 500:
+                break
+            offset += len(page)
+    else:
+        keys = store.list_keys()
+
+    now = datetime.now(timezone.utc)
+    return sorted(
+        {
+            jurisdiction
+            for key in keys
+            if str(key.tenant_id) == str(tenant_id)
+            and key.enabled
+            and not getattr(key, "revoked_at", None)
+            and (key.expires_at is None or key.expires_at.replace(tzinfo=key.expires_at.tzinfo or timezone.utc) > now)
+            for jurisdiction in (key.allowed_jurisdictions or [])
+            if isinstance(jurisdiction, str)
+        }
+    )
+
+
 async def _principal_from_user_session(request: Request) -> IngestionPrincipal:
     """Use the admin verifier and live tenant role permissions for a user session."""
     from shared.tenant_context import get_rls_tenant_id, set_rls_tenant_id
@@ -262,11 +299,14 @@ async def _principal_from_user_session(request: Request) -> IngestionPrincipal:
             raise HTTPException(status_code=401, detail="Tenant selection required")
         scopes = _resolve_session_permissions(user_id=user.id, tenant_id=tenant_id, db=db)
 
+    allowed_jurisdictions = await _tenant_jurisdictions(str(tenant_id))
+
     return IngestionPrincipal(
         key_id=f"session:{user.id}",
         scopes=scopes,
         tenant_id=str(tenant_id),
         auth_mode="session",
+        allowed_jurisdictions=allowed_jurisdictions,
     )
 
 

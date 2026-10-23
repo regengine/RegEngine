@@ -186,9 +186,10 @@ export default function IngestPage() {
     const intervalId = window.setInterval(async () => {
       try {
         const statusResponse = await apiClient.getIngestionJob(jobId);
+        setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
-          setJobStatus(STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
+          setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
           if (['completed', 'failed'].includes(normalizedStatus)) {
             window.clearInterval(intervalId);
           }
