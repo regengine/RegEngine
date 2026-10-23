@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
@@ -77,7 +78,7 @@ async function apiFetchProducts(tenantId: string): Promise<ProductCatalogRespons
     });
     if (!res.ok) {
         console.error(`Products fetch failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't load your product catalog. Check your connection and retry.");
+        throw new Error("Couldn't load your product catalog.");
     }
     return res.json();
 }
@@ -170,7 +171,7 @@ export default function ProductCatalogPage() {
 
     const products = productsData?.products ?? [];
     const totalFtl = productsData?.totalFtl ?? 0;
-    const error = productsError?.message ?? null;
+    const error = productsError;
 
     // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
     useDashboardRefresh(() => { loadProducts(); });
@@ -211,7 +212,7 @@ export default function ProductCatalogPage() {
     const deletingProduct = deleteProductMutation.isPending;
 
     const handleAdd = () => {
-        if (!newName) return;
+        if (!newName || error || !productsData) return;
         addProductMutation.mutate();
     };
 
@@ -265,6 +266,7 @@ export default function ProductCatalogPage() {
                 primaryAction={
                     <Button
                         onClick={() => setShowAdd(!showAdd)}
+                        disabled={!productsData || !!error || loading}
                         aria-expanded={showAdd}
                         leadingIcon={<Plus strokeWidth={1.75} aria-hidden="true" />}
                     >
@@ -288,33 +290,9 @@ export default function ProductCatalogPage() {
                     </div>
                 )}
 
-                {error && (
-                    <Callout
-                        tone="danger"
-                        role="alert"
-                        action={
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => loadProducts()}
-                                disabled={loading}
-                                leadingIcon={
-                                    <RefreshCw
-                                        className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
-                                        strokeWidth={1.75}
-                                        aria-hidden="true"
-                                    />
-                                }
-                            >
-                                Retry
-                            </Button>
-                        }
-                    >
-                        {error}
-                    </Callout>
-                )}
+                {error && <ErrorState message="We could not load this page." onRetry={() => loadProducts()} />}
 
-                {isLoggedIn && products.length > 0 && (
+                {isLoggedIn && !error && products.length > 0 && (
                     <>
                         {/* Stats */}
                         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">

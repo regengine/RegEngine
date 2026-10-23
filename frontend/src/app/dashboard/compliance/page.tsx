@@ -32,6 +32,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
+import { ErrorState } from '@/components/ui/error-state';
 import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
@@ -327,7 +328,7 @@ export default function ComplianceDashboardPage() {
         retry: false,
     });
 
-    const error = scoreError?.message ?? null;
+    const error = scoreError;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Ordered breakdown keys by weight (highest first)
@@ -378,12 +379,12 @@ export default function ComplianceDashboardPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {lastFetched && (
+                        {lastFetched && !error && (
                             <span className="text-label text-muted-foreground">
                                 Updated {lastFetched.toLocaleTimeString()}
                             </span>
                         )}
-                        {score && (
+                        {score && !error && (
                             <Button
                                 variant="ghost" size="sm"
                                 onClick={() => {
@@ -462,21 +463,11 @@ export default function ComplianceDashboardPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-muted-foreground">
-                                <Info className="h-5 w-5 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm font-medium text-foreground">Compliance data is currently unavailable for this workspace.</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">This can mean the scoring service is unavailable or there is not enough connected evidence to calculate a score yet.</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <ErrorState message="We could not load this page." onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }} />
                 )}
 
                 {/* Score Content */}
-                {score && !loading && (
+                {score && !loading && !error && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
 
                         {/* Status Banner */}

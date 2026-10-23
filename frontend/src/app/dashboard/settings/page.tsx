@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { Field } from '@/components/ui/field';
 import { Input, fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -102,7 +103,7 @@ export default function SettingsPage() {
     const { user, isAuthenticated } = useAuth();
     const { tenantId, isSystemTenant } = useTenant();
     const effectiveTenantId = isSystemTenant ? null : tenantId;
-    const { data: subscriptionData, isLoading: subLoading, isError: subError } = useCurrentSubscription(effectiveTenantId ?? undefined);
+    const { data: subscriptionData, isLoading: subLoading, isError: subError, refetch: refetchSubscription, isFetching: subFetching } = useCurrentSubscription(effectiveTenantId ?? undefined);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
@@ -268,7 +269,7 @@ export default function SettingsPage() {
                                 ) : subError ? (
                                     <div className="min-w-0">
                                         <span className="text-ui font-medium text-re-text-secondary">{planName}</span>
-                                        <p className="mt-0.5 text-small text-re-text-tertiary">Unable to reach the billing service. Your plan is not affected.</p>
+                                        <ErrorState message="We could not load this page." onRetry={() => refetchSubscription()} retrying={subFetching} className="mt-2" />
                                     </div>
                                 ) : (
                                     <>
@@ -280,7 +281,7 @@ export default function SettingsPage() {
                                 )}
                             </div>
                         </div>
-                        <Link href="/pricing" className="shrink-0">
+                        {!subError && subscriptionData && <Link href="/pricing" className="shrink-0">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -288,7 +289,7 @@ export default function SettingsPage() {
                             >
                                 Manage Plan
                             </Button>
-                        </Link>
+                        </Link>}
                     </CardContent>
                 </Card>
 

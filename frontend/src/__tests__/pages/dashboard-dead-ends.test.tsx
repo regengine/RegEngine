@@ -18,6 +18,7 @@ vi.mock('@/lib/tenant-context', () => ({
 }));
 
 vi.mock('@/hooks/use-api', () => ({
+    useQAHealth: () => ({ data: null, isLoading: false, error: null }),
     useSystemStatus: () => ({ data: { overall_status: 'healthy', services: [] }, isLoading: false }),
     useSystemMetrics: () => ({ data: { open_alerts: 0, events_ingested: 0 }, isLoading: false }),
     useQAHealth: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),

@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchRecallReport } from '@/lib/api-hooks';
+import { ErrorState } from '@/components/ui/error-state';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import {
     Download,
@@ -159,17 +160,9 @@ export default function RecallReportPage() {
     if (error || (!isLoading && !report)) {
         return (
             <PageContainer>
-                <div role="alert">
+                <div>
                     <PageHeader title="Recall report unavailable" />
-                    <div className={`${NOTICE_BASE} border-l-re-danger bg-re-danger-bg`}>
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-danger" strokeWidth={1.75} aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                            <p>No recall result could be loaded. Try again when your connection is available.</p>
-                            <div className="mt-3">
-                                <Button variant="outline" size="sm" onClick={() => refetch()}>Retry</Button>
-                            </div>
-                        </div>
-                    </div>
+                    <ErrorState message="We could not load this page." onRetry={() => refetch()} />
                 </div>
             </PageContainer>
         );
