@@ -13,7 +13,7 @@ describe('/verify without sample data', () => {
         expect(text).not.toMatch(/synthetic/i);
         expect(text).not.toMatch(/grab a sample/i);
         expect(text).not.toContain('fsma-204-sample.csv');
-        expect(text).not.toContain('64542033f908');
+        expect(text).not.toMatch(/\b[0-9a-f]{12,}\b/i);
         expect(container.querySelector('a[href="/proof"]')).toBeNull();
     });
 
