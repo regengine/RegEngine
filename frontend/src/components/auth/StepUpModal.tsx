@@ -4,9 +4,9 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Fingerprint, Loader2 } from 'lucide-react';
 
+import { PasskeyRequiredNotice } from '@/components/auth/PasskeyRequiredNotice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
 import {
   Dialog,
   DialogContent,
@@ -96,11 +96,7 @@ export function StepUpModal() {
           <DialogDescription>{reason}</DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <Callout tone="danger" role="alert">
-            {error}
-          </Callout>
-        )}
+        {error && <PasskeyRequiredNotice>{error}</PasskeyRequiredNotice>}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <Field label="Email address" htmlFor="step-up-email">

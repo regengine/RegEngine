@@ -59,6 +59,22 @@ describe('step-up interceptor', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(DEFAULT_STEP_UP_REASON));
   });
 
+  it('names the admin policy action when the SSO policy write is blocked', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('detail')));
+    const reason = "Confirm it's you to change your organization's SSO and admin policy.";
+
+    await expect(
+      apiClient.updateOrganizationSsoPolicy(
+        'org-id',
+        { domain_name: 'example.test', domain_verified: false, enforced_auth_policy: 'standard' },
+        { stepUpReason: reason },
+      ),
+    ).rejects.toThrow(/forbidden/i);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe(reason);
+  });
+
   it('recognizes the backend structured error envelope on writes', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('error')));
 

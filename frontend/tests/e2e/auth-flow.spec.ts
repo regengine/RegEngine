@@ -22,9 +22,10 @@ test('email OTP login hydrates profile and requires passkey step-up for admin po
     await expect(page.getByText('email_otp')).toBeVisible();
     await page.getByRole('button', { name: /verify admin policy access/i }).click();
 
-    await expect(page.getByRole('dialog', { name: /authenticate with your passkey/i })).toBeVisible();
-    await expect(page.getByText(/requires a high-assurance session/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /authenticate with passkey/i })).toBeVisible();
+    const stepUpDialog = page.getByRole('dialog', { name: /confirm it's you/i });
+    await expect(stepUpDialog).toBeVisible();
+    await expect(stepUpDialog).toContainText(/change your organization's SSO and admin policy/i);
+    await expect(stepUpDialog.getByRole('button', { name: /authenticate with passkey/i })).toBeVisible();
 });
 
 test('pre-provisioned SSO session enrolls WebAuthn and the passkey completes step-up', async ({ context, page }) => {
@@ -55,8 +56,9 @@ test('pre-provisioned SSO session enrolls WebAuthn and the passkey completes ste
         await expectHydratedSession(page, email, 'email_otp');
 
         await page.getByRole('button', { name: /verify admin policy access/i }).click();
-        const stepUpDialog = page.getByRole('dialog', { name: /authenticate with your passkey/i });
+        const stepUpDialog = page.getByRole('dialog', { name: /confirm it's you/i });
         await expect(stepUpDialog).toBeVisible();
+        await expect(stepUpDialog).toContainText(/change your organization's SSO and admin policy/i);
         await expect(stepUpDialog.getByLabel(/email address/i)).toHaveValue(email);
 
         await stepUpDialog.getByRole('button', { name: /authenticate with passkey/i }).click();

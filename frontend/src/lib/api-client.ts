@@ -1046,10 +1046,12 @@ class APIClient {
   async updateOrganizationSsoPolicy(
     organizationId: string,
     payload: OrganizationSsoPolicyUpdate,
+    options: { stepUpReason?: string } = {},
   ): Promise<OrganizationSsoPolicyResponse> {
     const { data } = await this.adminClient.put<OrganizationSsoPolicyResponse>(
       `/admin/organizations/${encodeURIComponent(organizationId)}/sso-policy`,
       payload,
+      { stepUpReason: options.stepUpReason },
     );
     return data;
   }
