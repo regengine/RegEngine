@@ -247,7 +247,7 @@ async def _principal_from_user_session(request: Request) -> IngestionPrincipal:
     from shared.tenant_context import get_rls_tenant_id, set_rls_tenant_id
 
     from services.admin.app.auth_routes import _resolve_session_permissions
-    from services.admin.app.database import SessionLocal, arm_global_admin_context, disarm_global_admin_context
+    from services.admin.app.database import SessionLocal
     from services.admin.app.dependencies import _optional_bearer_token, get_current_user
 
     # get_current_user sets this only after a verified token or active cookie
@@ -260,11 +260,7 @@ async def _principal_from_user_session(request: Request) -> IngestionPrincipal:
         tenant_id = get_rls_tenant_id()
         if not tenant_id:
             raise HTTPException(status_code=401, detail="Tenant selection required")
-        arm_global_admin_context(db)
-        try:
-            scopes = _resolve_session_permissions(user_id=user.id, tenant_id=tenant_id, db=db)
-        finally:
-            disarm_global_admin_context(db)
+        scopes = _resolve_session_permissions(user_id=user.id, tenant_id=tenant_id, db=db)
 
     return IngestionPrincipal(
         key_id=f"session:{user.id}",

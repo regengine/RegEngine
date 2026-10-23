@@ -60,6 +60,12 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         return Boolean(portalMatch && portalMatch[1] !== 'links');
     },
     prepareHeaders: (headers: Headers, request: NextRequest, path: string) => {
+        // Product catalog still requires the caller's API key even when a
+        // workspace session cookie is present. Other routes keep session forwarding.
+        if (request.cookies.get('__Host-regengine_session')?.value && !path.startsWith('api/v1/products/')) {
+            headers.delete('authorization');
+            headers.delete('x-regengine-api-key');
+        }
         return applyInflowWorkbenchReadCredentials(headers, request, path);
     },
     buildHeaders: (request: NextRequest) => {
@@ -87,13 +93,6 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         // Unlike admin, ingestion overwrites an incoming Authorization header
         // with the cookie token — preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
-
-        // Browser workspace sessions use their own verified identity even if
-        // a legacy API-key cookie remains from an earlier developer flow.
-        if (request.cookies.get('__Host-regengine_session')?.value) {
-            headers.delete('authorization');
-            headers.delete('x-regengine-api-key');
-        }
 
         return headers;
     },
