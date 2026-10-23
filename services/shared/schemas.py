@@ -317,6 +317,47 @@ class FSMAEventType(str, Enum):
 
 _TLC_PRODUCTION_RE = re.compile(r"^\d{14}[A-Za-z0-9\-\.]+$")
 
+# GS1 AI encodable character set 82: the ISO/IEC 646 invariant graphic
+# characters. Space and the twelve national-variant code points are excluded.
+_GS1_AI_82_EXCLUDED = " #$@[\\]^`{|}~"
+_GS1_AI_82 = "".join(chr(code) for code in range(33, 127) if chr(code) not in _GS1_AI_82_EXCLUDED)
+
+
+def _gs1_ai82_class(*, exclude: str = "") -> str:
+    """Regex character class for charset 82. Hyphen is last so it stays literal."""
+    dropped = set(exclude)
+    chars = [char for char in _GS1_AI_82 if char not in dropped]
+    if "-" in chars:
+        chars.remove("-")
+        chars.append("-")
+    return "[" + "".join(chars) + "]"
+
+
+# Any non-empty split of the 13 digits (GTIN without the check digit).
+_LGTIN_NUMERIC_PARTS = "(?:" + "|".join(
+    rf"\d{{{prefix_len}}}\.\d{{{13 - prefix_len}}}" for prefix_len in range(1, 13)
+) + ")"
+_TLC_LGTIN_CLASS_RE = re.compile(
+    rf"^urn:epc:class:lgtin:{_LGTIN_NUMERIC_PARTS}\.{_gs1_ai82_class()}{{1,20}}$"
+)
+# '/' and '?' are charset-82 characters, but in a Digital Link they end the
+# lot segment so a further path or query can follow.
+_TLC_DIGITAL_LINK_RE = re.compile(
+    rf"^https?://[^/\s?#]+/01/\d{{14}}/10/{_gs1_ai82_class(exclude='/?')}{{1,20}}"
+    rf"(?:/[^\s?#]*)?(?:\?[^\s#]*)?$"
+)
+
+# GS1 General Specifications Table 7-20: the 82-character AI set (no space).
+# AI (10) batch/lot is 1 to 20 of these characters.
+_GS1_AI_82_LOT = r"""[!"%&'()*+,\-./0-9:;<=>?A-Z_a-z]{1,20}"""
+# Two non-empty digit runs whose lengths sum to 13 (company prefix + indicator/item ref).
+_LGTIN_DIGIT_PAIRS = "(?:" + "|".join(rf"\d{{{n}}}\.\d{{{13 - n}}}" for n in range(1, 13)) + ")"
+_TLC_LGTIN_RE = re.compile(rf"^urn:epc:class:lgtin:{_LGTIN_DIGIT_PAIRS}\.{_GS1_AI_82_LOT}$")
+_TLC_DIGITAL_LINK_RE = re.compile(
+    rf"^https?://[^/\s?#]+/01/\d{{14}}/10/{_GS1_AI_82_LOT}"
+    rf"(?:/[^\s?#]*)?(?:\?[^\s#]*)?$"
+)
+
 
 class FSMAEvent(BaseModel):
     """FSMA event model for Critical Tracking Events.
@@ -327,7 +368,7 @@ class FSMAEvent(BaseModel):
     model before being emitted to Kafka.
 
     Required KDEs (rejection triggers):
-      - ``tlc``        – must match GTIN-14 prefix pattern
+      - ``tlc``        – GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link
       - ``event_time`` – ISO 8601 timestamp (required)
     """
 
@@ -341,7 +382,10 @@ class FSMAEvent(BaseModel):
     )
     tlc: str = Field(
         ...,
-        description="Traceability Lot Code (GTIN-14 + variable lot)",
+        description="Traceability Lot Code (GTIN-14 + lot, LGTIN class URN, or GS1 Digital Link)",
+        # 15 is the GTIN-14 form (14 digits + 1 lot character). An LGTIN class
+        # URN is at least 38 characters and a GS1 Digital Link at least 31,
+        # so this floor does not reject either lot-level form.
         min_length=15,
     )
     product_description: str = Field(
@@ -376,14 +420,14 @@ class FSMAEvent(BaseModel):
     @field_validator("tlc")
     @classmethod
     def validate_tlc_format(cls, v: str) -> str:
-        """Enforce GTIN-14 prefix pattern: 14 digits + alphanumeric lot suffix."""
-        if not _TLC_PRODUCTION_RE.match(v):
-            raise ValueError(
-                f"TLC '{v}' does not match FSMA 204 production pattern "
-                f"(expected 14-digit GTIN prefix + lot suffix, "
-                f"e.g. '00012345678901-LotA')"
-            )
-        return v
+        """Accept GTIN-14 + lot, an LGTIN class URN, or a GS1 Digital Link."""
+        if _TLC_PRODUCTION_RE.match(v) or _TLC_LGTIN_RE.match(v) or _TLC_DIGITAL_LINK_RE.match(v):
+            return v
+        raise ValueError(
+            f"TLC '{v}' does not match FSMA 204 production pattern "
+            f"(expected 14-digit GTIN prefix + lot suffix, "
+            f"e.g. '00012345678901-LotA')"
+        )
 
     @field_validator("event_time")
     @classmethod
