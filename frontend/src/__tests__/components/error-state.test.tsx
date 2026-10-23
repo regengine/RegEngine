@@ -7,7 +7,7 @@ describe('ErrorState', () => {
         render(<ErrorState message="Could not load" onRetry={vi.fn()} retrying className="m-4" />);
 
         expect(screen.getByRole('alert')).toHaveClass('bg-re-danger-bg', 'm-4');
-        expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled();
         expect(screen.getByText('Retrying…')).toBeInTheDocument();
     });
 });

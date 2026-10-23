@@ -35,7 +35,7 @@ export function ErrorState({
       action={
         <>
           {onRetry && (
-            <Button variant="secondary" size="sm" onClick={onRetry} disabled={retrying} aria-label={retrying ? retryLabel : undefined}>
+            <Button variant="secondary" size="sm" onClick={onRetry} disabled={retrying}>
               {retrying ? "Retrying…" : retryLabel}
             </Button>
           )}

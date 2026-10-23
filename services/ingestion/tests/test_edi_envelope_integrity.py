@@ -140,6 +140,8 @@ def test_warehouse_extractors_populate_envelope():
     raw = _build_isa() + _GS_BASE
     segments = _parse_x12_segments(raw)
     expected_env = _extract_envelope_ids(segments)
+    assert expected_env["isa13"] == "000000123"
+    assert expected_env["gs_sender_id"] == "GS_SENDER"
 
     for extractor in (_extract_944_fields, _extract_945_fields):
         data = extractor(segments)

@@ -97,7 +97,7 @@ def test_action_pin_rejects_branch_ref(repo: Path) -> None:
 
 
 @pytest.mark.parametrize("access", ["read", "write"])
-def test_action_pin_ignores_status_permissions_but_checks_uses(repo: Path, access: str) -> None:
+def test_action_pin_ignores_each_status_access_but_checks_uses(repo: Path, access: str) -> None:
     path = _write(
         repo,
         ".github/workflows/bad.yml",
