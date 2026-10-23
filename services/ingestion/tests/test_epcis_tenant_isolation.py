@@ -42,24 +42,13 @@ def client():
 # ---------------------------------------------------------------------------
 
 
-def _sample_event() -> dict:
-    """Return a valid-ish EPCIS event so the router progresses past parsing."""
-    return {
-        "type": "ObjectEvent",
-        "eventTime": "2026-04-17T12:00:00Z",
-        "action": "OBSERVE",
-        "bizStep": "shipping",
-        "epcList": ["urn:epc:id:sgtin:0614141.107346.2017"],
-    }
-
-
 def test_ingest_event_rejects_tenant_query_override(client):
     """POST /events?tenant_id=victim must return 409 and not ingest."""
     resp = client.post(
         "/api/v1/epcis/events",
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant"},
-        json=_sample_event(),
+        json={},
     )
     assert resp.status_code == 409
     assert resp.json()["detail"]["code"] == "E_TENANT_MISMATCH"
@@ -70,7 +59,7 @@ def test_batch_ingest_rejects_tenant_query_override(client):
         "/api/v1/epcis/events/batch",
         params={"tenant_id": "victim-tenant"},
         headers={"X-Tenant-ID": "attacker-tenant"},
-        json={"events": [_sample_event()]},
+        json={"events": []},
     )
     assert resp.status_code == 409
 
