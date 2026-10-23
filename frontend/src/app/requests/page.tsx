@@ -41,7 +41,7 @@ import {
 } from 'lucide-react';
 
 /**
- * Workflow status mapped onto the shared compliance-state vocabulary — the old
+ * Workflow status mapped onto the shared compliance-state vocabulary - the old
  * map painted Badge backgrounds with raw saturated palette classes (and a
  * non-existent `bg-re-surface-card0`) and white text.
  */
@@ -64,7 +64,7 @@ export default function RequestWorkflowPage() {
   const actor = user?.email || user?.id || 'unknown';
   const { toast } = useToast();
 
-  // Review finding: the workflow mutations swallowed failures — react-query
+  // Review finding: the workflow mutations swallowed failures - react-query
   // captures the thrown cpFetch error in mutation.error, which nothing read,
   // so a failed action (stale-status race, network, auth) left the card
   // unchanged with zero feedback. Every action button passes this handler.
@@ -271,7 +271,7 @@ export default function RequestWorkflowPage() {
                         {/* Status-aware next step. The card used to show
                             Assemble for every pre-ready status, but the
                             backend rejects assemble outside gap_analysis/
-                            exception_triage/assembling/internal_review —
+                            exception_triage/assembling/internal_review:
                             from intake the only offered action was a
                             guaranteed 400. Walk the state machine instead. */}
                         {rc.package_status === 'intake' && (

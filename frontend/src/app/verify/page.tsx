@@ -119,7 +119,7 @@ const MANIFEST_COLUMNS: DataTableColumn<ManifestField>[] = [
 const PROSE_LINK =
     'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
 
-/** Terminal transcript colouring — the word on the line always carries the meaning too. */
+/** Terminal transcript colouring - the word on the line always carries the meaning too. */
 function transcriptLineClass(line: string): string {
     if (line.startsWith('✓ VALID')) return 'text-re-success';
     if (line.startsWith('✗ INVALID')) return 'text-re-danger';
@@ -131,7 +131,7 @@ function transcriptLineClass(line: string): string {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   VerifyWidget — drop-and-verify export bundle
+   VerifyWidget: drop-and-verify export bundle
    ───────────────────────────────────────────────────────────── */
 type VerifyCheck = { name: string; passed: boolean; detail?: string };
 type VerifyResponse = {

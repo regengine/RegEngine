@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 /**
- * DataTable — SPEC §4.
+ * DataTable - SPEC §4.
  *
  * Columns are a plain descriptor array rather than TanStack `ColumnDef`
  * generics: there is exactly one obvious implementation, which is what keeps
@@ -48,7 +48,7 @@ export type DataTableSort = { key: string; direction: "asc" | "desc" }
 export interface DataTableProps<T> {
   columns: DataTableColumn<T>[]
   data: T[]
-  /** Visually hidden by default — the table's accessible name. */
+  /** Visually hidden by default - the table's accessible name. */
   caption: string
   density?: "low" | "medium" | "high"
   toolbar?: {

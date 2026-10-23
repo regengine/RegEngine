@@ -1,5 +1,5 @@
 /**
- * CSRF Protection — Double-Submit Cookie Pattern
+ * CSRF Protection - Double-Submit Cookie Pattern
  *
  * Defense-in-depth on top of SameSite=Lax cookies. State-changing requests
  * (POST/PUT/PATCH/DELETE) to /api/* must include an X-CSRF-Token header
@@ -7,8 +7,8 @@
  *
  * Token flow:
  *   1. POST /api/session sets two cookies:
- *      - re_csrf       (httpOnly: false, JS-readable) — random token
- *      - re_csrf_sig   (httpOnly: true)               — HMAC-SHA256(token, secret)
+ *      - re_csrf       (httpOnly: false, JS-readable) - random token
+ *      - re_csrf_sig   (httpOnly: true)               - HMAC-SHA256(token, secret)
  *   2. Client reads re_csrf from document.cookie and sends it as X-CSRF-Token header
  *   3. Middleware verifies: HMAC(headerValue, secret) === re_csrf_sig cookie
  */
@@ -25,7 +25,7 @@ export { CSRF_COOKIE, CSRF_SIG_COOKIE, CSRF_HEADER };
 
 /** Get the CSRF signing secret.
  *
- *  Production REQUIRES a dedicated CSRF_SECRET — reusing AUTH_SECRET_KEY (the
+ *  Production REQUIRES a dedicated CSRF_SECRET - reusing AUTH_SECRET_KEY (the
  *  JWT signing key) for HMAC violates cryptographic key separation
  *  (NIST SP 800-57 §5.2). The AUTH_SECRET_KEY fallback is preserved only for
  *  dev/test convenience. RE-SEC-005.
@@ -111,7 +111,7 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
 /** Routes exempt from CSRF checks (pre-auth ceremonies, signed webhooks, and API-key routes).
  *
  *  Keep this list narrow. Broad prefixes like /api/tools/ silently exempt
- *  every future handler placed there — list the specific public endpoints
+ *  every future handler placed there - list the specific public endpoints
  *  instead so adding a new /api/tools/* route is a deliberate decision.
  *
  *  /api/session is intentionally NOT exempt. GET /api/session bootstraps the
@@ -121,17 +121,17 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *  like every other mutating endpoint. The Origin allowlist on POST
  *  /api/session (RE-SEC-003) remains as defense-in-depth.
  *
- *  #2885 MATCHING RULE — read this before adding an entry. isCsrfExempt() is
+ *  #2885 MATCHING RULE - read this before adding an entry. isCsrfExempt() is
  *  called from src/proxy.ts with `request.nextUrl.pathname`, i.e. the path the
  *  BROWSER requested, before any rewrite or proxy runs. An entry only ever
- *  matches if it is a real frontend path — either a next.config.js rewrite
+ *  matches if it is a real frontend path - either a next.config.js rewrite
  *  source or a route under src/app/api. A backend path does NOT match the
  *  same-origin BFF path that proxies to it: '/api/v1/webhooks/' does not
  *  prefix-match '/api/ingestion/api/v1/webhooks/ingest'. That mismatch is what
  *  403'd every developer-playground POST (#2885); the fix was to send the CSRF
  *  header via fetchWithCsrf, NOT to widen this list.
  *
- *  Verified 2026-08-26 — each entry against next.config.js and src/app/api:
+ *  Verified 2026-08-26 - each entry against next.config.js and src/app/api:
  *    /api/auth/                        rewrite source (next.config.js:229) ✓
  *    /api/admin/auth/                  src/app/api/admin/[...path] ✓
  *    /api/admin/v1/auth/accept-invite  src/app/api/admin/[...path] ✓
@@ -143,7 +143,7 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *    /api/inflow-lab/                  src/app/api/inflow-lab/[...path] ✓
  *    /api/tools/check-access           src/app/api/tools/check-access ✓
  *    /api/tools/verify                 src/app/api/tools/verify ✓
- *    /api/webhooks/                    DEAD — no rewrite source and no handler
+ *    /api/webhooks/                    DEAD - no rewrite source and no handler
  *                                      under src/app/api/webhooks. It matches
  *                                      nothing today, so it grants nothing;
  *                                      it is kept only because removing an
@@ -152,7 +152,7 @@ export const CSRF_PROTECTED_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']
  *                                      src/__tests__/lib/csrf-exempt-prefixes.test.ts.
  *                                      If you add a local webhook handler
  *                                      there, that handler becomes CSRF-exempt
- *                                      silently — decide then, on purpose.
+ *                                      silently - decide then, on purpose.
  */
 export type CsrfExemptionRule = Readonly<{
     methods: readonly string[];

@@ -85,7 +85,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
 
         // Inject access token + tenant API key + tenant ID from cookies.
         // Unlike admin, ingestion overwrites an incoming Authorization header
-        // with the cookie token — preserving pre-refactor behavior.
+        // with the cookie token - preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
 
         return headers;

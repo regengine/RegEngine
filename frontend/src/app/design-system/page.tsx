@@ -29,7 +29,7 @@ import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 /**
- * /design-system — the rendered contract for the design system.
+ * /design-system - the rendered contract for the design system.
  *
  * Every primitive, in every state, in whichever theme is active. This is what a
  * page author checks their work against, and the fastest way for a human to

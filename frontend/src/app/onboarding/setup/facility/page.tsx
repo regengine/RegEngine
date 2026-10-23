@@ -23,10 +23,10 @@ import { apiClient } from '@/lib/api-client';
 import { StepIndicator } from '@/components/onboarding/StepIndicator';
 import { US_STATES, SUPPLY_CHAIN_ROLES } from '@/lib/constants';
 
-// #539 — US ZIP: 5 digits or 5+4 (e.g. 93901 or 93901-1234)
+// #539 - US ZIP: 5 digits or 5+4 (e.g. 93901 or 93901-1234)
 const ZIP_RE = /^\d{5}(-\d{4})?$/;
 
-// #540 — UUID v4 format expected from the API
+// #540 - UUID v4 format expected from the API
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function FacilityPage() {
@@ -50,7 +50,7 @@ export default function FacilityPage() {
     );
   };
 
-  // #539 — ZIP is required and must match the US ZIP pattern
+  // #539 - ZIP is required and must match the US ZIP pattern
   const zipValid = ZIP_RE.test(zip);
   const zipInvalid = zip.length > 0 && !zipValid;
 
@@ -69,15 +69,15 @@ export default function FacilityPage() {
     try {
       const facility = await apiClient.createSupplierFacility({
         name,
-        street,           // #539 — real value, no '--' placeholder
+        street,           // #539: real value, no '--' placeholder
         city,
         state,
-        postal_code: zip, // #539 — required, validated above
+        postal_code: zip, // #539: required, validated above
         fda_registration_number: fdaReg.trim() || undefined,
         roles,
       });
 
-      // #540 — Validate the returned facility ID before navigating.
+      // #540 - Validate the returned facility ID before navigating.
       // An empty or malformed ID would produce an unusable URL and a broken
       // next step. Surface the problem here rather than silently navigating.
       const facilityId = facility?.id;
@@ -159,7 +159,7 @@ export default function FacilityPage() {
           />
         </Field>
 
-        {/* Street address — #539: real field replaces hardcoded '--' */}
+        {/* Street address - #539: real field replaces hardcoded '--' */}
         <Field label="Street address" htmlFor="facility-street" required>
           <Input
             id="facility-street"
@@ -197,7 +197,7 @@ export default function FacilityPage() {
           </Field>
         </div>
 
-        {/* ZIP / FDA reg — #539: ZIP required with format validation */}
+        {/* ZIP / FDA reg - #539: ZIP required with format validation */}
         <div className="grid grid-cols-2 gap-3">
           <Field
             label="ZIP code"

@@ -1,9 +1,9 @@
 /**
  * Shared utilities for API proxy routes.
  *
- * – sanitizePath: prevents path traversal and null-byte injection
- * – proxyError: returns a consistent JSON error shape across all proxies
- * – validateProxySession: validates Supabase session tokens before proxying
+ * - sanitizePath: prevents path traversal and null-byte injection
+ * - proxyError: returns a consistent JSON error shape across all proxies
+ * - validateProxySession: validates Supabase session tokens before proxying
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,7 +58,7 @@ export function validateUuid(value: string | undefined | null): string | null {
 /**
  * Resolve the authoritative tenant for an opaque `__Host-regengine_session`
  * by calling the backend `/auth/me`. The session cookie is httpOnly and
- * server-validated, so the returned `organization_id` is trustworthy — unlike
+ * server-validated, so the returned `organization_id` is trustworthy - unlike
  * the client-writable `re_tenant_id` cookie. Returns the tenant id (lowercased)
  * or `null` when no server-derived tenant is available (caller must fail closed).
  *
@@ -334,7 +334,7 @@ export function hasSupabaseSessionCookies(request: NextRequest): boolean {
   // A real Supabase session is the `sb-<project>-auth-token` cookie (and its
   // chunked `.0` / `.1` variants when the payload is large). The PKCE flow
   // also writes a transient `sb-<project>-auth-token-code-verifier` cookie
-  // that is NOT a session — it's just the verifier for an in-flight OAuth
+  // that is NOT a session - it's just the verifier for an in-flight OAuth
   // exchange and can outlive the flow if the user navigates away. Matching
   // it as a session caused authenticated RegEngine sessions to 401 at the
   // proxy when supabase.auth.getUser() returned no user.
@@ -355,7 +355,7 @@ export function hasSupabaseSessionCookies(request: NextRequest): boolean {
  *
  * Only validates when Supabase cookies are present (sb-* cookies indicate
  * the user authenticated via Supabase). API-key-only requests are validated
- * by the backend — the proxy can't verify those.
+ * by the backend - the proxy can't verify those.
  *
  * Returns a 401 NextResponse if the session is invalid/expired,
  * or null if the request should proceed.
@@ -366,7 +366,7 @@ export async function validateProxySession(
 ): Promise<NextResponse | null> {
   const regengineToken = request.cookies.get('re_access_token')?.value;
   if (isUsableCallerCredential(regengineToken)) {
-    // Decode-only check — the backend (services/admin) owns JWTKeyRegistry
+    // Decode-only check - the backend (services/admin) owns JWTKeyRegistry
     // and is the authoritative verifier. We reject malformed/expired tokens
     // and obvious iss/aud mismatches up front, then compare the JWT's
     // tenant_id claim against the re_tenant_id cookie for defense-in-depth.
@@ -389,7 +389,7 @@ export async function validateProxySession(
     }
 
     // The RegEngine JWT is an authoritative caller credential. Don't fall
-    // through to the Supabase check — stale `sb-*` cookies (e.g. leftover
+    // through to the Supabase check - stale `sb-*` cookies (e.g. leftover
     // PKCE `-code-verifier`) would otherwise fail Supabase validation and
     // 401 a request that already authenticated successfully.
     return null;
@@ -426,7 +426,7 @@ export async function validateProxySession(
     return null;
   }
 
-  // Also skip if the request carries an API key — backend handles that auth
+  // Also skip if the request carries an API key - backend handles that auth
   const hasApiKey =
     !!request.cookies.get('re_api_key')?.value ||
     !!request.headers.get('x-regengine-api-key');
@@ -463,7 +463,7 @@ export async function validateProxySession(
         { status: 401 },
       );
     }
-    // Supabase SDK error — don't block requests that also carry backend-validated
+    // Supabase SDK error - don't block requests that also carry backend-validated
     // credentials; let the backend make the final auth decision.
     return null;
   }

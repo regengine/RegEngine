@@ -44,7 +44,7 @@ const COMPLIANCE_STEPS = [
     },
 ];
 
-// Generic, hedged framing — we don't claim insider knowledge of specific
+// Generic, hedged framing - we don't claim insider knowledge of specific
 // retailer contracting terms. If a buyer mandate is publicly cited, link
 // to the source rather than asserting it here.
 const RETAILERS_ENFORCING = [

@@ -397,7 +397,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
 ];
 
 // Sample export-job configurations rendered on the Trust Center page as
-// examples of supported configurations — NOT live production telemetry.
+// examples of supported configurations - NOT live production telemetry.
 // Timestamps and manifest hashes below are placeholder strings and must
 // not be presented as real run data; the Trust Center renderer hides
 // timestamps for this reason. If you add a renderer that surfaces

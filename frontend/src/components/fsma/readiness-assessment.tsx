@@ -26,7 +26,7 @@ import {
 import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
 import { trackReadinessAssessmentSubmit, trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
-// Food Traceability List categories — synced with the final FDA FTL as implemented
+// Food Traceability List categories - synced with the final FDA FTL as implemented
 // in src/app/tools/ftl-checker/components/FTLCheckerClient.tsx (source of truth)
 const FTL_CATEGORIES = [
     { id: 'leafy-greens-fresh', name: 'Leafy Greens (fresh, intact)', examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens', icon: Leaf },

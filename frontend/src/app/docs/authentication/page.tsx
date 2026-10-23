@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CodeBlock } from "@/components/ui/code-block";
 import { API_BASE } from "@/lib/api-base";
 
-/** Inline identifier — SPEC §2.3. */
+/** Inline identifier - SPEC §2.3. */
 const CODE =
     "rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary";
 

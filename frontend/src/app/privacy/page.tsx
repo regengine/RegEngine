@@ -222,7 +222,7 @@ export default function PrivacyPage() {
       {/* ── Two-column layout: TOC + Content ───────────────── */}
       <Container width="docs" className="pb-12">
         <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,720px)] lg:justify-center lg:gap-10">
-          {/* Sticky TOC — desktop only */}
+          {/* Sticky TOC - desktop only */}
           <nav className="hidden lg:block">
             <div className="sticky top-24">
               <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
@@ -283,7 +283,7 @@ export default function PrivacyPage() {
               </div>
             </div>
 
-            {/* ── What We Don't Do — highlighted callout ──── */}
+            {/* ── What We Don't Do: highlighted callout ──── */}
             <div id="dont" className="scroll-mt-24 border-t border-re-border-subtle pb-10 pt-8">
               <Callout tone="neutral" icon={Ban}>
                 <h2 className="mb-4 text-heading text-re-text-primary">

@@ -227,7 +227,7 @@ const API_SERVICES: { name: string; baseUrl: string; icon: React.ComponentType<{
     },
 ];
 
-/** Section label inside an endpoint panel — the only uppercase in the system (SPEC §2.2). */
+/** Section label inside an endpoint panel - the only uppercase in the system (SPEC §2.2). */
 const PANEL_LABEL = 'font-mono text-label uppercase text-re-text-muted';
 
 function CopyButton({ text }: { text: string }) {
@@ -387,7 +387,7 @@ const RATE_LIMIT_HEADERS = [
     { header: 'X-RateLimit-Reset', desc: 'When limit resets (epoch)' },
 ];
 
-/** A key/value well — one surface step below the card it sits on (SPEC §5.1). */
+/** A key/value well - one surface step below the card it sits on (SPEC §5.1). */
 const WELL = 'rounded-md border border-re-border-subtle bg-re-surface-inset p-3';
 
 export function ApiReferenceClient() {

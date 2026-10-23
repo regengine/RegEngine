@@ -33,7 +33,7 @@ const FEATURES = [
 ];
 
 const WHY_SWITCH = [
-  // #2757 — this used to assert the sandbox returns results "in seconds" regardless of
+  // #2757 - this used to assert the sandbox returns results "in seconds" regardless of
   // whether the sandbox surface is enabled on the deployment. Reworded to the claim the
   // product makes unconditionally: rule evaluation runs on the first CSV you upload.
   { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload, with no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
@@ -130,7 +130,7 @@ export default function FoodLogiQCompare() {
       {/* CTA */}
       <Card padding="spacious" className="text-center">
         <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
-        {/* #2757 — copy and destination resolve together so the blurb can never
+        {/* #2757 - copy and destination resolve together so the blurb can never
             promise a CSV sandbox that this deployment does not serve. */}
         <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
           {sandboxCta().blurb}

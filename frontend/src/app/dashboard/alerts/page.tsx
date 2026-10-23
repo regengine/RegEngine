@@ -221,7 +221,7 @@ function AlertsDashboardPageContent() {
 
                 {isLoggedIn && !loading && alerts.length > 0 && (
                     <>
-                        {/* Summary tiles — each one also toggles its severity filter */}
+                        {/* Summary tiles - each one also toggles its severity filter */}
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                             {SUMMARY_TILES.map((item) => (
                                 <button

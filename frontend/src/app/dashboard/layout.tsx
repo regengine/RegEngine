@@ -144,7 +144,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     },
 ];
 
-/** Mobile nav — the 5 always-visible items only */
+/** Mobile nav - the 5 always-visible items only */
 const MOBILE_NAV_ITEMS = TOP_ITEMS;
 
 function isNavItemVisible(item: NavItem, isSysadmin: boolean): boolean {
@@ -174,7 +174,7 @@ function saveExpandedSections(state: Record<string, boolean>) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-        // silent – quota exceeded, private browsing, etc.
+        // silent - quota exceeded, private browsing, etc.
     }
 }
 
@@ -290,7 +290,7 @@ function CollapsibleNavSection({
 
     return (
         <div className="mt-1">
-            {/* Section header — clickable toggle */}
+            {/* Section header - clickable toggle */}
             <button
                 type="button"
                 onClick={onToggle}
@@ -330,7 +330,7 @@ function CollapsibleNavSection({
 }
 
 // ---------------------------------------------------------------------------
-// Status strip (SPEC §3.3) — the single topbar
+// Status strip (SPEC §3.3) - the single topbar
 // ---------------------------------------------------------------------------
 
 const HEALTH_BADGE: Record<string, { state: ComplianceState; label: string }> = {
@@ -571,7 +571,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
 
                     {/* Nav sections */}
-                    {/* MEDIUM #12: Keyboard navigation — arrow keys traverse nav items */}
+                    {/* MEDIUM #12: Keyboard navigation - arrow keys traverse nav items */}
                     <nav
                         aria-label="Dashboard navigation"
                         className="flex-1 overflow-y-auto px-2 py-3"
@@ -625,7 +625,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </aside>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    {/* Status strip — the only topbar (SPEC §3.3) */}
+                    {/* Status strip - the only topbar (SPEC §3.3) */}
                     <header className="sticky top-0 z-[var(--re-z-sticky)] border-b border-re-border-subtle bg-re-surface-base/95 backdrop-blur">
                         <div className="flex h-12 items-center gap-2 px-3 md:h-11 md:px-4">
                             <Button
@@ -672,7 +672,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </div>
 
-            {/* Mobile bottom tab bar — same links, same order, new position */}
+            {/* Mobile bottom tab bar - same links, same order, new position */}
             <nav
                 aria-label="Dashboard quick navigation"
                 className="fixed inset-x-0 bottom-0 z-[var(--re-z-nav)] border-t border-re-border-subtle bg-re-surface-elevated pb-[env(safe-area-inset-bottom,0px)] md:hidden"
@@ -700,7 +700,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </nav>
 
-            {/* Mobile nav sheet — TOP_ITEMS plus the collapsible sections */}
+            {/* Mobile nav sheet - TOP_ITEMS plus the collapsible sections */}
             {mobileNavOpen && (
                 <div className="fixed inset-0 z-[var(--re-z-nav)] md:hidden">
                     <div

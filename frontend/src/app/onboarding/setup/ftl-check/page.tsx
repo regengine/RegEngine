@@ -135,7 +135,7 @@ export default function FTLCheckPage() {
       completeOnboarding();
       router.push('/dashboard');
     } catch {
-      // #541 — Don't silently redirect on failure. Show an error banner so
+      // #541 - Don't silently redirect on failure. Show an error banner so
       // the user can retry. Navigating to /dashboard with onboarding marked
       // incomplete causes a redirect loop back to /onboarding/setup.
       setSaveError('Could not save your progress. Please check your connection and try again.');
@@ -247,7 +247,7 @@ export default function FTLCheckPage() {
                   </p>
                 )}
 
-                {/* #541 — Error banner with retry; no silent redirect on failure */}
+                {/* #541 - Error banner with retry; no silent redirect on failure */}
                 {saveError && (
                   <Callout tone="danger" role="alert">
                     {saveError}

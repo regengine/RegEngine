@@ -42,7 +42,7 @@ export async function GET(
 
     const { tenantId: rawTenantId, snapshotId: rawSnapshotId } = await params;
     // Validate UUIDs before interpolating into the upstream URL (see
-    // verify/route.ts — same hardening applied to every named-segment proxy).
+    // verify/route.ts - same hardening applied to every named-segment proxy).
     const tenantId = validateUuid(rawTenantId);
     const snapshotId = validateUuid(rawSnapshotId);
     if (!tenantId || !snapshotId) {

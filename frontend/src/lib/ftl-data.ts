@@ -2,7 +2,7 @@
  * FDA Food Traceability List (FTL) category data.
  *
  * Shared between the full FTL Checker tool and the onboarding quick-check.
- * Source: 21 CFR Part 1, Subpart S — FDA Food Traceability Rule (FSMA 204)
+ * Source: 21 CFR Part 1, Subpart S - FDA Food Traceability Rule (FSMA 204)
  */
 
 export interface FTLCategory {

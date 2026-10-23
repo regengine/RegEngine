@@ -127,7 +127,7 @@ export default function FSMAChecklist() {
         }
     };
 
-    // Band colour for the readiness meter. The number itself stays ink — the
+    // Band colour for the readiness meter. The number itself stays ink - the
     // meter is a supporting mark, and "N/8" carries the meaning on its own.
     const scoreBarClass =
         checkedCount <= 3

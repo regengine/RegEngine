@@ -1,6 +1,6 @@
 'use client';
 
-// #2757 — extracted verbatim from the shared-result page so /sandbox and
+// #2757 - extracted verbatim from the shared-result page so /sandbox and
 // /sandbox/results/[id] render one diagnosis, not two that drift apart.
 // Presentational only: no fetching, no analytics. Callers own those.
 

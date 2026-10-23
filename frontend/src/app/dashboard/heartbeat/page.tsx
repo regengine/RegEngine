@@ -681,7 +681,7 @@ function HeartbeatPageContent() {
                                         <StatusRow
                                             icon={Link2}
                                             label="Hash Chain"
-                                            value={compliance ? `${compliance.breakdown.chain_integrity?.score ?? 0}%` : '—'}
+                                            value={compliance ? `${compliance.breakdown.chain_integrity?.score ?? 0}%` : NO_DATA_YET}
                                             status={compliance && (compliance.breakdown.chain_integrity?.score ?? 0) >= 80 ? 'good' : 'warn'}
                                         />
                                         <StatusRow

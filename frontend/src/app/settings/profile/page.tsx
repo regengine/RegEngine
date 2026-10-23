@@ -52,7 +52,7 @@ export default function ProfileSettingsPage() {
 
     return (
         <PageContainer>
-            {/* Back link — the shell owns the breadcrumb, this stays as the
+            {/* Back link - the shell owns the breadcrumb, this stays as the
                 page's own return affordance. */}
             <Link
                 href="/dashboard/settings"
@@ -114,7 +114,7 @@ export default function ProfileSettingsPage() {
                                 </Field>
                             </div>
 
-                            {/* Email — read-only, sourced from auth */}
+                            {/* Email - read-only, sourced from auth */}
                             <Field
                                 label="Email Address"
                                 htmlFor="email"
@@ -164,7 +164,7 @@ export default function ProfileSettingsPage() {
                                 />
                             </Field>
 
-                            {/* Role and Email — read-only account facts */}
+                            {/* Role and Email - read-only account facts */}
                             <dl className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <dt className="text-label text-re-text-muted">Role</dt>

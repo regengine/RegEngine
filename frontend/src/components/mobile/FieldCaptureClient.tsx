@@ -336,7 +336,7 @@ export function FieldCaptureClient() {
                     description: `${productName}: ${visionData.fsma_kdes?.length || 0} KDEs extracted`,
                 });
             } else {
-                // Vision failed — fall back to raw file upload
+                // Vision failed - fall back to raw file upload
                 await ingestFileMutation.mutateAsync({ file, sourceSystem: 'mobile_capture_pwa' });
                 toast({ title: 'Photo Uploaded', description: 'Vision analysis unavailable. Raw image stored.' });
             }

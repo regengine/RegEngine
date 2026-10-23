@@ -80,7 +80,7 @@ function scoreColor(score: number) {
     return 'var(--re-danger)';
 }
 
-/** For DOM nodes — a class keeps the colour out of an inline style (SPEC §4). */
+/** For DOM nodes - a class keeps the colour out of an inline style (SPEC §4). */
 function scoreTextClass(score: number) {
     if (score >= 80) return 'text-re-brand';
     if (score >= 60) return 'text-re-warning';
@@ -778,7 +778,7 @@ export default function ComplianceDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Empty state — no score and not loading */}
+                {/* Empty state - no score and not loading */}
                 {!score && !loading && !error && isLoggedIn && (
                     <motion.div
                         initial={{ opacity: 0 }}

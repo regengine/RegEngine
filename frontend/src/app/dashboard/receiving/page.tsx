@@ -160,7 +160,7 @@ export default function ReceivingDockPage() {
         const scannedGtin = parsed.gtin || '';
         const scannedLot = parsed.tlc || '';
         // The input invites typing a bare GTIN or lot code, but parseGS1 only
-        // extracts values from AI-encoded / Digital Link strings — so a user
+        // extracts values from AI-encoded / Digital Link strings - so a user
         // typing exactly what the Expected Items list displays never matched
         // and every scan landed in Unexpected Items. scanMatchesItem also
         // compares the raw string directly (matrix unit-tested in
@@ -185,7 +185,7 @@ export default function ReceivingDockPage() {
         }
 
         if (!matched) {
-            // Unexpected scan — add to unexpected list
+            // Unexpected scan - add to unexpected list
             updated.unexpectedScans.push({
                 id: `unx-${Date.now()}`,
                 gtin: scannedGtin,
@@ -314,7 +314,7 @@ export default function ReceivingDockPage() {
     /* ─── Render ─── */
     return (
         <PageContainer>
-            {/* Back link — the shell owns the breadcrumb; this stays as the
+            {/* Back link - the shell owns the breadcrumb; this stays as the
                 dock's own return affordance. */}
             <Link href="/dashboard" className="mb-4 inline-flex">
                 <Button variant="ghost" size="icon" aria-label="Back to dashboard">
@@ -410,7 +410,7 @@ export default function ReceivingDockPage() {
                             </CardContent>
                         </Card>
 
-                        {/* Scan input — keyboard wedge or manual */}
+                        {/* Scan input - keyboard wedge or manual */}
                         <Card>
                             <CardContent>
                                 <label

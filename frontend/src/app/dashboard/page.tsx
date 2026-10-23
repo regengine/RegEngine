@@ -34,11 +34,11 @@ import { useOnboardingStatus } from "@/hooks/use-onboarding";
  * An operator opens this page every morning and after every import. The first
  * viewport answers three questions without scrolling: where do we stand, what
  * is wrong, and what do I do next. Everything else is folded into those three
- * or demoted below the fold — see SPEC §7 for the mapping of every widget that
+ * or demoted below the fold - see SPEC §7 for the mapping of every widget that
  * used to sit up here.
  */
 
-/** The six quick actions, unchanged in label and href — now one link row. */
+/** The six quick actions, unchanged in label and href - now one link row. */
 const QUICK_LINKS = [
   { title: "FSMA Readiness Score", href: "/dashboard/compliance" },
   { title: "Alerts", href: "/dashboard/alerts" },
@@ -93,7 +93,7 @@ export default function DashboardPage() {
   const effectiveTenantId = tenantId;
 
   // Derive the health signal from the same useSystemStatus() data the widget
-  // uses — one source of truth, so the strip and the widget never contradict.
+  // uses - one source of truth, so the strip and the widget never contradict.
   const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
   const { data: metrics } = useSystemMetrics();
 
@@ -117,7 +117,7 @@ export default function DashboardPage() {
   }, [isHydrated, effectiveUser, router]);
 
   // Check design partner status from tenant settings. Wait for tenant
-  // hydration — pre-hydration the id is the DEFAULT_TENANT_ID placeholder
+  // hydration - pre-hydration the id is the DEFAULT_TENANT_ID placeholder
   // and every cold load fired a doomed onboarding call against it.
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;

@@ -201,7 +201,7 @@ export default function TermsClient() {
             {/* ═══ MAIN CONTENT: TOC + SECTIONS ═══ */}
             <Container width="docs" className="pb-20">
                 <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,720px)] lg:justify-center lg:gap-10">
-                    {/* Sticky TOC — desktop only */}
+                    {/* Sticky TOC - desktop only */}
                     <nav className="hidden lg:block">
                         <div className="sticky top-24">
                             <p className="mb-3 font-mono text-label uppercase text-re-text-muted">

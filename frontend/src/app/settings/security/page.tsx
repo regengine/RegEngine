@@ -81,7 +81,7 @@ export default function SecuritySettingsPage() {
 
   return (
     <PageContainer>
-      {/* Back link — the shell owns the breadcrumb, this stays as the page's
+      {/* Back link - the shell owns the breadcrumb, this stays as the page's
           own return affordance. */}
       <Link
         href="/dashboard/settings"

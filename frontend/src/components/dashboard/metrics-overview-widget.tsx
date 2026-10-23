@@ -11,7 +11,7 @@ import type { WorkbenchReadinessSnapshot } from "@/lib/api-hooks";
  * Follows the data-viz rules (SPEC §4, §7.1): exactly one hero figure per view;
  * a tile is label / value / delta / trend with no icon; the value is never
  * coloured; only the delta arrow carries sentiment. The readiness score appears
- * here and nowhere else on the page — it used to be rendered twice, once in
+ * here and nowhere else on the page - it used to be rendered twice, once in
  * this row and again in the "Traceability Readiness" card below it.
  */
 export function MetricsOverviewWidget({

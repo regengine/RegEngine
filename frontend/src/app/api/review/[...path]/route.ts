@@ -8,7 +8,7 @@ import { getServerServiceURL } from '@/lib/api-config';
 import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 // Proxy review API requests to the Admin backend service.
-// Handles the approve/reject actions on flagged extractions — paths like
+// Handles the approve/reject actions on flagged extractions - paths like
 //   /api/review/{id}/approve
 //   /api/review/{id}/reject
 // are transformed into

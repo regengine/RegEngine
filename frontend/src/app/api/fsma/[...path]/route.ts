@@ -14,7 +14,7 @@ import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } fr
 //     :62  metrics_router    prefix="/fsma/metrics"       -> /api/v1/fsma/metrics/*
 //     :63  compliance_router prefix="/fsma/compliance"    -> /api/v1/fsma/compliance/*
 //
-//   `gaps` and `export/` are NOT top-level FSMA routes — they are endpoints on
+//   `gaps` and `export/` are NOT top-level FSMA routes - they are endpoints on
 //   the compliance sub-router (services/graph/app/routers/fsma/compliance.py):
 //     :640 @router.get("/gaps")                    -> /api/v1/fsma/compliance/gaps
 //     :681 @router.get("/gaps/orphans")            -> /api/v1/fsma/compliance/gaps/orphans
@@ -32,7 +32,7 @@ import { applyCookieCredentials, createJsonProxy, passthroughRequestHeaders } fr
 //   entry pointed at /api/v1/fsma/drift/* which has never existed. Do not add
 //   it back without a real backend router to point it at.
 //
-//   Compliance service — services/compliance/app/routes.py:64 declares
+//   Compliance service - services/compliance/app/routes.py:64 declares
 //   `APIRouter(tags=["fsma-compliance"])` with NO prefix, and server/main.py:929
 //   mounts it with no prefix either (`app.include_router(fsma_router, ...)`), so
 //   its routes are /industries, /checklists, /checklists/{id} and

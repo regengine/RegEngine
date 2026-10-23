@@ -74,7 +74,7 @@ const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \
     ]
   }'`;
 
-// Synthetic FSMA 204 traceability dataset — mirrors test_data/regengine_test_traceability.csv
+// Synthetic FSMA 204 traceability dataset - mirrors test_data/regengine_test_traceability.csv
 const SAMPLE_EVENTS = [
     { event_type: 'HARVESTING',     event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
     { event_type: 'RECEIVING',      event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Salinas Cold Storage, Salinas, CA',           product_description: 'Romaine Lettuce', gtin: '09524000059109' },

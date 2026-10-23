@@ -9,7 +9,7 @@ const SERVICE_PORTS = { ingestion: 8002, graph: 8200, compliance: 8500, admin: 8
 type ServiceName = keyof typeof SERVICE_PORTS;
 
 /**
- * Server-side only — resolve backend URL from env vars with localhost fallback.
+ * Server-side only - resolve backend URL from env vars with localhost fallback.
  * Use this in Next.js API routes instead of inline `|| 'http://localhost:XXXX'`.
  */
 export function getServerServiceURL(service: ServiceName): string {

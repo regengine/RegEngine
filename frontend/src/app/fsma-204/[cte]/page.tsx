@@ -323,7 +323,7 @@ export default async function CTELandingPage({
 
   return (
     <div className="bg-re-surface-base">
-      {/* — HERO — */}
+      {/* - HERO - */}
       <Container width="marketing" className="pt-12 sm:pt-16">
         <Link
           href="/fsma-204"
@@ -351,7 +351,7 @@ export default async function CTELandingPage({
           className="border-b-0 pb-0"
         />
 
-        {/* — WHO NEEDS THIS — */}
+        {/* - WHO NEEDS THIS - */}
         <Callout tone="neutral" className="mt-8 max-w-[68ch]">
           <p className="font-medium text-re-text-primary">
             Who needs to record this CTE
@@ -360,7 +360,7 @@ export default async function CTELandingPage({
         </Callout>
       </Container>
 
-      {/* — REQUIRED KDEs TABLE — */}
+      {/* - REQUIRED KDEs TABLE - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Required Data Elements</span>}
@@ -394,7 +394,7 @@ export default async function CTELandingPage({
         </Table>
       </Section>
 
-      {/* — COMMON DATA QUALITY ISSUES — */}
+      {/* - COMMON DATA QUALITY ISSUES - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Watch out for these</span>}
@@ -416,7 +416,7 @@ export default async function CTELandingPage({
         </div>
       </Section>
 
-      {/* — HOW REGENGINE HELPS — */}
+      {/* - HOW REGENGINE HELPS - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Automated validation</span>}
@@ -446,7 +446,7 @@ export default async function CTELandingPage({
         </ul>
       </Section>
 
-      {/* — CTA — */}
+      {/* - CTA - */}
       <Section width="marketing" tone="inset">
         <div className="mx-auto max-w-[640px] text-center">
           <h2 className="font-display text-heading-lg text-re-text-primary">
@@ -471,7 +471,7 @@ export default async function CTELandingPage({
         </div>
       </Section>
 
-      {/* — OTHER CTEs NAV — */}
+      {/* - OTHER CTEs NAV - */}
       <Section width="marketing" className="py-12 sm:py-12">
         <p className="mb-5 text-center font-mono text-label uppercase text-re-text-muted">
           Other Critical Tracking Events

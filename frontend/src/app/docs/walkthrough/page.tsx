@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   },
 };
 
-/** Inline identifier — SPEC §2.3. */
+/** Inline identifier - SPEC §2.3. */
 const CODE =
   'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
 

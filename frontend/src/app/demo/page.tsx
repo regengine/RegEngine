@@ -14,7 +14,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
 // ---------------------------------------------------------------------------
-// Synthetic demo data — what a mid-market produce distributor would see
+// Synthetic demo data - what a mid-market produce distributor would see
 // ---------------------------------------------------------------------------
 
 const COMPLIANCE_SCORE = 94.2;

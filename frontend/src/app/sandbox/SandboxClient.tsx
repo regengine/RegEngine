@@ -1,6 +1,6 @@
 'use client';
 
-// #2757 — the CSV upload front door. Posts through the BFF proxy
+// #2757 - the CSV upload front door. Posts through the BFF proxy
 // (/api/ingestion/... → POST /api/v1/sandbox/evaluate), which is on the
 // unauthenticated allowlist, so no auth and no CSRF token are involved.
 // Limits mirror the backend exactly (services/ingestion/app/sandbox/router.py):

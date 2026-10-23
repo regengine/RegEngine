@@ -1,5 +1,5 @@
 /**
- * Proxy factory — shared scaffolding for Next.js catch-all proxy route
+ * Proxy factory - shared scaffolding for Next.js catch-all proxy route
  * handlers (the files under src/app/api/<service>/[...path]/route.ts).
  *
  * The frontend fronts several backend services (admin, ingestion, compliance,
@@ -458,7 +458,7 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
 }
 
 // ---------------------------------------------------------------------------
-// Shared helpers — used by proxy `buildHeaders` implementations
+// Shared helpers - used by proxy `buildHeaders` implementations
 // ---------------------------------------------------------------------------
 
 /** Strip trailing slashes from a URL base. */

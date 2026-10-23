@@ -25,18 +25,15 @@ import {
     AlertTriangle,
     ArrowUp,
     Play,
-    Package,
     MapPin,
     Clock,
     CheckCircle2,
-    ShoppingCart,
-    Zap,
     Info,
     ChevronDown,
     ChevronUp,
     RefreshCw,
 } from 'lucide-react';
-import { NOT_SET } from '@/lib/empty-values';
+import { NOT_SET, NO_DATA_YET } from '@/lib/empty-values';
 
 /* ── API Response Types ── */
 
@@ -109,16 +106,6 @@ const DEMO_AFFECTED_LOTS = [
     { tlc: 'LOT-ROM-2026-0309E', product: 'Romaine Salad Kit', facility: 'FreshCut Processing', status: 'partial', cte_count: 2, last_event: 'Transformation', risk: 'low' },
 ];
 
-const DEMO_TIMELINE = [
-    { time: '08:30', label: 'FDA Request Received', desc: 'FSMA 204 records request for romaine lettuce lots from Salinas Valley region', icon: AlertTriangle, done: true },
-    { time: '08:35', label: 'Automated Trace Initiated', desc: 'RegEngine backward trace from retail to harvest across 8 facilities', icon: Zap, done: true },
-    { time: '08:42', label: '12 Lots Identified', desc: 'Forward trace mapped all downstream distribution; 3 supplier origins confirmed', icon: Package, done: true },
-    { time: '09:15', label: 'Supplier Notifications Sent', desc: '3 suppliers contacted: Salinas Valley Farms, Pacific Coast Growers, FreshCut Processing', icon: Users, done: true },
-    { time: '10:00', label: 'FDA CSV Export Generated', desc: '24-hour response package with all CTEs, KDEs, and chain hashes', icon: Download, done: true },
-    { time: 'Pending', label: 'Retailer EPCIS Notification (Preview)', desc: 'GS1 EPCIS 2.0 export package ready for retailer portal upload. Confirm specific format with each buyer', icon: ShoppingCart, done: false },
-    { time: 'Pending', label: 'Investigation Closed', desc: 'All affected lots accounted for, remediation verified', icon: CheckCircle2, done: false },
-];
-
 /* ── Helpers ── */
 
 /** Grade as a badge tone. Numbers stay ink; only the grade pill carries colour. */
@@ -154,7 +141,7 @@ export default function RecallReportPage() {
         queryKey: ['recall-report', tenantId],
         queryFn: () => fetchRecallReport(tenantId!) as Promise<RecallReport>,
         enabled: !!tenantId && isAuthenticated,
-        staleTime: 5 * 60 * 1000, // 5 min — report is expensive to compute
+        staleTime: 5 * 60 * 1000, // 5 min: report is expensive to compute
     });
 
     if (error || (!isLoading && !report)) {
@@ -181,6 +168,9 @@ export default function RecallReportPage() {
     const actionItems = report?.action_items ?? [];
     const overallScore = report?.overall_score ?? 0;
     const overallGrade = report?.overall_grade ?? '—';
+    // Display-only: the sentinel above feeds gradeTone and the comparisons below;
+    // this derived value is what the empty state renders.
+    const overallGradeDisplay = overallGrade === '—' ? NO_DATA_YET : overallGrade;
     const responseTimeStr = report?.time_to_respond_estimate ?? NOT_SET;
 
     // Demo-mode fallback stats for summary banner
@@ -200,7 +190,7 @@ export default function RecallReportPage() {
             );
             if (!res.ok) {
                 // Surface the real reason instead of a bare status
-                // code — 402 is the billing gate, and users saw
+                // code - 402 is the billing gate, and users saw
                 // "Export failed: Export failed: 402" with no way
                 // to tell what to do about it.
                 if (res.status === 402) {
@@ -236,7 +226,7 @@ export default function RecallReportPage() {
     return (
         <PageContainer>
             {/* The dashboard shell owns the breadcrumb and the service-health
-                badge — this page only renders its own header. */}
+                badge: this page only renders its own header. */}
             <PageHeader
                 title="Recall Report"
                 description={<>FSMA 204 Traceability Response &amp; Readiness Assessment</>}
@@ -382,31 +372,11 @@ export default function RecallReportPage() {
                                             </CardDescription>
                                         </div>
                                     </CardHeader>
-                                    <CardContent className="p-0">
-                                        <ol className="divide-y divide-re-border-subtle">
-                                            {DEMO_TIMELINE.map((evt, i) => {
-                                                const Icon = evt.icon;
-                                                return (
-                                                    <li key={i} className="flex gap-3 px-5 py-3">
-                                                        <Icon
-                                                            className="mt-0.5 h-4 w-4 shrink-0 text-re-text-tertiary"
-                                                            strokeWidth={1.75}
-                                                            aria-hidden="true"
-                                                        />
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className={evt.done ? 'text-ui font-medium text-re-text-primary' : 'text-ui font-medium text-re-text-tertiary'}>{evt.label}</span>
-                                                                {evt.done && (
-                                                                    <Badge tone="success" size="sm">Done</Badge>
-                                                                )}
-                                                            </div>
-                                                            <p className="mt-0.5 text-small text-re-text-tertiary">{evt.desc}</p>
-                                                            <span className="font-mono text-label text-re-text-muted">{evt.time}</span>
-                                                        </div>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ol>
+                                    <CardContent>
+                                        <p className="text-ui text-re-text-secondary">No recall timeline yet.</p>
+                                        <p className="mt-1 text-small text-re-text-tertiary">
+                                            Import records or run a trace to build the event timeline for an investigation.
+                                        </p>
                                     </CardContent>
                                 </Card>
                             </div>
@@ -487,8 +457,10 @@ export default function RecallReportPage() {
                                             {overallScore}
                                         </span>
                                         <span className="text-ui text-re-text-tertiary">/100</span>
-                                        {overallGrade !== '—' && (
+                                        {overallGrade !== '—' ? (
                                             <Badge tone={gradeTone(overallGrade)}>{overallGrade}</Badge>
+                                        ) : (
+                                            <span className="text-ui text-re-text-tertiary">{overallGradeDisplay}</span>
                                         )}
                                     </div>
                                     <div className="mt-3 text-ui text-re-text-secondary">

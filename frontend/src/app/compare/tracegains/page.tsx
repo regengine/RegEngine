@@ -121,7 +121,7 @@ export default function TraceGainsCompare() {
       {/* CTA */}
       <Card padding="spacious" className="text-center">
         <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
-        {/* #2757 — copy and destination resolve together so the blurb can never
+        {/* #2757 - copy and destination resolve together so the blurb can never
             promise a CSV sandbox that this deployment does not serve. */}
         <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
           {sandboxCta().blurb}

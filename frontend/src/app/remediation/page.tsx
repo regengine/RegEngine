@@ -95,7 +95,7 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard denied (insecure context, permission) — the URL is on screen.
+      // Clipboard denied (insecure context, permission) - the URL is on screen.
     }
   };
 
@@ -151,7 +151,7 @@ export default function RemediationPage() {
   const releaseManifest = useReleaseManifest(tid);
   const issueLink = useIssueCorrectionLink(tid);
 
-  // Latest outbox entry per case (list is newest-first) — the per-case
+  // Latest outbox entry per case (list is newest-first) - the per-case
   // delivery state shown in the manifest detail table.
   const outboxByCase = useMemo(() => {
     const byCase = new Map<string, OutboxPreview>();
@@ -444,7 +444,7 @@ export default function RemediationPage() {
         </Card>
       )}
 
-      {/* Notification outbox — queued link emails are delivered by the drainer */}
+      {/* Notification outbox - queued link emails are delivered by the drainer */}
       <Section
         spacing="app"
         className="mt-8"

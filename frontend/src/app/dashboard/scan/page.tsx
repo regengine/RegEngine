@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 /* ------------------------------------------------------------------ */
-/*  QR Code generator — renders inline SVG via the `qrcode` package   */
+/*  QR Code generator - renders inline SVG via the `qrcode` package   */
 /* ------------------------------------------------------------------ */
 let qrcodeLib: typeof import('qrcode') | null = null;
 const SAFE_SCAN_TENANT_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
@@ -60,7 +60,7 @@ function useQRCodeSvgDataUrl(text: string) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Detect viewport — show scanner on mobile, QR share on desktop     */
+/*  Detect viewport - show scanner on mobile, QR share on desktop     */
 /* ------------------------------------------------------------------ */
 const MOBILE_MEDIA_QUERY = '(max-width: 768px)';
 

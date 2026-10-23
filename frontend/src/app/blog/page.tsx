@@ -30,7 +30,7 @@ type BlogPost = {
 
 // Slugs are typed against BLOG_POST_SLUGS so a post added here without being
 // added to the shared list (and therefore the sitemap) fails typecheck.
-// Titles live in that shared list too — the social cards render from them.
+// Titles live in that shared list too - the social cards render from them.
 const BLOG_POSTS: BlogPost[] = [
   {
     slug: 'fsma-204-compliance-guide',

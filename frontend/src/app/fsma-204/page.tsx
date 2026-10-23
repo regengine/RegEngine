@@ -145,7 +145,7 @@ const FAQS = [
 export default function FSMA204BusinessGuidePage() {
   return (
     <div className="bg-re-surface-base">
-      {/* — HERO — */}
+      {/* - HERO - */}
       <Container width="marketing" className="pt-12 sm:pt-16">
         <PageHeader
           size="hero"
@@ -177,7 +177,7 @@ export default function FSMA204BusinessGuidePage() {
           className="border-b-0 pb-0"
         />
 
-        {/* — KEY FACTS STRIP — */}
+        {/* - KEY FACTS STRIP - */}
         <ul className="mt-10 flex flex-col divide-y divide-re-border-subtle border-y border-re-border-subtle sm:flex-row sm:divide-x sm:divide-y-0">
           {KEY_FACTS.map((fact) => (
             <li key={fact.text} className="flex flex-1 items-center gap-3 py-4 sm:px-5 sm:first:pl-0 sm:last:pr-0">
@@ -188,7 +188,7 @@ export default function FSMA204BusinessGuidePage() {
         </ul>
       </Container>
 
-      {/* — WHAT IS FSMA 204 — */}
+      {/* - WHAT IS FSMA 204 - */}
       <Section width="marketing" flush title="What is FSMA 204?">
         <div className="max-w-[68ch] space-y-4 text-body text-re-text-secondary">
           <p>
@@ -211,7 +211,7 @@ export default function FSMA204BusinessGuidePage() {
         </Callout>
       </Section>
 
-      {/* — ARE YOUR PRODUCTS COVERED? — */}
+      {/* - ARE YOUR PRODUCTS COVERED? - */}
       <Section
         width="marketing"
         eyebrow="The Food Traceability List (FTL)"
@@ -240,7 +240,7 @@ export default function FSMA204BusinessGuidePage() {
         </div>
       </Section>
 
-      {/* — WHAT YOU HAVE TO RECORD — */}
+      {/* - WHAT YOU HAVE TO RECORD - */}
       <Section
         width="marketing"
         eyebrow="What the FDA requires"
@@ -268,7 +268,7 @@ export default function FSMA204BusinessGuidePage() {
         </Card>
       </Section>
 
-      {/* — THE 24-HOUR RULE — */}
+      {/* - THE 24-HOUR RULE - */}
       <Section
         width="marketing"
         eyebrow="The 24-hour rule"
@@ -291,7 +291,7 @@ export default function FSMA204BusinessGuidePage() {
         </div>
       </Section>
 
-      {/* — HOW TO COMPLY — */}
+      {/* - HOW TO COMPLY - */}
       <Section
         id="how-to-comply"
         width="marketing"
@@ -328,7 +328,7 @@ export default function FSMA204BusinessGuidePage() {
         </ol>
       </Section>
 
-      {/* — FAQ — */}
+      {/* - FAQ - */}
       <Section width="marketing" title="Common questions">
         <div className="max-w-[68ch] space-y-8">
           {FAQS.map((faq) => (
@@ -340,7 +340,7 @@ export default function FSMA204BusinessGuidePage() {
         </div>
       </Section>
 
-      {/* — FINAL CTA — */}
+      {/* - FINAL CTA - */}
       <Section width="marketing" tone="inset">
         <div className="mx-auto max-w-[640px] text-center">
           <p className="font-mono text-label uppercase text-re-text-muted">

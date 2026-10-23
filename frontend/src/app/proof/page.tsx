@@ -74,7 +74,7 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * A terminal transcript. SPEC §5.1: code is a well — one surface step below the
+ * A terminal transcript. SPEC §5.1: code is a well - one surface step below the
  * card, bounded by a hairline rather than an inverted ink block. Result lines
  * keep a status colour, but never alone: each one carries its own word ("ok",
  * "matched", "FAILED"), so the meaning survives greyscale.

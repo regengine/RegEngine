@@ -283,7 +283,7 @@ export default function SupplierDashboardPage() {
             setInviteSupplierEmail('');
             setInviteProfileId('');
             setShowInviteForm(false);
-            // Auto-copy the link — best-effort only. clipboard.writeText
+            // Auto-copy the link - best-effort only. clipboard.writeText
             // rejects whenever the document is unfocused or permission is
             // denied; sharing the API call's catch made a SUCCESSFUL link
             // creation render as "Unable to create portal link", inviting
@@ -454,7 +454,7 @@ export default function SupplierDashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Portal Links — Invite Suppliers */}
+                {/* Portal Links - Invite Suppliers */}
                 <Card>
                     <CardHeader>
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -770,7 +770,7 @@ export default function SupplierDashboardPage() {
                     </Card>
                 )}
 
-                {/* Facility List — hairline ledger rows */}
+                {/* Facility List - hairline ledger rows */}
                 {!loading && facilities.length > 0 && (
                     <Card>
                         <ul className="divide-y divide-re-border-subtle">

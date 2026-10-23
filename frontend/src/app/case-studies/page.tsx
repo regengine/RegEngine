@@ -74,7 +74,7 @@ const NORMALIZATION_EXAMPLES = [
     },
 ];
 
-/** Identifiers and sample values are recorded data — mono, on the inset well. */
+/** Identifiers and sample values are recorded data - mono, on the inset well. */
 const chipClass = 'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
 const cellClass = 'px-4 py-3 align-middle text-re-text-secondary';
 const headClass = 'px-4 py-3 text-left align-middle text-label text-re-text-tertiary';

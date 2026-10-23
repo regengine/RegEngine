@@ -86,7 +86,7 @@ export default function BuyerProgramsPage() {
                 <li>• FTL by that date; other products ASAP</li>
               </ul>
               <p className="mt-4 text-small leading-relaxed text-re-text-tertiary">
-                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks. EDI 856 / ASN mapping is on the roadmap.
+                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks.
               </p>
             </Card>
 
