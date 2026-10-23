@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
-USES_RE = re.compile(r"[\"']?uses[\"']?:\s*[\"']?([A-Za-z0-9_.\-/]+)(?:@([^\"'#\s]+))?[\"']?")
+USES_RE = re.compile(r"(?:^\s*(?:-\s*)?|[\[{,]\s*)[\"']?uses[\"']?\s*:\s*[\"']?([A-Za-z0-9_.\-/]+)(?:@([^\"'#\s]+))?[\"']?")
 USES_KEY_RE = re.compile(r"^\s*(?:-\s*)?[\"']?uses[\"']?\s*:(.*)$")
 PIPE_SHELL_RE = re.compile(r"\|\s*(sudo(\s+-\S+)*\s+)?(sh|bash)\b")
 LATEST_URL_RE = re.compile(r"https?://\S*latest\S*|@latest\b", re.IGNORECASE)
