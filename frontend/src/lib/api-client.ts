@@ -437,7 +437,7 @@ class APIClient {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('source', sourceSystem);
-    // cte_type is optional — the backend auto-detects from a cte_type/event_type column
+    // cte_type is optional - the backend auto-detects from a cte_type/event_type column
     if (cteType) {
       formData.append('cte_type', cteType);
     }
@@ -622,7 +622,7 @@ class APIClient {
   }
 
   // validateConfig() was removed on 2026-04-17 (#1203). The compliance
-  // service's POST /validate endpoint was orphaned — no component ever
+  // service's POST /validate endpoint was orphaned: no component ever
   // invoked the hook, and the real compliance evaluation lives in the
   // ingestion service's /api/v1/rules/evaluate route via the versioned
   // RulesEngine.
@@ -668,7 +668,7 @@ class APIClient {
   }
 
   /**
-   * Ingest CTE events via the webhook endpoint — persists to fsma.cte_events + hash chain.
+   * Ingest CTE events via the webhook endpoint - persists to fsma.cte_events + hash chain.
    * Use this for sample data loading and programmatic event ingestion.
    */
   async ingestWebhookEvents(
@@ -915,7 +915,7 @@ class APIClient {
     };
   }
 
-  // Bulk upload — uses adminClient (Vercel Pro proxy with maxDuration=300s)
+  // Bulk upload - uses adminClient (Vercel Pro proxy with maxDuration=300s)
 
   async parseSupplierBulkUpload(file: File): Promise<SupplierBulkUploadParseResponse> {
     const formData = new FormData();
@@ -961,7 +961,7 @@ class APIClient {
     return data;
   }
 
-  // Portal Links — supplier portal link management
+  // Portal Links - supplier portal link management
   async listPortalLinks(): Promise<{ links: PortalLink[]; total: number }> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
@@ -993,7 +993,7 @@ class APIClient {
     await this.ingestionClient.patch(`/api/v1/portal/links/${encodeURIComponent(portalId)}/revoke`);
   }
 
-  // Supplier Integration Profiles — saved field mappings for portal and file feeds
+  // Supplier Integration Profiles - saved field mappings for portal and file feeds
   async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');

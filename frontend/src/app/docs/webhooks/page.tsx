@@ -3,10 +3,10 @@ import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Outbound Webhooks (Planned) | RegEngine',
-  description: 'Planned: notifications from RegEngine to your systems. Not available yet. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
+  description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
   openGraph: {
     title: 'Outbound Webhooks (Planned)',
-    description: 'Planned: notifications from RegEngine to your systems. Not available yet. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
+    description: 'Planned: customer-managed notifications from RegEngine to your systems. Not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request. To send events into RegEngine, use POST /api/v1/webhooks/ingest.',
     url: 'https://regengine.co/docs/webhooks',
     type: 'website',
   },
@@ -53,13 +53,13 @@ export default function WebhooksDocsPage() {
                 }
                 eyebrow="Roadmap"
                 title="Outbound webhooks (planned)"
-                description="Notifications from RegEngine to your systems. These are not available yet."
+                description="Customer-managed outbound webhooks are planned and not available yet. FDA recall/enforcement alerts can be enabled by RegEngine on request."
             />
 
             <div className="space-y-8">
                 <Callout tone="info" title="Sending events to RegEngine?">
                     <p className="text-ui text-re-text-secondary">
-                        That is ingestion, and it is available now:{' '}
+                        That is the JSON events API, and it is available now:{' '}
                         <code className="rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary">
                             POST /api/v1/webhooks/ingest
                         </code>
@@ -125,7 +125,7 @@ export default function WebhooksDocsPage() {
                         Get Notified on Release
                     </h3>
                     <p className="mx-auto mb-5 max-w-[48ch] text-ui text-re-text-tertiary">
-                        Be the first to know when webhooks are available.
+                        Be the first to know when customer-managed webhooks are available.
                     </p>
                     <Button asChild variant="primary" size="lg">
                         <a href="mailto:webhooks@regengine.co?subject=Webhooks%20Interest" className="no-underline">

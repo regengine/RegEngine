@@ -29,7 +29,7 @@ const jsonLd = {
 
 const relatedTools = [
     { href: '/tools/label-scanner', title: 'AI Label Scanner', description: 'Upload a food label and AI extracts lot code, GTIN, expiry date, and FSMA 204 Key Data Element (KDE) fields automatically.' },
-    { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data from CSV files, IoT temperature logs, or webhook API.' },
+    { href: '/tools/data-import', title: 'Data Import Hub', description: 'Import traceability data from CSV or XLSX files (including IoT temperature logs), or the JSON events API.' },
     { href: '/tools/tlc-validator', title: 'TLC Format Check', description: 'Check a traceability lot code for format and uniqueness assumptions. FDA does not set one TLC format.' },
 ];
 

@@ -111,12 +111,12 @@ export default function AcceptInvitePage() {
     return (
       <AuthShell
         title="Welcome aboard"
-        description="Your account is ready. We'll email you a sign-in code when you log in — no password needed."
+        description="Your account is ready. We'll email you a sign-in code when you log in. No password needed."
       >
         <div role="status" className="space-y-4">
           <p className="sr-only">
             Your account is ready. We&apos;ll email you a sign-in code when you
-            log in — no password needed.
+            log in. No password needed.
           </p>
           <Button
             className="w-full"

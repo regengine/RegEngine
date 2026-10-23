@@ -41,7 +41,7 @@ function getIngestionTargets(): string[] {
             candidates.push(productionUrl);
         } else if (runningOnVercel) {
             console.error(
-                '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+                '[proxy/ingestion] No ingestion backend URL configured; set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
             );
         } else {
             candidates.push(DEFAULT_INGESTION_URL);
@@ -93,7 +93,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
 
         // Inject access token + tenant API key + tenant ID from cookies.
         // Unlike admin, ingestion overwrites an incoming Authorization header
-        // with the cookie token — preserving pre-refactor behavior.
+        // with the cookie token - preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
 
         return headers;

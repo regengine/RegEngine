@@ -282,7 +282,7 @@ function IdentityResolutionPageContent() {
               <div className="min-w-0">
                 <CardTitle>Ambiguous Match Review Queue</CardTitle>
                 <CardDescription className="mt-1">
-                  Potential duplicates requiring human review — confirm match, confirm distinct, or defer
+                  Potential duplicates requiring human review: confirm match, confirm distinct, or defer
                 </CardDescription>
               </div>
             </CardHeader>

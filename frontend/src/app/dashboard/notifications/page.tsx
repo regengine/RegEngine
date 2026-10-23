@@ -135,7 +135,7 @@ function Toggle({
     );
 }
 
-/** One label / description / control row — the shape repeated eight times here. */
+/** One label / description / control row - the shape repeated eight times here. */
 function SettingRow({
     id,
     title,
@@ -237,7 +237,7 @@ export default function NotificationPrefsPage() {
             />
 
             {/* Settings surfaces keep a readable form column inside the app width
-                (SPEC §6.10) — a toggle 1,100px from its label is unusable. */}
+                (SPEC §6.10) - a toggle 1,100px from its label is unusable. */}
             <div className="max-w-[760px] space-y-6">
                 {loading && (
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
@@ -340,7 +340,7 @@ export default function NotificationPrefsPage() {
                                         title="Quiet Hours"
                                         description={
                                             <>
-                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 – {effectivePrefs.quiet_hours.end_hour}:00
+                                                Suppress non-critical {effectivePrefs.quiet_hours.start_hour}:00 to {effectivePrefs.quiet_hours.end_hour}:00
                                                 {effectivePrefs.quiet_hours.override_critical && ' (critical bypass)'}
                                             </>
                                         }

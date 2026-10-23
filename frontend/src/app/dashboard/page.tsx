@@ -36,7 +36,7 @@ import { TimedSkeleton } from "@/components/ui/timed-skeleton";
  * An operator opens this page every morning and after every import. The first
  * viewport answers three questions without scrolling: where do we stand, what
  * is wrong, and what do I do next. Everything else is folded into those three
- * or demoted below the fold — see SPEC §7 for the mapping of every widget that
+ * or demoted below the fold - see SPEC §7 for the mapping of every widget that
  * used to sit up here.
  */
 
@@ -95,7 +95,7 @@ export default function DashboardPage() {
   const effectiveTenantId = tenantId;
 
   // Derive the health signal from the same useSystemStatus() data the widget
-  // uses — one source of truth, so the strip and the widget never contradict.
+  // uses - one source of truth, so the strip and the widget never contradict.
   const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
   const { data: metrics } = useSystemMetrics();
 
@@ -119,7 +119,7 @@ export default function DashboardPage() {
   }, [isHydrated, effectiveUser, router]);
 
   // Check design partner status from tenant settings. Wait for tenant
-  // hydration — pre-hydration the id is the DEFAULT_TENANT_ID placeholder
+  // hydration - pre-hydration the id is the DEFAULT_TENANT_ID placeholder
   // and every cold load fired a doomed onboarding call against it.
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
@@ -368,7 +368,7 @@ export default function DashboardPage() {
               <div>
                 <p className="text-subheading text-re-text-primary">Daily Compliance Heartbeat</p>
                 <p className="text-ui text-re-text-tertiary">
-                  Score, alerts, chain status &amp; next actions — your morning check
+                  Score, alerts, chain status &amp; next actions: your morning check
                 </p>
               </div>
               <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />

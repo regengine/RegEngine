@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, ShoppingCart, Zap, Code } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison",
+  title: "RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.",
   openGraph: {
-    title: 'RegEngine vs ReposiTrak — FSMA 204 Compliance Comparison',
+    title: 'RegEngine vs ReposiTrak: FSMA 204 Compliance Comparison',
     description: 'Compare RegEngine and ReposiTrak for FSMA 204 compliance. Deep rule validation vs retailer compliance tracking.',
     url: 'https://regengine.co/compare/repositrak',
     type: 'website',
@@ -25,17 +25,17 @@ const FEATURES = [
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify ReposiTrak's current API surface for your stack" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs status tracking" },
-  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify ReposiTrak's current ingestion options" },
+  { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify ReposiTrak's current ingestion options" },
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom retailer quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
+  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout; request access" },
 ];
 
 const WHY_SWITCH = [
-  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine validates whether the underlying data is FSMA 204 compliant \u2014 checking KDEs, cross-event integrity, and mass balance. You can use both." },
+  { title: "Validation, not just submission tracking", icon: Zap, desc: "ReposiTrak focuses on supplier-data submission tracking. RegEngine validates whether the underlying data is FSMA 204 compliant, checking KDEs, cross-event integrity, and mass balance. You can use both." },
   { title: "Works beyond one retailer", icon: Shield, desc: "ReposiTrak is optimized for retailer-supplier compliance mandates. RegEngine works across your supply chain regardless of which retailers you serve." },
-  { title: "Public API and open egress", icon: Code, desc: "RegEngine ships a public REST API, OpenAPI spec, webhook integrations, and CSV export at any time. Confirm ReposiTrak's current integration options for your stack." },
+  { title: "Public API and open egress", icon: Code, desc: "RegEngine ships a public REST API, OpenAPI spec, JSON events API, and CSV export at any time. Confirm ReposiTrak's current integration options for your stack." },
   { title: "Complement your retailer tools", icon: ShoppingCart, desc: "Use ReposiTrak for retailer compliance tracking AND RegEngine for FSMA 204 validation. They solve adjacent problems." },
 ];
 
@@ -121,7 +121,7 @@ export default function ReposiTrakCompare() {
       {/* CTA */}
       <Card padding="spacious" className="text-center">
         <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
-        {/* #2757 — copy and destination resolve together so the blurb can never
+        {/* #2757 - copy and destination resolve together so the blurb can never
             promise a CSV sandbox that this deployment does not serve. */}
         <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
           {sandboxCta().blurb}

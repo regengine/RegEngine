@@ -85,7 +85,7 @@ export default function ExceptionQueuePage() {
   const pageHeader = (
     <PageHeader
       title="Exception Queue"
-      description="Manage compliance exceptions — resolve defects before they block response packages"
+      description="Manage compliance exceptions: resolve defects before they block response packages"
       meta={
         !exceptions.error && !blocking.error && blocking.data ? (blockingCount > 0 ? (
           <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />

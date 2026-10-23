@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { parseGS1 } from '@/lib/gs1-parser';
 import { scanMatchesItem } from '@/lib/scan-match';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
+import { NOT_SET } from '@/lib/empty-values';
 
 /* ─── Types ─── */
 interface LineItem {
@@ -65,9 +66,9 @@ const EXPECTED_FIELD_HINTS: readonly (readonly [string, string])[] = [
 ];
 
 const RECEIPT_COLUMNS: DataTableColumn<LineItem>[] = [
-    { key: 'productName', header: 'Product', cell: (item) => item.productName || '—' },
-    { key: 'gtin', header: 'Barcode', mono: true, cell: (item) => item.gtin || '—' },
-    { key: 'lotCode', header: 'Lot', mono: true, cell: (item) => item.lotCode || '—' },
+    { key: 'productName', header: 'Product', cell: (item) => item.productName || NOT_SET },
+    { key: 'gtin', header: 'Barcode', mono: true, cell: (item) => item.gtin || NOT_SET },
+    { key: 'lotCode', header: 'Lot', mono: true, cell: (item) => item.lotCode || NOT_SET },
     { key: 'quantity', header: 'Qty', align: 'right', cell: (item) => item.quantity },
 ];
 
@@ -124,7 +125,7 @@ export default function ReceivingDockPage() {
         const scannedGtin = parsed.gtin || '';
         const scannedLot = parsed.tlc || '';
         // The input invites typing a bare GTIN or lot code, but parseGS1 only
-        // extracts values from AI-encoded / Digital Link strings — so a user
+        // extracts values from AI-encoded / Digital Link strings - so a user
         // typing exactly what the Expected Items list displays never matched
         // and every scan landed in Unexpected Items. scanMatchesItem also
         // compares the raw string directly (matrix unit-tested in
@@ -149,7 +150,7 @@ export default function ReceivingDockPage() {
         }
 
         if (!matched) {
-            // Unexpected scan — add to unexpected list
+            // Unexpected scan - add to unexpected list
             updated.unexpectedScans.push({
                 id: `unx-${Date.now()}`,
                 gtin: scannedGtin,
@@ -278,7 +279,7 @@ export default function ReceivingDockPage() {
     /* ─── Render ─── */
     return (
         <PageContainer>
-            {/* Back link — the shell owns the breadcrumb; this stays as the
+            {/* Back link - the shell owns the breadcrumb; this stays as the
                 dock's own return affordance. */}
             <Link href="/dashboard" className="mb-4 inline-flex">
                 <Button variant="ghost" size="icon" aria-label="Back to dashboard">
@@ -371,7 +372,7 @@ export default function ReceivingDockPage() {
                             </CardContent>
                         </Card>
 
-                        {/* Scan input — keyboard wedge or manual */}
+                        {/* Scan input - keyboard wedge or manual */}
                         <Card>
                             <CardContent>
                                 <label
@@ -601,7 +602,7 @@ export default function ReceivingDockPage() {
                                 <div className="space-y-2 text-center">
                                     <h2 className="text-heading text-re-text-primary">Receiving Complete</h2>
                                     <p className="text-ui text-re-text-secondary">
-                                        {session.supplier} — PO {session.poNumber}
+                                        {session.supplier}, PO {session.poNumber}
                                     </p>
                                     <p className="font-mono text-small text-re-text-tertiary">{ts}</p>
                                 </div>

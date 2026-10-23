@@ -34,6 +34,7 @@ import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
 import { ErrorState } from '@/components/ui/error-state';
 import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
 
@@ -80,7 +81,7 @@ function scoreColor(score: number) {
     return 'var(--re-danger)';
 }
 
-/** For DOM nodes — a class keeps the colour out of an inline style (SPEC §4). */
+/** For DOM nodes - a class keeps the colour out of an inline style (SPEC §4). */
 function scoreTextClass(score: number) {
     if (score >= 80) return 'text-re-brand';
     if (score >= 60) return 'text-re-warning';
@@ -103,20 +104,20 @@ const STATUS_CONFIG = {
     'compliant': {
         icon: Shield,
         label: 'FSMA 204 Ready',
-        desc: "Your traceability data meets RegEngine's readiness checks — an advisory indicator, not a legal determination.",
+        desc: "Your traceability data meets RegEngine's readiness checks. This is an advisory indicator, not a legal determination.",
         bg: 'bg-re-brand-muted border-re-brand/30',
         text: 'text-re-brand',
     },
     'at-risk': {
         icon: ShieldAlert,
-        label: 'At Risk — Action Needed',
+        label: 'At Risk: Action Needed',
         desc: 'Gaps in your traceability data could cause issues during an FDA inspection.',
         bg: 'bg-re-warning-muted0/10 border-re-warning/30',
         text: 'text-re-warning',
     },
     'critical': {
         icon: ShieldX,
-        label: 'Critical — Not Compliant',
+        label: 'Critical: Not Compliant',
         desc: 'Significant gaps exist. Prioritize the actions below before your next audit.',
         bg: 'bg-re-danger-muted0/10 border-re-danger/30',
         text: 'text-re-danger',
@@ -522,7 +523,7 @@ export default function ComplianceDashboardPage() {
                                             <div
                                                 className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
                                             >
-                                                {workbenchSummary?.score ?? '—'}
+                                                {workbenchSummary?.score ?? NO_DATA_YET}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground mt-1">
                                                 {workbenchSummary?.label ?? 'No saved preflight run yet'}
@@ -768,7 +769,7 @@ export default function ComplianceDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Empty state — no score and not loading */}
+                {/* Empty state - no score and not loading */}
                 {!score && !loading && !error && isLoggedIn && (
                     <motion.div
                         initial={{ opacity: 0 }}

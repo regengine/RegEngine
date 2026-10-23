@@ -54,7 +54,7 @@ export const ROI_CALCULATOR_CONFIG: ToolConfig = {
         ],
         leadGate: {
             title: 'Your Illustrative Savings Estimate is Ready',
-            description: 'Enter your work email to see the illustrative breakdown. The numbers are not a forecast or commitment — book a call to model against your actual record volume.',
+            description: 'Enter your work email to see the illustrative breakdown. The numbers are not a forecast or commitment. Book a call to model against your actual record volume.',
             cta: 'View My Estimate'
         }
     }
@@ -65,7 +65,7 @@ export const calculateROI = (answers: Record<string, any>) => {
     const manualHours = Number(answers['manual-hours'] || 0);
     const annualRevenue = Number(answers['annual-revenue'] || 0);
 
-    // ILLUSTRATIVE COEFFICIENTS — not forecasts, not industry benchmarks. Surfaced
+    // ILLUSTRATIVE COEFFICIENTS - not forecasts, not industry benchmarks. Surfaced
     // honestly in the user-facing Methodology Note. Adjust here if assumptions change.
     //
     // 1. Modeled labor-time avoided: ManualHours * $75/hr loaded rate * 52 weeks * 0.85 capture rate

@@ -235,7 +235,7 @@ export default function TracePage() {
           </CardContent>
         </Card>
 
-        {/* Error — the page's one alarm. `Callout` cannot be imported here:
+        {/* Error - the page's one alarm. `Callout` cannot be imported here:
             src/__tests__/pages/trace.test.tsx mocks lucide-react with six
             icons and vitest throws on any other icon access at import time. */}
         {error && (
@@ -292,7 +292,7 @@ export default function TracePage() {
                   <CardDescription className="mt-1">
                     <span className="font-mono text-[0.8125rem]">{traceResult.tlc_code}</span>
                     {traceResult.product_description && (
-                      <span className="ml-2 text-re-text-secondary">— {traceResult.product_description}</span>
+                      <span className="ml-2 text-re-text-secondary">({traceResult.product_description})</span>
                     )}
                   </CardDescription>
                 </div>

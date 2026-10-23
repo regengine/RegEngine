@@ -333,7 +333,7 @@ export default function SupplierDashboardPage() {
             setInviteSupplierEmail('');
             setInviteProfileId('');
             setShowInviteForm(false);
-            // Auto-copy the link — best-effort only. clipboard.writeText
+            // Auto-copy the link - best-effort only. clipboard.writeText
             // rejects whenever the document is unfocused or permission is
             // denied; sharing the API call's catch made a SUCCESSFUL link
             // creation render as "Unable to create portal link", inviting
@@ -478,7 +478,7 @@ export default function SupplierDashboardPage() {
                     <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-4">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-re-border bg-re-surface-inset text-subheading tabular-nums text-re-text-primary">
-                                {workbenchSummary?.score ?? '—'}
+                                {workbenchSummary?.score ?? NO_DATA_YET}
                             </div>
                             <div className="min-w-0">
                                 <div className="text-ui font-medium text-re-text-primary">Inflow Workbench readiness</div>
@@ -506,7 +506,7 @@ export default function SupplierDashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Portal Links — Invite Suppliers */}
+                {/* Portal Links - Invite Suppliers */}
                 <Card>
                     <CardHeader>
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -822,7 +822,7 @@ export default function SupplierDashboardPage() {
                     </Card>
                 )}
 
-                {/* Facility List — hairline ledger rows */}
+                {/* Facility List - hairline ledger rows */}
                 {!loading && facilities.length > 0 && (
                     <Card>
                         <ul className="divide-y divide-re-border-subtle">

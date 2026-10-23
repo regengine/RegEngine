@@ -31,6 +31,7 @@ import {
 } from '@/hooks/use-remediation';
 
 import { Check, Copy, FileWarning, Link2, Mail, PackageCheck } from 'lucide-react';
+import { NOT_SET, NO_DATA_YET } from '@/lib/empty-values';
 
 const CASE_STATUS_LABEL: Record<string, string> = {
   detected: 'Detected',
@@ -48,8 +49,8 @@ const CASE_STATUS_LABEL: Record<string, string> = {
 // Delivery lifecycle of an outbox entry (fsma.notification_outbox.status).
 // 'pending'/'previewed' predate automatic delivery and are never emailed.
 const DELIVERY_LABEL: Record<string, string> = {
-  pending: 'Preview — not emailed',
-  previewed: 'Preview — not emailed',
+  pending: 'Preview (not emailed)',
+  previewed: 'Preview (not emailed)',
   queued: 'Email queued',
   sending: 'Sending',
   sent: 'Emailed',
@@ -77,7 +78,7 @@ function DeliveryBadge({ status, reason }: { status: string; reason?: string | n
 }
 
 function pct(value: number | null | undefined): string {
-  if (value === null || value === undefined) return '—';
+  if (value === null || value === undefined) return NO_DATA_YET;
   return `${Math.round(value * 100)}%`;
 }
 
@@ -94,7 +95,7 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard denied (insecure context, permission) — the URL is on screen.
+      // Clipboard denied (insecure context, permission) - the URL is on screen.
     }
   };
 
@@ -103,7 +104,7 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
       {email ? (
         <>
           <p className="text-ui font-medium text-re-text-primary">
-            Link issued — being emailed to {email} automatically (usually within a minute).
+            Link issued. It is being emailed to {email} automatically (usually within a minute).
           </p>
           <p className="mt-1 text-small text-re-text-tertiary">
             Do not share the copy below: sending re-issues the link, so this copy stops working the
@@ -112,8 +113,8 @@ function IssuedLinkPanel({ url, email }: { url: string; email: string | null }) 
         </>
       ) : (
         <p className="text-ui font-medium text-re-text-primary">
-          No supplier email given — this link will NOT be emailed. Copy it now and deliver it
-          yourself (shown once — only its hash is stored):
+          No supplier email given, so this link will NOT be emailed. Copy it now and deliver it
+          yourself (shown once; only its hash is stored):
         </p>
       )}
       <div className="mt-2 flex items-start gap-2">
@@ -150,7 +151,7 @@ export default function RemediationPage() {
   const releaseManifest = useReleaseManifest(tid);
   const issueLink = useIssueCorrectionLink(tid);
 
-  // Latest outbox entry per case (list is newest-first) — the per-case
+  // Latest outbox entry per case (list is newest-first) - the per-case
   // delivery state shown in the manifest detail table.
   const outboxByCase = useMemo(() => {
     const byCase = new Map<string, OutboxPreview>();
@@ -166,7 +167,7 @@ export default function RemediationPage() {
   const pageHeader = (
     <PageHeader
       title="Supplier Remediation"
-      description="Manifest intake, blocked-line correction links, and evidence — suppliers fix their own data."
+      description="Manifest intake, blocked-line correction links, and evidence. Suppliers fix their own data."
     />
   );
 
@@ -264,7 +265,7 @@ export default function RemediationPage() {
       header: 'Case',
       width: '12.5rem',
       cell: (record) => {
-        if (!record.case) return <span className="text-re-text-muted">—</span>;
+        if (!record.case) return <span className="text-re-text-muted">{NOT_SET}</span>;
         const delivery = outboxByCase.get(record.case.case_id);
         return (
           <span className="flex flex-wrap items-center gap-2 text-ui text-re-text-secondary">
@@ -289,7 +290,7 @@ export default function RemediationPage() {
       width: '7rem',
       cell: (record) => (
         <span className="text-re-text-tertiary">
-          {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : '—'}
+          {record.case?.due_at ? new Date(record.case.due_at).toLocaleDateString() : NOT_SET}
         </span>
       ),
     },
@@ -298,7 +299,7 @@ export default function RemediationPage() {
       header: 'Why blocked',
       cell: (record) => (
         <span className="block max-w-[20ch] text-re-text-tertiary">
-          {(record.failures ?? []).map((f) => f.why_failed).join('; ') || '—'}
+          {(record.failures ?? []).map((f) => f.why_failed).join('; ') || NOT_SET}
         </span>
       ),
     },
@@ -372,7 +373,7 @@ export default function RemediationPage() {
       <Section
         spacing="app"
         title="Manifests"
-        description="A data hold withholds blocked lines from release — it never rejects physical shipments."
+        description="A data hold withholds blocked lines from release. It never rejects physical shipments."
       >
         <DataTable
           caption="Ingested supplier manifests"
@@ -392,7 +393,7 @@ export default function RemediationPage() {
             <div className="min-w-0">
               <CardTitle>{detail.data?.original_filename ?? 'Manifest detail'}</CardTitle>
               <CardDescription className="mt-1">
-                SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… — original bytes preserved verbatim
+                SHA-256 {detail.data?.source_sha256?.slice(0, 16)}… (original bytes preserved verbatim)
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setSelectedRun(null)}>
@@ -443,7 +444,7 @@ export default function RemediationPage() {
         </Card>
       )}
 
-      {/* Notification outbox — queued link emails are delivered by the drainer */}
+      {/* Notification outbox - queued link emails are delivered by the drainer */}
       <Section
         spacing="app"
         className="mt-8"

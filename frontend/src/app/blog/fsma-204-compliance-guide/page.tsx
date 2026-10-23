@@ -60,7 +60,7 @@ export default function FSMA204ComplianceGuide() {
               What Is FSMA 204?
             </h2>
             <p className="text-body text-re-text-secondary mb-6">
-              FSMA 204 is the FDA's Food Traceability Rule. It requires covered food businesses to keep records identifying the immediate previous sources and immediate recipients of their products. When the FDA needs your traceability data—due to a foodborne illness outbreak, contamination, or suspected intentional adulteration—you have 24 hours to provide it.
+              FSMA 204 is the FDA's Food Traceability Rule. It requires covered food businesses to keep records identifying the immediate previous sources and immediate recipients of their products. When the FDA needs your traceability data (due to a foodborne illness outbreak, contamination, or suspected intentional adulteration), you have 24 hours to provide it.
             </p>
             <p className="text-body text-re-text-secondary mb-6">
               The rule applies to foods specifically listed on the FDA's Food Traceability List (FTL), including leafy greens, berry crops, bivalve mollusks, soft cheeses, and more. If your business handles an FTL product, FSMA 204 traceability obligations may apply.
@@ -119,27 +119,27 @@ export default function FSMA204ComplianceGuide() {
             <ul className="space-y-3 mb-8 text-body text-re-text-secondary">
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Traceability Lot Code (TLC)</strong> — A unique identifier that links the product through the supply chain</span>
+                <span><strong>Traceability Lot Code (TLC):</strong> A unique identifier that links the product through the supply chain</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Product Description</strong> — Name, variety, and any identifying information</span>
+                <span><strong>Product Description:</strong> Name, variety, and any identifying information</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Quantity and Unit of Measure</strong> — How much product, in what units</span>
+                <span><strong>Quantity and Unit of Measure:</strong> How much product, in what units</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Location Information</strong> — Farm name, facility address, or geographic location</span>
+                <span><strong>Location Information:</strong> Farm name, facility address, or geographic location</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Date/Time of CTE</strong> — When the event occurred</span>
+                <span><strong>Date/Time of CTE:</strong> When the event occurred</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span><strong>Immediate Previous Source or Recipient</strong> — Who you received from or sent to</span>
+                <span><strong>Immediate Previous Source or Recipient:</strong> Who you received from or sent to</span>
               </li>
             </ul>
             <p className="text-body text-re-text-secondary">
@@ -247,7 +247,7 @@ export default function FSMA204ComplianceGuide() {
                   2. Standardize Your Traceability Lot Code
                 </h4>
                 <p className="text-re-text-secondary">
-                  Implement a consistent, unique TLC format across your supply chain. This doesn't need to be complex—it just needs to identify the product, lot, and date. Work with your suppliers and customers to ensure compatibility.
+                  Implement a consistent, unique TLC format across your supply chain. This doesn't need to be complex. It just needs to identify the product, lot, and date. Work with your suppliers and customers to ensure compatibility.
                 </p>
               </Card>
 
@@ -296,7 +296,7 @@ export default function FSMA204ComplianceGuide() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span>Identify which Critical Tracking Events occur at your operation (§§1.1325–1.1350) and capture the KDEs the rule requires for each one — not every CTE applies to every business.</span>
+                <span>Identify which Critical Tracking Events occur at your operation (§§1.1325 to 1.1350) and capture the KDEs the rule requires for each one. Not every CTE applies to every business.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />

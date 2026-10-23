@@ -4,20 +4,21 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { NO_DATA_YET } from "@/lib/empty-values"
 
 /**
- * StatTile — SPEC §4, following the data-viz rules.
+ * StatTile - SPEC §4, following the data-viz rules.
  *
  * Anatomy is fixed: label / value / optional delta / optional trend. There is
- * deliberately **no icon slot** — an icon slot is what let three competing tile
+ * deliberately **no icon slot** - an icon slot is what let three competing tile
  * styles grow across the dashboard last time.
  *
  * Colour rules:
- *   · the value is never coloured — it is always `text-re-text-primary`;
+ *   · the value is never coloured - it is always `text-re-text-primary`;
  *   · the delta *text* stays secondary; only the arrow carries sentiment colour,
  *     with an sr-only word so the direction is not colour-only;
- *   · the sparkline is aria-hidden and decorative — the delta carries the
- *     meaning — and is `text-tertiary` on every tile except the hero, which is
+ *   · the sparkline is aria-hidden and decorative - the delta carries the
+ *     meaning - and is `text-tertiary` on every tile except the hero, which is
  *     the one place a brand stroke is allowed.
  *
  * Exactly one `hero` tile per view.
@@ -35,7 +36,7 @@ export interface StatTileProps {
   value: React.ReactNode
   unit?: string
   delta?: StatTileDelta
-  /** 8–30 points. Omit for no chart. */
+  /** 8-30 points. Omit for no chart. */
   trend?: number[]
   /** A StatusBadge, typically. */
   status?: React.ReactNode
@@ -130,7 +131,7 @@ export function StatTile({
                 empty && "text-re-text-disabled"
               )}
             >
-              {empty ? "—" : value}
+              {empty ? NO_DATA_YET : value}
             </span>
             {unit && !empty && <span className="text-ui text-re-text-tertiary">{unit}</span>}
             {trend && trend.length > 1 && !empty && (

@@ -221,7 +221,7 @@ function AlertsDashboardPageContent() {
 
                 {isLoggedIn && !loading && alerts.length > 0 && (
                     <>
-                        {/* Summary tiles — each one also toggles its severity filter */}
+                        {/* Summary tiles - each one also toggles its severity filter */}
                         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                             {SUMMARY_TILES.map((item) => (
                                 <button
@@ -285,7 +285,7 @@ function AlertsDashboardPageContent() {
 
                         {ackError && (
                             <Callout tone="danger" role="alert">
-                                Couldn&apos;t acknowledge — retry.
+                                Couldn&apos;t acknowledge. Retry.
                             </Callout>
                         )}
 
@@ -445,7 +445,7 @@ function AlertsDashboardPageContent() {
                     <EmptyState
                         icon={CheckCircle2}
                         title="No alerts"
-                        description="Everything looks good — no active alerts"
+                        description="Everything looks good: no active alerts"
                     />
                 )}
             </div>

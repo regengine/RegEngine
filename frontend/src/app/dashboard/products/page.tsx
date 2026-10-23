@@ -95,7 +95,7 @@ async function apiAddProduct(tenantId: string, name: string, category: string, s
     });
     if (!res.ok) {
         console.error(`Product add failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't add the product — retry.");
+        throw new Error("Couldn't add the product. Retry.");
     }
 }
 
@@ -119,7 +119,7 @@ async function apiUpdateProduct(tenantId: string, product: Product, updates: { n
     });
     if (!res.ok) {
         console.error(`Product update failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't save your changes — retry.");
+        throw new Error("Couldn't save your changes. Retry.");
     }
 }
 
@@ -133,7 +133,7 @@ async function apiDeleteProduct(tenantId: string, productId: string): Promise<vo
     });
     if (!res.ok) {
         console.error(`Product delete failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't delete the product — retry.");
+        throw new Error("Couldn't delete the product. Retry.");
     }
 }
 
@@ -332,7 +332,7 @@ export default function ProductCatalogPage() {
                                     {addProductMutation.isError && (
                                         <p className="flex items-center gap-1.5 text-small text-re-danger sm:col-span-2 md:col-span-4">
                                             <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            {addProductMutation.error?.message || "Couldn't add the product — retry."}
+                                            {addProductMutation.error?.message || "Couldn't add the product. Retry."}
                                         </p>
                                     )}
                                 </CardContent>
@@ -426,7 +426,7 @@ export default function ProductCatalogPage() {
                                             {updateProductMutation.isError && (
                                                 <p className="flex items-center gap-1.5 text-small text-re-danger sm:col-span-2 md:col-span-4">
                                                     <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                                    {updateProductMutation.error?.message || "Couldn't save your changes — retry."}
+                                                    {updateProductMutation.error?.message || "Couldn't save your changes. Retry."}
                                                 </p>
                                             )}
                                         </div>
@@ -457,11 +457,11 @@ export default function ProductCatalogPage() {
                         {deleteProductMutation.isError && (
                             <p className="flex items-center gap-1.5 text-small text-re-danger">
                                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                {deleteProductMutation.error?.message || "Couldn't delete the product — retry."}
+                                {deleteProductMutation.error?.message || "Couldn't delete the product. Retry."}
                             </p>
                         )}
 
-                        {/* Product List — hairline ledger rows. Each row keeps its
+                        {/* Product List - hairline ledger rows. Each row keeps its
                             role="region" + aria-label, which the authenticated e2e
                             journey scopes its Open/Edit/Delete clicks to. */}
                         <Card className="overflow-hidden">
