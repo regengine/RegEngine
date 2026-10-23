@@ -169,7 +169,7 @@ describe('use-fsma hooks', () => {
                 controls_mapped: 9,
                 evidence_items: 12,
                 is_demo: false,
-                generated_at: '2026-05-07T00:00:00.000Z',
+                generated_at: '',
             }),
         });
 

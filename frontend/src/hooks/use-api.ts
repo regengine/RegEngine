@@ -6,22 +6,7 @@ import type { LabelBatchInitRequest } from '@/types/labels';
 import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
 import { POLL_HEALTH_MS as POLL_HEALTH, POLL_METRICS_MS as POLL_METRICS } from '@/lib/polling-config';
 
-// Fallback data shown when backend services are unreachable.
-// Uses zeros — no fabricated metrics. The _demo flag lets the UI
-// distinguish "backend unavailable" from "tenant has no data."
-const DEMO_METRICS: SystemMetricsResponse & { _demo: true } = {
-  _demo: true,
-  total_tenants: 0,
-  total_documents: 0,
-  active_jobs: 0,
-  compliance_score: 0,
-  compliance_grade: '—',
-  events_ingested: 0,
-  chain_length: 0,
-  chain_valid: false,
-  open_alerts: 0,
-};
-
+// Fallback status shown when backend services are unreachable.
 const DEMO_STATUS: SystemStatusResponse & { _demo: true } = {
   _demo: true,
   overall_status: 'degraded',
@@ -128,20 +113,17 @@ export const useSystemStatus = () => {
   };
 };
 
+// Real data only: no placeholder metrics on error. When a refetch fails,
+// react-query keeps the last successful `data` and sets `error`, so callers
+// can show stale-but-real figures and only fall back to an error state when
+// nothing has ever loaded.
 export const useSystemMetrics = () => {
-  const query = useQuery({
+  return useQuery<SystemMetricsResponse>({
     queryKey: ['system', 'metrics'],
     queryFn: () => apiClient.getSystemMetrics(),
     refetchInterval: POLL_METRICS,
     retry: false,
   });
-  // Same rule as useSystemStatus: demo zeros for down backends, real error
-  // for expired or forbidden sessions.
-  const hideAuthError = query.error && isAuthError(query.error);
-  return {
-    ...query,
-    data: query.data ?? (!hideAuthError && query.error ? DEMO_METRICS : undefined),
-  };
 };
 
 export const useQAHealth = (enabled = true) => {
@@ -196,7 +178,7 @@ export const useRevokeAPIKey = () => {
 // Ingestion
 export const useIngestURL = () => {
   return useMutation({
-    mutationFn: ({ apiKey, url, sourceSystem }: { apiKey: string; url: string; sourceSystem?: string }) =>
+    mutationFn: ({ apiKey, url, sourceSystem }: { apiKey?: string; url: string; sourceSystem?: string }) =>
       apiClient.ingestURL(apiKey, url, sourceSystem),
   });
 };

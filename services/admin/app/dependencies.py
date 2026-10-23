@@ -10,7 +10,7 @@ from fastapi.security.utils import get_authorization_scheme_param
 from jwt.exceptions import PyJWTError as JWTError
 from shared.env import requires_strict_auth_runtime
 from shared.jwt_key_registry import JWTKeyRegistryBackendUnavailable
-from shared.permissions import has_permission
+from shared.permissions import has_permission, role_rank
 
 # Supabase Integration
 from shared.supabase_client import get_supabase
@@ -586,7 +586,9 @@ class PermissionChecker:
                 detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID",
             )
 
-        # Get Membership and Role
+        # Resolve user's role for the current tenant/workspace (the tenant of
+        # the request, via the same membership lookup the existing permission path uses),
+        # never a global or other-tenant role.
         stmt = (
             select(RoleModel)
             .join(MembershipModel)
@@ -604,11 +606,25 @@ class PermissionChecker:
         if not role:
             raise HTTPException(status_code=403, detail="Role not found")
 
+        role_name = getattr(role, "name", None)
+        role_perms = role.permissions or []
+        if self.required_permission.lower() in ("owner", "role:owner"):
+            if (
+                (role_name and role_name.lower() == "owner")
+                or role_rank(role_name, role_perms) >= 100
+                or has_permission(role_perms, "*")
+            ):
+                return True
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
         # Check permissions with wildcard and namespace support.
         if has_permission(role.permissions or [], self.required_permission):
             return True
 
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+require_owner = PermissionChecker("owner")
 
 
 def verify_path_tenant_matches(

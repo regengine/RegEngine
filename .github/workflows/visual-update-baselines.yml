@@ -1,0 +1,56 @@
+# Refresh visual baselines on demand. Manual dispatch only.
+#
+# Produces fresh __screenshots__ on Linux (the same platform CI compares
+# against) and uploads them as the 'visual-baselines-linux' artifact.
+#
+# Baselines are committed to frontend/tests/visual/__screenshots__/ ONLY
+# after the RegEngine Visual Designer's approval comment on the run or the
+# associated PR. Never commit baseline PNGs from a local macOS/Windows run:
+# font rendering differs per platform and will fail Linux CI comparisons.
+name: Visual Update Baselines
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: Base URL to capture baselines from
+        required: false
+        type: string
+        default: https://regengine.co
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  update-baselines:
+    name: visual-report (non-required)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Capture baselines
+        env:
+          VISUAL_BASE_URL: ${{ inputs.url || 'https://regengine.co' }}
+        run: >-
+          npx playwright test --config=playwright.visual.config.ts
+          --update-snapshots
+          --project=desktop --project=mobile --project=priority-extras
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        if: always()
+        with:
+          name: visual-baselines-linux
+          path: frontend/tests/visual/__screenshots__

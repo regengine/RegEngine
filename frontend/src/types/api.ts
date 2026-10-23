@@ -382,6 +382,30 @@ export interface SupplierFacility {
     roles: string[];
 }
 
+export interface FacilityRemovalCheck {
+    facility_id: string;
+    facility_name: string;
+    allowed: boolean;
+    linked_counts: {
+        lots: number;
+        events: number;
+        records: number;
+        cte_events?: number;
+        funnel_events?: number;
+        scoping_config?: number;
+    };
+    lots_count: number;
+    cte_events_count: number;
+    funnel_events_count: number;
+    scoping_config_count: number;
+    address: {
+        street: string;
+        city: string;
+        state: string;
+        postal_code: string;
+    };
+}
+
 export interface FacilityFTLScopingRequest {
     category_ids: string[];
 }

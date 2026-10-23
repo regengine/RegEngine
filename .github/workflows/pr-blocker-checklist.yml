@@ -1,0 +1,730 @@
+name: PR Blocker Checklist
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  issue_comment:
+    types: [created, edited, deleted]
+
+concurrency:
+  group: pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  pr-blocker-checklist:
+    name: PR Blocker Checklist
+    if: github.event_name != 'issue_comment' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR Blocker Checklist
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const pr = context.payload.pull_request;
+              const prNumber = pr?.number || context.issue?.number || context.payload.issue?.number;
+              if (!prNumber) {
+                console.log('No pull request number in event payload. Skipping.');
+                return;
+              }
+
+              const isFork = Boolean(
+                pr?.head?.repo?.fork ||
+                (pr?.head?.repo?.full_name && pr?.base?.repo?.full_name && pr.head.repo.full_name !== pr.base.repo.full_name) ||
+                context.payload.repository?.fork
+              );
+
+              const initialQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                  viewer {
+                    login
+                  }
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      id
+                      headRefOid
+                      isCrossRepository
+                      reviewThreads(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          isResolved
+                          path
+                          comments(first: 100) {
+                            pageInfo {
+                              hasNextPage
+                              endCursor
+                            }
+                            nodes {
+                              id
+                              databaseId
+                              url
+                              body
+                              createdAt
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                      reviews(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          author {
+                            login
+                          }
+                          state
+                          submittedAt
+                          url
+                          body
+                        }
+                      }
+                      comments(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let prData;
+              let botLogin = null;
+              try {
+                const response = await github.graphql(initialQuery, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  prNumber: prNumber,
+                });
+                botLogin = response?.viewer?.login || null;
+                prData = response?.repository?.pullRequest;
+              } catch (gqlErr) {
+                console.log('GraphQL query failed or insufficient permissions: ' + gqlErr.message);
+                if (typeof core !== 'undefined' && core.summary) {
+                  try {
+                    await core.summary.addRaw('### PR Blocker Checklist\n\nUnable to fetch PR details via GraphQL: ' + gqlErr.message).write();
+                  } catch (_) {}
+                }
+                return;
+              }
+
+              if (!prData) {
+                console.log(`Could not load PR #${prNumber} data via GraphQL.`);
+                return;
+              }
+
+              // Paginate reviewThreads if needed
+              const allReviewThreads = [...(prData.reviewThreads?.nodes || [])];
+              let threadPageInfo = prData.reviewThreads?.pageInfo;
+              const threadPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviewThreads(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          isResolved
+                          path
+                          comments(first: 100) {
+                            pageInfo {
+                              hasNextPage
+                              endCursor
+                            }
+                            nodes {
+                              id
+                              databaseId
+                              url
+                              body
+                              createdAt
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (threadPageInfo?.hasNextPage && threadPageInfo.endCursor) {
+                  const pageRes = await github.graphql(threadPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: threadPageInfo.endCursor,
+                  });
+                  const moreThreads = pageRes?.repository?.pullRequest?.reviewThreads;
+                  if (moreThreads?.nodes?.length) {
+                    allReviewThreads.push(...moreThreads.nodes);
+                  }
+                  threadPageInfo = moreThreads?.pageInfo;
+                }
+              } catch (pageErr) {
+                console.log('Note: pagination for reviewThreads stopped early: ' + pageErr.message);
+              }
+
+              // Paginate comments within reviewThreads if any thread has more than 100 comments
+              const threadCommentsQuery = `
+                query($threadId: ID!, $cursor: String!) {
+                  node(id: $threadId) {
+                    ... on ReviewThread {
+                      comments(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              for (const thread of allReviewThreads) {
+                const threadComments = [...(thread.comments?.nodes || [])];
+                let commentPageInfo = thread.comments?.pageInfo;
+                try {
+                  while (commentPageInfo?.hasNextPage && commentPageInfo.endCursor) {
+                    const pageRes = await github.graphql(threadCommentsQuery, {
+                      threadId: thread.id,
+                      cursor: commentPageInfo.endCursor,
+                    });
+                    const moreComments = pageRes?.node?.comments;
+                    if (moreComments?.nodes?.length) {
+                      threadComments.push(...moreComments.nodes);
+                    }
+                    commentPageInfo = moreComments?.pageInfo;
+                  }
+                } catch (threadCommentErr) {
+                  console.log('Note: pagination for thread comments stopped early: ' + threadCommentErr.message);
+                }
+                thread.allComments = threadComments;
+              }
+
+              // Paginate reviews if needed
+              const allReviews = [...(prData.reviews?.nodes || [])];
+              let reviewPageInfo = prData.reviews?.pageInfo;
+              const reviewPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviews(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          author {
+                            login
+                          }
+                          state
+                          submittedAt
+                          url
+                          body
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (reviewPageInfo?.hasNextPage && reviewPageInfo.endCursor) {
+                  const pageRes = await github.graphql(reviewPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: reviewPageInfo.endCursor,
+                  });
+                  const moreReviews = pageRes?.repository?.pullRequest?.reviews;
+                  if (moreReviews?.nodes?.length) {
+                    allReviews.push(...moreReviews.nodes);
+                  }
+                  reviewPageInfo = moreReviews?.pageInfo;
+                }
+              } catch (reviewPageErr) {
+                console.log('Note: pagination for reviews stopped early: ' + reviewPageErr.message);
+              }
+
+              // Paginate issue comments if needed
+              const allPrComments = [...(prData.comments?.nodes || [])];
+              let prCommentPageInfo = prData.comments?.pageInfo;
+              const prCommentPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      comments(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (prCommentPageInfo?.hasNextPage && prCommentPageInfo.endCursor) {
+                  const pageRes = await github.graphql(prCommentPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: prCommentPageInfo.endCursor,
+                  });
+                  const moreComments = pageRes?.repository?.pullRequest?.comments;
+                  if (moreComments?.nodes?.length) {
+                    allPrComments.push(...moreComments.nodes);
+                  }
+                  prCommentPageInfo = moreComments?.pageInfo;
+                }
+              } catch (commentPageErr) {
+                console.log('Note: pagination for PR comments stopped early: ' + commentPageErr.message);
+              }
+
+              const headSha = pr?.head?.sha || prData.headRefOid || 'unknown';
+              const isCrossRepo = Boolean(isFork || prData.isCrossRepository);
+              const MARKER = '<!-- pr-blocker-checklist -->';
+
+              function cleanText(text, maxLen = 80) {
+                if (!text) return '';
+                let clean = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+                clean = clean.replace(/[\u2013\u2014]/g, '-');
+                if (maxLen && clean.length > maxLen) {
+                  clean = clean.slice(0, maxLen) + '...';
+                }
+                return clean;
+              }
+
+              function sanitizeCodeSpan(text) {
+                if (!text) return '';
+                return String(text).replace(/`/g, "'").replace(/[\u2013\u2014]/g, '-');
+              }
+
+              function escapeProse(text) {
+                if (!text) return '';
+                return text
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/[\u2013\u2014]/g, '-');
+              }
+
+              function isShaMatch(a, b) {
+                if (!a || !b) return false;
+                const la = a.toLowerCase();
+                const lb = b.toLowerCase();
+                return la === lb || la.startsWith(lb) || lb.startsWith(la);
+              }
+
+              function parseVerdictLine(line) {
+                if (!line) return null;
+                const trimmed = line.trim();
+                const stripped = trimmed
+                  .replace(/^#+\s*/, '')
+                  .replace(/^[*_~-]+\s*/, '')
+                  .replace(/^\*\*([^*]+)\*\*/, '$1')
+                  .trim();
+
+                const markerMatch = trimmed.match(/^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/) ||
+                                    stripped.match(/^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/);
+                if (markerMatch) {
+                  return {
+                    type: 'MARKER',
+                    verdict: markerMatch[1],
+                    engine: markerMatch[2],
+                    sha: markerMatch[3].toLowerCase(),
+                    text: trimmed,
+                  };
+                }
+
+                const legacyMatch = stripped.match(/^(?:Verdict:\s*)?(FAIL|PASS)\b/) ||
+                                    trimmed.match(/^(?:Verdict:\s*)?(FAIL|PASS)\b/);
+                if (legacyMatch) {
+                  return {
+                    type: 'LEGACY',
+                    verdict: legacyMatch[1] === 'FAIL' ? 'BLOCKED' : 'PASS',
+                    legacyVerdict: legacyMatch[1],
+                    engine: null,
+                    sha: null,
+                    text: stripped,
+                  };
+                }
+
+                return null;
+              }
+
+              function hasFailLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const parsed = parseVerdictLine(line);
+                  return parsed && (parsed.verdict === 'BLOCKED' || parsed.legacyVerdict === 'FAIL');
+                });
+              }
+
+              function extractFailLine(body, maxLen = 100) {
+                if (!body) return '';
+                const lines = body.split(/\r?\n/);
+                for (const line of lines) {
+                  const parsed = parseVerdictLine(line);
+                  if (parsed && (parsed.verdict === 'BLOCKED' || parsed.legacyVerdict === 'FAIL')) {
+                    return cleanText(parsed.text, maxLen);
+                  }
+                }
+                return '';
+              }
+
+              function hasPassLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const parsed = parseVerdictLine(line);
+                  return parsed && parsed.verdict === 'PASS';
+                });
+              }
+
+              // 1. Unresolved Review Threads
+              const unresolvedThreads = [];
+              for (const thread of allReviewThreads) {
+                if (thread.isResolved) continue;
+                const firstComment = thread.allComments?.[0] || thread.comments?.nodes?.[0];
+                const author = firstComment?.author?.login || 'unknown';
+                const url = firstComment?.url || `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
+                const snippet = cleanText(firstComment?.body, 80);
+                unresolvedThreads.push({
+                  id: thread.id,
+                  path: thread.path,
+                  author,
+                  url,
+                  snippet,
+                });
+              }
+
+              // 2. Reviews requesting changes (latest opinionated review is CHANGES_REQUESTED)
+              const reviewsByAuthor = new Map();
+              for (const review of allReviews) {
+                const login = review.author?.login;
+                if (!login || review.state === 'PENDING') continue;
+                if (!reviewsByAuthor.has(login)) {
+                  reviewsByAuthor.set(login, []);
+                }
+                reviewsByAuthor.get(login).push(review);
+              }
+
+              const changesRequestedReviews = [];
+              for (const [login, authorReviews] of reviewsByAuthor.entries()) {
+                authorReviews.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
+                const opinionated = authorReviews.filter(r =>
+                  ['CHANGES_REQUESTED', 'APPROVED', 'DISMISSED'].includes(r.state)
+                );
+                const latestOpinionated = opinionated[opinionated.length - 1];
+                if (latestOpinionated && latestOpinionated.state === 'CHANGES_REQUESTED') {
+                  changesRequestedReviews.push({
+                    author: login,
+                    url: latestOpinionated.url,
+                    submittedAt: latestOpinionated.submittedAt,
+                  });
+                }
+              }
+
+              // 3. Engine verdicts (marker lines and legacy FAIL/PASS comments)
+              const allComments = [];
+              const seenCommentIds = new Set();
+
+              for (const c of allPrComments) {
+                if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                if (c.body.includes(MARKER)) continue;
+                seenCommentIds.add(c.id);
+                allComments.push({
+                  id: c.id,
+                  databaseId: c.databaseId,
+                  url: c.url,
+                  body: c.body,
+                  author: c.author?.login || 'unknown',
+                  createdAt: new Date(c.createdAt),
+                  type: 'issue_comment',
+                });
+              }
+
+              for (const thread of allReviewThreads) {
+                for (const c of thread.allComments || thread.comments?.nodes || []) {
+                  if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                  if (c.body.includes(MARKER)) continue;
+                  seenCommentIds.add(c.id);
+                  allComments.push({
+                    id: c.id,
+                    databaseId: c.databaseId,
+                    url: c.url,
+                    body: c.body,
+                    author: c.author?.login || 'unknown',
+                    createdAt: new Date(c.createdAt),
+                    type: 'review_comment',
+                    path: thread.path,
+                  });
+                }
+              }
+
+              for (const r of allReviews) {
+                if (!r || !r.body || r.state === 'PENDING' || seenCommentIds.has(r.id)) continue;
+                if (r.body.includes(MARKER)) continue;
+                seenCommentIds.add(r.id);
+                allComments.push({
+                  id: r.id,
+                  url: r.url,
+                  body: r.body,
+                  author: r.author?.login || 'unknown',
+                  createdAt: new Date(r.submittedAt),
+                  type: 'review_body',
+                });
+              }
+
+              allComments.sort((a, b) => a.createdAt - b.createdAt);
+
+              const allVerdicts = [];
+              for (const c of allComments) {
+                const lines = c.body.split(/\r?\n/);
+                const parsedInComment = [];
+                for (const rawLine of lines) {
+                  const parsed = parseVerdictLine(rawLine);
+                  if (parsed) {
+                    parsedInComment.push(parsed);
+                  }
+                }
+                if (parsedInComment.length === 0) continue;
+
+                const markerVerdicts = parsedInComment.filter(p => p.type === 'MARKER');
+                if (markerVerdicts.length > 0) {
+                  for (const mv of markerVerdicts) {
+                    allVerdicts.push({
+                      engine: mv.engine,
+                      sha: mv.sha,
+                      status: mv.verdict,
+                      createdAt: c.createdAt,
+                      url: c.url,
+                      line: cleanText(mv.text, 100),
+                      path: c.path,
+                    });
+                  }
+                } else {
+                  for (const lv of parsedInComment) {
+                    allVerdicts.push({
+                      engine: c.author,
+                      sha: headSha.toLowerCase(),
+                      status: lv.verdict,
+                      createdAt: c.createdAt,
+                      url: c.url,
+                      line: cleanText(lv.text, 100),
+                      path: c.path,
+                    });
+                  }
+                }
+              }
+
+              // Track verdicts per (engine, sha) and latest verdict per engine.
+              // A BLOCKED/FAIL by engine X is cleared only by a later PASS by the same engine X.
+              const verdictsByEngineSha = new Map();
+              const latestVerdictByEngine = new Map();
+
+              for (const v of allVerdicts) {
+                verdictsByEngineSha.set(`${v.engine}:${v.sha}`, v);
+                latestVerdictByEngine.set(v.engine, v);
+              }
+
+              const blockedEngines = [];
+              for (const [engine, verdict] of latestVerdictByEngine.entries()) {
+                if (verdict.status === 'BLOCKED') {
+                  blockedEngines.push(verdict);
+                }
+              }
+
+              const totalBlockers = unresolvedThreads.length + changesRequestedReviews.length + blockedEngines.length;
+
+              const lines = [];
+              lines.push(MARKER);
+              lines.push('## PR Blocker Checklist');
+              lines.push('');
+              lines.push(`**Head SHA:** \`${sanitizeCodeSpan(headSha)}\``);
+              lines.push('');
+
+              if (totalBlockers === 0) {
+                lines.push('### Status: Ready');
+                lines.push('');
+                lines.push('- [x] All review threads resolved');
+                lines.push('- [x] No reviews requesting changes');
+                lines.push('- [x] No blocked review engines');
+              } else {
+                const blockerWord = totalBlockers === 1 ? 'blocker' : 'blockers';
+                lines.push(`### Status: Blocked (${totalBlockers} open ${blockerWord})`);
+                lines.push('');
+
+                lines.push(`#### Review Threads (${unresolvedThreads.length} unresolved)`);
+                if (unresolvedThreads.length === 0) {
+                  lines.push('- [x] All review threads resolved');
+                } else {
+                  for (const t of unresolvedThreads) {
+                    const snippetPart = t.snippet ? `: "${escapeProse(t.snippet)}"` : '';
+                    lines.push(`- [ ] [\`${sanitizeCodeSpan(t.path)}\`](${t.url}) by @${t.author}${snippetPart}`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Changes Requested (${changesRequestedReviews.length})`);
+                if (changesRequestedReviews.length === 0) {
+                  lines.push('- [x] No reviews requesting changes');
+                } else {
+                  for (const r of changesRequestedReviews) {
+                    lines.push(`- [ ] Review by @${r.author}: [View changes requested](${r.url})`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Blocked Engines (${blockedEngines.length})`);
+                if (blockedEngines.length === 0) {
+                  lines.push('- [x] No blocked review engines');
+                } else {
+                  for (const b of blockedEngines) {
+                    const isHead = isShaMatch(b.sha, headSha);
+                    const shortSha = b.sha.slice(0, 7);
+                    const headNotice = isHead
+                      ? `at current head (\`${shortSha}\`)`
+                      : `at \`${shortSha}\` (current head: \`${headSha.slice(0, 7)}\`)`;
+                    const detail = b.line ? `: \`${sanitizeCodeSpan(b.line)}\`` : '';
+                    const pathInfo = b.path ? ` on \`${sanitizeCodeSpan(b.path)}\`` : '';
+                    lines.push(`- [ ] Engine \`${sanitizeCodeSpan(b.engine)}\` blocked ${headNotice}${pathInfo}: [View verdict](${b.url})${detail}`);
+                  }
+                }
+              }
+
+              const markdownBody = lines.join('\n');
+
+              if (typeof core !== 'undefined' && core.summary) {
+                try {
+                  await core.summary.addRaw(markdownBody).write();
+                } catch (summaryErr) {
+                  console.log('Note: core.summary.write error:', summaryErr.message);
+                }
+              }
+
+              if (isCrossRepo || isFork) {
+                console.log('Pull request is from a fork or cross-repository. Step summary written, skipping PR comment write.');
+                return;
+              }
+
+              let existingCommentId = null;
+              for (const c of allPrComments) {
+                if (c.body && c.body.includes(MARKER)) {
+                  if (!botLogin || c.author?.login === botLogin) {
+                    existingCommentId = c.databaseId;
+                    break;
+                  }
+                }
+              }
+
+              if (!existingCommentId) {
+                try {
+                  const restComments = await github.paginate(github.rest.issues.listComments, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    per_page: 100,
+                  });
+                  const found = restComments.find(c =>
+                    c.body &&
+                    c.body.includes(MARKER) &&
+                    (!botLogin || c.user?.login === botLogin)
+                  );
+                  if (found) {
+                    existingCommentId = found.id;
+                  }
+                } catch (err) {
+                  console.log('Note: listComments error:', err.message);
+                }
+              }
+
+              try {
+                if (existingCommentId) {
+                  console.log(`Updating existing blocker checklist comment #${existingCommentId}`);
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: existingCommentId,
+                    body: markdownBody,
+                  });
+                } else {
+                  console.log(`Creating new blocker checklist comment on PR #${prNumber}`);
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: markdownBody,
+                  });
+                }
+              } catch (commentWriteErr) {
+                console.log('Unable to post or update PR comment (permission or API restriction): ' + commentWriteErr.message);
+              }
+            } catch (err) {
+              console.error('Non-fatal error in PR Blocker Checklist:', err);
+              if (typeof core !== 'undefined' && core.warning) {
+                core.warning(`PR Blocker Checklist encountered a non-fatal error: ${err.message}`);
+              }
+            }

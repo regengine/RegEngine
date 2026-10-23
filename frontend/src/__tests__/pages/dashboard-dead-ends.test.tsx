@@ -18,8 +18,9 @@ vi.mock('@/lib/tenant-context', () => ({
 }));
 
 vi.mock('@/hooks/use-api', () => ({
-    useSystemStatus: () => ({ data: null, isLoading: false }),
-    useSystemMetrics: () => ({ data: null, isLoading: false }),
+    useSystemStatus: () => ({ data: { overall_status: 'healthy', services: [] }, isLoading: false }),
+    useSystemMetrics: () => ({ data: { open_alerts: 0, events_ingested: 0 }, isLoading: false }),
+    useQAHealth: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
 vi.mock('@/hooks/use-onboarding', () => ({
@@ -49,6 +50,7 @@ describe('disabled dashboard features', () => {
         expect(linksTo('/dashboard/alerts')).toHaveLength(0);
         expect(linksTo('/dashboard/heartbeat')).toHaveLength(0);
         expect(screen.getByText('Alerts are off')).toBeInTheDocument();
+        expect(screen.queryByText(/open compliance alert/)).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Recall drills (coming soon)' })).toHaveAttribute('href', '/dashboard/recall-drills');
     });
 
