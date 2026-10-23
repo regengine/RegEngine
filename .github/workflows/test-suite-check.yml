@@ -2,7 +2,7 @@ name: Test Suite Health Check
 
 on:
   schedule:
-    - cron: '30 7 * * *'
+    - cron: '47 7 * * *'
   push:
     branches: [main]
     paths:

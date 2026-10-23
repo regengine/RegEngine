@@ -224,17 +224,11 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: requirements.lock
+          cache-dependency-path: .github/workflows/pr-gate.yml
       - name: Install PyYAML
         run: pip install --disable-pip-version-check "pyyaml==6.0.2"
       - name: Check workflow inventory and required contexts
-        run: |
-          # The source inventory is outside this workflow-only change. Remove
-          # only the two workflow names retired by this merge in the runner's
-          # checkout; the inventory guard still checks every remaining file
-          # and every required context.
-          sed -i '/^pr-quality.yml$/d; /^review-gates.yml$/d' scripts/workflow_inventory.txt
-          python3 scripts/check_workflow_inventory.py
+        run: python3 scripts/check_workflow_inventory.py
 
   # security.yml skips docs-only PRs, so keep both secret scanners in this
   # always-on workflow. Its aggregate gate fails if either scanner fails.
@@ -273,7 +267,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: requirements.lock
+          cache-dependency-path: .github/workflows/pr-gate.yml
       - name: Install detect-secrets
         run: pip install detect-secrets==1.5.0
       - name: Scan for new secrets against baseline
