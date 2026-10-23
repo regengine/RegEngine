@@ -299,16 +299,6 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         evidence_url: '/docs/api',
     },
     {
-        id: 'inflow-lab',
-        name: 'Inflow Lab',
-        category: 'developer_api',
-        status: 'pilot',
-        delivery_mode: 'native_api',
-        integration_type: 'api_based_custom',
-        customer_copy: 'RegEngine-owned FSMA 204 simulator that posts events to the JSON events API for demos, contract tests, and developer validation.',
-        evidence_url: '/docs/connectors/inflow-lab',
-    },
-    {
         id: 'epcis',
         name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',

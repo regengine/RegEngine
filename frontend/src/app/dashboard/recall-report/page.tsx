@@ -57,6 +57,7 @@ interface RecallReport {
     executive_summary: string;
     action_items: Array<{ priority: string; action: string; impact: string; effort: string }>;
     demo_mode: boolean;
+    demo_disclaimer: string | null;
 }
 
 /* ── Icon + tone mappings ── */
@@ -88,7 +89,7 @@ const NOTICE_BASE =
 function gradeTone(grade: string): BadgeTone {
     if (grade === 'A' || grade === 'B') return 'success';
     if (grade === 'C') return 'warning';
-    if (grade === '—') return 'neutral';
+    if (grade === '—' || grade === 'N/A') return 'neutral';
     return 'danger';
 }
 
@@ -126,13 +127,18 @@ export default function RecallReportPage() {
     }
 
     const isDemo = report?.demo_mode === true;
+    // Backend PR #3536: no recall evidence => status "no_data", score 0,
+    // grade "N/A", demo_mode false, demo_disclaimer null. Treat legacy demo
+    // responses the same way and never render a demo disclaimer.
+    const isNoData = isDemo || report?.overall_status === 'no_data';
     const dimensions = report?.dimensions ?? [];
     const actionItems = report?.action_items ?? [];
     const overallScore = report?.overall_score ?? 0;
     const overallGrade = report?.overall_grade ?? '—';
     // Display-only: the sentinel above feeds gradeTone and the comparisons below;
     // this derived value is what the empty state renders.
-    const overallGradeDisplay = overallGrade === '—' ? NO_DATA_YET : overallGrade;
+    const overallGradeDisplay =
+        overallGrade === '—' || overallGrade === 'N/A' ? NO_DATA_YET : overallGrade;
     const responseTimeStr = report?.time_to_respond_estimate ?? NOT_SET;
 
     const handleExport = async () => {
@@ -257,31 +263,23 @@ export default function RecallReportPage() {
 
                 {!isLoading && (
                     <>
-                        {/* ── Empty state: no live recall evidence yet (also shown in demo mode) ── */}
-                        <EmptyState
-                            icon={ShieldCheck}
-                            title={isDemo ? NO_DATA_YET : 'No Active Recall Report'}
-                            description={isDemo
-                                ? 'Recall evidence appears here after your traceability records are imported.'
-                                : 'This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team’s response speed.'}
-                            action={
-                                isDemo ? (
+                        {/* ── Empty state: API reports no recall evidence (status "no_data") ── */}
+                        {isNoData && (
+                            <EmptyState
+                                icon={ShieldCheck}
+                                title={NO_DATA_YET}
+                                description="Recall evidence appears here after your traceability records are imported."
+                                action={
                                     <Link href="/tools/data-import">
                                         <Button size="sm" leadingIcon={<Upload strokeWidth={1.75} aria-hidden="true" />}>
                                             Import Records
                                         </Button>
                                     </Link>
-                                ) : (
-                                    <Link href="/dashboard/recall-drills">
-                                        <Button size="sm" leadingIcon={<Play strokeWidth={1.75} aria-hidden="true" />}>
-                                            Run Recall Drill
-                                        </Button>
-                                    </Link>
-                                )
-                            }
-                        />
+                                }
+                            />
+                        )}
 
-                        {/* ── Readiness Score + Dimensions (always shown, live or demo) ── */}
+                        {/* ── Readiness Score + Dimensions ── */}
                         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                             {/* Overall Score */}
                             <Card>
@@ -292,7 +290,7 @@ export default function RecallReportPage() {
                                             {overallScore}
                                         </span>
                                         <span className="text-ui text-re-text-tertiary">/100</span>
-                                        {overallGrade !== '—' ? (
+                                        {overallGrade !== '—' && overallGrade !== 'N/A' ? (
                                             <Badge tone={gradeTone(overallGrade)}>{overallGrade}</Badge>
                                         ) : (
                                             <span className="text-ui text-re-text-tertiary">{overallGradeDisplay}</span>
@@ -307,7 +305,7 @@ export default function RecallReportPage() {
                                             ? new Date(report.generated_at).toLocaleDateString()
                                             : new Date().toLocaleDateString()}
                                     </div>
-                                    {!isDemo && report?.executive_summary && (
+                                    {report?.executive_summary && (
                                         <p className="mt-3 border-t border-re-border-subtle pt-3 text-small text-re-text-tertiary">
                                             {report.executive_summary}
                                         </p>
@@ -397,7 +395,7 @@ export default function RecallReportPage() {
                                     <div className="min-w-0">
                                         <CardTitle>Prioritized Actions</CardTitle>
                                         <CardDescription>
-                                            {isDemo ? 'Address these to improve recall readiness' : 'Personalized recommendations based on your traceability data'}
+                                            Personalized recommendations based on your traceability data
                                         </CardDescription>
                                     </div>
                                 </CardHeader>

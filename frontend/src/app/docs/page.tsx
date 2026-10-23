@@ -96,7 +96,7 @@ const quickStartSteps = [
 const SECTION_LABEL = 'mb-5 font-mono text-label uppercase text-re-text-muted';
 
 /* ─── Code Samples ─────────────────────────────────────────── */
-/* Rendered from one payload: src/lib/api-samples/ingest-receiving.json. */
+/* Rendered from the shared request-body skeleton in src/lib/api-samples/ingest-samples.ts. */
 
 const codeTabs = [
   { label: 'cURL', lang: 'bash', code: INGEST_CURL_SAMPLE },

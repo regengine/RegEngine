@@ -160,11 +160,11 @@ export default function DashboardPage() {
       rows.push({
         id: "workbench-fixes",
         state: "needs-correction",
-        item: `${fixes} unresolved ${fixes === 1 ? "fix" : "fixes"} in the Inflow Workbench`,
+        item: `${fixes} unresolved ${fixes === 1 ? "fix" : "fixes"} in imported records`,
         source: workbenchReadiness?.source && workbenchReadiness.source !== "none"
           ? workbenchReadiness.source
-          : "Inflow Workbench",
-        href: "/dashboard/inflow-lab",
+          : "Import readiness",
+        href: "/ingest",
       });
     }
 
@@ -224,8 +224,8 @@ export default function DashboardPage() {
     const fixes = workbenchReadiness?.unresolved_fix_count ?? 0;
     if (fixes > 0) {
       actions.push({
-        label: `Resolve ${fixes} open ${fixes === 1 ? "fix" : "fixes"} in the workbench`,
-        href: "/dashboard/inflow-lab",
+        label: `Resolve ${fixes} open ${fixes === 1 ? "fix" : "fixes"} in imported records`,
+        href: "/ingest",
         cta: "Open",
       });
     }
@@ -259,16 +259,6 @@ export default function DashboardPage() {
           <Button variant="secondary" asChild>
             <Link href="/ingest">Import data</Link>
           </Button>
-        }
-        primaryAction={
-          experimentalFeaturesEnabled() ? (
-            <Button asChild>
-              <Link href="/dashboard/inflow-lab">
-                Open Inflow Lab
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : undefined
         }
       />
 

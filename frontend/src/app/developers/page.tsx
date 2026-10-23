@@ -60,7 +60,7 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-/* Rendered from one payload: src/lib/api-samples/ingest-receiving.json. */
+/* Rendered from the shared request-body skeleton in src/lib/api-samples/ingest-samples.ts. */
 const curlSnippet = `${INGEST_ENV_SETUP}
 
 ${INGEST_CURL_SAMPLE}`;

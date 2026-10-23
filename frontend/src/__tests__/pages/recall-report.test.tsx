@@ -3,8 +3,10 @@
  *
  * Tests for the recall investigation / readiness report:
  * - Renders heading
- * - Renders dimension scores
- * - Shows the empty state instead of fabricated demo data in demo mode
+ * - Shows the "No data yet" empty state for the backend PR #3536 no-data
+ *   contract (status "no_data", score 0, grade "N/A", demo_mode false,
+ *   demo_disclaimer null)
+ * - Never renders fabricated data or a demo disclaimer
  * - Auth guard (skips fetch without credentials)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -22,29 +24,20 @@ function createWrapper() {
   );
 }
 
-// ── Mock demo report matching backend shape ──
+// ── No-data report matching the backend PR #3536 contract ──
 
-const MOCK_DEMO_REPORT = {
+const MOCK_NO_DATA_REPORT = {
   tenant_id: 'tenant-123',
   generated_at: new Date().toISOString(),
-  overall_score: 72,
-  overall_grade: 'C',
-  overall_status: 'needs_improvement',
-  time_to_respond_estimate: '4.2 hours',
-  dimensions: [
-    { id: 'trace_speed', name: 'Trace Speed', score: 85, grade: 'B', status: 'good', findings: ['Fast lookup'], recommendations: ['Add caching'] },
-    { id: 'data_completeness', name: 'Data Completeness', score: 68, grade: 'C', status: 'needs_improvement', findings: ['Missing KDEs'], recommendations: ['Onboard suppliers'] },
-    { id: 'chain_integrity', name: 'Chain Integrity', score: 90, grade: 'A', status: 'excellent', findings: ['Hash chain valid'], recommendations: [] },
-    { id: 'supplier_coverage', name: 'Supplier Coverage', score: 55, grade: 'D', status: 'at_risk', findings: ['3 of 8 onboarded'], recommendations: ['Prioritize top suppliers'] },
-    { id: 'export_readiness', name: 'Export Readiness', score: 78, grade: 'C', status: 'needs_improvement', findings: ['CSV ready'], recommendations: ['Add EPCIS'] },
-    { id: 'team_readiness', name: 'Team Readiness', score: 60, grade: 'C', status: 'needs_improvement', findings: ['No drills run'], recommendations: ['Schedule monthly drill'] },
-  ],
-  executive_summary: 'Your facility has basic recall capabilities but gaps remain.',
-  action_items: [
-    { priority: 'HIGH', action: 'Onboard remaining suppliers', impact: 'Coverage +40%', effort: 'Medium' },
-    { priority: 'MEDIUM', action: 'Run mock recall drill', impact: 'Team readiness', effort: 'Low' },
-  ],
-  demo_mode: true,
+  overall_score: 0,
+  overall_grade: 'N/A',
+  overall_status: 'no_data',
+  time_to_respond_estimate: '',
+  dimensions: [],
+  executive_summary: '',
+  action_items: [],
+  demo_mode: false,
+  demo_disclaimer: null,
 };
 
 // ── Mocks ──
@@ -134,8 +127,8 @@ describe('RecallReportPage', () => {
     vi.clearAllMocks();
     mockUseAuth.mockReturnValue({ apiKey: null, isAuthenticated: true });
     mockUseTenant.mockReturnValue({ tenantId: 'tenant-123', isSystemTenant: false });
-    // Default: API returns demo report with dimensions
-    mockFetchRecallReport.mockResolvedValue(MOCK_DEMO_REPORT);
+    // Default: API returns the no-data contract (status "no_data")
+    mockFetchRecallReport.mockResolvedValue(MOCK_NO_DATA_REPORT);
   });
 
   afterEach(() => {
@@ -156,42 +149,43 @@ describe('RecallReportPage', () => {
     });
   });
 
-  it('shows the empty state instead of fabricated demo data in demo mode', async () => {
+  it('shows the "No data yet" empty state for the no-data contract', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
+    // "No data yet" appears twice: the empty-state title and the grade
+    // placeholder (backend grade "N/A" renders as the placeholder, not a badge).
     await waitFor(() => {
-      expect(screen.getByText('No data yet')).toBeInTheDocument();
+      expect(screen.getAllByText('No data yet').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Salinas Valley Farms/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/SLA Met/)).not.toBeInTheDocument();
+    expect(screen.queryByText('N/A')).not.toBeInTheDocument();
   });
 
-  it('renders readiness dimension scores', async () => {
+  it('never renders a demo disclaimer', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText('Trace Speed')).toBeInTheDocument();
+      expect(screen.getAllByText('No data yet').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText('Data Completeness')).toBeInTheDocument();
-    expect(screen.getByText('Chain Integrity')).toBeInTheDocument();
-    expect(screen.getByText('Supplier Coverage')).toBeInTheDocument();
+    expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sample scenario/i)).not.toBeInTheDocument();
   });
 
-  it('does not render fabricated affected lots', async () => {
+  it('renders no readiness dimensions or action items when the report has none', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText('No data yet')).toBeInTheDocument();
+      expect(screen.getAllByText('No data yet').length).toBeGreaterThan(0);
     });
-    expect(screen.queryByText(/LOT-ROM-2026/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Trace Speed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Data Completeness')).not.toBeInTheDocument();
+    expect(screen.queryByText('Chain Integrity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Supplier Coverage')).not.toBeInTheDocument();
+    expect(screen.queryByText('Prioritized Actions')).not.toBeInTheDocument();
   });
 
-  it('shows the empty state with a next-step link in demo mode', async () => {
-    mockFetchRecallReport.mockResolvedValue({ ...MOCK_DEMO_REPORT, demo_mode: true });
+  it('shows the empty state with a next-step link', async () => {
     render(<RecallReportPage />, { wrapper: createWrapper() });
     await waitFor(() => {
-      expect(screen.getByText('No data yet')).toBeInTheDocument();
+      expect(screen.getAllByText('No data yet').length).toBeGreaterThan(0);
     });
     expect(screen.getByRole('link', { name: /import records/i })).toHaveAttribute('href', '/tools/data-import');
-    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
   });
 
   it('shows an error without fabricated results when the API fails', async () => {
@@ -200,8 +194,7 @@ describe('RecallReportPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Recall report unavailable')).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Romaine Lettuce/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/SLA Met/)).not.toBeInTheDocument();
+    expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
   });
 
   it('does not fetch when credentials are missing', () => {
@@ -212,11 +205,6 @@ describe('RecallReportPage', () => {
   });
 
   it('exports the FDA response through the cookie-backed ingestion proxy without browser auth headers', async () => {
-    // Override the default demo mock — the export button is disabled and
-    // relabelled "Connect Live Data To Enable FDA Export" while demo_mode is
-    // true, so we need a non-demo report to exercise the export path.
-    mockFetchRecallReport.mockResolvedValue({ ...MOCK_DEMO_REPORT, demo_mode: false });
-
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['csv']),
