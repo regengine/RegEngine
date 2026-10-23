@@ -12,6 +12,7 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TimedSkeleton } from '@/components/ui/timed-skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { useSystemStatus } from '@/hooks/use-api';
 import { useAuth } from '@/lib/auth-context';
@@ -152,7 +153,7 @@ const COLLAPSIBLE_SECTIONS: CollapsibleSection[] = [
     },
 ];
 
-/** Mobile nav — the 5 always-visible items only */
+/** Mobile nav - the 5 always-visible items only */
 const MOBILE_NAV_ITEMS = TOP_ITEMS;
 
 function isNavItemVisible(item: NavItem, isSysadmin: boolean): boolean {
@@ -182,7 +183,7 @@ function saveExpandedSections(state: Record<string, boolean>) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-        // silent – quota exceeded, private browsing, etc.
+        // silent - quota exceeded, private browsing, etc.
     }
 }
 
@@ -300,7 +301,7 @@ function CollapsibleNavSection({
 
     return (
         <div className="mt-1">
-            {/* Section header — clickable toggle */}
+            {/* Section header - clickable toggle */}
             <button
                 type="button"
                 onClick={onToggle}
@@ -340,7 +341,7 @@ function CollapsibleNavSection({
 }
 
 // ---------------------------------------------------------------------------
-// Status strip (SPEC §3.3) — the single topbar
+// Status strip (SPEC §3.3) - the single topbar
 // ---------------------------------------------------------------------------
 
 const HEALTH_BADGE: Record<string, { state: ComplianceState; label: string }> = {
@@ -421,13 +422,18 @@ function DashboardShellSkeleton() {
                         </div>
                     </div>
                     <div className="flex-1 pb-20 md:pb-0">
-                        <Container width="app" className="space-y-6 py-6">
-                            <Skeleton className="h-8 w-44" />
-                            <Skeleton className="h-[244px] rounded-lg" />
-                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
-                                <Skeleton className="h-[360px] rounded-lg" />
-                            </div>
+                        <Container width="app" className="py-6">
+                            {/* Session hydration can stall on a slow backend; never spin forever. */}
+                            <TimedSkeleton errorMessage="Your session check did not finish. Reload to try again.">
+                                <div className="space-y-6">
+                                    <Skeleton className="h-8 w-44" />
+                                    <Skeleton className="h-[244px] rounded-lg" />
+                                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                                        <Skeleton className="h-[360px] rounded-lg lg:col-span-2" />
+                                        <Skeleton className="h-[360px] rounded-lg" />
+                                    </div>
+                                </div>
+                            </TimedSkeleton>
                         </Container>
                     </div>
                 </div>
@@ -560,7 +566,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {demoMode && (
                 <Callout tone="warning" className="rounded-none border-r-0 border-t-0 px-4 py-2 text-small">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span>Sandbox mode — using sample data for demonstration.</span>
+                        <span>Sandbox mode: using sample data for demonstration.</span>
                         <Link href="/ingest" className="underline hover:no-underline">
                             Connect real data to exit sample mode
                         </Link>
@@ -581,7 +587,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
 
                     {/* Nav sections */}
-                    {/* MEDIUM #12: Keyboard navigation — arrow keys traverse nav items */}
+                    {/* MEDIUM #12: Keyboard navigation - arrow keys traverse nav items */}
                     <nav
                         aria-label="Dashboard navigation"
                         className="flex-1 overflow-y-auto px-2 py-3"
@@ -635,7 +641,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </aside>
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                    {/* Status strip — the only topbar (SPEC §3.3) */}
+                    {/* Status strip - the only topbar (SPEC §3.3) */}
                     <header className="sticky top-0 z-[var(--re-z-sticky)] border-b border-re-border-subtle bg-re-surface-base/95 backdrop-blur">
                         <div className="flex h-12 items-center gap-2 px-3 md:h-11 md:px-4">
                             <Button
@@ -682,7 +688,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </div>
 
-            {/* Mobile bottom tab bar — same links, same order, new position */}
+            {/* Mobile bottom tab bar - same links, same order, new position */}
             <nav
                 aria-label="Dashboard quick navigation"
                 className="fixed inset-x-0 bottom-0 z-[var(--re-z-nav)] border-t border-re-border-subtle bg-re-surface-elevated pb-[env(safe-area-inset-bottom,0px)] md:hidden"
@@ -710,7 +716,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
             </nav>
 
-            {/* Mobile nav sheet — TOP_ITEMS plus the collapsible sections */}
+            {/* Mobile nav sheet - TOP_ITEMS plus the collapsible sections */}
             {mobileNavOpen && (
                 <div className="fixed inset-0 z-[var(--re-z-nav)] md:hidden">
                     <div

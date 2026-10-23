@@ -70,7 +70,7 @@ const supplierChecklistExamples = [
 const evidenceCards = [
   {
     title: "Ingest workspace",
-    description: "CTE/KDE records arrive through webhooks, CSV, EPCIS, or EDI and enter the inflow workbench for coverage checking.",
+    description: "CTE/KDE records arrive through CSV upload or the JSON events API and enter the inflow workbench for coverage checking.",
     state: "needs-correction" as const,
     meta: "Inflow workbench",
     icon: Gauge,
@@ -92,7 +92,7 @@ const evidenceCards = [
 ];
 
 const workflow = [
-  { label: "Ingest", detail: "Webhooks, CSV, EPCIS, or EDI files enter the workbench.", icon: ScanLine },
+  { label: "Ingest", detail: "CSV uploads and JSON events API submissions enter the workbench.", icon: ScanLine },
   { label: "Check", detail: "CTE/KDE coverage and completeness are flagged in the inflow workbench.", icon: Database },
   { label: "Fix", detail: "Every gap gets a reason, owner, and recovery path.", icon: ClipboardCheck },
   { label: "Commit", detail: "Commit is our append-only step. After the checks you configure, accepted records enter the evidence ledger. Commit is not a certification, not an FDA gate, and not a retailer gate.", icon: ShieldCheck },
@@ -155,7 +155,7 @@ function ChecklistRadar() {
       </div>
       <div className="mt-4 border-t border-re-border-subtle pt-3">
         <p className="text-small text-re-text-tertiary">
-          Export checklist (advisory) — checks configured in the workspace, not FDA certification, not retailer approval.
+          Export checklist (advisory): checks configured in the workspace, not FDA certification, not retailer approval.
         </p>
       </div>
     </Card>
@@ -204,7 +204,7 @@ export default function HomePage() {
             FSMA 204 recordkeeping for the Food Traceability Rule.
           </h1>
           <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-            Ingest supply-chain data through webhooks, CSV, EPCIS, or EDI. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
+            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
           </p>
           <Callout tone="neutral" className="mt-6 max-w-[68ch]">
             <p>

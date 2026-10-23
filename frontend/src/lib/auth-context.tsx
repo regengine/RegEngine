@@ -36,7 +36,7 @@ type LoginOptions = {
 };
 
 /**
- * HTTP-only cookie auth — CRITICAL #2 fix complete.
+ * HTTP-only cookie auth - CRITICAL #2 fix complete.
  *
  * Sensitive credentials (access_token and tenant API keys) are stored
  * ONLY in HTTP-only cookies via /api/session. They are never readable
@@ -50,7 +50,7 @@ type LoginOptions = {
  * access is derived from the authenticated user session, never from a key.
  */
 
-/** Placeholder value for apiKey — indicates credentials are
+/** Placeholder value for apiKey - indicates credentials are
  *  managed server-side in HTTP-only cookies. NOT the real key. */
 const COOKIE_MANAGED_PLACEHOLDER = 'cookie-managed';
 
@@ -59,13 +59,13 @@ const STORAGE_KEYS = {
   ONBOARDED: 'regengine_onboarded',
   DEMO_MODE: 'regengine_demo_mode',
   USER: 'regengine_user',
-  // DEPRECATED — migrated to HTTP-only cookies, then removed from localStorage
+  // DEPRECATED - migrated to HTTP-only cookies, then removed from localStorage
   _LEGACY_API_KEY: 'regengine_api_key',
   _LEGACY_ACCESS_TOKEN: 'regengine_access_token',
 };
 
 // ---------------------------------------------------------------------------
-// Cookie helpers — talk to /api/session (server-side)
+// Cookie helpers - talk to /api/session (server-side)
 // ---------------------------------------------------------------------------
 
 /** Store sensitive credentials in HTTP-only cookies via /api/session POST.
@@ -90,13 +90,13 @@ async function setSessionCookies(params: {
     // double-submit check, so this POST needs a valid X-CSRF-Token header.
     // GET /api/session is idempotent and sets the cookie pair on first
     // call. The auth provider runs this on mount, but on cold-start /
-    // SSR'd login pages the hydrate effect may not have fired yet — call
+    // SSR'd login pages the hydrate effect may not have fired yet: call
     // bootstrap defensively here so a freshly-loaded login page can submit
     // immediately without race-conditioning on the hydrate fetch.
     if (!document.cookie.includes('re_csrf=')) {
       try {
         await fetch('/api/session', { method: 'GET', credentials: 'include' });
-      } catch { /* fall through — POST will surface the error if cookies still missing */ }
+      } catch { /* fall through: POST will surface the error if cookies still missing */ }
     }
     const res = await fetchWithCsrf('/api/session', {
       method: 'POST',
@@ -133,6 +133,8 @@ async function clearSessionCookies(): Promise<void> {
   }
 }
 
+const SESSION_CHECK_TIMEOUT_MS = 10_000;
+
 /** Check current session via /api/session GET — never returns raw tokens. */
 async function getSessionInfo(): Promise<{
   authenticated: boolean;
@@ -144,7 +146,15 @@ async function getSessionInfo(): Promise<{
 } | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const res = await fetch('/api/session', { method: 'GET', credentials: 'include' });
+    // Bounded: the route calls the admin backend's /auth/me with no timeout,
+    // and a hung check left every dashboard-layout page (/ingest,
+    // /dashboard/integrations, ...) on the shell skeleton forever. A timeout
+    // takes the same "indeterminate" path as a network error below.
+    const res = await fetch('/api/session', {
+      method: 'GET',
+      credentials: 'include',
+      signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -215,7 +225,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
 
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
-    console.info('[auth] Migration complete — localStorage secrets removed.');
+    console.info('[auth] Migration complete; localStorage secrets removed.');
   }
 }
 
@@ -302,7 +312,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
         } else if (!loginCompletedRef.current) {
-          // Definitive unauthenticated answer — the cookie session expired or
+          // Definitive unauthenticated answer - the cookie session expired or
           // was cleared server-side. Drop the localStorage-hydrated user (and
           // ignore any session.user echoed back from a stale re_user cookie)
           // so pages can't render an authenticated shell from stale state.
@@ -316,7 +326,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
         }
       } else {
-        // The session check itself failed (network error or non-2xx —
+        // The session check itself failed (network error or non-2xx -
         // /api/session GET otherwise always answers 200 with an
         // `authenticated` boolean). Indeterminate: keep the
         // localStorage-hydrated state rather than logging the user out of
@@ -335,7 +345,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const setApiKey = useCallback(async (key: string | null) => {
     if (key) {
-      // MUST await — middleware checks this cookie on the next request.
+      // MUST await - middleware checks this cookie on the next request.
       // Setting state before the cookie is written causes a race condition
       // where the app appears authenticated but middleware rejects the request.
       const cookiesOk = await setSessionCookies({ apiKey: key });
@@ -351,7 +361,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setTenantId = useCallback(async (id: string | null) => {
     if (typeof window !== 'undefined') {
       if (id) {
-        // Await cookie write before updating state — middleware needs the
+        // Await cookie write before updating state - middleware needs the
         // tenant cookie in place before any navigation triggers a request.
         await setSessionCookies({ tenantId: id });
         localStorage.setItem(STORAGE_KEYS.TENANT_ID, id);
@@ -395,7 +405,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logoutInProgressRef.current = false;
     const normalizedLoginUser = normalizeUserProfile(loginUser);
 
-    // Non-React state — these don't trigger re-renders or effects.
+    // Non-React state - these don't trigger re-renders or effects.
     apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
     apiClient.setUser(normalizedLoginUser);
     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
@@ -409,13 +419,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //
     // React state updates below can trigger navigation to /dashboard (or the
     // ?next= path). The middleware runs on that navigation and checks
-    // re_access_token — if the cookie isn't in the browser yet, middleware
+    // re_access_token - if the cookie isn't in the browser yet, middleware
     // rejects and redirects back to /login?next=/dashboard.
     //
     // Awaiting setSessionCookies first lets the Set-Cookie response be
     // processed by the browser before any navigation can occur.
     //
-    // #535: Check the return value — if the /api/session POST fails (network
+    // #535: Check the return value - if the /api/session POST fails (network
     // error, server error) we must throw rather than silently continue.
     // A false return means the re_access_token cookie was never written, so
     // the very next middleware check would reject the user and redirect back
@@ -434,7 +444,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     loginCompletedRef.current = true;
 
-    // React state updates — triggers re-renders and the navigation useEffect.
+    // React state updates - triggers re-renders and the navigation useEffect.
     // Cookie should be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setAuthMethodState(null);

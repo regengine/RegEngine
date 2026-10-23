@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { useReviewItems, useApproveReviewItem, useRejectReviewItem } from '@/hooks/use-review';
 import { useAuth } from '@/lib/auth-context';
@@ -16,7 +17,7 @@ export function CuratorReview() {
   const { hasAdminSession } = useAuth();
   const [processing, setProcessing] = useState<string | null>(null);
 
-  const { data: items, isLoading, error } = useReviewItems(hasAdminSession);
+  const { data: items, isLoading, error, refetch, isFetching } = useReviewItems(hasAdminSession);
   const approveMutation = useApproveReviewItem();
   const rejectMutation = useRejectReviewItem();
 
@@ -60,11 +61,7 @@ export function CuratorReview() {
   }
 
   if (error) {
-    return (
-      <Callout tone="danger" role="alert">
-        Unable to load review queue. Please verify service connectivity.
-      </Callout>
-    );
+    return <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isFetching} />;
   }
 
   if (sortedItems.length === 0) {

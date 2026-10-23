@@ -1,3 +1,0 @@
-# Synthetic Data Notice
-
-All data in this directory is **fully synthetic**. The exported CSVs, EPCIS bundles, and audit packages here are produced by `scripts/regenerate_public_samples.py` from the synthetic source CSVs in `sample_data/` and are intended only for demonstrating RegEngine's FDA 21 CFR 1.1455 export, GS1 EPCIS 2.0 export, and Merkle audit-bundle paths. Entity names, addresses, GLNs, lot codes, hashes, and timestamps are invented or computed deterministically over the synthetic inputs. None of these artifacts are derived from any real customer, supplier, recall, or shipment. Any resemblance to a real registered business is coincidental.

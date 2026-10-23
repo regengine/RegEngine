@@ -16,13 +16,13 @@ function getComplianceUrl(): string {
     if (url) {
         const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
         if (onVercel && url.includes('.railway.internal')) {
-            console.warn('[proxy/attest] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+            console.warn('[proxy/attest] COMPLIANCE_SERVICE_URL points to internal Railway URL; unreachable from Vercel.');
             return process.env.NEXT_PUBLIC_API_BASE_URL || url;
         }
         return url;
     }
     if (process.env.VERCEL) {
-        console.error('[api/attest] COMPLIANCE_SERVICE_URL not configured — localhost is unreachable from Vercel');
+        console.error('[api/attest] COMPLIANCE_SERVICE_URL not configured; localhost is unreachable from Vercel');
         return '';
     }
     return 'http://localhost:8500';
@@ -49,7 +49,7 @@ export async function POST(
     const COMPLIANCE_URL = getComplianceUrl();
     const allowFallback = allowDevComplianceSnapshotFallback();
     if (!COMPLIANCE_URL && !allowFallback) {
-        console.error('[proxy/attest] 503 — compliance backend not configured');
+        console.error('[proxy/attest] 503: compliance backend not configured');
         return NextResponse.json(
             { error: 'backend_not_configured', message: 'Compliance backend is not configured' },
             { status: 503 },

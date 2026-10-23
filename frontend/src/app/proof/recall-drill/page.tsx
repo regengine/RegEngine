@@ -77,7 +77,7 @@ const DEFAULT_DRILL_STEPS: DrillStep[] = [
     {
         label: 'Generating FDA-oriented sortable recall CSV from sample data',
         detailLines: [
-            'Wrote 21 CFR §§1.1325–1.1350 Key Data Elements for each downstream lot',
+            'Wrote 21 CFR §§1.1325 to 1.1350 Key Data Elements for each downstream lot',
             'Hash-anchored each record (SHA-256 chain integrity preserved)',
         ],
         durationMs: 1600,
@@ -267,9 +267,9 @@ export default function RecallDrillPage() {
                     className="mb-0 border-b-0 pb-0"
                 />
                 <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
-                    Click <span className="font-medium text-re-text-primary">Start drill</span> — RegEngine
+                    Click <span className="font-medium text-re-text-primary">Start drill</span> and RegEngine
                     traces the contaminated lot through the applicable CTEs and produces an FDA-oriented sortable
-                    recall CSV in under 60 seconds. Synthetic data — illustrative only.
+                    recall CSV in under 60 seconds. Synthetic data, illustrative only.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-3">
@@ -391,7 +391,7 @@ export default function RecallDrillPage() {
                             <p className="text-small text-re-text-tertiary">Synthetic lot {drill.lot_code}</p>
                         </StatTile>
                         <StatTile label="FDA mandate" value="24 hours">
-                            <p className="text-small text-re-text-tertiary">§ 204 — produce records on request</p>
+                            <p className="text-small text-re-text-tertiary">§ 204: produce records on request</p>
                         </StatTile>
                         <StatTile label="Margin" value={`${marginMultiple}× faster`}>
                             <p className="text-small text-re-text-tertiary">Headroom vs. regulatory window</p>
@@ -455,7 +455,7 @@ export default function RecallDrillPage() {
                                 Recall CSV ready
                             </div>
                             <div className="text-ui text-re-text-secondary">
-                                21 CFR §§1.1325–1.1350 Key Data Elements · 11 rows · synthetic data
+                                21 CFR §§1.1325 to 1.1350 Key Data Elements · 11 rows · synthetic data
                             </div>
                         </div>
                         <Button asChild size="lg" className="shrink-0">
@@ -482,7 +482,7 @@ export default function RecallDrillPage() {
                             </li>
                             <li>
                                 <span className="font-mono tabular-nums text-re-text-primary">2.</span> The recall simulator walks downstream
-                                through all 7 CTEs — harvesting, cooling, packing, shipping,
+                                through all 7 CTEs: harvesting, cooling, packing, shipping,
                                 receiving, transformation, shipping again.
                             </li>
                             <li>
@@ -505,7 +505,7 @@ export default function RecallDrillPage() {
                     <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                     <span>
                         All data is synthetic. The drill runs on a frozen public dataset separate
-                        from any customer data. Run as many times as you like — results are
+                        from any customer data. Run as many times as you like; results are
                         deterministic.
                     </span>
                 </Container>

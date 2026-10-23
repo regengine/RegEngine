@@ -83,7 +83,7 @@ const TRUST_MODEL = [
     {
         Icon: FileCode,
         title: 'Open Source',
-        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
+        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us. You can verify the math yourself.',
     },
     {
         Icon: ShieldCheck,
@@ -118,7 +118,7 @@ const MANIFEST_COLUMNS: DataTableColumn<ManifestField>[] = [
 const PROSE_LINK =
     'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
 
-/** Terminal transcript colouring — the word on the line always carries the meaning too. */
+/** Terminal transcript colouring - the word on the line always carries the meaning too. */
 function transcriptLineClass(line: string): string {
     if (line.startsWith('✓ VALID')) return 'text-re-success';
     if (line.startsWith('✗ INVALID')) return 'text-re-danger';
@@ -130,7 +130,7 @@ function transcriptLineClass(line: string): string {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   VerifyWidget — drop-and-verify export bundle
+   VerifyWidget: drop-and-verify export bundle
    ───────────────────────────────────────────────────────────── */
 type VerifyCheck = { name: string; passed: boolean; detail?: string };
 type VerifyResponse = {
@@ -244,8 +244,8 @@ function VerifyWidget() {
                         title={file ? file.name : 'Drop your export bundle here'}
                         description={
                             file
-                                ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
-                                : 'or click to browse — accepts .zip or .json'
+                                ? `${(file.size / 1024).toFixed(1)} KB. Click to choose a different file`
+                                : 'or click to browse (accepts .zip or .json)'
                         }
                         className={cn(
                             'transition-colors duration-120 motion-reduce:transition-none',
@@ -411,7 +411,7 @@ export default function VerifyPage() {
                     Every public RegEngine proof bundle carries a{' '}
                     <strong className="font-medium text-re-text-primary">SHA-256 manifest and Merkle root</strong>.
                     Our open-source verification script lets you independently check that
-                    the bundle is consistent with its own manifest — without relying on our servers.
+                    the bundle is consistent with its own manifest, without relying on our servers.
                     It does not authenticate who published the bundle.
                 </p>
 
@@ -450,12 +450,12 @@ export default function VerifyPage() {
                     </p>
                     <p className="m-0 text-ui text-re-text-secondary">
                         Your file is sent to a public verifier endpoint that runs the same algorithm
-                        as the export pipeline — no auth, no email capture. Want to verify entirely
+                        as the export pipeline: no auth, no email capture. Want to verify entirely
                         offline?{' '}
                         <a href="/sdk/verify_chain.py" download className={PROSE_LINK}>
                             Download verify_chain.py
                         </a>{' '}
-                        and run it locally — same algorithm, zero network.
+                        and run it locally: same algorithm, zero network.
                     </p>
                     <Callout tone="warning">
                         <strong className="font-medium text-re-text-primary">What this does not prove.</strong>{' '}
@@ -512,7 +512,7 @@ export default function VerifyPage() {
                 <Card className="overflow-hidden">
                     <CardHeader className="items-center py-2.5">
                         <span className="font-mono text-label uppercase text-re-text-muted">
-                            verify_chain.py — bash
+                            verify_chain.py (bash)
                         </span>
                     </CardHeader>
                     <pre className="m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
@@ -637,7 +637,7 @@ export default function VerifyPage() {
                     </h2>
                     <p className="mb-7 max-w-[68ch] text-ui text-re-text-secondary">
                         RegEngine adds hash-based consistency checks on top of standard compliance controls.
-                        SHA-256 hashing lets you confirm a bundle matches its own manifest independently —
+                        SHA-256 hashing lets you confirm a bundle matches its own manifest independently,
                         whether or not you require a SOC 2 report. It is not a signature and does not
                         authenticate the publisher.
                     </p>

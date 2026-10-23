@@ -81,7 +81,7 @@ const STEPS: Step[] = [
   "chain_hash": "f0a2b5c8d1e4f7a0b3c6d9e2f5a8b1c4d7e0f3a6b9c2d5e8f1a4b7c0d3e6f9a2"
 }`,
     canonicalAnnotation:
-      "KDE validation against §1.1330 (a)(1)–(7). Hash chained to previous event.",
+      "KDE validation against §1.1330 (a)(1) through (a)(7). Hash chained to previous event.",
     fdaRow: [
       ["Traceability Lot Code (TLC)", "LOT-ROM-2026-0312A"],
       ["Product Description", "Organic Romaine Hearts"],
@@ -175,7 +175,7 @@ const STEPS: Step[] = [
     cte: "§1.1340",
     title: "Shipping",
     subtitle:
-      "Transfer event. Adds Ship-From / Ship-To facilities with GLN identifiers — the FDA's expected join keys.",
+      "Transfer event. Adds Ship-From / Ship-To facilities with GLN identifiers, the FDA's expected join keys.",
     csvHeader:
       "traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,ship_from_gln,ship_to_gln,carrier_name,po_number,reference_document",
     csvRows: [

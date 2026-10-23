@@ -122,5 +122,5 @@ export function epcisErrorMessage(error: unknown): string {
     if (fromDetail) return fromDetail;
     if (error.message) return error.message;
   }
-  return 'EPCIS upload failed';
+  return 'EPCIS upload (Preview) failed';
 }

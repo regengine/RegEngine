@@ -320,7 +320,7 @@ export default function BulkUploadPage() {
               <span className="text-sm font-semibold text-[var(--re-text-primary)]">Free preview mode</span>
             </div>
             <p className="text-xs text-[var(--re-text-muted)] leading-relaxed">
-              Upload a CSV to preview and validate your data against FSMA 204 traceability expectations — no account required. Sign in to commit with cryptographic integrity and generate review-ready records.
+              Upload a CSV to preview and validate your data against FSMA 204 traceability expectations. No account required. Sign in to commit with cryptographic integrity and generate review-ready records.
             </p>
           </div>
         )}

@@ -85,7 +85,7 @@ describe('AuditReviewPage', () => {
                         exceptions: { total: 3, open: 1, critical_open: 0 },
                         requests: { total: 2, submitted: 1, active: 1 },
                         chain_integrity: { chain_length: 24, status: 'VERIFIED' },
-                        generated_at: '2026-05-07T00:00:00.000Z',
+                        generated_at: '',
                     }),
                 });
             }
@@ -144,9 +144,9 @@ describe('AuditReviewPage', () => {
                             chain_length: 24,
                             status: 'UNVERIFIED',
                             errors: ['Tamper detected at seq=7'],
-                            verified_at: '2026-05-07T00:00:00.000Z',
+                            verified_at: '',
                         },
-                        generated_at: '2026-05-07T00:00:00.000Z',
+                        generated_at: '',
                     }),
                 });
             }

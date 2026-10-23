@@ -29,7 +29,7 @@ export default function IntegrationHubPage() {
         <PageContainer>
             <PageHeader
                 title="Data Integration Hub"
-                description="Meet FSMA 204 records-keeping obligations without ripping out your current ERP. RegEngine acts as an overlay data layer that captures the CTEs and KDEs your operations require under 21 CFR Part 1, Subpart S — your operation remains responsible for compliance."
+                description="Meet FSMA 204 records-keeping obligations without ripping out your current ERP. RegEngine acts as an overlay data layer that captures the CTEs and KDEs your operations require under 21 CFR Part 1, Subpart S. Your operation remains responsible for compliance."
             />
 
             <div className="space-y-12">
@@ -42,7 +42,7 @@ export default function IntegrationHubPage() {
                                 The &quot;Overlay&quot; Traceability Model
                             </h2>
                             <p className="text-ui leading-relaxed text-re-text-secondary">
-                                RegEngine doesn&apos;t replace your WMS or inventory management system. We capture the Critical Tracking Events your operations require — Harvesting and Cooling (§1.1325), Initial Packing (§1.1330) for RACs other than from a fishing vessel, First Land-Based Receiving (§1.1335) for seafood from a fishing vessel, Shipping (§1.1340), Receiving (§1.1345, subject to §1.1305(j) restaurant/RFE exemption), and Transformation (§1.1350) — link them to your Traceability Lot Codes, and store them with SHA-256 manifests so you can produce a sortable electronic spreadsheet within 24 hours of an FDA request under §1.1455(c).
+                                RegEngine doesn&apos;t replace your WMS or inventory management system. We capture the Critical Tracking Events your operations require: Harvesting and Cooling (§1.1325), Initial Packing (§1.1330) for RACs other than from a fishing vessel, First Land-Based Receiving (§1.1335) for seafood from a fishing vessel, Shipping (§1.1340), Receiving (§1.1345, subject to §1.1305(j) restaurant/RFE exemption), and Transformation (§1.1350). We link them to your Traceability Lot Codes and store them with SHA-256 manifests so you can produce a sortable electronic spreadsheet within 24 hours of an FDA request under §1.1455(c).
                             </p>
                         </div>
                         <div className="w-full shrink-0 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4 md:w-[320px]">
@@ -71,7 +71,7 @@ export default function IntegrationHubPage() {
                             <Code className="mb-6 h-5 w-5 text-re-cat-1" strokeWidth={1.75} aria-hidden="true" />
                             <h4 className="mb-2 text-subheading text-re-text-primary">API &amp; EPCIS 2.0</h4>
                             <p className="mb-6 text-ui text-re-text-secondary">
-                                For enterprise systems (SAP, Oracle, NetSuite). Push events directly to our endpoints via Webhooks or standard GS1 EPCIS 2.0 XML/JSON payloads.
+                                For enterprise systems (SAP, Oracle, NetSuite). Push events directly to our endpoints via the JSON events API; GS1 EPCIS 2.0 XML/JSON upload is in Preview.
                             </p>
 
                             <div className="mb-6 rounded-md border border-re-border-subtle bg-re-surface-inset p-4">

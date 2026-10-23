@@ -217,7 +217,7 @@ export default function RetentionPage() {
                     <h3 className="text-subheading text-re-text-primary">Our recommendation</h3>
                     <p className="mt-1">
                         Set up weekly automated exports to your own object storage within the first week of onboarding.
-                        Use the audit evidence bundle format — it ships with a SHA-256 manifest so records can be verified out-of-band. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.
+                        Use the audit evidence bundle format. It ships with a SHA-256 manifest so records can be verified out-of-band. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.
                         This supports FSMA 204&apos;s two-year retention requirement regardless of your RegEngine subscription status.
                     </p>
                 </Callout>

@@ -10,16 +10,18 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/auth-context', () => ({
-    useAuth: () => ({ user: { id: 'user-1', is_sysadmin: false }, isHydrated: true, isAuthenticated: true }),
+    useAuth: () => ({ user: { is_sysadmin: false }, isHydrated: true, isAuthenticated: true }),
 }));
 
 vi.mock('@/lib/tenant-context', () => ({
-    useTenant: () => ({ tenantId: 'tenant-1', isTenantReady: false }),
+    useTenant: () => ({ tenantId: null, isTenantReady: false }),
 }));
 
 vi.mock('@/hooks/use-api', () => ({
+    useQAHealth: () => ({ data: null, isLoading: false, error: null }),
     useSystemStatus: () => ({ data: { overall_status: 'healthy', services: [] }, isLoading: false }),
-    useSystemMetrics: () => ({ data: { open_alerts: 3, events_ingested: 1 }, isLoading: false }),
+    useSystemMetrics: () => ({ data: { open_alerts: 0, events_ingested: 0 }, isLoading: false }),
+    useQAHealth: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
 vi.mock('@/hooks/use-onboarding', () => ({
@@ -43,13 +45,13 @@ describe('disabled dashboard features', () => {
     beforeEach(() => vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', ''));
     afterEach(() => vi.unstubAllEnvs());
 
-    it('hides alerts and heartbeat links and replaces the alert count when the feature is off', () => {
+    it('hides alerts and heartbeat links and marks alerts off when the feature is off', () => {
         renderPage(<DashboardPage />);
 
         expect(linksTo('/dashboard/alerts')).toHaveLength(0);
         expect(linksTo('/dashboard/heartbeat')).toHaveLength(0);
         expect(screen.getByText('Alerts are off')).toBeInTheDocument();
-        expect(screen.queryByText('3 open compliance alerts')).not.toBeInTheDocument();
+        expect(screen.queryByText(/open compliance alert/)).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Recall drills (coming soon)' })).toHaveAttribute('href', '/dashboard/recall-drills');
     });
 
@@ -60,7 +62,6 @@ describe('disabled dashboard features', () => {
         expect(linksTo('/dashboard/alerts').length).toBeGreaterThan(0);
         expect(linksTo('/dashboard/heartbeat')).toHaveLength(1);
         expect(screen.queryByText('Alerts are off')).not.toBeInTheDocument();
-        expect(screen.getByText('3 open compliance alerts')).toBeInTheDocument();
     });
 
     it.each([
@@ -74,5 +75,12 @@ describe('disabled dashboard features', () => {
         expect(screen.getByRole('link', { name: 'JSON events API' })).toHaveAttribute('href', '/developers');
         expect(screen.getByRole('button', { name: new RegExp(`${disabledAction} \\(coming soon\\)`, 'i') })).toBeDisabled();
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    });
+
+    it('keeps the manual Internal Drill path available', async () => {
+        renderPage(<RecallDrillsPage />);
+
+        expect(await screen.findByRole('link', { name: 'Requests (Internal Drill)' })).toHaveAttribute('href', '/requests');
+        expect(screen.getByText(/create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit/)).toBeInTheDocument();
     });
 });

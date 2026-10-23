@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
+  Fingerprint,
   RefreshCw,
   WifiOff,
   XCircle,
@@ -14,6 +15,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
+import { ErrorState } from "@/components/ui/error-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,6 +24,7 @@ import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQAHealth } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth-context";
+import { isRequiresStepUpPayload, requestStepUp } from "@/lib/step-up-events";
 import type {
   QAHealthArtifactRef,
   QADecisionStatus,
@@ -32,6 +35,8 @@ import type {
   QASeverity,
   QASuiteStatus,
 } from "@/types/api";
+
+const QA_HEALTH_STEP_UP_REASON = "Confirm it's you to view QA Health, a sysadmin page with internal release and test-run details.";
 
 const SUMMARY_SUITE_ORDER = [
   "backend-pytest",
@@ -264,25 +269,33 @@ export default function QAHealthPage() {
 
   if (isLoading) return <QAPageSkeleton />;
 
+  const errorPayload = (error as { response?: { data?: unknown } } | null)?.response?.data;
+  if (error && !data && isRequiresStepUpPayload(errorPayload)) {
+    return (
+      <PageContainer>
+        <PageHeader title="Passkey confirmation required" />
+        <Callout
+          tone="info"
+          action={
+            <Button
+              onClick={() => requestStepUp({ reason: QA_HEALTH_STEP_UP_REASON, returnTo: "/dashboard" })}
+              leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
+            >
+              Confirm with passkey
+            </Button>
+          }
+        >
+          QA Health is a sysadmin page. Your current session was not signed in with a passkey.
+        </Callout>
+      </PageContainer>
+    );
+  }
+
   if (error && !data) {
     return (
       <PageContainer>
         <PageHeader title="QA health request failed" />
-        <Callout
-          tone="danger"
-          role="alert"
-          action={
-            <Button
-              onClick={() => refetch()}
-              variant="outline"
-              leadingIcon={<RefreshCw strokeWidth={1.75} aria-hidden="true" />}
-            >
-              Retry
-            </Button>
-          }
-        >
-          The sysadmin QA endpoint did not return a dashboard summary.
-        </Callout>
+        <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isRefetching} />
       </PageContainer>
     );
   }

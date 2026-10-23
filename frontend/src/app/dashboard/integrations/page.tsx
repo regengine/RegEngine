@@ -80,7 +80,7 @@ const INFLOW_FACTS = [
 
 const INFLOW_PATH = [
     ['Simulator', 'FSMA 204 event batch'],
-    ['Webhook ingest', '/api/v1/webhooks/ingest'],
+    ['JSON events API', '/api/v1/webhooks/ingest'],
     ['Alias resolution', 'inflow-lab -> inflow_lab'],
     ['Dashboard source', 'Tagged as Inflow Lab'],
 ];
@@ -100,7 +100,7 @@ const ROUTE_GUIDANCE = [
     },
     {
         title: 'Inflow Lab',
-        description: 'Run FSMA event simulations and webhook replay without mixing test traffic into normal imports.',
+        description: 'Run FSMA event simulations and event replay without mixing test traffic into normal imports.',
         href: '/dashboard/inflow-lab',
         icon: FlaskConical,
     },
@@ -431,7 +431,7 @@ export default function DashboardIntegrationsPage() {
                                 loading={profilesStatus === 'loading'}
                             >
                                 <p className="text-small text-re-text-tertiary">
-                                    Reusable mappings for CSV, spreadsheet, API, EDI-style, and supplier portal feeds.
+                                    Reusable mappings for CSV, spreadsheet, API, and supplier portal feeds.
                                 </p>
                             </StatTile>
                             <StatTile
@@ -487,8 +487,7 @@ export default function DashboardIntegrationsPage() {
                                         >
                                             <option value="csv">CSV</option>
                                             <option value="spreadsheet">Spreadsheet</option>
-                                            <option value="edi">EDI-style</option>
-                                            <option value="epcis">EPCIS</option>
+                                            <option value="epcis">EPCIS (Preview)</option>
                                             <option value="api">API</option>
                                             <option value="webhook">Webhook</option>
                                             <option value="supplier_portal">Supplier portal</option>

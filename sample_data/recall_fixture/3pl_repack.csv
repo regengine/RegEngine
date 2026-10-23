@@ -1,3 +1,0 @@
-record_id,process_type,input_pallet_id,output_pallet_id,lot_code,quantity,unit_of_measure,performed_at,location_gln,location_name,reference_document
-REPK-3PL-001,consolidate,008610001100000072,008610001100000102,HLF-215A,40,cases,2026-08-07T10:00:00Z,0861000330005,Bluewater Logistics,WO-3PL-0807-001
-REPK-3PL-001,consolidate,008610001100000089,008610001100000102,HLF-215B,20,cases,2026-08-07T10:00:00Z,0861000330005,Bluewater Logistics,WO-3PL-0807-001

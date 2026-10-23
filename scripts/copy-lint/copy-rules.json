@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "source": "C.Lee copy rules and Product Designer empty value rules, Oct 23 2026",
+  "roots": ["frontend/src/app", "frontend/src/components", "frontend/src/lib"],
+  "extensions": [".tsx", ".ts", ".md", ".mdx"],
+  "skip": ["__tests__", "/test/", ".test.", ".spec.", ".stories.", "node_modules", ".next"],
+  "rules": {
+    "em-dash": { "message": "Em dash in copy. Rewrite with a comma, period, colon or parentheses.", "source": "visual-designer" },
+    "en-dash": { "message": "En dash in copy. Use 'to' for ranges or rewrite.", "source": "visual-designer" },
+    "hyphen-dash": { "message": "Spaced hyphen ' - ' used as a dash in copy. Rewrite.", "source": "both" },
+    "dash-placeholder": { "message": "Standalone dash as an empty value. Use 'Not set' (fillable field), 'No data yet' plus a next step link (empty metric) or 0 (real zero). See lib/empty-values.ts.", "source": "both" },
+    "edi-sftp": { "message": "EDI or SFTP named in copy. These are not mentioned at all, roadmap included.", "source": "both" },
+    "epcis-unlabeled": { "message": "EPCIS mentioned without 'Preview' in the same string or line. Intake and export both count.", "source": "both" },
+    "nan-undefined": { "message": "'NaN' or 'undefined' in rendered text.", "source": "visual-designer" },
+    "invented-entity": { "message": "Invented supplier, facility, lot or number. Real data only: render real data or an empty state.", "source": "both" },
+    "live-claim": { "message": "A non-live capability is labeled Live, Implemented, GA or Available.", "source": "product-designer" },
+    "pilot-status": { "message": "Pilot is not an approved badge or status label.", "source": "product-designer" },
+    "sample-demo": { "message": "Sample, demo, simulated or synthetic wording in copy.", "source": "product-designer" },
+    "sandbox": { "message": "Sandbox wording in copy.", "source": "product-designer" },
+    "empty-render": { "message": "Blank fallback rendered in JSX. Use an explicit empty state.", "source": "product-designer" }
+  },
+  "denylist": [
+    "Salinas Valley Farms",
+    "Salinas Valley Cooler",
+    "Salinas Valley grower",
+    "FreshCut Processing",
+    "Pacific Coast Growers",
+    "Valley Fresh Farms",
+    "Valley Fresh Packhouse",
+    "MegaMart Distribution Center",
+    "Premier Grocery Warehouse",
+    "North River Test Facility",
+    "test 88493",
+    "LOT-ROM-",
+    "SV-20240115-001",
+    "18,200 lbs",
+    "~2,400",
+    "test data",
+    "FreshCo"
+  ],
+  "denylistSource": "punch-list.md sections 'Sample / fake data flags' plus PR #3471 review 5625527202"
+}

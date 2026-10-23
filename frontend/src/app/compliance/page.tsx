@@ -257,7 +257,7 @@ export default function CompliancePage() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 <Badge tone="neutral">FSMA 204</Badge>
-                <Badge tone="neutral">EPCIS 2.0</Badge>
+                <Badge tone="neutral">EPCIS 2.0 export</Badge>
                 <Badge tone="neutral">GS1</Badge>
                 <Badge tone="neutral">FDA CTEs</Badge>
                 <Badge tone="neutral">KDEs</Badge>

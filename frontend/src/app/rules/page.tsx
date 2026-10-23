@@ -26,6 +26,7 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
+import { NOT_SET } from '@/lib/empty-values';
 
 /**
  * Category accent uses the categorical token ramp (--re-cat-1..6): a rule's
@@ -67,18 +68,18 @@ export default function RulesDashboardPage() {
     <PageHeader
       title="Compliance Rules"
       description="Versioned FSMA 204 compliance rules — every rule is citable, explainable, and independently deployable"
-      meta={<Badge>{ruleList.length} rules</Badge>}
-      primaryAction={
+      meta={!rules.error && rules.data ? <Badge>{ruleList.length} rules</Badge> : undefined}
+      primaryAction={!rules.error ? (
         <Button onClick={() => seedRules.mutate()} disabled={seedRules.isPending}>
           {seedRules.isPending ? 'Loading...' : 'Load Rules'}
         </Button>
-      }
+      ) : undefined}
     />
   );
 
   if (rules.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"
@@ -158,14 +159,14 @@ export default function RulesDashboardPage() {
       mono: true,
       width: '12rem',
       cell: (rule) => (
-        <span className="text-re-text-secondary">{rule.citation_reference || '—'}</span>
+        <span className="text-re-text-secondary">{rule.citation_reference || NOT_SET}</span>
       ),
     },
     {
       key: 'remediation_suggestion',
       header: 'Remediation',
       cell: (rule) => (
-        <span className="text-re-text-tertiary">{rule.remediation_suggestion || '—'}</span>
+        <span className="text-re-text-tertiary">{rule.remediation_suggestion || NOT_SET}</span>
       ),
     },
   ];

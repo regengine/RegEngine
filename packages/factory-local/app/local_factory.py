@@ -1,15 +1,12 @@
-"""One-shot local dry run with the Colorado SB 24-205 fixture, or a live LegiScan bill.
+"""Process a live LegiScan bill or scan a state for candidates.
 
   python app/local_factory.py [--tenant T]
-  python app/local_factory.py --bill SB205 [--state CO] [--tenant T]
-  python app/local_factory.py --bill-id 1234567 [--tenant T]
+  python app/local_factory.py --bill BILL [--state STATE] --tenant TENANT
+  python app/local_factory.py --bill-id LEGISCAN_BILL_ID --tenant TENANT
   python app/local_factory.py --scan-state --state CO [--top-n 5] [--tenant T]
   (--bill, --bill-id and --scan-state also take --sim-threshold 0.80)
 
-Dry run (no --bill/--bill-id): Z3 verification, Rego compile, cartridge write, OPA
-evaluation, Ed25519 signed receipts appended to the Postgres hash chain, then a full
-chain verification. Uses the fixture IR (no Ollama) and skips the human approval step
-and Neo4j; use pipeline.py for that flow. Reads the same environment as pipeline.py.
+With no bill or scan input, reports "No data yet" and makes no external calls.
 
 Live bill: fetches the latest bill text from LegiScan (LEGISCAN_API_KEY), extracts a
 DeonticIR through an OpenAI compatible endpoint (LLM_BASE_URL, LLM_MODEL), checks it with
@@ -42,14 +39,11 @@ import httpx  # noqa: E402
 import psycopg  # noqa: E402
 import z3  # noqa: E402
 from compiler import compile_ir_to_rego  # noqa: E402
-from extract import load_fixture  # noqa: E402
 from pipeline import (  # noqa: E402
     TENANT_ID,
-    VERSION_UID,
     cartridge_name,
     deploy_and_record,
     ensure_schema,
-    package_for,
     pg_connect,
 )
 from psycopg.types.json import Jsonb  # noqa: E402
@@ -108,18 +102,6 @@ KEYWORD_WEIGHTS = {
 ACTIVE_STATUSES = range(1, 5)  # LegiScan 1 Introduced, 2 Engrossed, 3 Enrolled, 4 Passed
 ADVANCED_BONUS = 3  # past introduction (status >= 2) and already relevant
 MIN_CANDIDATE_SCORE = 4
-
-
-def dry_run(tenant_id: str = TENANT_ID) -> dict:
-    ir = load_fixture()
-    z3_result = verify_ir(ir)
-    if z3_result["status"] != OK_STATUS:
-        raise RuntimeError(f"refusing to deploy {ir.rule_id}: Z3 status {z3_result['status']}")
-    rego = compile_ir_to_rego(ir, package_for(ir.rule_id))
-    with pg_connect() as conn:
-        ensure_schema(conn)
-        deployed = deploy_and_record(conn, ir, ir.rule_id, rego, VERSION_UID, tenant_id)
-    return {"rule_uid": ir.rule_id, "tenant_id": tenant_id, "z3_status": z3_result["status"], **deployed}
 
 
 class LiveBillError(RuntimeError):
@@ -303,8 +285,8 @@ LLM_SYSTEM_PROMPT = (
     "Use the rule_id given by the user exactly. citation is the section of law the duty adds or amends. "
     "applicability_predicates are snake_case input facts that make the duty apply (numeric thresholds use "
     "GREATER_THAN or LESS_THAN with a number). action_required is a snake_case control name that satisfies "
-    "the duty. safe_harbor_control is a snake_case control that gives an affirmative defense, default "
-    "nist_ai_rmf_aligned. max_penalty_usd is the per violation civil penalty in USD (0 if none stated). "
+    "the duty. safe_harbor_control is a snake_case control only when the text establishes an affirmative "
+    "defense; otherwise use null. max_penalty_usd is the per violation civil penalty in USD (0 if none stated). "
     "opportunity_score_vs is an integer 0 to 100 for how much a compliance software vendor could sell "
     "against this duty. Add up four parts: breadth of regulated entities, up to 30 (many private "
     "businesses across sectors scores high; one agency or a tiny niche scores low); enforcement "
@@ -515,7 +497,7 @@ def boundary_cases(ir: DeonticIR, breach: dict) -> list[tuple[str, dict, str, fl
     cases = [
         ("boundary_breach", breach, "NON_COMPLIANT_BREACH", breach["affected_consumer_count"] * ir.max_penalty_usd)
     ]
-    if ir.safe_harbor_control != ir.action_required:  # otherwise turning it on also changes the action
+    if ir.safe_harbor_control and ir.safe_harbor_control != ir.action_required:
         safe_harbor = {**breach, "controls": {**breach["controls"], ir.safe_harbor_control: True}}
         cases.append(("boundary_safe_harbor", safe_harbor, "COMPLIANT_VIA_SAFE_HARBOR", 0))
     return cases
@@ -534,6 +516,8 @@ def process_single_bill(
     threshold and Z3 verifies: compile, store the rule, write the cartridge and load it into OPA
     (deploy_and_record). A skipped bill never touches OPA or extracted_rules. Errors raise."""
     meta = legiscan.fetch_latest_bill_text(bill_id)
+    if not meta.get("full_text", "").strip():
+        raise LiveBillError("No data yet: bill text is empty")
     live_ir = extract_deontic_ir_from_text(meta, llm_client)
     ir = DeonticIR.model_validate(live_ir.model_dump(exclude={"opportunity_score_vs"}))
     rule_uid, slug = ir.rule_id, cartridge_name(ir.rule_id)
@@ -608,6 +592,7 @@ def process_single_bill(
             tenant_id,
             cases=boundary_cases(ir, check["boundary_payload"]),
             data_path=f"cartridge/{slug}",
+            source_uri=meta["url"],
         )
     return {
         **row,
@@ -667,6 +652,8 @@ def scan_state(
 
 
 def format_matrix(rows: list[dict]) -> str:
+    if not rows:
+        return "No data yet"
     header = ("rank", "bill_uid", "score", "max fine", "PRA", "Z3 status", "action")
     lines = []
     for r in rows:
@@ -720,7 +707,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--state", default="CO", help="LegiScan state code, or US for Congress (with --bill or --scan-state)"
     )
-    parser.add_argument("--bill", help="bill number, e.g. SB205; runs the live LegiScan pipeline")
+    parser.add_argument("--bill", help="bill number; runs the live LegiScan pipeline")
     parser.add_argument("--bill-id", type=int, help="LegiScan bill_id; skips the search")
     parser.add_argument("--scan-state", action="store_true", help="rank the --state masterlist and process the top N")
     parser.add_argument("--top-n", type=int, default=5, help="bills to process with --scan-state (default 5)")
@@ -739,10 +726,16 @@ def main(argv: list[str] | None = None) -> int:
     if not 0 <= args.sim_threshold <= 1:
         parser.error("--sim-threshold must be between 0 and 1")
     live = single or args.scan_state
+    if not live:
+        print("No data yet")
+        return 0
+    if not args.tenant:
+        print("FACTORY_TENANT_ID or --tenant is required", file=sys.stderr)
+        return 2
     if live and not os.environ.get("LEGISCAN_API_KEY"):
         print(
             "LEGISCAN_API_KEY is not set. Add it to .env (gitignored, never commit it), then "
-            "`set -a; . ./.env; set +a` and retry. The dry run (no --bill) needs no key.",
+            "`set -a; . ./.env; set +a` and retry.",
             file=sys.stderr,
         )
         return 2
@@ -751,7 +744,7 @@ def main(argv: list[str] | None = None) -> int:
             legiscan = LegiScanClient(os.environ["LEGISCAN_API_KEY"])
             rows = scan_state(args.state, legiscan, args.top_n, args.tenant, sim_threshold=args.sim_threshold)
             if not rows:
-                print(f"no {args.state.upper()} masterlist bills scored {MIN_CANDIDATE_SCORE} or more")
+                print("No data yet")
                 return 0
             print(format_matrix(rows))
             failed = any(r["action"] == "ERROR" or not r.get("chain", {"ok": True})["ok"] for r in rows)
@@ -765,8 +758,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.tenant,
                 sim_threshold=args.sim_threshold,
             )
-        else:
-            out = dry_run(args.tenant)
     except psycopg.OperationalError as exc:
         print(f"Postgres unreachable ({type(exc).__name__}). Start it: docker compose up -d", file=sys.stderr)
         return 2

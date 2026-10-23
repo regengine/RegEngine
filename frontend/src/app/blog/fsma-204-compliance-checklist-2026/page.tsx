@@ -69,7 +69,7 @@ export default function FSMA204ComplianceChecklist() {
                 { task: 'Document your supply chain', detail: 'List all suppliers, distributors, and customers. Where does data flow today?', done: false },
                 { task: 'Assess your IT systems', detail: 'What ERP, WMS, or other systems do you use? Can they be integrated with a traceability platform?', done: false },
                 { task: 'Estimate implementation cost and timeline', detail: 'Get quotes from 2-3 FSMA 204 platform vendors. Build a budget for 2026-2027', done: false },
-                { task: 'Assign a compliance lead', detail: 'Designate one person to own FSMA 204 implementation. This is a significant role—don\'t dilute it', done: false },
+                { task: 'Assign a compliance lead', detail: 'Designate one person to own FSMA 204 implementation. This is a significant role, so don\'t dilute it', done: false },
               ].map((item, idx) => (
                 <Card key={idx} variant="inset" padding="compact" className="flex gap-4 hover:border-re-border-strong transition-colors duration-120 motion-reduce:transition-none">
                   <div className="flex-shrink-0">

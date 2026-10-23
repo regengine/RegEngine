@@ -8,7 +8,7 @@ import { getServerServiceURL } from '@/lib/api-config';
 import { attestPrivilegedProxyClientIp } from '@/lib/proxy-ip-attestation';
 
 // Proxy review API requests to the Admin backend service.
-// Handles the approve/reject actions on flagged extractions — paths like
+// Handles the approve/reject actions on flagged extractions - paths like
 //   /api/review/{id}/approve
 //   /api/review/{id}/reject
 // are transformed into
@@ -18,7 +18,7 @@ const ADMIN_URL = (() => {
     const url = process.env.ADMIN_SERVICE_URL || getServerServiceURL('admin');
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
-        console.warn('[proxy/review] ADMIN_SERVICE_URL points to internal Railway URL — unreachable from Vercel.');
+        console.warn('[proxy/review] ADMIN_SERVICE_URL points to internal Railway URL; unreachable from Vercel.');
         return getServerServiceURL('admin');
     }
     return url;

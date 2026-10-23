@@ -77,7 +77,7 @@ export default function WelcomePage() {
         Welcome to RegEngine
       </h1>
       <p className="mt-1 text-ui text-re-text-secondary">
-        Help us tailor your workspace — this takes about 10 seconds.
+        Help us tailor your workspace. This takes about 10 seconds.
       </p>
 
       <div className="mt-6 space-y-5">
@@ -133,7 +133,7 @@ export default function WelcomePage() {
           size="lg"
           onClick={() => router.push('/dashboard')}
         >
-          Skip for now — I&apos;ll set up later
+          Skip for now. I&apos;ll set up later
         </Button>
         <Button
           size="lg"

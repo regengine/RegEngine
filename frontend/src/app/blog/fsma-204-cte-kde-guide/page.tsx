@@ -219,7 +219,7 @@ export default function CTEKDEGuidePage() {
               First Land-Based Receiving
             </h3>
             <p className="text-re-text-secondary mb-4">
-              Per §1.1335, this CTE applies <strong>only</strong> to food obtained from a fishing vessel — the first land-based receiver of seafood landed by a vessel. Non-seafood imports follow the §1.1345 Receiving CTE instead, not this one.
+              Per §1.1335, this CTE applies <strong>only</strong> to food obtained from a fishing vessel: the first land-based receiver of seafood landed by a vessel. Non-seafood imports follow the §1.1345 Receiving CTE instead, not this one.
             </p>
             <div className="mb-4 overflow-x-auto rounded-md border border-re-border-subtle bg-re-surface-inset p-4 font-mono text-small text-re-text-secondary">
               <code>{`Required KDEs (per §1.1335):
@@ -232,7 +232,7 @@ export default function CTEKDEGuidePage() {
 • Reference Document Type and Number`}</code>
             </div>
             <p className="text-ui text-re-text-secondary">
-              <strong>Implementation note:</strong> If you are an importer of non-seafood Food Traceability List items, your obligation is §1.1345 Receiving (subject to the §1.1305(j) restaurant/RFE exemption when selling food directly to consumers) — not §1.1335.
+              <strong>Implementation note:</strong> If you are an importer of non-seafood Food Traceability List items, your obligation is §1.1345 Receiving (subject to the §1.1305(j) restaurant/RFE exemption when selling food directly to consumers), not §1.1335.
             </p>
           </Card>
 
@@ -245,7 +245,7 @@ export default function CTEKDEGuidePage() {
           <Card variant="inset" padding="spacious" className="mb-8">
             <h3 className="text-subheading text-re-text-primary mb-4">Common KDEs across CTEs</h3>
             <p className="text-re-text-secondary mb-6">
-              These KDEs recur across most CTEs, though the exact set required at each event differs by §§1.1325–1.1350. Confirm the specific KDE list against the section that governs the event at your operation:
+              These KDEs recur across most CTEs, though the exact set required at each event differs across §§1.1325 to 1.1350. Confirm the specific KDE list against the section that governs the event at your operation:
             </p>
             <ul className="space-y-3">
               <li className="flex items-start gap-3 text-re-text-secondary">

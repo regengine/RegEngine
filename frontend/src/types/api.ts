@@ -83,11 +83,14 @@ export interface APIKeyResponse {
     key_id?: string;      // alternative ID field
     key?: string;         // the actual key value (on creation)
     api_key?: string;     // alternative key field name from some endpoints
+    key_prefix?: string;
     name: string;
     description?: string;
     tenant_id?: string;
     created_at: string;
     expires_at?: string;
+    last_used_at?: string | null;
+    last_used?: string | null;
     is_active?: boolean;
 }
 
@@ -377,6 +380,30 @@ export interface SupplierFacility {
     postal_code: string;
     fda_registration_number?: string | null;
     roles: string[];
+}
+
+export interface FacilityRemovalCheck {
+    facility_id: string;
+    facility_name: string;
+    allowed: boolean;
+    linked_counts: {
+        lots: number;
+        events: number;
+        records: number;
+        cte_events?: number;
+        funnel_events?: number;
+        scoping_config?: number;
+    };
+    lots_count: number;
+    cte_events_count: number;
+    funnel_events_count: number;
+    scoping_config_count: number;
+    address: {
+        street: string;
+        city: string;
+        state: string;
+        postal_code: string;
+    };
 }
 
 export interface FacilityFTLScopingRequest {

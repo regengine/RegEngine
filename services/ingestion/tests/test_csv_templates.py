@@ -64,8 +64,7 @@ class TestTemplateValidatorDrift:
     POST /api/v1/ingest/csv with "Missing required KDE" because the
     templates omitted mandatory columns (harvester_business_name for
     initial_packing, tlc_source_reference for shipping/receiving,
-    reference_document for most types). sample_data/ drifted the same
-    way (fixed in PR #2631). These tests pin template <-> validator
+    reference_document for most types). These tests pin template <-> validator
     parity so the two can never diverge again.
     """
 
