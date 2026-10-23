@@ -100,7 +100,6 @@ export default function ExportJobsPage() {
                 />
                 <Callout tone="warning" icon={Link2Off} title="Scheduled export jobs aren't available on this workspace yet.">
                     <p>Recurring archive scheduling is still in development. This workspace cannot create an export job here today.</p>
-                    <p className="mt-2">For an on-demand tenant CSV export, open <Link href="/dashboard/recall-report" className="underline">Recall Report</Link>.</p>
                     <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
                 </Callout>
             </PageContainer>

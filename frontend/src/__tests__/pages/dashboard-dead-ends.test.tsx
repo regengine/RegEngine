@@ -80,11 +80,4 @@ describe('disabled dashboard features', () => {
         expect(await screen.findByRole('link', { name: 'Requests (Internal Drill)' })).toHaveAttribute('href', '/requests');
         expect(screen.getByText(/create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit/)).toBeInTheDocument();
     });
-
-    it('keeps the on-demand tenant CSV export path available', async () => {
-        renderPage(<ExportJobsPage />);
-
-        expect(await screen.findByRole('link', { name: 'Recall Report' })).toHaveAttribute('href', '/dashboard/recall-report');
-        expect(screen.getByText(/on-demand tenant CSV export/)).toBeInTheDocument();
-    });
 });
