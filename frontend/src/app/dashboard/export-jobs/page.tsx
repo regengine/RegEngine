@@ -94,7 +94,7 @@ export default function ExportJobsPage() {
         return (
             <PageContainer>
                 <PageHeader
-                    title="FDA Export"
+                    title="Scheduled Exports"
                     description="Scheduled export jobs are coming soon."
                     primaryAction={<Button variant="secondary" disabled>Save export job (coming soon)</Button>}
                 />
@@ -109,7 +109,7 @@ export default function ExportJobsPage() {
     return (
         <PageContainer>
             <PageHeader
-                title="FDA Export"
+                title="Scheduled Exports"
                 description="Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone."
                 primaryAction={
                     <Button

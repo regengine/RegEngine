@@ -100,41 +100,6 @@ export default function ReceivingDockPage() {
         toast({ title: 'Receiving Session Started', description: `Supplier: ${supplier || 'Unknown'}` });
     }, [supplier, poNumber, toast]);
 
-    const startSampleSession = useCallback(() => {
-        const sampleSupplier = supplier || 'Valley Fresh Farms';
-        const samplePo = poNumber || 'PO-2026-0042';
-        setSupplier(sampleSupplier);
-        setPoNumber(samplePo);
-        setSession({
-            supplier: sampleSupplier,
-            poNumber: samplePo,
-            expectedItems: [
-                {
-                    id: 'sample-romaine',
-                    gtin: '00614141000012',
-                    lotCode: 'TLC-ROM-20260426-001',
-                    productName: 'Romaine Lettuce',
-                    quantity: 18,
-                    expiryDate: '',
-                    status: 'pending',
-                },
-                {
-                    id: 'sample-spring-mix',
-                    gtin: '00614141000029',
-                    lotCode: 'TLC-MIX-20260426-004',
-                    productName: 'Spring Mix',
-                    quantity: 12,
-                    expiryDate: '',
-                    status: 'pending',
-                },
-            ],
-            unexpectedScans: [],
-            startedAt: new Date().toISOString(),
-            status: 'active',
-        });
-        toast({ title: 'Sample Receiving Session Started', description: 'Two expected items are ready to scan.' });
-    }, [poNumber, supplier, toast]);
-
     /* ─── Add expected item ─── */
     const addExpectedItem = useCallback(() => {
         if (!session || (!manualGtin && !manualLot)) return;
@@ -352,7 +317,7 @@ export default function ReceivingDockPage() {
                                     <Input
                                         id="receiving-supplier"
                                         type="text"
-                                        placeholder="e.g. Valley Fresh Farms"
+                                        placeholder="Supplier on the shipment"
                                         value={supplier}
                                         onChange={e => setSupplier(e.target.value)}
                                     />
@@ -361,7 +326,7 @@ export default function ReceivingDockPage() {
                                     <Input
                                         id="receiving-po"
                                         type="text"
-                                        placeholder="e.g. PO-2026-0042"
+                                        placeholder="PO or ASN on the paperwork"
                                         value={poNumber}
                                         onChange={e => setPoNumber(e.target.value)}
                                     />
@@ -375,9 +340,6 @@ export default function ReceivingDockPage() {
                                     leadingIcon={<Truck strokeWidth={1.75} aria-hidden="true" />}
                                 >
                                     Start Receiving
-                                </Button>
-                                <Button variant="outline" size="lg" onClick={startSampleSession} className="w-full sm:w-auto">
-                                    Load sample PO
                                 </Button>
                             </div>
                         </CardContent>
@@ -525,9 +487,9 @@ export default function ReceivingDockPage() {
                                     <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-5">
                                         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                             <div className="min-w-0">
-                                                <p className="text-subheading text-re-text-primary">No expected items added yet</p>
+                                                <p className="text-subheading text-re-text-primary">No data yet</p>
                                                 <p className="mt-1 max-w-[70ch] text-ui text-re-text-secondary">
-                                                    Add the lots you expect from the PO to turn scans into pass/fail checks. If the shipment is unplanned, scan directly and the dock will capture the items as unexpected receiving records for review.
+                                                    No expected items added. Add the lots you expect from the PO to turn scans into pass/fail checks. If the shipment is unplanned, scan directly and the dock will capture the items as unexpected receiving records for review.
                                                 </p>
                                             </div>
                                             <Button
