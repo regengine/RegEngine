@@ -177,9 +177,9 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                 }
             ]
             logger.warning(
-                "fsma_event_validation_failed tenant=%s errors=%s",
+                "fsma_event_validation_failed tenant=%s error_count=%s",
                 tenant_id,
-                [{"loc": err.get("loc"), "type": err.get("type")} for err in errors],
+                len(errors),
             )
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
@@ -222,18 +222,18 @@ def _validate_as_fsma_event(normalized: dict, tenant_id: str | None = None) -> d
                     dumped = _build(_GS1_LOT_LEVEL_TLC_STANDIN)
                 except ValidationError as other:
                     logger.warning(
-                        "fsma_event_validation_failed tenant=%s errors=%s",
+                        "fsma_event_validation_failed tenant=%s error_count=%s",
                         tenant_id,
-                        [{"loc": err.get("loc"), "type": err.get("type")} for err in other.errors()],
+                        len(other.errors()),
                     )
                     _audit_log_validation_failure(other.errors(), tenant_id, normalized)
                     return None
                 dumped["tlc"] = received_tlc
                 return dumped
             logger.warning(
-                "fsma_event_validation_failed tenant=%s errors=%s",
+                "fsma_event_validation_failed tenant=%s error_count=%s",
                 tenant_id,
-                [{"loc": err.get("loc"), "type": err.get("type")} for err in errors],
+                len(errors),
             )
             _audit_log_validation_failure(errors, tenant_id, normalized)
             return None
