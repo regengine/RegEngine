@@ -10,11 +10,11 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@/lib/auth-context', () => ({
-    useAuth: () => ({ user: { id: 'user-1', is_sysadmin: false }, isHydrated: true, isAuthenticated: true }),
+    useAuth: () => ({ user: { is_sysadmin: false }, isHydrated: true, isAuthenticated: true }),
 }));
 
 vi.mock('@/lib/tenant-context', () => ({
-    useTenant: () => ({ tenantId: 'tenant-1', isTenantReady: false }),
+    useTenant: () => ({ tenantId: null, isTenantReady: false }),
 }));
 
 vi.mock('@/hooks/use-api', () => ({
@@ -44,7 +44,7 @@ describe('disabled dashboard features', () => {
     beforeEach(() => vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', ''));
     afterEach(() => vi.unstubAllEnvs());
 
-    it('hides alerts and heartbeat links and replaces the alert count when the feature is off', () => {
+    it('hides alerts and heartbeat links and marks alerts off when the feature is off', () => {
         renderPage(<DashboardPage />);
 
         expect(linksTo('/dashboard/alerts')).toHaveLength(0);
@@ -74,5 +74,12 @@ describe('disabled dashboard features', () => {
         expect(screen.getByRole('link', { name: 'JSON events API' })).toHaveAttribute('href', '/developers');
         expect(screen.getByRole('button', { name: new RegExp(`${disabledAction} \\(coming soon\\)`, 'i') })).toBeDisabled();
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    });
+
+    it('keeps the manual Internal Drill path available', async () => {
+        renderPage(<RecallDrillsPage />);
+
+        expect(await screen.findByRole('link', { name: 'Requests (Internal Drill)' })).toHaveAttribute('href', '/requests');
+        expect(screen.getByText(/create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit/)).toBeInTheDocument();
     });
 });
