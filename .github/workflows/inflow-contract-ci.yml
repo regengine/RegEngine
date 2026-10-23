@@ -65,7 +65,9 @@ env:
   # controller, mock_service, schemas/*) inflow-lab's scheduled Contract Pin
   # Drift check would otherwise report as a breach against the older pin.
   # Both sides advertise INFLOW_CONTRACT_VERSION "2".
-  INFLOW_LAB_REF: 78050ae78c72a348a518b6d48bdeae7424d772da  # pragma: allowlist secret
+  # Bumped to inflow-lab main 919b5282 (SEL-335) after the Contract Pin Drift
+  # check found the pin 18 commits behind; contract version is still 2.
+  INFLOW_LAB_REF: 919b5282852313479c8eb7fbacf4d79d55bed909  # pragma: allowlist secret
   CONTRACT_TENANT_ID: 11111111-1111-1111-1111-111111111111
   CONTRACT_API_KEY: ci-inflow-contract-key  # pragma: allowlist secret
   CONTRACT_HMAC_SECRET: ci-inflow-contract-hmac-secret  # pragma: allowlist secret
