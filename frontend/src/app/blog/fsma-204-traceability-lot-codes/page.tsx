@@ -28,7 +28,7 @@ const TLC_REQUIREMENTS = [
   {
     cte: "Harvesting",
     who: "Farms & growers",
-    requirement: "Assign a TLC at harvest. The TLC must uniquely identify the lot — typically a combination of farm, field, date, and commodity.",
+    requirement: "Assign a TLC at harvest. The TLC must uniquely identify the lot, typically a combination of farm, field, date, and commodity.",
   },
   {
     cte: "Cooling",
@@ -116,8 +116,8 @@ export default function TLCGuidePage() {
           <section className="space-y-5">
             <h2 className="text-heading text-re-text-primary">What Is a Traceability Lot Code?</h2>
             <p className="text-body text-re-text-secondary">
-              A Traceability Lot Code (TLC) is a descriptor — often a number, code,
-              or combination — used to identify a traceability lot. Under 21 CFR 1.1310,
+              A Traceability Lot Code (TLC) is a descriptor (often a number, code,
+              or combination) used to identify a traceability lot. Under 21 CFR 1.1310,
               every food on the Food Traceability List must carry a TLC that connects it
               to the Critical Tracking Events (CTEs) in its supply chain.
             </p>

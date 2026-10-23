@@ -7,7 +7,7 @@
  * The sandbox evaluator is an experimental router (server/main.py
  * _EXPERIMENTAL_ROUTERS) and is auto-disabled in production, so this spec
  * probes it at runtime and asserts the correct behaviour for whichever state
- * the target deployment is in — same convention as demo-smoke.spec.ts:
+ * the target deployment is in:
  *
  *   mounted    → CTA lands on /sandbox and the sample CSV evaluates end to end.
  *   unmounted  → CTA lands on /demo, no page promises a CSV sandbox, and a

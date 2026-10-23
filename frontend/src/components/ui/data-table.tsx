@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 /**
- * DataTable — SPEC §4.
+ * DataTable - SPEC §4.
  *
  * Columns are a plain descriptor array rather than TanStack `ColumnDef`
  * generics: there is exactly one obvious implementation, which is what keeps
@@ -48,7 +48,7 @@ export type DataTableSort = { key: string; direction: "asc" | "desc" }
 export interface DataTableProps<T> {
   columns: DataTableColumn<T>[]
   data: T[]
-  /** Visually hidden by default — the table's accessible name. */
+  /** Visually hidden by default - the table's accessible name. */
   caption: string
   density?: "low" | "medium" | "high"
   toolbar?: {
@@ -240,7 +240,7 @@ export function DataTable<T>({
       {pagination && status === "idle" && data.length > 0 && (
         <div className="flex items-center justify-between border-t border-re-border-subtle px-4 py-2 text-small text-re-text-tertiary">
           <span>
-            {(pagination.page - 1) * pagination.pageSize + 1}–
+            {(pagination.page - 1) * pagination.pageSize + 1} to{' '}
             {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total}
           </span>
           <div className="flex items-center gap-2">

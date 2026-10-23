@@ -1,5 +1,5 @@
 /**
- * Proxy for tool email verification — forwards to backend and sets
+ * Proxy for tool email verification - forwards to backend and sets
  * the re_tool_access HTTP-only cookie on successful code confirmation.
  *
  * POST /api/tools/verify
@@ -32,14 +32,14 @@ function getBackendUrl(): string {
 }
 
 export async function POST(request: NextRequest) {
-    // On Vercel, localhost fallback will never work — fail fast with a clear error.
+    // On Vercel, localhost fallback will never work - fail fast with a clear error.
     const backendUrl = getBackendUrl();
     if (process.env.VERCEL && !backendUrl) {
         console.error(
-            '[api/tools/verify] ADMIN_SERVICE_URL or NEXT_PUBLIC_API_BASE_URL must be set on Vercel — cannot reach localhost from serverless functions',
+            '[api/tools/verify] ADMIN_SERVICE_URL or NEXT_PUBLIC_API_BASE_URL must be set on Vercel; cannot reach localhost from serverless functions',
         );
         return NextResponse.json(
-            { error: 'Backend not configured — contact support' },
+            { error: 'Backend not configured. Contact support' },
             { status: 503 },
         );
     }

@@ -9,7 +9,7 @@ const SERVICE_PORTS = { ingestion: 8002, graph: 8200, compliance: 8500, admin: 8
 type ServiceName = keyof typeof SERVICE_PORTS;
 
 /**
- * Server-side only — resolve backend URL from env vars with localhost fallback.
+ * Server-side only - resolve backend URL from env vars with localhost fallback.
  * Use this in Next.js API routes instead of inline `|| 'http://localhost:XXXX'`.
  */
 export function getServerServiceURL(service: ServiceName): string {
@@ -25,7 +25,7 @@ export function getServerServiceURL(service: ServiceName): string {
 
     if (process.env.VERCEL) {
         console.error(
-            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured — local dev fallback is unreachable from Vercel`,
+            `[api-config] ${service.toUpperCase()}_SERVICE_URL not configured; local dev fallback is unreachable from Vercel`,
         );
         return '';
     }

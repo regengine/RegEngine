@@ -37,6 +37,7 @@ import {
     FileText,
     ShieldCheck,
 } from 'lucide-react';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 // ── Types ──
 
@@ -503,7 +504,7 @@ function HeartbeatPageContent() {
                                             <CardContent className="py-3">
                                                 <div className="flex items-center gap-2 text-re-danger">
                                                     <XCircle className="h-4 w-4 flex-shrink-0" />
-                                                    <p className="text-sm">{error} — showing cached data if available.</p>
+                                                    <p className="text-sm">{error}. Showing cached data if available.</p>
                                 </div>
                                             </CardContent>
                                         </Card>
@@ -680,13 +681,13 @@ function HeartbeatPageContent() {
                                         <StatusRow
                                             icon={Link2}
                                             label="Hash Chain"
-                                            value={compliance ? `${compliance.breakdown.chain_integrity?.score ?? 0}%` : '—'}
+                                            value={compliance ? `${compliance.breakdown.chain_integrity?.score ?? 0}%` : NO_DATA_YET}
                                             status={compliance && (compliance.breakdown.chain_integrity?.score ?? 0) >= 80 ? 'good' : 'warn'}
                                         />
                                         <StatusRow
                                             icon={FileText}
                                             label="CTE Events"
-                                            value={compliance?.events_analyzed?.toLocaleString() ?? '—'}
+                                            value={compliance?.events_analyzed?.toLocaleString() ?? NO_DATA_YET}
                                             status={compliance && compliance.events_analyzed > 0 ? 'good' : 'neutral'}
                                         />
                                         <StatusRow

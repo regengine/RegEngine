@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge, type BadgeTone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
+import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { StatTile } from '@/components/ui/stat-tile';
@@ -115,7 +116,7 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
     });
     if (!res.ok) {
         console.error(`Audit log fetch failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't load the audit log. Check your connection and retry.");
+        throw new Error("Couldn't load the audit log.");
     }
     return res.json();
 }
@@ -147,7 +148,7 @@ export default function AuditLogPage() {
 
     const entries = useMemo(() => auditData?.entries ?? [], [auditData?.entries]);
     const total = auditData?.total ?? 0;
-    const error = auditError?.message ?? null;
+    const error = auditError;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Re-fetch when data changes elsewhere (upload, bulk import, tab refocus)
@@ -182,14 +183,14 @@ export default function AuditLogPage() {
         <PageContainer>
             <PageHeader
                 title="Audit Log"
-                description="Immutable, SHA-256 verified record of all system events"
+                description={auditData && !error ? "Immutable, SHA-256 verified record of all system events" : "System event history"}
                 meta={
                     <>
-                        {lastFetched && <span>Updated {lastFetched.toLocaleTimeString()}</span>}
-                        <Badge tone="neutral" size="sm" className="hidden sm:inline-flex">
+                        {lastFetched && !error && <span>Updated {lastFetched.toLocaleTimeString()}</span>}
+                        {auditData && !error && <Badge tone="neutral" size="sm" className="hidden sm:inline-flex">
                             <Shield className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                             Hash-chained
-                        </Badge>
+                        </Badge>}
                     </>
                 }
                 secondaryActions={
@@ -207,12 +208,12 @@ export default function AuditLogPage() {
                                 aria-hidden="true"
                             />
                         </Button>
-                        <Button variant="secondary" size="sm" asChild>
+                        {auditData && !error && <Button variant="secondary" size="sm" asChild>
                             <Link href="/dashboard/export-jobs">
                                 <Download className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
                                 Export
                             </Link>
-                        </Button>
+                        </Button>}
                     </>
                 }
             />
@@ -226,7 +227,7 @@ export default function AuditLogPage() {
                 )}
 
                 {/* Summary */}
-                {isLoggedIn && entries.length > 0 && (
+                {isLoggedIn && !error && entries.length > 0 && (
                     <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                         <StatTile label="Total Events" value={total.toLocaleString()} />
                         <StatTile label="Today" value={stats.today} />
@@ -243,29 +244,10 @@ export default function AuditLogPage() {
                 )}
 
                 {/* Error */}
-                {error && (
-                    <Callout
-                        tone="danger"
-                        role="alert"
-                        icon={AlertTriangle}
-                        title="Couldn't load the audit log"
-                        action={
-                            <Button variant="secondary" size="sm" onClick={() => loadLog()} disabled={loading}>
-                                <RefreshCw
-                                    className={loading ? 'animate-spin motion-reduce:animate-none' : undefined}
-                                    strokeWidth={1.75}
-                                    aria-hidden="true"
-                                />
-                                Retry
-                            </Button>
-                        }
-                    >
-                        Check your connection and retry.
-                    </Callout>
-                )}
+                {error && <ErrorState message="We could not load this page." onRetry={() => loadLog()} />}
 
                 {/* Event list shell — toolbar, rows, pagination */}
-                {isLoggedIn && entries.length > 0 && (
+                {isLoggedIn && !error && entries.length > 0 && (
                     <div className="rounded-lg border border-re-border bg-re-surface-card">
                         {/* Toolbar */}
                         <div className="space-y-3 border-b border-re-border-subtle px-4 py-3">
@@ -499,7 +481,7 @@ export default function AuditLogPage() {
                 )}
 
                 {/* Chain integrity footer */}
-                {isLoggedIn && entries.length > 0 && (
+                {isLoggedIn && !error && entries.length > 0 && (
                     <Card variant="inset">
                         <CardContent className="p-4 text-ui text-re-text-secondary">
                             <span className="font-medium text-re-text-primary">Tamper-evident audit trail: </span>

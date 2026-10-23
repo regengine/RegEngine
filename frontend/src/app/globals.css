@@ -1123,3 +1123,8 @@ html.a11y-cursor-large [role="button"],
 html.a11y-cursor-large input[type="submit"] {
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Cpath d='M8 4v40h6V28h12v-6H14V10h20V4z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 8 4, pointer !important;
 }
+
+/* A failed workspace load must not retain a healthy-looking status badge. */
+.re-app-shell:has(.workspace-load-error) .bg-re-success-bg {
+    display: none;
+}

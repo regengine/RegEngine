@@ -14,7 +14,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 
 // ---------------------------------------------------------------------------
-// Synthetic demo data — what a mid-market produce distributor would see
+// Synthetic demo data - what a mid-market produce distributor would see
 // ---------------------------------------------------------------------------
 
 const COMPLIANCE_SCORE = 94.2;
@@ -90,7 +90,7 @@ export default function DemoPage() {
         title="Compliance Dashboard"
         description={
           <>
-            DEMO WORKSPACE &mdash; FreshCo Distribution is a fictional distributor. Numbers are illustrative.
+            DEMO WORKSPACE: FreshCo Distribution is a fictional distributor. Numbers are illustrative.
           </>
         }
       />
@@ -211,7 +211,7 @@ export default function DemoPage() {
       <Card padding="spacious" className="text-center">
         <h2 className="font-display text-heading-lg text-re-text-primary">This could be your data</h2>
         <p className="mx-auto mt-4 max-w-[68ch] text-ui text-re-text-secondary">
-          RegEngine ingests events from your ERP, validates them against 36 FSMA 204 validation rules (33 stateless + 3 cross-event), and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal — not an FDA-issued rating.
+          RegEngine ingests events from your ERP, validates them against 36 FSMA 204 validation rules (33 stateless + 3 cross-event), and surfaces gaps before they become audit findings during a §1.1455(c) records request. The compliance score shown is RegEngine&apos;s internal six-dimension readiness signal, not an FDA-issued rating.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <Button asChild size="lg">

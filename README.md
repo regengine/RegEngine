@@ -14,9 +14,7 @@ This is a pre-production application with deployed public proof surfaces. The ca
 
 You don't have to take our word for any of this — try it yourself:
 
-- [regengine.co/proof](https://regengine.co/proof) — download a synthetic FSMA CSV, EPCIS 2.0 JSON-LD bundle, and audit evidence ZIP.
-- [regengine.co/verify](https://regengine.co/verify) — drop the public audit bundle into the verifier and confirm file-hash and Merkle-root integrity.
-- [regengine.co/proof/recall-drill](https://regengine.co/proof/recall-drill) — call the public recall-drill endpoint against a frozen synthetic dataset and reproduce the case-study metrics.
+- [regengine.co/verify](https://regengine.co/verify) — drop an audit bundle exported from your own workspace into the verifier and confirm file-hash and Merkle-root integrity.
 
 This README describes behavior that is visible in checked-in code, configuration, tests, and runbooks.
 
@@ -54,7 +52,6 @@ Implemented capabilities in the current tree. Route availability is controlled b
 | FDA-oriented CSV and evidence-bundle export routes | [services/ingestion/app/fda_export/router.py](services/ingestion/app/fda_export/router.py) |
 | Request-response cases, scoped evidence package assembly, and auditor workflows | [services/ingestion/app/request_workflow_router.py](services/ingestion/app/request_workflow_router.py), [services/ingestion/app/auditor_router.py](services/ingestion/app/auditor_router.py) |
 | Recall readiness assessments, gap checklists, and recall reports | [services/ingestion/app/readiness_router.py](services/ingestion/app/readiness_router.py), [services/ingestion/app/recall_report.py](services/ingestion/app/recall_report.py) |
-| Public synthetic recall drill and independently verifiable sample bundles | [services/ingestion/app/proof_recall_router.py](services/ingestion/app/proof_recall_router.py), [frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py) |
 | EPCIS JSON-LD export and broader recall simulations (experimental routers; excluded from the production allowlist) | [services/ingestion/app/epcis_export.py](services/ingestion/app/epcis_export.py), [services/ingestion/app/recall_simulations.py](services/ingestion/app/recall_simulations.py) |
 | Subscription-gated access and persisted usage metering; Stripe usage reporting requires an operator call | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py), [DESIGN_metering-billing.md](DESIGN_metering-billing.md) |
 | Tenant/admin/user/API-key management, including a sysadmin rename of an organization and the tenant row that shares its id | [services/admin/app/](services/admin/app/), [docs/engineering/ADMIN_ORGANIZATIONS.md](docs/engineering/ADMIN_ORGANIZATIONS.md) |

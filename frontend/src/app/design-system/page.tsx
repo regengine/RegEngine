@@ -29,7 +29,7 @@ import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 /**
- * /design-system — the rendered contract for the design system.
+ * /design-system - the rendered contract for the design system.
  *
  * Every primitive, in every state, in whichever theme is active. This is what a
  * page author checks their work against, and the fastest way for a human to
@@ -264,7 +264,7 @@ export default function DesignSystemPage() {
 
                         <div className="space-y-4">
                             <Card variant="inset" padding="spacious">
-                                <p className="text-ui text-re-text-secondary">Card variant <code className="font-mono text-[0.8125rem]">inset</code> — wells, code blocks and summary strips.</p>
+                                <p className="text-ui text-re-text-secondary">Card variant <code className="font-mono text-[0.8125rem]">inset</code>: wells, code blocks and summary strips.</p>
                             </Card>
                             <Tabs defaultValue="overview">
                                 <TabsList>

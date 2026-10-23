@@ -946,7 +946,7 @@ class TestTemplateExampleRowSurvivesIngest:
 
     Guards the live failure where rows built from the official template
     were rejected with "Missing required KDE" (template <-> validator
-    drift; sample_data/ counterpart fixed in PR #2631).
+    drift).
     """
 
     # Parametrized over every served template — including legacy aliases like

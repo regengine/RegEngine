@@ -2,7 +2,7 @@
  * FDA Food Traceability List (FTL) category data.
  *
  * Shared between the full FTL Checker tool and the onboarding quick-check.
- * Source: 21 CFR Part 1, Subpart S — FDA Food Traceability Rule (FSMA 204)
+ * Source: 21 CFR Part 1, Subpart S - FDA Food Traceability Rule (FSMA 204)
  */
 
 export interface FTLCategory {
@@ -146,7 +146,7 @@ export const FTL_CATEGORIES: FTLCategory[] = [
   },
   {
     id: 'finfish-histamine',
-    name: 'Finfish — Scombrotoxin/Histamine-Forming',
+    name: 'Finfish (Scombrotoxin/Histamine-Forming)',
     category: 'Seafood',
     examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack, bonito',
     exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -158,7 +158,7 @@ export const FTL_CATEGORIES: FTLCategory[] = [
   },
   {
     id: 'finfish-ciguatoxin',
-    name: 'Finfish — Ciguatoxin-Associated',
+    name: 'Finfish (Ciguatoxin-Associated)',
     category: 'Seafood',
     examples: 'Barracuda, grouper, snapper, moray eel (tropical reef species)',
     exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',
@@ -170,7 +170,7 @@ export const FTL_CATEGORIES: FTLCategory[] = [
   },
   {
     id: 'finfish-other',
-    name: 'Finfish — Other (fresh/frozen/previously frozen)',
+    name: 'Finfish, Other (fresh/frozen/previously frozen)',
     category: 'Seafood',
     examples: 'Salmon, cod, halibut, tilapia, trout, bass, swordfish',
     exclusions: 'Catfish (Siluriformes) are USDA-regulated and excluded per §1.1305(g)',

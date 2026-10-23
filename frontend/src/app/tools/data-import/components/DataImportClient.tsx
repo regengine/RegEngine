@@ -51,30 +51,31 @@ const CTE_TYPES = [
 const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \\
   -H "Content-Type: application/json" \\
   -H "X-RegEngine-API-Key: YOUR_API_KEY" \\
+  -H "Idempotency-Key: <unique-request-id>" \\
   -d '{
     "source": "erp",
     "events": [
       {
         "cte_type": "shipping",
-        "traceability_lot_code": "TOM-0226-F3-001",
-        "product_description": "Roma Tomatoes 12ct",
-        "quantity": 200,
-        "unit_of_measure": "cases",
-        "location_gln": "0614141000005",
-        "location_name": "Valley Fresh Farms",
-        "timestamp": "2026-02-26T14:30:00Z",
+        "traceability_lot_code": "<traceability-lot-code>",
+        "product_description": "<product-description>",
+        "quantity": <quantity-number>,
+        "unit_of_measure": "<unit-of-measure>",
+        "location_gln": "<your-13-digit-gln>",
+        "location_name": "<your-location-name>",
+        "timestamp": "<iso-8601-timestamp>",
         "kdes": {
-          "ship_date": "2026-02-26",
-          "ship_from_location": "Valley Fresh Farms, Salinas CA",
-          "ship_to_location": "Metro Distribution, LA",
-          "carrier_name": "Cold Express Logistics",
-          "temperature_celsius": 3.2
+          "ship_date": "<yyyy-mm-dd>",
+          "ship_from_location": "<ship-from-location>",
+          "ship_to_location": "<ship-to-location>",
+          "reference_document": "<bol-or-invoice-number>",
+          "tlc_source_reference": "<tlc-source-location-or-gln>"
         }
       }
     ]
   }'`;
 
-// Synthetic FSMA 204 traceability dataset — mirrors test_data/regengine_test_traceability.csv
+// Synthetic FSMA 204 traceability dataset - mirrors test_data/regengine_test_traceability.csv
 const SAMPLE_EVENTS = [
     { event_type: 'HARVESTING',     event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
     { event_type: 'RECEIVING',      event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Salinas Cold Storage, Salinas, CA',           product_description: 'Romaine Lettuce', gtin: '09524000059109' },
@@ -251,7 +252,7 @@ export function DataImportClient() {
             trackToolRunCompleted('data-import', result.accepted > 0 ? 'success' : 'error');
         } catch (err: unknown) {
             const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'Webhook ingest failed';
+            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'JSON events API ingest failed';
             addStep('Batch ingest', false, msg);
             setSampleState('error');
             trackToolRunCompleted('data-import', 'error');
@@ -269,19 +270,19 @@ export function DataImportClient() {
     return (
         <FreeToolPageShell
             title="Data Import Hub"
-            subtitle="Get your traceability data into RegEngine. Upload CSV, import IoT logs, or connect via API."
+            subtitle="Get your traceability data into RegEngine. Upload CSV or XLSX files (including Sensitech TempTale logs), or connect via the JSON events API."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <LeadGate
                 source="data-import"
                 headline="Unlock the Data Import Hub"
-                subheadline="Upload CSV files, import IoT temperature logs, and connect via API to start building your traceability records."
+                subheadline="Upload CSV or XLSX files (including IoT temperature logs), or connect via the JSON events API to start building your traceability records."
                 ctaText="Access Import Tools"
                 teaser={
                     <Card padding="spacious" className="text-center">
                         <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                         <p className="text-subheading text-re-text-primary">Three Ways to Import</p>
-                        <p className="mt-2 text-ui text-re-text-secondary">CSV Upload with templates for every Critical Tracking Event (CTE) type, IoT Sensitech TempTale import, and a full REST webhook API.</p>
+                        <p className="mt-2 text-ui text-re-text-secondary">CSV and XLSX upload with templates for every Critical Tracking Event (CTE) type, Sensitech TempTale CSV import, and the JSON events API.</p>
                     </Card>
                 }
             >
@@ -604,7 +605,7 @@ export function DataImportClient() {
                                 <div className="flex items-center gap-3">
                                     <Code2 className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                     <div>
-                                        <CardTitle>Webhook Ingestion API</CardTitle>
+                                        <CardTitle>JSON Events API</CardTitle>
                                         <CardDescription>
                                             Push CTE events from any system using a single REST endpoint.
                                         </CardDescription>

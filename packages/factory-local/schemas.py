@@ -18,8 +18,23 @@ _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # input.default does not parse, so these are rejected as path segments.
 REGO_RESERVED = frozenset(
     {
-        "as", "contains", "data", "default", "else", "every", "false", "if",
-        "import", "in", "input", "not", "null", "package", "some", "true", "with",
+        "as",
+        "contains",
+        "data",
+        "default",
+        "else",
+        "every",
+        "false",
+        "if",
+        "import",
+        "in",
+        "input",
+        "not",
+        "null",
+        "package",
+        "some",
+        "true",
+        "with",
     }
 )
 
@@ -71,7 +86,7 @@ class DeonticIR(BaseModel):
     modality: Modality
     applicability_predicates: list[DeonticPredicate]
     action_required: str = Field(description="Control key under input.controls that satisfies the rule")
-    safe_harbor_control: str = "nist_ai_rmf_aligned"
+    safe_harbor_control: str | None = None
     max_penalty_usd: Union[StrictInt, StrictFloat]
     private_right_of_action: bool
 
@@ -84,7 +99,9 @@ class DeonticIR(BaseModel):
 
     @field_validator("action_required", "safe_harbor_control")
     @classmethod
-    def _control_is_safe(cls, v: str) -> str:
+    def _control_is_safe(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
         if not is_safe_identifier(v):
             raise ValueError(f"unsafe control name: {v!r}")
         return v

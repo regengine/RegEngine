@@ -31,7 +31,7 @@ const PROOF_VERIFY_ENDPOINT = '/api/ingestion/api/v1/proof/verify';
 
 const TERMINAL_OUTPUT = `$ python verify_chain.py audit-bundle.zip
 manifest: ok
-files: 2 / 2 sha256 matches
+files: N / N sha256 matches
 merkle: root recomputed and matched
 result: bundle intact`;
 
@@ -63,9 +63,9 @@ const INSTALL_STEPS = [
         desc: 'Single file, no package manager needed.',
     },
     {
-        title: 'Download a sample bundle',
-        code: 'curl -O https://regengine.co/proof/audit-bundle.zip',
-        desc: 'The ZIP contains manifest.json plus synthetic FSMA/EPCIS evidence files.',
+        title: 'Export your own bundle',
+        code: undefined,
+        desc: 'Use the audit bundle ZIP you exported from your RegEngine workspace. It contains manifest.json plus your evidence files.',
     },
     {
         title: 'Verify the bundle',
@@ -83,7 +83,7 @@ const TRUST_MODEL = [
     {
         Icon: FileCode,
         title: 'Open Source',
-        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us — you can verify the math yourself.',
+        desc: 'The verification script is Apache 2.0-licensed. Read every line. Fork it. Modify it. You don\'t need to trust us. You can verify the math yourself.',
     },
     {
         Icon: ShieldCheck,
@@ -99,27 +99,26 @@ const BUNDLE_CHECK_STEPS = [
     { step: '4', label: 'Compare', detail: 'If every file hash and the root match the manifest inside the bundle, the bundle is self-consistent. The check does not authenticate who produced it.' },
 ];
 
-type ManifestField = { field: string; meaning: string; example: string };
+type ManifestField = { field: string; meaning: string };
 
 const MANIFEST_FIELDS: ManifestField[] = [
-    { field: 'files[].path', meaning: 'Evidence file inside the ZIP', example: 'fsma-204-sample.csv' },
-    { field: 'files[].sha256', meaning: 'Declared SHA-256 digest for that file', example: 'ab250df1f9ed...' },
-    { field: 'files[].size', meaning: 'Declared byte length', example: '1524' },
-    { field: 'merkle.leaves[]', meaning: 'Ordered file hashes used as tree leaves', example: 'ab250df1f9ed...' },
-    { field: 'merkle.root', meaning: 'Declared root of the evidence tree', example: 'a320428f4057...' },
-    { field: 'build.commit', meaning: 'Code revision that produced the sample bundle', example: '64542033f908...' },
+    { field: 'files[].path', meaning: 'Evidence file inside the ZIP' },
+    { field: 'files[].sha256', meaning: 'Declared SHA-256 digest for that file' },
+    { field: 'files[].size', meaning: 'Declared byte length' },
+    { field: 'merkle.leaves[]', meaning: 'Ordered file hashes used as tree leaves' },
+    { field: 'merkle.root', meaning: 'Declared root of the evidence tree' },
+    { field: 'build.commit', meaning: 'Code revision that produced the bundle' },
 ];
 
 const MANIFEST_COLUMNS: DataTableColumn<ManifestField>[] = [
     { key: 'field', header: 'Field', mono: true, width: '14rem' },
     { key: 'meaning', header: 'Meaning' },
-    { key: 'example', header: 'Example', mono: true },
 ];
 
 const PROSE_LINK =
     'text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand';
 
-/** Terminal transcript colouring — the word on the line always carries the meaning too. */
+/** Terminal transcript colouring - the word on the line always carries the meaning too. */
 function transcriptLineClass(line: string): string {
     if (line.startsWith('✓ VALID')) return 'text-re-success';
     if (line.startsWith('✗ INVALID')) return 'text-re-danger';
@@ -131,7 +130,7 @@ function transcriptLineClass(line: string): string {
 }
 
 /* ─────────────────────────────────────────────────────────────
-   VerifyWidget — drop-and-verify export bundle
+   VerifyWidget: drop-and-verify export bundle
    ───────────────────────────────────────────────────────────── */
 type VerifyCheck = { name: string; passed: boolean; detail?: string };
 type VerifyResponse = {
@@ -245,8 +244,8 @@ function VerifyWidget() {
                         title={file ? file.name : 'Drop your export bundle here'}
                         description={
                             file
-                                ? `${(file.size / 1024).toFixed(1)} KB — click to choose a different file`
-                                : 'or click to browse — accepts .zip or .json'
+                                ? `${(file.size / 1024).toFixed(1)} KB. Click to choose a different file`
+                                : 'or click to browse (accepts .zip or .json)'
                         }
                         className={cn(
                             'transition-colors duration-120 motion-reduce:transition-none',
@@ -412,7 +411,7 @@ export default function VerifyPage() {
                     Every public RegEngine proof bundle carries a{' '}
                     <strong className="font-medium text-re-text-primary">SHA-256 manifest and Merkle root</strong>.
                     Our open-source verification script lets you independently check that
-                    the bundle is consistent with its own manifest — without relying on our servers.
+                    the bundle is consistent with its own manifest, without relying on our servers.
                     It does not authenticate who published the bundle.
                 </p>
 
@@ -444,19 +443,19 @@ export default function VerifyPage() {
                     </h2>
                     <p className="m-0 text-ui text-re-text-secondary">
                         Drop in a RegEngine export bundle (the <code className="font-mono text-[0.8125rem] text-re-text-primary">.zip</code> or{' '}
-                        <code className="font-mono text-[0.8125rem] text-re-text-primary">.json</code> you downloaded
-                        from the proof page) and we&apos;ll re-run the same self-consistency checks the public
+                        <code className="font-mono text-[0.8125rem] text-re-text-primary">.json</code> you exported
+                        from your workspace) and we&apos;ll re-run the same self-consistency checks the public
                         verifier runs: file SHA-256 checks, Merkle root match against the bundle&apos;s own
                         manifest, and manifest consistency.
                     </p>
                     <p className="m-0 text-ui text-re-text-secondary">
                         Your file is sent to a public verifier endpoint that runs the same algorithm
-                        as the export pipeline — no auth, no email capture. Want to verify entirely
+                        as the export pipeline: no auth, no email capture. Want to verify entirely
                         offline?{' '}
                         <a href="/sdk/verify_chain.py" download className={PROSE_LINK}>
                             Download verify_chain.py
                         </a>{' '}
-                        and run it locally — same algorithm, zero network.
+                        and run it locally: same algorithm, zero network.
                     </p>
                     <Callout tone="warning">
                         <strong className="font-medium text-re-text-primary">What this does not prove.</strong>{' '}
@@ -474,11 +473,11 @@ export default function VerifyPage() {
                 <Callout tone="neutral" className="mt-5 flex-wrap items-center">
                     <span className="flex flex-wrap items-center gap-1">
                         <span>Don&apos;t have a bundle yet?</span>
-                        <a href="/proof" className={cn('inline-flex items-center gap-1', PROSE_LINK)}>
-                            Grab a sample on the proof page
+                        <a href="/dashboard/export-jobs" className={cn('inline-flex items-center gap-1', PROSE_LINK)}>
+                            Export an audit bundle from your workspace
                             <ExternalLink className="h-3 w-3" strokeWidth={1.75} aria-hidden="true" />
                         </a>
-                        <span>and feed it back in here.</span>
+                        <span>and verify it here.</span>
                     </span>
                 </Callout>
             </Container>
@@ -513,7 +512,7 @@ export default function VerifyPage() {
                 <Card className="overflow-hidden">
                     <CardHeader className="items-center py-2.5">
                         <span className="font-mono text-label uppercase text-re-text-muted">
-                            verify_chain.py — bash
+                            verify_chain.py (bash)
                         </span>
                     </CardHeader>
                     <pre className="m-0 max-h-[480px] overflow-auto bg-re-surface-inset p-5 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
@@ -543,12 +542,14 @@ export default function VerifyPage() {
                                 <div className="mb-1.5 text-subheading text-re-text-primary">
                                     {step.title}
                                 </div>
-                                <Card variant="inset" className="mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1">
-                                    <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary">
-                                        {step.code}
-                                    </code>
-                                    <CopyButton text={step.code} />
-                                </Card>
+                                {step.code && (
+                                    <Card variant="inset" className="mb-1.5 flex items-center gap-2 py-1 pl-3 pr-1">
+                                        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[0.8125rem] text-re-text-primary">
+                                            {step.code}
+                                        </code>
+                                        <CopyButton text={step.code} />
+                                    </Card>
+                                )}
                                 <p className="m-0 text-ui text-re-text-secondary">{step.desc}</p>
                             </div>
                         </Card>
@@ -636,7 +637,7 @@ export default function VerifyPage() {
                     </h2>
                     <p className="mb-7 max-w-[68ch] text-ui text-re-text-secondary">
                         RegEngine adds hash-based consistency checks on top of standard compliance controls.
-                        SHA-256 hashing lets you confirm a bundle matches its own manifest independently —
+                        SHA-256 hashing lets you confirm a bundle matches its own manifest independently,
                         whether or not you require a SOC 2 report. It is not a signature and does not
                         authenticate the publisher.
                     </p>

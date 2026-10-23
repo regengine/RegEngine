@@ -7,6 +7,7 @@ import {
     stripTrailingSlash,
 } from '@/lib/proxy-factory';
 import { applyInflowWorkbenchReadCredentials } from '@/lib/inflow-workbench-proxy';
+import { acceptsWorkspaceSession } from '@/lib/ingestion-session-routes';
 
 const DEFAULT_INGESTION_URL = 'http://localhost:8002';
 
@@ -40,7 +41,7 @@ function getIngestionTargets(): string[] {
             candidates.push(productionUrl);
         } else if (runningOnVercel) {
             console.error(
-                '[proxy/ingestion] No ingestion backend URL configured — set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
+                '[proxy/ingestion] No ingestion backend URL configured; set NEXT_PUBLIC_INGESTION_URL, INGESTION_SERVICE_URL, or INGESTION_PRODUCTION_URL',
             );
         } else {
             candidates.push(DEFAULT_INGESTION_URL);
@@ -60,6 +61,13 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
         return Boolean(portalMatch && portalMatch[1] !== 'links');
     },
     prepareHeaders: (headers: Headers, request: NextRequest, path: string) => {
+        // Session-capable routes use the verified session. Key-only routes
+        // retain caller credentials even when the browser also has a session.
+        if (request.cookies.get('__Host-regengine_session')?.value && acceptsWorkspaceSession(path)) {
+            headers.delete('authorization');
+            headers.delete('x-api-key');
+            headers.delete('x-regengine-api-key');
+        }
         return applyInflowWorkbenchReadCredentials(headers, request, path);
     },
     buildHeaders: (request: NextRequest) => {
@@ -85,7 +93,7 @@ const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = createStreamProxy({
 
         // Inject access token + tenant API key + tenant ID from cookies.
         // Unlike admin, ingestion overwrites an incoming Authorization header
-        // with the cookie token — preserving pre-refactor behavior.
+        // with the cookie token - preserving pre-refactor behavior.
         applyCookieCredentials(headers, request);
 
         return headers;

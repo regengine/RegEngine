@@ -26,7 +26,7 @@ import {
 import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
 import { trackReadinessAssessmentSubmit, trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
 
-// Food Traceability List categories — synced with the final FDA FTL as implemented
+// Food Traceability List categories - synced with the final FDA FTL as implemented
 // in src/app/tools/ftl-checker/components/FTLCheckerClient.tsx (source of truth)
 const FTL_CATEGORIES = [
     { id: 'leafy-greens-fresh', name: 'Leafy Greens (fresh, intact)', examples: 'Whole leaf lettuce, spinach bunches, kale, arugula, chard, collard greens', icon: Leaf },
@@ -40,9 +40,9 @@ const FTL_CATEGORIES = [
     { id: 'sprouts', name: 'Sprouts', examples: 'Alfalfa, bean, broccoli sprouts', icon: Leaf },
     { id: 'fresh-cut-fruits', name: 'Fresh-Cut Fruits', examples: 'Pre-cut fruit mixes, fruit cups', icon: Package },
     { id: 'fresh-cut-vegetables', name: 'Fresh-Cut Vegetables (non-leafy)', examples: 'Veggie trays, pre-cut carrots, celery sticks, broccoli florets', icon: Package },
-    { id: 'finfish-histamine', name: 'Finfish — Scombrotoxin/Histamine-Forming', examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack', icon: Package },
-    { id: 'finfish-ciguatoxin', name: 'Finfish — Ciguatoxin-Associated', examples: 'Barracuda, grouper, snapper, moray eel', icon: Package },
-    { id: 'finfish-other', name: 'Finfish — Other (fresh/frozen)', examples: 'Salmon, cod, halibut, tilapia, trout', icon: Package },
+    { id: 'finfish-histamine', name: 'Finfish (Scombrotoxin/Histamine-Forming)', examples: 'Tuna, mackerel, mahi-mahi, bluefish, amberjack', icon: Package },
+    { id: 'finfish-ciguatoxin', name: 'Finfish (Ciguatoxin-Associated)', examples: 'Barracuda, grouper, snapper, moray eel', icon: Package },
+    { id: 'finfish-other', name: 'Finfish, Other (fresh/frozen)', examples: 'Salmon, cod, halibut, tilapia, trout', icon: Package },
     { id: 'finfish-smoked', name: 'Smoked Finfish', examples: 'Smoked salmon, lox, kippered herring, smoked trout', icon: Package },
     { id: 'crustaceans', name: 'Crustaceans', examples: 'Shrimp, crab, lobster, crawfish', icon: Package },
     { id: 'molluscan-shellfish', name: 'Molluscan Shellfish (bivalves)', examples: 'Oysters, clams, mussels, scallops', icon: Package },
@@ -59,7 +59,7 @@ const CTES = [
     { id: 'harvesting', name: 'Harvesting (§1.1325)', description: 'Harvesting of raw agricultural commodities' },
     { id: 'cooling', name: 'Cooling (§1.1325)', description: 'Cooling of an RAC before initial packing (combined with Harvesting in §1.1325)' },
     { id: 'initial_packing', name: 'Initial Packing (§1.1330)', description: 'Initial packing of a raw agricultural commodity (other than food obtained from a fishing vessel)' },
-    { id: 'first_receiver', name: 'First Land-Based Receiving (§1.1335) — Seafood', description: 'First land-based receipt of food obtained directly from a fishing vessel. Applies only to seafood obtained from a fishing vessel — non-seafood importers perform §1.1345 Receiving, not FLBR.' },
+    { id: 'first_receiver', name: 'First Land-Based Receiving, Seafood (§1.1335)', description: 'First land-based receipt of food obtained directly from a fishing vessel. Applies only to seafood obtained from a fishing vessel. Non-seafood importers perform §1.1345 Receiving, not FLBR.' },
     { id: 'shipping', name: 'Shipping (§1.1340)', description: 'Sending food from one location to another' },
     { id: 'receiving', name: 'Receiving (§1.1345)', description: 'Receipt of food at a facility. Subject to the §1.1305(j) exemption for restaurants and retail food establishments selling food directly to consumers.' },
     { id: 'transformation', name: 'Transformation (§1.1350)', description: 'Manufacturing, processing, or changing a food into a new traceability lot' },
@@ -439,7 +439,7 @@ export function FSMA204Assessment() {
                                 {!systemAnswers['24hr'] && (
                                     <div className="flex items-start gap-2 text-ui text-re-text-secondary">
                                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
-                                        <span>Gap indicated: ability to produce records within 24 hours of an FDA request — review your retrieval workflow.</span>
+                                        <span>Gap indicated: ability to produce records within 24 hours of an FDA request. Review your retrieval workflow.</span>
                                     </div>
                                 )}
                                 {!systemAnswers['testing'] && (

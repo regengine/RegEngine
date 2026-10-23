@@ -36,11 +36,11 @@ import {
 export const metadata: Metadata = {
   title: 'Data Processing Agreement | RegEngine',
   description:
-    'RegEngine Data Processing Agreement — covering processor obligations, sub-processors, data subject rights, breach notification, and data deletion under GDPR and applicable law.',
+    'RegEngine Data Processing Agreement covering processor obligations, sub-processors, data subject rights, breach notification, and data deletion under GDPR and applicable law.',
   openGraph: {
     title: 'Data Processing Agreement | RegEngine',
     description:
-      'RegEngine DPA — data processor obligations for food safety traceability data.',
+      'RegEngine DPA: data processor obligations for food safety traceability data.',
     url: 'https://regengine.co/dpa',
     type: 'website',
   },
@@ -103,7 +103,7 @@ const SECURITY_MEASURES = [
   {
     Icon: Server,
     title: 'Access Controls',
-    text: 'Access to production systems requires multi-factor authentication. Production credentials are stored in secret management systems — never in source control — and rotated on a defined schedule and immediately on any suspicion of exposure.',
+    text: 'Access to production systems requires multi-factor authentication. Production credentials are stored in secret management systems (never in source control) and rotated on a defined schedule and immediately on any suspicion of exposure.',
   },
   {
     Icon: Users,
@@ -238,8 +238,8 @@ export default function DpaPage() {
                 <p>
                   <strong className="font-medium text-re-text-primary">&ldquo;Controller&rdquo;</strong>{' '}
                   means the natural or legal person, public authority, agency, or other body that
-                  determines the purposes and means of processing personal data — in this context,
-                  the RegEngine customer.
+                  determines the purposes and means of processing personal data (in this context,
+                  the RegEngine customer).
                 </p>
                 <p>
                   <strong className="font-medium text-re-text-primary">&ldquo;Processor&rdquo;</strong>{' '}

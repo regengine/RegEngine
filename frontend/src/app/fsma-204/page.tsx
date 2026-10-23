@@ -9,11 +9,11 @@ import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "FSMA 204 Compliance Guide — What Your Farm Needs to Know | RegEngine",
+  title: "FSMA 204 Compliance Guide: What Your Farm Needs to Know | RegEngine",
   description:
-    "Plain-English guide to the FDA Food Traceability Rule. Learn what FSMA 204 requires, whether your products are covered, and how to get compliant — no developer needed.",
+    "Plain-English guide to the FDA Food Traceability Rule. Learn what FSMA 204 requires, whether your products are covered, and how to get compliant. No developer needed.",
   openGraph: {
-    title: 'FSMA 204 Compliance Guide — What Your Farm Needs to Know',
+    title: 'FSMA 204 Compliance Guide: What Your Farm Needs to Know',
     description: 'Plain-English guide to the FDA Food Traceability Rule: what it requires, whether your products are covered, and how to comply.',
     url: 'https://regengine.co/fsma-204',
     type: 'article',
@@ -57,7 +57,7 @@ const CTES_PLAIN = [
     name: "First Land-Based Receiving",
     icon: Anchor,
     who: "Receivers of seafood from a fishing vessel",
-    what: "Per §1.1330: record when seafood was received from a fishing vessel, the lot code, the harvest and landing location, and the receiving facility — distinct from generic imported-food entry.",
+    what: "Under §1.1335, record when seafood was received from a fishing vessel, the lot code, the harvest and landing location, and the receiving facility. This is distinct from generic imported-food entry.",
   },
   {
     name: "Shipping",
@@ -88,19 +88,19 @@ const STEPS = [
   {
     num: "2",
     title: "Upload your data",
-    desc: "Download our CSV or Excel template, fill in your lot codes, locations, and dates. Upload it to RegEngine. No code, no API — just a spreadsheet.",
+    desc: "Download our CSV or Excel template, fill in your lot codes, locations, and dates. Upload it to RegEngine. No code, no API, just a spreadsheet.",
     cta: { label: "Download Templates", href: "/onboarding/bulk-upload" },
   },
   {
     num: "3",
     title: "RegEngine maps your events",
-    desc: "We map your data to the 7 Critical Tracking Events defined in the FSMA 204 rule — harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what’s covered and what’s missing.",
+    desc: "We map your data to the 7 Critical Tracking Events defined in the FSMA 204 rule: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. You only record the events that occur at your operation. The dashboard shows what’s covered and what’s missing.",
     cta: null,
   },
   {
     num: "4",
     title: "Be ready when they ask",
-    desc: "When the FDA or a retailer requests traceability records, RegEngine produces a sortable electronic spreadsheet structured to FDA's §1.1455 format — populated from the lot codes, dates, and locations you've uploaded. Compliance remains your operation's legal responsibility.",
+    desc: "When the FDA or a retailer requests traceability records, RegEngine produces a sortable electronic spreadsheet structured to FDA's §1.1455 format, populated from the lot codes, dates, and locations you've uploaded. Compliance remains your operation's legal responsibility.",
     cta: null,
   },
 ];
@@ -118,7 +118,7 @@ const FAQS = [
   },
   {
     q: "I don’t have a developer or IT person. Can I still use RegEngine?",
-    a: "Yes. You can upload your data using our CSV or Excel templates — no code required. Download the template, fill in your lot codes and dates, and upload. RegEngine handles the rest.",
+    a: "Yes. You can upload your data using our CSV or Excel templates, with no code required. Download the template, fill in your lot codes and dates, and upload. RegEngine handles the rest.",
   },
   {
     q: "What if I already track this in spreadsheets?",
@@ -130,7 +130,7 @@ const FAQS = [
   },
   {
     q: "What happens if I’m not compliant by July 2028?",
-    a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers — the bigger risk for most farms is losing a key retail customer over missing traceability data.",
+    a: "FDA enforcement under §1.1455 focuses on producing the required records on request. Beyond direct enforcement, major retailers may drop non-compliant suppliers. The bigger risk for most farms is losing a key retail customer over missing traceability data.",
   },
   {
     q: "How much does this cost?",
@@ -145,12 +145,12 @@ const FAQS = [
 export default function FSMA204BusinessGuidePage() {
   return (
     <div className="bg-re-surface-base">
-      {/* — HERO — */}
+      {/* - HERO - */}
       <Container width="marketing" className="pt-12 sm:pt-16">
         <PageHeader
           size="hero"
           eyebrow="FSMA 204 Compliance Guide"
-          title="The FDA food traceability rule — in plain English."
+          title="The FDA food traceability rule, in plain English."
           description={
             <>
               <span className="block">
@@ -177,7 +177,7 @@ export default function FSMA204BusinessGuidePage() {
           className="border-b-0 pb-0"
         />
 
-        {/* — KEY FACTS STRIP — */}
+        {/* - KEY FACTS STRIP - */}
         <ul className="mt-10 flex flex-col divide-y divide-re-border-subtle border-y border-re-border-subtle sm:flex-row sm:divide-x sm:divide-y-0">
           {KEY_FACTS.map((fact) => (
             <li key={fact.text} className="flex flex-1 items-center gap-3 py-4 sm:px-5 sm:first:pl-0 sm:last:pr-0">
@@ -188,11 +188,11 @@ export default function FSMA204BusinessGuidePage() {
         </ul>
       </Container>
 
-      {/* — WHAT IS FSMA 204 — */}
+      {/* - WHAT IS FSMA 204 - */}
       <Section width="marketing" flush title="What is FSMA 204?">
         <div className="max-w-[68ch] space-y-4 text-body text-re-text-secondary">
           <p>
-            The FDA&apos;s Food Safety Modernization Act Section 204 — commonly called &ldquo;FSMA 204&rdquo; or the &ldquo;Food Traceability Rule&rdquo; — requires anyone who grows, receives, ships, or transforms certain high-risk foods to keep detailed traceability records.
+            The FDA&apos;s Food Safety Modernization Act Section 204 (commonly called &ldquo;FSMA 204&rdquo; or the &ldquo;Food Traceability Rule&rdquo;) requires anyone who grows, receives, ships, or transforms certain high-risk foods to keep detailed traceability records.
           </p>
           <p>
             The goal is simple: when a foodborne illness outbreak happens, FDA can request your traceability records and you must produce a sortable electronic spreadsheet within <strong className="font-medium text-re-text-primary">24 hours</strong>. Before this rule, that process could take weeks.
@@ -204,14 +204,14 @@ export default function FSMA204BusinessGuidePage() {
 
         {/* Enforcement callout */}
         <Callout tone="warning" className="mt-8 max-w-[68ch]">
-          <p className="font-medium text-re-text-primary">The deadline moved — the rule didn&apos;t.</p>
+          <p className="font-medium text-re-text-primary">The deadline moved. The rule didn&apos;t.</p>
           <p className="mt-1">
-            Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal — your effective deadline may already have passed.
+            Congress directed FDA not to enforce before July 2028, but major retailers have published supplier traceability programs that pre-date the federal enforcement date. If you sell to a major retailer, check your supplier portal: your effective deadline may already have passed.
           </p>
         </Callout>
       </Section>
 
-      {/* — ARE YOUR PRODUCTS COVERED? — */}
+      {/* - ARE YOUR PRODUCTS COVERED? - */}
       <Section
         width="marketing"
         eyebrow="The Food Traceability List (FTL)"
@@ -233,14 +233,14 @@ export default function FSMA204BusinessGuidePage() {
         <div className="mt-4">
           <Button asChild size="lg">
             <Link href="/tools/ftl-checker">
-              Free FTL Checker — takes 30 seconds
+              Free FTL Checker (takes 30 seconds)
               <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
           </Button>
         </div>
       </Section>
 
-      {/* — WHAT YOU HAVE TO RECORD — */}
+      {/* - WHAT YOU HAVE TO RECORD - */}
       <Section
         width="marketing"
         eyebrow="What the FDA requires"
@@ -268,7 +268,7 @@ export default function FSMA204BusinessGuidePage() {
         </Card>
       </Section>
 
-      {/* — THE 24-HOUR RULE — */}
+      {/* - THE 24-HOUR RULE - */}
       <Section
         width="marketing"
         eyebrow="The 24-hour rule"
@@ -291,7 +291,7 @@ export default function FSMA204BusinessGuidePage() {
         </div>
       </Section>
 
-      {/* — HOW TO COMPLY — */}
+      {/* - HOW TO COMPLY - */}
       <Section
         id="how-to-comply"
         width="marketing"
@@ -328,7 +328,7 @@ export default function FSMA204BusinessGuidePage() {
         </ol>
       </Section>
 
-      {/* — FAQ — */}
+      {/* - FAQ - */}
       <Section width="marketing" title="Common questions">
         <div className="max-w-[68ch] space-y-8">
           {FAQS.map((faq) => (
@@ -340,7 +340,7 @@ export default function FSMA204BusinessGuidePage() {
         </div>
       </Section>
 
-      {/* — FINAL CTA — */}
+      {/* - FINAL CTA - */}
       <Section width="marketing" tone="inset">
         <div className="mx-auto max-w-[640px] text-center">
           <p className="font-mono text-label uppercase text-re-text-muted">
@@ -350,7 +350,7 @@ export default function FSMA204BusinessGuidePage() {
             Don&apos;t wait for the deadline.
           </h2>
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Start with a free tool. See where you stand. Get compliant on your schedule — not the FDA&apos;s.
+            Start with a free tool. See where you stand. Get compliant on your schedule, not the FDA&apos;s.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">

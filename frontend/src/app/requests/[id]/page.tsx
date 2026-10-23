@@ -132,7 +132,7 @@ export default function RequestCaseDetailPage() {
           </Link>
         }
         title="Request Case"
-        description={`${requestCase.requesting_party} — ${requestCase.scope_type?.replace(/_/g, ' ')}`}
+        description={`${requestCase.requesting_party}: ${requestCase.scope_type?.replace(/_/g, ' ')}`}
         meta={
           <>
             <span

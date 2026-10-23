@@ -32,7 +32,9 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
+import { ErrorState } from '@/components/ui/error-state';
 import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
 
@@ -79,7 +81,7 @@ function scoreColor(score: number) {
     return 'var(--re-danger)';
 }
 
-/** For DOM nodes — a class keeps the colour out of an inline style (SPEC §4). */
+/** For DOM nodes - a class keeps the colour out of an inline style (SPEC §4). */
 function scoreTextClass(score: number) {
     if (score >= 80) return 'text-re-brand';
     if (score >= 60) return 'text-re-warning';
@@ -102,20 +104,20 @@ const STATUS_CONFIG = {
     'compliant': {
         icon: Shield,
         label: 'FSMA 204 Ready',
-        desc: "Your traceability data meets RegEngine's readiness checks — an advisory indicator, not a legal determination.",
+        desc: "Your traceability data meets RegEngine's readiness checks. This is an advisory indicator, not a legal determination.",
         bg: 'bg-re-brand-muted border-re-brand/30',
         text: 'text-re-brand',
     },
     'at-risk': {
         icon: ShieldAlert,
-        label: 'At Risk — Action Needed',
+        label: 'At Risk: Action Needed',
         desc: 'Gaps in your traceability data could cause issues during an FDA inspection.',
         bg: 'bg-re-warning-muted0/10 border-re-warning/30',
         text: 'text-re-warning',
     },
     'critical': {
         icon: ShieldX,
-        label: 'Critical — Not Compliant',
+        label: 'Critical: Not Compliant',
         desc: 'Significant gaps exist. Prioritize the actions below before your next audit.',
         bg: 'bg-re-danger-muted0/10 border-re-danger/30',
         text: 'text-re-danger',
@@ -327,7 +329,7 @@ export default function ComplianceDashboardPage() {
         retry: false,
     });
 
-    const error = scoreError?.message ?? null;
+    const error = scoreError;
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Ordered breakdown keys by weight (highest first)
@@ -378,12 +380,12 @@ export default function ComplianceDashboardPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {lastFetched && (
+                        {lastFetched && !error && (
                             <span className="text-label text-muted-foreground">
                                 Updated {lastFetched.toLocaleTimeString()}
                             </span>
                         )}
-                        {score && (
+                        {score && !error && (
                             <Button
                                 variant="ghost" size="sm"
                                 onClick={() => {
@@ -462,21 +464,11 @@ export default function ComplianceDashboardPage() {
 
                 {/* Error */}
                 {error && (
-                    <Card className="border-[var(--re-border-default)] bg-[var(--re-surface-elevated)]">
-                        <CardContent className="py-4">
-                            <div className="flex items-center gap-3 text-muted-foreground">
-                                <Info className="h-5 w-5 flex-shrink-0" />
-                                <div>
-                                    <p className="text-sm font-medium text-foreground">Compliance data is currently unavailable for this workspace.</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">This can mean the scoring service is unavailable or there is not enough connected evidence to calculate a score yet.</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <ErrorState message="We could not load this page." onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }} />
                 )}
 
                 {/* Score Content */}
-                {score && !loading && (
+                {score && !loading && !error && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
 
                         {/* Status Banner */}
@@ -531,7 +523,7 @@ export default function ComplianceDashboardPage() {
                                             <div
                                                 className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
                                             >
-                                                {workbenchSummary?.score ?? '—'}
+                                                {workbenchSummary?.score ?? NO_DATA_YET}
                                             </div>
                                             <p className="text-[11px] text-muted-foreground mt-1">
                                                 {workbenchSummary?.label ?? 'No saved preflight run yet'}
@@ -777,7 +769,7 @@ export default function ComplianceDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Empty state — no score and not loading */}
+                {/* Empty state - no score and not loading */}
                 {!score && !loading && !error && isLoggedIn && (
                     <motion.div
                         initial={{ opacity: 0 }}

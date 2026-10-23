@@ -112,7 +112,7 @@ ${ctes.join('\n')}
 
 ## Operations
 ${formData.has_iot ? '✅ IoT Temperature Monitoring (Sensitech)' : '⬜ No IoT monitoring'}
-${formData.has_erp ? '✅ ERP/WMS Integration via Webhook API' : '⬜ Manual data entry / CSV upload'}
+${formData.has_erp ? '✅ ERP/WMS Integration via the JSON events API' : '⬜ Manual data entry / CSV upload'}
 
 ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.map(r => `- ${r}`).join('\n')}\n\n*Specific retailer traceability requirements vary, change frequently, and should be confirmed directly with each buyer.*` : ''}
 

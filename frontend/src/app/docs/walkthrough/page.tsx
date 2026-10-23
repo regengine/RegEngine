@@ -16,16 +16,16 @@ import {
 export const metadata: Metadata = {
   title: 'End-to-End Walkthrough | RegEngine',
   description:
-    'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
+    'A 15-minute hands-on walkthrough: post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
   openGraph: {
     title: 'End-to-End Walkthrough',
-    description: 'A 15-minute hands-on walkthrough — post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
+    description: 'A 15-minute hands-on walkthrough: post a complete FSMA 204 supplier-to-shipping flow, see it on your dashboard, and produce a review-ready export.',
     url: 'https://regengine.co/docs/walkthrough',
     type: 'website',
   },
 };
 
-/** Inline identifier — SPEC §2.3. */
+/** Inline identifier - SPEC §2.3. */
 const CODE =
   'rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary';
 
@@ -79,7 +79,7 @@ export default function WalkthroughPage() {
         <Step n={1} title="Post the Receiving event">
           <p className="mb-3 text-body text-re-text-secondary">
             You receive lot <code className={CODE}>{WALKTHROUGH_RECEIVED_LOT}</code> from
-            Supplier A. This is a Receiving CTE — the starting anchor for the chain.
+            Supplier A. This is a Receiving CTE, the starting anchor for the chain.
           </p>
           <CodeBlock language="bash" code={INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE} />
           <ExpectedResponse>
@@ -94,25 +94,25 @@ export default function WalkthroughPage() {
           </ExpectedResponse>
           <Troubleshoot>
             <li>
-              <strong className="font-medium text-re-text-primary">503 with &quot;Document storage is not configured&quot;</strong> — this endpoint doesn&apos;t
+              <strong className="font-medium text-re-text-primary">503 with &quot;Document storage is not configured&quot;</strong>: this endpoint doesn&apos;t
               need object storage; you shouldn&apos;t hit this. If you do, the 503 is from a different
               path; ping support.
             </li>
             <li>
-              <strong className="font-medium text-re-text-primary">401</strong> — the key is missing or not recognized, or{' '}
+              <strong className="font-medium text-re-text-primary">401</strong>: the key is missing or not recognized, or{' '}
               <code className={CODE}>X-Webhook-Signature</code> is missing or wrong. The key header is{' '}
               <code className={CODE}>X-RegEngine-API-Key</code> (not <code className={CODE}>Authorization</code>). Sign the exact bytes
               you send, which is why the sample uses <code className={CODE}>--data-binary</code>.{' '}
-              <strong className="font-medium text-re-text-primary">403</strong> — the key lacks the{' '}
+              <strong className="font-medium text-re-text-primary">403</strong>: the key lacks the{' '}
               <code className={CODE}>webhooks.ingest</code> scope.
             </li>
             <li>
-              <strong className="font-medium text-re-text-primary">200 with <code className={CODE}>status: &quot;rejected&quot;</code></strong> — read{' '}
+              <strong className="font-medium text-re-text-primary">200 with <code className={CODE}>status: &quot;rejected&quot;</code></strong>: read{' '}
               <code className={CODE}>errors</code> on that event, for example a missing KDE. Fix it and resend with a new{' '}
               <code className={CODE}>Idempotency-Key</code>.
             </li>
             <li>
-              <strong className="font-medium text-re-text-primary">422</strong> — the whole request failed validation and nothing was stored.{' '}
+              <strong className="font-medium text-re-text-primary">422</strong>: the whole request failed validation and nothing was stored.{' '}
               <code className={CODE}>error.details</code> names the field, for example a missing <code className={CODE}>quantity</code> or a timestamp more than 24 hours ahead.
             </li>
           </Troubleshoot>
@@ -121,7 +121,7 @@ export default function WalkthroughPage() {
         {/* Step 2 */}
         <Step n={2} title="Post the Transformation event">
           <p className="mb-3 text-body text-re-text-secondary">
-            You wash and bag the lot — that&apos;s a Transformation CTE. The input lot is the
+            You wash and bag the lot. That&apos;s a Transformation CTE. The input lot is the
             Receiving lot from Step 1; the output lot is new.
           </p>
           <CodeBlock language="bash" code={INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE} />
@@ -184,7 +184,7 @@ head -20 lot-export.csv`}
           </p>
           <p className="mt-3 text-ui text-re-text-tertiary">
             You should see header rows mapping to FDA&apos;s 1.1455(c) requirements, with one row per
-            CTE event for the lot. Production records, not legal advice — your operation remains
+            CTE event for the lot. Production records, not legal advice. Your operation remains
             responsible for compliance.
           </p>
         </Step>
@@ -208,7 +208,7 @@ head -20 lot-export.csv`}
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
               { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
-              { title: 'Set up EPCIS or EDI', desc: 'Replace manual curl with your existing system-of-record', href: '/docs/connectors/inflow-lab' },
+              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/docs/connectors/inflow-lab' },
             ]).map(({ title, desc, href }) => (
               <li key={href}>
                 <Link

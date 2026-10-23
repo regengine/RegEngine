@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/lib/auth-context', async (importOriginal) => {
@@ -134,6 +134,15 @@ function jsonResponse(payload: unknown, init?: ResponseInit) {
             ...init,
         }),
     );
+}
+
+// Stands in for rows the user pastes: header plus one opaque row, no record values.
+const USER_CSV = 'cte_type,traceability_lot_code\nreceiving,user-lot';
+
+async function enterUserCsv(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: 'Open data editor' }));
+    const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
+    fireEvent.change(textarea, { target: { value: USER_CSV } });
 }
 
 function renderDashboardInflowLabPage() {
@@ -431,20 +440,29 @@ describe('Dashboard Inflow Lab', () => {
         expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
     });
 
-    it('loads a realistic sample flow into the CSV drawer', async () => {
+    it('offers no sample data loader, only Upload CSV for the user\'s own rows', () => {
+        renderDashboardInflowLabPage();
+
+        expect(screen.queryByRole('button', { name: /sample/i })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /example/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Upload CSV' })).toBeInTheDocument();
+    });
+
+    it('does not evaluate anything when Run trace is pressed before the user adds rows', async () => {
         const user = userEvent.setup();
         renderDashboardInflowLabPage();
 
-        await user.click(screen.getByRole('button', { name: 'Load realistic sample' }));
+        await user.click(await screen.findByRole('button', { name: /Run trace/ }));
 
+        expect(screen.getByText(/Paste CSV text or upload a CSV file before evaluating\./i)).toBeInTheDocument();
         const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
-        const textareaValue = (textarea as HTMLTextAreaElement).value;
-        expect(textareaValue).toContain('Riverbend Organics');
-        expect(textareaValue).toContain('GreenLeaf Shipping Dock');
-        expect(textareaValue).toContain('North Bay DC');
+        expect((textarea as HTMLTextAreaElement).value).toBe('');
+        expect(
+            mockFetch.mock.calls.some(([url]) => String(url) === '/api/ingestion/api/v1/sandbox/evaluate'),
+        ).toBe(false);
     });
 
-    it('runs the guided proof with sample data without saving until requested', async () => {
+    it('runs the trace on the user\'s own rows without saving until requested', async () => {
         const user = userEvent.setup();
         vi.mocked(useAuth).mockReturnValue({
             isAuthenticated: true,
@@ -463,20 +481,15 @@ describe('Dashboard Inflow Lab', () => {
 
         renderDashboardInflowLabPage();
 
+        await enterUserCsv(user);
         await user.click(screen.getByRole('button', { name: /Run trace/ }));
-
-        const textarea = await screen.findByRole('textbox', { name: 'Inbound CSV data' });
-        const textareaValue = (textarea as HTMLTextAreaElement).value;
-        expect(textareaValue).toContain('Riverbend Organics');
-        expect(textareaValue).toContain('GreenLeaf Shipping Dock');
-        expect(textareaValue).toContain('North Bay DC');
 
         await waitFor(() => {
             expect(mockFetch).toHaveBeenCalledWith(
                 '/api/ingestion/api/v1/sandbox/evaluate',
                 expect.objectContaining({
                     method: 'POST',
-                    body: expect.stringContaining('Riverbend Organics'),
+                    body: JSON.stringify({ csv: USER_CSV }),
                 }),
             );
         });
@@ -501,6 +514,7 @@ describe('Dashboard Inflow Lab', () => {
         const user = userEvent.setup();
         renderDashboardInflowLabPage();
 
+        await enterUserCsv(user);
         await user.click(screen.getByRole('button', { name: /Run trace/ }));
 
         await waitFor(() => {
