@@ -3,6 +3,17 @@ name: Sentinel Audit
 on:
   pull_request:
     types: [labeled, synchronize, reopened]
+    paths:
+      - 'frontend/**'
+      - 'services/**'
+      - 'server/**'
+      - 'shared/**'
+      - 'kernel/**'
+      - 'alembic/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.claude/**'
+      - '.github/workflows/sentinel.yml'
 
 # Only run on PRs that carry the `sentinel` label.
 # We re-evaluate on `synchronize` (new commits) and `reopened` so a labeled PR

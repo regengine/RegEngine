@@ -1,24 +1,10 @@
 name: Test Suite Health Check
 
 on:
-  pull_request:
-    paths:
-      - 'services/**'
-      - 'shared/**'
-      - 'kernel/**'
-      - 'tests/**'
-      # regengine/** so a strictly SDK-only PR still runs the route-contract
-      # test with the backend dependency tree present (#2952); sdk-ci's clean
-      # venv importorskips it.
-      - 'regengine/**'
-      - 'pyproject.toml'
-      - 'requirements.in'
-      - 'requirements.lock'
-      - 'scripts/**'
-      - '.semgrep/**'
-      - '.github/workflows/test-suite-check.yml'
+  schedule:
+    - cron: '30 7 * * *'
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'services/**'
       - 'shared/**'
