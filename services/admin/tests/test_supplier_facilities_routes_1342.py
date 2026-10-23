@@ -26,6 +26,7 @@ Tracks GitHub issue #1342.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import NamedTuple
 from unittest.mock import MagicMock
 from uuid import UUID, uuid4
@@ -189,9 +190,6 @@ def _make_facility(
     postal_code: str | None = None,
     roles: list[str] | None = None,
 ) -> SupplierFacilityModel:
-    if isinstance(ids, str):
-        name = ids
-        ids = None
     if ids is not None:
         tenant_id = ids[0]
         supplier_user_id = ids[1]
@@ -347,9 +345,10 @@ class TestSetFtlCategories:
     def test_unknown_category_returns_400(self, client: TestClient, db_session: Session, ids: TestIds):
         """Line 165: unknown FTL category id → 400."""
         f = _make_facility(db_session, ids)
+        unknown_id = f"missing-{uuid4().hex}"
         resp = client.put(
             f"/v1/supplier/facilities/{f.id}/ftl-categories",
-            json={"category_ids": ["9999"]},
+            json={"category_ids": [unknown_id]},
         )
         assert resp.status_code == 400
         assert "Unknown FTL category" in resp.json()["detail"]
@@ -436,7 +435,7 @@ class TestSubmitCteEvent:
             json={
                 "cte_type": "harvesting",
                 "tlc_code": f"tlc-{uuid4().hex}",
-                "event_time": "2026-03-01T00:00:00Z",
+                "event_time": datetime.now(timezone.utc).isoformat(),
                 "kde_data": {},
             },
         )
@@ -449,7 +448,7 @@ class TestSubmitCteEvent:
             json={
                 "cte_type": "harvesting",
                 "tlc_code": f"tlc-{uuid4().hex}",
-                "event_time": "2026-03-01T00:00:00Z",
+                "event_time": datetime.now(timezone.utc).isoformat(),
                 "kde_data": {},
             },
         )
@@ -477,8 +476,8 @@ class TestSubmitCteEvent:
             json={
                 "cte_type": "harvesting",
                 "tlc_code": tlc_code,
-                "event_time": "2026-03-01T12:00:00Z",
-                "kde_data": {"quantity": 50, "unit_of_measure": "cases"},
+                "event_time": datetime.now(timezone.utc).isoformat(),
+                "kde_data": {},
             },
         )
         assert resp.status_code == 200
