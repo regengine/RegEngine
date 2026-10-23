@@ -1,7 +1,8 @@
 """factory-local pipeline CLI.
 
-python pipeline.py run                          seed, extract, compile, verify, store (unverified)
-python pipeline.py approve --rule US_CO_SB205_V2  deploy to OPA, evaluate, write signed receipts
+python pipeline.py run --text PATH --bill-id ID --version-uid UID --title TITLE --jurisdiction CODE --source-uri URI
+                                                extract, compile, verify, store (unverified)
+python pipeline.py approve --rule RULE           reports no data until cases are supplied through the API
 python pipeline.py verify-chain [--tenant T]    recompute and check the receipt chain
 """
 
@@ -27,27 +28,7 @@ from verify import OK_STATUS, verify_ir
 
 ROOT = Path(__file__).resolve().parent
 CARTRIDGES = ROOT / "cartridges"
-STATUTE_TEXT = ROOT / "fixtures" / "co_sb205_text.txt"
-
-BILL_ID = "CO_SB24_205"
-VERSION_UID = "CO_SB24_205@V2"
-SOURCE_URI = "https://leg.colorado.gov/bills/sb24-205"
-TENANT_ID = os.environ.get("FACTORY_TENANT_ID", "example-tenant")
-
-SAFE_HARBOR_PAYLOAD = {
-    "fte_count": 250,
-    "does_business_in_co": True,
-    "affected_consumer_count": 15,
-    "controls": {"annual_impact_assessment_completed": False, "nist_ai_rmf_aligned": True},
-}
-BREACH_PAYLOAD = {
-    **SAFE_HARBOR_PAYLOAD,
-    "controls": {"annual_impact_assessment_completed": False, "nist_ai_rmf_aligned": False},
-}
-EXPECTED = [
-    ("safe_harbor", SAFE_HARBOR_PAYLOAD, "COMPLIANT_VIA_SAFE_HARBOR", 0),
-    ("breach", BREACH_PAYLOAD, "NON_COMPLIANT_BREACH", 300000),
-]
+TENANT_ID = os.environ.get("FACTORY_TENANT_ID", "")
 
 
 def pg_connect() -> psycopg.Connection:
@@ -74,7 +55,7 @@ def opa_url() -> str:
 
 
 def cartridge_name(rule_uid: str) -> str:
-    """US_CO_SB205_V2 -> us_co_sb205 (the version suffix is not part of the policy path)."""
+    """Remove a version suffix from the policy path."""
     return re.sub(r"_V\d+$", "", rule_uid).lower()
 
 
@@ -82,32 +63,40 @@ def package_for(rule_uid: str) -> str:
     return f"factory.{cartridge_name(rule_uid)}"
 
 
-def citation_uri(citation: str) -> str:
-    return f"{SOURCE_URI}#{quote(citation)}"
+def citation_uri(source_uri: str, citation: str) -> str:
+    return f"{source_uri}#{quote(citation)}"
 
 
-def run() -> dict:
-    text = STATUTE_TEXT.read_text()
+def run(
+    text_path: Path | None = None,
+    *,
+    bill_id: str | None = None,
+    version_uid: str | None = None,
+    title: str | None = None,
+    jurisdiction: str | None = None,
+    source_uri: str | None = None,
+) -> dict:
+    if text_path is None or not text_path.is_file():
+        return {"message": "No data yet"}
+    text = text_path.read_text()
+    if not text.strip():
+        return {"message": "No data yet"}
+    if not all((bill_id, version_uid, title, jurisdiction, source_uri)):
+        return {"message": "No data yet: bill metadata required"}
+    ir, source = extract_ir(text)
+    if ir is None:
+        return {"message": source}
     with pg_connect() as conn:
         ensure_schema(conn)
         conn.execute(
             """INSERT INTO bill_versions (version_uid, bill_id, jurisdiction, title, statutory_text, source_uri)
-               VALUES (%s, %s, 'US-CO', 'Consumer Protections for Artificial Intelligence (SB24-205)', %s, %s)
+               VALUES (%s, %s, %s, %s, %s, %s)
                ON CONFLICT (version_uid) DO UPDATE SET statutory_text = EXCLUDED.statutory_text""",
-            (VERSION_UID, BILL_ID, text, SOURCE_URI),
+            (version_uid, bill_id, jurisdiction, title, text, source_uri),
         )
 
-    ir, source = extract_ir(text)
     rego = compile_ir_to_rego(ir, package_for(ir.rule_id))
     z3_result = verify_ir(ir)
-
-    from graph import seed_graph
-    from neo4j import GraphDatabase
-
-    user, _, password = os.environ["NEO4J_AUTH"].partition("/")
-    uri = os.environ.get("NEO4J_URI", f"bolt://localhost:{os.environ.get('FACTORY_NEO4J_BOLT_PORT', '7687')}")
-    with GraphDatabase.driver(uri, auth=(user, password)) as driver:
-        seed_graph(driver, ir.rule_id, VERSION_UID)
 
     with pg_connect() as conn:
         # Re-extraction always resets approval: a human must review the new output.
@@ -119,7 +108,7 @@ def run() -> dict:
                    ir_json = EXCLUDED.ir_json, rego = EXCLUDED.rego, z3_result = EXCLUDED.z3_result,
                    human_verified = false, extraction_source = EXCLUDED.extraction_source,
                    approved_at = NULL, updated_at = now()""",
-            (ir.rule_id, VERSION_UID, Jsonb(ir.model_dump(mode="json")), rego, Jsonb(z3_result), source),
+            (ir.rule_id, version_uid, Jsonb(ir.model_dump(mode="json")), rego, Jsonb(z3_result), source),
         )
     return {
         "rule_uid": ir.rule_id,
@@ -172,14 +161,20 @@ def evaluate(rule_uid: str, payload: dict, data_path: str | None = None) -> dict
     return body["result"]
 
 
-def approve(rule_uid: str) -> dict:
+def approve(rule_uid: str, cases: list[tuple[str, dict, str, float]] | None = None, tenant_id: str = TENANT_ID) -> dict:
+    if not cases:
+        return {"message": "No data yet: evaluation cases required"}
+    if not tenant_id:
+        raise ValueError("tenant_id is required for evaluation receipts")
     with pg_connect() as conn:
         row = conn.execute(
-            "SELECT ir_json, rego, z3_result, version_uid FROM extracted_rules WHERE rule_uid = %s", (rule_uid,)
+            """SELECT r.ir_json, r.rego, r.z3_result, r.version_uid, b.source_uri
+               FROM extracted_rules r JOIN bill_versions b USING (version_uid) WHERE r.rule_uid = %s""",
+            (rule_uid,),
         ).fetchone()
         if row is None:
             raise LookupError(f"no extracted rule {rule_uid}; run `python pipeline.py run` first")
-        ir_json, rego, z3_result, version_uid = row
+        ir_json, rego, z3_result, version_uid, source_uri = row
         if z3_result.get("status") != OK_STATUS:
             raise RuntimeError(f"refusing to deploy {rule_uid}: Z3 status {z3_result.get('status')}")
         ir = DeonticIR.model_validate(ir_json)
@@ -192,7 +187,9 @@ def approve(rule_uid: str) -> dict:
             "WHERE rule_uid = %s",
             (rule_uid,),
         )
-        deployed = deploy_and_record(conn, ir, rule_uid, rego, version_uid)
+        deployed = deploy_and_record(
+            conn, ir, rule_uid, rego, version_uid, tenant_id=tenant_id, cases=cases, source_uri=source_uri
+        )
     return {"rule_uid": rule_uid, "human_verified": True, **deployed}
 
 
@@ -203,11 +200,16 @@ def deploy_and_record(
     rego: str,
     version_uid: str,
     tenant_id: str = TENANT_ID,
-    cases: list[tuple[str, dict, str, float]] = EXPECTED,
+    cases: list[tuple[str, dict, str, float]] | None = None,
     data_path: str | None = None,
+    source_uri: str = "",
 ) -> dict:
-    """Write the cartridge, load it into OPA, check the cases (EXPECTED by default), append one
-    signed receipt per case to the tenant's chain, then verify the whole chain."""
+    """Deploy a verified rule and evaluate only explicitly supplied cases."""
+    cases = cases or []
+    if cases and (not tenant_id or not source_uri):
+        raise ValueError("tenant_id and source_uri are required for evaluation receipts")
+    if not cases:
+        return {"message": "No data yet: evaluation cases required", "evaluations": [], "receipts": []}
     CARTRIDGES.mkdir(exist_ok=True)
     (CARTRIDGES / f"{cartridge_name(rule_uid)}.rego").write_text(rego)
     loaded_via = deploy_to_opa(rule_uid, rego)
@@ -238,7 +240,7 @@ def deploy_and_record(
             version_uid=version_uid,
             input_payload=payload,
             evaluated_decision=ev["compliance_status"],
-            citation_uri=citation_uri(ir.citation),
+            citation_uri=citation_uri(source_uri, ir.citation),
             private_key=key,
         )
         receipts.append({"case": name, "seq": r["seq"], "leaf_hash": r["leaf_hash"]})
@@ -247,6 +249,8 @@ def deploy_and_record(
 
 
 def verify_chain_cmd(tenant_id: str) -> dict:
+    if not tenant_id:
+        return {"message": "No data yet"}
     if not DEFAULT_KEY_PATH.exists():
         raise FileNotFoundError(f"no signing key at {DEFAULT_KEY_PATH}; run approve first")
     key = load_or_create_signing_key()
@@ -257,7 +261,13 @@ def verify_chain_cmd(tenant_id: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("run")
+    rp = sub.add_parser("run")
+    rp.add_argument("--text", type=Path)
+    rp.add_argument("--bill-id")
+    rp.add_argument("--version-uid")
+    rp.add_argument("--title")
+    rp.add_argument("--jurisdiction")
+    rp.add_argument("--source-uri")
     ap = sub.add_parser("approve")
     ap.add_argument("--rule", required=True)
     vp = sub.add_parser("verify-chain")
@@ -265,7 +275,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.cmd == "run":
-            out = run()
+            out = run(
+                args.text,
+                bill_id=args.bill_id,
+                version_uid=args.version_uid,
+                title=args.title,
+                jurisdiction=args.jurisdiction,
+                source_uri=args.source_uri,
+            )
         elif args.cmd == "approve":
             out = approve(args.rule)
         else:
