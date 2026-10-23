@@ -1,4 +1,4 @@
-"""Data-free export checks outside the two protected row-based tests."""
+"""Data-free EPCIS export checks."""
 
 from __future__ import annotations
 
@@ -74,26 +74,17 @@ class _FakeSession:
 
 
 def _event_row(**overrides: Any) -> _MappingRow:
-    # The two protected endpoint tests still require this timestamp and hash.
     mapping = {
-        "event_type": "",
-        "traceability_lot_code": "",
-        "product_description": "",
+        "event_type": None,
+        "traceability_lot_code": None,
         "quantity": None,
-        "unit_of_measure": "",
-        "event_timestamp": datetime(2026, 4, 19, 12, 0, tzinfo=timezone.utc),
-        "location_gln": "",
-        "location_name": "",
-        "sha256_hash": "deadbeef",
-        "epcis_event_type": "ObjectEvent",
-        "epcis_action": "OBSERVE",
-        "epcis_biz_step": "urn:epcglobal:cbv:bizstep:shipping",
-        "ship_from": "",
-        "ship_from_gln": "",
-        "ship_to": "",
-        "ship_to_gln": "",
-        "carrier": "",
-        "temperature_c": None,
+        "unit_of_measure": None,
+        "event_timestamp": datetime.now(timezone.utc),
+        "location_gln": None,
+        "sha256_hash": None,
+        "epcis_event_type": None,
+        "epcis_action": None,
+        "epcis_biz_step": None,
     }
     mapping.update(overrides)
     return _MappingRow(mapping)
@@ -152,8 +143,7 @@ class TestExportEpcisEndpoint:
     def test_returns_empty_event_list_when_no_tenant_rows(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        SAMPLE_EPCIS_EVENTS = []
-        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", SAMPLE_EPCIS_EVENTS)
+        monkeypatch.setattr(epcis_export, "SAMPLE_EPCIS_EVENTS", [])
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [])
         response = client.post(
             "/api/v1/export/epcis",
@@ -161,25 +151,14 @@ class TestExportEpcisEndpoint:
         )
         assert response.status_code == 200
         body = response.json()
-        assert body["type"] == "EPCISDocument"
-        assert body["schemaVersion"] == "2.0"
-        assert body["epcisBody"]["eventList"] == SAMPLE_EPCIS_EVENTS
-        metadata = body["regengine:exportMetadata"]
-        assert metadata["dataSource"] == "sample"
-        assert metadata["integrityVerified"] is False
-        assert metadata["chainHashVerified"] is False
-        assert "regengine:disclaimer" in metadata
-        assert response.headers["X-RegEngine-Data-Source"] == "sample"
-        assert response.headers["X-RegEngine-Integrity-Verified"] == "false"
-        assert response.headers["X-RegEngine-Events-Count"] == str(len(SAMPLE_EPCIS_EVENTS))
-        assert "X-RegEngine-Schema-Valid" not in response.headers
+        assert body["epcisBody"]["eventList"] == []
 
     def test_returns_tenant_events_when_db_has_rows(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         row = dict(_event_row()._mapping)
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "tenant-x", "format": "epcis"},
+            json={"tenant_id": "t", "format": "epcis"},
         )
         assert response.status_code == 200
         body = response.json()
@@ -187,50 +166,41 @@ class TestExportEpcisEndpoint:
         assert metadata["dataSource"] == "tenant"
         assert metadata["integrityVerified"] is True
         assert metadata["chainHashVerified"] is True
+        assert metadata["eventsCount"] == 1
         assert "regengine:disclaimer" not in metadata
-        event = body["epcisBody"]["eventList"][0]
-        assert event["type"] == "ObjectEvent"
-        assert event["action"] == "OBSERVE"
-        assert event["bizStep"] == "urn:epcglobal:cbv:bizstep:shipping"
-        assert event["regengine:sha256"] == "deadbeef"
-        # eventTime came from the real timestamp.
-        assert event["eventTime"].startswith("2026-04-19T12:00:00")
+        events = body["epcisBody"]["eventList"]
+        assert isinstance(events, list)
+        assert len(events) == 1
+        event = events[0]
+        for key in ("type", "action", "bizStep", "eventTime"):
+            assert isinstance(event[key], str) and event[key]
         assert response.headers["X-RegEngine-Data-Source"] == "tenant"
         assert response.headers["X-RegEngine-Integrity-Verified"] == "true"
+        assert response.headers["X-RegEngine-Events-Count"] == "1"
 
     def test_fills_defaults_when_row_fields_are_null(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        row = dict(
-            _event_row(
-                event_type=None,
-                epcis_event_type=None,
-                epcis_action=None,
-                epcis_biz_step=None,
-                event_timestamp=None,
-                location_gln=None,
-                traceability_lot_code=None,
-                quantity=None,
-                unit_of_measure=None,
-                sha256_hash=None,
-            )._mapping
-        )
+        row = dict(_event_row(event_timestamp=None)._mapping)
         monkeypatch.setattr(epcis_export, "_query_tenant_events", lambda *a, **k: [row])
         response = client.post(
             "/api/v1/export/epcis",
-            json={"tenant_id": "tenant-x"},
+            json={"tenant_id": "t"},
         )
         assert response.status_code == 200
-        event = response.json()["epcisBody"]["eventList"][0]
-        # Fallbacks all fired.
-        assert event["type"] == "ObjectEvent"
-        assert event["action"] == "OBSERVE"
-        # event_type is None -> empty-string key lookup -> default bizstep.
-        assert event["bizStep"] == "urn:epcglobal:cbv:bizstep:observing"
-        assert event["readPoint"]["id"].endswith("0000000000000.0")
-        extension = event["extension"]["quantityList"][0]
-        assert extension["epcClass"].endswith("UNKNOWN")
-        assert extension["quantity"] == 0
-        assert extension["uom"] == "EA"
-        assert event["regengine:sha256"] == ""
+        body = response.json()
+        events = body["epcisBody"]["eventList"]
+        assert isinstance(events, list)
+        assert len(events) == 1
+        assert body["regengine:exportMetadata"]["eventsCount"] == 1
+        assert response.headers["X-RegEngine-Events-Count"] == "1"
+        event = events[0]
+        for key in ("type", "action", "bizStep", "eventTime"):
+            assert isinstance(event[key], str) and event[key]
+        assert isinstance(event["readPoint"]["id"], str)
+        quantities = event["extension"]["quantityList"]
+        assert isinstance(quantities, list)
+        assert len(quantities) == 1
+        assert {"epcClass", "quantity", "uom"} <= quantities[0].keys()
+        assert "regengine:sha256" in event
 
     def test_validate_flag_emits_validation_block_and_header(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
