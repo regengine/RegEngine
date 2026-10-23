@@ -69,6 +69,17 @@ def test_action_pin_accepts_full_sha(repo: Path) -> None:
     assert mod.check_action_pin(path, "ok.yml") == []
 
 
+def test_action_pin_ignores_status_permissions_but_checks_uses(repo: Path) -> None:
+    path = _write(
+        repo,
+        ".github/workflows/statuses.yml",
+        "permissions:\n  statuses: write\n  statuses: read\nsteps:\n  - uses: actions/checkout@v4\n  - {uses: actions/setup-node@v4}\n",
+    )
+    violations = mod.check_action_pin(path, "statuses.yml")
+    assert [v.line for v in violations] == [5, 6]
+    assert [v.rule for v in violations] == ["action-pin", "action-pin"]
+
+
 def test_action_pin_rejects_tag_ref(repo: Path) -> None:
     path = _write(repo, ".github/workflows/bad.yml", "steps:\n  - uses: actions/checkout@v4\n")
     violations = mod.check_action_pin(path, "bad.yml")
