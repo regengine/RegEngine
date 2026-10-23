@@ -581,18 +581,26 @@ jobs:
                 }
               }
 
-              // Track verdicts per (engine, sha) and latest verdict per engine.
-              // A BLOCKED/FAIL by engine X is cleared only by a later PASS by the same engine X.
+              // Track verdicts per (engine, sha) and latest blocking verdict per engine.
+              // A BLOCKED or FAIL verdict from an engine is cleared only by a later PASS from
+              // the same engine whose sha matches the current head (isShaMatch(v.sha, headSha)).
+              // A PASS whose sha does not match head must never clear a block.
+              // An engine's latest BLOCKED/FAIL on any head still counts as blocking unless
+              // a later head-matching PASS from that engine exists.
               const verdictsByEngineSha = new Map();
-              const latestVerdictByEngine = new Map();
+              const latestBlockedVerdictByEngine = new Map();
 
               for (const v of allVerdicts) {
                 verdictsByEngineSha.set(`${v.engine}:${v.sha}`, v);
-                latestVerdictByEngine.set(v.engine, v);
+                if (v.status === 'BLOCKED' || v.status === 'FAIL') {
+                  latestBlockedVerdictByEngine.set(v.engine, v);
+                } else if (v.status === 'PASS' && isShaMatch(v.sha, headSha)) {
+                  latestBlockedVerdictByEngine.delete(v.engine);
+                }
               }
 
               const blockedEngines = [];
-              for (const [engine, verdict] of latestVerdictByEngine.entries()) {
+              for (const [engine, verdict] of latestBlockedVerdictByEngine.entries()) {
                 if (verdict.status === 'BLOCKED' || verdict.status === 'FAIL') {
                   blockedEngines.push(verdict);
                 }
