@@ -3,7 +3,6 @@ import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
 import {
   ArrowRight,
-  Boxes,
   CheckCircle2,
   ClipboardCheck,
   Database,
@@ -14,20 +13,12 @@ import {
   ScanLine,
   ShieldCheck,
 } from "lucide-react";
-import {
-  CommitGate,
-  ComplianceStateBadge,
-  EvidenceCard,
-  EvidencePackagePreview,
-  HashVerificationStrip,
-} from "@/components/compliance";
-import { sandboxCta } from "@/lib/sandbox-cta";
+import { EvidenceCard } from "@/components/compliance";
 import { Container } from "@/components/layout/container";
 import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
-import { StatTile } from "@/components/ui/stat-tile";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
@@ -42,30 +33,6 @@ export const metadata: Metadata = {
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 recordkeeping software" }],
   },
 };
-
-const demoMetrics = [
-  { label: "FTL list overlap", value: "91%", sublabel: "Example", state: "needs-correction" as const },
-  { label: "KDE completeness", value: "84%", sublabel: "Gaps flagged", state: "needs-correction" as const },
-  { label: "Export checklist", value: "72%", sublabel: "Items open", state: "blocked" as const },
-];
-
-const supplierChecklistExamples = [
-  {
-    supplier: "FreshPack Central",
-    issue: "Ship-to location missing for 3 lots",
-    state: "blocked" as const,
-  },
-  {
-    supplier: "Valley Farms",
-    issue: "Harvest date and quantity validated",
-    state: "committed" as const,
-  },
-  {
-    supplier: "Cold Dock 7",
-    issue: "Temperature note requires review",
-    state: "needs-correction" as const,
-  },
-];
 
 const evidenceCards = [
   {
@@ -106,92 +73,6 @@ const destinations = [
   { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
 ];
 
-function MetricRail() {
-  return (
-    <div className="mt-8">
-      <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
-        Synthetic demo · example numbers · not a customer workspace
-      </p>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        {demoMetrics.map((metric) => (
-          <StatTile
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            status={<ComplianceStateBadge state={metric.state} />}
-          >
-            <p className="text-small text-re-text-tertiary">{metric.sublabel}</p>
-          </StatTile>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ChecklistRadar() {
-  return (
-    <Card padding="compact">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-label uppercase text-re-text-muted">Demo workspace · synthetic data · 3 open checklist items</p>
-          <h2 className="mt-2 text-heading text-re-text-primary">What the export checklist still flags</h2>
-        </div>
-        <Boxes className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-      </div>
-      <div className="mt-4 grid gap-3">
-        {supplierChecklistExamples.map((item) => (
-          <Card key={item.supplier} variant="inset" padding="compact">
-            <article className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-subheading text-re-text-primary">{item.supplier}</h3>
-                  <ComplianceStateBadge state={item.state} />
-                </div>
-                <p className="mt-2 text-ui text-re-text-secondary">{item.issue}</p>
-              </div>
-            </article>
-          </Card>
-        ))}
-      </div>
-      <div className="mt-4 border-t border-re-border-subtle pt-3">
-        <p className="text-small text-re-text-tertiary">
-          Export checklist (advisory): checks configured in the workspace, not FDA certification, not retailer approval.
-        </p>
-      </div>
-    </Card>
-  );
-}
-
-function CommandCenterPreview() {
-  return (
-    <div className="rounded-lg border border-re-border bg-re-surface-inset p-3">
-      <div className="mb-3 flex justify-end">
-        <span className="font-mono text-label uppercase text-re-text-muted">
-          Demo workspace
-        </span>
-      </div>
-      <ChecklistRadar />
-      <div className="mt-3 grid gap-3">
-        <CommitGate
-          status="blocked"
-          title="Export checklist (advisory)"
-          description="The export package can build after missing ship-to locations are corrected and revalidated. Checklist is advisory; passing it is not FDA certification or retailer approval."
-          criteria={[
-            { label: "Workspace identity resolved", passed: true },
-            { label: "CTE/KDE coverage above threshold", passed: true },
-            { label: "Supplier gaps cleared", passed: false, detail: "FreshPack Central has 3 unresolved shipping lots." },
-          ]}
-        />
-        <HashVerificationStrip
-          hash="sample-demo-chain-hash-example"
-          verifiedAt="example/synthetic"
-          state="committed"
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function HomePage() {
   return (
     <div className="re-compliance-os min-h-screen">
@@ -214,7 +95,7 @@ export default function HomePage() {
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
               <Link href="/verify">
-                Verify a sample export
+                Verify an evidence bundle
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -222,10 +103,22 @@ export default function HomePage() {
               <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
             </Button>
           </div>
-          <MetricRail />
         </div>
 
-        <CommandCenterPreview />
+        <Card padding="spacious" className="flex flex-col items-start gap-3">
+          <p className="font-mono text-label uppercase text-re-text-muted">Workspace preview</p>
+          <h2 className="text-heading text-re-text-primary">No data yet</h2>
+          <p className="text-ui text-re-text-secondary">
+            There is no public workspace to show. Connect your own supplier data and the
+            ingest, checklist, and export views populate from your records.
+          </p>
+          <Button asChild variant="secondary" size="lg" className="mt-2">
+            <Link href="/signup">
+              Start setup
+              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+            </Link>
+          </Button>
+        </Card>
       </Container>
 
       <section className="border-y border-re-border-subtle">
@@ -266,70 +159,20 @@ export default function HomePage() {
       </Section>
 
       <Section width="marketing" tone="inset">
-        <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
-          <div className="grid gap-4">
-            <EvidencePackagePreview
-              packageId="RE-DEMO-PKG-0427"
-              status="building"
-              records={1284}
-              kdeCoverage={94}
-              generatedAt="example/synthetic"
-              items={["Facility scope manifest", "Committed CTE/KDE records", "Supplier correction log", "Hash verification strip"]}
-            />
-            <HashVerificationStrip
-              hash="demo-example-chain-hash-synthetic"
-              verifiedAt="example/synthetic"
-              state="signed"
-            />
-          </div>
-          <div>
-            <Card padding="compact">
-              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
-                What this is not
-              </p>
-              <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
-                <li>Not FDA endorsement</li>
-                <li>Not a claim we meet §1.1455 24-hour request</li>
-                <li>Not retailer-readiness score</li>
-                <li>Not a commit-gate that certifies</li>
-                <li>Not a 24-hour Recall Clock product</li>
-                <li>Not live customer metrics</li>
-                <li>Not legal advice</li>
-              </ul>
-            </Card>
-            <div className="mt-5">
-              <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
-                Sample data · illustrative · synthetic
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  ["Records with full provenance", "1,184"],
-                  ["Open supplier blockers", "3"],
-                  ["Facilities scoped", "12/14"],
-                ].map(([label, value]) => (
-                  <StatTile key={label} label={label} value={value} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      <Section id="sandbox" width="marketing">
-        <h2 className="font-display text-heading-lg text-re-text-primary">
-          Walk the synthetic workspace
-        </h2>
-        <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
-          {sandboxCta().blurb}
-        </p>
-        <div className="mt-6">
-          <Button asChild size="lg">
-            <Link href={sandboxCta().href}>
-              {sandboxCta().label}
-              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
-          </Button>
-        </div>
+        <Card padding="compact" className="max-w-[68ch]">
+          <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
+            What this is not
+          </p>
+          <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
+            <li>Not FDA endorsement</li>
+            <li>Not a claim we meet §1.1455 24-hour request</li>
+            <li>Not retailer-readiness score</li>
+            <li>Not a commit-gate that certifies</li>
+            <li>Not a 24-hour Recall Clock product</li>
+            <li>Not live customer metrics</li>
+            <li>Not legal advice</li>
+          </ul>
+        </Card>
       </Section>
 
       <Section width="marketing" className="pb-20 sm:pb-24">
