@@ -5,14 +5,14 @@ on:
     paths:
       - 'frontend/**'
       - 'scripts/copy-lint/**'
-      - '.github/workflows/copy-lint.yml'
+      - '.github/workflows/copy-gate.yml'
       - 'scripts/copy-lint/baseline.json'
   push:
     branches: [main]
     paths:
       - 'frontend/**'
       - 'scripts/copy-lint/**'
-      - '.github/workflows/copy-lint.yml'
+      - '.github/workflows/copy-gate.yml'
       - 'scripts/copy-lint/baseline.json'
 
 permissions:
