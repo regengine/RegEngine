@@ -19,8 +19,8 @@ Public recall-drill endpoint. Coverage:
 from __future__ import annotations
 
 import os
-import uuid
 import sys
+import uuid
 from itertools import count
 
 import app.proof_recall_router as proof_recall_module
