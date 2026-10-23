@@ -15,6 +15,9 @@ def _request(path: str) -> Request:
 
 @pytest.mark.asyncio
 async def test_session_without_selected_rls_tenant_is_denied(monkeypatch):
+    monkeypatch.setenv("REGENGINE_ENV", "test")
+    monkeypatch.setenv("ADMIN_FALLBACK_SQLITE", "sqlite:///:memory:")
+    monkeypatch.delenv("ADMIN_DATABASE_URL", raising=False)
     from services.admin.app import auth_routes, database, dependencies
 
     async def verified_user(**_kwargs):
