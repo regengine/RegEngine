@@ -1,29 +1,25 @@
+# All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
+
 name: Engine Review Pass
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   pull_request_review:
-    types: [submitted, edited, dismissed]
-  issue_comment:
-    types: [created, edited, deleted]
-  pull_request_review_comment:
-    types: [created, edited, deleted]
+    types: [submitted, dismissed]
 
 concurrency:
-  group: engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
+  group: engine-review-pass-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
-  pull-requests: read
-  issues: read
   statuses: write
+  pull-requests: read
   contents: read
 
 jobs:
   engine-review-pass:
     name: Engine Review Pass
-    if: github.event_name != 'issue_comment' || github.event.issue.pull_request != null
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -31,304 +27,157 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
-            if (context.eventName === 'issue_comment' && !context.payload.issue?.pull_request) {
-              core.info('Issue comment is not on a pull request. Skipping.');
-              return;
-            }
-
-            const prNumber = context.payload.pull_request?.number || context.payload.issue?.number;
-            if (!prNumber) {
-              core.setFailed('Could not determine pull request number from event payload.');
-              return;
-            }
-
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const pr = context.payload.pull_request;
 
-            async function setCommitStatus(sha, state, description) {
+            if (!pr) {
+              core.setFailed('Could not determine pull request from event payload.');
+              return;
+            }
+
+            const headSha = pr.head?.sha;
+            if (!headSha) {
+              core.setFailed('Could not determine head SHA from pull request.');
+              return;
+            }
+
+            let statusPosted = false;
+            async function setCommitStatus(state, description) {
+              if (statusPosted) {
+                core.info(`Commit status already posted. Skipping duplicate (${state}: ${description})`);
+                return;
+              }
+              statusPosted = true;
               try {
                 await github.rest.repos.createCommitStatus({
                   owner,
                   repo,
-                  sha,
+                  sha: headSha,
                   state,
                   context: 'Engine Review Pass',
                   description: description.slice(0, 140),
                   target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
                 });
-                core.info(`Created commit status '${state}' on ${sha}: ${description}`);
+                core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
               } catch (err) {
-                core.warning(`Failed to create commit status on ${sha}: ${err.message}`);
+                core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
               }
             }
 
-            let headSha;
-
             try {
-              core.info(`Fetching pull request #${prNumber}...`);
-              const { data: pr } = await github.rest.pulls.get({
+              const headRef = pr.head?.ref || '';
+              const slashIndex = headRef.indexOf('/');
+              if (slashIndex <= 0) {
+                const msg = 'cannot determine author engine';
+                await setCommitStatus('failure', msg);
+                core.setFailed(msg);
+                return;
+              }
+
+              const authorEngine = headRef.slice(0, slashIndex).trim();
+              if (!authorEngine) {
+                const msg = 'cannot determine author engine';
+                await setCommitStatus('failure', msg);
+                core.setFailed(msg);
+                return;
+              }
+
+              core.info(`Author engine: ${authorEngine} (from branch ${headRef})`);
+              core.info(`Head SHA: ${headSha}`);
+
+              const prNumber = pr.number;
+              core.info(`Fetching reviews for pull request #${prNumber}...`);
+
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
                 owner,
                 repo,
                 pull_number: prNumber,
+                per_page: 100,
               });
 
-              headSha = pr.head.sha;
-              const prBody = (pr.body || '').replace(/\r\n/g, '\n');
-              core.info(`Head SHA: ${headSha}`);
+              core.info(`Total reviews retrieved: ${reviews.length}`);
 
-              const { data: commitData } = await github.rest.repos.getCommit({
-                owner,
-                repo,
-                ref: headSha,
+              const eligibleReviews = reviews.filter((r) => {
+                return r.state !== 'DISMISSED' && r.submitted_at && r.body;
               });
 
-              const committerDateStr = commitData.commit?.committer?.date;
-              if (!committerDateStr) {
-                const msg = `Unable to determine committer date for head commit ${headSha}`;
-                await setCommitStatus(headSha, 'failure', msg);
-                core.setFailed(msg);
-                return;
-              }
-
-              const headCommitDate = new Date(committerDateStr);
-              const headCommitTime = headCommitDate.getTime();
-              core.info(`Head commit date (committer): ${headCommitDate.toISOString()} (${headCommitTime})`);
-
-              const authorEngineRegex = /^Author-Engine:\s*(\S+)\s*$/m;
-              const authorEngineMatch = prBody.match(authorEngineRegex);
-
-              if (!authorEngineMatch) {
-                const msg = 'Missing Author-Engine line in PR body matching /^Author-Engine:\\s*(\\S+)\\s*$/m';
-                await setCommitStatus(headSha, 'failure', msg);
-                core.setFailed(msg);
-                return;
-              }
-
-              const authorEngine = authorEngineMatch[1].trim();
-              core.info(`Author-Engine: ${authorEngine}`);
-
-              core.info('Collecting reviews, issue comments, and review comments...');
-              const [reviews, issueComments, reviewComments] = await Promise.all([
-                github.paginate(github.rest.pulls.listReviews, {
-                  owner,
-                  repo,
-                  pull_number: prNumber,
-                  per_page: 100,
-                }),
-                github.paginate(github.rest.issues.listComments, {
-                  owner,
-                  repo,
-                  issue_number: prNumber,
-                  per_page: 100,
-                }),
-                github.paginate(github.rest.pulls.listReviewComments, {
-                  owner,
-                  repo,
-                  pull_number: prNumber,
-                  per_page: 100,
-                }),
-              ]);
-
-              core.info(`Total items retrieved: ${reviews.length} reviews, ${issueComments.length} issue comments, ${reviewComments.length} review comments.`);
-
-              const candidateItems = [];
-              const staleItems = [];
-              let candidateReviewsCount = 0;
-              let candidateIssueCommentsCount = 0;
-              let candidateReviewCommentsCount = 0;
-
-              for (const r of reviews) {
-                if (r.state === 'DISMISSED') continue;
-                const dateStr = r.updated_at || r.submitted_at || r.created_at;
-                if (!dateStr || !r.body) continue;
-                const time = new Date(dateStr).getTime();
-                const item = {
-                  type: 'pull_request_review',
-                  id: r.id,
-                  user: r.user?.login || 'unknown',
-                  date: dateStr,
-                  time,
-                  body: r.body.replace(/\r\n/g, '\n'),
-                };
-                if (time > headCommitTime) {
-                  candidateItems.push(item);
-                  candidateReviewsCount++;
-                } else {
-                  staleItems.push(item);
+              eligibleReviews.sort((a, b) => {
+                const timeA = new Date(a.submitted_at).getTime();
+                const timeB = new Date(b.submitted_at).getTime();
+                if (timeA !== timeB) {
+                  return timeA - timeB;
                 }
-              }
+                return a.id - b.id;
+              });
 
-              for (const c of issueComments) {
-                const dateStr = c.updated_at || c.created_at;
-                if (!dateStr || !c.body) continue;
-                const time = new Date(dateStr).getTime();
-                const item = {
-                  type: 'issue_comment',
-                  id: c.id,
-                  user: c.user?.login || 'unknown',
-                  date: dateStr,
-                  time,
-                  body: c.body.replace(/\r\n/g, '\n'),
-                };
-                if (time > headCommitTime) {
-                  candidateItems.push(item);
-                  candidateIssueCommentsCount++;
-                } else {
-                  staleItems.push(item);
-                }
-              }
-
-              for (const rc of reviewComments) {
-                const dateStr = rc.updated_at || rc.created_at;
-                if (!dateStr || !rc.body) continue;
-                const time = new Date(dateStr).getTime();
-                const item = {
-                  type: 'pull_request_review_comment',
-                  id: rc.id,
-                  user: rc.user?.login || 'unknown',
-                  date: dateStr,
-                  time,
-                  body: rc.body.replace(/\r\n/g, '\n'),
-                };
-                if (time > headCommitTime) {
-                  candidateItems.push(item);
-                  candidateReviewCommentsCount++;
-                } else {
-                  staleItems.push(item);
-                }
-              }
-
-              core.info(`Eligible items created/updated after head commit date: ${candidateItems.length}`);
-
-              const passRegex = /^REVIEW: PASS ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m;
+              const markerRegex = /^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
-              let passingReview = null;
-              const evaluatedMatches = [];
-              const otherReviewLines = [];
+              const latestMarkers = new Map();
 
-              for (const item of candidateItems) {
-                const lines = item.body.split('\n');
+              for (const r of eligibleReviews) {
+                const lines = r.body.replace(/\r\n/g, '\n').split('\n');
                 for (const line of lines) {
-                  const match = line.match(passRegex);
-                  if (match) {
-                    const reviewerEngine = match[1];
-                    const reviewerSha = match[2];
-                    const reviewerShaLower = reviewerSha.toLowerCase();
-                    const engineDiffers = reviewerEngine.toLowerCase() !== authorEngineLower;
-                    const shaMatches = reviewerSha.length >= 7 && headShaLower.startsWith(reviewerShaLower);
-
-                    if (engineDiffers && shaMatches) {
-                      passingReview = {
-                        engine: reviewerEngine,
-                        sha: reviewerSha,
-                        item,
-                        line,
-                      };
-                      break;
-                    } else {
-                      const reasons = [];
-                      if (!engineDiffers) {
-                        reasons.push(`engine '${reviewerEngine}' matches Author-Engine '${authorEngine}' (must differ, case-insensitive)`);
-                      }
-                      if (!shaMatches) {
-                        reasons.push(`sha '${reviewerSha}' is not equal to or a prefix of current head sha '${headSha}'`);
-                      }
-                      evaluatedMatches.push({
-                        line,
-                        itemType: item.type,
-                        user: item.user,
-                        date: item.date,
-                        reasons: reasons.join('; '),
-                      });
-                    }
-                  } else if (/^REVIEW:\s*/i.test(line)) {
-                    otherReviewLines.push({
-                      line,
-                      itemType: item.type,
-                      user: item.user,
-                      date: item.date,
-                    });
+                  const match = line.match(markerRegex);
+                  if (!match) {
+                    continue;
                   }
-                }
-                if (passingReview) {
-                  break;
+
+                  const action = match[1];
+                  const reviewerEngine = match[2];
+                  const markerSha = match[3];
+
+                  if (!headShaLower.startsWith(markerSha.toLowerCase())) {
+                    core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
+                    continue;
+                  }
+
+                  const isAuthorEngine = reviewerEngine.toLowerCase() === authorEngineLower;
+                  if (action === 'PASS' && isAuthorEngine) {
+                    core.info(`Ignoring PASS from author engine '${reviewerEngine}'`);
+                    continue;
+                  }
+
+                  const engineKey = reviewerEngine.toLowerCase();
+                  latestMarkers.set(engineKey, {
+                    action,
+                    engine: reviewerEngine,
+                    sha: markerSha,
+                    submittedAt: r.submitted_at,
+                  });
+                  core.info(`Recorded marker: ${action} by ${reviewerEngine} (SHA: ${markerSha}, submitted: ${r.submitted_at})`);
                 }
               }
 
-              if (passingReview) {
-                const successMsg = `REVIEW: PASS ${passingReview.engine} ${passingReview.sha}`;
-                core.info(`Engine review passed! Found passing review in ${passingReview.item.type} by ${passingReview.item.user}:`);
-                core.info(`  ${passingReview.line}`);
-                await setCommitStatus(headSha, 'success', successMsg);
+              const markers = Array.from(latestMarkers.values());
+              const blockedMarkers = markers.filter((m) => m.action === 'BLOCKED');
+              const nonAuthorPassMarkers = markers.filter((m) => {
+                return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
+              });
+
+              if (blockedMarkers.length > 0) {
+                const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
+                const msg = `Blocked by ${blockedEngines}`;
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass blocked: ${msg}`);
                 return;
               }
 
-              const staleReviewLines = [];
-              for (const item of staleItems) {
-                const lines = item.body.split('\n');
-                for (const line of lines) {
-                  if (passRegex.test(line)) {
-                    staleReviewLines.push({
-                      line,
-                      itemType: item.type,
-                      user: item.user,
-                      date: item.date,
-                    });
-                  }
-                }
+              if (nonAuthorPassMarkers.length === 0) {
+                const msg = 'No passing review from a non-author engine for current head SHA';
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass failed: ${msg}`);
+                return;
               }
 
-              const failureLines = [
-                'Engine Review Pass: FAILED',
-                `Author-Engine: ${authorEngine}`,
-                `Current head SHA: ${headSha}`,
-                `Head commit date: ${headCommitDate.toISOString()}`,
-                `Eligible items considered (created/updated after head commit date): ${candidateItems.length} (${candidateReviewsCount} reviews, ${candidateIssueCommentsCount} issue comments, ${candidateReviewCommentsCount} review comments)`,
-              ];
-
-              if (evaluatedMatches.length > 0) {
-                failureLines.push('');
-                failureLines.push('Candidate REVIEW: PASS lines evaluated but rejected:');
-                for (const m of evaluatedMatches) {
-                  failureLines.push(`  - [${m.itemType} by ${m.user} on ${m.date}] "${m.line}": ${m.reasons}`);
-                }
-              }
-
-              if (otherReviewLines.length > 0) {
-                failureLines.push('');
-                failureLines.push('Other REVIEW: lines found after head commit date:');
-                for (const r of otherReviewLines) {
-                  failureLines.push(`  - [${r.itemType} by ${r.user} on ${r.date}] "${r.line}"`);
-                }
-              }
-
-              if (staleReviewLines.length > 0) {
-                failureLines.push('');
-                failureLines.push('Stale REVIEW: PASS lines found before head commit date (ignored):');
-                for (const s of staleReviewLines) {
-                  failureLines.push(`  - [${s.itemType} by ${s.user} on ${s.date}] "${s.line}" (before head commit)`);
-                }
-              }
-
-              if (evaluatedMatches.length === 0 && otherReviewLines.length === 0 && staleReviewLines.length === 0) {
-                failureLines.push('');
-                failureLines.push('No REVIEW lines found in PR reviews or comments.');
-              }
-
-              const detailedMsg = failureLines.join('\n');
-              const statusDesc = evaluatedMatches.length > 0
-                ? 'REVIEW: PASS rejected (engine or SHA mismatch)'
-                : 'No passing review found for current head SHA';
-
-              await setCommitStatus(headSha, 'failure', statusDesc);
-              core.setFailed(detailedMsg);
-
+              const passEngines = nonAuthorPassMarkers.map((m) => m.engine).join(', ');
+              const successMsg = `Passed by ${passEngines}`;
+              await setCommitStatus('success', successMsg);
+              core.info(`Engine Review Pass succeeded: ${successMsg}`);
             } catch (err) {
               core.error(`Unexpected error: ${err.message}`);
-              if (headSha) {
-                await setCommitStatus(headSha, 'failure', `Error: ${err.message}`.slice(0, 140));
-              }
+              await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
               core.setFailed(err.message);
             }
