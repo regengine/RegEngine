@@ -49,21 +49,36 @@ describe('ReceivingDockPage', () => {
         global.fetch = vi.fn() as any;
     });
 
+    it('offers no sample PO, only the real start path', () => {
+        render(<ReceivingDockPage />);
+
+        expect(screen.queryByRole('button', { name: /sample/i })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /start receiving/i })).toBeInTheDocument();
+    });
+
+    it('starts with no expected items and shows "No data yet"', () => {
+        render(<ReceivingDockPage />);
+
+        fireEvent.click(screen.getByRole('button', { name: /start receiving/i }));
+
+        expect(screen.getByText('No data yet')).toBeInTheDocument();
+    });
+
     it('looks up GTINs through the cookie-backed proxy without browser auth headers', async () => {
         (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
             ok: true,
             json: async () => ({
                 found: true,
                 product: {
-                    name: 'Romaine Hearts',
+                    name: 'catalog-product-name',
                 },
             }),
         });
 
         render(<ReceivingDockPage />);
 
-        fireEvent.click(screen.getByRole('button', { name: /load sample po/i }));
-        fireEvent.click(screen.getByRole('button', { name: /add expected item/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start receiving/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /add expected item/i })[0]!);
         fireEvent.change(screen.getByPlaceholderText('Barcode / GTIN'), {
             target: { value: '01234567' },
         });
@@ -80,14 +95,14 @@ describe('ReceivingDockPage', () => {
         expect(init?.credentials).toBe('include');
         expect(headers.get('X-RegEngine-API-Key')).toBeNull();
         expect(headers.get('X-Tenant-ID')).toBeNull();
-        expect(screen.getByDisplayValue('Romaine Hearts')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('catalog-product-name')).toBeInTheDocument();
     });
 
     it('posts receiving ingests through the cookie-backed proxy without browser auth headers', async () => {
         mockParseGS1.mockReturnValue({
             raw: 'scan-1',
-            gtin: '00614141000012',
-            tlc: 'TLC-ROM-20260426-001',
+            gtin: 'scanned-gtin',
+            tlc: 'scanned-lot',
         });
         (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
             ok: true,
@@ -96,7 +111,7 @@ describe('ReceivingDockPage', () => {
 
         render(<ReceivingDockPage />);
 
-        fireEvent.click(screen.getByRole('button', { name: /load sample po/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start receiving/i }));
         fireEvent.change(screen.getByPlaceholderText('Scan or type barcode...'), {
             target: { value: 'scan-1' },
         });
@@ -143,8 +158,8 @@ describe('ReceivingDockPage', () => {
 
         render(<ReceivingDockPage />);
 
-        fireEvent.click(screen.getByRole('button', { name: /load sample po/i }));
-        fireEvent.click(screen.getByRole('button', { name: /add expected item/i }));
+        fireEvent.click(screen.getByRole('button', { name: /start receiving/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /add expected item/i })[0]!);
         fireEvent.change(screen.getByPlaceholderText('Barcode / GTIN'), {
             target: { value: '01234567' },
         });
