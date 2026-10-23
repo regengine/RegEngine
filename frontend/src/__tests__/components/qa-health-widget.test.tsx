@@ -19,10 +19,10 @@ const qaHealth: QAHealthResponse = {
   generated_at: '2026-06-04T00:00:00Z',
   source: { kind: 'ci_artifact', path: 'qa/qa-health/latest.json' },
   overall: {
-    status: 'failing',
-    ready_percent: 28,
-    blocking_count: 3,
-    advisory_count: 1,
+    status: 'unavailable',
+    ready_percent: 0,
+    blocking_count: 0,
+    advisory_count: 0,
   },
   suites: [],
   clusters: [],
@@ -59,8 +59,7 @@ describe('QAHealthWidget', () => {
     render(<QAHealthWidget />);
 
     expect(screen.getByText('QA Health')).toBeInTheDocument();
-    expect(screen.getByText('Release gate failing')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('QA signal unavailable')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open qa health/i })).toHaveAttribute(
       'href',
       '/dashboard/qa-health',

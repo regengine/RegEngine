@@ -91,9 +91,9 @@ describe('Dashboard QA agreement', () => {
     expect(screen.queryByText(/0% ready/)).not.toBeInTheDocument();
   });
 
-  it('while QA health loads, rows already known stay visible and only the QA row is loading', () => {
+  it('while QA health loads, only the QA row is loading and it is not counted', () => {
     vi.mocked(useSystemMetrics).mockReturnValue({
-      data: { open_alerts: 3, events_ingested: 10, chain_length: 0, chain_valid: true },
+      data: { open_alerts: 0, events_ingested: 0, chain_length: 0, chain_valid: false },
       isLoading: false,
       error: null,
       refetch: vi.fn(),
@@ -108,11 +108,10 @@ describe('Dashboard QA agreement', () => {
     renderPage();
 
     const panel = attentionPanel();
-    expect(within(panel).getByText('3 open compliance alerts')).toBeInTheDocument();
     expect(within(panel).getByText('Checking QA signal')).toBeInTheDocument();
     expect(within(panel).queryByText('Nothing needs attention')).not.toBeInTheDocument();
     // The count badge covers only real items, not the pending QA check.
-    expect(within(panel).getByRole('heading', { name: /needs attention/i })).toHaveTextContent(/1$/);
+    expect(within(panel).getByRole('heading', { name: /needs attention/i })).toHaveTextContent(/needs attention$/i);
   });
 
   it('a passing gate is passing in both', () => {

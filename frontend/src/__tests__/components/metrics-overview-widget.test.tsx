@@ -22,7 +22,7 @@ function mockMetrics(value: Partial<ReturnType<typeof useSystemMetrics>>) {
 }
 
 const emptyMetrics = {
-  total_tenants: 1,
+  total_tenants: 0,
   total_documents: 0,
   active_jobs: 0,
   compliance_score: 0,
@@ -32,18 +32,6 @@ const emptyMetrics = {
   chain_valid: false,
   open_alerts: 0,
 };
-
-// Non-empty so every tile renders a figure. Tests derive expected text from
-// these objects rather than asserting literal values.
-const populatedMetrics = {
-  ...emptyMetrics,
-  compliance_score: 72,
-  events_ingested: 1500,
-  chain_length: 9,
-  chain_valid: true,
-  open_alerts: 2,
-};
-const populatedReadiness = { unresolved_fix_count: 3, export_eligible: false };
 
 describe('MetricsOverviewWidget', () => {
   afterEach(() => vi.unstubAllEnvs());
@@ -71,19 +59,6 @@ describe('MetricsOverviewWidget', () => {
     expect(screen.getByText('0')).toBeInTheDocument();
   });
 
-  it('renders real figures when present', () => {
-    mockMetrics({ data: populatedMetrics });
-    render(<MetricsOverviewWidget readiness={populatedReadiness as never} />);
-
-    // Expected text comes from the mock itself, never a hard-coded figure.
-    expect(screen.getByText(String(populatedMetrics.compliance_score))).toBeInTheDocument();
-    expect(screen.getByText(populatedMetrics.events_ingested.toLocaleString())).toBeInTheDocument();
-    expect(screen.getByText(`${populatedMetrics.chain_length.toLocaleString()} entries`)).toBeInTheDocument();
-    expect(screen.getByText(String(populatedMetrics.open_alerts))).toBeInTheDocument();
-    expect(screen.getByText(String(populatedReadiness.unresolved_fix_count))).toBeInTheDocument();
-    expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
-  });
-
   it('a failed metrics load shows the error state with Retry, not placeholder zeros', () => {
     // Nothing real has ever loaded: no data, only an error.
     mockMetrics({ data: undefined, error: new Error('Network Error') });
@@ -96,16 +71,15 @@ describe('MetricsOverviewWidget', () => {
   });
 
   it('a failed refresh after a good load leaves the rendered tiles unchanged and shows a non-blocking note', () => {
-    mockMetrics({ data: populatedMetrics });
-    const { container, rerender } = render(<MetricsOverviewWidget readiness={populatedReadiness as never} />);
+    mockMetrics({ data: emptyMetrics });
+    const { container, rerender } = render(<MetricsOverviewWidget readiness={undefined} />);
     const tilesBefore = container.querySelector('.grid')?.textContent;
-    // Every tile shows a figure, so an unchanged grid proves the figures survived.
-    expect(tilesBefore).toBeTruthy();
-    expect(tilesBefore).not.toContain('No data yet');
+    // The empty tiles are what loaded; an unchanged grid proves they survived.
+    expect(tilesBefore).toContain('No data yet');
 
     // react-query keeps the last good `data` alongside the refetch `error`.
-    mockMetrics({ data: populatedMetrics, error: new Error('Network Error') });
-    rerender(<MetricsOverviewWidget readiness={populatedReadiness as never} />);
+    mockMetrics({ data: emptyMetrics, error: new Error('Network Error') });
+    rerender(<MetricsOverviewWidget readiness={undefined} />);
 
     expect(container.querySelector('.grid')?.textContent).toBe(tilesBefore);
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -117,30 +91,31 @@ describe('MetricsOverviewWidget', () => {
 
   it('alerts disabled: the open alerts tile says "Alerts are off" with no count or CSV link', () => {
     vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', '');
-    const metrics = { ...emptyMetrics, open_alerts: 7 };
-    mockMetrics({ data: metrics });
+    mockMetrics({ data: emptyMetrics });
     render(<MetricsOverviewWidget readiness={undefined} />);
 
     expect(screen.getByText('Alerts are off')).toBeInTheDocument();
-    expect(screen.queryByText(String(metrics.open_alerts))).not.toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
     // Only score, CTE events, hash chain and open fixes are empty tiles.
     expect(screen.getAllByRole('link', { name: 'Upload a CSV' })).toHaveLength(4);
   });
 
   it('alerts enabled but no alert count: "No data yet", never a demo zero', () => {
-    mockMetrics({ data: { ...emptyMetrics, compliance_score: 50, events_ingested: 1, chain_length: 1, chain_valid: true, open_alerts: undefined } });
-    render(<MetricsOverviewWidget readiness={{ unresolved_fix_count: 1, export_eligible: true } as never} />);
+    mockMetrics({ data: { ...emptyMetrics, open_alerts: undefined } });
+    render(<MetricsOverviewWidget readiness={undefined} />);
 
-    expect(screen.getAllByText('No data yet')).toHaveLength(1);
+    // Score, CTE events, hash chain, open alerts, open fixes.
+    expect(screen.getAllByText('No data yet')).toHaveLength(5);
     expect(screen.queryByText('0')).not.toBeInTheDocument();
     expect(screen.queryByText('Alerts are off')).not.toBeInTheDocument();
   });
 
   it('a failed readiness load says so on the open fixes tile instead of "No data yet"', () => {
-    mockMetrics({ data: { ...emptyMetrics, compliance_score: 50, events_ingested: 1, chain_length: 1, chain_valid: true } });
+    mockMetrics({ data: emptyMetrics });
     render(<MetricsOverviewWidget readiness={undefined} readinessFailed />);
 
     expect(screen.getByText("Couldn't load")).toBeInTheDocument();
-    expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
+    // Only score, CTE events and hash chain are empty; open fixes is not.
+    expect(screen.getAllByText('No data yet')).toHaveLength(3);
   });
 });

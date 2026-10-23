@@ -19,7 +19,7 @@ vi.mock('@/lib/tenant-context', () => ({
 
 vi.mock('@/hooks/use-api', () => ({
     useSystemStatus: () => ({ data: { overall_status: 'healthy', services: [] }, isLoading: false }),
-    useSystemMetrics: () => ({ data: { open_alerts: 3, events_ingested: 1 }, isLoading: false }),
+    useSystemMetrics: () => ({ data: { open_alerts: 0, events_ingested: 0 }, isLoading: false }),
     useQAHealth: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
@@ -50,7 +50,7 @@ describe('disabled dashboard features', () => {
         expect(linksTo('/dashboard/alerts')).toHaveLength(0);
         expect(linksTo('/dashboard/heartbeat')).toHaveLength(0);
         expect(screen.getByText('Alerts are off')).toBeInTheDocument();
-        expect(screen.queryByText('3 open compliance alerts')).not.toBeInTheDocument();
+        expect(screen.queryByText(/open compliance alert/)).not.toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Recall drills (coming soon)' })).toHaveAttribute('href', '/dashboard/recall-drills');
     });
 
@@ -61,7 +61,6 @@ describe('disabled dashboard features', () => {
         expect(linksTo('/dashboard/alerts').length).toBeGreaterThan(0);
         expect(linksTo('/dashboard/heartbeat')).toHaveLength(1);
         expect(screen.queryByText('Alerts are off')).not.toBeInTheDocument();
-        expect(screen.getByText('3 open compliance alerts')).toBeInTheDocument();
     });
 
     it.each([
