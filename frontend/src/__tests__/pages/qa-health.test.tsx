@@ -168,7 +168,7 @@ describe('QAHealthPage', () => {
 
     expect(screen.getByText('QA health request failed')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'The sysadmin QA endpoint did not return a dashboard summary.',
+      'We could not load this page.',
     );
     expect(screen.queryByRole('heading', { name: 'QA Health' })).not.toBeInTheDocument();
 
