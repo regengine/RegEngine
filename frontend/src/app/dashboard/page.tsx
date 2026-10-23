@@ -301,7 +301,7 @@ export default function DashboardPage() {
               rowHref={(row) => row.href}
               density="medium"
               minWidth="480px"
-              status={qa.status === "loading" ? "loading" : attentionRows.length === 0 ? "empty" : "idle"}
+              status={attentionRows.length === 0 ? "empty" : "idle"}
               empty={{
                 icon: CheckCircle2,
                 title: "Nothing needs attention",
