@@ -31,6 +31,7 @@ export function StepUpModal() {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState(DEFAULT_STEP_UP_REASON);
   const [returnTo, setReturnTo] = useState<string | undefined>();
+  const [onSuccess, setOnSuccess] = useState<(() => void) | undefined>();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,6 +44,7 @@ export function StepUpModal() {
       }
       setReason(detail?.reason || DEFAULT_STEP_UP_REASON);
       setReturnTo(detail?.returnTo);
+      setOnSuccess(() => detail?.onSuccess);
       setOpen(true);
       setError(null);
     };
@@ -73,7 +75,11 @@ export function StepUpModal() {
       await performPasskeyLogin(normalizedEmail);
       seedPasswordlessClientUser(normalizedEmail);
       setOpen(false);
-      window.location.reload();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.reload();
+      }
     } catch (err: unknown) {
       const browserError = err instanceof Error || err instanceof DOMException;
       setError(browserError && err.name === 'SecurityError'

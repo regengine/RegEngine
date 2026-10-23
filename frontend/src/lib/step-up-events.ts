@@ -14,6 +14,8 @@ export type StepUpRequest = {
   reason: string;
   /** Where Cancel sends the user. Omit to stay on the current page. */
   returnTo?: string;
+  /** Runs after passkey verification instead of reloading the page. */
+  onSuccess?: () => void;
 };
 
 export type StepUpEventDetail = StepUpRequest & {
