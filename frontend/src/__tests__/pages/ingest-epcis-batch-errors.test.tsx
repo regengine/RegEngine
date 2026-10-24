@@ -124,11 +124,20 @@ describe('EPCIS all-failed batch shows per-event errors', () => {
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
-  it('shows no event lines for a failure without per-event errors', async () => {
-    const rejection = axiosRejection(422, { detail: 'No EPCIS events found in XML document' });
-    mocks.ingestEpcisBatch.mockRejectedValue(rejection);
-    await uploadBatch();
-    expect(await screen.findByText('No EPCIS events found in XML document')).toBeInTheDocument();
-    expect(screen.queryByText(/^Event \d+:/)).not.toBeInTheDocument();
+  it('shows the single-event 400 once, with no Event N: lines', async () => {
+    // Single-event path: persistence.py raises
+    // HTTPException(400, detail={"errors": [...]}) for {}.
+    mocks.ingestEpcisEvent.mockRejectedValue(axiosRejection(STATUS, { detail: { errors: BACKEND_EVENT_ERRORS } }));
+    render(<IngestPage />);
+    await userEvent.click(screen.getByRole('tab', { name: /epcis 2\.0/i }));
+    const input = document.getElementById('epcis-file-upload') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File([JSON.stringify(EVENTS[0])], 'event.json', { type: 'application/json' })] },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
+    expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
+    expect(screen.getAllByText(JOINED)).toHaveLength(1);
+    expect(screen.queryAllByText(/^Event \d+:/)).toHaveLength(0);
+    expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
   });
 });
