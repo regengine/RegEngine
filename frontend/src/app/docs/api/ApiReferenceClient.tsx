@@ -370,15 +370,15 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 }
 
 const ERROR_CODES = [
-    { code: '400', desc: 'Bad Request - Missing Idempotency-Key or invalid parameters' },
-    { code: '401', desc: 'Unauthorized - Missing or invalid API key, or a missing or wrong ingest signature' },
-    { code: '402', desc: 'Payment Required - No active subscription for the workspace' },
-    { code: '403', desc: 'Forbidden - Key lacks the required scope, or tenant_id / X-Tenant-ID names a different workspace' },
-    { code: '404', desc: "Not Found - Resource doesn't exist" },
-    { code: '409', desc: 'Conflict - Idempotency-Key reused with different request bytes' },
-    { code: '422', desc: 'Unprocessable - Request body failed validation' },
-    { code: '429', desc: 'Too Many Requests - Rate limited' },
-    { code: '500', desc: 'Internal Error - Contact support' },
+    { code: '400', desc: 'Bad Request: Missing Idempotency-Key or invalid parameters' },
+    { code: '401', desc: 'Unauthorized: Missing or invalid API key, or a missing or wrong ingest signature' },
+    { code: '402', desc: 'Payment Required: No active subscription for the workspace' },
+    { code: '403', desc: 'Forbidden: Key lacks the required scope, or tenant_id / X-Tenant-ID names a different workspace' },
+    { code: '404', desc: "Not Found: Resource doesn't exist" },
+    { code: '409', desc: 'Conflict: Idempotency-Key reused with different request bytes' },
+    { code: '422', desc: 'Unprocessable: Request body failed validation' },
+    { code: '429', desc: 'Too Many Requests: Rate limited' },
+    { code: '500', desc: 'Internal Error: Contact support' },
 ];
 
 const RATE_LIMIT_HEADERS = [

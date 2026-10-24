@@ -12,7 +12,7 @@ export const MARKETING_APP_ROUTE_PREFIXES = [
 const INTERNAL_STORAGE_KEY = 're_internal';
 const SENSITIVE_ROUTE_PREFIXES = ['/sandbox/results', '/portal'] as const;
 const PUBLIC_MARKETING_SECTIONS = new Set([
-  '/about', '/alpha', '/blog', '/buyer-programs', '/case-studies',
+  '/about', '/alpha', '/blog', '/buyer-programs',
   '/compare', '/contact', '/demo', '/design-system', '/developers',
   '/docs', '/dpa', '/fsma', '/fsma-204', '/integrations', '/legal',
   '/pricing', '/privacy', '/product', '/proof', '/retailer-readiness',

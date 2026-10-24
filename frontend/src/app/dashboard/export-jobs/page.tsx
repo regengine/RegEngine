@@ -182,7 +182,7 @@ export default function ExportJobsPage() {
                                 className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="FDA Package">FDA Package</option>
-                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
+                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0 (Preview)</option>
                                 <option value="Audit Bundle">Audit Bundle</option>
                             </select>
                         </Field>

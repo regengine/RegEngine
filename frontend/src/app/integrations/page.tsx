@@ -52,7 +52,7 @@ const CATEGORY_META: Record<
   CapabilityCategory,
   { title: string; eyebrow: string; icon: typeof Shield }
 > = {
-  developer_api: { title: "Developer APIs", eyebrow: "REST, JSON events, EPCIS export", icon: Code },
+  developer_api: { title: "Developer APIs", eyebrow: "REST, JSON events, EPCIS (Preview) export", icon: Code },
   erp_warehouse: { title: "ERP & warehouse", eyebrow: "Files, extracts, mapping", icon: FileSpreadsheet },
   food_safety_iot: { title: "Food safety & IoT", eyebrow: "Audits, sensors, cold chain", icon: Thermometer },
   retailer_network: { title: "Retailer exports", eyebrow: "Outbound packages", icon: ShoppingCart },

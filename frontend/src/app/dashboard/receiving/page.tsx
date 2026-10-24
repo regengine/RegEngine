@@ -210,7 +210,7 @@ export default function ReceivingDockPage() {
                 quantity: item.quantity,
                 unit_of_measure: 'cases',
                 timestamp: item.scannedAt || new Date().toISOString(),
-                location_name: `Receiving Dock — ${session.supplier}`,
+                location_name: `Receiving Dock: ${session.supplier}`,
                 kdes: {
                     gtin: item.gtin || undefined,
                     lot_code: item.lotCode || undefined,

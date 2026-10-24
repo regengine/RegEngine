@@ -34,7 +34,6 @@ export const MARKETING_ALL_TOOLS_LINK: MarketingToolLink = {
 
 export const MARKETING_FOOTER_PRODUCT_LINKS: MarketingNavLink[] = [
     { label: "Pricing", href: "/pricing" },
-    { label: "Product Validation", href: "/case-studies" },
     { label: "Integrations", href: "/integrations" },
     { label: "Get Started", href: "/signup" },
 ];
