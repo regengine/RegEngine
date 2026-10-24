@@ -23,6 +23,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.deployment.ref || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   deployments: read
