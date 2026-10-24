@@ -11,7 +11,7 @@ on:
     types: [created, edited, deleted]
 
 concurrency:
-  group: pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  group: pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: true
 
 permissions:
@@ -385,12 +385,13 @@ jobs:
                   .replace(/^\*\*([^*]+)\*\*/, '$1')
                   .trim();
 
-                const markerMatch = trimmed.match(/^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/) ||
-                                    stripped.match(/^REVIEW: (PASS|BLOCKED) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/);
+                const markerMatch = trimmed.match(/^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m) ||
+                                    stripped.match(/^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m);
                 if (markerMatch) {
                   return {
                     type: 'MARKER',
-                    verdict: markerMatch[1],
+                    verdict: markerMatch[1] === 'FAIL' ? 'BLOCKED' : markerMatch[1],
+                    rawVerdict: markerMatch[1],
                     engine: markerMatch[2],
                     sha: markerMatch[3].toLowerCase(),
                     text: trimmed,
@@ -418,7 +419,7 @@ jobs:
                 const lines = body.split(/\r?\n/);
                 return lines.some(line => {
                   const parsed = parseVerdictLine(line);
-                  return parsed && (parsed.verdict === 'BLOCKED' || parsed.legacyVerdict === 'FAIL');
+                  return parsed && (parsed.verdict === 'BLOCKED' || parsed.rawVerdict === 'FAIL' || parsed.legacyVerdict === 'FAIL');
                 });
               }
 
@@ -427,7 +428,7 @@ jobs:
                 const lines = body.split(/\r?\n/);
                 for (const line of lines) {
                   const parsed = parseVerdictLine(line);
-                  if (parsed && (parsed.verdict === 'BLOCKED' || parsed.legacyVerdict === 'FAIL')) {
+                  if (parsed && (parsed.verdict === 'BLOCKED' || parsed.rawVerdict === 'FAIL' || parsed.legacyVerdict === 'FAIL')) {
                     return cleanText(parsed.text, maxLen);
                   }
                 }
@@ -580,19 +581,27 @@ jobs:
                 }
               }
 
-              // Track verdicts per (engine, sha) and latest verdict per engine.
-              // A BLOCKED/FAIL by engine X is cleared only by a later PASS by the same engine X.
+              // Track verdicts per (engine, sha) and latest blocking verdict per engine.
+              // A BLOCKED or FAIL verdict from an engine is cleared only by a later PASS from
+              // the same engine whose sha matches the current head (isShaMatch(v.sha, headSha)).
+              // A PASS whose sha does not match head must never clear a block.
+              // An engine's latest BLOCKED/FAIL on any head still counts as blocking unless
+              // a later head-matching PASS from that engine exists.
               const verdictsByEngineSha = new Map();
-              const latestVerdictByEngine = new Map();
+              const latestBlockedVerdictByEngine = new Map();
 
               for (const v of allVerdicts) {
                 verdictsByEngineSha.set(`${v.engine}:${v.sha}`, v);
-                latestVerdictByEngine.set(v.engine, v);
+                if (v.status === 'BLOCKED' || v.status === 'FAIL') {
+                  latestBlockedVerdictByEngine.set(v.engine, v);
+                } else if (v.status === 'PASS' && isShaMatch(v.sha, headSha)) {
+                  latestBlockedVerdictByEngine.delete(v.engine);
+                }
               }
 
               const blockedEngines = [];
-              for (const [engine, verdict] of latestVerdictByEngine.entries()) {
-                if (verdict.status === 'BLOCKED') {
+              for (const [engine, verdict] of latestBlockedVerdictByEngine.entries()) {
+                if (verdict.status === 'BLOCKED' || verdict.status === 'FAIL') {
                   blockedEngines.push(verdict);
                 }
               }

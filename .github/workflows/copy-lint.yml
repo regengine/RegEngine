@@ -13,6 +13,10 @@ on:
       - 'scripts/copy-lint/**'
       - '.github/workflows/copy-lint.yml'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -25,6 +29,6 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
       - run: node --test scripts/copy-lint/check-copy.test.mjs
       - run: node scripts/copy-lint/check-copy.mjs . --github

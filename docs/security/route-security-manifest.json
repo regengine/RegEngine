@@ -3022,6 +3022,19 @@
       "test_adapter": "tenant_dual_session_csrf"
     },
     {
+      "operation": "admin:GET:/v1/supplier/gap-time-to-fix",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/gap-time-to-fix",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
       "operation": "admin:GET:/v1/supplier/gaps",
       "owner": "admin",
       "method": "GET",
@@ -4905,13 +4918,13 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 254,
+    "enabled_operation_count": 255,
     "disabled_operation_count": 180,
     "disabled_unique_path_count": 163,
     "enabled_by_classification": {
       "global-sysadmin": 16,
       "public": 30,
-      "tenant-scoped": 201,
+      "tenant-scoped": 202,
       "workload-only": 7
     }
   }
