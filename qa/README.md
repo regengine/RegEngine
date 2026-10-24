@@ -8,6 +8,7 @@ These checks **block merge**. No exceptions, no softening.
 |---|---|---|
 | Merkle chain integrity | Every hash cryptographically verified against its predecessor | `fsma-lite-check.js` |
 | FSMA 204 CTE count | Must reference 7 CTEs, never 6 | `fsma-lite-check.js` |
+| FSMA 204 CTE count (standalone) | Fails if fsma-204/page.tsx says 6 CTEs or doesn't state 7 | `fsma-cte-count-check.js` |
 | KDE completeness | All required fields present on every event | `fsma-lite-check.js` |
 | Cross-format consistency | JSON, CSV, verification report, and manifest must agree on every hash | `full-flow.js` |
 | Export artifact presence | All 5 files exist, valid format, correct record counts | `export-validate.js` |

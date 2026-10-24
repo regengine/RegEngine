@@ -46,7 +46,7 @@ Current public positioning for the FSMA 204 traceability product.
 **Headline:** Inflow prepares the data. The Engine proves it.
 
 **Steps:**
-1. Preflight supplier data: Upload, paste, or simulate supplier CSV, spreadsheet, EDI-style, or API-shaped traceability records.
+1. Preflight supplier data: Upload, paste, or simulate supplier CSV, spreadsheet, or API-shaped traceability records.
 2. The Engine evaluates: FSMA 204 KDE and CTE rules produce readiness scores, blocked states, and fix queue tasks.
 3. Commit only clean evidence: Simulation, preflight, staging, and production evidence are separated by an explicit commit gate.
 
@@ -64,7 +64,7 @@ Supplier Data -> Inflow Lab -> Engine -> Commit Gate -> Evidence + Export
 
 ### Feature Copy
 
-**Supplier Data Readiness:** Upload or simulate CSV, spreadsheet, EDI-style, API, and supplier portal records in Inflow before they touch production evidence. Saved integration profiles preserve supplier-specific field mappings so the same feed can be replayed and improved.
+**Supplier Data Readiness:** Upload or simulate CSV, spreadsheet, API, and supplier portal records in Inflow before they touch production evidence. Saved integration profiles preserve supplier-specific field mappings so the same feed can be replayed and improved.
 
 **Preflight Validation:** The Engine evaluates each CTE against FSMA 204 KDE requirements, lot linkage expectations, malformed values, duplicate risks, and export readiness impact. Failures generate plain-language remediation work instead of disappearing into a rejected payload.
 
