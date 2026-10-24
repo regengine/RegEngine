@@ -3,10 +3,10 @@
 Locks:
 - _grade / _status helpers — all threshold bands
 - _query_scoring_data: happy path with gaps, chain_length=0 path
-  (no max_seq query), SessionLocal raise → None, execute raise → None
+  (no max_seq query), SessionLocal raise and execute raise propagate (not None)
 - Pydantic models — RecallDimension, RecallReport
-- GET /{tenant_id}/report: demo mode (None scoring), demo mode
-  (cte_count=0), real mode (low suppliers + no chain + no export),
+- GET /{tenant_id}/report: cte_count=0 → empty report; DB error → 503 (never no_data),
+  real mode (low suppliers + no chain + no export),
   real mode (medium suppliers + chain gaps + has export), real mode
   (high suppliers + clean chain + has export)
 
@@ -16,6 +16,7 @@ Issue: #1342
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from app import recall_report as rr
@@ -206,7 +207,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data is not None
         assert data["cte_count"] == 50
         assert data["tlc_count"] == 8
@@ -224,7 +225,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["chain_gap_count"] == 0
 
     def test_has_export_false_when_count_zero(self, monkeypatch):
@@ -233,7 +234,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["has_export"] is False
 
     def test_chain_length_zero_skips_max_seq(self, monkeypatch):
@@ -249,7 +250,7 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data["chain_length"] == 0
         assert data["chain_gap_count"] == 0
 
@@ -261,24 +262,25 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        data = _query_scoring_data("t1")
+        data = _query_scoring_data(str(uuid4()))
         assert data is not None
         assert data["cte_count"] == 0
         assert data["chain_length"] == 0
         assert data["chain_gap_count"] == 0
 
-    def test_sessionlocal_raises_returns_none(self, monkeypatch):
-        """SessionLocal() itself raising is caught and returns None."""
+    def test_sessionlocal_raises_propagates(self, monkeypatch):
+        """SessionLocal() raising is NOT swallowed into None/no-data."""
         import shared.database as db_mod
 
         def _boom():
             raise RuntimeError("connection refused")
 
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
-        assert _query_scoring_data("t1") is None
+        with pytest.raises(RuntimeError):
+            _query_scoring_data(str(uuid4()))
 
-    def test_execute_raises_returns_none(self, monkeypatch):
-        """An execute() exception is caught and returns None."""
+    def test_execute_raises_propagates_and_closes(self, monkeypatch):
+        """An execute() exception propagates; db.close() still runs."""
         sess = _ScoringSession(
             raise_on={"COUNT(*) FROM fsma.traceability_events": ValueError("boom")},
         )
@@ -286,41 +288,66 @@ class TestQueryScoringData:
 
         monkeypatch.setattr(db_mod, "SessionLocal", lambda: sess)
 
-        assert _query_scoring_data("t1") is None
-        # db.close() was still called via finally
+        with pytest.raises(ValueError):
+            _query_scoring_data(str(uuid4()))
         assert sess.closed is True
 
 
 # ---------------------------------------------------------------------------
-# GET /{tenant_id}/report — demo mode
+# GET /{tenant_id}/report — tenant with no data gets an honest empty report
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateReportDemoMode:
-    def test_demo_mode_when_scoring_returns_none(self, client, monkeypatch):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: None)
-
-        r = client.get("/api/v1/recall/acme/report")
-        assert r.status_code == 200
-        body = r.json()
-        assert body["demo_mode"] is True
-        assert body["demo_disclaimer"] is not None
-        assert body["tenant_id"] == "acme"
-        # Demo mode uses hardcoded "4.2 hours" estimate
-        assert "4.2 hours" in body["time_to_respond_estimate"]
-        # Demo dimensions total is (78+85+95+65+88+72)/6 = 80.5 → 80
-        assert body["overall_score"] == 80
-
-    def test_demo_mode_when_cte_count_zero(self, client, monkeypatch):
+class TestGenerateReportNoData:
+    def test_zero_ctes_returns_empty_report(self, client, monkeypatch):
         monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: {"cte_count": 0})
+        tenant_id = str(uuid4())
 
-        r = client.get("/api/v1/recall/empty-tenant/report")
+        r = client.get(f"/api/v1/recall/{tenant_id}/report")
         assert r.status_code == 200
         body = r.json()
-        assert body["demo_mode"] is True
-        assert body["demo_disclaimer"] is not None
-        # Overall score is demo dimensions average
-        assert body["overall_grade"] in {"B", "C"}
+        assert body["tenant_id"] == tenant_id
+        assert body["demo_mode"] is False
+        assert body["demo_disclaimer"] is None
+        assert body["dimensions"] == []
+        assert body["action_items"] == []
+        assert body["overall_score"] == 0
+        assert body["overall_grade"] == "N/A"
+        assert body["overall_status"] == "no_data"
+        assert body["executive_summary"].startswith("No data yet")
+        assert body["time_to_respond_estimate"].startswith("Not yet measured")
+
+
+# ---------------------------------------------------------------------------
+# GET /{tenant_id}/report — a DB error is a 5xx, never an empty "no_data" report
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateReportDbError:
+    @pytest.mark.parametrize("exc_type", [RuntimeError, OSError, ValueError])
+    def test_db_error_returns_5xx_not_no_data(self, client, monkeypatch, exc_type):
+        def _fail(tid):
+            raise exc_type(str(uuid4()))
+
+        monkeypatch.setattr(rr, "_query_scoring_data", _fail)
+
+        r = client.get(f"/api/v1/recall/{uuid4()}/report")
+        assert r.status_code == 503
+        body = r.json()
+        assert "overall_status" not in body
+        assert "no_data" not in r.text
+        assert "No data yet" not in r.text
+
+    def test_sessionlocal_failure_end_to_end_is_5xx(self, client, monkeypatch):
+        import shared.database as db_mod
+
+        def _boom():
+            raise RuntimeError(str(uuid4()))
+
+        monkeypatch.setattr(db_mod, "SessionLocal", _boom)
+        r = client.get(f"/api/v1/recall/{uuid4()}/report")
+        assert r.status_code == 503
+        assert "no_data" not in r.text
 
 
 # ---------------------------------------------------------------------------
@@ -575,17 +602,31 @@ class TestGenerateReportRealMode:
 
 class TestReportShape:
     def test_summary_and_citations_present(self, client, monkeypatch):
-        monkeypatch.setattr(rr, "_query_scoring_data", lambda tid: None)
-        r = client.get("/api/v1/recall/abc/report")
+        # Real-mode scoring with gaps; no data is invented by the report.
+        monkeypatch.setattr(
+            rr,
+            "_query_scoring_data",
+            lambda tid: {
+                "cte_count": 1,
+                "tlc_count": 0,
+                "cte_types": 0,
+                "has_export": False,
+                "supplier_count": 0,
+                "chain_length": 0,
+                "chain_gap_count": 0,
+            },
+        )
+        tenant_id = str(uuid4())
+        r = client.get(f"/api/v1/recall/{tenant_id}/report")
         body = r.json()
 
         # Executive summary mentions tenant id + score
-        assert "abc" in body["executive_summary"]
+        assert tenant_id in body["executive_summary"]
         assert "21 CFR 1.1455" in body["executive_summary"] or "21 CFR 1.1455" in " ".join(body["regulatory_citations"])
         # Regulatory citations fully populated
         assert len(body["regulatory_citations"]) == 4
-        # Action items populated
-        assert len(body["action_items"]) >= 5
+        # Action items derived from the tenant's own sub-80 dimensions
+        assert body["action_items"]
         # All action items have required fields
         for item in body["action_items"]:
             assert item["priority"] in {"HIGH", "MEDIUM", "LOW"}
