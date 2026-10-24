@@ -168,7 +168,7 @@ jobs:
                 repo: context.repo.repo,
                 sha: evaluatedSha,
                 state: 'failure',
-                context: 'Head SHA Check Guard',
+                context: 'Head SHA Check Guard / status',
                 description: 'Head moved',
                 target_url: targetUrl,
               });
@@ -322,7 +322,7 @@ jobs:
                   repo: context.repo.repo,
                   sha: evaluatedSha,
                   state: 'failure',
-                  context: 'Head SHA Check Guard',
+                  context: 'Head SHA Check Guard / status',
                   description: 'Head moved',
                   target_url: targetUrl,
                 });
@@ -383,7 +383,7 @@ jobs:
                 repo: context.repo.repo,
                 sha: evaluatedSha,
                 state: 'success',
-                context: 'Head SHA Check Guard',
+                context: 'Head SHA Check Guard / status',
                 description: 'All required checks passed on head SHA',
                 target_url: targetUrl,
               });
@@ -402,7 +402,7 @@ jobs:
                 repo: context.repo.repo,
                 sha: evaluatedSha,
                 state: 'failure',
-                context: 'Head SHA Check Guard',
+                context: 'Head SHA Check Guard / status',
                 description: statusDesc,
                 target_url: targetUrl,
               });
@@ -422,7 +422,7 @@ jobs:
                 repo: context.repo.repo,
                 sha: evaluatedSha,
                 state: 'pending',
-                context: 'Head SHA Check Guard',
+                context: 'Head SHA Check Guard / status',
                 description: statusDesc,
                 target_url: targetUrl,
               });
