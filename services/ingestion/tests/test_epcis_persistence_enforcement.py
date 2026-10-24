@@ -179,13 +179,13 @@ def _make_prepared() -> dict:
             "tlc": "",
             "quantity": 1.0,
             "unit_of_measure": "",
-            "event_time": "2026-01-01T00:00:00+00:00",
+            "event_time": "present",
         },
         "kdes": [],
         "alerts": [],
         "kde_map": {"fsma_validation_status": "passed"},
         "quantity_value": 1.0,
-        "event_time": "2026-01-01T00:00:00+00:00",
+        "event_time": "present",
     }
 
 
@@ -286,7 +286,7 @@ class TestEnforceCteOnly:
         assert _FakeCTEPersistence.last_called is True
 
     def test_canonical_error_raises_500_under_enforcement(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Finding A (Suite 4 audit 2026-05-12): under cte_only a
+        """Finding A (Suite 4 audit): under cte_only a
         pre-eval crash must produce HTTPException(500), NOT a silent
         accept. The previous "swallow → no-verdict → accept" behavior
         defeated the compliance product — every broken rule looked
