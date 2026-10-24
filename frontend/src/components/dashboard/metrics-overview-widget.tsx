@@ -86,7 +86,7 @@ export function MetricsOverviewWidget({
     <div className="space-y-2">
       {metricsError && (
         <p role="status" className="text-label text-re-text-muted">
-          Refresh failed — showing the last loaded figures.{" "}
+          Refresh failed. Showing the last loaded figures.{" "}
           <button
             type="button"
             onClick={() => void refetch()}

@@ -70,7 +70,7 @@ const COMPARISON_DATA: ComparisonRow[] = [
         repositrak: 'Verify with vendor',
     },
     {
-        feature: 'EPCIS 2.0 export',
+        feature: 'EPCIS 2.0 (Preview) export',
         regengine: true,
         trustwell: 'Verify with vendor',
         safetychain: 'Verify with vendor',
@@ -158,10 +158,10 @@ const DIFFERENTIATORS = [
     },
     {
         icon: Workflow,
-        title: 'EPCIS 2.0 export',
+        title: 'EPCIS 2.0 (Preview) export',
         description:
-            "EPCIS 2.0 export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
-        detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
+            "EPCIS 2.0 (Preview) export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
+        detail: 'We started on EPCIS 2.0 (Preview); verify EPCIS (Preview) coverage with each vendor for your stack.',
     },
     {
         icon: CheckCircle,
@@ -582,17 +582,17 @@ HTTP 201
                     <div className="grid items-center gap-8 md:grid-cols-2">
                         <div>
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
-                                EPCIS 2.0 export
+                                EPCIS 2.0 (Preview) export
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a supported schema where the enabled workflow and source data allow it.
+                                EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 (Preview) as a supported schema where the enabled workflow and source data allow it.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
+                                Verify EPCIS (Preview) coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'EPCIS 2.0 XML + JSON serialization',
+                                    'EPCIS 2.0 (Preview) XML + JSON serialization',
                                     'Traceability event export support',
                                     'No third-party conversion needed',
                                     'Designed for buyer and trading-partner interoperability checks',
@@ -604,27 +604,6 @@ HTTP 201
                                 ))}
                             </ul>
                         </div>
-                        <Card padding="spacious" className="hidden md:block">
-                            <code className="block overflow-auto font-mono text-small leading-relaxed text-re-text-secondary">
-                                {`<events>
-  <EPCISEvent>
-    <eventTime>2026-04-05T...</eventTime>
-    <eventType>
-      ObjectEvent
-    </eventType>
-    <epcList>
-      <epc>
-        urn:epc:id:sgtin:...
-      </epc>
-    </epcList>
-    <action>OBSERVE</action>
-    <bizStep>
-      urn:epcglobal:cbv:bizstep:...
-    </bizStep>
-  </EPCISEvent>
-</events>`}
-                            </code>
-                        </Card>
                     </div>
 
                     {/* SMB Focus */}

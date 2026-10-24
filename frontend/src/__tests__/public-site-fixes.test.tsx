@@ -159,15 +159,8 @@ describe('public site launch-blocker fixes', () => {
         });
     });
 
-    it('labels synthetic validation honestly in the footer', () => {
-        expect(MARKETING_FOOTER_PRODUCT_LINKS).toContainEqual({
-            label: 'Product Validation',
-            href: '/case-studies',
-        });
-        expect(MARKETING_FOOTER_PRODUCT_LINKS).not.toContainEqual({
-            label: 'Case Studies',
-            href: '/case-studies',
-        });
+    it('keeps the hidden case-studies route out of the footer', () => {
+        expect(MARKETING_FOOTER_PRODUCT_LINKS.map((link) => link.href)).not.toContain('/case-studies');
     });
 
     it('keeps public archive posture dates current for the demo workspace', () => {

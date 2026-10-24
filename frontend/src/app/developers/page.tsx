@@ -43,7 +43,7 @@ const capabilities = [
     {
         Icon: FileSpreadsheet,
         title: 'Records Export',
-        description: 'Generate FDA-oriented sortable spreadsheet records and EPCIS 2.0 event exports where the enabled workflow and source data support them.',
+        description: 'Generate FDA-oriented sortable spreadsheet records and EPCIS 2.0 (Preview) event exports where the enabled workflow and source data support them.',
     },
     {
         Icon: BarChart3,

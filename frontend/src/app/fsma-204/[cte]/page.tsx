@@ -423,7 +423,8 @@ export default async function CTELandingPage({
         title="How RegEngine Helps"
         description={
           <>
-            Upload your {data.name.toLowerCase()} data to the sandbox and
+            Upload your {data.name.toLowerCase()} data to{" "}
+            <Link href="/ingest" className="text-re-brand underline underline-offset-[3px]">RegEngine</Link> and
             RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
           </>
         }
@@ -453,7 +454,7 @@ export default async function CTELandingPage({
             See it in action.
           </h2>
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Upload a sample {data.name.toLowerCase()} file to the RegEngine
+            Upload your {data.name.toLowerCase()} file to the RegEngine
             sandbox and get an instant validation report. Free, no signup
             required.
           </p>

@@ -97,7 +97,7 @@ const TIMELINE = [
       { label: 'Exceptions resolved', value: '3 of 3' },
       { label: 'Package version', value: 'v1 (immutable)' },
       { label: 'SHA-256 manifest hash', value: 'a7c3e9f2...d1b84c' },
-      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD' },
+      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 (Preview) JSON-LD' },
     ],
   },
   {
@@ -269,10 +269,6 @@ export default function WalkthroughPage() {
               <Link href="/security">See Security Details</Link>
             </Button>
           </div>
-          <p className="mt-6 text-ui text-re-text-secondary">
-            See the underlying transformation step by step at{' '}
-            <Link href="/proof/transformation" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof/transformation</Link>.
-          </p>
         </div>
       </Container>
     </div>
