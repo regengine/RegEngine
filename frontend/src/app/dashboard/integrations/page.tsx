@@ -66,6 +66,7 @@ const STATUS_TONES: Record<CustomerVisibleStatus, BadgeTone> = {
     export_supported: 'info',
     file_import_supported: 'info',
     pilot: 'warning',
+    preview: 'warning',
     design_partner: 'warning',
     custom_scoped: 'neutral',
     preparation: 'neutral',

@@ -2,6 +2,7 @@ export type CustomerVisibleStatus =
     | 'implemented'
     | 'supported'
     | 'pilot'
+    | 'preview'
     | 'design_partner'
     | 'export_supported'
     | 'file_import_supported'
@@ -121,6 +122,7 @@ export const STATUS_LABELS: Record<CustomerVisibleStatus, string> = {
     implemented: 'Implemented',
     supported: 'Supported',
     pilot: 'Pilot',
+    preview: 'Preview',
     design_partner: 'Design Partner',
     export_supported: 'Export Supported',
     file_import_supported: 'File Import Supported',
@@ -245,7 +247,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'RegEngine can prepare EPCIS-oriented export packages for retailer submission workflows.',
+        customer_copy: 'RegEngine can prepare EPCIS (Preview) export packages for retailer submission workflows.',
         evidence_url: '/trust',
     },
     {
@@ -305,17 +307,17 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'pilot',
         delivery_mode: 'native_api',
         integration_type: 'api_based_custom',
-        customer_copy: 'RegEngine-owned FSMA 204 simulator that posts events to the JSON events API for demos, contract tests, and developer validation.',
+        customer_copy: 'RegEngine-owned FSMA 204 simulator that posts generated FSMA 204 events to the JSON events API; the inflow-lab connector runs against it in contract tests.',
         evidence_url: '/docs/connectors/inflow-lab',
     },
     {
         id: 'epcis',
-        name: 'GS1 EPCIS 2.0',
+        name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',
-        status: 'export_supported',
+        status: 'preview',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'JSON-LD EPCIS export and EPCIS ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {

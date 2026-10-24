@@ -23,6 +23,8 @@ import {
   type CustomerVisibleStatus,
 } from "@/lib/customer-readiness";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NO_DATA_YET } from "@/lib/empty-values";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Container } from "@/components/layout/container";
@@ -91,6 +93,7 @@ const STATUS_TONE: Record<CustomerVisibleStatus, BadgeTone> = {
   implemented: "success",
   supported: "success",
   pilot: "info",
+  preview: "info",
   design_partner: "info",
   export_supported: "neutral",
   file_import_supported: "neutral",
@@ -203,6 +206,22 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="space-y-8">
+            {grouped.length === 0 && (
+              <EmptyState
+                title={NO_DATA_YET}
+                description="No intake paths are listed yet. Send records by CSV upload or the JSON events API."
+                action={
+                  <Button asChild size="sm">
+                    <Link href="/ingest" className="no-underline">Upload a CSV</Link>
+                  </Button>
+                }
+                secondaryAction={
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href="/docs/api" className="no-underline">JSON events API docs</Link>
+                  </Button>
+                }
+              />
+            )}
             {grouped.map((group) => {
               const CategoryIcon = group.icon;
 

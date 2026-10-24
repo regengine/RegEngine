@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
+import { ArrowRight, Database, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/layout/section";
@@ -37,7 +37,6 @@ const controls = [
 
 const links = [
   { icon: Terminal, label: "Open verifier", href: "/verify" },
-  { icon: Download, label: "Download proof artifacts", href: "/proof" },
   { icon: FileCode2, label: "Security details", href: "/trust/architecture" },
   { icon: KeyRound, label: "Contact security", href: "/contact" },
 ];

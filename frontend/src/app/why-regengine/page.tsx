@@ -161,7 +161,7 @@ const DIFFERENTIATORS = [
         title: 'EPCIS 2.0 (Preview) export',
         description:
             "EPCIS 2.0 (Preview) export for trading-partner interoperability. Verify each enabled workflow against your retailer and buyer requirements.",
-        detail: 'We started on EPCIS 2.0; verify EPCIS coverage with each vendor for your stack.',
+        detail: 'We started on EPCIS 2.0 (Preview); verify EPCIS (Preview) coverage with each vendor for your stack.',
     },
     {
         icon: CheckCircle,
@@ -588,7 +588,7 @@ HTTP 201
                                 EPCIS 2.0 can support trading-partner interoperability. RegEngine treats EPCIS 2.0 (Preview) as a supported schema where the enabled workflow and source data allow it.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
+                                Verify EPCIS (Preview) coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
                             </p>
                             <ul className="space-y-2">
                                 {[

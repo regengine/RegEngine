@@ -56,14 +56,8 @@ describe('public proof-bundle trust copy', () => {
         }
     });
 
-    it('/proof states the checks do not authenticate the issuer', () => {
-        const text = renderedText(<ProofPage />);
-
-        expect(text).toMatch(/do not authenticate the issuer/i);
-
-        for (const claim of UNBACKED_AUTHENTICITY_CLAIMS) {
-            expect(text).not.toMatch(claim);
-        }
+    it('/proof is hidden until it can publish artifacts from a real export', () => {
+        expect(() => ProofPage()).toThrow();
     });
 
     it('verify_chain.py documents that the uploaded manifest is an untrusted commitment', () => {
