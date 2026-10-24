@@ -103,8 +103,8 @@ export default function CaseStudy() {
                     Product validation · synthetic data modeled on industry patterns. Not a named-customer case study.
                 </Callout>
                 <p className="mb-6 text-ui text-re-text-secondary">
-                    These metrics are reproducible. Try the same recall drill at{' '}
-                    <Link href="/proof/recall-drill" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">/proof/recall-drill</Link>.
+                    The public recall-drill endpoint at{' '}
+                    <Link href="/proof/recall-drill" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">/proof/recall-drill</Link> currently returns no drill data and does not reproduce these metrics.
                 </p>
                 <p className="mb-10 max-w-[68ch] text-body text-re-text-secondary">
                     We ran a synthetic validation workflow modeled on leafy-greens supply chains (from Salinas Valley
