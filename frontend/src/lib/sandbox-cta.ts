@@ -41,9 +41,9 @@ export function sandboxCta(): SandboxCta {
     // when the experimental sandbox router is enabled on the backend.
     return {
         enabled: false,
-        href: '/demo',
-        label: 'Explore the interactive demo',
+        href: '/ingest',
+        label: 'Upload your CSV',
         blurb:
-            'Walk through a synthetic FSMA 204 evidence-layer demo. No signup required.',
+            'Upload your own traceability records as CSV to check them against FSMA 204.',
     };
 }
