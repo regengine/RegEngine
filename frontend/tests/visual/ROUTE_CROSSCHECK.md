@@ -24,11 +24,11 @@ the source list.
 
 ## Coverage statement
 
-`routes.json` covers all 155 source-list routes plus `/`:
+`routes.json` covers all 155 source-list routes plus `/`, minus `/sandbox/results/[id]` (deleted in #3557):
 
 - `public`: 78 (designer crawl minus the 3 deliberate exclusions; was 82 before reconciliation — see below)
 - `authOnly`: 58
-- `skippedDynamic`: 5 (`/fsma-204/[cte]`, `/ingest/results/[id]`, `/portal/[portalId]`, `/requests/[id]`, `/sandbox/results/[id]`)
+- `skippedDynamic`: 4 (`/fsma-204/[cte]`, `/ingest/results/[id]`, `/portal/[portalId]`, `/requests/[id]`; `/sandbox/results/[id]` was removed when #3557 deleted it)
 - `expectRedirectOr404`: 14 (was 10 before reconciliation)
 - excluded entirely: `/auth/sso/mock` (mock SSO fixture; reason in `excludedReason`, visited by no spec)
 
@@ -53,7 +53,7 @@ params, so every non-dynamic route was crawled exactly once, including
 |---|---|---|
 | `/auth/sso/mock` | Crawled 200 | Excluded entirely (unchanged): mock SSO fixture page (`CHROMELESS_EXACT_ROUTES`). Never screenshotted or visited by monitoring, regardless of status. |
 | `/demo` | Removed by #3543 | Stays in `expectRedirectOr404` (unchanged). /demo is removed by #3543: the page is deleted, so the assertion now passes. |
-| `/sandbox` | Crawled 200 | Stays in `expectRedirectOr404` (unchanged): demo surface, flag-gated by `isSandboxEnabled()`. Same as `/demo`: flags until retired or reclassified. |
+| `/sandbox` | Crawled 200 (before #3557) | Stays in `expectRedirectOr404`. The route was deleted in #3557 (no `src/app/sandbox/`), so it is now expected to 404 and the assertion should pass. |
 
 ### In our `public`, not in the designer list (4) — adopted, moved to `expectRedirectOr404`
 
