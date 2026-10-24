@@ -56,7 +56,7 @@ const RETENTION_TIMELINE = [
 ];
 const EXPORT_FORMATS = [
     {
-        format: 'EPCIS 2.0 JSON-LD',
+        format: 'EPCIS 2.0 JSON-LD (Preview)',
         standard: 'GS1 industry standard',
         useCase: 'Interoperable with other FSMA 204 platforms, trading partner systems, and FDA submissions',
         icon: FileCheck,
@@ -96,7 +96,7 @@ const ARCHIVE_NOTES = [
     },
     {
         title: 'No vendor lock-in',
-        body: 'Exports are intended to use industry-standard formats such as EPCIS 2.0, FDA spreadsheet layouts, and CSV. Format coverage depends on the workflow enabled for your account.',
+        body: 'Exports are intended to use industry-standard formats such as EPCIS 2.0 (Preview), FDA spreadsheet layouts, and CSV. Format coverage depends on the workflow enabled for your account.',
     },
 ];
 

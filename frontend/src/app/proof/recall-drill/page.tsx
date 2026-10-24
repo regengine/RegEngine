@@ -7,7 +7,6 @@ import {
     Download,
     CheckCircle2,
     Clock,
-    ArrowRight,
     RotateCcw,
     Lock,
 } from 'lucide-react';
@@ -17,9 +16,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardHeader } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { StatTile } from '@/components/ui/stat-tile';
+import { NO_DATA_YET } from '@/lib/empty-values';
 
-const RECALL_CSV_URL = '/samples/sample_recall_drill.csv';
 const PROOF_RECALL_ENDPOINT = '/api/ingestion/api/v1/proof/recall-drill';
 
 type DrillStep = {
@@ -45,80 +45,6 @@ type RecallDrillResponse = {
     timestamp: string;
 };
 
-const DEFAULT_DRILL_STEPS: DrillStep[] = [
-    {
-        label: 'Identifying source lot',
-        detailLines: [
-            'Loaded contaminated lot: SV-20240115-001 (Romaine Lettuce, 500 cases)',
-            'Origin: Sunny Valley Farms (GLN 1234567890128)',
-        ],
-        durationMs: 1200,
-        status: 'ok',
-    },
-    {
-        label: 'Tracing forward through 7 CTEs',
-        detailLines: [
-            'CTE-1 HARVESTING → CTE-2 COOLING → CTE-3 INITIAL_PACKING',
-            'CTE-4 SHIPPING → CTE-5 RECEIVING → CTE-6 TRANSFORMATION → CTE-7 SHIPPING',
-            'Resolved 2 child lots (FC-20240116-A, FC-20240116-B) at transformation node',
-        ],
-        durationMs: 2400,
-        status: 'ok',
-    },
-    {
-        label: 'Walking downstream graph edges',
-        detailLines: [
-            'Visited 11 events across 5 facilities',
-            'Reached 3 receivers: Metro Foods, Valley Wholesale, SuperMart #42',
-        ],
-        durationMs: 1800,
-        status: 'ok',
-    },
-    {
-        label: 'Generating FDA-oriented sortable recall CSV from sample data',
-        detailLines: [
-            'Wrote 21 CFR §§1.1325 to 1.1350 Key Data Elements for each downstream lot',
-            'Hash-anchored each record (SHA-256 chain integrity preserved)',
-        ],
-        durationMs: 1600,
-        status: 'ok',
-    },
-];
-
-/* Final trace nodes used in the result panel diagram. */
-type TraceNode = {
-    id: string;
-    facility: string;
-    cte: string;
-    lot: string;
-    qty: string;
-};
-
-const TRACE_NODES: TraceNode[] = [
-    { id: 'h', facility: 'Sunny Valley Farms', cte: 'HARVESTING', lot: 'SV-20240115-001', qty: '500 cs' },
-    { id: 's1', facility: 'Sunny Valley Farms', cte: 'SHIPPING', lot: 'SV-20240115-001', qty: '500 cs' },
-    { id: 'r1', facility: 'Fresh Cut Co', cte: 'RECEIVING', lot: 'SV-20240115-001', qty: '500 cs' },
-    { id: 't', facility: 'Fresh Cut Co', cte: 'TRANSFORMATION', lot: 'FC-20240116-A / -B', qty: '250 + 250 cs' },
-    { id: 's2', facility: 'Fresh Cut Co', cte: 'SHIPPING', lot: 'FC-20240116-A', qty: '100 cs' },
-    { id: 'r2', facility: 'Metro Foods', cte: 'RECEIVING', lot: 'FC-20240116-A', qty: '100 cs' },
-    { id: 's3', facility: 'Metro Foods', cte: 'SHIPPING', lot: 'FC-20240116-A', qty: '50 cs' },
-    { id: 'r3', facility: 'SuperMart #42', cte: 'RECEIVING', lot: 'FC-20240116-A', qty: '50 cs' },
-];
-
-const DEFAULT_DRILL_RESPONSE: RecallDrillResponse = {
-    steps: DEFAULT_DRILL_STEPS.map((step) => ({
-        name: step.label,
-        duration_ms: step.durationMs,
-        status: step.status,
-        detail: step.detailLines.join(' '),
-    })),
-    time_to_trace_seconds: DEFAULT_DRILL_STEPS.reduce((acc, s) => acc + s.durationMs, 0) / 1000,
-    output_csv_url: RECALL_CSV_URL,
-    lot_code: 'SV-20240115-001',
-    fda_24h_mandate_seconds: 86400,
-    timestamp: '',
-};
-
 type DrillState = 'idle' | 'loading' | 'running' | 'done';
 
 function normalizeStep(step: RecallDrillApiStep): DrillStep {
@@ -137,7 +63,7 @@ function normalizeDrill(data: RecallDrillResponse): {
     const steps = data.steps.map(normalizeStep).filter((step) => step.durationMs >= 0);
     return {
         response: data,
-        steps: steps.length > 0 ? steps : DEFAULT_DRILL_STEPS,
+        steps,
     };
 }
 
@@ -149,8 +75,8 @@ export default function RecallDrillPage() {
     const [state, setState] = useState<DrillState>('idle');
     const [activeStep, setActiveStep] = useState(-1);
     const [elapsedMs, setElapsedMs] = useState(0);
-    const [drill, setDrill] = useState<RecallDrillResponse>(DEFAULT_DRILL_RESPONSE);
-    const [drillSteps, setDrillSteps] = useState<DrillStep[]>(DEFAULT_DRILL_STEPS);
+    const [drill, setDrill] = useState<RecallDrillResponse | null>(null);
+    const [drillSteps, setDrillSteps] = useState<DrillStep[]>([]);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const startedAtRef = useRef<number | null>(null);
     const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -222,7 +148,11 @@ export default function RecallDrillPage() {
             const normalized = normalizeDrill(payload);
             setDrill(normalized.response);
             setDrillSteps(normalized.steps);
-            runAnimation(normalized.steps);
+            if (normalized.steps.length > 0) {
+                runAnimation(normalized.steps);
+            } else {
+                setState('done');
+            }
         } catch {
             setState('idle');
             setErrorMessage(
@@ -238,15 +168,16 @@ export default function RecallDrillPage() {
         setActiveStep(-1);
         setElapsedMs(0);
         setErrorMessage(null);
+        setDrill(null);
+        setDrillSteps([]);
     }
 
     const elapsedS = (elapsedMs / 1000).toFixed(1);
-    const totalDurationS = drill.time_to_trace_seconds || (
+    const totalDurationS = drill?.time_to_trace_seconds ?? (
         drillSteps.reduce((acc, s) => acc + s.durationMs, 0) / 1000
     );
     const finalSeconds = state === 'done' ? totalDurationS : Number(elapsedS);
-    const outputCsvUrl = drill.output_csv_url || RECALL_CSV_URL;
-    const fdaMandateSeconds = drill.fda_24h_mandate_seconds || 86400;
+    const fdaMandateSeconds = drill?.fda_24h_mandate_seconds || 86400;
     const finalSecondsLabel = formatSeconds(finalSeconds);
     const totalDurationLabel = formatSeconds(totalDurationS);
     const marginMultiple = finalSeconds > 0 ? Math.round(fdaMandateSeconds / finalSeconds) : 0;
@@ -260,16 +191,17 @@ export default function RecallDrillPage() {
                     eyebrow={
                         <Badge tone="warning">
                             <AlertTriangle className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                            Live Recall Drill • Synthetic Data
+                            Live Recall Drill
                         </Badge>
                     }
-                    title="Run a recall drill on synthetic supply-chain data."
+                    title="Run a recall drill."
                     className="mb-0 border-b-0 pb-0"
                 />
                 <p className="mt-4 max-w-[68ch] text-body text-re-text-secondary">
                     Click <span className="font-medium text-re-text-primary">Start drill</span> and RegEngine
-                    traces the contaminated lot through the applicable CTEs and produces an FDA-oriented sortable
-                    recall CSV in under 60 seconds. Synthetic data, illustrative only.
+                    asks the recall-drill endpoint to trace a contaminated lot through its Critical Tracking
+                    Events and produce an FDA-oriented sortable recall CSV. If no drill data exists yet,
+                    the page shows an empty state instead of placeholder content.
                 </p>
 
                 <div className="mt-8 flex flex-wrap gap-3">
@@ -316,7 +248,7 @@ export default function RecallDrillPage() {
             </Container>
 
             {/* ─── Progress / Steps ───────────────────── */}
-            {(state === 'running' || state === 'done') && (
+            {(state === 'running' || state === 'done') && drillSteps.length > 0 && (
                 <Container className="pb-10">
                     <Card className="overflow-hidden">
                         <CardHeader className="items-center py-3">
@@ -385,86 +317,62 @@ export default function RecallDrillPage() {
             {/* ─── Result panel (after done) ────────────── */}
             {state === 'done' && (
                 <Container as="section" className="pb-10">
-                    {/* Time-to-trace metric */}
-                    <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
-                        <StatTile label="Time to trace" value={`${finalSecondsLabel}s`}>
-                            <p className="text-small text-re-text-tertiary">Synthetic lot {drill.lot_code}</p>
-                        </StatTile>
-                        <StatTile label="FDA mandate" value="24 hours">
-                            <p className="text-small text-re-text-tertiary">§ 204: produce records on request</p>
-                        </StatTile>
-                        <StatTile label="Margin" value={`${marginMultiple}× faster`}>
-                            <p className="text-small text-re-text-tertiary">Headroom vs. regulatory window</p>
-                        </StatTile>
-                    </div>
+                    {!drill || drillSteps.length === 0 ? (
+                        <EmptyState
+                            icon={AlertTriangle}
+                            titleAs="h2"
+                            title={NO_DATA_YET}
+                            description="The recall-drill endpoint returned no trace steps. There is no drill data to show yet."
+                        />
+                    ) : (
+                        <>
+                            {/* Time-to-trace metric */}
+                            <div className="mb-8 grid grid-cols-1 gap-5 md:grid-cols-3">
+                                <StatTile label="Time to trace" value={`${finalSecondsLabel}s`}>
+                                    <p className="text-small text-re-text-tertiary">Lot {drill.lot_code}</p>
+                                </StatTile>
+                                <StatTile label="FDA mandate" value="24 hours">
+                                    <p className="text-small text-re-text-tertiary">§ 204: produce records on request</p>
+                                </StatTile>
+                                <StatTile label="Margin" value={`${marginMultiple}× faster`}>
+                                    <p className="text-small text-re-text-tertiary">Headroom vs. regulatory window</p>
+                                </StatTile>
+                            </div>
 
-                    {/* Trace diagram */}
-                    <Card className="mb-8 p-6">
-                        <h2 className="mb-4 text-heading text-re-text-primary">Forward trace graph</h2>
-                        <div className="overflow-x-auto">
-                            <div className="flex min-w-max items-stretch gap-2 pb-2">
-                                {TRACE_NODES.map((n, i) => (
-                                    <div key={n.id} className="flex items-stretch">
-                                        <Card
-                                            variant="inset"
-                                            padding="compact"
-                                            className={
-                                                n.cte === 'TRANSFORMATION'
-                                                    ? 'min-w-[170px] border-re-danger'
-                                                    : 'min-w-[170px]'
-                                            }
-                                        >
-                                            <div
-                                                className={
-                                                    n.cte === 'TRANSFORMATION'
-                                                        ? 'mb-1 font-mono text-label uppercase text-re-danger'
-                                                        : 'mb-1 font-mono text-label uppercase text-re-text-muted'
-                                                }
-                                            >
-                                                {n.cte}
-                                            </div>
-                                            <div className="mb-1 text-subheading text-re-text-primary">
-                                                {n.facility}
-                                            </div>
-                                            <div className="font-mono text-[0.8125rem] text-re-text-secondary">
-                                                {n.lot}
-                                            </div>
-                                            <div className="font-mono text-[0.8125rem] tabular-nums text-re-text-tertiary">
-                                                {n.qty}
-                                            </div>
-                                        </Card>
-                                        {i < TRACE_NODES.length - 1 && (
-                                            <div className="flex items-center justify-center px-1 text-re-text-muted">
-                                                <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
-                                            </div>
-                                        )}
+                            {/* Trace diagram */}
+                            <Card className="mb-8 p-6">
+                                <h2 className="mb-4 text-heading text-re-text-primary">Forward trace graph</h2>
+                                <EmptyState
+                                    bare
+                                    size="sm"
+                                    title={NO_DATA_YET}
+                                    description="The recall-drill endpoint does not return per-facility trace nodes yet."
+                                />
+                            </Card>
+
+                            {/* CSV download */}
+                            <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
+                                <div>
+                                    <div className="mb-1 text-subheading text-re-text-primary">
+                                        Recall CSV
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                        <p className="mt-3 text-small text-re-text-tertiary">
-                            Red border = transformation node where a single inbound lot fans out
-                            into multiple downstream lots.
-                        </p>
-                    </Card>
-
-                    {/* CSV download */}
-                    <Card className="flex flex-col items-start justify-between gap-4 p-6 sm:flex-row sm:items-center">
-                        <div>
-                            <div className="mb-1 text-subheading text-re-text-primary">
-                                Recall CSV ready
-                            </div>
-                            <div className="text-ui text-re-text-secondary">
-                                21 CFR §§1.1325 to 1.1350 Key Data Elements · 11 rows · synthetic data
-                            </div>
-                        </div>
-                        <Button asChild size="lg" className="shrink-0">
-                            <a href={outputCsvUrl} download>
-                                <Download strokeWidth={1.75} aria-hidden="true" />
-                                Download recall CSV
-                            </a>
-                        </Button>
-                    </Card>
+                                    <div className="text-ui text-re-text-secondary">
+                                        21 CFR §§1.1325 to 1.1350 Key Data Elements
+                                    </div>
+                                </div>
+                                {drill.output_csv_url ? (
+                                    <Button asChild size="lg" className="shrink-0">
+                                        <a href={drill.output_csv_url} download>
+                                            <Download strokeWidth={1.75} aria-hidden="true" />
+                                            Download recall CSV
+                                        </a>
+                                    </Button>
+                                ) : (
+                                    <span className="text-ui text-re-text-tertiary">{NO_DATA_YET}</span>
+                                )}
+                            </Card>
+                        </>
+                    )}
                 </Container>
             )}
 
@@ -475,15 +383,12 @@ export default function RecallDrillPage() {
                         <h2 className="mb-3 text-heading text-re-text-primary">What happens when you click start</h2>
                         <ol className="flex flex-col gap-2 text-ui text-re-text-secondary">
                             <li>
-                                <span className="font-mono tabular-nums text-re-text-primary">1.</span> RegEngine loads a known-contaminated lot
-                                ({' '}
-                                <code className="font-mono text-[0.8125rem] text-re-text-primary">SV-20240115-001</code>) from
-                                the synthetic dataset.
+                                <span className="font-mono tabular-nums text-re-text-primary">1.</span> RegEngine asks the recall-drill
+                                endpoint to identify the contaminated lot to trace.
                             </li>
                             <li>
-                                <span className="font-mono tabular-nums text-re-text-primary">2.</span> The recall simulator walks downstream
-                                through all 7 CTEs: harvesting, cooling, packing, shipping,
-                                receiving, transformation, shipping again.
+                                <span className="font-mono tabular-nums text-re-text-primary">2.</span> The trace walks downstream
+                                through every Critical Tracking Event (CTE) recorded for that lot.
                             </li>
                             <li>
                                 <span className="font-mono tabular-nums text-re-text-primary">3.</span> Every receiver of the contaminated lot
@@ -504,9 +409,8 @@ export default function RecallDrillPage() {
                 <Container className="flex items-center justify-center gap-2 py-3 text-small text-re-text-tertiary">
                     <Lock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
                     <span>
-                        All data is synthetic. The drill runs on a frozen public dataset separate
-                        from any customer data. Run as many times as you like; results are
-                        deterministic.
+                        Results come from the live recall-drill endpoint. When no drill data
+                        exists yet, this page shows an empty state instead of placeholder content.
                     </span>
                 </Container>
             </div>

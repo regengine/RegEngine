@@ -111,7 +111,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.validateEpcis).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
+    expect(await screen.findByText('EPCIS (Preview) processed')).toBeInTheDocument();
     expect(
       screen.getByText(`${eventList.length} of ${eventList.length} events accepted; 0 rejected.`),
     ).toBeInTheDocument();
@@ -138,7 +138,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
       apiKey: 'cookie-managed', // pragma: allowlist secret
       events,
     });
-    expect(await screen.findByText('EPCIS partially accepted')).toBeInTheDocument();
+    expect(await screen.findByText('EPCIS (Preview) partially accepted')).toBeInTheDocument();
     expect(screen.getByText('1 of 2 events accepted; 1 rejected.')).toBeInTheDocument();
     expect(screen.getByText('Event 2: Missing bizLocation')).toBeInTheDocument();
   });
@@ -157,7 +157,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     });
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
+    expect(await screen.findByText('EPCIS (Preview) processed')).toBeInTheDocument();
     expect(screen.getByText('1 of 1 events accepted; 0 rejected.')).toBeInTheDocument();
   });
 
@@ -183,7 +183,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     });
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
+    expect(await screen.findByText('EPCIS (Preview) processed')).toBeInTheDocument();
   });
 
   it('validate-only calls the validate endpoint and never ingests', async () => {
@@ -236,7 +236,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.validateEpcis).not.toHaveBeenCalled();
     expect(mocks.ingestFile).not.toHaveBeenCalled();
-    expect(screen.queryByText('EPCIS processed')).not.toBeInTheDocument();
+    expect(screen.queryByText('EPCIS (Preview) processed')).not.toBeInTheDocument();
   });
 
   it('shows backend failures with the same error pattern as the CSV tab', async () => {
@@ -248,7 +248,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
 
     expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
     expect(screen.getByText('Batch ingest failed')).toBeInTheDocument();
-    expect(screen.queryByText('EPCIS processed')).not.toBeInTheDocument();
+    expect(screen.queryByText('EPCIS (Preview) processed')).not.toBeInTheDocument();
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 

@@ -76,19 +76,15 @@ const HASH_STEPS = [
   },
 ];
 
-// Sample CTE data for demo
-const SAMPLE_RECORDS = [
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-15', eventType: 'harvesting', location: 'Farm A, California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-16', eventType: 'initial_packing', location: 'Facility B, California' },
-  { tlc: 'TLC-2024-001', product: 'Romaine Lettuce', quantity: 50, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center C, Nevada' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-16', eventType: 'harvesting', location: 'Farm D, Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-17', eventType: 'initial_packing', location: 'Facility E, Florida' },
-  { tlc: 'TLC-2024-002', product: 'Cherry Tomatoes', quantity: 100, uom: 'lbs', eventDate: '2024-01-18', eventType: 'receiving', location: 'Hub F, Georgia' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-14', eventType: 'harvesting', location: 'Farm G, Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-15', eventType: 'initial_packing', location: 'Facility H, Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-16', eventType: 'shipping', location: 'Facility H, Texas' },
-  { tlc: 'TLC-2024-003', product: 'Spinach', quantity: 75, uom: 'lbs', eventDate: '2024-01-17', eventType: 'receiving', location: 'Distribution Center J, Oklahoma' },
-];
+interface CteRecord {
+  tlc: string;
+  product: string;
+  quantity: number;
+  uom: string;
+  eventDate: string;
+  eventType: string;
+  location: string;
+}
 
 interface GeneratedPackage {
   csv: Array<Record<string, string>>;
@@ -125,9 +121,9 @@ async function sha256(data: string): Promise<string> {
     .join('');
 }
 
-async function generatePackage(records: typeof SAMPLE_RECORDS): Promise<GeneratedPackage> {
+async function generatePackage(records: CteRecord[]): Promise<GeneratedPackage> {
   // Sort records by TLC and date for consistent ordering
-  const sortedRecords = [...records].sort((a: typeof SAMPLE_RECORDS[0], b: typeof SAMPLE_RECORDS[0]) => {
+  const sortedRecords = [...records].sort((a: CteRecord, b: CteRecord) => {
     if (a.tlc !== b.tlc) return a.tlc.localeCompare(b.tlc);
     return new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
   });
@@ -233,36 +229,6 @@ export default function ExportPage() {
   const [generationStep, setGenerationStep] = useState<string | null>(null);
   const [generatedPackage, setGeneratedPackage] = useState<GeneratedPackage | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleGenerateDemo = useCallback(async (): Promise<void> => {
-    trackToolRunStarted('export');
-    let outcome: 'success' | 'error' = 'error';
-    setIsGenerating(true);
-    setGenerationStep(null);
-
-    try {
-      const steps = [
-        { label: 'Reading records...', duration: 300 },
-        { label: 'Computing SHA-256 hashes...', duration: 500 },
-        { label: 'Building chain verification...', duration: 400 },
-        { label: 'Generating FDA CSV...', duration: 300 },
-        { label: 'Creating manifest...', duration: 200 },
-      ];
-
-      for (const step of steps) {
-        setGenerationStep(step.label);
-        await new Promise((resolve) => setTimeout(resolve, step.duration));
-      }
-
-      const pkg = await generatePackage(SAMPLE_RECORDS);
-      setGeneratedPackage(pkg);
-      outcome = 'success';
-    } finally {
-      setGenerationStep(null);
-      setIsGenerating(false);
-      trackToolRunCompleted('export', outcome);
-    }
-  }, []);
 
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
@@ -382,53 +348,31 @@ export default function ExportPage() {
           </div>
         </section>
 
-        {/* Section 2: Interactive Demo */}
+        {/* Section 2: Generate Package */}
         <section>
           <h2 className="mb-6 text-heading text-re-text-primary">Generate Your Package</h2>
 
-          <Tabs defaultValue="sample" className="w-full">
-            <TabsList className="max-w-full overflow-x-auto">
-              <TabsTrigger value="sample">Try with Sample Data</TabsTrigger>
-              <TabsTrigger value="upload">Upload Your Records</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="sample">
-              <div className="py-8 text-center">
-                <p className="mb-6 text-ui text-re-text-secondary">Generate a demo package using realistic food traceability data</p>
-                <Button
-                  onClick={handleGenerateDemo}
-                  disabled={isGenerating}
-                  size="lg"
-                >
-                  {isGenerating ? 'Generating...' : 'Generate Demo Package'}
-                </Button>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="upload">
-              <div className="rounded-lg border-2 border-dashed border-re-border p-8 text-center">
-                <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                <p className="mb-4 text-ui text-re-text-secondary">
-                  Upload a CSV with columns: tlc, product, quantity, uom, event_date, event_type, location
-                </p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  aria-label="Upload Your Records"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isGenerating}
-                  variant="secondary"
-                >
-                  {isGenerating ? 'Processing...' : 'Choose CSV File'}
-                </Button>
-              </div>
-            </TabsContent>
-          </Tabs>
+          <div className="rounded-lg border-2 border-dashed border-re-border p-8 text-center">
+            <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <p className="mb-4 text-ui text-re-text-secondary">
+              Upload a CSV with columns: tlc, product, quantity, uom, event_date, event_type, location
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              aria-label="Upload Your Records"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isGenerating}
+              variant="secondary"
+            >
+              {isGenerating ? 'Processing...' : 'Choose CSV File'}
+            </Button>
+          </div>
 
           {/* Generation Progress */}
           <AnimatePresence>
