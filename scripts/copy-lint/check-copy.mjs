@@ -95,6 +95,9 @@ export function parseCapabilities(src) {
   for (const name of ['live', 'preview', 'planned', 'off']) {
     const match = src.match(new RegExp(`\\b${name}\\s*:\\s*\\[([^\\]]*)\\]`));
     if (!match) throw new Error(`Missing ${name} capability registry`);
+    if (match[1].replace(/'[^']+'/g, '').replace(/,/g, '').trim()) {
+      throw new Error(`Unparseable ${name} capability registry`);
+    }
     groups[name] = [...match[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
     if (name !== 'planned' && !groups[name].length) throw new Error(`Empty ${name} capability registry`);
     for (const feature of groups[name]) {

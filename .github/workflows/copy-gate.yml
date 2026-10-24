@@ -34,10 +34,25 @@ jobs:
       - name: Read base copy baseline
         env:
           BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            git show "origin/${BASE_REF}:scripts/copy-lint/baseline.json" > "$RUNNER_TEMP/base-baseline.json" 2>/dev/null || :
+            base_ref="origin/${BASE_REF}"
           else
-            git show "HEAD^:scripts/copy-lint/baseline.json" > "$RUNNER_TEMP/base-baseline.json" 2>/dev/null || :
+            if [[ "$BEFORE_SHA" =~ ^0{40}$ ]]; then
+              exit 0
+            fi
+            base_ref="$BEFORE_SHA"
+          fi
+          base_commit=$(git rev-parse --verify "${base_ref}^{commit}") || exit 1
+          baseline_path="scripts/copy-lint/baseline.json"
+          if git cat-file -e "${base_commit}:${baseline_path}" 2>/dev/null; then
+            git show "${base_commit}:${baseline_path}" > "$RUNNER_TEMP/base-baseline.json" || exit 1
+          else
+            baseline_entry=$(git ls-tree -r --name-only "$base_commit" -- "$baseline_path") || exit 1
+            if [ -n "$baseline_entry" ]; then
+              echo "Unable to read base copy baseline" >&2
+              exit 1
+            fi
           fi
       - run: node scripts/copy-lint/check-copy.mjs . --gate --github --base-baseline "$RUNNER_TEMP/base-baseline.json"

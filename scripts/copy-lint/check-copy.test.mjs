@@ -19,7 +19,6 @@ const registrySource = groups => Object.entries(groups).map(([status, names]) =>
 
 test('rule sources and capability registry are complete', () => {
   assert.deepEqual(Object.keys(capabilities), ['live', 'preview', 'planned', 'off']);
-  assert.equal(capabilities.planned.length, 0);
   assert.equal(capabilities.live.length > 0 && capabilities.preview.length > 0 && capabilities.off.length > 0, true);
   assert.deepEqual(parseCapabilities(registrySource(capabilities)), capabilities);
   assert.equal(Object.values(cfg.rules).every(rule => ['visual-designer', 'product-designer', 'both'].includes(rule.source)), true);
@@ -28,6 +27,11 @@ test('rule sources and capability registry are complete', () => {
 test('a feature cannot have two capability statuses', () => {
   const duplicate = { ...capabilities, planned: [capabilities.live[0]] };
   assert.throws(() => parseCapabilities(registrySource(duplicate)), /Duplicate capability status/);
+});
+
+test('a double-quoted planned capability is rejected', () => {
+  const invalid = registrySource({ ...capabilities, planned: ['X'] }).replace("planned: ['X']", 'planned: ["X"]');
+  assert.throws(() => parseCapabilities(invalid), /Unparseable planned capability registry/);
 });
 
 test('VD dash and preview rules remain, with stricter empty values', () => {
