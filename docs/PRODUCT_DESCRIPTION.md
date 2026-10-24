@@ -48,7 +48,7 @@ Public synthetic artifacts, a browser verifier, a downloadable Python bundle ver
 
 ## Talking-track opener
 
-RegEngine turns supplier and ERP records into traceability evidence for food businesses. Import records, identify missing or inconsistent CTEs and KDEs, resolve issues, and assemble FDA-oriented exports with verifiable audit evidence. Inflow Workbench prepares the data; RegEngine stores and verifies the evidence. Inspect the synthetic examples at [regengine.co/proof](https://regengine.co/proof) and check a bundle at [regengine.co/verify](https://regengine.co/verify).
+RegEngine turns supplier and ERP records into traceability evidence for food businesses. Import records, identify missing or inconsistent CTEs and KDEs, resolve issues, and assemble FDA-oriented exports with verifiable audit evidence. Inflow Workbench prepares the data; RegEngine stores and verifies the evidence. Check a bundle at [regengine.co/verify](https://regengine.co/verify).
 
 ## Maintenance rule
 

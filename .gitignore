@@ -85,7 +85,6 @@ secrets.json
 
 # Artifacts that should never be tracked
 *.zip
-# ...except the public sample bundles the frontend serves (#2873).
 !frontend/public/samples/*.zip
 login_resp.json
 frontend/build_log.txt
