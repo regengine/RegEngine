@@ -520,7 +520,7 @@ export interface SupplierQualityMetric {
     numerator: number | null;
     denominator: number | null;
     share: number | null;
-    /** Set when status is unavailable. */
+    /** Set when status is unavailable. On epcis_failed it also says the count is tenant wide. */
     reason: string | null;
 }
 
