@@ -38,8 +38,8 @@ VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.vis
 # One project
 VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.visual.config.ts --project=smoke
 
-# Sitemap crawler at both widths
-VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.visual.config.ts --project=crawl-desktop --project=crawl-mobile
+# Sitemap crawler at both widths (opt-in via VISUAL_CRAWL=1)
+VISUAL_BASE_URL=https://regengine.co VISUAL_CRAWL=1 npx playwright test --config=playwright.visual.config.ts --project=crawl-desktop --project=crawl-mobile
 
 # View the last HTML report
 npx playwright show-report playwright-visual-report
@@ -52,6 +52,7 @@ npx playwright show-report playwright-visual-report
 | `VISUAL_BASE_URL` | Base URL under test. Default `https://regengine.co` |
 | `VISUAL_ALLOW_FORM_SUBMIT` | `1` enables the `preview-forms` project (blank submits). Set only by `visual-preview.yml` |
 | `VISUAL_AUTH` | `1` enables the `signed-in` project. Set by hand for manual runs; no workflow sets it |
+| `VISUAL_CRAWL` | `1` enables the `crawl-desktop` / `crawl-mobile` projects. Set by hand for manual runs; no workflow sets it |
 | `VISUAL_USER_EMAIL` | Expected session email for the signed-in project (asserted, not used to log in) |
 | `VISUAL_SESSION_TOKEN` | Opaque session cookie value for the signed-in project, provisioned out-of-band |
 | `VISUAL_UPDATE_BOXES` | `1` records header/nav boxes to `test-results-visual/layout-boxes.candidate.json` (JSONL) instead of asserting |
@@ -66,8 +67,8 @@ npx playwright show-report playwright-visual-report
 | `priority-extras` | priority extras | mixed (set per test) |
 | `content` | content rules | default |
 | `smoke` | smoke | default |
-| `crawl-desktop` | sitemap crawl | 1440×900 |
-| `crawl-mobile` | sitemap crawl | 390×844, touch |
+| `crawl-desktop` | sitemap crawl | 1440×900, only if `VISUAL_CRAWL=1` |
+| `crawl-mobile` | sitemap crawl | 390×844, touch, only if `VISUAL_CRAWL=1` |
 | `preview-forms` | blank submits | default, only if `VISUAL_ALLOW_FORM_SUBMIT=1` |
 | `signed-in` | signed-in reads | default, only if `VISUAL_AUTH=1` |
 
