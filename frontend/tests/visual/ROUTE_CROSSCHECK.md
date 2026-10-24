@@ -28,8 +28,8 @@ the source list.
 
 - `public`: 78 (designer crawl minus the 3 deliberate exclusions; was 82 before reconciliation — see below)
 - `authOnly`: 58
-- `skippedDynamic`: 5 (`/fsma-204/[cte]`, `/ingest/results/[id]`, `/portal/[portalId]`, `/requests/[id]`, `/sandbox/results/[id]`)
-- `expectRedirectOr404`: 14 (was 10 before reconciliation)
+- `skippedDynamic`: 4 (`/fsma-204/[cte]`, `/ingest/results/[id]`, `/portal/[portalId]`, `/requests/[id]`)
+- `expectRedirectOr404`: 13 (was 10 before reconciliation; `/sandbox` removed after the route was retired in #3557)
 - excluded entirely: `/auth/sso/mock` (mock SSO fixture; reason in `excludedReason`, visited by no spec)
 
 Per-route reasons for every non-public route live in the `excludedReason` map
