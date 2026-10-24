@@ -41,6 +41,18 @@ jobs:
 
             const targetUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
+            // check_suite and workflow_run events run in the default-branch context, so a
+            // failed job there is attributed to main even though it evaluated a PR head.
+            // For those events the PR verdict is carried by the commit status posted on the
+            // PR head SHA; only fail the job itself for pull_request events.
+            const failGuard = (msg) => {
+              if (context.eventName === 'pull_request') {
+                core.setFailed(msg);
+              } else {
+                core.warning(`${msg} (reported via commit status; not failing ${context.eventName} run on default branch)`);
+              }
+            };
+
             // Prevent self-trigger loops
             if (context.eventName === 'workflow_run' && context.payload.workflow_run?.name === 'Head SHA Check Guard') {
               core.info('Skipping run triggered by own workflow_run completion.');
@@ -143,7 +155,7 @@ jobs:
             const prHeadSha = matchedPr.head?.sha;
 
             if (!prHeadSha) {
-              core.setFailed(`PR #${prNumber} has no head SHA.`);
+              failGuard(`PR #${prNumber} has no head SHA.`);
               return;
             }
 
@@ -160,7 +172,7 @@ jobs:
                 description: 'Head moved',
                 target_url: targetUrl,
               });
-              core.setFailed(`Head moved: PR #${prNumber} head is ${prHeadSha}, evaluated commit was ${evaluatedSha}`);
+              failGuard(`Head moved: PR #${prNumber} head is ${prHeadSha}, evaluated commit was ${evaluatedSha}`);
               return;
             }
 
@@ -314,7 +326,7 @@ jobs:
                   description: 'Head moved',
                   target_url: targetUrl,
                 });
-                core.setFailed(`Head moved: PR #${prNumber} head is ${latestPrAfterWait.head?.sha}, evaluated commit was ${evaluatedSha}`);
+                failGuard(`Head moved: PR #${prNumber} head is ${latestPrAfterWait.head?.sha}, evaluated commit was ${evaluatedSha}`);
                 return;
               }
 
@@ -394,7 +406,7 @@ jobs:
                 description: statusDesc,
                 target_url: targetUrl,
               });
-              core.setFailed(`Head SHA Check Guard failed on head SHA ${evaluatedSha}. Failed checks: ${failedList}`);
+              failGuard(`Head SHA Check Guard failed on head SHA ${evaluatedSha}. Failed checks: ${failedList}`);
               return;
             }
 
