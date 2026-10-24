@@ -604,27 +604,6 @@ HTTP 201
                                 ))}
                             </ul>
                         </div>
-                        <Card padding="spacious" className="hidden md:block">
-                            <code className="block overflow-auto font-mono text-small leading-relaxed text-re-text-secondary">
-                                {`<events>
-  <EPCISEvent>
-    <eventTime>2026-04-05T...</eventTime>
-    <eventType>
-      ObjectEvent
-    </eventType>
-    <epcList>
-      <epc>
-        urn:epc:id:sgtin:...
-      </epc>
-    </epcList>
-    <action>OBSERVE</action>
-    <bizStep>
-      urn:epcglobal:cbv:bizstep:...
-    </bizStep>
-  </EPCISEvent>
-</events>`}
-                            </code>
-                        </Card>
                     </div>
 
                     {/* SMB Focus */}
