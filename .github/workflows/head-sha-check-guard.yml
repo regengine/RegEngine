@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read
