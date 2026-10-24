@@ -81,7 +81,8 @@ Still reachable but low-usage. Keep for now, revisit if we prune:
 Resolved since the last audit: `/owner/*` (the unwired billing/contracts
 suite) has been deleted, and its prefix removed from
 `src/lib/app-routes.ts`. `/sandbox` and `/sandbox/results/[id]` were deleted
-in #3557; CSV upload lives at `/ingest`.
+in #3557; CSV upload lives at `/ingest`, which requires sign-in (public
+alternative: `/tools/drill-simulator`).
 
 ## Route map quick stats
 - Total page routes: 163 (including dynamic `[param]` variants)

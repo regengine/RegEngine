@@ -218,8 +218,11 @@ Pure copy deletions/rewrites, one pass:
   label the portal sandbox-only.
 
 ### PR-8 — Dead CTAs and dead-ends (~half day) [Tier3]
-- `/#sandbox` links (demo:237, compare×3, fsma-204/[cte]:497) → `/ingest`.
-  The `/sandbox` route and SharedSandboxResult were deleted in #3557.
+- `/#sandbox` links (demo:237, compare×3, fsma-204/[cte]:497): the `/sandbox`
+  route and SharedSandboxResult were deleted in #3557. The CSV upload flow is
+  `/ingest`, which requires sign-in (it is in `AUTHENTICATED_APP_ROUTE_PREFIXES`,
+  `src/lib/app-routes.ts`). For anonymous marketing CTAs, use the public
+  `/tools/drill-simulator` or `/signup`; link `/ingest` only where sign-in is expected.
 - Wire or remove each dead button: kde-checker Print/CSV Template/Explore
   (wire Print to `window.print()`, CSV to a real template file, else
   remove); sop-generator Download PDF/Print; tlc-validator Schedule a Demo
