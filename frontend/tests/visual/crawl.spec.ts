@@ -275,9 +275,11 @@ test('crawl sitemap pages for broken links, dead ends, and errors', async ({
         }
 
         let deadEndReason: string | null = null;
-        if (status >= 400) {
+        // A failed navigation leaves stale DOM behind and is already recorded
+        // in pageErrors, so skip dead-end classification entirely.
+        if (!navigationFailed && status >= 400) {
             deadEndReason = `HTTP ${status}`;
-        } else {
+        } else if (!navigationFailed) {
             let finalPath = '';
             try {
                 finalPath = new URL(pageUrl).pathname;

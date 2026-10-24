@@ -1,10 +1,9 @@
 /**
  * Report-only visual regression + page monitoring config.
  *
- * Read-only by design: every project in this file visits pages with GET only,
- * except the conditional preview-forms project below, which does not exist
- * unless its env flag is set (so nothing ever shows as "skipped").
- * Conditional projects (absent unless the env flag is set):
+ * Read-only by design: every project in this file visits pages with GET only.
+ * Conditional projects below do not exist unless their env flag is set
+ * (so nothing ever shows as "skipped"):
  *
  * - crawl-desktop / crawl-mobile: sitemap crawler (crawl.spec.ts).
  *   Opt-in via VISUAL_CRAWL=1. No workflow sets VISUAL_CRAWL.
