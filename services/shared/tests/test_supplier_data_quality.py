@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 from shared.supplier_data_quality import (
     COLUMN_BACKED_KDES,
+    DEFAULT_WINDOW_DAYS,
     METRIC_EPCIS_FAILED,
     METRIC_LATE_CTE,
     METRIC_MISSING_KDE,
@@ -36,11 +37,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 WEBHOOK_MODELS = REPO_ROOT / "services" / "ingestion" / "app" / "webhook_models.py"
 
 COMPLETE_SHIPPING = {
-    "product_description": "Baby Spinach",
-    "quantity": 10,
-    "unit_of_measure": "cases",
-    "ship_to_location": "DC 4",
-    "reference_document": "BOL-1",
+    "product_description": str(uuid.uuid4()),
+    # Any positive count; derived rather than picked.
+    "quantity": MIN_RECORDS,
+    "unit_of_measure": str(uuid.uuid4()),
+    "ship_to_location": str(uuid.uuid4()),
+    "reference_document": str(uuid.uuid4()),
     "tlc_source_reference": str(uuid.uuid4()),
 }
 
@@ -135,7 +137,7 @@ def test_non_mapping_kde_data_misses_everything():
 
 
 def test_flag_records_keeps_only_failing_rows_with_names():
-    rows = [_record("shipping", COMPLETE_SHIPPING), _record("shipping", {"quantity": 1})]
+    rows = [_record("shipping", COMPLETE_SHIPPING), _record("shipping", {"quantity": COMPLETE_SHIPPING["quantity"]})]
     flagged = flag_records(rows)
     assert len(flagged) == 1
     assert flagged[0]["record_id"] == rows[1]["record_id"]
@@ -153,7 +155,7 @@ def test_lot_linked_by_transformation_output():
     "field", ["tlc_source_reference", "tlc_source_gln", "immediate_previous_source", "input_lot_codes"]
 )
 def test_lot_linked_by_linkage_kde(field):
-    assert lot_is_linked([("shipping", {}), ("receiving", {field: "X"})], False)
+    assert lot_is_linked([("shipping", {}), ("receiving", {field: str(uuid.uuid4())})], False)
 
 
 @pytest.mark.parametrize("cte", ["harvesting", "first_receiver", "first_land_based_receiving"])
@@ -190,16 +192,20 @@ def test_unlinked_lots_returns_ids_and_codes():
 
 
 def test_share_below_min_records_is_not_enough_data_but_keeps_counts():
-    metric = share_metric(METRIC_MISSING_KDE, 3, MIN_RECORDS - 1)
+    records = [_record("shipping", {}) for _ in range(MIN_RECORDS - 1)]
+    flagged = records[::2]
+    metric = share_metric(METRIC_MISSING_KDE, len(flagged), len(records))
     assert metric["status"] == "not_enough_data"
     assert metric["share"] is None
-    assert (metric["numerator"], metric["denominator"]) == (3, MIN_RECORDS - 1)
+    assert (metric["numerator"], metric["denominator"]) == (len(flagged), len(records))
 
 
 def test_share_at_min_records_is_computed():
-    metric = share_metric(METRIC_MISSING_KDE, 5, MIN_RECORDS)
+    records = [_record("shipping", {}) for _ in range(MIN_RECORDS)]
+    flagged = records[::2]
+    metric = share_metric(METRIC_MISSING_KDE, len(flagged), len(records))
     assert metric["status"] == "ok"
-    assert metric["share"] == 5 / MIN_RECORDS
+    assert metric["share"] == len(flagged) / len(records)
 
 
 def test_zero_denominator_is_not_enough_data():
@@ -211,34 +217,40 @@ def test_min_records_is_twenty():
 
 
 def test_unavailable_metric_has_reason_and_no_counts():
-    metric = unavailable_metric(METRIC_LATE_CTE, "why")
+    reason = str(uuid.uuid4())
+    metric = unavailable_metric(METRIC_LATE_CTE, reason)
     assert metric == {
         "key": METRIC_LATE_CTE,
         "status": "unavailable",
         "numerator": None,
         "denominator": None,
         "share": None,
-        "reason": "why",
+        "reason": reason,
     }
 
 
 def test_window_start():
-    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
-    assert window_start(now, 30) == now - timedelta(days=30)
+    now = datetime.now(timezone.utc)
+    assert window_start(now, DEFAULT_WINDOW_DAYS) == now - timedelta(days=DEFAULT_WINDOW_DAYS)
 
 
 # --- facility summary --------------------------------------------------------
 
 
 def test_summarize_facility_keeps_four_separate_metrics():
-    records = [_record("shipping", COMPLETE_SHIPPING) for _ in range(15)] + [_record("shipping", {}) for _ in range(5)]
-    lots = [_lot_row(str(i), "shipping", {}) for i in range(3)]
+    complete = [_record("shipping", COMPLETE_SHIPPING) for _ in range(MIN_RECORDS // 2)]
+    incomplete = [_record("shipping", {}) for _ in range(MIN_RECORDS - len(complete))]
+    records = complete + incomplete
+    lots = [_lot_row(str(uuid.uuid4()), "shipping", {}) for _ in range(MIN_RECORDS // 2)]
     summary = summarize_facility(records, lots)
 
     assert set(summary) == {METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE, METRIC_EPCIS_FAILED}
-    assert summary[METRIC_MISSING_KDE]["share"] == 5 / 20
+    assert summary[METRIC_MISSING_KDE]["share"] == len(incomplete) / len(records)
     assert summary[METRIC_UNLINKED_LOT]["status"] == "not_enough_data"
-    assert (summary[METRIC_UNLINKED_LOT]["numerator"], summary[METRIC_UNLINKED_LOT]["denominator"]) == (3, 3)
+    assert (summary[METRIC_UNLINKED_LOT]["numerator"], summary[METRIC_UNLINKED_LOT]["denominator"]) == (
+        len(lots),
+        len(lots),
+    )
     assert summary[METRIC_LATE_CTE]["status"] == "unavailable"
     assert summary[METRIC_EPCIS_FAILED]["status"] == "unavailable"
 
@@ -248,4 +260,4 @@ def test_fetch_supplier_quality_without_facilities_runs_no_query():
         def execute(self, *args, **kwargs):  # pragma: no cover (must not run)
             raise AssertionError("no query expected")
 
-    assert fetch_supplier_quality(NoQuery(), "t", "u", [], datetime.now(timezone.utc)) == {}
+    assert fetch_supplier_quality(NoQuery(), str(uuid.uuid4()), str(uuid.uuid4()), [], datetime.now(timezone.utc)) == {}

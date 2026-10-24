@@ -12,6 +12,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from shared.supplier_data_quality import DEFAULT_WINDOW_DAYS, LATE_CTE_LABEL, MAX_WINDOW_DAYS, MIN_RECORDS
 
 TENANT = uuid4()
 OTHER_TENANT = uuid4()
@@ -21,7 +22,7 @@ OWN_FACILITY = uuid4()
 FOREIGN_FACILITY = uuid4()
 OTHER_TENANT_FACILITY = uuid4()
 
-# Two shipping records with no KDEs on the owned facility, and one lot with no
+# Shipping records with no KDEs on the owned facility, and one lot with no
 # upstream link. Ids and lot codes are generated per run.
 RECORD_ROWS = [
     {
@@ -33,7 +34,7 @@ RECORD_ROWS = [
         "created_at": None,
         "lot_code": str(uuid4()),
     }
-    for _ in range(2)
+    for _ in range(MIN_RECORDS // 10)
 ]
 LOT_ROWS = [
     {
@@ -100,11 +101,9 @@ def test_summary_returns_four_separate_metrics_for_owned_facilities(monkeypatch,
     resp = _client(monkeypatch, calls).get("/v1/supplier/data-quality")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["window_days"] == 30
-    assert body["min_records"] == 20
-    assert body["late_cte_label"] == (
-        "Our measure, based on the agreed sending time with this supplier; not a regulatory requirement"
-    )
+    assert body["window_days"] == DEFAULT_WINDOW_DAYS
+    assert body["min_records"] == MIN_RECORDS
+    assert body["late_cte_label"] == LATE_CTE_LABEL
     [supplier] = body["suppliers"]
     assert supplier["supplier_key"] == str(OWN_FACILITY)
     assert [m["key"] for m in supplier["metrics"]] == ["missing_kde", "unlinked_lot", "late_cte", "epcis_failed"]
@@ -120,7 +119,7 @@ def test_summary_returns_four_separate_metrics_for_owned_facilities(monkeypatch,
     assert all(call[3] == [str(OWN_FACILITY)] for call in calls)
 
 
-@pytest.mark.parametrize("window", [0, 366, -1])
+@pytest.mark.parametrize("window", [0, MAX_WINDOW_DAYS + 1, -1])
 def test_window_days_is_bounded(monkeypatch, calls, window):
     resp = _client(monkeypatch, calls).get(f"/v1/supplier/data-quality?window_days={window}")
     assert resp.status_code == 422
