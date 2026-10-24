@@ -112,7 +112,7 @@ export default function ProofPage() {
                             </Link>
                         </Button>
                         <Button asChild variant="secondary" size="lg">
-                            <Link href="/sdk/verify_chain.py">Get the verifier</Link>
+                            <a href="/sdk/verify_chain.py" download>Get the verifier</a>
                         </Button>
                     </div>
                 </div>
@@ -176,9 +176,9 @@ export default function ProofPage() {
                             <code className="font-mono text-[0.8125rem]">verify_chain.py</code> reads the manifest, recomputes each declared file&apos;s SHA-256, and rebuilds the Merkle root using the same algorithm RegEngine ships in <code className="font-mono text-[0.8125rem]">services/shared/merkle_tree.py</code>. If those values disagree with the included manifest, the script exits non-zero.
                         </p>
                         <Button asChild variant="secondary" size="lg" className="mt-6">
-                            <Link href="/sdk/verify_chain.py">
+                            <a href="/sdk/verify_chain.py" download>
                                 <Terminal aria-hidden="true" strokeWidth={1.75} /> Open verify_chain.py
-                            </Link>
+                            </a>
                         </Button>
                     </div>
                     <Transcript title="Three-step verify">

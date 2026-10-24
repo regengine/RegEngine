@@ -1279,8 +1279,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setIsTutorialOpen(true);
     };
 
-    const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
-    const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const engineConnected = Boolean(health?.ok && !serviceError);
     const connectionLabel = engineConnected ? "Connection ready" : serviceError ? "Connection needs attention" : "Checking connection";
     const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
@@ -1811,17 +1809,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
                                                         Preview test CSV or EPCIS JSON-LD filters. Formal production records are generated only from imported production data.
                                                     </p>
-                                                    <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
-                                                        </Button>
-                                                        <a
-                                                            href={epcisExportHref}
-                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                                        >
-                                                            Preview test EPCIS
-                                                        </a>
-                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2375,17 +2362,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     <p className="mt-1 text-xs leading-5 text-slate-300">
                                                         {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal production records require signed-in imports.
                                                     </p>
-                                                    <div className="mt-4 grid grid-cols-2 gap-2">
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
-                                                        </Button>
-                                                        <a
-                                                            href={epcisExportHref}
-                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                                        >
-                                                            Preview test EPCIS
-                                                        </a>
-                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2586,9 +2562,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Formal production records are generated only from imported production data.
                                                 </p>
-                                                <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
-                                                    <a href={csvExportHref}>Preview test CSV</a>
-                                                </Button>
                                             </div>
                                             <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                 <FileJson className="h-5 w-5 text-blue-700" />
@@ -2596,9 +2569,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
                                                     Uses the same lot and date filters for interoperability testing. It is not production evidence.
                                                 </p>
-                                                <Button asChild variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
-                                                    <a href={epcisExportHref}>Preview test EPCIS</a>
-                                                </Button>
                                             </div>
                                         </div>
                                     </div>
