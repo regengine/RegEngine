@@ -3,7 +3,8 @@
 No EPCIS event documents, GS1 identifiers, or lot codes. Namespace helpers
 run on plain strings. Element walkers run on empty lxml elements, comments,
 and processing instructions. ``_parse_epcis_xml`` is exercised with
-malformed bytes, an empty document, and a comment-only document.
+malformed bytes, an empty document, a comment-only document, and a
+non-parse exception from the XML helper.
 
 Issue: #1342
 """
@@ -164,6 +165,17 @@ class TestParseEpcisXml:
     def test_comment_only_document_returns_empty(self):
         raw = b"<?xml version='1.0'?><EPCISDocument><!-- note --></EPCISDocument>"
         assert xp._parse_epcis_xml(raw) == []
+
+    def test_non_parse_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A helper failure that is not an XML syntax error must not become []."""
+        import defusedxml.lxml as defused_lxml
+
+        def _boom(*_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("parser helper failed")
+
+        monkeypatch.setattr(defused_lxml, "parse", _boom)
+        with pytest.raises(RuntimeError, match="parser helper failed"):
+            xp._parse_epcis_xml(b"<root/>")
 
     def test_missing_defusedxml_returns_empty_list(self):
         """If defusedxml.lxml import fails, the handler logs and returns []."""
