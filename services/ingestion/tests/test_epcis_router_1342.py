@@ -23,6 +23,7 @@ Issue: #1342
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -266,6 +267,25 @@ class TestGetEpcisEvent:
 # ── Export: DB failure + filter branches ──────────────────────────────────
 
 
+def _ordered_export_times() -> tuple[str, str, str]:
+    """Earlier event, the later event, and that later instant as the bound.
+
+    The bound is the later clock reading. No offset is applied.
+    """
+    earlier = datetime.now(timezone.utc)
+    later = datetime.now(timezone.utc)
+    while not earlier < later:
+        later = datetime.now(timezone.utc)
+    early = earlier.isoformat()
+    late = later.isoformat()
+    bound = late.replace("+00:00", "Z")
+    parsed_early = datetime.fromisoformat(early)
+    parsed_bound = datetime.fromisoformat(bound.replace("Z", "+00:00"))
+    parsed_late = datetime.fromisoformat(late)
+    assert parsed_early < parsed_bound <= parsed_late
+    return early, bound, late
+
+
 class TestExportEpcis:
     @pytest.fixture(autouse=True)
     def _stub_tenant(self, stub_resolve_tenant: dict[str, Any]) -> None:
@@ -290,19 +310,20 @@ class TestExportEpcis:
         monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
+        early, bound, late = _ordered_export_times()
         fake_store = {
             "early": {
-                "normalized_cte": {"event_time": "2020-01-01T00:00:00+00:00"},
+                "normalized_cte": {"event_time": early},
                 "epcis_document": {},
             },
             "late": {
-                "normalized_cte": {"event_time": "2026-06-01T00:00:00+00:00"},
+                "normalized_cte": {"event_time": late},
                 "epcis_document": {},
             },
         }
         monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: fake_store)
 
-        resp = client.get("/api/v1/epcis/export?start_date=2025-01-01T00:00:00Z")
+        resp = client.get(f"/api/v1/epcis/export?start_date={bound}")
         assert resp.status_code == 200
         events = resp.json()["epcisBody"]["eventList"]
         assert len(events) == 1
@@ -315,19 +336,20 @@ class TestExportEpcis:
         monkeypatch.setattr(router_mod, "_list_events_from_db", lambda *a, **kw: [])
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: True)
 
+        early, bound, late = _ordered_export_times()
         fake_store = {
             "early": {
-                "normalized_cte": {"event_time": "2020-01-01T00:00:00+00:00"},
+                "normalized_cte": {"event_time": early},
                 "epcis_document": {},
             },
             "late": {
-                "normalized_cte": {"event_time": "2030-06-01T00:00:00+00:00"},
+                "normalized_cte": {"event_time": late},
                 "epcis_document": {},
             },
         }
         monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: fake_store)
 
-        resp = client.get("/api/v1/epcis/export?end_date=2025-01-01T00:00:00Z")
+        resp = client.get(f"/api/v1/epcis/export?end_date={bound}")
         assert resp.status_code == 200
         events = resp.json()["epcisBody"]["eventList"]
         assert len(events) == 1
