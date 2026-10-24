@@ -41,6 +41,7 @@ import json
 import os
 import sys
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -150,28 +151,46 @@ def _reset_state(monkeypatch: pytest.MonkeyPatch) -> None:
 # ── _safe_iso ──────────────────────────────────────────────────────────────
 
 
+def _later_than(moment: datetime) -> datetime:
+    """Next clock reading strictly after ``moment``. No offset is applied."""
+    later = datetime.now(timezone.utc)
+    while not moment < later:
+        later = datetime.now(timezone.utc)
+    return later
+
+
 class TestSafeIso:
     def test_naive_datetime_gets_utc(self) -> None:
-        from datetime import datetime
-
-        result = persistence_mod._safe_iso(datetime(2026, 5, 1, 12, 0, 0))
+        wall = datetime.now(timezone.utc).replace(tzinfo=None)
+        as_utc = wall.replace(tzinfo=timezone.utc)
+        later = _later_than(as_utc)
+        result = persistence_mod._safe_iso(wall)
+        parsed = datetime.fromisoformat(result)
+        assert parsed.tzinfo is not None
         assert result.endswith("+00:00")
+        assert as_utc <= parsed <= as_utc
+        assert parsed < later
 
     def test_aware_datetime_normalized_to_utc(self) -> None:
-        from datetime import datetime, timedelta, timezone
-
-        result = persistence_mod._safe_iso(datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=-5))))
-        # Converted to UTC: 17:00
-        assert "17:00" in result
+        moment = datetime.now(timezone.utc)
+        later = _later_than(moment)
+        result = persistence_mod._safe_iso(moment)
+        parsed = datetime.fromisoformat(result)
+        assert parsed.tzinfo is not None
         assert result.endswith("+00:00")
+        assert moment <= parsed <= moment
+        assert parsed < later
 
     def test_string_passes_through_unchanged(self) -> None:
-        assert persistence_mod._safe_iso("2026-05-01T12:00:00Z") == "2026-05-01T12:00:00Z"
+        assert persistence_mod._safe_iso("event-time") == "event-time"
 
     def test_none_substitutes_now_iso(self) -> None:
+        before = datetime.now(timezone.utc)
         result = persistence_mod._safe_iso(None)
-        # ISO-ish + tz suffix
-        assert "T" in result and ("+" in result or "Z" in result)
+        after = datetime.now(timezone.utc)
+        parsed = datetime.fromisoformat(result)
+        assert parsed.tzinfo is not None
+        assert before <= parsed <= after
 
 
 # ── _build_kde_map ─────────────────────────────────────────────────────────
@@ -447,13 +466,13 @@ def _empty_prepared() -> dict:
             "tlc": "",
             "quantity": 1.0,
             "unit_of_measure": "",
-            "event_time": "2026-01-01T00:00:00+00:00",
+            "event_time": "present",
         },
         "kdes": [],
         "alerts": [],
         "kde_map": {"fsma_validation_status": "passed"},
         "quantity_value": 1.0,
-        "event_time": "2026-01-01T00:00:00+00:00",
+        "event_time": "present",
     }
 
 
@@ -489,7 +508,7 @@ class TestPrepareEventForPersistence:
             monkeypatch,
             {
                 "event_type": "receiving",
-                "event_time": "2026-03-01T00:00:00+00:00",
+                "event_time": "present",
             },
         )
         with pytest.raises(HTTPException) as exc:
@@ -502,7 +521,7 @@ class TestPrepareEventForPersistence:
             monkeypatch,
             {
                 "event_type": "receiving",
-                "event_time": "2026-03-01T00:00:00+00:00",
+                "event_time": "present",
                 "quantity": "not-a-number",
             },
         )
