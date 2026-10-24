@@ -1803,13 +1803,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         )}
                                                     </div>
                                                 </div>
-
-                                                <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
-                                                    <p className="text-sm font-semibold">Test handoff preview</p>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        Preview test CSV or EPCIS JSON-LD filters. Formal production records are generated only from imported production data.
-                                                    </p>
-                                                </div>
                                             </div>
                                         </div>
                                     </div>
