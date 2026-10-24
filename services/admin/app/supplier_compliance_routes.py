@@ -9,12 +9,28 @@ from __future__ import annotations
 import io
 import uuid as uuid_module
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from shared.data_gap_tracking import INTERNAL_TARGET, fetch_supplier_summaries
+from shared.supplier_data_quality import (
+    DEFAULT_WINDOW_DAYS,
+    LATE_CTE_LABEL,
+    MAX_WINDOW_DAYS,
+    METRIC_EPCIS_FAILED,
+    METRIC_LATE_CTE,
+    METRIC_MISSING_KDE,
+    METRIC_UNLINKED_LOT,
+    MIN_RECORDS,
+    fetch_lot_rows,
+    fetch_record_rows,
+    fetch_supplier_quality,
+    flag_records,
+    unlinked_lots,
+    window_start as quality_window_start,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -36,6 +52,8 @@ from .supplier_onboarding_routes import (
 )
 
 router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
+
+QUALITY_METRIC_ORDER = (METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE, METRIC_EPCIS_FAILED)
 
 
 @router.get("/compliance-score", response_model=SupplierComplianceScoreResponse)
@@ -165,6 +183,154 @@ async def get_gap_time_to_fix(
         suppliers=[SupplierGapTimeToFix(supplier_key=key, **summary) for key, summary in summaries.items()],
         internal_target_seconds=int(INTERNAL_TARGET.total_seconds()),
         evaluated_at=now.isoformat(),
+    )
+
+
+class SupplierQualityMetric(BaseModel):
+    key: str
+    status: Literal["ok", "not_enough_data", "unavailable"]
+    numerator: int | None
+    denominator: int | None
+    share: float | None
+    reason: str | None
+
+
+class SupplierDataQuality(BaseModel):
+    supplier_key: str
+    metrics: list[SupplierQualityMetric]
+
+
+class SupplierDataQualityResponse(BaseModel):
+    suppliers: list[SupplierDataQuality]
+    window_days: int
+    min_records: int
+    late_cte_label: str
+    evaluated_at: str
+
+
+class SupplierQualityRecordItem(BaseModel):
+    record_id: str | None = None
+    lot_id: str | None = None
+    lot_code: str
+    cte_type: str | None = None
+    event_time: str | None = None
+    received_at: str | None = None
+    missing_kdes: list[str] = []
+
+
+class SupplierQualityRecordsResponse(BaseModel):
+    supplier_key: str
+    metric: str
+    window_days: int
+    total: int
+    limit: int
+    offset: int
+    items: list[SupplierQualityRecordItem]
+
+
+def _owned_facility_ids(db: Session, tenant_id: uuid_module.UUID, user_id: Any) -> list[str]:
+    return [
+        str(facility_id)
+        for facility_id in db.scalars(
+            select(SupplierFacilityModel.id).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == user_id,
+            )
+        ).all()
+    ]
+
+
+def _iso_or_none(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+@router.get("/data-quality", response_model=SupplierDataQualityResponse)
+async def get_supplier_data_quality(
+    window_days: int = Query(default=DEFAULT_WINDOW_DAYS, ge=1, le=MAX_WINDOW_DAYS),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierDataQualityResponse:
+    """Four separate data quality measures per facility over a rolling window.
+
+    Scoped to the tenant and to facilities owned by the calling user.
+    """
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    facility_ids = _owned_facility_ids(db, tenant_id, current_user.id)
+    now = datetime.now(timezone.utc)
+    quality = fetch_supplier_quality(
+        db, str(tenant_id), str(current_user.id), facility_ids, quality_window_start(now, window_days)
+    )
+    return SupplierDataQualityResponse(
+        suppliers=[
+            SupplierDataQuality(
+                supplier_key=key,
+                metrics=[SupplierQualityMetric(**metrics[name]) for name in QUALITY_METRIC_ORDER],
+            )
+            for key, metrics in quality.items()
+        ],
+        window_days=window_days,
+        min_records=MIN_RECORDS,
+        late_cte_label=LATE_CTE_LABEL,
+        evaluated_at=now.isoformat(),
+    )
+
+
+@router.get("/data-quality/{facility_id}/records", response_model=SupplierQualityRecordsResponse)
+async def get_supplier_data_quality_records(
+    facility_id: str,
+    metric: Literal["missing_kde", "unlinked_lot"],
+    window_days: int = Query(default=DEFAULT_WINDOW_DAYS, ge=1, le=MAX_WINDOW_DAYS),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierQualityRecordsResponse:
+    """The exact records behind one facility's metric numerator, paginated."""
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    try:
+        scoped_facility_id = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+    _get_supplier_facility_or_404(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+    )
+
+    key = str(scoped_facility_id)
+    since = quality_window_start(datetime.now(timezone.utc), window_days)
+    if metric == METRIC_MISSING_KDE:
+        flagged = flag_records(fetch_record_rows(db, str(tenant_id), str(current_user.id), [key], since))
+        items = [
+            SupplierQualityRecordItem(
+                record_id=str(row["record_id"]),
+                lot_code=row["lot_code"],
+                cte_type=row["cte_type"],
+                event_time=_iso_or_none(row["event_time"]),
+                received_at=_iso_or_none(row["created_at"]),
+                missing_kdes=row["missing_kdes"],
+            )
+            for row in flagged
+        ]
+    else:
+        items = [
+            SupplierQualityRecordItem(lot_id=lot["lot_id"], lot_code=lot["lot_code"])
+            for lot in unlinked_lots(fetch_lot_rows(db, str(tenant_id), str(current_user.id), [key], since))
+        ]
+    return SupplierQualityRecordsResponse(
+        supplier_key=key,
+        metric=metric,
+        window_days=window_days,
+        total=len(items),
+        limit=limit,
+        offset=offset,
+        items=items[offset : offset + limit],
     )
 
 
