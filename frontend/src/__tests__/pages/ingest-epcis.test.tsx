@@ -2,7 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import IngestPage from '@/app/ingest/page';
-import sampleEpcisDocument from '../../../public/samples/sample_epcis_2.0.json';
+
+// Minimal EPCIS 2.0 request body for exercising the upload path in tests.
+const epcisDocument = {
+  '@context': ['https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld'],
+  type: 'EPCISDocument',
+  schemaVersion: '2.0',
+  epcisBody: {
+    eventList: [
+      { type: 'ObjectEvent', action: 'OBSERVE', bizStep: 'shipping', eventTime: '2026-01-01T00:00:00Z', eventTimeZoneOffset: '+00:00' },
+      { type: 'ObjectEvent', action: 'OBSERVE', bizStep: 'receiving', eventTime: '2026-01-02T00:00:00Z', eventTimeZoneOffset: '+00:00' },
+    ],
+  },
+};
 
 const mocks = vi.hoisted(() => ({
   ingestURL: vi.fn(),
@@ -75,7 +87,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     mocks.storeApiKey.mockResolvedValue(undefined);
   });
 
-  it('offers an EPCIS 2.0 tab with a JSON/XML chooser and the sample file link', async () => {
+  it('offers an EPCIS 2.0 tab with a JSON/XML chooser and no sample file link', async () => {
     await openEpcisTab();
     expect(screen.getByText('CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.')).toBeInTheDocument();
     expect(document.getElementById('epcis-file-upload')).toHaveAttribute(
@@ -83,12 +95,11 @@ describe('EPCIS 2.0 import on /ingest', () => {
       '.json,application/json,.xml,application/xml,text/xml',
     );
     expect(screen.getByText('JSON or XML files up to 5MB')).toBeInTheDocument();
-    const sampleLink = screen.getByRole('link', { name: /download a sample epcis file/i });
-    expect(sampleLink).toHaveAttribute('href', '/samples/sample_epcis_2.0.json');
+    expect(screen.queryByRole('link', { name: /download a sample epcis file/i })).not.toBeInTheDocument();
   });
 
-  it('sends the sample EPCIS JSON document to the batch endpoint once with all events', async () => {
-    const eventList = (sampleEpcisDocument as { epcisBody: { eventList: unknown[] } }).epcisBody.eventList;
+  it('sends an EPCIS JSON document to the batch endpoint once with all events', async () => {
+    const eventList = (epcisDocument as { epcisBody: { eventList: unknown[] } }).epcisBody.eventList;
     expect(eventList.length).toBeGreaterThan(1);
     mocks.ingestEpcisBatch.mockResolvedValue({
       total: eventList.length,
@@ -100,7 +111,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     });
 
     await openEpcisTab();
-    uploadEpcisFile('sample_epcis_2.0.json', JSON.stringify(sampleEpcisDocument), 'application/json');
+    uploadEpcisFile('events.json', JSON.stringify(epcisDocument), 'application/json');
     await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
 
     expect(mocks.ingestEpcisBatch).toHaveBeenCalledTimes(1);
@@ -243,7 +254,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     mocks.ingestEpcisBatch.mockRejectedValue(new Error('Batch ingest failed'));
 
     await openEpcisTab();
-    uploadEpcisFile('sample_epcis_2.0.json', JSON.stringify(sampleEpcisDocument), 'application/json');
+    uploadEpcisFile('events.json', JSON.stringify(epcisDocument), 'application/json');
     await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
 
     expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();

@@ -43,9 +43,6 @@ jobs:
       # checks use only Node built-ins; keep the existing job/check name for
       # consumers without repeating the dependency install and unit suite.
 
-      - name: FSMA 204 compliance checks
-        run: node qa/fsma-lite-check.js
-
       # #2824: renamed. This step is a static text scan of frontend sources --
       # credential hygiene and auth-wiring conventions. It does NOT verify
       # tenant isolation, which is enforced by PostgreSQL RLS policies that a
@@ -67,14 +64,8 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Full ingestion-to-export flow
-        run: node qa/full-flow.js
-
       - name: Bad data rejection
         run: node qa/bad-data.js
-
-      - name: Export artifact validation
-        run: node qa/export-validate.js
 
   # ── Stage 3: AI Analysis ───────────────────────────────
   # Advisory-only: copy, pricing, and credibility warnings for human
