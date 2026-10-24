@@ -105,7 +105,9 @@ def _receipt_for_response(tenant_id: Optional[str], raw_body: bytes, response: J
     try:
         content = json.loads(response.body)
         failed = content.get("failed") if isinstance(content, dict) else None
-        summary = summarize_failed_events(failed, content.get("total")) if failed else None
+        total = content.get("total") if isinstance(content, dict) else None
+        counts_are_ints = isinstance(failed, int) and isinstance(total, int)
+        summary = summarize_failed_events(failed, total) if counts_are_ints and failed else None
     except (ValueError, TypeError):
         summary = None
     status = RECEIPT_REJECTED if response.status_code >= 400 else RECEIPT_ACCEPTED

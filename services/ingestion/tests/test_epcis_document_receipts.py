@@ -29,10 +29,13 @@ from shared.epcis_receipts import (  # noqa: E402
     RECEIPT_REJECTED,
     document_sha256,
 )
+from shared.supplier_data_quality import MIN_RECORDS  # noqa: E402
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override  # noqa: E402
 
 TENANT = str(uuid4())
+# Batch size comes from the spec constant, not a picked number.
+BATCH_SIZE = MIN_RECORDS
 
 
 @pytest.fixture
@@ -159,7 +162,7 @@ def test_receipt_write_failure_keeps_the_rejection(client, monkeypatch):
 
 
 def test_atomic_batch_files_one_accepted_receipt(client, receipts, monkeypatch):
-    events = [_event() for _ in range(3)]
+    events = [_event() for _ in range(BATCH_SIZE)]
     monkeypatch.setattr(
         router_mod, "_ingest_batch_events_db_atomic", lambda t, evs: [({"cte_id": str(uuid4())}, 201) for _ in evs]
     )
@@ -175,7 +178,7 @@ def test_atomic_batch_validation_failure_files_rejected_receipt(client, receipts
         raise HTTPException(status_code=400, detail={"error": "batch_validation_failed", "errors": _events})
 
     monkeypatch.setattr(router_mod, "_ingest_batch_events_db_atomic", _reject)
-    events = [_event() for _ in range(2)]
+    events = [_event() for _ in range(BATCH_SIZE)]
     raw, resp = _post_json(client, "/api/v1/epcis/events/batch?mode=atomic", {"events": events})
 
     assert resp.status_code == 400
@@ -186,8 +189,8 @@ def test_atomic_batch_validation_failure_files_rejected_receipt(client, receipts
 
 
 def test_partial_batch_with_some_failures_is_accepted_with_failed_count(client, receipts, monkeypatch):
-    events = [_event() for _ in range(4)]
-    failing = {events[0]["id"], events[2]["id"]}
+    events = [_event() for _ in range(BATCH_SIZE)]
+    failing = {event["id"] for event in events[::2]}
 
     def _single(_tenant, event):
         if event["id"] in failing:
@@ -204,7 +207,7 @@ def test_partial_batch_with_some_failures_is_accepted_with_failed_count(client, 
 
 
 def test_partial_batch_with_every_event_failing_is_rejected(client, receipts, monkeypatch):
-    events = [_event() for _ in range(2)]
+    events = [_event() for _ in range(BATCH_SIZE)]
 
     def _single(_tenant, event):
         raise HTTPException(status_code=422, detail=event["value"])
@@ -238,7 +241,7 @@ def _post_xml(client: TestClient, raw: bytes, mode: str = "atomic"):
 
 def test_xml_document_files_accepted_receipt(client, receipts, monkeypatch):
     raw = uuid4().hex.encode()
-    events = [_event() for _ in range(2)]
+    events = [_event() for _ in range(BATCH_SIZE)]
     monkeypatch.setattr(router_mod, "_is_xml_content", lambda body: True)
     monkeypatch.setattr(router_mod, "_parse_epcis_xml", lambda body: events)
     monkeypatch.setattr(
@@ -274,3 +277,17 @@ def test_non_xml_body_files_rejected_receipt(client, receipts, monkeypatch):
 def test_invalid_mode_is_rejected_before_the_body_is_read(client, receipts):
     assert _post_xml(client, uuid4().hex.encode(), mode=uuid4().hex).status_code == 400
     assert receipts == []
+
+
+@pytest.mark.parametrize(
+    "counts", [{"failed": str(BATCH_SIZE), "total": BATCH_SIZE}, {"failed": BATCH_SIZE, "total": None}]
+)
+def test_partial_response_with_non_int_counts_files_no_summary(receipts, counts):
+    from fastapi.responses import JSONResponse
+
+    raw = uuid4().hex.encode()
+    router_mod._receipt_for_response(TENANT, raw, JSONResponse(counts, status_code=207))
+
+    [receipt] = receipts
+    _assert_receipt(receipt, raw, RECEIPT_ACCEPTED)
+    assert receipt["error_summary"] is None
