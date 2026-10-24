@@ -39,8 +39,7 @@ Implemented capabilities in the current tree. Route availability is controlled b
 | Paid endpoint subscription gate | [services/ingestion/app/subscription_gate.py](services/ingestion/app/subscription_gate.py) |
 | CSV template download and CSV or Excel `.xlsx` CTE ingest (workbook converted to CSV text on the same route) | [services/ingestion/app/csv_templates.py](services/ingestion/app/csv_templates.py), [services/ingestion/app/shared/xlsx_rows.py](services/ingestion/app/shared/xlsx_rows.py), [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) |
 | EPCIS 2.0 JSON and XML ingest, including the `/ingest` dashboard upload tab | [services/ingestion/app/epcis/router.py](services/ingestion/app/epcis/router.py), [frontend/src/lib/epcis-upload.ts](frontend/src/lib/epcis-upload.ts) |
-| EDI X12 ingest for 856, 850, 810, 861, 944, and 945 (856/861/944/945 emit one CTE per item line; 850/810 stay one event per transaction set) | [services/ingestion/app/edi_ingestion/](services/ingestion/app/edi_ingestion/), [docs/engineering/TRACEABILITY_FILE_INTAKE.md](docs/engineering/TRACEABILITY_FILE_INTAKE.md) |
-| GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook, EDI, and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
+| GS1 identifier check-digit validation (GLN/GTIN/SSCC) used by webhook and EPCIS ingest | [services/shared/fsma_validation.py](services/shared/fsma_validation.py) |
 | Optional Jev CSV column mapping and file-CTE suggestions, confidence-based review, upload UI prompts, and operator preview/evaluation tools; automatic application defaults off | [services/shared/jev/](services/shared/jev/), [docs/engineering/JEV_HEADER_MAPPING.md](docs/engineering/JEV_HEADER_MAPPING.md) |
 | Optional LlamaIndex Extract v2.5 document extraction: a fail-open second pass on bulk-upload supplier PDFs the table parser cannot read, with per-field citations, confidence and evidence; rows still go through classify, validate and human commit; operator command-line tool | [services/shared/document_extract/](services/shared/document_extract/), [docs/engineering/DOCUMENT_EXTRACT.md](docs/engineering/DOCUMENT_EXTRACT.md) |
 | Inflow Workbench preflight, readiness, fix queue, scenario library, and commit gate | [services/ingestion/app/inflow_workbench.py](services/ingestion/app/inflow_workbench.py) |
@@ -77,7 +76,7 @@ ingest source record
   -> expose compliance/audit/export views
 ```
 
-The diagram describes the Workbench workflow. Direct webhook, CSV, EPCIS, and EDI intake has route-specific validation and persistence; it does not universally pass through Workbench. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and read paths have consumer-specific cutover flags. Chain verification defaults to canonical reads; FDA CSV export v1 retains a legacy code default. Historical rollout observations are recorded in the cutover runbook; current deployment flags must be read back separately (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
+The diagram describes the Workbench workflow. Direct webhook, CSV, and EPCIS intake has route-specific validation and persistence; it does not universally pass through Workbench. Event persistence is mid-migration from a legacy CTE store to a canonical hash-chain store: some write paths still write both stores, newer paths write canonical-only, and read paths have consumer-specific cutover flags. Chain verification defaults to canonical reads; FDA CSV export v1 retains a legacy code default. Historical rollout observations are recorded in the cutover runbook; current deployment flags must be read back separately (see [docs/persistence/dual-write-cutover.md](docs/persistence/dual-write-cutover.md)). Graph, NLP, generic regulatory-intelligence, and document-ingestion modules are present, but they should not be treated as the core product contract without checking the relevant tests and deploy wiring.
 
 ## Architecture
 
@@ -88,7 +87,7 @@ The repo still contains six service directories:
 | Directory | Purpose |
 | --- | --- |
 | [services/admin](services/admin) | tenants, users, roles, MFA, API keys, audit logs, admin routes |
-| [services/ingestion](services/ingestion) | webhook, CSV, EPCIS, EDI, sandbox, export, CTE persistence integration |
+| [services/ingestion](services/ingestion) | webhook, CSV, EPCIS, sandbox, export, CTE persistence integration |
 | [services/compliance](services/compliance) | compliance validation routes and FSMA rules JSON |
 | [services/graph](services/graph) | graph and supply-chain query modules |
 | [services/nlp](services/nlp) | regulatory/document extraction modules |
