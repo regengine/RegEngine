@@ -35,7 +35,8 @@ GAP_KIND_MISSING_KDE = "missing_kde"
 GAP_KIND_CTE_VALIDATION_FAILED = "cte_validation_failed"
 UNASSIGNED_SUPPLIER_KEY = "unassigned"
 
-# 21 CFR 1.1455(c)(1): records must reach FDA within 24 hours of a request.
+# 21 CFR 1.1455(c)(1): records must reach FDA within 24 hours of a request, or
+# within a reasonable time FDA agrees to. This threshold measures gap age only.
 AT_RISK_THRESHOLD = timedelta(hours=24)
 
 _MISSING_KDE_RE = re.compile(r"Missing required KDE '([^']+)'")
@@ -250,18 +251,16 @@ def record_outcomes(db_session: Any, tenant_id: str, outcomes: Sequence[Validati
             except Exception as exc:  # noqa: BLE001 -- gap logging is fail-open
                 savepoint.rollback()
                 logger.warning(
-                    "data_gap_write_failed tenant=%s error_type=%s error=%s",
+                    "data_gap_write_failed tenant=%s error_type=%s",
                     tenant_id,
                     type(exc).__name__,
-                    exc,
                 )
         db_session.commit()
     except Exception as exc:  # noqa: BLE001 -- gap logging must never block ingest
         logger.warning(
-            "data_gap_record_failed tenant=%s error_type=%s error=%s",
+            "data_gap_record_failed tenant=%s error_type=%s",
             tenant_id,
             type(exc).__name__,
-            exc,
         )
         try:
             db_session.rollback()
