@@ -113,7 +113,7 @@ export default function HomePage() {
             ingest, checklist, and export views populate from your records.
           </p>
           <Button asChild variant="secondary" size="lg" className="mt-2">
-            <Link href="/signup">
+            <Link href="/ingest">
               Start setup
               <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
             </Link>
