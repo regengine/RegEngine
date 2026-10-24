@@ -210,6 +210,18 @@ export default function SupplierDashboardPage() {
     const [newPostalCode, setNewPostalCode] = useState('');
     const [adding, setAdding] = useState(false);
 
+    const loadDataQuality = useCallback(() => {
+        apiClient.getSupplierDataQuality()
+            .then((res) => {
+                setDataQuality(res);
+                setDataQualityUnavailable(false);
+            })
+            .catch(() => {
+                setDataQuality(null);
+                setDataQualityUnavailable(true);
+            });
+    }, []);
+
     /* ---------- Fetch all data ------------------------------------ */
     // Phase 1: Load facility list fast (1 API call)
     // Phase 2: Lazy-enrich with compliance data in background (batched, non-blocking)
@@ -244,15 +256,7 @@ export default function SupplierDashboardPage() {
                     setGapTimeToFixUnavailable(true);
                 });
 
-            apiClient.getSupplierDataQuality()
-                .then((res) => {
-                    setDataQuality(res);
-                    setDataQualityUnavailable(false);
-                })
-                .catch(() => {
-                    setDataQuality(null);
-                    setDataQualityUnavailable(true);
-                });
+            loadDataQuality();
 
             if (tenantId) {
                 fetchWorkbenchReadinessSummary(tenantId)
@@ -311,7 +315,7 @@ export default function SupplierDashboardPage() {
             setError(friendlyError(err, 'Unable to load supplier data. Please try again.'));
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId]);
+    }, [isLoggedIn, tenantId, loadDataQuality]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -906,6 +910,7 @@ export default function SupplierDashboardPage() {
                                                     windowDays={dataQuality?.window_days ?? 30}
                                                     minRecords={dataQuality?.min_records ?? 20}
                                                     lateCteLabel={dataQuality?.late_cte_label ?? ''}
+                                                    onSendingHoursSaved={loadDataQuality}
                                                 />
                                             )}
                                             {comp.gaps.length > 0 && (
