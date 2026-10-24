@@ -6,7 +6,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
     AlertTriangle,
     ArrowDownToLine,
-    CalendarDays,
     CheckCircle2,
     ClipboardList,
     Database,
@@ -20,6 +19,7 @@ import {
     RotateCcw,
     Search,
     SlidersHorizontal,
+    Tag,
     Truck,
     Upload,
 } from "lucide-react";
@@ -2317,8 +2317,8 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             <div className="grid gap-4 lg:grid-cols-2">
                                                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                     <div className="flex items-center gap-2">
-                                                        <CalendarDays className="h-4 w-4 text-slate-700" />
-                                                        <p className="text-sm font-semibold text-slate-950">Export filters</p>
+                                                        <Tag className="h-4 w-4 text-slate-700" />
+                                                        <p className="text-sm font-semibold text-slate-950">Lot code</p>
                                                     </div>
                                                     <div className="mt-4">
                                                         <label className="block text-xs font-medium text-slate-600">
