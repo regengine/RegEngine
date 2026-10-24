@@ -43,6 +43,9 @@ jobs:
       # checks use only Node built-ins; keep the existing job/check name for
       # consumers without repeating the dependency install and unit suite.
 
+      - name: FSMA 204 CTE count copy check (7, never 6)
+        run: node qa/fsma-cte-count-check.js
+
       # #2824: renamed. This step is a static text scan of frontend sources --
       # credential hygiene and auth-wiring conventions. It does NOT verify
       # tenant isolation, which is enforced by PostgreSQL RLS policies that a

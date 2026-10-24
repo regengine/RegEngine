@@ -6,6 +6,7 @@ These checks **block merge**. No exceptions, no softening.
 
 | Rule | Check | Script |
 |---|---|---|
+| FSMA 204 CTE count | Fails if fsma-204/page.tsx says 6 CTEs or doesn't state 7 | `fsma-cte-count-check.js` |
 | No hardcoded credentials | No API keys, JWTs, or AWS keys in source | `frontend-security-scan.js` |
 | Bad data rejection | Invalid CTEs blocked, empty lot codes rejected | `bad-data.js` |
 

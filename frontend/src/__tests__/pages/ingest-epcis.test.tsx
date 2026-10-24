@@ -39,23 +39,14 @@ vi.mock('@/app/ingest/NormalizedDocumentViewer', () => ({
   NormalizedDocumentViewer: () => <div>Normalized document viewer</div>,
 }));
 
-const SINGLE_EVENT = {
-  type: 'ObjectEvent',
-  eventTime: '2026-03-01T06:00:00Z',
-  eventTimeZoneOffset: '-08:00',
-  action: 'OBSERVE',
-  bizStep: 'urn:epcglobal:cbv:bizstep:harvesting',
-};
+// Data-free placeholders: the page only routes on shape (single object vs
+// array vs .xml), so no event field values are needed. Real data only in tests.
+const SINGLE_EVENT: Record<string, unknown> = {};
 
 const EPCIS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2">
   <EPCISBody>
-    <EventList>
-      <ObjectEvent>
-        <eventTime>2026-03-01T06:00:00Z</eventTime>
-        <action>OBSERVE</action>
-      </ObjectEvent>
-    </EventList>
+    <EventList />
   </EPCISBody>
 </epcis:EPCISDocument>`;
 
@@ -120,7 +111,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
   });
 
   it('sends a bare JSON array of events to the batch endpoint', async () => {
-    const events = [SINGLE_EVENT, { ...SINGLE_EVENT, eventTime: '2026-03-01T08:00:00Z' }];
+    const events = [{ ...SINGLE_EVENT }, { ...SINGLE_EVENT }];
     mocks.ingestEpcisBatch.mockResolvedValue({
       total: 2,
       created: 1,
@@ -208,7 +199,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
   });
 
   it('validate-only reports per-event failures for a batch document', async () => {
-    const events = [SINGLE_EVENT, { ...SINGLE_EVENT, eventTime: '2026-03-01T08:00:00Z' }];
+    const events = [{ ...SINGLE_EVENT }, { ...SINGLE_EVENT }];
     mocks.validateEpcis
       .mockResolvedValueOnce({ valid: true, errors: [], normalized_cte: null })
       .mockResolvedValueOnce({ valid: false, errors: ['Missing bizLocation'], normalized_cte: null });
