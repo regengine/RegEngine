@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
-TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
+TEST_TENANT_ID = "t"
 _XML_PATH = "/api/v1/epcis/events/xml"
 _CBV_PREFIX = "urn:epcglobal:cbv:bizstep:"
 _CBV_NAMES = tuple(sorted(key[len(_CBV_PREFIX) :] for key in _EVENT_TYPE_MAP if key.startswith(_CBV_PREFIX)))
@@ -86,6 +86,27 @@ def test_malformed_xml_bytes_return_400(client: TestClient) -> None:
     detail = response.json().get("detail", "")
     assert isinstance(detail, str)
     assert "malformed XML" in detail
+    _assert_no_parser_internals(response)
+
+
+def test_non_parse_exception_propagates_as_500(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A parser failure that is not malformed XML is not relabelled as HTTP 400."""
+
+    def _boom(_raw: object) -> list[dict]:
+        raise RuntimeError("parser helper failed")
+
+    monkeypatch.setattr("app.epcis.router._parse_epcis_xml", _boom)
+    app = FastAPI()
+    app.include_router(epcis_ingestion_router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant=TEST_TENANT_ID)
+    with TestClient(app, raise_server_exceptions=False) as local_client:
+        response = local_client.post(
+            _XML_PATH,
+            headers={"X-Tenant-ID": TEST_TENANT_ID, "Content-Type": "application/xml"},
+            content=b"<a/>",
+        )
+    assert response.status_code == 500
     _assert_no_parser_internals(response)
 
 

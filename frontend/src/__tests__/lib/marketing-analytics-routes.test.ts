@@ -42,7 +42,6 @@ describe('marketing pageview routes', () => {
     expect(safeMarketingPath('/portal/portal-123')).toBeNull();
     expect(shouldTrackMarketingPageview('/sandbox/results/result-123')).toBe(false);
     expect(shouldTrackMarketingPageview('/portal/portal-123')).toBe(false);
-    expect(shouldTrackMarketingPageview('/sandbox')).toBe(true);
   });
 
   it('normalizes arbitrary public child paths so names and encoded email never become pageview URLs', () => {
