@@ -29,6 +29,6 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
         with:
-          node-version: '20'
+          node-version-file: .nvmrc
       - run: node --test scripts/copy-lint/check-copy.test.mjs
       - run: node scripts/copy-lint/check-copy.mjs . --github

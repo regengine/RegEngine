@@ -57,12 +57,6 @@ Inflow prepares the data. The Engine proves it.
 
 ## Local Persisted Evidence Proof
 
-Use the fast simulator for quick golden-contract checks; it is DB-free and does not prove persisted evidence:
-
-```bash
-./venv/bin/python scripts/run_full_fsma_simulation.py --json
-```
-
 Use the full verifier when you need real local Postgres-backed evidence:
 
 ```bash

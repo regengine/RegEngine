@@ -37,7 +37,6 @@ const SOURCE_LABEL: Record<string, string> = {
   xlsx_upload: 'XLSX Upload',
   epcis_api: 'EPCIS API',
   epcis_xml: 'EPCIS XML',
-  edi: 'EDI',
   manual: 'Manual',
   legacy_v002: 'Legacy',
 };
