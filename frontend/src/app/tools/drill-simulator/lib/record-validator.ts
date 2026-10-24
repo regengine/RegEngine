@@ -902,13 +902,13 @@ function calculateScores(
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Blank CSV template: the header row only, matching the column spec the
- * validator checks (see COLUMN_MAP and REQUIRED_KDES above). No data rows —
- * users fill it with their own records.
- */
+/** Header row only: the columns the drill simulator expects, with no example records. */
+export const CSV_TEMPLATE_HEADERS =
+  'Event Type,Product,Lot Code,GTIN,Facility GLN,Source GLN,Destination GLN,Timestamp,Quantity,Unit of Measure,Reference Document';
+
 export function generateCsvTemplate(): string {
-  return 'Event Type,Product,Lot Code,GTIN,Facility GLN,Source GLN,Destination GLN,Timestamp,Quantity,Unit of Measure,Reference Document';
+  return `${CSV_TEMPLATE_HEADERS}\n`;
+}
 }
 
 /**

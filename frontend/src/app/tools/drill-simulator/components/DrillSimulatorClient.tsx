@@ -316,7 +316,7 @@ STATUS: ${
                     onClick={handleDownloadTemplate}
                     leadingIcon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    Download CSV Template
+                    Download CSV template
                 </Button>
             </div>
 
