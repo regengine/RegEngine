@@ -14,7 +14,7 @@ Accepted events are stored with tenant boundaries in PostgreSQL. The platform ev
 
 Optional Jev assistance suggests mappings for unfamiliar CSV columns and a file's CTE when none is declared. Upload screens expose suggestions for operator review. Automatic application defaults off, requests use headers without row samples by default, and model suggestions do not replace deterministic validation. Preview and evaluation tools let operators inspect suggestions before enabling automatic application.
 
-Public synthetic artifacts, a browser verifier, a downloadable Python bundle verifier, and a reproducible recall drill let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
+A browser verifier, a downloadable Python bundle verifier, and a reproducible recall drill let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
 
 ## Capability and availability matrix
 
