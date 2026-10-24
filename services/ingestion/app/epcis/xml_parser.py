@@ -417,11 +417,11 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
         root = tree.getroot()
     except Exception as exc:
         detail = _malformed_xml_detail(exc)
-        if detail is not None:
-            logger.warning("epcis_xml_parse_failed error=%s", detail)
-            raise HTTPException(status_code=400, detail=detail) from None
-        logger.warning("epcis_xml_parse_failed error_type=%s", type(exc).__name__)
-        return []
+        if detail is None:
+            # Not an XML parse failure. Propagate so the API returns 500.
+            raise
+        logger.warning("epcis_xml_parse_failed error=%s", detail)
+        raise HTTPException(status_code=400, detail=detail) from None
 
     event_elements = _xml_find_events(root)
     events = [_xml_event_to_dict(ev) for ev in event_elements]
