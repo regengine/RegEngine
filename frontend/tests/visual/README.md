@@ -92,13 +92,11 @@ Snapshot stems (`home`, `about`, `blog__<slug>`, …) match the designer's
 
 ## Expected findings (known on day one)
 
-- `/demo` and `/sandbox` are classified `expectRedirectOr404`, but both
-  currently return 200 (`src/app/demo/page.tsx` renders the synthetic demo;
-  `/sandbox` renders UI or a disabled notice depending on
-  `isSandboxEnabled()`). Those assertions flag until the routes are retired
-  or reclassified to `public`. `/alpha` genuinely redirects to `/contact`.
+- `/demo` and `/sandbox` are classified `expectRedirectOr404`. The `/sandbox`
+  route was deleted in #3557 (its upload flow now lives at `/ingest`), so it
+  is expected to 404. `/alpha` genuinely redirects to `/contact`.
 - The content word bans (`demo`, `sandbox`, `sample`, …) will flag current
-  production copy (e.g. sandbox CTAs, "interactive demo" links). That is the
+  production copy (e.g. "interactive demo" links). That is the
   point: the report inventories every occurrence for the copy cleanup.
 
 ## Baselines
