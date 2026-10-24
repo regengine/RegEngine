@@ -204,9 +204,9 @@ export default function ProofPage() {
                             <code className="font-mono text-[0.8125rem]">audit-bundle-tampered.zip</code> contains a changed CSV while the manifest&apos;s declared hash remains unchanged. Run the verifier against it and watch it exit non-zero. This demonstrates detection of changed file bytes against an unchanged manifest; replacing both the file and manifest is outside this check.
                         </p>
                         <Button asChild variant="secondary" size="lg" className="mt-6">
-                            <Link href="/proof/audit-bundle-tampered.zip">
+                            <a href="/proof/audit-bundle-tampered.zip" download>
                                 <Download aria-hidden="true" strokeWidth={1.75} /> Download audit-bundle-tampered.zip
-                            </Link>
+                            </a>
                         </Button>
                     </div>
                     <Transcript title="Tampered output">

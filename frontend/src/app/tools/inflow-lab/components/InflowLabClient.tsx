@@ -10,7 +10,6 @@ import {
     CheckCircle2,
     ClipboardList,
     Database,
-    FileJson,
     FileSpreadsheet,
     GitBranch,
     GraduationCap,
@@ -830,9 +829,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [fixture, setFixture] = useState("leafy_greens_trace");
     const [deliveryMode, setDeliveryMode] = useState("mock");
     const [source, setSource] = useState("codex-simulator");
-    const [exportPreset, setExportPreset] = useState("all_records");
-    const [startDate, setStartDate] = useState("2026-04-26");
-    const [endDate, setEndDate] = useState("2026-04-27");
     const [feederCsv, setFeederCsv] = useState(FEEDER_SAMPLE_CSV);
     const [feederResult, setFeederResult] = useState<SandboxEvaluationResult | null>(null);
     const [feederError, setFeederError] = useState<string | null>(null);
@@ -2326,35 +2322,10 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                     </div>
                                                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                                                         <label className="block text-xs font-medium text-slate-600">
-                                                            Preset
-                                                            <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                                                <option value="all_records">All records</option>
-                                                                <option value="lot_trace">Lot trace</option>
-                                                                <option value="shipment_handoff">Shipment handoff</option>
-                                                                <option value="receiving_log">Receiving log</option>
-                                                                <option value="transformation_batches">Transformation batches</option>
-                                                            </select>
-                                                        </label>
-                                                        <label className="block text-xs font-medium text-slate-600">
                                                             Traceability Lot Code
                                                             <Input value={traceInput} onChange={(event) => setTraceInput(event.target.value)} className="mt-1 h-9 bg-white text-xs" />
                                                         </label>
-                                                        <label className="block text-xs font-medium text-slate-600">
-                                                            Start date
-                                                            <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                                        </label>
-                                                        <label className="block text-xs font-medium text-slate-600">
-                                                            End date
-                                                            <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                                        </label>
                                                     </div>
-                                                </div>
-
-                                                <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
-                                                    <p className="text-sm font-semibold">Test handoff preview</p>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal production records require signed-in imports.
-                                                    </p>
                                                 </div>
                                             </div>
                                         </div>
@@ -2548,22 +2519,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 Selected lot is an exception. Test-complete counts include only complete mock lots; this lot stays visible until missing CTE/KDE evidence or delivery issues are resolved.
                                             </div>
                                         )}
-                                        <div className="grid gap-3 md:grid-cols-2">
-                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
-                                                <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test CSV preview</p>
-                                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Formal production records are generated only from imported production data.
-                                                </p>
-                                            </div>
-                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
-                                                <FileJson className="h-5 w-5 text-blue-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test EPCIS preview</p>
-                                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Uses the same lot and date filters for interoperability testing. It is not production evidence.
-                                                </p>
-                                            </div>
-                                        </div>
                                     </div>
                                 )}
 
@@ -2788,7 +2743,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             </CardContent>
                         </Card>
 
-                        {isStandalone ? (
+                        {isStandalone && (
                             <>
                                 <Card className="rounded-lg border-amber-200 bg-amber-50/70 shadow-sm">
                                     <CardContent className="flex gap-3 p-4">
@@ -2812,35 +2767,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </CardContent>
                                 </Card>
                             </>
-                        ) : (
-                            <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
-                                <CardHeader className="border-b border-slate-200 p-4">
-                                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
-                                        <CalendarDays className="h-4 w-4 text-slate-700" />
-                                        Test preview filters
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3 p-4">
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        Preset
-                                        <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                            <option value="all_records">All records</option>
-                                            <option value="lot_trace">Lot trace</option>
-                                            <option value="shipment_handoff">Shipment handoff</option>
-                                            <option value="receiving_log">Receiving log</option>
-                                            <option value="transformation_batches">Transformation batches</option>
-                                        </select>
-                                    </label>
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        Start date
-                                        <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                    </label>
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        End date
-                                        <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                    </label>
-                                </CardContent>
-                            </Card>
                         )}
                     </aside>
                 </section>
