@@ -16,7 +16,7 @@ const PUBLIC_MARKETING_SECTIONS = new Set([
   '/compare', '/contact', '/demo', '/design-system', '/developers',
   '/docs', '/dpa', '/fsma', '/fsma-204', '/integrations', '/legal',
   '/pricing', '/privacy', '/product', '/proof', '/retailer-readiness',
-  '/sandbox', '/security', '/status', '/supplier-compliance', '/terms',
+  '/security', '/status', '/supplier-compliance', '/terms',
   '/tools', '/trust', '/trust-center', '/verify', '/verticals',
   '/walkthrough', '/why-regengine',
 ]);
