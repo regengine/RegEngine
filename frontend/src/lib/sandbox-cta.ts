@@ -38,20 +38,13 @@ export function isSandboxEnabled(): boolean {
 }
 
 export function sandboxCta(): SandboxCta {
-    if (isSandboxEnabled()) {
-        return {
-            enabled: true,
-            href: '/sandbox',
-            label: 'Try the Sandbox',
-            blurb:
-                'Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds. No signup required.',
-        };
-    }
+    // The public /sandbox route was retired. The CTA never links to it, even
+    // when the experimental sandbox router is enabled on the backend.
     return {
         enabled: false,
-        href: '/walkthrough',
-        label: 'See the walkthrough',
+        href: '/ingest',
+        label: 'Upload your CSV',
         blurb:
-            'Walk the FSMA 204 records-request workflow step by step. No signup required.',
+            'Upload your own traceability records as CSV to check them against FSMA 204.',
     };
 }

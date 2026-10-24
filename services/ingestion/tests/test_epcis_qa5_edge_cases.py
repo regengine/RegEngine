@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -59,17 +60,28 @@ def _force_fallback(monkeypatch: pytest.MonkeyPatch, store: dict) -> None:
     monkeypatch.setattr(router_mod, "_fallback_store_for", lambda t: store)
 
 
-def _timestamp_store() -> dict:
+def _date_only_export_case() -> tuple[dict, str]:
+    """One stored clock reading and the date-only form of that same reading.
+
+    An untimed record stays in every export. The timed record is kept or
+    dropped by comparison with its own calendar date, not a separate offset.
+    """
+    moment = datetime.now(timezone.utc)
     return {
-        "early": {
-            "normalized_cte": {"event_time": "2020-01-01T00:00:00+00:00"},
+        "untimed": {"normalized_cte": {}, "epcis_document": {}},
+        "timed": {
+            "normalized_cte": {"event_time": moment.isoformat()},
             "epcis_document": {},
         },
-        "late": {
-            "normalized_cte": {"event_time": "2026-06-01T00:00:00+00:00"},
-            "epcis_document": {},
-        },
-    }
+    }, moment.date().isoformat()
+
+
+def _assert_bound_orders_stored_time(store: dict, bound: str) -> datetime:
+    stored = datetime.fromisoformat(store["timed"]["normalized_cte"]["event_time"])
+    bound_dt = router_mod._parse_export_bound(bound, "start_date")
+    assert bound_dt is not None and stored.tzinfo is not None and bound_dt.tzinfo is not None
+    assert bound_dt <= stored
+    return stored
 
 
 class TestExportDateHandling:
@@ -84,21 +96,31 @@ class TestExportDateHandling:
     def test_naive_date_only_start_filters_without_crash(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _force_fallback(monkeypatch, _timestamp_store())
-        resp = client.get("/api/v1/epcis/export?start_date=2026-01-01")
+        store, bound = _date_only_export_case()
+        stored = _assert_bound_orders_stored_time(store, bound)
+        _force_fallback(monkeypatch, store)
+        resp = client.get(f"/api/v1/epcis/export?start_date={bound}")
         assert resp.status_code == 200
-        events = resp.json()["epcisBody"]["eventList"]
-        assert len(events) == 1
+        body = resp.json()
+        created = datetime.fromisoformat(body["creationDate"])
+        assert created.tzinfo is not None
+        assert stored <= created
+        assert len(body["epcisBody"]["eventList"]) == 2
         assert "Traceback" not in resp.text
 
     def test_naive_date_only_end_filters_without_crash(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        _force_fallback(monkeypatch, _timestamp_store())
-        resp = client.get("/api/v1/epcis/export?end_date=2026-01-01")
+        store, bound = _date_only_export_case()
+        stored = _assert_bound_orders_stored_time(store, bound)
+        _force_fallback(monkeypatch, store)
+        resp = client.get(f"/api/v1/epcis/export?end_date={bound}")
         assert resp.status_code == 200
-        events = resp.json()["epcisBody"]["eventList"]
-        assert len(events) == 1
+        body = resp.json()
+        created = datetime.fromisoformat(body["creationDate"])
+        assert created.tzinfo is not None
+        assert stored <= created
+        assert len(body["epcisBody"]["eventList"]) == 1
         assert "Traceback" not in resp.text
 
 

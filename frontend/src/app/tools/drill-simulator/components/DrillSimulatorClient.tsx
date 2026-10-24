@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
-    parseCSV, validateRecords, generateSampleCSV, getScoreColor,
+    parseCSV, validateRecords, generateSampleCSV, generateCsvTemplate, getScoreColor,
     getSeverityColor, getSeverityBadgeColor,
     type ValidationResult,
 } from '../lib/record-validator';
@@ -216,13 +216,13 @@ export function DrillSimulatorClient() {
         setState({ ...state, uploadedFile: file });
     };
 
-    const handleDownloadSample = () => {
-        const csv = generateSampleCSV();
+    const handleDownloadTemplate = () => {
+        const csv = generateCsvTemplate();
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'sample-traceability-records.csv';
+        a.download = 'traceability-records-template.csv';
         a.click();
         URL.revokeObjectURL(url);
     };
@@ -373,10 +373,10 @@ STATUS: ${
                 <Button
                     size="lg"
                     variant="secondary"
-                    onClick={handleDownloadSample}
+                    onClick={handleDownloadTemplate}
                     leadingIcon={<Download size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    Download Sample CSV
+                    Download CSV template
                 </Button>
             </div>
 
