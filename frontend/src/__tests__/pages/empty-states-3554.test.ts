@@ -71,5 +71,7 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         const src = read('src/app/fsma-204/[cte]/page.tsx');
         expect(src).not.toContain('Upload a sample');
         expect(src).toContain('Upload your {data.name.toLowerCase()} file');
+        expect(src).not.toContain('data to the sandbox');
+        expect(src).toMatch(/data to\{" "\}\s*<Link href="\/ingest"[^>]*>RegEngine<\/Link>/);
     });
 });
