@@ -37,15 +37,8 @@ export function isSandboxEnabled(): boolean {
 }
 
 export function sandboxCta(): SandboxCta {
-    if (isSandboxEnabled()) {
-        return {
-            enabled: true,
-            href: '/sandbox',
-            label: 'Try the Sandbox',
-            blurb:
-                'Drop your CSV in the sandbox and get FSMA 204 compliance results in under 60 seconds. No signup required.',
-        };
-    }
+    // The public /sandbox route was retired. The CTA never links to it, even
+    // when the experimental sandbox router is enabled on the backend.
     return {
         enabled: false,
         href: '/demo',
