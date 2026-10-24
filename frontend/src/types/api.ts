@@ -490,6 +490,22 @@ export interface SupplierComplianceGapsResponse {
     evaluated_at: string;
 }
 
+export interface SupplierGapTimeToFix {
+    /** Supplier facility id. */
+    supplier_key: string;
+    open_gap_count: number;
+    median_time_to_fix_seconds: number | null;
+    oldest_open_gap_opened_at: string | null;
+    at_risk: boolean;
+    has_data: boolean;
+}
+
+export interface SupplierGapTimeToFixResponse {
+    suppliers: SupplierGapTimeToFix[];
+    at_risk_threshold_seconds: number;
+    evaluated_at: string;
+}
+
 export interface SupplierFDAExportRow {
     event_id: string;
     tlc_code: string;

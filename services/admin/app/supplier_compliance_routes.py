@@ -13,12 +13,15 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from shared.data_gap_tracking import AT_RISK_THRESHOLD, fetch_supplier_summaries
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_session
 from .dependencies import get_current_user
 from .models import TenantContext
-from .sqlalchemy_models import UserModel
+from .sqlalchemy_models import SupplierFacilityModel, UserModel
 from .supplier_onboarding_routes import (
     SupplierComplianceGap,
     SupplierComplianceGapsResponse,
@@ -113,6 +116,53 @@ async def get_compliance_gaps(
         medium=medium,
         low=low,
         evaluated_at=score_payload["evaluated_at"],
+    )
+
+
+class SupplierGapTimeToFix(BaseModel):
+    supplier_key: str
+    open_gap_count: int
+    median_time_to_fix_seconds: float | None
+    oldest_open_gap_opened_at: str | None
+    at_risk: bool
+    has_data: bool
+
+
+class SupplierGapTimeToFixResponse(BaseModel):
+    suppliers: list[SupplierGapTimeToFix]
+    at_risk_threshold_seconds: int
+    evaluated_at: str
+
+
+@router.get("/gap-time-to-fix", response_model=SupplierGapTimeToFixResponse)
+async def get_gap_time_to_fix(
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> SupplierGapTimeToFixResponse:
+    """Per facility data gap time to fix for the current supplier's facilities.
+
+    Scoped to the tenant and to facilities owned by the calling user; RLS on
+    ``public.data_gap_events`` enforces the tenant boundary as well.
+    """
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    facility_ids = [
+        str(facility_id)
+        for facility_id in db.scalars(
+            select(SupplierFacilityModel.id).where(
+                SupplierFacilityModel.tenant_id == tenant_id,
+                SupplierFacilityModel.supplier_user_id == current_user.id,
+            )
+        ).all()
+    ]
+    now = datetime.now(timezone.utc)
+    summaries = fetch_supplier_summaries(db, str(tenant_id), facility_ids, now)
+    return SupplierGapTimeToFixResponse(
+        suppliers=[SupplierGapTimeToFix(supplier_key=key, **summary) for key, summary in summaries.items()],
+        at_risk_threshold_seconds=int(AT_RISK_THRESHOLD.total_seconds()),
+        evaluated_at=now.isoformat(),
     )
 
 
