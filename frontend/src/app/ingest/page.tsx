@@ -32,6 +32,7 @@ import {
   parseEpcisJson,
   normalizeEpcisIngestResult,
   epcisErrorMessage,
+  epcisErrorEventMessages,
   type ParsedEpcisJson,
 } from '@/lib/epcis-upload';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
@@ -134,6 +135,7 @@ export default function IngestPage() {
   const [epcisFile, setEpcisFile] = useState<File | null>(null);
   const [epcisResult, setEpcisResult] = useState<NormalizedEpcisResult | null>(null);
   const [epcisError, setEpcisError] = useState<string | null>(null);
+  const [epcisErrorEvents, setEpcisErrorEvents] = useState<string[]>([]);
   const [epcisValidation, setEpcisValidation] = useState<{
     checked: number;
     valid: number;
@@ -172,6 +174,7 @@ export default function IngestPage() {
       setEpcisFile(e.target.files[0]);
       setEpcisResult(null);
       setEpcisError(null);
+      setEpcisErrorEvents([]);
       setEpcisValidation(null);
     }
   };
@@ -235,6 +238,7 @@ export default function IngestPage() {
     setErrorColumnSuggestions([]);
     setEpcisResult(null);
     setEpcisError(null);
+    setEpcisErrorEvents([]);
     setEpcisValidation(null);
     return true;
   };
@@ -309,6 +313,7 @@ export default function IngestPage() {
       notifyDashboardRefresh();
     } catch (error) {
       setEpcisError(epcisErrorMessage(error));
+      setEpcisErrorEvents(epcisErrorEventMessages(error));
     } finally {
       submitInFlightRef.current = false;
       setIsSubmitting(false);
@@ -852,6 +857,9 @@ export default function IngestPage() {
                       <p className="mt-1">
                         {(activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
                       </p>
+                      {activeTab === 'epcis' && epcisErrorEvents.map((message, index) => (
+                        <p key={index} className="mt-2">{message}</p>
+                      ))}
                       {activeTab === 'file' && (
                         <ColumnSuggestionList suggestions={errorColumnSuggestions} />
                       )}
@@ -905,6 +913,7 @@ export default function IngestPage() {
                         setEpcisFile(null);
                         setEpcisResult(null);
                         setEpcisError(null);
+                        setEpcisErrorEvents([]);
                         setEpcisValidation(null);
                         setJobId(null);
                         setJobStatus('queued');
