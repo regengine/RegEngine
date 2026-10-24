@@ -41,27 +41,32 @@ COMPLETE_SHIPPING = {
     "unit_of_measure": "cases",
     "ship_to_location": "DC 4",
     "reference_document": "BOL-1",
-    "tlc_source_reference": "Farm A",
+    "tlc_source_reference": str(uuid.uuid4()),
 }
 
 
-def _record(cte_type: str, kde_data: dict, lot_code: str = "LOT-1") -> dict:
+FACILITY_ID = str(uuid.uuid4())
+# One generated lot code per generated lot id.
+LOT_CODES: dict[str, str] = {}
+
+
+def _record(cte_type: str, kde_data: dict, lot_code: str | None = None) -> dict:
     return {
         "record_id": uuid.uuid4(),
-        "facility_id": "fac-1",
+        "facility_id": FACILITY_ID,
         "cte_type": cte_type,
         "kde_data": kde_data,
         "event_time": None,
         "created_at": None,
-        "lot_code": lot_code,
+        "lot_code": lot_code if lot_code is not None else str(uuid.uuid4()),
     }
 
 
 def _lot_row(lot_id: str, cte_type: str | None, kde_data: dict | None, output: bool = False) -> dict:
     return {
         "lot_id": lot_id,
-        "lot_code": f"TLC-{lot_id}",
-        "facility_id": "fac-1",
+        "lot_code": LOT_CODES.setdefault(lot_id, str(uuid.uuid4())),
+        "facility_id": FACILITY_ID,
         "cte_type": cte_type,
         "kde_data": kde_data,
         "is_transformation_output": output,
@@ -162,19 +167,23 @@ def test_lot_without_any_link_is_unlinked():
 
 
 def test_group_lots_collapses_records_per_lot():
-    rows = [_lot_row("a", "shipping", {}), _lot_row("a", "receiving", {}), _lot_row("b", "cooling", {})]
+    first, second = str(uuid.uuid4()), str(uuid.uuid4())
+    rows = [_lot_row(first, "shipping", {}), _lot_row(first, "receiving", {}), _lot_row(second, "cooling", {})]
     lots = group_lots(rows)
-    assert set(lots) == {"a", "b"}
-    assert len(lots["a"]["records"]) == 2
+    assert set(lots) == {first, second}
+    assert len(lots[first]["records"]) == sum(1 for row in rows if row["lot_id"] == first)
 
 
 def test_unlinked_lots_returns_ids_and_codes():
     rows = [
-        _lot_row("a", "shipping", {}),
-        _lot_row("b", "receiving", {"tlc_source_reference": "Farm"}),
-        _lot_row("c", "shipping", {}, output=True),
+        _lot_row(str(uuid.uuid4()), "shipping", {}),
+        _lot_row(str(uuid.uuid4()), "receiving", {"tlc_source_reference": str(uuid.uuid4())}),
+        _lot_row(str(uuid.uuid4()), "shipping", {}, output=True),
     ]
-    assert unlinked_lots(rows) == [{"lot_id": "a", "lot_code": "TLC-a", "facility_id": "fac-1"}]
+    unlinked = rows[0]
+    assert unlinked_lots(rows) == [
+        {"lot_id": unlinked["lot_id"], "lot_code": unlinked["lot_code"], "facility_id": unlinked["facility_id"]}
+    ]
 
 
 # --- share and thresholds ----------------------------------------------------

@@ -7,19 +7,44 @@ stubbed so the tests check what the routes pass and return, not SQL.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-TENANT = UUID("00000000-0000-0000-0000-000000000001")
-OTHER_TENANT = UUID("00000000-0000-0000-0000-000000000009")
-USER = UUID("00000000-0000-0000-0000-000000000002")
-OTHER_USER = UUID("00000000-0000-0000-0000-000000000003")
-OWN_FACILITY = UUID("00000000-0000-0000-0000-0000000000f1")
-FOREIGN_FACILITY = UUID("00000000-0000-0000-0000-0000000000f2")
-OTHER_TENANT_FACILITY = UUID("00000000-0000-0000-0000-0000000000f3")
+TENANT = uuid4()
+OTHER_TENANT = uuid4()
+USER = uuid4()
+OTHER_USER = uuid4()
+OWN_FACILITY = uuid4()
+FOREIGN_FACILITY = uuid4()
+OTHER_TENANT_FACILITY = uuid4()
+
+# Two shipping records with no KDEs on the owned facility, and one lot with no
+# upstream link. Ids and lot codes are generated per run.
+RECORD_ROWS = [
+    {
+        "record_id": str(uuid4()),
+        "facility_id": str(OWN_FACILITY),
+        "cte_type": "shipping",
+        "kde_data": {},
+        "event_time": None,
+        "created_at": None,
+        "lot_code": str(uuid4()),
+    }
+    for _ in range(2)
+]
+LOT_ROWS = [
+    {
+        "lot_id": str(uuid4()),
+        "lot_code": str(uuid4()),
+        "facility_id": str(OWN_FACILITY),
+        "cte_type": "shipping",
+        "kde_data": {},
+        "is_transformation_output": False,
+    }
+]
 
 
 class FakeSession:
@@ -51,39 +76,11 @@ def _client(monkeypatch, calls, tenant=TENANT):
 
     def fake_records(_db, tenant_id, user_id, facility_ids, since):
         calls.append(("records", tenant_id, user_id, list(facility_ids)))
-        return [
-            {
-                "record_id": "r1",
-                "facility_id": str(OWN_FACILITY),
-                "cte_type": "shipping",
-                "kde_data": {},
-                "event_time": None,
-                "created_at": None,
-                "lot_code": "TLC-1",
-            },
-            {
-                "record_id": "r2",
-                "facility_id": str(OWN_FACILITY),
-                "cte_type": "shipping",
-                "kde_data": {},
-                "event_time": None,
-                "created_at": None,
-                "lot_code": "TLC-2",
-            },
-        ]
+        return [dict(row) for row in RECORD_ROWS]
 
     def fake_lots(_db, tenant_id, user_id, facility_ids, since):
         calls.append(("lots", tenant_id, user_id, list(facility_ids)))
-        return [
-            {
-                "lot_id": "l1",
-                "lot_code": "TLC-1",
-                "facility_id": str(OWN_FACILITY),
-                "cte_type": "shipping",
-                "kde_data": {},
-                "is_transformation_output": False,
-            }
-        ]
+        return [dict(row) for row in LOT_ROWS]
 
     monkeypatch.setattr(routes, "fetch_record_rows", fake_records)
     monkeypatch.setattr(routes, "fetch_lot_rows", fake_lots)
@@ -112,7 +109,11 @@ def test_summary_returns_four_separate_metrics_for_owned_facilities(monkeypatch,
     assert supplier["supplier_key"] == str(OWN_FACILITY)
     assert [m["key"] for m in supplier["metrics"]] == ["missing_kde", "unlinked_lot", "late_cte", "epcis_failed"]
     missing = supplier["metrics"][0]
-    assert (missing["status"], missing["numerator"], missing["denominator"]) == ("not_enough_data", 2, 2)
+    assert (missing["status"], missing["numerator"], missing["denominator"]) == (
+        "not_enough_data",
+        len(RECORD_ROWS),
+        len(RECORD_ROWS),
+    )
     assert supplier["metrics"][2]["status"] == "unavailable"
     assert supplier["metrics"][3]["status"] == "unavailable"
     assert all(call[1:3] == (str(TENANT), str(USER)) for call in calls)
@@ -136,8 +137,8 @@ def test_drilldown_lists_missing_kde_records(monkeypatch, calls):
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert (body["total"], body["limit"], body["offset"]) == (2, 1, 0)
-    assert [item["record_id"] for item in body["items"]] == ["r1"]
+    assert (body["total"], body["limit"], body["offset"]) == (len(RECORD_ROWS), 1, 0)
+    assert [item["record_id"] for item in body["items"]] == [RECORD_ROWS[0]["record_id"]]
     assert "product_description" in body["items"][0]["missing_kdes"]
     assert calls == [("records", str(TENANT), str(USER), [str(OWN_FACILITY)])]
 
@@ -146,13 +147,13 @@ def test_drilldown_offset_pages(monkeypatch, calls):
     resp = _client(monkeypatch, calls).get(
         f"/v1/supplier/data-quality/{OWN_FACILITY}/records?metric=missing_kde&limit=1&offset=1"
     )
-    assert [item["record_id"] for item in resp.json()["items"]] == ["r2"]
+    assert [item["record_id"] for item in resp.json()["items"]] == [RECORD_ROWS[1]["record_id"]]
 
 
 def test_drilldown_lists_unlinked_lots(monkeypatch, calls):
     resp = _client(monkeypatch, calls).get(f"/v1/supplier/data-quality/{OWN_FACILITY}/records?metric=unlinked_lot")
     assert resp.status_code == 200
-    assert [item["lot_code"] for item in resp.json()["items"]] == ["TLC-1"]
+    assert [item["lot_code"] for item in resp.json()["items"]] == [LOT_ROWS[0]["lot_code"]]
 
 
 @pytest.mark.parametrize("facility", [FOREIGN_FACILITY, OTHER_TENANT_FACILITY])

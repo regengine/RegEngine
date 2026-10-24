@@ -26,11 +26,19 @@ const metric = (overrides: Partial<SupplierQualityMetric>): SupplierQualityMetri
     ...overrides,
 });
 
-const summary = (metrics: SupplierQualityMetric[]): SupplierDataQuality => ({ supplier_key: 'fac-1', metrics });
+const FACILITY_ID = crypto.randomUUID();
+const MIN_RECORDS = 20;
+// Counts are derived from MIN_RECORDS so one metric clears the minimum and one does not.
+const MISSING = { numerator: 1 + (Date.now() % 5), denominator: MIN_RECORDS * 2 };
+const UNLINKED = { numerator: 2, denominator: MIN_RECORDS - 1 };
+const missingShare = MISSING.numerator / MISSING.denominator;
+const formatShare = (share: number) => `${Math.round(share * 1000) / 10}%`;
+
+const summary = (metrics: SupplierQualityMetric[]): SupplierDataQuality => ({ supplier_key: FACILITY_ID, metrics });
 
 const fourMetrics = summary([
-    metric({ key: 'missing_kde', status: 'ok', numerator: 5, denominator: 40, share: 0.125 }),
-    metric({ key: 'unlinked_lot', status: 'not_enough_data', numerator: 2, denominator: 7, share: null }),
+    metric({ key: 'missing_kde', status: 'ok', ...MISSING, share: missingShare }),
+    metric({ key: 'unlinked_lot', status: 'not_enough_data', ...UNLINKED, share: null }),
     metric({ key: 'late_cte', status: 'unavailable', numerator: null, denominator: null, reason: 'No agreed sending time is recorded for this supplier, so late records cannot be measured.' }),
     metric({ key: 'epcis_failed', status: 'unavailable', numerator: null, denominator: null, reason: 'No EPCIS file record.' }),
 ]);
@@ -38,18 +46,18 @@ const fourMetrics = summary([
 function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false) {
     return render(
         <DataQuality
-            facilityId="fac-1"
+            facilityId={FACILITY_ID}
             summary={data ?? undefined}
             unavailable={unavailable}
             windowDays={30}
-            minRecords={20}
+            minRecords={MIN_RECORDS}
             lateCteLabel={LATE_LABEL}
         />,
     );
 }
 
 const page = (overrides: Partial<SupplierQualityRecordsResponse>): SupplierQualityRecordsResponse => ({
-    supplier_key: 'fac-1',
+    supplier_key: FACILITY_ID,
     metric: 'missing_kde',
     window_days: 30,
     total: 0,
@@ -66,16 +74,16 @@ describe('DataQuality', () => {
 
     it('shows count of denominator and a share for each metric, with no combined score', () => {
         renderQuality();
-        expect(screen.getByText('5 of 40 records (12.5%)')).toBeInTheDocument();
+        expect(screen.getByText(`${MISSING.numerator} of ${MISSING.denominator} records (${formatShare(missingShare)})`)).toBeInTheDocument();
         expect(screen.queryByText(/score/i)).not.toBeInTheDocument();
         expect(screen.getByText('Data quality, records received in the last 30 days')).toBeInTheDocument();
     });
 
     it('shows Not enough data below the minimum instead of a share', () => {
         renderQuality();
-        expect(screen.getByText(/2 of 7 lot codes/)).toBeInTheDocument();
-        expect(screen.getByText('Not enough data (fewer than 20)')).toBeInTheDocument();
-        expect(screen.queryByText(/28\.6%/)).not.toBeInTheDocument();
+        expect(screen.getByText(new RegExp(`${UNLINKED.numerator} of ${UNLINKED.denominator} lot codes`))).toBeInTheDocument();
+        expect(screen.getByText(`Not enough data (fewer than ${MIN_RECORDS})`)).toBeInTheDocument();
+        expect(screen.queryByText(formatShare(UNLINKED.numerator / UNLINKED.denominator))).not.toBeInTheDocument();
     });
 
     it('shows unavailable metrics with their reason and the late CTE label', () => {
@@ -96,15 +104,16 @@ describe('DataQuality', () => {
     });
 
     it('loads the exact records for a metric and pages with Show more', async () => {
+        const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
         mocks.getSupplierDataQualityRecords
             .mockResolvedValueOnce(
                 page({
                     total: 2,
                     items: [
                         {
-                            record_id: 'rec-1',
+                            record_id: first,
                             lot_id: null,
-                            lot_code: 'TLC-1',
+                            lot_code: crypto.randomUUID(),
                             cte_type: 'shipping',
                             event_time: null,
                             received_at: null,
@@ -119,9 +128,9 @@ describe('DataQuality', () => {
                     offset: 1,
                     items: [
                         {
-                            record_id: 'rec-2',
+                            record_id: second,
                             lot_id: null,
-                            lot_code: 'TLC-2',
+                            lot_code: crypto.randomUUID(),
                             cte_type: 'receiving',
                             event_time: null,
                             received_at: null,
@@ -133,17 +142,17 @@ describe('DataQuality', () => {
         renderQuality();
 
         fireEvent.click(screen.getAllByRole('button', { name: 'View records' })[0]);
-        await waitFor(() => expect(screen.getByText('rec-1')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(first)).toBeInTheDocument());
         expect(screen.getByText('Missing: reference_document, quantity')).toBeInTheDocument();
-        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith('fac-1', 'missing_kde', {
+        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith(FACILITY_ID, 'missing_kde', {
             windowDays: 30,
             limit: DRILLDOWN_PAGE_SIZE,
             offset: 0,
         });
 
         fireEvent.click(screen.getByRole('button', { name: 'Show more (1 of 2)' }));
-        await waitFor(() => expect(screen.getByText('rec-2')).toBeInTheDocument());
-        expect(mocks.getSupplierDataQualityRecords).toHaveBeenLastCalledWith('fac-1', 'missing_kde', {
+        await waitFor(() => expect(screen.getByText(second)).toBeInTheDocument());
+        expect(mocks.getSupplierDataQualityRecords).toHaveBeenLastCalledWith(FACILITY_ID, 'missing_kde', {
             windowDays: 30,
             limit: DRILLDOWN_PAGE_SIZE,
             offset: 1,
@@ -152,6 +161,7 @@ describe('DataQuality', () => {
     });
 
     it('lists unlinked lot codes', async () => {
+        const lotCode = crypto.randomUUID();
         mocks.getSupplierDataQualityRecords.mockResolvedValueOnce(
             page({
                 metric: 'unlinked_lot',
@@ -159,8 +169,8 @@ describe('DataQuality', () => {
                 items: [
                     {
                         record_id: null,
-                        lot_id: 'lot-9',
-                        lot_code: 'TLC-9',
+                        lot_id: crypto.randomUUID(),
+                        lot_code: lotCode,
                         cte_type: null,
                         event_time: null,
                         received_at: null,
@@ -171,8 +181,8 @@ describe('DataQuality', () => {
         );
         renderQuality();
         fireEvent.click(screen.getAllByRole('button', { name: 'View records' })[1]);
-        await waitFor(() => expect(screen.getByText('Lot TLC-9')).toBeInTheDocument());
-        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith('fac-1', 'unlinked_lot', expect.anything());
+        await waitFor(() => expect(screen.getByText(`Lot ${lotCode}`)).toBeInTheDocument());
+        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith(FACILITY_ID, 'unlinked_lot', expect.anything());
     });
 
     it('says so when the records request fails', async () => {
