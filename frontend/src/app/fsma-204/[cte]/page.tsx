@@ -453,7 +453,7 @@ export default async function CTELandingPage({
             See it in action.
           </h2>
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Upload a sample {data.name.toLowerCase()} file to the RegEngine
+            Upload your {data.name.toLowerCase()} file to the RegEngine
             sandbox and get an instant validation report. Free, no signup
             required.
           </p>

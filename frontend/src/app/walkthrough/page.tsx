@@ -269,10 +269,6 @@ export default function WalkthroughPage() {
               <Link href="/security">See Security Details</Link>
             </Button>
           </div>
-          <p className="mt-6 text-ui text-re-text-secondary">
-            See the underlying transformation step by step at{' '}
-            <Link href="/proof/transformation" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof/transformation</Link>.
-          </p>
         </div>
       </Container>
     </div>

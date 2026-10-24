@@ -85,11 +85,7 @@ secrets.json
 
 # Artifacts that should never be tracked
 *.zip
-# ...except the public proof/sample bundles the frontend serves. These are
-# intentionally tracked fixtures (the audit-bundle pair backs the public
-# /api/v1/proof/verify demo, including the deliberately tampered one), and
-# the bare *.zip rule above was silently covering them (#2873).
-!frontend/public/proof/*.zip
+# ...except the public sample bundles the frontend serves (#2873).
 !frontend/public/samples/*.zip
 login_resp.json
 frontend/build_log.txt

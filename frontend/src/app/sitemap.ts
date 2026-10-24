@@ -136,7 +136,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/trust/architecture`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/retention`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/support`, changeFrequency: 'monthly' as const, priority: 0.5 },
-        { url: `${baseUrl}/proof/transformation`, changeFrequency: 'monthly' as const, priority: 0.5 },
     ];
 
     // No blanket lastModified: stamping every URL "now" on every request

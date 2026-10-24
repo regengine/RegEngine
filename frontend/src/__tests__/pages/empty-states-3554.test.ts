@@ -48,4 +48,28 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         expect(status).not.toBe(0);
         expect(stderr).toMatch(/^usage: /);
     });
+    it('hides /proof/transformation and drops every link to it', () => {
+        expect(read('src/app/proof/transformation/page.tsx')).toContain('notFound()');
+        expect(existsSync(resolve(process.cwd(), 'src/app/proof/transformation/opengraph-image.tsx'))).toBe(false);
+        expect(read('src/app/sitemap.ts')).not.toContain('/proof/transformation');
+        expect(read('src/app/walkthrough/page.tsx')).not.toContain('/proof/transformation');
+    });
+
+    it('removes the public proof zips', () => {
+        for (const f of ['public/proof/audit-bundle.zip', 'public/proof/audit-bundle-tampered.zip']) {
+            expect(existsSync(resolve(process.cwd(), f))).toBe(false);
+        }
+    });
+
+    it('security page shows No data yet instead of illustrative verifier output', () => {
+        const src = read('src/app/security/page.tsx');
+        expect(src).not.toContain('Sample · illustrative');
+        expect(src).toContain('title={NO_DATA_YET}');
+    });
+
+    it('CTE pages ask for the user\'s own file, not a sample', () => {
+        const src = read('src/app/fsma-204/[cte]/page.tsx');
+        expect(src).not.toContain('Upload a sample');
+        expect(src).toContain('Upload your {data.name.toLowerCase()} file');
+    });
 });
