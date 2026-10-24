@@ -52,9 +52,7 @@ class TestFirstRecipient:
         assert _first_recipient(payload) == "preferred@tenant.co"
 
     def test_strips_original_recipient(self):
-        payload = PostmarkInboundPayload(
-            MessageID="m1", From="a@example.com", OriginalRecipient="  spaced@tenant.co  "
-        )
+        payload = PostmarkInboundPayload(MessageID="m1", From="a@example.com", OriginalRecipient="  spaced@tenant.co  ")
         assert _first_recipient(payload) == "spaced@tenant.co"
 
     def test_blank_original_recipient_falls_through_to_tofull(self):
@@ -67,9 +65,7 @@ class TestFirstRecipient:
         assert _first_recipient(payload) == "tofull@tenant.co"
 
     def test_falls_back_to_tofull_lowercase_key(self):
-        payload = PostmarkInboundPayload(
-            MessageID="m1", From="a@example.com", ToFull=[{"email": "lower@tenant.co"}]
-        )
+        payload = PostmarkInboundPayload(MessageID="m1", From="a@example.com", ToFull=[{"email": "lower@tenant.co"}])
         assert _first_recipient(payload) == "lower@tenant.co"
 
     def test_tofull_skips_blank_entries_and_uses_first_valid(self):
@@ -527,7 +523,9 @@ class TestIngestAttachmentCsv:
         import app.csv_templates as csv_templates_mod
         from app.webhook_models import IngestResponse
 
-        async def fake_ingest_events(payload, *, principal_tenant_id, x_regengine_api_key=None, source_file=None):
+        async def fake_ingest_events(
+            payload, *, principal_tenant_id, x_regengine_api_key=None, principal=None, source_file=None
+        ):
             if not x_regengine_api_key:
                 raise HTTPException(status_code=401, detail="Invalid or missing API key")
             return IngestResponse(accepted=1, rejected=0, total=1, events=[])
@@ -780,7 +778,9 @@ class TestProcessInboundEmailUnmappedRecipient:
         # touch CSV ingestion nor set tenant context, even when it carries
         # attachments. The claim row is still recorded as rejected for audit.
         monkeypatch.setattr(service_mod, "get_inbound_email_audit_by_message_id", lambda db, mid: None)
-        monkeypatch.setattr(service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: None)
+        monkeypatch.setattr(
+            service_mod.tenant_lookup, "lookup_tenant_by_inbound_address", lambda db, addr, sender: None
+        )
         _stub_claim(monkeypatch, succeeds=True)
         monkeypatch.setattr(service_mod, "finalize_inbound_email_audit", lambda db, **kwargs: {"id": "1"})
 
