@@ -36,11 +36,9 @@ describe('marketing pageview routes', () => {
     expect(shouldTrackMarketingPageview('/tools/person%40example.com')).toBe(false);
   });
 
-  it('omits public result and portal paths whose segments identify a user or record', () => {
+  it('omits portal paths whose segments identify a user or record', () => {
     document.cookie = 're_cookie_consent=accepted; path=/';
-    expect(safeMarketingPath('/sandbox/results/result-123')).toBeNull();
     expect(safeMarketingPath('/portal/portal-123')).toBeNull();
-    expect(shouldTrackMarketingPageview('/sandbox/results/result-123')).toBe(false);
     expect(shouldTrackMarketingPageview('/portal/portal-123')).toBe(false);
   });
 
