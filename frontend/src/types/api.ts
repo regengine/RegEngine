@@ -510,6 +510,54 @@ export interface SupplierGapTimeToFixResponse {
     evaluated_at: string;
 }
 
+export type SupplierQualityMetricKey = 'missing_kde' | 'unlinked_lot' | 'late_cte' | 'epcis_failed';
+export type SupplierQualityDrilldownMetric = 'missing_kde' | 'unlinked_lot';
+
+export interface SupplierQualityMetric {
+    key: SupplierQualityMetricKey;
+    /** not_enough_data: denominator is below min_records, so share is null. */
+    status: 'ok' | 'not_enough_data' | 'unavailable';
+    numerator: number | null;
+    denominator: number | null;
+    share: number | null;
+    /** Set when status is unavailable. */
+    reason: string | null;
+}
+
+export interface SupplierDataQuality {
+    /** Supplier facility id. */
+    supplier_key: string;
+    metrics: SupplierQualityMetric[];
+}
+
+export interface SupplierDataQualityResponse {
+    suppliers: SupplierDataQuality[];
+    window_days: number;
+    min_records: number;
+    late_cte_label: string;
+    evaluated_at: string;
+}
+
+export interface SupplierQualityRecordItem {
+    record_id: string | null;
+    lot_id: string | null;
+    lot_code: string;
+    cte_type: string | null;
+    event_time: string | null;
+    received_at: string | null;
+    missing_kdes: string[];
+}
+
+export interface SupplierQualityRecordsResponse {
+    supplier_key: string;
+    metric: SupplierQualityDrilldownMetric;
+    window_days: number;
+    total: number;
+    limit: number;
+    offset: number;
+    items: SupplierQualityRecordItem[];
+}
+
 export interface SupplierFDAExportRow {
     event_id: string;
     tlc_code: string;
