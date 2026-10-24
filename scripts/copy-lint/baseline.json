@@ -188,23 +188,6 @@
     "em-dash": 1,
     "empty-render": 2
   },
-  "frontend/src/app/sandbox/SandboxClient.tsx": {
-    "sample-demo": 3,
-    "sandbox": 8
-  },
-  "frontend/src/app/sandbox/opengraph-image.tsx": {
-    "sandbox": 2
-  },
-  "frontend/src/app/sandbox/page.tsx": {
-    "sample-demo": 2,
-    "sandbox": 3
-  },
-  "frontend/src/app/sandbox/results/[id]/SharedSandboxResult.tsx": {
-    "sandbox": 1
-  },
-  "frontend/src/app/sandbox/results/[id]/page.tsx": {
-    "sandbox": 2
-  },
   "frontend/src/app/security/page.tsx": {
     "sample-demo": 1
   },
@@ -218,7 +201,7 @@
     "sample-demo": 2
   },
   "frontend/src/app/tools/drill-simulator/components/DrillSimulatorClient.tsx": {
-    "sample-demo": 4
+    "sample-demo": 3
   },
   "frontend/src/app/tools/export/page.tsx": {
     "empty-render": 2,
@@ -289,12 +272,6 @@
   "frontend/src/components/lead-gate/LeadGate.tsx": {
     "empty-render": 1
   },
-  "frontend/src/components/marketing/sandbox-grid/SandboxPdfReport.ts": {
-    "sandbox": 4
-  },
-  "frontend/src/components/marketing/sandbox-grid/SandboxResultView.tsx": {
-    "sandbox": 2
-  },
   "frontend/src/components/marketing/sandbox-grid/diagnosis.ts": {
     "sandbox": 1
   },
@@ -319,10 +296,6 @@
   },
   "frontend/src/lib/roi-calculator-data.ts": {
     "hyphen-dash": 4
-  },
-  "frontend/src/lib/sandbox-cta.ts": {
-    "sample-demo": 2,
-    "sandbox": 2
   },
   "frontend/src/lib/trust-subprocessors.ts": {
     "sample-demo": 1
