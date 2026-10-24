@@ -3,18 +3,8 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import IngestPage from '@/app/ingest/page';
 
-// Minimal EPCIS 2.0 request body for exercising the upload path in tests.
-const epcisDocument = {
-  '@context': ['https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld'],
-  type: 'EPCISDocument',
-  schemaVersion: '2.0',
-  epcisBody: {
-    eventList: [
-      { type: 'ObjectEvent', action: 'OBSERVE', bizStep: 'shipping', eventTime: '2026-01-01T00:00:00Z', eventTimeZoneOffset: '+00:00' },
-      { type: 'ObjectEvent', action: 'OBSERVE', bizStep: 'receiving', eventTime: '2026-01-02T00:00:00Z', eventTimeZoneOffset: '+00:00' },
-    ],
-  },
-};
+// Data-free placeholder: the tests only check passthrough and event count.
+const epcisDocument = { epcisBody: { eventList: Array.from({ length: 2 }, () => ({})) } };
 
 const mocks = vi.hoisted(() => ({
   ingestURL: vi.fn(),
