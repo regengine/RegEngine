@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import unquote
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -315,18 +316,51 @@ class FSMAEventType(str, Enum):
     RECEIVING = "RECEIVING"
 
 
-_TLC_PRODUCTION_RE = re.compile(r"^\d{14}[A-Za-z0-9\-\.]+$")
+_TLC_PRODUCTION_RE = re.compile(r"^[0-9]{14}[A-Za-z0-9\-\.]+\Z")
 
-# GS1 General Specifications Table 7-20: the 82-character AI set (no space).
-# AI (10) batch/lot is 1 to 20 of these characters.
-_GS1_AI_82_LOT = r"""[!"%&'()*+,\-./0-9:;<=>?A-Z_a-z]{1,20}"""
+# GS1 General Specifications Figure 7.11-1: 82 characters, space excluded.
+# AI (10) is 1 to 20 of those characters after percent-decoding. A well-formed
+# %HH escape is one character. The structural patterns reject a raw character
+# that the carrier requires to be percent-encoded, and a % that is not an escape.
+_GS1_AI_82_CHARS = frozenset("!\"%&'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz")
+_PCT_ESCAPE = r"%[0-9A-Fa-f]{2}"
+# Digital Link XCHAR literals. Reserved symbols exist only as %HH escapes.
+_DL_LOT_RAW_CLASS = r'[0-9A-Za-z"._-]'
+# TDS GS3A3 URI form. Appendix A escapes that must not appear raw: " % & / < > ?
+_LGTIN_LOT_RAW_CLASS = r"[!'()*+,\-.0-9:;=A-Z_a-z]"
+# Zero or more custom path segments between the host and /01 (segment = *pchar).
+_DL_CUSTOM_STEM = r"(?P<stem>(?:/[^/\s?#]*)*?)"
 # Two non-empty digit runs whose lengths sum to 13 (company prefix + indicator/item ref).
-_LGTIN_DIGIT_PAIRS = "(?:" + "|".join(rf"\d{{{n}}}\.\d{{{13 - n}}}" for n in range(1, 13)) + ")"
-_TLC_LGTIN_RE = re.compile(rf"^urn:epc:class:lgtin:{_LGTIN_DIGIT_PAIRS}\.{_GS1_AI_82_LOT}$")
-_TLC_DIGITAL_LINK_RE = re.compile(
-    rf"^https?://[^/\s?#]+/01/\d{{14}}/10/{_GS1_AI_82_LOT}"
-    rf"(?:/[^\s?#]*)?(?:\?[^\s#]*)?$"
+_LGTIN_DIGIT_PAIRS = "(?:" + "|".join(rf"[0-9]{{{n}}}\.[0-9]{{{13 - n}}}" for n in range(1, 13)) + ")"
+_TLC_LGTIN_RE = re.compile(
+    rf"^urn:epc:class:lgtin:{_LGTIN_DIGIT_PAIRS}\."
+    rf"(?P<lot>(?:{_LGTIN_LOT_RAW_CLASS}|{_PCT_ESCAPE})+)\Z"
 )
+_TLC_DIGITAL_LINK_RE = re.compile(
+    rf"^https?://[^/\s?#]+{_DL_CUSTOM_STEM}/01/[0-9]{{14}}/10/"
+    rf"(?P<lot>(?:{_DL_LOT_RAW_CLASS}|{_PCT_ESCAPE})+)"
+    rf"(?:/[^\s?#]*)?(?:\?[^\s#]*)?\Z"
+)
+
+
+def _decoded_ai10_lot_within_limit(encoded_lot: str) -> bool:
+    """Return whether an AI (10) lot is 1-20 GS1 characters after unquote.
+
+    The caller has already matched a carrier pattern. This does not rewrite
+    the TLC; it only accepts or rejects the lot substring.
+    """
+    index = 0
+    size = len(encoded_lot)
+    while index < size:
+        if encoded_lot[index] != "%":
+            index += 1
+            continue
+        hex_pair = encoded_lot[index + 1 : index + 3]
+        if len(hex_pair) != 2 or any(char not in "0123456789ABCDEFabcdef" for char in hex_pair):
+            return False
+        index += 3
+    decoded = unquote(encoded_lot)
+    return 1 <= len(decoded) <= 20 and all(char in _GS1_AI_82_CHARS for char in decoded)
 
 
 class FSMAEvent(BaseModel):
@@ -391,8 +425,12 @@ class FSMAEvent(BaseModel):
     @classmethod
     def validate_tlc_format(cls, v: str) -> str:
         """Accept GTIN-14 + lot, an LGTIN class URN, or a GS1 Digital Link."""
-        if _TLC_PRODUCTION_RE.match(v) or _TLC_LGTIN_RE.match(v) or _TLC_DIGITAL_LINK_RE.match(v):
+        if _TLC_PRODUCTION_RE.fullmatch(v):
             return v
+        for pattern in (_TLC_LGTIN_RE, _TLC_DIGITAL_LINK_RE):
+            matched = pattern.fullmatch(v)
+            if matched is not None and _decoded_ai10_lot_within_limit(matched.group("lot")):
+                return v
         raise ValueError(
             f"TLC '{v}' does not match FSMA 204 production pattern "
             "(accepted formats: a fourteen-digit GTIN prefix followed by a lot "
