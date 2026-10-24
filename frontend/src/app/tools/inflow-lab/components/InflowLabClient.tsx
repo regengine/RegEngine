@@ -585,8 +585,8 @@ function getLotFixGuidance(lot: {
     };
 }
 
-const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Test previews", "Event log", "Diagnostics"];
-const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Lots", "Lineage", "Test previews", "Record log", "Diagnostics"];
+const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Lots", "Lineage", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -1245,7 +1245,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     const prepareExport = () => {
         setRunStage("exported");
-        setActiveTab("Test previews");
+        setActiveTab("Lots");
     };
 
     const startMachineDemo = async () => {
@@ -1702,7 +1702,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Test previews use the selected lot and date window. Formal production records come later from signed-in imports.
+                                                    Test completeness uses the selected lot. Formal production records come later from signed in imports.
                                                 </p>
                                             </div>
                                         </div>
@@ -2320,7 +2320,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         <CalendarDays className="h-4 w-4 text-slate-700" />
                                                         <p className="text-sm font-semibold text-slate-950">Export filters</p>
                                                     </div>
-                                                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                                    <div className="mt-4">
                                                         <label className="block text-xs font-medium text-slate-600">
                                                             Traceability Lot Code
                                                             <Input value={traceInput} onChange={(event) => setTraceInput(event.target.value)} className="mt-1 h-9 bg-white text-xs" />
@@ -2509,16 +2509,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 ))}
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-
-                                {activeTab === "Test previews" && (
-                                    <div className="mt-4">
-                                        {!selectedIsExportReady && (
-                                            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                                Selected lot is an exception. Test-complete counts include only complete mock lots; this lot stays visible until missing CTE/KDE evidence or delivery issues are resolved.
-                                            </div>
-                                        )}
                                     </div>
                                 )}
 
