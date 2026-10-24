@@ -14,7 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from shared.data_gap_tracking import AT_RISK_THRESHOLD, fetch_supplier_summaries
+from shared.data_gap_tracking import INTERNAL_TARGET, fetch_supplier_summaries
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -125,12 +125,14 @@ class SupplierGapTimeToFix(BaseModel):
     median_time_to_fix_seconds: float | None
     oldest_open_gap_opened_at: str | None
     at_risk: bool
+    at_risk_gap_count: int
+    past_internal_target: bool
     has_data: bool
 
 
 class SupplierGapTimeToFixResponse(BaseModel):
     suppliers: list[SupplierGapTimeToFix]
-    at_risk_threshold_seconds: int
+    internal_target_seconds: int
     evaluated_at: str
 
 
@@ -161,7 +163,7 @@ async def get_gap_time_to_fix(
     summaries = fetch_supplier_summaries(db, str(tenant_id), facility_ids, now)
     return SupplierGapTimeToFixResponse(
         suppliers=[SupplierGapTimeToFix(supplier_key=key, **summary) for key, summary in summaries.items()],
-        at_risk_threshold_seconds=int(AT_RISK_THRESHOLD.total_seconds()),
+        internal_target_seconds=int(INTERNAL_TARGET.total_seconds()),
         evaluated_at=now.isoformat(),
     )
 

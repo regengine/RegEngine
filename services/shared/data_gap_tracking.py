@@ -35,9 +35,12 @@ GAP_KIND_MISSING_KDE = "missing_kde"
 GAP_KIND_CTE_VALIDATION_FAILED = "cte_validation_failed"
 UNASSIGNED_SUPPLIER_KEY = "unassigned"
 
-# 21 CFR 1.1455(c)(1): records must reach FDA within 24 hours of a request, or
-# within a reasonable time FDA agrees to. This threshold measures gap age only.
-AT_RISK_THRESHOLD = timedelta(hours=24)
+# Internal target only, not a regulatory deadline: fix a gap within 24 hours of
+# flagging it. Regulatory risk is computed against request_cases.response_due_at.
+INTERNAL_TARGET = timedelta(hours=24)
+
+# Request cases that have not yet been answered.
+CLOSED_REQUEST_STATUSES = ("submitted", "amended")
 
 _MISSING_KDE_RE = re.compile(r"Missing required KDE '([^']+)'")
 _HARVESTER_PHONE_ERROR = "Harvester business phone must be a non-empty string"
@@ -137,26 +140,34 @@ def oldest_opened_at(opened_ats: Sequence[datetime]) -> Optional[datetime]:
     return min(opened_ats) if opened_ats else None
 
 
-def is_at_risk(
+def is_past_internal_target(
     open_opened_ats: Sequence[datetime],
     now: datetime,
-    threshold: timedelta = AT_RISK_THRESHOLD,
+    threshold: timedelta = INTERNAL_TARGET,
 ) -> bool:
-    """True when any open gap has been open strictly longer than ``threshold``."""
+    """True when any open gap has been open strictly longer than the internal target."""
     return any(now - opened > threshold for opened in open_opened_ats)
+
+
+def is_open_at(opened_at: datetime, closed_at: datetime | None, due_at: datetime) -> bool:
+    """True when a gap is open at ``due_at`` (opened by then, not closed by then)."""
+    return opened_at <= due_at and (closed_at is None or closed_at > due_at)
 
 
 def summarize_supplier(
     open_opened_ats: Sequence[datetime],
     fix_durations_seconds: Sequence[float],
     now: datetime,
+    at_risk_gap_count: int = 0,
 ) -> dict[str, Any]:
     oldest = oldest_opened_at(open_opened_ats)
     return {
         "open_gap_count": len(open_opened_ats),
         "median_time_to_fix_seconds": median_seconds(fix_durations_seconds),
         "oldest_open_gap_opened_at": oldest.isoformat() if oldest else None,
-        "at_risk": is_at_risk(open_opened_ats, now),
+        "at_risk": at_risk_gap_count > 0,
+        "at_risk_gap_count": at_risk_gap_count,
+        "past_internal_target": is_past_internal_target(open_opened_ats, now),
         "has_data": bool(open_opened_ats) or bool(fix_durations_seconds),
     }
 
@@ -280,6 +291,27 @@ _SUMMARY_ROWS_SQL = text(
 )
 
 
+# A gap is at risk when its lot is listed on an unanswered request case and the
+# gap is still open at that case's response_due_at (21 CFR 1.1455(c)(1)). The
+# same predicate is in is_open_at; a closed gap counts only when it closed after
+# the due time.
+_AT_RISK_SQL = text(
+    """
+    SELECT g.supplier_key, COUNT(DISTINCT g.id) AS at_risk_gaps
+      FROM public.data_gap_events g
+      JOIN fsma.request_cases r
+        ON r.tenant_id = g.tenant_id
+       AND g.lot_code = ANY(r.affected_lots)
+     WHERE g.tenant_id = CAST(:tid AS uuid)
+       AND g.supplier_key = ANY(:keys)
+       AND r.package_status <> ALL(:closed_statuses)
+       AND g.opened_at <= r.response_due_at
+       AND (g.closed_at IS NULL OR g.closed_at > r.response_due_at)
+     GROUP BY g.supplier_key
+    """
+)
+
+
 def fetch_supplier_summaries(
     db_session: Any,
     tenant_id: str,
@@ -289,6 +321,7 @@ def fetch_supplier_summaries(
     """Per supplier time to fix summary for ``supplier_keys`` (every key is present)."""
     open_by_key: dict[str, list[datetime]] = {key: [] for key in supplier_keys}
     fixed_by_key: dict[str, list[float]] = {key: [] for key in supplier_keys}
+    at_risk_by_key: dict[str, int] = {key: 0 for key in supplier_keys}
     if supplier_keys:
         rows = db_session.execute(_SUMMARY_ROWS_SQL, {"tid": tenant_id, "keys": list(supplier_keys)}).fetchall()
         for supplier_key, opened_at, fix_seconds in rows:
@@ -296,4 +329,12 @@ def fetch_supplier_summaries(
                 open_by_key[supplier_key].append(opened_at)
             else:
                 fixed_by_key[supplier_key].append(float(fix_seconds))
-    return {key: summarize_supplier(open_by_key[key], fixed_by_key[key], now) for key in supplier_keys}
+        at_risk_rows = db_session.execute(
+            _AT_RISK_SQL,
+            {"tid": tenant_id, "keys": list(supplier_keys), "closed_statuses": list(CLOSED_REQUEST_STATUSES)},
+        ).fetchall()
+        for supplier_key, count in at_risk_rows:
+            at_risk_by_key[supplier_key] = int(count)
+    return {
+        key: summarize_supplier(open_by_key[key], fixed_by_key[key], now, at_risk_by_key[key]) for key in supplier_keys
+    }

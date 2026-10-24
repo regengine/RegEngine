@@ -70,12 +70,20 @@ export function GapTimeToFix({ summary, unavailable, now }: GapTimeToFixProps) {
             </span>
             <span>Median time to fix: {median === null ? 'No fixes yet' : formatDuration(median)}</span>
             {oldest !== null && <span>Oldest open gap: {oldest}</span>}
-            {summary.at_risk && (
-                <Badge tone="danger" size="sm">
-                    At risk: gap open over 24 hours
+            <span>Internal target: fixed within 24 hours of flag</span>
+            {summary.past_internal_target && (
+                <Badge tone="warning" size="sm">
+                    Past internal target
                 </Badge>
             )}
-            {citation}
+            {summary.at_risk && (
+                <span className="inline-flex items-center gap-2">
+                    <Badge tone="danger" size="sm">
+                        At risk: open when FDA records response is due
+                    </Badge>
+                    {citation}
+                </span>
+            )}
         </div>
     );
 }

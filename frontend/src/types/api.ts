@@ -496,13 +496,17 @@ export interface SupplierGapTimeToFix {
     open_gap_count: number;
     median_time_to_fix_seconds: number | null;
     oldest_open_gap_opened_at: string | null;
+    /** A gap on a lot named in an unanswered records request is open at its response_due_at. */
     at_risk: boolean;
+    at_risk_gap_count: number;
+    /** Internal target only: an open gap is older than 24 hours. Not a regulatory deadline. */
+    past_internal_target: boolean;
     has_data: boolean;
 }
 
 export interface SupplierGapTimeToFixResponse {
     suppliers: SupplierGapTimeToFix[];
-    at_risk_threshold_seconds: number;
+    internal_target_seconds: number;
     evaluated_at: string;
 }
 

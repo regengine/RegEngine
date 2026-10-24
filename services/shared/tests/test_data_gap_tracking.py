@@ -10,16 +10,17 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 
 from shared.data_gap_tracking import (
-    AT_RISK_THRESHOLD,
     GAP_KIND_CTE_VALIDATION_FAILED,
     GAP_KIND_MISSING_KDE,
+    INTERNAL_TARGET,
     Gap,
     ValidationOutcome,
     decide_transition,
     gap_from_rule_reason,
     gap_identity,
     gaps_from_kde_errors,
-    is_at_risk,
+    is_open_at,
+    is_past_internal_target,
     is_receipt_hash,
     median_seconds,
     oldest_opened_at,
@@ -54,20 +55,36 @@ def test_oldest_opened_at():
     assert oldest_opened_at([NOW, NOW - timedelta(hours=1)]) == NOW - timedelta(hours=1)
 
 
-def test_at_risk_threshold_is_24_hours():
-    assert AT_RISK_THRESHOLD == timedelta(hours=24)
+def test_internal_target_is_24_hours():
+    assert INTERNAL_TARGET == timedelta(hours=24)
 
 
-def test_gap_open_exactly_24_hours_is_not_at_risk():
-    assert is_at_risk([NOW - timedelta(hours=24)], NOW) is False
+def test_gap_open_exactly_24_hours_is_not_past_internal_target():
+    assert is_past_internal_target([NOW - timedelta(hours=24)], NOW) is False
 
 
-def test_gap_open_just_over_24_hours_is_at_risk():
-    assert is_at_risk([NOW - timedelta(hours=24, microseconds=1)], NOW) is True
+def test_gap_open_just_over_24_hours_is_past_internal_target():
+    assert is_past_internal_target([NOW - timedelta(hours=24, microseconds=1)], NOW) is True
 
 
-def test_no_open_gaps_is_not_at_risk():
-    assert is_at_risk([], NOW) is False
+def test_no_open_gaps_is_not_past_internal_target():
+    assert is_past_internal_target([], NOW) is False
+
+
+def test_gap_still_open_at_due_time_is_open_at():
+    assert is_open_at(NOW - timedelta(hours=2), None, NOW) is True
+
+
+def test_gap_closed_after_due_time_is_open_at():
+    assert is_open_at(NOW - timedelta(hours=2), NOW + timedelta(seconds=1), NOW) is True
+
+
+def test_gap_closed_exactly_at_due_time_is_not_open_at():
+    assert is_open_at(NOW - timedelta(hours=2), NOW, NOW) is False
+
+
+def test_gap_opened_after_due_time_is_not_open_at():
+    assert is_open_at(NOW + timedelta(seconds=1), None, NOW) is False
 
 
 def test_summary_without_history_has_no_data():
@@ -76,6 +93,8 @@ def test_summary_without_history_has_no_data():
         "median_time_to_fix_seconds": None,
         "oldest_open_gap_opened_at": None,
         "at_risk": False,
+        "at_risk_gap_count": 0,
+        "past_internal_target": False,
         "has_data": False,
     }
 
@@ -92,7 +111,15 @@ def test_summary_with_open_gaps():
     result = summarize_supplier([opened, NOW], [], NOW)
     assert result["open_gap_count"] == 2
     assert result["oldest_open_gap_opened_at"] == opened.isoformat()
+    assert result["past_internal_target"] is True
+    assert result["at_risk"] is False
+
+
+def test_summary_at_risk_comes_from_request_due_count_not_gap_age():
+    result = summarize_supplier([NOW], [], NOW, at_risk_gap_count=2)
     assert result["at_risk"] is True
+    assert result["at_risk_gap_count"] == 2
+    assert result["past_internal_target"] is False
 
 
 # ---------------------------------------------------------------------------
