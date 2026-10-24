@@ -23,6 +23,8 @@
     "entry": [
       "scripts/design-lint.mjs",
       "tests/e2e/qa-2026-10-02/fe-regressions.config.ts",
+      "playwright.visual.config.ts",
+      "tests/visual/**/*.ts",
       "src/lib/capabilities.ts"
     ]
   },
