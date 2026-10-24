@@ -108,23 +108,125 @@ jobs:
           PY
       - name: Wait for Backend CI Status Gate
         if: steps.detect.outputs.changed == 'true'
-        uses: lewagon/wait-on-check-action@369769072fe522a3a8a85c03c96af1e5242a1994  # v1.9.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECK_NAME: "Backend CI Status Gate"
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          check-name: "Backend CI Status Gate"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: "PR Gate: Backend"
-          wait-interval: 30
-          allowed-conclusions: success
-          # The action's DEFAULT is 60s, which is how long it waits for the
-          # target check to EXIST before giving up with "The requested check
-          # was never run against this ref". "Backend CI Status Gate" is the
-          # final aggregate job of backend-ci.yml — it is not created until
-          # every other backend job finishes (~8 min on a green run), so the
-          # 60s default guaranteed a false red on every PR that actually
-          # touched backend paths. Wait up to 30 min for it to appear; the
-          # job's own timeout-minutes: 45 remains the hard bound.
-          checks-discovery-timeout: 1800
+          github-token: ${{ github.token }}
+          # "Backend CI Status Gate" is the final aggregate job of
+          # backend-ci.yml. It is not created until every other backend job
+          # finishes (~8 min on a green run), so we poll up to 40 minutes for it
+          # to appear and complete. The job's timeout-minutes: 45 remains the hard bound.
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = process.env.HEAD_SHA;
+            const CHECK_NAME = process.env.CHECK_NAME;
+            const deadline = Date.now() + 40 * 60 * 1000;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+            const callWithRetry = async (fn) => {
+              let otherRetries = 0;
+              while (Date.now() < deadline) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (Date.now() >= deadline) {
+                    throw error;
+                  }
+                  const status = error.status || error.response?.status;
+                  const headers = error.response?.headers || error.headers || {};
+                  const remaining = headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'];
+                  const isRateLimit = status === 429 ||
+                    remaining === '0' ||
+                    ((status === 403 || status === 429) && (
+                      remaining === '0' ||
+                      headers['x-ratelimit-reset'] != null ||
+                      headers['X-RateLimit-Reset'] != null ||
+                      headers['retry-after'] != null ||
+                      headers['Retry-After'] != null ||
+                      /rate[- ]limit/i.test(error.message || '')
+                    ));
+
+                  if (isRateLimit) {
+                    let waitMs = 60000;
+                    const retryAfter = headers['retry-after'] || headers['Retry-After'];
+                    const resetHeader = headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'];
+                    if (retryAfter) {
+                      const sec = parseInt(retryAfter, 10);
+                      if (!isNaN(sec) && sec > 0) {
+                        waitMs = (sec + 5) * 1000;
+                      } else {
+                        const dateMs = Date.parse(retryAfter);
+                        if (!isNaN(dateMs)) {
+                          waitMs = Math.max(0, dateMs - Date.now()) + 5000;
+                        }
+                      }
+                    } else if (resetHeader) {
+                      const resetSec = parseInt(resetHeader, 10);
+                      if (!isNaN(resetSec) && resetSec > 0) {
+                        waitMs = Math.max(0, (resetSec * 1000) - Date.now()) + 5000;
+                      }
+                    }
+                    const remainingDeadline = Math.max(0, deadline - Date.now());
+                    const sleepMs = Math.min(waitMs, remainingDeadline);
+                    core.warning(`Rate limit hit (${status || 'exhausted'}). Sleeping ${Math.round(sleepMs / 1000)}s until reset.`);
+                    await sleep(sleepMs);
+                    continue;
+                  }
+
+                  if (otherRetries < 3) {
+                    otherRetries++;
+                    const backoffMs = Math.min(5000 * Math.pow(2, otherRetries - 1), Math.max(0, deadline - Date.now()));
+                    core.warning(`API error (${error.message || status}). Retry ${otherRetries}/3 in ${Math.round(backoffMs / 1000)}s.`);
+                    await sleep(backoffMs);
+                    continue;
+                  }
+
+                  throw error;
+                }
+              }
+              return null;
+            };
+
+            let delay = 30000;
+            while (Date.now() < deadline) {
+              const res = await callWithRetry(() =>
+                github.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: sha,
+                  check_name: CHECK_NAME,
+                  filter: 'latest',
+                  per_page: 20,
+                })
+              );
+              if (!res) {
+                break;
+              }
+
+              const runs = res.data?.check_runs || [];
+              const completedRun = runs.find(r => r.status === 'completed');
+              if (completedRun) {
+                if (completedRun.conclusion === 'success') {
+                  core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                  return;
+                }
+                core.setFailed(completedRun.conclusion);
+                return;
+              }
+
+              const remaining = Math.max(0, deadline - Date.now());
+              if (remaining === 0) {
+                break;
+              }
+              const sleepDuration = Math.min(delay, remaining);
+              core.info(`Check ${CHECK_NAME} not completed yet. Sleeping ${Math.round(sleepDuration / 1000)}s...`);
+              await sleep(sleepDuration);
+              delay = Math.min(Math.round(delay * 1.5), 120000);
+            }
+
+            core.setFailed(`Timed out waiting for ${CHECK_NAME}`);
       - name: No backend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No backend-relevant paths changed; Backend CI legitimately did not run. Gate vacuously green."
@@ -191,17 +293,124 @@ jobs:
           PY
       - name: Wait for Frontend CI Status Gate
         if: steps.detect.outputs.changed == 'true'
-        uses: lewagon/wait-on-check-action@369769072fe522a3a8a85c03c96af1e5242a1994  # v1.9.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECK_NAME: "Frontend CI Status Gate"
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          check-name: "Frontend CI Status Gate"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          running-workflow-name: "PR Gate: Frontend"
-          wait-interval: 30
-          allowed-conclusions: success
-          # See the backend job above — the 60s default discovery window is
-          # shorter than the time it takes the real gate job to be created.
-          checks-discovery-timeout: 1800
+          github-token: ${{ github.token }}
+          # See the backend job above: "Frontend CI Status Gate" is created
+          # only after earlier frontend jobs finish, so we poll up to 40 minutes
+          # for it to appear and complete.
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = process.env.HEAD_SHA;
+            const CHECK_NAME = process.env.CHECK_NAME;
+            const deadline = Date.now() + 40 * 60 * 1000;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+            const callWithRetry = async (fn) => {
+              let otherRetries = 0;
+              while (Date.now() < deadline) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (Date.now() >= deadline) {
+                    throw error;
+                  }
+                  const status = error.status || error.response?.status;
+                  const headers = error.response?.headers || error.headers || {};
+                  const remaining = headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'];
+                  const isRateLimit = status === 429 ||
+                    remaining === '0' ||
+                    ((status === 403 || status === 429) && (
+                      remaining === '0' ||
+                      headers['x-ratelimit-reset'] != null ||
+                      headers['X-RateLimit-Reset'] != null ||
+                      headers['retry-after'] != null ||
+                      headers['Retry-After'] != null ||
+                      /rate[- ]limit/i.test(error.message || '')
+                    ));
+
+                  if (isRateLimit) {
+                    let waitMs = 60000;
+                    const retryAfter = headers['retry-after'] || headers['Retry-After'];
+                    const resetHeader = headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'];
+                    if (retryAfter) {
+                      const sec = parseInt(retryAfter, 10);
+                      if (!isNaN(sec) && sec > 0) {
+                        waitMs = (sec + 5) * 1000;
+                      } else {
+                        const dateMs = Date.parse(retryAfter);
+                        if (!isNaN(dateMs)) {
+                          waitMs = Math.max(0, dateMs - Date.now()) + 5000;
+                        }
+                      }
+                    } else if (resetHeader) {
+                      const resetSec = parseInt(resetHeader, 10);
+                      if (!isNaN(resetSec) && resetSec > 0) {
+                        waitMs = Math.max(0, (resetSec * 1000) - Date.now()) + 5000;
+                      }
+                    }
+                    const remainingDeadline = Math.max(0, deadline - Date.now());
+                    const sleepMs = Math.min(waitMs, remainingDeadline);
+                    core.warning(`Rate limit hit (${status || 'exhausted'}). Sleeping ${Math.round(sleepMs / 1000)}s until reset.`);
+                    await sleep(sleepMs);
+                    continue;
+                  }
+
+                  if (otherRetries < 3) {
+                    otherRetries++;
+                    const backoffMs = Math.min(5000 * Math.pow(2, otherRetries - 1), Math.max(0, deadline - Date.now()));
+                    core.warning(`API error (${error.message || status}). Retry ${otherRetries}/3 in ${Math.round(backoffMs / 1000)}s.`);
+                    await sleep(backoffMs);
+                    continue;
+                  }
+
+                  throw error;
+                }
+              }
+              return null;
+            };
+
+            let delay = 30000;
+            while (Date.now() < deadline) {
+              const res = await callWithRetry(() =>
+                github.rest.checks.listForRef({
+                  owner,
+                  repo,
+                  ref: sha,
+                  check_name: CHECK_NAME,
+                  filter: 'latest',
+                  per_page: 20,
+                })
+              );
+              if (!res) {
+                break;
+              }
+
+              const runs = res.data?.check_runs || [];
+              const completedRun = runs.find(r => r.status === 'completed');
+              if (completedRun) {
+                if (completedRun.conclusion === 'success') {
+                  core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                  return;
+                }
+                core.setFailed(completedRun.conclusion);
+                return;
+              }
+
+              const remaining = Math.max(0, deadline - Date.now());
+              if (remaining === 0) {
+                break;
+              }
+              const sleepDuration = Math.min(delay, remaining);
+              core.info(`Check ${CHECK_NAME} not completed yet. Sleeping ${Math.round(sleepDuration / 1000)}s...`);
+              await sleep(sleepDuration);
+              delay = Math.min(Math.round(delay * 1.5), 120000);
+            }
+
+            core.setFailed(`Timed out waiting for ${CHECK_NAME}`);
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
