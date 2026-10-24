@@ -12,7 +12,14 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from shared.supplier_data_quality import DEFAULT_WINDOW_DAYS, LATE_CTE_LABEL, MAX_WINDOW_DAYS, MIN_RECORDS
+from shared.supplier_data_quality import (
+    DEFAULT_WINDOW_DAYS,
+    EPCIS_TENANT_SCOPE_REASON,
+    EPCIS_UNAVAILABLE_REASON,
+    LATE_CTE_LABEL,
+    MAX_WINDOW_DAYS,
+    MIN_RECORDS,
+)
 
 TENANT = uuid4()
 OTHER_TENANT = uuid4()
@@ -48,6 +55,11 @@ LOT_ROWS = [
 ]
 
 
+# Tenant wide EPCIS receipts: enough for a share, every other one rejected.
+RECEIPTS = [uuid4() for _ in range(MIN_RECORDS)]
+REJECTED_RECEIPTS = RECEIPTS[::2]
+
+
 class FakeSession:
     def __init__(self) -> None:
         self.facilities = {
@@ -72,8 +84,12 @@ def calls():
     return []
 
 
-def _client(monkeypatch, calls, tenant=TENANT):
+def _client(monkeypatch, calls, tenant=TENANT, receipt_counts=(len(REJECTED_RECEIPTS), len(RECEIPTS))):
     import app.supplier_compliance_routes as routes
+
+    def fake_receipt_counts(_db, tenant_id, since):
+        calls.append(("receipts", tenant_id))
+        return receipt_counts
 
     def fake_records(_db, tenant_id, user_id, facility_ids, since):
         calls.append(("records", tenant_id, user_id, list(facility_ids)))
@@ -87,6 +103,7 @@ def _client(monkeypatch, calls, tenant=TENANT):
     monkeypatch.setattr(routes, "fetch_lot_rows", fake_lots)
     monkeypatch.setattr("shared.supplier_data_quality.fetch_record_rows", fake_records)
     monkeypatch.setattr("shared.supplier_data_quality.fetch_lot_rows", fake_lots)
+    monkeypatch.setattr("shared.supplier_data_quality.fetch_receipt_counts", fake_receipt_counts)
     monkeypatch.setattr(routes.TenantContext, "get_tenant_context", lambda _db: tenant)
 
     app = FastAPI()
@@ -114,9 +131,39 @@ def test_summary_returns_four_separate_metrics_for_owned_facilities(monkeypatch,
         len(RECORD_ROWS),
     )
     assert supplier["metrics"][2]["status"] == "unavailable"
-    assert supplier["metrics"][3]["status"] == "unavailable"
-    assert all(call[1:3] == (str(TENANT), str(USER)) for call in calls)
-    assert all(call[3] == [str(OWN_FACILITY)] for call in calls)
+    epcis = supplier["metrics"][3]
+    assert (epcis["status"], epcis["numerator"], epcis["denominator"], epcis["share"], epcis["reason"]) == (
+        "ok",
+        len(REJECTED_RECEIPTS),
+        len(RECEIPTS),
+        len(REJECTED_RECEIPTS) / len(RECEIPTS),
+        EPCIS_TENANT_SCOPE_REASON,
+    )
+    scoped = [call for call in calls if call[0] != "receipts"]
+    assert all(call[1:3] == (str(TENANT), str(USER)) for call in scoped)
+    assert all(call[3] == [str(OWN_FACILITY)] for call in scoped)
+    # Receipts carry no facility: one tenant scoped count, no user or facility filter.
+    assert [call for call in calls if call[0] == "receipts"] == [("receipts", str(TENANT))]
+
+
+def test_epcis_under_min_records_is_not_enough_data(monkeypatch, calls):
+    receipts = RECEIPTS[: MIN_RECORDS - 1]
+    rejected = receipts[::2]
+    client = _client(monkeypatch, calls, receipt_counts=(len(rejected), len(receipts)))
+    [supplier] = client.get("/v1/supplier/data-quality").json()["suppliers"]
+    epcis = supplier["metrics"][3]
+    assert (epcis["status"], epcis["numerator"], epcis["denominator"], epcis["share"]) == (
+        "not_enough_data",
+        len(rejected),
+        len(receipts),
+        None,
+    )
+
+
+def test_epcis_unreadable_receipts_is_unavailable(monkeypatch, calls):
+    [supplier] = _client(monkeypatch, calls, receipt_counts=None).get("/v1/supplier/data-quality").json()["suppliers"]
+    epcis = supplier["metrics"][3]
+    assert (epcis["status"], epcis["reason"]) == ("unavailable", EPCIS_UNAVAILABLE_REASON)
 
 
 @pytest.mark.parametrize("window", [0, MAX_WINDOW_DAYS + 1, -1])

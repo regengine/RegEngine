@@ -16,7 +16,7 @@ const METRIC_COPY: Record<SupplierQualityMetricKey, { label: string; unit: strin
     missing_kde: { label: 'Records missing a KDE', unit: 'records' },
     unlinked_lot: { label: 'Lot codes not linked back through the chain', unit: 'lot codes' },
     late_cte: { label: 'Late CTE records', unit: 'records' },
-    epcis_failed: { label: 'EPCIS files failing validation', unit: 'files' },
+    epcis_failed: { label: 'EPCIS documents rejected', unit: 'documents' },
 };
 
 function isDrilldown(key: SupplierQualityMetricKey): key is SupplierQualityDrilldownMetric {
@@ -135,6 +135,7 @@ function MetricRow({
                 )}
             </div>
             {metric.key === 'late_cte' && <p className="text-re-text-tertiary">{lateCteLabel}</p>}
+            {metric.status !== 'unavailable' && metric.reason && <p className="text-re-text-tertiary">{metric.reason}</p>}
             {open && isDrilldown(metric.key) && (
                 <div className="space-y-1 pl-3">
                     <DrilldownList metric={metric.key} state={drilldown} />
