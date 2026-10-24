@@ -21,7 +21,7 @@ describe("HomePage Compliance OS foundation", () => {
     render(<HomePage />);
 
     expect(screen.getByText("No data yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /start setup/i })).toHaveAttribute("href", "/signup");
+    expect(screen.getByRole("link", { name: /start setup/i })).toHaveAttribute("href", "/ingest");
   });
 
   it("contains no synthetic demo data", () => {
