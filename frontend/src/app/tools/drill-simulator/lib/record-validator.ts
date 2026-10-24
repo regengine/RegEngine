@@ -909,7 +909,6 @@ export const CSV_TEMPLATE_HEADERS =
 export function generateCsvTemplate(): string {
   return `${CSV_TEMPLATE_HEADERS}\n`;
 }
-}
 
 /**
  * Design-system colour helpers.
