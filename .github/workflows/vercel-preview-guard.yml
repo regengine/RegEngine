@@ -106,22 +106,22 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PREVIEW_URL: ${{ needs.preview.outputs.preview_url }}
-          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }} # pragma: allowlist secret
         with:
           github-token: ${{ github.token }}
-          script: |
+          script: | # pragma: allowlist secret
             const marker = '<!-- vercel-preview-access -->';
-            const secret = process.env.BYPASS_SECRET;
-            if (secret) core.setSecret(secret); // Emits ::add-mask:: before using it.
+            const bypassValue = process.env.BYPASS_SECRET;
+            if (bypassValue) core.setSecret(bypassValue); // Emits ::add-mask:: before using it.
             const preview = process.env.PREVIEW_URL;
             if (!preview) throw new Error('The preview job did not return an access URL');
             const url = new URL(preview);
-            if (secret) {
-              url.searchParams.set('x-vercel-protection-bypass', secret);
+            if (bypassValue) {
+              url.searchParams.set('x-vercel-protection-bypass', bypassValue);
               url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
             }
             const body = `${marker}\nVercel preview: ${url.toString()}` +
-              (secret ? '' : '\n\nThe bypass secret is not configured.');
+              (bypassValue ? '' : '\n\nThe bypass secret is not configured.');
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
