@@ -68,7 +68,7 @@ jobs:
               'kimi',
               'pi',
               'deepseek',
-              'devops',
+              'hermes',
               'visual-designer',
               'product-designer',
             ]);
@@ -172,7 +172,7 @@ jobs:
               });
 
               // The marker must be alone on its own line.
-              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
@@ -195,7 +195,7 @@ jobs:
                     continue;
                   }
 
-                  if (!headShaLower.startsWith(markerSha.toLowerCase())) {
+                  if (markerSha.toLowerCase() !== headShaLower) {
                     core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
                     continue;
                   }
