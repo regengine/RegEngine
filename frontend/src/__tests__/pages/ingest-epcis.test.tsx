@@ -43,12 +43,39 @@ vi.mock('@/app/ingest/NormalizedDocumentViewer', () => ({
 // array vs .xml), so no event field values are needed. Real data only in tests.
 const SINGLE_EVENT: Record<string, unknown> = {};
 
-// Real backend output for the placeholder above: an event with no `type`
-// gets this message from _validate_epcis (services/ingestion/app/epcis/
-// validation.py), and the batch path wraps it as HTTPException(400,
-// detail={"errors": [...]}) per event (persistence.py).
-const BACKEND_EVENT_ERROR = 'Unsupported EPCIS event type';
+// What _validate_epcis (services/ingestion/app/epcis/validation.py) really
+// returns for the {} placeholder, in order: each missing required field
+// (type, eventTime, action, bizStep), then the unsupported type, then the
+// missing lot code. Every {} event is invalid, so the batch path rejects each
+// one with HTTPException(400, detail={"errors": [...]}) (persistence.py).
+const REQUIRED_FIELDS = ['type', 'eventTime', 'action', 'bizStep'];
+const BACKEND_EVENT_ERRORS = [
+  ...REQUIRED_FIELDS.map((field) => `Missing required EPCIS field '${field}'`),
+  'Unsupported EPCIS event type',
+  'Missing traceability lot code (fsma:traceabilityLotCode or cbvmda:lotNumber)',
+];
 const BACKEND_VALIDATION_STATUS = 400;
+// page.tsx and epcis-upload.ts both join an error list with ': '.
+const JOINED_EVENT_ERRORS = BACKEND_EVENT_ERRORS.join(': ');
+
+// The real batch response for a list of {} events: none created, all failed.
+function rejectedBatchResponse(events: unknown[]) {
+  const detail = { errors: BACKEND_EVENT_ERRORS };
+  return {
+    total: events.length,
+    created: 0,
+    failed: events.length,
+    results: events.map((_, index) => ({ index, status_code: BACKEND_VALIDATION_STATUS, detail })),
+    errors: events.map((_, index) => ({ index, detail })),
+    mode: 'partial',
+  };
+}
+
+function expectEveryEventRejected(count: number) {
+  for (let index = 0; index < count; index += 1) {
+    expect(screen.getByText(`Event ${index + 1}: ${JOINED_EVENT_ERRORS}`)).toBeInTheDocument();
+  }
+}
 
 const EPCIS_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2">
@@ -89,14 +116,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
   it('sends an EPCIS JSON document to the batch endpoint once with all events', async () => {
     const eventList = (epcisDocument as { epcisBody: { eventList: unknown[] } }).epcisBody.eventList;
     expect(eventList.length).toBeGreaterThan(1);
-    mocks.ingestEpcisBatch.mockResolvedValue({
-      total: eventList.length,
-      created: eventList.length,
-      failed: 0,
-      results: [],
-      errors: [],
-      mode: 'partial',
-    });
+    mocks.ingestEpcisBatch.mockResolvedValue(rejectedBatchResponse(eventList));
 
     await openEpcisTab();
     uploadEpcisFile('events.json', JSON.stringify(epcisDocument), 'application/json');
@@ -110,27 +130,17 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.validateEpcis).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
+    expect(await screen.findByText('No events accepted')).toBeInTheDocument();
     expect(
-      screen.getByText(`${eventList.length} of ${eventList.length} events accepted; 0 rejected.`),
+      screen.getByText(`0 of ${eventList.length} events accepted; ${eventList.length} rejected.`),
     ).toBeInTheDocument();
-    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+    expectEveryEventRejected(eventList.length);
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('sends a bare JSON array of events to the batch endpoint', async () => {
     const events = [{ ...SINGLE_EVENT }, { ...SINGLE_EVENT }];
-    const failedIndex = events.length - 1;
-    const created = events.length - 1;
-    const failed = events.length - created;
-    const detail = { errors: [BACKEND_EVENT_ERROR] };
-    mocks.ingestEpcisBatch.mockResolvedValue({
-      total: events.length,
-      created,
-      failed,
-      results: [{ index: failedIndex, status_code: BACKEND_VALIDATION_STATUS, detail }],
-      errors: [{ index: failedIndex, detail }],
-      mode: 'partial',
-    });
+    mocks.ingestEpcisBatch.mockResolvedValue(rejectedBatchResponse(events));
 
     await openEpcisTab();
     uploadEpcisFile('events.json', JSON.stringify(events), 'application/json');
@@ -141,15 +151,19 @@ describe('EPCIS 2.0 import on /ingest', () => {
       apiKey: 'cookie-managed', // pragma: allowlist secret
       events,
     });
-    expect(await screen.findByText('EPCIS partially accepted')).toBeInTheDocument();
+    expect(await screen.findByText('No events accepted')).toBeInTheDocument();
     expect(
-      screen.getByText(`${created} of ${events.length} events accepted; ${failed} rejected.`),
+      screen.getByText(`0 of ${events.length} events accepted; ${events.length} rejected.`),
     ).toBeInTheDocument();
-    expect(screen.getByText(`Event ${failedIndex + 1}: ${BACKEND_EVENT_ERROR}`)).toBeInTheDocument();
+    expectEveryEventRejected(events.length);
   });
 
   it('sends a single-event JSON to the single-event endpoint', async () => {
-    mocks.ingestEpcisEvent.mockResolvedValue({ status: 201 });
+    mocks.ingestEpcisEvent.mockRejectedValue(
+      Object.assign(new Error(`Request failed with status code ${BACKEND_VALIDATION_STATUS}`), {
+        response: { status: BACKEND_VALIDATION_STATUS, data: { detail: { errors: BACKEND_EVENT_ERRORS } } },
+      }),
+    );
 
     await openEpcisTab();
     uploadEpcisFile('event.json', JSON.stringify(SINGLE_EVENT), 'application/json');
@@ -162,20 +176,16 @@ describe('EPCIS 2.0 import on /ingest', () => {
     });
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
-    const singleTotal = [SINGLE_EVENT].length;
-    expect(
-      screen.getByText(`${singleTotal} of ${singleTotal} events accepted; 0 rejected.`),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
+    expect(screen.getByText(JOINED_EVENT_ERRORS)).toBeInTheDocument();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('sends an XML file to the XML endpoint untouched', async () => {
-    // EPCIS_XML carries an empty EventList; the mocked parse reports one
-    // event created so the success path renders. Counts derive from it.
-    const xmlTotal = [EPCIS_XML].length;
+    // EPCIS_XML carries an empty EventList, so the backend parses no events.
     mocks.ingestEpcisXml.mockResolvedValue({
-      total: xmlTotal,
-      created: xmlTotal,
+      total: 0,
+      created: 0,
       failed: 0,
       results: [],
       errors: [],
@@ -194,11 +204,14 @@ describe('EPCIS 2.0 import on /ingest', () => {
     });
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
-    expect(await screen.findByText('EPCIS processed')).toBeInTheDocument();
+    // The page passes the response through unchanged.
+    expect(await screen.findByText('No events accepted')).toBeInTheDocument();
+    expect(screen.getByText('0 of 0 events accepted; 0 rejected.')).toBeInTheDocument();
+    expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
   it('validate-only calls the validate endpoint and never ingests', async () => {
-    mocks.validateEpcis.mockResolvedValue({ valid: true, errors: [], normalized_cte: null });
+    mocks.validateEpcis.mockResolvedValue({ valid: false, errors: BACKEND_EVENT_ERRORS, normalized_cte: null });
 
     await openEpcisTab();
     uploadEpcisFile('event.json', JSON.stringify(SINGLE_EVENT), 'application/json');
@@ -213,30 +226,26 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.ingestFile).not.toHaveBeenCalled();
-    expect(await screen.findByText('All events valid')).toBeInTheDocument();
-    const validTotal = [SINGLE_EVENT].length;
-    expect(screen.getByText(`${validTotal} of ${validTotal} events valid.`)).toBeInTheDocument();
+    expect(await screen.findByText('Validation found issues')).toBeInTheDocument();
+    expect(screen.getByText(`0 of ${[SINGLE_EVENT].length} events valid.`)).toBeInTheDocument();
+    expectEveryEventRejected([SINGLE_EVENT].length);
   });
 
   it('validate-only reports per-event failures for a batch document', async () => {
     const events = [{ ...SINGLE_EVENT }, { ...SINGLE_EVENT }];
-    mocks.validateEpcis
-      .mockResolvedValueOnce({ valid: true, errors: [], normalized_cte: null })
-      .mockResolvedValueOnce({ valid: false, errors: [BACKEND_EVENT_ERROR], normalized_cte: null });
-    const failedIndex = events.length - 1;
-    const validCount = events.length - 1;
+    mocks.validateEpcis.mockResolvedValue({ valid: false, errors: BACKEND_EVENT_ERRORS, normalized_cte: null });
 
     await openEpcisTab();
     uploadEpcisFile('events.json', JSON.stringify(events), 'application/json');
     await userEvent.click(screen.getByRole('button', { name: /^validate only$/i }));
 
-    expect(mocks.validateEpcis).toHaveBeenCalledTimes(2);
+    expect(mocks.validateEpcis).toHaveBeenCalledTimes(events.length);
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(await screen.findByText('Validation found issues')).toBeInTheDocument();
-    expect(screen.getByText(`${validCount} of ${events.length} events valid.`)).toBeInTheDocument();
-    expect(screen.getByText(`Event ${failedIndex + 1}: ${BACKEND_EVENT_ERROR}`)).toBeInTheDocument();
+    expect(screen.getByText(`0 of ${events.length} events valid.`)).toBeInTheDocument();
+    expectEveryEventRejected(events.length);
   });
 
   it('shows a parse error and makes no request for a non-JSON .json file', async () => {
