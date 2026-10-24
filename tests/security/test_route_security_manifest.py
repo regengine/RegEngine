@@ -192,8 +192,8 @@ def test_dual_session_routes_record_cookie_tenancy_and_csrf_adapter(manifest):
     dual = [item for item in manifest["enabled_operations"] if item["test_adapter"] == "tenant_dual_session_csrf"]
     mutations = [item for item in dual if item["method"] in {"POST", "PUT", "PATCH", "DELETE"}]
 
-    assert len(dual) == 54
-    assert len(mutations) == 23
+    assert len(dual) == 55
+    assert len(mutations) == 24
     assert all(item["authentication"] == "bearer-token-or-opaque-session-cookie" for item in dual)
     assert all(item["storage_boundary"] == "admin-postgres:jwt-tenant-or-session-membership-tenant" for item in dual)
 
