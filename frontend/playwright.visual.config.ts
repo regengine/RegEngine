@@ -90,6 +90,21 @@ export default defineConfig({
             name: 'smoke',
             testMatch: ['smoke.spec.ts'],
         },
+        {
+            name: 'crawl-desktop',
+            testMatch: ['crawl.spec.ts'],
+            use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
+        },
+        {
+            name: 'crawl-mobile',
+            testMatch: ['crawl.spec.ts'],
+            use: {
+                viewport: { width: 390, height: 844 },
+                isMobile: true,
+                hasTouch: true,
+                deviceScaleFactor: 1,
+            },
+        },
         /* Conditional projects: absent unless the env flag is set. */
         ...(allowFormSubmit
             ? [

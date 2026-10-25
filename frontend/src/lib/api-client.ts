@@ -28,6 +28,7 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
+  SupplierGapTimeToFixResponse,
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
   SupplierBulkUploadStatusResponse,
@@ -868,6 +869,11 @@ class APIClient {
     const { data } = await this.adminClient.get<SupplierComplianceGapsResponse>('/v1/supplier/gaps', {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
+    return data;
+  }
+
+  async getSupplierGapTimeToFix(): Promise<SupplierGapTimeToFixResponse> {
+    const { data } = await this.adminClient.get<SupplierGapTimeToFixResponse>('/v1/supplier/gap-time-to-fix');
     return data;
   }
 
