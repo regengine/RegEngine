@@ -24,6 +24,7 @@ vi.mock('@/lib/api-client', () => ({
         getSupplierComplianceScore: () => Promise.resolve(null),
         getSupplierComplianceGaps: () => Promise.resolve({ gaps: [] }),
         listSupplierTLCs: () => Promise.resolve({ items: [] }),
+        getSupplierGapTimeToFix: () => Promise.resolve({ suppliers: [], internal_target_seconds: 86400, evaluated_at: '' }),
         checkFacilityRemoval: mocks.checkRemoval,
         deleteSupplierFacility: mocks.deleteFacility,
     },

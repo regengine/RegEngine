@@ -245,7 +245,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'RegEngine can prepare EPCIS-oriented export packages for retailer submission workflows.',
+        customer_copy: 'RegEngine can prepare EPCIS (Preview) export packages for retailer submission workflows.',
         evidence_url: '/trust',
     },
     {
@@ -299,23 +299,13 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         evidence_url: '/docs/api',
     },
     {
-        id: 'inflow-lab',
-        name: 'Inflow Lab',
-        category: 'developer_api',
-        status: 'pilot',
-        delivery_mode: 'native_api',
-        integration_type: 'api_based_custom',
-        customer_copy: 'RegEngine-owned FSMA 204 simulator that posts events to the JSON events API for demos, contract tests, and developer validation.',
-        evidence_url: '/docs/connectors/inflow-lab',
-    },
-    {
         id: 'epcis',
-        name: 'GS1 EPCIS 2.0',
+        name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'JSON-LD EPCIS export is supported. EPCIS ingest is in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
         evidence_url: '/developers',
     },
     {
@@ -396,51 +386,6 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     },
 ];
 
-// Sample export-job configurations rendered on the Trust Center page as
-// examples of supported configurations - NOT live production telemetry.
-// Timestamps and manifest hashes below are placeholder strings and must
-// not be presented as real run data; the Trust Center renderer hides
-// timestamps for this reason. If you add a renderer that surfaces
-// `lastRun` / `nextRun` / `manifestHash`, label the area "Sample data".
-export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
-    {
-        id: 'job_fda_daily',
-        name: 'Sample: Daily FDA package archive',
-        format: 'FDA Package',
-        cadence: 'Daily',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
-        id: 'job_epcis_weekly',
-        name: 'Sample: Weekly EPCIS outbound bundle',
-        format: 'GS1 EPCIS 2.0',
-        cadence: 'Weekly',
-        destination: 'Downloadable bundle',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
-        id: 'job_audit_monthly',
-        name: 'Sample: Monthly audit evidence bundle',
-        format: 'Audit Bundle',
-        cadence: 'Monthly',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-];
-
 export const MAPPING_REVIEW_ITEMS: MappingReviewItem[] = [
     {
         id: 'map_po_001',
@@ -492,7 +437,7 @@ export const RECALL_DRILL_RUNS: RecallDrillRun[] = [
         dateRange: '2026-02-01 to 2026-02-28',
         status: 'completed',
         elapsed: '18m 24s',
-        artifacts: ['FDA package', 'EPCIS export', 'drill report'],
+        artifacts: ['FDA package', 'EPCIS export (Preview)', 'drill report'],
         warnings: [],
     },
     {

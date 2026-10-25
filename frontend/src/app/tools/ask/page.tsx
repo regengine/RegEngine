@@ -138,12 +138,11 @@ function parseQuery(query: string): QueryResult {
     intent,
     confidence,
     filters,
-    results: generateResults(intent, filters),
+    results: [],
     apiEndpoints: generateEndpoints(intent, filters),
   };
 }
 
-// Generate realistic demo results
 interface TraceResult {
   type: string;
   nodes: TraceNode[];
@@ -158,164 +157,6 @@ interface OrphanLot {
   firstSeen: string;
 }
 
-function generateResults(intent: string, filters: Record<string, string>): unknown[] {
-  switch (intent) {
-    case 'trace_forward': {
-      const nodes: TraceNode[] = [
-        { facility: 'Produce Farm CA-001', gln: '0614141234567', date: '2024-03-10 06:00', type: 'Origin' },
-        { facility: 'Regional Packing Center', gln: '0614141234568', date: '2024-03-10 14:30', type: 'Packing' },
-        { facility: 'Distribution Center LA', gln: '0614141234569', date: '2024-03-11 08:00', type: 'Distribution' },
-        { facility: 'Retail Chain Warehouse', gln: '0614141234570', date: '2024-03-11 16:45', type: 'Warehouse' },
-      ];
-      return [{ type: 'trace', nodes, lotId: filters['lot'] || 'LOT-2024-001' }];
-    }
-    case 'trace_backward': {
-      const nodes: TraceNode[] = [
-        { facility: 'Retail Store #432', gln: '0614141234570', date: '2024-03-12 10:00', type: 'Retail' },
-        { facility: 'Distribution Center LA', gln: '0614141234569', date: '2024-03-11 22:00', type: 'Distribution' },
-        { facility: 'Regional Packing Center', gln: '0614141234568', date: '2024-03-11 06:00', type: 'Packing' },
-        { facility: 'Goodrich Farm CA', gln: '0614141234567', date: '2024-03-10 05:30', type: 'Farm' },
-      ];
-      return [{ type: 'trace', nodes, product: filters['product'] || 'Romaine Lettuce' }];
-    }
-    case 'lot_timeline': {
-      const events: Event[] = [
-        {
-          id: 'evt-001',
-          timestamp: '2024-03-10 06:15',
-          eventType: 'Harvest',
-          gln: '0614141234567',
-          facility: 'Goodrich Farm CA-001',
-          product: 'Romaine Lettuce',
-          lot: filters['lot'] || 'LOT-2024-001',
-          quantity: '5000 lbs',
-        },
-        {
-          id: 'evt-002',
-          timestamp: '2024-03-10 14:30',
-          eventType: 'Receiving',
-          gln: '0614141234568',
-          facility: 'Regional Packing Center',
-          product: 'Romaine Lettuce',
-          lot: filters['lot'] || 'LOT-2024-001',
-          quantity: '5000 lbs',
-        },
-        {
-          id: 'evt-003',
-          timestamp: '2024-03-10 16:00',
-          eventType: 'Processing',
-          gln: '0614141234568',
-          facility: 'Regional Packing Center',
-          product: 'Romaine Lettuce (Packed)',
-          lot: filters['lot'] || 'LOT-2024-001',
-          quantity: '4800 lbs',
-        },
-        {
-          id: 'evt-004',
-          timestamp: '2024-03-11 08:00',
-          eventType: 'Shipping',
-          gln: '0614141234568',
-          facility: 'Regional Packing Center',
-          product: 'Romaine Lettuce (Packed)',
-          lot: filters['lot'] || 'LOT-2024-001',
-          quantity: '4800 lbs',
-        },
-        {
-          id: 'evt-005',
-          timestamp: '2024-03-11 16:45',
-          eventType: 'Receiving',
-          gln: '0614141234569',
-          facility: 'Distribution Center LA',
-          product: 'Romaine Lettuce (Packed)',
-          lot: filters['lot'] || 'LOT-2024-001',
-          quantity: '4800 lbs',
-        },
-      ];
-      return events;
-    }
-    case 'events_search': {
-      const dateFilter = filters['date'] || 'last 30 days';
-      const events: Event[] = [
-        {
-          id: 'evt-101',
-          timestamp: '2024-03-15 09:30',
-          eventType: 'Receiving',
-          gln: '0614141234568',
-          facility: 'Regional Packing Center',
-          product: 'Romaine Lettuce',
-          lot: 'LOT-2024-045',
-          quantity: '3500 lbs',
-        },
-        {
-          id: 'evt-102',
-          timestamp: '2024-03-14 11:00',
-          eventType: 'Shipping',
-          gln: '0614141234567',
-          facility: 'Goodrich Farm CA-001',
-          product: 'Romaine Lettuce',
-          lot: 'LOT-2024-044',
-          quantity: '5000 lbs',
-        },
-        {
-          id: 'evt-103',
-          timestamp: '2024-03-13 14:20',
-          eventType: 'Packing',
-          gln: '0614141234568',
-          facility: 'Regional Packing Center',
-          product: 'Spinach',
-          lot: 'LOT-2024-043',
-          quantity: '2200 lbs',
-        },
-        {
-          id: 'evt-104',
-          timestamp: '2024-03-12 08:45',
-          eventType: 'Receiving',
-          gln: '0614141234569',
-          facility: 'Distribution Center LA',
-          product: 'Carrots',
-          lot: 'LOT-2024-042',
-          quantity: '8000 lbs',
-        },
-      ];
-      return events;
-    }
-    case 'compliance_gaps': {
-      const gaps: ComplianceGap[] = [
-        {
-          severity: 'high',
-          gap: 'Missing temperature control records at Regional Packing Center',
-          affectedLots: 8,
-          remediation: 'Install IoT sensors and enable automated logging',
-        },
-        {
-          severity: 'medium',
-          gap: 'Incomplete supplier verification documents',
-          affectedLots: 3,
-          remediation: 'Request COA and GLN verification from 3 suppliers',
-        },
-        {
-          severity: 'low',
-          gap: 'Non-standardized lot code format in older shipments',
-          affectedLots: 12,
-          remediation: 'Update legacy records to FSMA standard format',
-        },
-      ];
-      return gaps;
-    }
-    case 'orphan_lots': {
-      const orphans = [
-        { lot: 'LOT-2024-015', product: 'Romaine Lettuce', origin: 'Unknown Supplier', firstSeen: '2024-03-08' },
-        { lot: 'LOT-2024-022', product: 'Spinach', origin: 'No matching farm record', firstSeen: '2024-03-11' },
-        { lot: 'LOT-2024-031', product: 'Carrots', origin: 'Missing harvest event', firstSeen: '2024-03-13' },
-      ];
-      return orphans;
-    }
-    default:
-      return [];
-  }
-}
-
-// Generate API endpoint info
 function generateEndpoints(intent: string, filters: Record<string, string>): Array<{ path: string; params: Record<string, string>; resultType: string }> {
   const baseEndpoints: { path: string; params: Record<string, string>; resultType: string }[] = [
     {
@@ -409,18 +250,19 @@ function AskPageContent() {
         setIsLiveResult(true);
         outcome = 'success';
       } else if (response.status === 503) {
-        // NLP service not configured — fall back to local stub with a notice.
-        setNlpError('NLP service not configured. Showing simulated results.');
+        // NLP service not configured — fall back to local intent parsing with
+        // an empty result set and a notice.
+        setNlpError('NLP service not configured.');
         setResult(parseQuery(finalQuery));
         outcome = 'success';
       } else {
         const errData = await response.json().catch(() => ({}));
-        setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'}. Showing simulated results.`);
+        setNlpError(`NLP service error (${response.status}): ${errData.detail ?? 'unknown error'}.`);
         setResult(parseQuery(finalQuery));
         outcome = 'success';
       }
     } catch (err) {
-      setNlpError(`Could not reach NLP service: ${String(err)}. Showing simulated results.`);
+      setNlpError(`Could not reach NLP service: ${String(err)}.`);
       setResult(parseQuery(finalQuery));
       outcome = 'success';
     } finally {
@@ -517,7 +359,7 @@ function AskPageContent() {
               exit={{ opacity: 0, y: -20 }}
               className="space-y-6"
             >
-              {/* Live vs simulated notice */}
+              {/* Live vs fallback notice */}
               {nlpError && (
                 <Callout tone="warning" role="status" icon={AlertTriangle}>
                   {nlpError}
@@ -571,11 +413,14 @@ function AskPageContent() {
 
               {/* Results Display */}
               <div className="space-y-4">
-                <h3 className="text-subheading text-re-text-primary">
-                  {isLiveResult ? 'Results' : 'Simulated Results'}
-                </h3>
+                <h3 className="text-subheading text-re-text-primary">Results</h3>
 
-                {result.intent === 'trace_forward' || result.intent === 'trace_backward' ? (
+                {result.results.length === 0 ? (
+                  <EmptyState
+                    icon={Database}
+                    title="No data yet. Connect your data to run queries."
+                  />
+                ) : result.intent === 'trace_forward' || result.intent === 'trace_backward' ? (
                   <Card padding="spacious">
                     <div className="space-y-4">
                       {(result.results[0] as TraceResult | undefined)?.nodes?.map((node: TraceNode, idx: number) => (
@@ -617,7 +462,7 @@ function AskPageContent() {
                   </div>
                 ) : result.intent === 'events_search' ? (
                   <DataTable
-                    caption={isLiveResult ? 'Results' : 'Simulated Results'}
+                    caption="Results"
                     columns={EVENT_COLUMNS}
                     data={result.results as Event[]}
                     rowKey={(row) => row.id}
@@ -678,21 +523,6 @@ function AskPageContent() {
                 </div>
               </div>
 
-              {/* CTA */}
-              <Card variant="inset" padding="spacious" className="text-center">
-                <p className="mb-2 text-subheading text-re-text-primary">
-                  This is a demo of RegEngine&apos;s query engine.
-                </p>
-                <p className="mb-4 text-ui text-re-text-secondary">
-                  Connect your data for live results across your entire supply chain.
-                </p>
-                <Button asChild>
-                  <a href="/onboarding">
-                    Get Started
-                    <ArrowRight size={18} strokeWidth={1.75} aria-hidden="true" />
-                  </a>
-                </Button>
-              </Card>
             </motion.div>
           )}
         </AnimatePresence>
@@ -720,8 +550,8 @@ function AskPageContent() {
           >
             <EmptyState
               icon={Database}
-              title="Ask a question to see simulated traceability results"
-              description="Or click an example above to try a pre-built query"
+              title="Ask a question to query your supply chain data"
+              description="Or click an example above to run a pre-built query"
             />
           </motion.div>
         )}
