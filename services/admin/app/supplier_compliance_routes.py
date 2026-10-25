@@ -396,8 +396,14 @@ async def set_agreed_sending_hours(
         scoped_facility_id = uuid_module.UUID(facility_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid facility id") from exc
-    facility = db.get(SupplierFacilityModel, scoped_facility_id)
-    if facility is None or facility.tenant_id != tenant_id:
+    # Tenant scoping lives in the query: a facility in another tenant is never loaded.
+    facility = db.execute(
+        select(SupplierFacilityModel).where(
+            SupplierFacilityModel.id == scoped_facility_id,
+            SupplierFacilityModel.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if facility is None:
         raise HTTPException(status_code=404, detail="Facility not found")
 
     facility.agreed_sending_hours = request.agreed_sending_hours
