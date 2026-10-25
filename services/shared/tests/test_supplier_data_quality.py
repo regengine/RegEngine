@@ -14,8 +14,10 @@ import pytest
 from shared.supplier_data_quality import (
     COLUMN_BACKED_KDES,
     DEFAULT_WINDOW_DAYS,
+    DRILLDOWN_METRICS,
     EPCIS_TENANT_SCOPE_REASON,
     EPCIS_UNAVAILABLE_REASON,
+    LATE_CTE_NO_HOURS_REASON,
     METRIC_EPCIS_FAILED,
     METRIC_LATE_CTE,
     METRIC_MISSING_KDE,
@@ -23,14 +25,18 @@ from shared.supplier_data_quality import (
     MIN_RECORDS,
     WEBHOOK_REQUIRED_KDES,
     epcis_failed_metric,
+    fetch_sending_hours,
     fetch_supplier_quality,
     flag_records,
     group_lots,
+    late_metric,
+    late_records,
     lot_is_linked,
     missing_kdes,
     required_record_kdes,
     share_metric,
     summarize_facility,
+    timed_records,
     unavailable_metric,
     unlinked_lots,
     window_start,
@@ -55,14 +61,25 @@ FACILITY_ID = str(uuid.uuid4())
 LOT_CODES: dict[str, str] = {}
 
 
-def _record(cte_type: str, kde_data: dict, lot_code: str | None = None) -> dict:
+# Any positive whole number of hours; derived rather than picked.
+AGREED_HOURS = MIN_RECORDS
+NOW = datetime.now(timezone.utc)
+
+
+def _record(
+    cte_type: str,
+    kde_data: dict,
+    lot_code: str | None = None,
+    event_time: datetime | None = None,
+    created_at: datetime | None = None,
+) -> dict:
     return {
         "record_id": uuid.uuid4(),
         "facility_id": FACILITY_ID,
         "cte_type": cte_type,
         "kde_data": kde_data,
-        "event_time": None,
-        "created_at": None,
+        "event_time": event_time,
+        "created_at": created_at,
         "lot_code": lot_code if lot_code is not None else str(uuid.uuid4()),
     }
 
@@ -240,6 +257,73 @@ def test_window_start():
 # --- facility summary --------------------------------------------------------
 
 
+# --- late CTE ------------------------------------------------------------------
+
+
+def _received_after(delay: timedelta) -> dict:
+    """A shipping record received ``delay`` after its event time."""
+    return _record("shipping", COMPLETE_SHIPPING, event_time=NOW - delay, created_at=NOW)
+
+
+ON_TIME = timedelta(hours=AGREED_HOURS)
+LATE = ON_TIME + timedelta.resolution
+
+
+def test_record_received_exactly_at_agreed_hours_is_on_time():
+    assert late_records([_received_after(ON_TIME)], AGREED_HOURS) == []
+
+
+def test_record_received_after_agreed_hours_is_late():
+    late = _received_after(LATE)
+    assert late_records([_received_after(ON_TIME), late], AGREED_HOURS) == [late]
+
+
+def test_records_without_both_times_are_outside_the_denominator():
+    untimed = [
+        _record("shipping", {}, event_time=NOW),
+        _record("shipping", {}, created_at=NOW),
+        _record("shipping", {}),
+    ]
+    timed = [_received_after(LATE)]
+    assert timed_records(untimed + timed) == timed
+    assert late_records(untimed, AGREED_HOURS) == []
+
+
+def test_late_metric_without_agreed_hours_is_not_enough_data_with_reason():
+    rows = [_received_after(LATE) for _ in range(MIN_RECORDS)]
+    assert late_metric(rows, None) == {
+        "key": METRIC_LATE_CTE,
+        "status": "not_enough_data",
+        "numerator": None,
+        "denominator": None,
+        "share": None,
+        "reason": LATE_CTE_NO_HOURS_REASON,
+    }
+
+
+def test_late_metric_below_min_timed_records_is_not_enough_data():
+    timed = [_received_after(LATE) for _ in range(MIN_RECORDS - 1)]
+    # Untimed rows never lift the count over MIN_RECORDS.
+    untimed = [_record("shipping", {}) for _ in range(MIN_RECORDS)]
+    metric = late_metric(timed + untimed, AGREED_HOURS)
+    assert metric["status"] == "not_enough_data"
+    assert metric["share"] is None
+    assert (metric["numerator"], metric["denominator"]) == (len(timed), len(timed))
+
+
+def test_late_metric_at_min_records_computes_share():
+    late = [_received_after(LATE) for _ in range(MIN_RECORDS // 2)]
+    on_time = [_received_after(ON_TIME) for _ in range(MIN_RECORDS - len(late))]
+    metric = late_metric(late + on_time + [_record("shipping", {})], AGREED_HOURS)
+    assert metric["status"] == "ok"
+    assert (metric["numerator"], metric["denominator"]) == (len(late), len(late + on_time))
+    assert metric["share"] == len(late) / len(late + on_time)
+
+
+def test_late_cte_is_a_drilldown_metric():
+    assert METRIC_LATE_CTE in DRILLDOWN_METRICS
+
+
 def test_summarize_facility_keeps_four_separate_metrics():
     complete = [_record("shipping", COMPLETE_SHIPPING) for _ in range(MIN_RECORDS // 2)]
     incomplete = [_record("shipping", {}) for _ in range(MIN_RECORDS - len(complete))]
@@ -247,7 +331,7 @@ def test_summarize_facility_keeps_four_separate_metrics():
     lots = [_lot_row(str(uuid.uuid4()), "shipping", {}) for _ in range(MIN_RECORDS // 2)]
     receipts = [uuid.uuid4() for _ in range(MIN_RECORDS)]
     rejected = receipts[::2]
-    summary = summarize_facility(records, lots, (len(rejected), len(receipts)))
+    summary = summarize_facility(records, lots, epcis_counts=(len(rejected), len(receipts)))
 
     assert set(summary) == {METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE, METRIC_EPCIS_FAILED}
     assert summary[METRIC_MISSING_KDE]["share"] == len(incomplete) / len(records)
@@ -256,7 +340,7 @@ def test_summarize_facility_keeps_four_separate_metrics():
         len(lots),
         len(lots),
     )
-    assert summary[METRIC_LATE_CTE]["status"] == "unavailable"
+    assert summary[METRIC_LATE_CTE] == late_metric(records, None)
     assert summary[METRIC_EPCIS_FAILED]["share"] == len(rejected) / len(receipts)
 
 
@@ -316,11 +400,20 @@ def test_fetch_supplier_quality_repeats_tenant_epcis_counts_on_every_facility(mo
     monkeypatch.setattr(quality, "fetch_record_rows", lambda *args: [])
     monkeypatch.setattr(quality, "fetch_lot_rows", lambda *args: [])
     monkeypatch.setattr(quality, "fetch_receipt_counts", fake_counts)
-    result = fetch_supplier_quality(object(), tenant, str(uuid.uuid4()), facilities, datetime.now(timezone.utc))
+    result = fetch_supplier_quality(
+        object(), tenant, str(uuid.uuid4()), facilities, datetime.now(timezone.utc), sending_hours={}
+    )
 
     assert calls == [tenant]
     assert set(result) == set(facilities)
     assert {result[key][METRIC_EPCIS_FAILED]["share"] for key in facilities} == {len(rejected) / len(receipts)}
+
+
+def test_summarize_facility_measures_late_records_with_agreed_hours():
+    late = [_received_after(LATE) for _ in range(MIN_RECORDS)]
+    summary = summarize_facility(late, [], AGREED_HOURS)
+    assert summary[METRIC_LATE_CTE]["status"] == "ok"
+    assert summary[METRIC_LATE_CTE]["share"] == len(late) / len(late)
 
 
 def test_fetch_supplier_quality_without_facilities_runs_no_query():
@@ -329,3 +422,4 @@ def test_fetch_supplier_quality_without_facilities_runs_no_query():
             raise AssertionError("no query expected")
 
     assert fetch_supplier_quality(NoQuery(), str(uuid.uuid4()), str(uuid.uuid4()), [], datetime.now(timezone.utc)) == {}
+    assert fetch_sending_hours(NoQuery(), str(uuid.uuid4()), str(uuid.uuid4()), []) == {}

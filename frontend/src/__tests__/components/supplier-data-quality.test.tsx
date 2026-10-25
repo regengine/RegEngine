@@ -4,11 +4,13 @@ import type { SupplierDataQuality, SupplierQualityMetric, SupplierQualityRecords
 
 const mocks = vi.hoisted(() => ({
     getSupplierDataQualityRecords: vi.fn(),
+    setFacilityAgreedSendingHours: vi.fn(),
 }));
 
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         getSupplierDataQualityRecords: (...args: unknown[]) => mocks.getSupplierDataQualityRecords(...args),
+        setFacilityAgreedSendingHours: (...args: unknown[]) => mocks.setFacilityAgreedSendingHours(...args),
     },
 }));
 
@@ -38,21 +40,35 @@ const LOT_IDS = uuids(MIN_RECORDS - 1);
 const UNLINKED_LOT_IDS = LOT_IDS.filter((_, index) => index % 2 === 0);
 const MISSING = { numerator: FLAGGED_RECORD_IDS.length, denominator: RECORD_IDS.length };
 const UNLINKED = { numerator: UNLINKED_LOT_IDS.length, denominator: LOT_IDS.length };
+const LATE_RECORD_IDS = uuids(MIN_RECORDS);
+const LATE_FLAGGED_IDS = LATE_RECORD_IDS.filter((_, index) => index % 2 === 0);
+const LATE = { numerator: LATE_FLAGGED_IDS.length, denominator: LATE_RECORD_IDS.length };
+// Any positive whole number of hours; derived rather than picked.
+const AGREED_HOURS = MIN_RECORDS;
 const LATE_REASON = crypto.randomUUID();
 const EPCIS_REASON = crypto.randomUUID();
 const missingShare = MISSING.numerator / MISSING.denominator;
 const formatShare = (share: number) => `${Math.round(share * 1000) / 10}%`;
 
-const summary = (metrics: SupplierQualityMetric[]): SupplierDataQuality => ({ supplier_key: FACILITY_ID, metrics });
+const summary = (metrics: SupplierQualityMetric[], agreedSendingHours: number | null = null): SupplierDataQuality => ({
+    supplier_key: FACILITY_ID,
+    agreed_sending_hours: agreedSendingHours,
+    metrics,
+});
 
 const fourMetrics = summary([
     metric({ key: 'missing_kde', status: 'ok', ...MISSING, share: missingShare }),
     metric({ key: 'unlinked_lot', status: 'not_enough_data', ...UNLINKED, share: null }),
-    metric({ key: 'late_cte', status: 'unavailable', numerator: null, denominator: null, reason: LATE_REASON }),
+    metric({ key: 'late_cte', status: 'not_enough_data', numerator: null, denominator: null, reason: LATE_REASON }),
     metric({ key: 'epcis_failed', status: 'unavailable', numerator: null, denominator: null, reason: EPCIS_REASON }),
 ]);
 
-function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false) {
+const lateMeasured = summary(
+    [metric({ key: 'late_cte', status: 'ok', ...LATE, share: LATE.numerator / LATE.denominator })],
+    AGREED_HOURS,
+);
+
+function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false, onSendingHoursSaved?: () => void) {
     return render(
         <DataQuality
             facilityId={FACILITY_ID}
@@ -61,6 +77,7 @@ function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailab
             windowDays={WINDOW_DAYS}
             minRecords={MIN_RECORDS}
             lateCteLabel={LATE_LABEL}
+            onSendingHoursSaved={onSendingHoursSaved}
         />,
     );
 }
@@ -79,6 +96,7 @@ const page = (overrides: Partial<SupplierQualityRecordsResponse>): SupplierQuali
 describe('DataQuality', () => {
     beforeEach(() => {
         mocks.getSupplierDataQualityRecords.mockReset();
+        mocks.setFacilityAgreedSendingHours.mockReset();
     });
 
     it('shows count of denominator and a share for each metric, with no combined score', () => {
@@ -97,7 +115,7 @@ describe('DataQuality', () => {
 
     it('shows unavailable metrics with their reason and the late CTE label', () => {
         renderQuality();
-        expect(screen.getByText(`Unavailable. ${LATE_REASON}`)).toBeInTheDocument();
+        expect(screen.getByText(`Not enough data. ${LATE_REASON}`)).toBeInTheDocument();
         expect(screen.getByText(`Unavailable. ${EPCIS_REASON}`)).toBeInTheDocument();
         expect(screen.getByText(LATE_LABEL)).toBeInTheDocument();
     });
@@ -233,5 +251,88 @@ describe('DataQuality', () => {
     it('shows No data for a facility missing from the response', () => {
         renderQuality(null, false);
         expect(screen.getByText('Data quality: No data')).toBeInTheDocument();
+    });
+
+    it('shows the late share against the agreed sending time and offers its records', async () => {
+        const [lateId] = uuids(1);
+        mocks.getSupplierDataQualityRecords.mockResolvedValueOnce(
+            page({
+                metric: 'late_cte',
+                total: [lateId].length,
+                items: [
+                    {
+                        record_id: lateId,
+                        lot_id: null,
+                        lot_code: crypto.randomUUID(),
+                        cte_type: 'shipping',
+                        event_time: null,
+                        received_at: null,
+                        missing_kdes: [],
+                    },
+                ],
+            }),
+        );
+        renderQuality(lateMeasured);
+        expect(
+            screen.getByText(`${LATE.numerator} of ${LATE.denominator} records (${formatShare(LATE.numerator / LATE.denominator)})`),
+        ).toBeInTheDocument();
+        expect(screen.getByText(`Agreed sending time: ${AGREED_HOURS} hours after the event`)).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'View records' }));
+        await waitFor(() => expect(screen.getByText(lateId)).toBeInTheDocument());
+        expect(mocks.getSupplierDataQualityRecords).toHaveBeenCalledWith(FACILITY_ID, 'late_cte', expect.anything());
+    });
+
+    it('offers no late drill down without an agreed sending time', () => {
+        renderQuality(summary([fourMetrics.metrics[2]]));
+        expect(screen.getByText('Agreed sending time: Not set')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'View records' })).not.toBeInTheDocument();
+    });
+
+    it('saves a new agreed sending time and reloads the measures', async () => {
+        const onSaved = vi.fn();
+        mocks.setFacilityAgreedSendingHours.mockResolvedValueOnce({
+            facility_id: FACILITY_ID,
+            agreed_sending_hours: AGREED_HOURS,
+        });
+        renderQuality(summary([fourMetrics.metrics[2]]), false, onSaved);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
+        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: String(AGREED_HOURS) } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+        await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+        expect(mocks.setFacilityAgreedSendingHours).toHaveBeenCalledWith(FACILITY_ID, AGREED_HOURS);
+    });
+
+    it.each(['0', `-${AGREED_HOURS}`, `${AGREED_HOURS}.5`, ''])('refuses %j as an agreed sending time', (draft) => {
+        renderQuality(summary([fourMetrics.metrics[2]]));
+        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
+        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: draft } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number of hours above zero');
+        expect(mocks.setFacilityAgreedSendingHours).not.toHaveBeenCalled();
+    });
+
+    it('clears the agreed sending time with null', async () => {
+        const onSaved = vi.fn();
+        mocks.setFacilityAgreedSendingHours.mockResolvedValueOnce({ facility_id: FACILITY_ID, agreed_sending_hours: null });
+        renderQuality(lateMeasured, false, onSaved);
+        fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+        expect(screen.getByLabelText('Hours after the event')).toHaveValue(AGREED_HOURS);
+        fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+        await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+        expect(mocks.setFacilityAgreedSendingHours).toHaveBeenCalledWith(FACILITY_ID, null);
+    });
+
+    it('says so when saving the agreed sending time fails', async () => {
+        const onSaved = vi.fn();
+        mocks.setFacilityAgreedSendingHours.mockRejectedValueOnce(new Error(crypto.randomUUID()));
+        renderQuality(summary([fourMetrics.metrics[2]]), false, onSaved);
+        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
+        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: String(AGREED_HOURS) } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('The agreed sending time could not be saved'));
+        expect(onSaved).not.toHaveBeenCalled();
     });
 });

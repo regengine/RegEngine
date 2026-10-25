@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from shared.data_gap_tracking import INTERNAL_TARGET, fetch_supplier_summaries
 from shared.supplier_data_quality import (
     DEFAULT_WINDOW_DAYS,
@@ -26,8 +26,10 @@ from shared.supplier_data_quality import (
     MIN_RECORDS,
     fetch_lot_rows,
     fetch_record_rows,
+    fetch_sending_hours,
     fetch_supplier_quality,
     flag_records,
+    late_records,
     unlinked_lots,
     window_start as quality_window_start,
 )
@@ -54,6 +56,8 @@ from .supplier_onboarding_routes import (
 router = APIRouter(prefix="/supplier", tags=["supplier-onboarding"])
 
 QUALITY_METRIC_ORDER = (METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE, METRIC_EPCIS_FAILED)
+# supplier_facilities.agreed_sending_hours is a Postgres integer.
+MAX_AGREED_SENDING_HOURS = 2**31 - 1
 
 
 @router.get("/compliance-score", response_model=SupplierComplianceScoreResponse)
@@ -197,7 +201,18 @@ class SupplierQualityMetric(BaseModel):
 
 class SupplierDataQuality(BaseModel):
     supplier_key: str
+    agreed_sending_hours: int | None = None
     metrics: list[SupplierQualityMetric]
+
+
+class AgreedSendingHoursRequest(BaseModel):
+    # Required key; null clears it. Strict: no strings, floats or booleans.
+    agreed_sending_hours: int | None = Field(..., strict=True, gt=0, le=MAX_AGREED_SENDING_HOURS)
+
+
+class AgreedSendingHoursResponse(BaseModel):
+    facility_id: str
+    agreed_sending_hours: int | None
 
 
 class SupplierDataQualityResponse(BaseModel):
@@ -262,13 +277,15 @@ async def get_supplier_data_quality(
 
     facility_ids = _owned_facility_ids(db, tenant_id, current_user.id)
     now = datetime.now(timezone.utc)
+    hours = fetch_sending_hours(db, str(tenant_id), str(current_user.id), facility_ids)
     quality = fetch_supplier_quality(
-        db, str(tenant_id), str(current_user.id), facility_ids, quality_window_start(now, window_days)
+        db, str(tenant_id), str(current_user.id), facility_ids, quality_window_start(now, window_days), hours
     )
     return SupplierDataQualityResponse(
         suppliers=[
             SupplierDataQuality(
                 supplier_key=key,
+                agreed_sending_hours=hours.get(key),
                 metrics=[SupplierQualityMetric(**metrics[name]) for name in QUALITY_METRIC_ORDER],
             )
             for key, metrics in quality.items()
@@ -283,7 +300,7 @@ async def get_supplier_data_quality(
 @router.get("/data-quality/{facility_id}/records", response_model=SupplierQualityRecordsResponse)
 async def get_supplier_data_quality_records(
     facility_id: str,
-    metric: Literal["missing_kde", "unlinked_lot"],
+    metric: Literal["missing_kde", "unlinked_lot", "late_cte"],
     window_days: int = Query(default=DEFAULT_WINDOW_DAYS, ge=1, le=MAX_WINDOW_DAYS),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -298,17 +315,22 @@ async def get_supplier_data_quality_records(
         scoped_facility_id = uuid_module.UUID(facility_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid facility id") from exc
-    _get_supplier_facility_or_404(
+    facility = _get_supplier_facility_or_404(
         db,
         tenant_id=tenant_id,
         supplier_user_id=current_user.id,
         facility_id=scoped_facility_id,
     )
+    if metric == METRIC_LATE_CTE and facility.agreed_sending_hours is None:
+        raise HTTPException(status_code=409, detail="No agreed sending time is set for this facility")
 
     key = str(scoped_facility_id)
     since = quality_window_start(datetime.now(timezone.utc), window_days)
-    if metric == METRIC_MISSING_KDE:
-        flagged = flag_records(fetch_record_rows(db, str(tenant_id), str(current_user.id), [key], since))
+    if metric in (METRIC_MISSING_KDE, METRIC_LATE_CTE):
+        rows = fetch_record_rows(db, str(tenant_id), str(current_user.id), [key], since)
+        flagged = (
+            flag_records(rows) if metric == METRIC_MISSING_KDE else late_records(rows, facility.agreed_sending_hours)
+        )
         items = [
             SupplierQualityRecordItem(
                 record_id=str(row["record_id"]),
@@ -316,7 +338,7 @@ async def get_supplier_data_quality_records(
                 cte_type=row["cte_type"],
                 event_time=_iso_or_none(row["event_time"]),
                 received_at=_iso_or_none(row["created_at"]),
-                missing_kdes=row["missing_kdes"],
+                missing_kdes=row.get("missing_kdes", []),
             )
             for row in flagged
         ]
@@ -333,6 +355,35 @@ async def get_supplier_data_quality_records(
         limit=limit,
         offset=offset,
         items=items[offset : offset + limit],
+    )
+
+
+@router.put("/facilities/{facility_id}/agreed-sending-hours", response_model=AgreedSendingHoursResponse)
+async def set_agreed_sending_hours(
+    facility_id: str,
+    request: AgreedSendingHoursRequest,
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> AgreedSendingHoursResponse:
+    """Set or clear (null) the agreed sending time for one owned facility."""
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+    try:
+        scoped_facility_id = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+    facility = _get_supplier_facility_or_404(
+        db,
+        tenant_id=tenant_id,
+        supplier_user_id=current_user.id,
+        facility_id=scoped_facility_id,
+    )
+
+    facility.agreed_sending_hours = request.agreed_sending_hours
+    db.commit()
+    return AgreedSendingHoursResponse(
+        facility_id=str(scoped_facility_id), agreed_sending_hours=request.agreed_sending_hours
     )
 
 

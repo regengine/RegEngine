@@ -61,7 +61,7 @@ const RELATED_ENDPOINTS = [
 const RECALL_SNIPPET = `curl -G https://regengine.co/api/v1/fda/export/recall \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -d "tenant_id=YOUR_WORKSPACE_ID" \\
-  -d "tlc=TEST-00012345678901-LOT-001" \\
+  -d "tlc=<the lot code under recall>" \\
   -o fda_response.csv`;
 
 /** A labelled code well — SPEC §5.1: code sits one surface step below the page. */
@@ -214,7 +214,7 @@ export default function FSMA204GuidePage() {
 
                     <CodePanel
                         label="Trace a lot (where did it come from, where did it go?)"
-                        code={`curl -G https://regengine.co/api/v1/fda/trace/TEST-00012345678901-LOT-001 \\
+                        code={`curl -G https://regengine.co/api/v1/fda/trace/<the-lot-code> \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -d "tenant_id=YOUR_WORKSPACE_ID"`}
                     />

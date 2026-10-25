@@ -89,7 +89,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '5',
         title: 'Export',
-        description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0, FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
+        description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0 (Preview), FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
     },
 ];
 
@@ -144,7 +144,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Workflow,
         title: 'Evidence exports',
-        detail: 'FDA-oriented spreadsheets, EPCIS/CSV packages, and manifests where configured',
+        detail: 'FDA-oriented spreadsheets, EPCIS (Preview) and CSV packages, and manifests where configured',
         boundary: 'Customer review and archive',
     },
 ];

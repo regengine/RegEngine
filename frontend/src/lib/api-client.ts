@@ -30,6 +30,7 @@ import type {
   SupplierComplianceScore,
   SupplierGapTimeToFixResponse,
   SupplierDataQualityResponse,
+  AgreedSendingHoursResponse,
   SupplierQualityDrilldownMetric,
   SupplierQualityRecordsResponse,
   SupplierBulkUploadCommitResponse,
@@ -884,6 +885,17 @@ class APIClient {
     const { data } = await this.adminClient.get<SupplierDataQualityResponse>('/v1/supplier/data-quality', {
       params: windowDays ? { window_days: windowDays } : undefined,
     });
+    return data;
+  }
+
+  async setFacilityAgreedSendingHours(
+    facilityId: string,
+    agreedSendingHours: number | null,
+  ): Promise<AgreedSendingHoursResponse> {
+    const { data } = await this.adminClient.put<AgreedSendingHoursResponse>(
+      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/agreed-sending-hours`,
+      { agreed_sending_hours: agreedSendingHours },
+    );
     return data;
   }
 

@@ -511,23 +511,34 @@ export interface SupplierGapTimeToFixResponse {
 }
 
 export type SupplierQualityMetricKey = 'missing_kde' | 'unlinked_lot' | 'late_cte' | 'epcis_failed';
-export type SupplierQualityDrilldownMetric = 'missing_kde' | 'unlinked_lot';
+export type SupplierQualityDrilldownMetric = 'missing_kde' | 'unlinked_lot' | 'late_cte';
 
 export interface SupplierQualityMetric {
     key: SupplierQualityMetricKey;
-    /** not_enough_data: denominator is below min_records, so share is null. */
+    /**
+     * not_enough_data: denominator is below min_records, so share is null. For
+     * late_cte with no agreed sending time, the counts are null too and reason
+     * says why.
+     */
     status: 'ok' | 'not_enough_data' | 'unavailable';
     numerator: number | null;
     denominator: number | null;
     share: number | null;
-    /** Set when status is unavailable. On epcis_failed it also says the count is tenant wide. */
+    /** Set when status is unavailable, when late_cte has no agreed sending time, and on epcis_failed to say the count is tenant wide. */
     reason: string | null;
 }
 
 export interface SupplierDataQuality {
     /** Supplier facility id. */
     supplier_key: string;
+    /** Hours after the event time the supplier agreed to send a record; null when not set. */
+    agreed_sending_hours: number | null;
     metrics: SupplierQualityMetric[];
+}
+
+export interface AgreedSendingHoursResponse {
+    facility_id: string;
+    agreed_sending_hours: number | null;
 }
 
 export interface SupplierDataQualityResponse {
