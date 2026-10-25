@@ -40,6 +40,7 @@ from .database import get_session
 from .dependencies import get_current_user
 from .models import TenantContext
 from .sqlalchemy_models import SupplierFacilityModel, UserModel
+from .tenant_settings_routes import _ADMIN_ROLE_NAMES, _get_user_role_name
 from .supplier_onboarding_routes import (
     SupplierComplianceGap,
     SupplierComplianceGapsResponse,
@@ -358,14 +359,38 @@ async def get_supplier_data_quality_records(
     )
 
 
-@router.put("/facilities/{facility_id}/agreed-sending-hours", response_model=AgreedSendingHoursResponse)
+class TenantAdminChecker:
+    """Allow only an Owner or Admin membership in the bound tenant.
+
+    Reuses the tenant settings role gate (#1386). ``required_permission``
+    is read by the route security manifest.
+    """
+
+    required_permission = "tenant.admin"
+
+    def __call__(self, user: UserModel = Depends(get_current_user), db: Session = Depends(get_session)) -> UserModel:
+        tenant_id = TenantContext.get_tenant_context(db)
+        if not tenant_id:
+            raise HTTPException(status_code=403, detail="E_NO_TENANT_CONTEXT: tenant-scoped endpoint requires X-Tenant-ID")
+        if _get_user_role_name(tenant_id, user, db) not in _ADMIN_ROLE_NAMES:
+            raise HTTPException(status_code=403, detail="Only tenant Owner or Admin roles may set agreed sending hours")
+        return user
+
+
+require_tenant_admin = TenantAdminChecker()
+
+
+@router.put("/admin/facilities/{facility_id}/agreed-sending-hours", response_model=AgreedSendingHoursResponse)
 async def set_agreed_sending_hours(
     facility_id: str,
     request: AgreedSendingHoursRequest,
-    current_user: UserModel = Depends(get_current_user),
+    _admin: UserModel = Depends(require_tenant_admin),
     db: Session = Depends(get_session),
 ) -> AgreedSendingHoursResponse:
-    """Set or clear (null) the agreed sending time for one owned facility."""
+    """Tenant admin sets or clears (null) the agreed sending time for a facility in the tenant.
+
+    Suppliers can read it in their data quality summary but cannot change it.
+    """
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:
         raise HTTPException(status_code=400, detail="Tenant context required")
@@ -373,12 +398,15 @@ async def set_agreed_sending_hours(
         scoped_facility_id = uuid_module.UUID(facility_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid facility id") from exc
-    facility = _get_supplier_facility_or_404(
-        db,
-        tenant_id=tenant_id,
-        supplier_user_id=current_user.id,
-        facility_id=scoped_facility_id,
-    )
+    # Tenant scoping lives in the query: a facility in another tenant is never loaded.
+    facility = db.execute(
+        select(SupplierFacilityModel).where(
+            SupplierFacilityModel.id == scoped_facility_id,
+            SupplierFacilityModel.tenant_id == tenant_id,
+        )
+    ).scalar_one_or_none()
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
 
     facility.agreed_sending_hours = request.agreed_sending_hours
     db.commit()

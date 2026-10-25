@@ -1,7 +1,6 @@
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api-client';
 import type {
     SupplierDataQuality,
@@ -17,7 +16,7 @@ const METRIC_COPY: Record<SupplierQualityMetricKey, { label: string; unit: strin
     missing_kde: { label: 'Records missing a KDE', unit: 'records' },
     unlinked_lot: { label: 'Lot codes not linked back through the chain', unit: 'lot codes' },
     late_cte: { label: 'Late CTE records', unit: 'records' },
-    epcis_failed: { label: 'EPCIS (Preview) documents rejected', unit: 'documents' },
+    epcis_failed: { label: 'EPCIS (Preview) documents rejected across your whole account', unit: 'documents' },
 };
 
 function isDrilldown(key: SupplierQualityMetricKey): key is SupplierQualityDrilldownMetric {
@@ -78,94 +77,13 @@ function DrilldownList({ metric, state }: { metric: SupplierQualityDrilldownMetr
     );
 }
 
-function SendingHoursEditor({
-    facilityId,
-    hours,
-    onSaved,
-}: {
-    facilityId: string;
-    hours: number | null;
-    onSaved?: () => void;
-}) {
-    const inputId = useId();
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState('');
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const start = () => {
-        setDraft(hours === null ? '' : String(hours));
-        setError(null);
-        setEditing(true);
-    };
-
-    const save = async (value: number | null) => {
-        setSaving(true);
-        setError(null);
-        try {
-            await apiClient.setFacilityAgreedSendingHours(facilityId, value);
-            setEditing(false);
-            onSaved?.();
-        } catch {
-            setError('The agreed sending time could not be saved');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        const trimmed = draft.trim();
-        const value = Number(trimmed);
-        if (!/^\d+$/.test(trimmed) || !Number.isSafeInteger(value) || value <= 0) {
-            setError('Enter a whole number of hours above zero');
-            return;
-        }
-        void save(value);
-    };
-
-    if (!editing) {
-        return (
-            <div className="flex flex-wrap items-center gap-x-2">
-                <span>
-                    Agreed sending time: {hours === null ? 'Not set' : `${formatHours(hours)} after the event`}
-                </span>
-                <Button variant="link" size="sm" onClick={start}>
-                    {hours === null ? 'Set' : 'Edit'}
-                </Button>
-            </div>
-        );
-    }
+/** Read only: the customer (tenant admin) sets the agreed sending time, not the supplier. */
+function SendingHoursNote({ hours }: { hours: number | null }) {
     return (
-        <form onSubmit={submit} noValidate className="flex flex-wrap items-center gap-2" aria-label="Agreed sending time">
-            <label htmlFor={inputId}>Hours after the event</label>
-            <Input
-                id={inputId}
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                className="w-24"
-            />
-            <Button type="submit" size="sm" disabled={saving}>
-                Save
-            </Button>
-            {hours !== null && (
-                <Button type="button" variant="secondary" size="sm" disabled={saving} onClick={() => void save(null)}>
-                    Clear
-                </Button>
-            )}
-            <Button type="button" variant="ghost" size="sm" disabled={saving} onClick={() => setEditing(false)}>
-                Cancel
-            </Button>
-            {error && (
-                <p role="alert" className="w-full text-re-text-tertiary">
-                    {error}
-                </p>
-            )}
-        </form>
+        <div className="flex flex-wrap items-center gap-x-2">
+            <span>Agreed sending time: {hours === null ? 'Not set' : `${formatHours(hours)} after the event`}</span>
+            <span className="text-re-text-tertiary">Set by your customer</span>
+        </div>
     );
 }
 
@@ -176,7 +94,6 @@ function MetricRow({
     minRecords,
     lateCteLabel,
     agreedSendingHours,
-    onSendingHoursSaved,
 }: {
     facilityId: string;
     metric: SupplierQualityMetric;
@@ -184,7 +101,6 @@ function MetricRow({
     minRecords: number;
     lateCteLabel: string;
     agreedSendingHours: number | null;
-    onSendingHoursSaved?: () => void;
 }) {
     const copy = METRIC_COPY[metric.key];
     const [open, setOpen] = useState(false);
@@ -251,7 +167,7 @@ function MetricRow({
             {metric.key === 'late_cte' && (
                 <>
                     <p className="text-re-text-tertiary">{lateCteLabel}</p>
-                    <SendingHoursEditor facilityId={facilityId} hours={agreedSendingHours} onSaved={onSendingHoursSaved} />
+                    <SendingHoursNote hours={agreedSendingHours} />
                 </>
             )}
             {metric.status !== 'unavailable' && metric.reason && <p className="text-re-text-tertiary">{metric.reason}</p>}
@@ -282,8 +198,6 @@ interface DataQualityProps {
     windowDays: number;
     minRecords: number;
     lateCteLabel: string;
-    /** Called after the agreed sending time is saved, to reload the measures. */
-    onSendingHoursSaved?: () => void;
 }
 
 /** Four separate data quality measures for one facility. No combined score. */
@@ -294,7 +208,6 @@ export function DataQuality({
     windowDays,
     minRecords,
     lateCteLabel,
-    onSendingHoursSaved,
 }: DataQualityProps) {
     if (unavailable) {
         return <p className="mt-2 text-small text-re-text-tertiary">Data quality unavailable</p>;
@@ -315,7 +228,6 @@ export function DataQuality({
                         minRecords={minRecords}
                         lateCteLabel={lateCteLabel}
                         agreedSendingHours={summary.agreed_sending_hours ?? null}
-                        onSendingHoursSaved={onSendingHoursSaved}
                     />
                 ))}
             </ul>

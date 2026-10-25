@@ -73,8 +73,8 @@ def test_checked_in_manifest_matches_live_route_and_dependency_graph(manifest):
         # +1 tenant-scoped (#3572): admin:GET:/v1/supplier/gap-time-to-fix.
         # +2 tenant-scoped: admin:GET:/v1/supplier/data-quality and
         # admin:GET:/v1/supplier/data-quality/{facility_id}/records, owner-only, tenant-filtered.
-        # +1 tenant-scoped: admin:PUT:/v1/supplier/facilities/{facility_id}/agreed-sending-hours,
-        # owner-only, tenant-filtered.
+        # +1 tenant-scoped: admin:PUT:/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours,
+        # tenant Owner or Admin only (tenant.admin), tenant-filtered.
         "enabled_operation_count": 258,
         # 178/161 includes graph:GET:/api/v1/provisions/by-request: it is added
         # to the graph v1_router AFTER router.include_router(v1_router), so the
