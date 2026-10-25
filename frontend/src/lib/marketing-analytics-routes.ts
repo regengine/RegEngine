@@ -10,7 +10,7 @@ export const MARKETING_APP_ROUTE_PREFIXES = [
 ] as const;
 
 const INTERNAL_STORAGE_KEY = 're_internal';
-const SENSITIVE_ROUTE_PREFIXES = ['/sandbox/results', '/portal'] as const;
+const SENSITIVE_ROUTE_PREFIXES = ['/portal'] as const;
 const PUBLIC_MARKETING_SECTIONS = new Set([
   '/about', '/alpha', '/blog', '/buyer-programs', '/case-studies',
   '/compare', '/contact', '/design-system', '/developers',
