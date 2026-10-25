@@ -19,6 +19,7 @@ workflow sets automatically (see below).
 | `priority-extras.visual.spec.ts` | Mobile nav-open, CTA focus ring, tablet home+pricing |
 | `content.spec.ts` | Copy rules (all `expect.soft`): no em/en dashes, no lone `-`, banned demo words, EPCIS→Preview, Live-label and trust rules |
 | `smoke.spec.ts` | Page/same-origin console errors, same-origin ≥400s, empty pages; third-party failures attached + annotated, never fail |
+| `crawl.spec.ts` | Sitemap crawler: visits every live sitemap URL (rewritten to base origin), flags broken links / dead ends / page+console errors, checks routes.json coverage; writes `test-results-visual/crawl-report-<project>.json` |
 | `preview-forms.spec.ts` | Blank-submit validation screenshots, login+signup (preview only) |
 | `signed-in.spec.ts` | Read-only signed-in checks (manual only, `VISUAL_AUTH=1`) |
 | `layout-boxes.json` | Expected header/nav boxes (empty: `_note` only — see below) |
@@ -36,6 +37,9 @@ VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.vis
 
 # One project
 VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.visual.config.ts --project=smoke
+
+# Sitemap crawler at both widths
+VISUAL_BASE_URL=https://regengine.co npx playwright test --config=playwright.visual.config.ts --project=crawl-desktop --project=crawl-mobile
 
 # View the last HTML report
 npx playwright show-report playwright-visual-report
@@ -62,6 +66,8 @@ npx playwright show-report playwright-visual-report
 | `priority-extras` | priority extras | mixed (set per test) |
 | `content` | content rules | default |
 | `smoke` | smoke | default |
+| `crawl-desktop` | sitemap crawl | 1440×900 |
+| `crawl-mobile` | sitemap crawl | 390×844, touch |
 | `preview-forms` | blank submits | default, only if `VISUAL_ALLOW_FORM_SUBMIT=1` |
 | `signed-in` | signed-in reads | default, only if `VISUAL_AUTH=1` |
 
@@ -92,13 +98,13 @@ Snapshot stems (`home`, `about`, `blog__<slug>`, …) match the designer's
 
 ## Expected findings (known on day one)
 
-- `/demo` and `/sandbox` are classified `expectRedirectOr404`, but both
-  currently return 200 (`src/app/demo/page.tsx` renders the synthetic demo;
-  `/sandbox` renders UI or a disabled notice depending on
-  `isSandboxEnabled()`). Those assertions flag until the routes are retired
-  or reclassified to `public`. `/alpha` genuinely redirects to `/contact`.
+- `/demo` and `/sandbox` are classified `expectRedirectOr404`. `/demo` still
+  returns 200 (`src/app/demo/page.tsx` renders the synthetic demo), so its
+  assertion flags until the route is retired or reclassified to `public`.
+  `/sandbox` was deleted in #3557 (no `src/app/sandbox/` remains), so it is
+  expected to 404. `/alpha` genuinely redirects to `/contact`.
 - The content word bans (`demo`, `sandbox`, `sample`, …) will flag current
-  production copy (e.g. sandbox CTAs, "interactive demo" links). That is the
+  production copy (e.g. "interactive demo" links). That is the
   point: the report inventories every occurrence for the copy cleanup.
 
 ## Baselines

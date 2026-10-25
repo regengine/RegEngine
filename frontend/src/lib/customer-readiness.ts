@@ -386,39 +386,6 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     },
 ];
 
-// Sample export-job configurations rendered on the Trust Center page as
-// examples of supported configurations - NOT live production telemetry.
-// Timestamps and manifest hashes below are placeholder strings and must
-// not be presented as real run data; the Trust Center renderer hides
-// timestamps for this reason. If you add a renderer that surfaces
-// `lastRun` / `nextRun` / `manifestHash`, label the area "Sample data".
-export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
-    {
-        id: 'job_epcis_weekly',
-        name: 'Sample: Weekly EPCIS outbound bundle (Preview)',
-        format: 'GS1 EPCIS 2.0',
-        cadence: 'Weekly',
-        destination: 'Downloadable bundle',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
-        id: 'job_audit_monthly',
-        name: 'Sample: Monthly audit evidence bundle',
-        format: 'Audit Bundle',
-        cadence: 'Monthly',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-];
-
 export const MAPPING_REVIEW_ITEMS: MappingReviewItem[] = [
     {
         id: 'map_po_001',

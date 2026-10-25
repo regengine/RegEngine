@@ -29,11 +29,8 @@ if (allPassed) {
   console.log('\u2705 DEPLOY: All checks passed.');
   console.log('');
   console.log('  Pipeline summary:');
-  console.log('  \u2500 FSMA 204 compliance: verified');
   console.log('  \u2500 Tenant isolation: verified');
-  console.log('  \u2500 Full flow simulation: passed');
   console.log('  \u2500 Bad data rejection: passed');
-  console.log('  \u2500 Export artifacts: validated');
   console.log('');
   process.exit(0);
 } else if (anyFailed) {
@@ -47,11 +44,8 @@ if (allPassed) {
   console.error('');
   console.error('  Fix the failing checks before deploying.');
   console.error('  Run individual check scripts locally:');
-  console.error('    node qa/fsma-lite-check.js');
   console.error('    node qa/frontend-security-scan.js');
-  console.error('    node qa/full-flow.js');
   console.error('    node qa/bad-data.js');
-  console.error('    node qa/export-validate.js');
   console.error('');
   process.exit(1);
 } else if (anySkipped) {

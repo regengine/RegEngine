@@ -123,7 +123,6 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
     { feature: 'Time to first FDA-oriented export', regengine: 'Design-partner workflow', foodlogiq: 'Enterprise implementation', repositrak: 'Retailer-coordinated', tracegains: 'Enterprise implementation' },
     { feature: 'Public API + OpenAPI Docs', regengine: 'Available for contracted workspaces', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Self-Serve Signup', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
-    { feature: 'Developer Sandbox', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Hash-manifested audit trail', regengine: 'Supported where export workflow creates manifests', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Free Trial', regengine: 'Design-partner terms', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Pricing Model', regengine: 'Indicative design-partner ranges; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
