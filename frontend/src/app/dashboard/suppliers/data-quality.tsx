@@ -221,7 +221,7 @@ export function DataQuality({
             <ul className="mt-1 space-y-1">
                 {summary.metrics.map((metric) => (
                     <MetricRow
-                        key={metric.key}
+                        key={metric.key === 'late_cte' ? `${metric.key}:${summary.agreed_sending_hours ?? 'unset'}` : metric.key}
                         facilityId={facilityId}
                         metric={metric}
                         windowDays={windowDays}
