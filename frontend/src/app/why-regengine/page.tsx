@@ -415,16 +415,16 @@ export default function WhyRegEnginePage() {
 Content-Type: application/json
 
 {
-  "traceability_lot_code": "LOT-2026-001",
-  "product": "Organic spinach",
-  "supplier_gln": "5012345678909",
-  "received_date": "2026-04-05",
-  "location_gln": "5012345678909"
+  "traceability_lot_code": "<your lot code>",
+  "product": "<product description>",
+  "supplier_gln": "<13-digit GLN>",
+  "received_date": "<YYYY-MM-DD>",
+  "location_gln": "<13-digit GLN>"
 }
 
 HTTP 201
 {
-  "cte_id": "cte_abc123def456",
+  "cte_id": "<generated id>",
   "status": "validated",
   "missing_kdes": []
 }`}
