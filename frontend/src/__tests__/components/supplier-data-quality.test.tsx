@@ -137,7 +137,7 @@ describe('DataQuality', () => {
                 }),
             ]),
         );
-        expect(screen.getByText('EPCIS documents rejected:')).toBeInTheDocument();
+        expect(screen.getByText('EPCIS (Preview) documents rejected:')).toBeInTheDocument();
         expect(screen.getByText(`${rejected.length} of ${receipts.length} documents (${formatShare(share)})`)).toBeInTheDocument();
         expect(screen.getByText(tenantReason)).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: 'View records' })).not.toBeInTheDocument();
