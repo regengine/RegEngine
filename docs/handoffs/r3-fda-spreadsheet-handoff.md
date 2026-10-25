@@ -21,3 +21,5 @@ The spreadsheet does **not** share the EPCIS code path. `fsma_spreadsheet.py` im
 | R3-C1 | `_normalise_event` origin GLN | fixture GLN with check digit +1: `0061414100015` | exported `0061414100015`, Risk Flag empty | reject (GS1 check digit fails) |
 | R3-C2 | `_normalise_event` origin GLN | fixture row with GLN `""` | Origin GLN `""`, Risk Flag empty | reject or flag |
 | R3-C3 | `FDA_HEADERS` | n/a | no GTIN column | a product GTIN column (SEL-504) |
+
+Note on R3-C1: `0061414100015` is a deliberate bad-check-digit negative case, derived from the fixture's real GLN `0061414100014` by changing only the check digit, under C.Lee's R3 fixture exception. It is not a real GLN.

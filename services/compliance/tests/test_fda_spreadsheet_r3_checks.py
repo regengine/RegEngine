@@ -144,7 +144,16 @@ def test_fixture_glns_are_valid_and_pass_through_unchanged():
 
 
 @pytest.mark.xfail(strict=True, reason="R3-C1: a GLN failing the GS1 check digit is exported as-is")
+# Deliberate negative case: the GLN below is NOT a real code. It is derived
+# from the fixture's real GLN 0061414100014 (01_harvesting.csv) by changing
+# only its GS1 check digit, under C.Lee's R3 fixture exception.
 def test_gln_with_bad_check_digit_is_rejected():
+    """Deliberate bad-check-digit negative case (R3-C1).
+
+    Derived from the fixture's real GLN 0061414100014 under C.Lee's R3
+    fixture exception; the export must reject a GLN whose GS1 check digit
+    fails.
+    """
     row = _fixture_rows()[0]
     good = row["location_gln"]
     bad = good[:-1] + str((int(good[-1]) + 1) % 10)
