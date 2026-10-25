@@ -27,7 +27,7 @@ Tracks GitHub issue #1342.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from app.sqlalchemy_models import (
@@ -44,6 +44,26 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+
+# Data-free placeholders: opaque random tokens, not invented domain records.
+# Tests only assert that values round-trip, never what they mean.
+def _opaque() -> str:
+    return uuid4().hex
+
+
+TLC_CREATE = _opaque()
+TLC_EVENT = _opaque()
+TLC_BADFAC = _opaque()
+TLC_DUP = _opaque()
+TLC_FILTER = _opaque()
+PRODUCT = _opaque()
+FACILITY_NAME = _opaque()
+FACILITY_NAME_BADID = _opaque()
+FACILITY_NAME_NEW = _opaque()
+STREET = _opaque()
+CITY = _opaque()
+POSTAL_CODE = _opaque()
 
 TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
 TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
@@ -155,15 +175,15 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
 # ---------------------------------------------------------------------------
 
 
-def _make_facility(db: Session, name: str = "Warehouse A") -> SupplierFacilityModel:
+def _make_facility(db: Session, name: str = FACILITY_NAME) -> SupplierFacilityModel:
     f = SupplierFacilityModel(
         tenant_id=TEST_TENANT_ID,
         supplier_user_id=TEST_USER_ID,
         name=name,
-        street="1 Main St",
-        city="Salinas",
+        street=STREET,
+        city=CITY,
         state="CA",
-        postal_code="93901",
+        postal_code=POSTAL_CODE,
         roles=["Grower"],
     )
     db.add(f)
@@ -210,7 +230,7 @@ class TestListSupplierFacilities:
         body = resp.json()
         assert body["total"] == 1
         assert len(body["items"]) == 1
-        assert body["items"][0]["name"] == "Warehouse A"
+        assert body["items"][0]["name"] == FACILITY_NAME
 
     def test_pagination_params_forwarded(self, client: TestClient, db_session: Session):
         """Lines 63-97: pagination skip/limit reflected in response."""
@@ -240,11 +260,11 @@ class TestCreateSupplierFacility:
         resp = client_no_tenant.post(
             "/v1/supplier/facilities",
             json={
-                "name": "Warehouse X",
-                "street": "1 Main St",
-                "city": "Salinas",
+                "name": FACILITY_NAME_BADID,
+                "street": STREET,
+                "city": CITY,
                 "state": "CA",
-                "postal_code": "93901",
+                "postal_code": POSTAL_CODE,
                 "roles": [],
             },
         )
@@ -255,17 +275,17 @@ class TestCreateSupplierFacility:
         resp = client.post(
             "/v1/supplier/facilities",
             json={
-                "name": "New Packhouse",
+                "name": FACILITY_NAME_NEW,
                 "street": "100 Depot Rd",
-                "city": "Salinas",
+                "city": CITY,
                 "state": "CA",
-                "postal_code": "93901",
+                "postal_code": POSTAL_CODE,
                 "roles": ["Packer"],
             },
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["name"] == "New Packhouse"
+        assert body["name"] == FACILITY_NAME_NEW
         assert body["state"] == "CA"
         assert "id" in body
 
@@ -387,7 +407,7 @@ class TestSubmitCteEvent:
             f"/v1/supplier/facilities/{uuid.uuid4()}/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-001",
+                "tlc_code": TLC_CREATE,
                 "event_time": "2026-03-01T00:00:00Z",
                 "kde_data": {},
             },
@@ -400,7 +420,7 @@ class TestSubmitCteEvent:
             "/v1/supplier/facilities/not-a-uuid/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-001",
+                "tlc_code": TLC_CREATE,
                 "event_time": "2026-03-01T00:00:00Z",
                 "kde_data": {},
             },
@@ -415,8 +435,8 @@ class TestSubmitCteEvent:
             tenant_id=TEST_TENANT_ID,
             supplier_user_id=TEST_USER_ID,
             facility_id=f.id,
-            tlc_code="TLC-EVENT-001",
-            product_description="Baby Spinach",
+            tlc_code=TLC_EVENT,
+            product_description=PRODUCT,
             status="active",
         )
         db_session.add(lot)
@@ -426,14 +446,14 @@ class TestSubmitCteEvent:
             f"/v1/supplier/facilities/{f.id}/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-EVENT-001",
+                "tlc_code": TLC_EVENT,
                 "event_time": "2026-03-01T12:00:00Z",
                 "kde_data": {"quantity": 50, "unit_of_measure": "cases"},
             },
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["tlc_code"] == "TLC-EVENT-001"
+        assert body["tlc_code"] == TLC_EVENT
         assert body["cte_type"] == "harvesting"
         assert body["merkle_hash"] is not None
 
@@ -452,8 +472,8 @@ class TestCreateTlc:
             "/v1/supplier/tlcs",
             json={
                 "facility_id": str(uuid.uuid4()),
-                "tlc_code": "TLC-X",
-                "product_description": "Spinach",
+                "tlc_code": TLC_BADFAC,
+                "product_description": PRODUCT,
             },
         )
         assert resp.status_code == 400
@@ -464,8 +484,8 @@ class TestCreateTlc:
             "/v1/supplier/tlcs",
             json={
                 "facility_id": "not-a-uuid",
-                "tlc_code": "TLC-X",
-                "product_description": "Spinach",
+                "tlc_code": TLC_BADFAC,
+                "product_description": PRODUCT,
             },
         )
         assert resp.status_code == 400
@@ -476,8 +496,8 @@ class TestCreateTlc:
         f = _make_facility(db_session)
         payload = {
             "facility_id": str(f.id),
-            "tlc_code": "TLC-DUP-001",
-            "product_description": "Baby Spinach",
+            "tlc_code": TLC_DUP,
+            "product_description": PRODUCT,
         }
         r1 = client.post("/v1/supplier/tlcs", json=payload)
         assert r1.status_code == 200
@@ -518,8 +538,8 @@ class TestListTlcs:
             tenant_id=TEST_TENANT_ID,
             supplier_user_id=TEST_USER_ID,
             facility_id=f.id,
-            tlc_code="TLC-FILTER-001",
-            product_description="Spinach",
+            tlc_code=TLC_FILTER,
+            product_description=PRODUCT,
             status="active",
         )
         db_session.add(lot)
@@ -529,7 +549,7 @@ class TestListTlcs:
         assert resp.status_code == 200
         body = resp.json()
         assert body["total"] == 1
-        assert body["items"][0]["tlc_code"] == "TLC-FILTER-001"
+        assert body["items"][0]["tlc_code"] == TLC_FILTER
         assert body["items"][0]["event_count"] == 0
 
 
