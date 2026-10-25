@@ -8,7 +8,7 @@ on:
   pull_request_review:
     types: [submitted, dismissed]
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
 
 # Review bursts must not cancel in-progress runs.
 concurrency:
@@ -140,7 +140,8 @@ jobs:
               const normalizedComments = comments.map((c) => ({
                 id: c.id,
                 body: c.body,
-                submitted_at: c.created_at,
+                // Edits take effect at their edit time, so use updated_at.
+                submitted_at: c.updated_at || c.created_at,
                 author_association: c.author_association,
                 user: c.user,
                 state: 'COMMENTED',
@@ -172,7 +173,7 @@ jobs:
               });
 
               // The marker must be alone on its own line.
-              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{40})\s*$/;
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
