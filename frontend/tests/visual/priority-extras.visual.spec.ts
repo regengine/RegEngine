@@ -58,7 +58,7 @@ test.describe('main CTA focus ring', () => {
             const hrefCta = page
                 .locator(
                     'main a[href*="/signup"], main a[href*="/contact"], ' +
-                        'main a[href*="/demo"], main a[href*="/pricing"]',
+                        'main a[href*="/pricing"]',
                 )
                 .first();
             const textCta = page

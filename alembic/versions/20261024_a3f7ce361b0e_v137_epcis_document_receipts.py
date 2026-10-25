@@ -1,6 +1,6 @@
 """EPCIS document receipts: fsma.epcis_document_receipts.
 
-Mirrors supabase/migrations/20261024070000_epcis_document_receipts.sql exactly:
+Mirrors supabase/migrations/20261024090000_epcis_document_receipts.sql exactly:
 same table, columns, constraints, index, RLS policy and grants. One row per
 EPCIS document the ingest routes receive, accepted or rejected, keyed by the
 SHA-256 of the raw request body. error_summary is a short sanitized summary,
@@ -11,7 +11,7 @@ role-guarded grants), so the plain SQL file can run ahead of it. Downgrade
 drops only what this revision created.
 
 Revision ID: a3f7ce361b0e
-Revises: 41f96588d87c
+Revises: b005ddbf1dba
 Create Date: 2026-10-24
 """
 
@@ -20,7 +20,7 @@ from typing import Sequence, Union
 from alembic import op
 
 revision: str = "a3f7ce361b0e"  # pragma: allowlist secret
-down_revision: Union[str, Sequence[str], None] = "41f96588d87c"  # pragma: allowlist secret
+down_revision: Union[str, Sequence[str], None] = "b005ddbf1dba"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 

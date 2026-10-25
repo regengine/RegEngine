@@ -6,27 +6,6 @@ The RegEngine golden path is the narrow story we expect demos, tests, and produc
 simulate data -> ingest -> validate -> show failures -> export evidence
 ```
 
-## Fast Verification
-
-Run the deterministic local simulation:
-
-```bash
-python3 scripts/run_full_fsma_simulation.py
-```
-
-The runner writes artifacts to `/tmp/regengine-golden-path` by default:
-
-- `summary.json` records the simulated lifecycle, detected failure point, remediation replay, evidence hashes, and export metadata.
-- `fda_export.csv` is generated through the ingestion service's FDA CSV formatter.
-
-This check is intentionally database-free. It proves that the production spine primitives still line up:
-
-- deterministic Inflow-style source events
-- canonical `TraceabilityEvent` normalization
-- stateless FSMA rule evaluation
-- SHA-256 record hashes and ordered chain hashes
-- FDA export columns, including `System Entry Timestamp`
-
 For the heavier live-service scenario, export the service secret first, then use:
 
 ```bash

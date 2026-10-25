@@ -38,17 +38,93 @@ jobs:
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const rejected = /\b(skip(?:ped)?|ignor(?:e|ed)|cancel(?:ed|led)|error|fail(?:ed|ure)?)\b/i;
 
+            const callWithRetry = async (fn) => {
+              let otherRetries = 0;
+              while (Date.now() < deadline) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (Date.now() >= deadline) {
+                    throw error;
+                  }
+                  const status = error.status || error.response?.status;
+                  const headers = error.response?.headers || error.headers || {};
+                  const remaining = headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'];
+                  const isRateLimit = status === 429 ||
+                    remaining === '0' ||
+                    ((status === 403 || status === 429) && (
+                      remaining === '0' ||
+                      headers['x-ratelimit-reset'] != null ||
+                      headers['X-RateLimit-Reset'] != null ||
+                      headers['retry-after'] != null ||
+                      headers['Retry-After'] != null ||
+                      /rate[- ]limit/i.test(error.message || '')
+                    ));
+
+                  if (isRateLimit) {
+                    let waitMs = 60000;
+                    const retryAfter = headers['retry-after'] || headers['Retry-After'];
+                    const resetHeader = headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'];
+                    if (retryAfter) {
+                      const sec = parseInt(retryAfter, 10);
+                      if (!isNaN(sec) && sec > 0) {
+                        waitMs = (sec + 5) * 1000;
+                      } else {
+                        const dateMs = Date.parse(retryAfter);
+                        if (!isNaN(dateMs)) {
+                          waitMs = Math.max(0, dateMs - Date.now()) + 5000;
+                        }
+                      }
+                    } else if (resetHeader) {
+                      const resetSec = parseInt(resetHeader, 10);
+                      if (!isNaN(resetSec) && resetSec > 0) {
+                        waitMs = Math.max(0, (resetSec * 1000) - Date.now()) + 5000;
+                      }
+                    }
+                    const remainingDeadline = Math.max(0, deadline - Date.now());
+                    const sleepMs = Math.min(waitMs, remainingDeadline);
+                    core.warning(`Rate limit hit (${status || 'exhausted'}). Sleeping ${Math.round(sleepMs / 1000)}s until reset.`);
+                    await sleep(sleepMs);
+                    continue;
+                  }
+
+                  if (otherRetries < 3) {
+                    otherRetries++;
+                    const backoffMs = Math.min(5000 * Math.pow(2, otherRetries - 1), Math.max(0, deadline - Date.now()));
+                    core.warning(`API error (${error.message || status}). Retry ${otherRetries}/3 in ${Math.round(backoffMs / 1000)}s.`);
+                    await sleep(backoffMs);
+                    continue;
+                  }
+
+                  throw error;
+                }
+              }
+              return null;
+            };
+
+            let delay = 20000;
+            let iteration = 0;
+
             while (Date.now() < deadline) {
-              const { data: deployments } = await github.rest.repos.listDeployments({
-                owner, repo, sha, per_page: 100,
-              });
+              const deployRes = await callWithRetry(() =>
+                github.rest.repos.listDeployments({
+                  owner, repo, sha, per_page: 100,
+                })
+              );
+              if (!deployRes) break;
+              const deployments = deployRes.data;
+
               // Use only the newest deployment for this SHA and project.
               const deployment = deployments.find(d =>
                 d.sha === sha && environments.includes(d.environment));
               if (deployment) {
-                const { data: statuses } = await github.rest.repos.listDeploymentStatuses({
-                  owner, repo, deployment_id: deployment.id, per_page: 100,
-                });
+                const statusRes = await callWithRetry(() =>
+                  github.rest.repos.listDeploymentStatuses({
+                    owner, repo, deployment_id: deployment.id, per_page: 100,
+                  })
+                );
+                if (!statusRes) break;
+                const statuses = statusRes.data;
                 const latest = statuses[0];
                 if (latest) {
                   const detail = latest.description || '';
@@ -72,24 +148,38 @@ jobs:
 
               // An ignored build can produce a green commit status and no ready
               // deployment. Inspect its description and the Vercel check conclusion.
-              const { data: commitStatuses } = await github.rest.repos.listCommitStatusesForRef({
-                owner, repo, ref: sha, per_page: 100,
-              });
-              const vercelStatus = commitStatuses.find(s => statusContexts.includes(s.context));
-              if (vercelStatus && (rejected.test(vercelStatus.description || '') ||
-                  ['error', 'failure'].includes(vercelStatus.state))) {
-                throw new Error(`Vercel preview status ended ${vercelStatus.state}: ${vercelStatus.description || 'no detail'}`);
+              if (iteration % 2 === 0) {
+                const commitStatusRes = await callWithRetry(() =>
+                  github.rest.repos.listCommitStatusesForRef({
+                    owner, repo, ref: sha, per_page: 100,
+                  })
+                );
+                if (!commitStatusRes) break;
+                const commitStatuses = commitStatusRes.data;
+                const vercelStatus = commitStatuses.find(s => statusContexts.includes(s.context));
+                if (vercelStatus && (rejected.test(vercelStatus.description || '') ||
+                    ['error', 'failure'].includes(vercelStatus.state))) {
+                  throw new Error(`Vercel preview status ended ${vercelStatus.state}: ${vercelStatus.description || 'no detail'}`);
+                }
+
+                const checksRes = await callWithRetry(() =>
+                  github.rest.checks.listForRef({
+                    owner, repo, ref: sha, per_page: 100,
+                  })
+                );
+                if (!checksRes) break;
+                const checks = checksRes.data;
+                const vercelCheck = checks.check_runs.find(c =>
+                  c.app?.slug === 'vercel' && statusContexts.includes(c.name));
+                if (vercelCheck && ['skipped', 'cancelled', 'failure', 'timed_out', 'action_required', 'neutral', 'stale'].includes(vercelCheck.conclusion)) {
+                  throw new Error(`Vercel preview check ended ${vercelCheck.conclusion}`);
+                }
               }
 
-              const { data: checks } = await github.rest.checks.listForRef({
-                owner, repo, ref: sha, per_page: 100,
-              });
-              const vercelCheck = checks.check_runs.find(c =>
-                c.app?.slug === 'vercel' && statusContexts.includes(c.name));
-              if (vercelCheck && ['skipped', 'cancelled', 'failure', 'timed_out', 'action_required', 'neutral', 'stale'].includes(vercelCheck.conclusion)) {
-                throw new Error(`Vercel preview check ended ${vercelCheck.conclusion}`);
-              }
-              await sleep(15000);
+              const sleepDuration = Math.min(delay, Math.max(0, deadline - Date.now()));
+              await sleep(sleepDuration);
+              delay = Math.min(Math.round(delay * 1.5), 60000);
+              iteration++;
             }
             throw new Error(`No ready regengine Vercel preview for ${sha} after 25 minutes`);
 

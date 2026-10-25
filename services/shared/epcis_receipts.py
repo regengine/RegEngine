@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 RECEIPT_ACCEPTED = "accepted"
 RECEIPT_REJECTED = "rejected"
 RECEIPT_STATUSES = (RECEIPT_ACCEPTED, RECEIPT_REJECTED)
-# Matches the error_summary length check in alembic v136.
+# Matches the error_summary length check in alembic v137.
 MAX_ERROR_SUMMARY_LENGTH = 200
 
 # A machine error code such as ``batch_validation_failed``. The EPCIS ingest
@@ -150,7 +150,7 @@ def fetch_receipt_counts(db_session: Any, tenant_id: str, since: datetime) -> Op
     """(rejected, total) receipts for the tenant since ``since``.
 
     Runs in a savepoint and returns None when the table cannot be read (for
-    example before alembic v136 is applied), so the caller's transaction and
+    example before alembic v137 is applied), so the caller's transaction and
     the other metrics are unaffected.
     """
     try:
