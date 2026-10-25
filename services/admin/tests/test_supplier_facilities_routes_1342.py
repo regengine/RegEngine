@@ -97,9 +97,7 @@ def db_session() -> Session:
     SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
     session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
-    session.add(
-        UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
-    )
+    session.add(UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False))
     session.commit()
 
     try:
@@ -615,4 +613,3 @@ class TestDeleteSupplierFacility:
         with TestClient(app) as member_client:
             resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
             assert resp.status_code == 403
-
