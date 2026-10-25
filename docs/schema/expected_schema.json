@@ -5525,6 +5525,55 @@
       }
     ]
   },
+  "public.data_gap_events": {
+    "columns": {
+      "closed_at": {
+        "nullable": true,
+        "type": "timestamp"
+      },
+      "closing_record_hash": {
+        "nullable": true,
+        "type": "text"
+      },
+      "closing_record_id": {
+        "nullable": true,
+        "type": "uuid"
+      },
+      "cte_type": {
+        "nullable": false,
+        "type": "text"
+      },
+      "gap_key": {
+        "nullable": false,
+        "type": "text"
+      },
+      "gap_kind": {
+        "nullable": false,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "lot_code": {
+        "nullable": false,
+        "type": "text"
+      },
+      "opened_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "supplier_key": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "public.food_traceability_list": {
     "columns": {
       "applicable_ctes": {
