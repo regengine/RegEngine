@@ -16,7 +16,11 @@ separate on purpose; there is no combined score.
    linkage KDE (the same fields the rules engine checks in
    ``shared.rules.seeds``), or when it starts at this facility (harvesting or
    first land based receiving).
-3. ``late_cte``: unavailable. No agreed sending time is stored per supplier.
+3. ``late_cte``: share of CTE records received in the window that arrived
+   more than ``supplier_facilities.agreed_sending_hours`` after their
+   ``event_time`` (received is ``created_at``). The denominator is the records
+   in the window with both times. Our measure against the agreed sending time,
+   not an FDA rule. With no agreed hours set, the status is not enough data.
 4. ``epcis_failed``: unavailable. EPCIS documents are not stored as files with
    a validation result, and nothing ties an EPCIS upload to a facility.
 
@@ -39,12 +43,10 @@ METRIC_MISSING_KDE = "missing_kde"
 METRIC_UNLINKED_LOT = "unlinked_lot"
 METRIC_LATE_CTE = "late_cte"
 METRIC_EPCIS_FAILED = "epcis_failed"
-DRILLDOWN_METRICS = (METRIC_MISSING_KDE, METRIC_UNLINKED_LOT)
+DRILLDOWN_METRICS = (METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE)
 
 LATE_CTE_LABEL = "Our measure, based on the agreed sending time with this supplier; not a regulatory requirement"
-LATE_CTE_UNAVAILABLE_REASON = (
-    "No agreed sending time is recorded for this supplier, so late records cannot be measured."
-)
+LATE_CTE_NO_HOURS_REASON = "No agreed sending time is set for this supplier, so late records cannot be measured."
 EPCIS_UNAVAILABLE_REASON = (
     "EPCIS uploads are not stored as files with a validation result linked to a facility, "
     "so failing files cannot be counted."
@@ -228,6 +230,30 @@ def share_metric(key: str, numerator: int, denominator: int, min_records: int = 
     }
 
 
+def timed_records(rows: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    """Records with both an event time and a received time: the late denominator."""
+    return [row for row in rows if row.get("event_time") is not None and row.get("created_at") is not None]
+
+
+def late_records(rows: Sequence[Mapping[str, Any]], agreed_sending_hours: int) -> list[Mapping[str, Any]]:
+    """Records received (``created_at``) more than ``agreed_sending_hours`` after ``event_time``."""
+    allowed = timedelta(hours=agreed_sending_hours)
+    return [row for row in timed_records(rows) if row["created_at"] - row["event_time"] > allowed]
+
+
+def late_metric(rows: Sequence[Mapping[str, Any]], agreed_sending_hours: Optional[int]) -> dict[str, Any]:
+    if agreed_sending_hours is None:
+        return {
+            "key": METRIC_LATE_CTE,
+            "status": "not_enough_data",
+            "numerator": None,
+            "denominator": None,
+            "share": None,
+            "reason": LATE_CTE_NO_HOURS_REASON,
+        }
+    return share_metric(METRIC_LATE_CTE, len(late_records(rows, agreed_sending_hours)), len(timed_records(rows)))
+
+
 def unavailable_metric(key: str, reason: str) -> dict[str, Any]:
     return {
         "key": key,
@@ -284,13 +310,14 @@ def unlinked_lots(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 def summarize_facility(
     record_rows: Sequence[Mapping[str, Any]],
     lot_rows: Sequence[Mapping[str, Any]],
+    agreed_sending_hours: Optional[int] = None,
 ) -> dict[str, dict[str, Any]]:
     """The four metrics for one facility, keyed by metric."""
     lot_count = len(group_lots(lot_rows))
     return {
         METRIC_MISSING_KDE: share_metric(METRIC_MISSING_KDE, len(flag_records(record_rows)), len(record_rows)),
         METRIC_UNLINKED_LOT: share_metric(METRIC_UNLINKED_LOT, len(unlinked_lots(lot_rows)), lot_count),
-        METRIC_LATE_CTE: unavailable_metric(METRIC_LATE_CTE, LATE_CTE_UNAVAILABLE_REASON),
+        METRIC_LATE_CTE: late_metric(record_rows, agreed_sending_hours),
         METRIC_EPCIS_FAILED: unavailable_metric(METRIC_EPCIS_FAILED, EPCIS_UNAVAILABLE_REASON),
     }
 
@@ -357,6 +384,18 @@ _LOT_ROWS_SQL = text(
 )
 
 
+_SENDING_HOURS_SQL = text(
+    """
+    SELECT f.id AS facility_id,
+           f.agreed_sending_hours
+      FROM supplier_facilities f
+     WHERE f.tenant_id = CAST(:tid AS uuid)
+       AND f.supplier_user_id = CAST(:uid AS uuid)
+       AND f.id = ANY(CAST(:fids AS uuid[]))
+    """
+)
+
+
 def _params(tenant_id: str, supplier_user_id: str, facility_ids: Sequence[str], since: datetime) -> dict[str, Any]:
     return {"tid": tenant_id, "uid": supplier_user_id, "fids": list(facility_ids), "since": since}
 
@@ -379,6 +418,18 @@ def fetch_lot_rows(
     return [dict(row) for row in result.mappings().all()]
 
 
+def fetch_sending_hours(
+    db_session: Any, tenant_id: str, supplier_user_id: str, facility_ids: Sequence[str]
+) -> dict[str, Optional[int]]:
+    """Agreed sending hours per facility id; None where none is set."""
+    if not facility_ids:
+        return {}
+    result = db_session.execute(
+        _SENDING_HOURS_SQL, {"tid": tenant_id, "uid": supplier_user_id, "fids": list(facility_ids)}
+    )
+    return {str(row["facility_id"]): row["agreed_sending_hours"] for row in result.mappings().all()}
+
+
 def _by_facility(rows: Sequence[Mapping[str, Any]], facility_ids: Sequence[str]) -> dict[str, list[Mapping[str, Any]]]:
     grouped: dict[str, list[Mapping[str, Any]]] = {key: [] for key in facility_ids}
     for row in rows:
@@ -392,10 +443,19 @@ def fetch_supplier_quality(
     supplier_user_id: str,
     facility_ids: Sequence[str],
     since: datetime,
+    sending_hours: Optional[Mapping[str, Optional[int]]] = None,
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    """Per facility metrics for ``facility_ids`` (every id is present)."""
+    """Per facility metrics for ``facility_ids`` (every id is present).
+
+    ``sending_hours`` is fetched when the caller has not already done so.
+    """
     records = _by_facility(
         fetch_record_rows(db_session, tenant_id, supplier_user_id, facility_ids, since), facility_ids
     )
     lots = _by_facility(fetch_lot_rows(db_session, tenant_id, supplier_user_id, facility_ids, since), facility_ids)
-    return {key: summarize_facility(records[key], lots[key]) for key in facility_ids}
+    hours = (
+        sending_hours
+        if sending_hours is not None
+        else fetch_sending_hours(db_session, tenant_id, supplier_user_id, facility_ids)
+    )
+    return {key: summarize_facility(records[key], lots[key], hours.get(key)) for key in facility_ids}

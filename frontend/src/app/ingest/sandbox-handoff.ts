@@ -2,7 +2,7 @@ export const SANDBOX_HANDOFF_STORAGE_KEY = 'regengine:sandbox-handoff';
 
 export type SandboxOperationalHandoff = {
   version: 1;
-  source: 'free-sandbox' | 'inflow-lab-feeder';
+  source: 'free-sandbox';
   createdAt: string;
   summary: {
     totalEvents: number;
@@ -106,7 +106,7 @@ export function parseSandboxHandoff(raw: string | null): ParseResult {
     return { ok: false, error: 'The sandbox handoff uses an unsupported format.' };
   }
 
-  if (parsed.source !== 'free-sandbox' && parsed.source !== 'inflow-lab-feeder') {
+  if (parsed.source !== 'free-sandbox') {
     return { ok: false, error: 'The sandbox handoff source is not recognized.' };
   }
 
