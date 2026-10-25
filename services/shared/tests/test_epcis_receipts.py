@@ -200,3 +200,15 @@ def test_counts_are_tenant_and_window_scoped():
 def test_unreadable_receipts_table_returns_none():
     session = CountSession(error=RuntimeError(str(uuid.uuid4())))
     assert fetch_receipt_counts(session, str(uuid.uuid4()), datetime.now(timezone.utc)) is None
+
+
+def test_counts_dedupe_retries_by_document_hash():
+    from shared.epcis_receipts import _COUNTS_SQL
+
+    sql = " ".join(str(_COUNTS_SQL).split())
+    assert "DISTINCT ON (document_sha256)" in sql
+    assert "ORDER BY document_sha256, received_at DESC, id DESC" in sql
+    # Tenant and window filters apply before the dedupe, inside the subquery.
+    inner = sql.split("FROM (", 1)[1]
+    assert "tenant_id = CAST(:tid AS uuid)" in inner
+    assert "received_at >= :since" in inner
