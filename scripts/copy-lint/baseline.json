@@ -21,45 +21,24 @@
   "frontend/src/app/blog/regengine-vs-spreadsheets-traceability/page.tsx": {
     "epcis-unlabeled": 1
   },
-  "frontend/src/app/compliance/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/contact/layout.tsx": {
     "sample-demo": 2
   },
   "frontend/src/app/controls/page.tsx": {
     "epcis-unlabeled": 2
   },
-  "frontend/src/app/dashboard/compliance/page.tsx": {
-    "epcis-unlabeled": 2
-  },
-  "frontend/src/app/dashboard/export-jobs/page.tsx": {
-    "epcis-unlabeled": 4
-  },
   "frontend/src/app/dashboard/integrations/page.tsx": {
     "empty-render": 1,
-    "sample-demo": 3
-  },
-  "frontend/src/app/dashboard/layout.tsx": {
-    "sample-demo": 2,
-    "sandbox": 1
+    "sample-demo": 1
   },
   "frontend/src/app/dashboard/qa-health/page.tsx": {
     "dash-placeholder": 1
   },
-  "frontend/src/app/dashboard/recall-drills/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/dashboard/recall-report/page.tsx": {
-    "dash-placeholder": 4,
-    "invented-entity": 12,
-    "sample-demo": 1
+    "dash-placeholder": 4
   },
   "frontend/src/app/dashboard/recall-response/page.tsx": {
     "dash-placeholder": 1
-  },
-  "frontend/src/app/dashboard/receiving/page.tsx": {
-    "em-dash": 1
   },
   "frontend/src/app/dashboard/settings/users/page.tsx": {
     "empty-render": 1
@@ -72,18 +51,11 @@
   "frontend/src/app/developer/portal/page.tsx": {
     "empty-render": 1
   },
-  "frontend/src/app/developers/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/docs/api/ApiReferenceClient.tsx": {
     "hyphen-dash": 8
   },
   "frontend/src/app/docs/changelog/page.tsx": {
-    "epcis-unlabeled": 1,
     "sample-demo": 1
-  },
-  "frontend/src/app/docs/connectors/inflow-lab/page.tsx": {
-    "sandbox": 6
   },
   "frontend/src/app/docs/quickstart/page.tsx": {
     "sample-demo": 1
@@ -106,8 +78,7 @@
     "empty-render": 1
   },
   "frontend/src/app/ingest/page.tsx": {
-    "epcis-unlabeled": 6,
-    "sample-demo": 1,
+    "epcis-unlabeled": 3,
     "sandbox": 3
   },
   "frontend/src/app/ingest/results/[id]/AnalysisResultClient.tsx": {
@@ -116,28 +87,18 @@
   "frontend/src/app/ingest/sandbox-handoff.ts": {
     "sandbox": 6
   },
-  "frontend/src/app/integrations/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/legal/vulnerability-disclosure/page.tsx": {
     "sample-demo": 1
   },
   "frontend/src/app/onboarding/bulk-upload/page.tsx": {
     "sample-demo": 1
   },
-  "frontend/src/app/pricing/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/product/page.tsx": {
     "sandbox": 2
   },
   "frontend/src/app/proof/page.tsx": {
-    "epcis-unlabeled": 7,
+    "epcis-unlabeled": 2,
     "sample-demo": 5
-  },
-  "frontend/src/app/proof/recall-drill/page.tsx": {
-    "invented-entity": 6,
-    "sample-demo": 7
   },
   "frontend/src/app/records/page.tsx": {
     "dash-placeholder": 3,
@@ -157,34 +118,14 @@
   "frontend/src/app/sysadmin/page.tsx": {
     "dash-placeholder": 3
   },
-  "frontend/src/app/tools/ask/page.tsx": {
-    "sample-demo": 6
-  },
-  "frontend/src/app/tools/data-import/components/DataImportClient.tsx": {
-    "sample-demo": 2
-  },
   "frontend/src/app/tools/drill-simulator/components/DrillSimulatorClient.tsx": {
     "sample-demo": 3
   },
   "frontend/src/app/tools/export/page.tsx": {
-    "empty-render": 2,
-    "sample-demo": 6
+    "empty-render": 2
   },
   "frontend/src/app/tools/fsma-unified/components/UnifiedDashboardClient.tsx": {
     "sample-demo": 2
-  },
-  "frontend/src/app/tools/inflow-lab/components/DashboardInflowLab.tsx": {
-    "invented-entity": 5,
-    "sandbox": 14
-  },
-  "frontend/src/app/tools/inflow-lab/components/InflowLabClient.tsx": {
-    "invented-entity": 15,
-    "sample-demo": 4,
-    "sandbox": 19
-  },
-  "frontend/src/app/tools/inflow-lab/components/InflowLabTutorial.tsx": {
-    "sample-demo": 2,
-    "sandbox": 2
   },
   "frontend/src/app/tools/notice-validator/page.tsx": {
     "invented-entity": 1,
@@ -199,23 +140,8 @@
   "frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx": {
     "sample-demo": 1
   },
-  "frontend/src/app/trust/architecture/page.tsx": {
-    "epcis-unlabeled": 2
-  },
-  "frontend/src/app/trust/page.tsx": {
-    "epcis-unlabeled": 3
-  },
-  "frontend/src/app/trust/retention/page.tsx": {
-    "epcis-unlabeled": 2
-  },
-  "frontend/src/app/walkthrough/page.tsx": {
-    "epcis-unlabeled": 1
-  },
   "frontend/src/app/why-regengine/page.tsx": {
-    "epcis-unlabeled": 7
-  },
-  "frontend/src/components/control-plane/demo-banner.tsx": {
-    "sample-demo": 1
+    "epcis-unlabeled": 1
   },
   "frontend/src/components/dashboard/compliance-status-widget.tsx": {
     "empty-render": 1
@@ -243,7 +169,7 @@
     "edi-sftp": 2
   },
   "frontend/src/lib/customer-readiness.ts": {
-    "epcis-unlabeled": 4
+    "epcis-unlabeled": 1
   },
   "frontend/src/lib/dev-compliance-snapshots.ts": {
     "dash-placeholder": 2

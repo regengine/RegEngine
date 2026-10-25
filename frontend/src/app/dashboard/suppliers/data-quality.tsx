@@ -17,7 +17,7 @@ const METRIC_COPY: Record<SupplierQualityMetricKey, { label: string; unit: strin
     missing_kde: { label: 'Records missing a KDE', unit: 'records' },
     unlinked_lot: { label: 'Lot codes not linked back through the chain', unit: 'lot codes' },
     late_cte: { label: 'Late CTE records', unit: 'records' },
-    epcis_failed: { label: 'EPCIS files failing validation', unit: 'files' },
+    epcis_failed: { label: 'EPCIS (Preview) files failing validation', unit: 'files' },
 };
 
 function isDrilldown(key: SupplierQualityMetricKey): key is SupplierQualityDrilldownMetric {
