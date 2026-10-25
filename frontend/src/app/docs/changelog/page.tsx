@@ -83,7 +83,7 @@ export default function ChangelogPage() {
                     <div>
                         <h4 className={GROUP}>Verification</h4>
                         <ul className={LIST}>
-                            <li>Offline verifier now validates the current audit bundle structure, including EPCIS package contents</li>
+                            <li>Offline verifier now validates the current audit bundle structure, including EPCIS (Preview) package contents</li>
                             <li>Tampered proof-bundle sample added so evaluators can see failure detection instead of only the happy path</li>
                             <li>Root Docker deploy context and admin proxy routing aligned with the consolidated production surface</li>
                         </ul>

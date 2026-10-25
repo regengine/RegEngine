@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,15 +16,6 @@ import {
 import { GitBranch, Search } from "lucide-react";
 
 // ── Utilities ──
-function mulberry32(seed: number) {
-    let a = seed >>> 0;
-    return function () {
-        a |= 0; a = (a + 0x6d2b79f5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
 function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
 
 // ── Types ──
@@ -63,36 +55,6 @@ function hexToRgba(hex: string, a: number) {
 
 function nodeR(t: NodeType) { return t === "Facility" ? 20 : t === "Supplier" || t === "Product" ? 18 : t === "Location" ? 14 : 16; }
 
-function seededScenario(seed = 204) {
-    const rng = mulberry32(seed); const j = () => (rng() - 0.5) * 30;
-    const nodes: GraphNode[] = [
-        { id: "sup-1", type: "Supplier", label: "Arroyo Farms", x: 120 + j(), y: 140 + j(), meta: { region: "CA" } },
-        { id: "loc-1", type: "Location", label: "Salinas, CA", x: 110 + j(), y: 260 + j() },
-        { id: "fac-1", type: "Facility", label: "Cooler • Farm Pack", x: 280 + j(), y: 160 + j() },
-        { id: "cte-1", type: "CTE", label: "Harvest / Cooling", x: 280 + j(), y: 260 + j() },
-        { id: "prod-1", type: "Product", label: "Romaine Lettuce", x: 460 + j(), y: 140 + j() },
-        { id: "lot-1", type: "Lot", label: "TLC: RML-021-744", x: 460 + j(), y: 260 + j() },
-        { id: "fac-2", type: "Facility", label: "Processor • Wash/Trim", x: 640 + j(), y: 150 + j() },
-        { id: "cte-2", type: "CTE", label: "Transform", x: 640 + j(), y: 260 + j() },
-        { id: "lot-2", type: "Lot", label: "TLC: RML-021-744-A", x: 800 + j(), y: 260 + j() },
-        { id: "fac-3", type: "Facility", label: "DC • West", x: 960 + j(), y: 150 + j() },
-        { id: "cte-3", type: "CTE", label: "Ship to DC", x: 960 + j(), y: 260 + j() },
-        { id: "fac-4", type: "Facility", label: "Retail • Pasadena", x: 1120 + j(), y: 150 + j() },
-        { id: "cte-4", type: "CTE", label: "Receive / Sell", x: 1120 + j(), y: 260 + j() },
-    ];
-    const edges: GraphEdge[] = [
-        { id: "e-1", type: "LocatedAt", from: "sup-1", to: "loc-1" }, { id: "e-2", type: "Supplies", from: "sup-1", to: "fac-1" },
-        { id: "e-3", type: "TracedFrom", from: "cte-1", to: "fac-1" }, { id: "e-4", type: "Contains", from: "prod-1", to: "lot-1" },
-        { id: "e-5", type: "TracedFrom", from: "cte-1", to: "lot-1" }, { id: "e-6", type: "ShipsTo", from: "fac-1", to: "fac-2" },
-        { id: "e-7", type: "TracedFrom", from: "cte-2", to: "fac-2" }, { id: "e-8", type: "Transforms", from: "lot-1", to: "lot-2" },
-        { id: "e-9", type: "TracedFrom", from: "cte-2", to: "lot-2" }, { id: "e-10", type: "ShipsTo", from: "fac-2", to: "fac-3" },
-        { id: "e-11", type: "TracedFrom", from: "cte-3", to: "fac-3" }, { id: "e-12", type: "ShipsTo", from: "fac-3", to: "fac-4" },
-        { id: "e-13", type: "TracedFrom", from: "cte-4", to: "fac-4" }, { id: "e-14", type: "TracedFrom", from: "cte-3", to: "lot-2" },
-        { id: "e-15", type: "TracedFrom", from: "cte-4", to: "lot-2" },
-    ];
-    return { nodes, edges };
-}
-
 function traceNodes(startId: string, edges: GraphEdge[], mode: TraceMode, depth: number) {
     const out = new Map<string, string[]>(), inn = new Map<string, string[]>();
     edges.forEach(e => { if (!out.has(e.from)) out.set(e.from, []); if (!inn.has(e.to)) inn.set(e.to, []); out.get(e.from)!.push(e.to); inn.get(e.to)!.push(e.from); });
@@ -115,11 +77,8 @@ function useAnimFrame(cb: () => void, on: boolean) {
 }
 
 export function SupplyChainKnowledgeGraphBuilder() {
-    const [seed] = useState(204);
-    const scenario = useMemo(() => seededScenario(seed), [seed]);
-    const [nodes, setNodes] = useState<GraphNode[]>(scenario.nodes);
-    const [edges, setEdges] = useState<GraphEdge[]>(scenario.edges);
-    useEffect(() => { setNodes(scenario.nodes); setEdges(scenario.edges); }, [scenario]);
+    const [nodes, setNodes] = useState<GraphNode[]>([]);
+    const [edges, setEdges] = useState<GraphEdge[]>([]);
 
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -247,6 +206,30 @@ export function SupplyChainKnowledgeGraphBuilder() {
     const onDown = (e: React.MouseEvent) => { const w = toW(e.clientX, e.clientY); const h = hitNode(w.x, w.y); if (h) { setSelEdge(null); setSelNode(h); setDragId(h); const n = nodes.find(x => x.id === h); if (n) setDragOff({ x: w.x - n.x, y: w.y - n.y }); } else { setSelNode(null); setSelEdge(null); setPanning(true); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onMove = (e: React.MouseEvent) => { if (dragId && dragOff) { const w = toW(e.clientX, e.clientY); setNodes(p => p.map(n => n.id === dragId ? { ...n, x: w.x - dragOff.x, y: w.y - dragOff.y } : n)); } else if (panning && lastPan) { setVp(v => ({ ...v, panX: v.panX + e.clientX - lastPan.x, panY: v.panY + e.clientY - lastPan.y })); setLastPan({ x: e.clientX, y: e.clientY }); } };
     const onUp = () => { setDragId(null); setDragOff(null); setPanning(false); setLastPan(null); };
+
+    if (nodes.length === 0) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <div className="text-heading text-re-text-primary">Knowledge Graph Builder</div>
+                    <div className="mt-1 text-ui text-re-text-secondary">FSMA 204-native traceability graph.</div>
+                </div>
+                <EmptyState
+                    title="No supply chain data yet"
+                    titleAs="h2"
+                    description="This view has no data source connected yet. It renders suppliers, facilities, products, lots, and Critical Tracking Events only when traceability records are provided to it; it does not fetch data on its own."
+                    action={
+                        <Button variant="secondary" size="sm" asChild>
+                            <Link href="/tools/data-import" className="no-underline">
+                                Import traceability data
+                            </Link>
+                        </Button>
+                    }
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

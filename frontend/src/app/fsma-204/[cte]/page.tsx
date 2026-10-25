@@ -18,6 +18,7 @@ import {
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/layout/section";
+import { sandboxCta } from "@/lib/sandbox-cta";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
@@ -320,6 +321,7 @@ export default async function CTELandingPage({
   if (!data) notFound();
 
   const Icon = CTE_ICONS[cteSlug] ?? ClipboardList;
+  const cta = sandboxCta();
 
   return (
     <div className="bg-re-surface-base">
@@ -423,8 +425,17 @@ export default async function CTELandingPage({
         title="How RegEngine Helps"
         description={
           <>
-            Upload your {data.name.toLowerCase()} data to the sandbox and
-            RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
+            {cta.enabled ? (
+              <>
+                Upload your {data.name.toLowerCase()} data to the sandbox and
+                RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
+              </>
+            ) : (
+              <>
+                RegEngine surfaces these issues in your {data.name.toLowerCase()}{" "}
+                data before they become audit findings during a §1.1455 records request.
+              </>
+            )}
           </>
         }
       >
@@ -452,15 +463,15 @@ export default async function CTELandingPage({
           <h2 className="font-display text-heading-lg text-re-text-primary">
             See it in action.
           </h2>
+          {/* #2757 - copy and destination resolve together so the blurb can never
+              promise a CSV sandbox that this deployment does not serve. */}
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Upload a sample {data.name.toLowerCase()} file to the RegEngine
-            sandbox and get an instant validation report. Free, no signup
-            required.
+            {cta.blurb}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/demo">
-                Try it now, free
+              <Link href={cta.href}>
+                {cta.label}
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>

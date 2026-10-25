@@ -270,13 +270,10 @@ kubectl rollout status deployment/<service-name> -n regengine
 - [ ] **5.1** Run full QA pipeline against production
   ```bash
   # Stage 1: Fast Gate
-  node qa/fsma-lite-check.js --env=production
   node qa/tenant-test.js --env=production
 
   # Stage 2: System Simulation
-  node qa/full-flow.js --env=production
   node qa/bad-data.js --env=production
-  node qa/export-validate.js --env=production
 
   # Stage 3: AI Analysis
   node qa/ai-analysis.js --env=production

@@ -52,7 +52,7 @@ params, so every non-dynamic route was crawled exactly once, including
 | Route | Designer evidence | Verdict |
 |---|---|---|
 | `/auth/sso/mock` | Crawled 200 | Excluded entirely (unchanged): mock SSO fixture page (`CHROMELESS_EXACT_ROUTES`). Never screenshotted or visited by monitoring, regardless of status. |
-| `/demo` | Crawled 200 | Stays in `expectRedirectOr404` (unchanged): demo surface. The crawl independently confirms the OBSERVED 200 noted in `routes.json`; the assertion flags until the route is retired or reclassified to `public`. |
+| `/demo` | Removed by #3543 | Stays in `expectRedirectOr404` (unchanged). /demo is removed by #3543: the page is deleted, so the assertion now passes. |
 | `/sandbox` | Crawled 200 (before #3557) | Stays in `expectRedirectOr404`. The route was deleted in #3557 (no `src/app/sandbox/`), so it is now expected to 404 and the assertion should pass. |
 
 ### In our `public`, not in the designer list (4) — adopted, moved to `expectRedirectOr404`
