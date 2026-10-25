@@ -62,6 +62,7 @@ FACILITY_NAME = _opaque()
 FACILITY_NAME_BADID = _opaque()
 FACILITY_NAME_NEW = _opaque()
 STREET = _opaque()
+STREET_NEW = _opaque()
 CITY = _opaque()
 POSTAL_CODE = _opaque()
 
@@ -233,7 +234,7 @@ class TestListSupplierFacilities:
     def test_pagination_params_forwarded(self, client: TestClient, db_session: Session):
         """Lines 63-97: pagination skip/limit reflected in response."""
         for i in range(3):
-            _make_facility(db_session, name=f"Facility {i}")
+            _make_facility(db_session, name=_opaque())
         resp = client.get("/v1/supplier/facilities?skip=1&limit=1")
         assert resp.status_code == 200
         body = resp.json()
@@ -274,7 +275,7 @@ class TestCreateSupplierFacility:
             "/v1/supplier/facilities",
             json={
                 "name": FACILITY_NAME_NEW,
-                "street": "100 Depot Rd",
+                "street": STREET_NEW,
                 "city": CITY,
                 "state": "CA",
                 "postal_code": POSTAL_CODE,
@@ -364,7 +365,7 @@ class TestGetRequiredCtes:
 
         f = _make_facility(db_session)
         graph_response = {
-            "categories": [{"id": "1", "name": "Leafy Greens", "ctes": ["harvesting"]}],
+            "categories": [{"id": "1", "name": _opaque(), "ctes": ["harvesting"]}],
             "required_ctes": ["harvesting"],
             "source": "neo4j",
         }
@@ -446,7 +447,7 @@ class TestSubmitCteEvent:
                 "cte_type": "harvesting",
                 "tlc_code": TLC_EVENT,
                 "event_time": "2026-03-01T12:00:00Z",
-                "kde_data": {"quantity": 50, "unit_of_measure": "cases"},
+                "kde_data": {},
             },
         )
         assert resp.status_code == 200
