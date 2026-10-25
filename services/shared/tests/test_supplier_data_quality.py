@@ -423,3 +423,15 @@ def test_fetch_supplier_quality_without_facilities_runs_no_query():
 
     assert fetch_supplier_quality(NoQuery(), str(uuid.uuid4()), str(uuid.uuid4()), [], datetime.now(timezone.utc)) == {}
     assert fetch_sending_hours(NoQuery(), str(uuid.uuid4()), str(uuid.uuid4()), []) == {}
+
+
+def test_active_lot_window_counts_only_the_callers_records_at_requested_facilities():
+    from shared.supplier_data_quality import _LOT_ROWS_SQL, _RECORD_ROWS_SQL
+
+    active = " ".join(str(_LOT_ROWS_SQL).split("WITH active AS (", 1)[1].split("SELECT a.id", 1)[0].split())
+    assert "w.supplier_user_id = CAST(:uid AS uuid)" in active
+    assert "w.facility_id = ANY(CAST(:fids AS uuid[]))" in active
+    # Same record scope as the record metric query.
+    record = " ".join(str(_RECORD_ROWS_SQL).split())
+    assert "e.supplier_user_id = CAST(:uid AS uuid)" in record
+    assert "e.facility_id = ANY(CAST(:fids AS uuid[]))" in record
