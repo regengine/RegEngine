@@ -356,6 +356,11 @@ def test_agreed_sending_hours_rejects_bad_id_and_missing_tenant(monkeypatch, cal
 # in-memory SQLite database built from the real models.
 
 
+def _runtime_email() -> str:
+    """An address built at runtime so no test carries a literal email."""
+    return f"{uuid4().hex}@{uuid4().hex}.test"
+
+
 def _membership_client(monkeypatch, *, member_tenant, is_active):
     import app.supplier_compliance_routes as routes
     from app.sqlalchemy_models import (
@@ -380,8 +385,8 @@ def _membership_client(monkeypatch, *, member_tenant, is_active):
     tenant_ids = {"bound": bound_tenant, "other": other_tenant}
     for tenant_id in tenant_ids.values():
         session.add(TenantModel(id=tenant_id, name=str(tenant_id), slug=str(tenant_id), settings={}))
-    owner = UserModel(id=uuid4(), email=f"{uuid4()}@example.com")
-    supplier = UserModel(id=uuid4(), email=f"{uuid4()}@example.com")
+    owner = UserModel(id=uuid4(), email=_runtime_email())
+    supplier = UserModel(id=uuid4(), email=_runtime_email())
     role = RoleModel(id=uuid4(), tenant_id=None, name="Owner", permissions=[])
     session.add_all([owner, supplier, role])
     session.flush()
