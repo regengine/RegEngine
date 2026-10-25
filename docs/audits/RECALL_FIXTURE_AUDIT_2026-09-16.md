@@ -13,7 +13,7 @@ This is a historical audit. The invented recall scenario and its runner were rem
 | Requirement | Working | Missing (before this change) | Now covered by the fixture engine |
 |---|---|---|---|
 | 1. Worksheet with tri-state labels | tri-state precedent (`EvaluationSummary.compliant`) | any `linked / no_link_established / unresolved` vocabulary; pallet column; last-location and destination derivation | yes (DB-free) |
-| 2. Controlled scenario + answer key | DB-free runner pattern (`scripts/run_full_fsma_simulation.py`) | answer key; multi-case runs; `sample_data` wired to anything | yes |
+| 2. Controlled scenario + answer key | DB-free runner pattern (`scripts/run_full_fsma_simulation.py` (removed in #3559, golden-path sim deleted)) | answer key; multi-case runs; `sample_data` wired to anything | yes |
 | 3. lot → pallet contents → shipment → receipt → movement | lot-keyed events with raw payload + hash chain; transformation links; SSCC/GLN validators | pallet/container entity; shipment line items; receipt↔shipment link; evidence pointer on every link | yes (in-memory) |
 | 4. Splits, mixed pallets, repack, identifier change | split expressible as N transformation rows | mixed pallet; identifier succession; quantity reconciliation across a transformation | yes |
 | 5. Expose uncertainty | mass balance per TLC; KDE coverage 409 gate; identity ambiguity blocker | missing-handoff detection; conflicting contents; unmatched identifiers; per-shipment quantity delta | yes |
@@ -24,7 +24,7 @@ This is a historical audit. The invented recall scenario and its runner were rem
 
 - Tri-state "no verdict ≠ negative verdict" — `services/shared/rules/types.py:96-114`.
 - Package manifest with hash, scope, gap analysis — `services/shared/request_workflow/assembly.py:211-261`.
-- DB-free deterministic runner with pass/fail summary — `scripts/run_full_fsma_simulation.py:326-401`; test `tests/scripts/test_run_full_fsma_simulation.py`.
+- DB-free deterministic runner with pass/fail summary — `scripts/run_full_fsma_simulation.py:326-401`; test `tests/scripts/test_run_full_fsma_simulation.py`. (removed in #3559, golden-path sim deleted)
 - Canonical event with verbatim `raw_payload`, provenance, hash chain — `services/shared/canonical_event.py:293-389`; `alembic/sql/V043__canonical_traceability_events.sql:110`.
 - Lot → lot lineage table — `fsma.transformation_links`; writer `services/shared/canonical_persistence/writer.py:701-762`.
 - SSCC-18 / GLN-13 / GTIN-14 validators — `services/shared/fsma_validation.py`.

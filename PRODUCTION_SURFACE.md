@@ -15,7 +15,7 @@ ingest -> canonicalize -> validate -> persist evidence -> export
 These surfaces are part of the core production spine when their corresponding routers are mounted in `server/main.py`.
 
 - Ingestion and webhook CTE intake
-- CSV, EPCIS, and EDI FSMA data intake
+- CSV and EPCIS FSMA data intake
 - Inflow Workbench preflight and commit gate
 - Canonical record and CTE/KDE persistence
 - Compliance rules, readiness, exception, and audit review workflows

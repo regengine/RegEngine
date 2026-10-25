@@ -8,13 +8,13 @@ RegEngine is an API-first FSMA 204 food traceability evidence platform: supplier
 
 ## Product description
 
-RegEngine works alongside an ERP, turning existing food supply-chain records into traceability evidence. It accepts webhook events, CSV uploads, EPCIS documents, and EDI records. Inflow Workbench provides a preparation workflow with preflight checks, readiness scoring, a fix queue, and a commit gate. Direct intake routes have their own validation and persistence paths; not every ingestion request passes through Workbench.
+RegEngine works alongside an ERP, turning existing food supply-chain records into traceability evidence. It accepts webhook events, CSV uploads, and EPCIS documents. Inflow Workbench provides a preparation workflow with preflight checks, readiness scoring, a fix queue, and a commit gate. Direct intake routes have their own validation and persistence paths; not every ingestion request passes through Workbench.
 
 Accepted events are stored with tenant boundaries in PostgreSQL. The platform evaluates versioned rules, records audit evidence, and provides FDA-oriented exports, request-response cases, auditor workflows, and recall readiness reports. Canonical and legacy persistence paths coexist during a documented cutover. Rule enforcement can be advisory or blocking according to configuration and route support.
 
 Optional Jev assistance suggests mappings for unfamiliar CSV columns and a file's CTE when none is declared. Upload screens expose suggestions for operator review. Automatic application defaults off, requests use headers without row samples by default, and model suggestions do not replace deterministic validation. Preview and evaluation tools let operators inspect suggestions before enabling automatic application.
 
-Public synthetic artifacts, a browser verifier, a downloadable Python bundle verifier let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval. The public recall-drill endpoint currently returns no drill data; it reports that honestly rather than showing a sample drill.
+A browser verifier and a downloadable Python bundle verifier let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
 
 ## Capability and availability matrix
 
@@ -22,14 +22,14 @@ Public synthetic artifacts, a browser verifier, a downloadable Python bundle ver
 
 | Capability | Availability and code evidence |
 | --- | --- |
-| Webhook, CSV, EPCIS, and EDI intake; CTE/KDE normalization | Core intake: [webhook routes](../services/ingestion/app/webhook_router_v2/routes.py), [CSV intake](../services/ingestion/app/csv_templates.py), [EPCIS](../services/ingestion/app/epcis/router.py), [EDI](../services/ingestion/app/edi_ingestion/). |
+| Webhook, CSV, and EPCIS intake; CTE/KDE normalization | Core intake: [webhook routes](../services/ingestion/app/webhook_router_v2/routes.py), [CSV intake](../services/ingestion/app/csv_templates.py), [EPCIS](../services/ingestion/app/epcis/router.py). |
 | Inflow Workbench and supplier preflight | Release-enabled: [Workbench](../services/ingestion/app/inflow_workbench.py), [supplier portal](../services/ingestion/app/supplier_portal.py). |
 | Jev CSV header and file-CTE suggestions | Optional integration: [settings and policies](../services/shared/jev/), [configuration and evaluation guide](engineering/JEV_HEADER_MAPPING.md). Requires provider configuration; automatic application is opt-in. |
 | Versioned rules and compliance scores | Release-enabled: [rules engine](../services/shared/rules/engine.py), [compliance validation](../services/compliance/app/routes.py), [score API](../services/ingestion/app/compliance_score.py). Enforcement is configuration-dependent. |
 | Tenant-scoped records and tamper-evident chains | [Tenant authority](../services/shared/tenant_context.py), [canonical persistence](../services/shared/canonical_persistence/writer.py), [canonical chain verification](../services/shared/canonical_persistence/verification.py), [admin audit integrity](../services/admin/app/audit_integrity.py). See [persistence cutover](persistence/dual-write-cutover.md). |
 | FDA-oriented exports and request-response packages | Release-enabled: [FDA export](../services/ingestion/app/fda_export/router.py), [request workflow](../services/ingestion/app/request_workflow_router.py), [auditor API](../services/ingestion/app/auditor_router.py). |
 | Readiness assessments and recall reporting | Release-enabled: [readiness](../services/ingestion/app/readiness_router.py), [recall reports](../services/ingestion/app/recall_report.py). |
-| Public proof and recall-drill endpoint | [Proof page](https://regengine.co/proof), [browser verifier](https://regengine.co/verify), [recall drill](https://regengine.co/proof/recall-drill), [verifier source](../frontend/public/sdk/verify_chain.py). Synthetic verification artifacts; the recall-drill endpoint currently returns no drill data. |
+| Public proof and recall-drill endpoint | [Proof page](https://regengine.co/proof), [browser verifier](https://regengine.co/verify), [verifier source](../frontend/public/sdk/verify_chain.py). Synthetic verification artifacts; the recall-drill endpoint currently returns no drill data. |
 | Supplier manifest remediation and correction links | Implemented in [remediation](../services/ingestion/app/remediation/) and the [buyer dashboard](../frontend/src/app/remediation/page.tsx); excluded from the production router allowlist. Notification delivery also requires recipient/provider configuration. |
 | EPCIS JSON-LD export and broader recall simulations | Implemented in [EPCIS export](../services/ingestion/app/epcis_export.py) and [simulations](../services/ingestion/app/recall_simulations.py); these routers are experimental and excluded from the production allowlist. Public sample EPCIS downloads are a separate proof surface. |
 | Inbound email CSV ingestion | [Postmark integration](../services/ingestion/app/email_ingest/); excluded from the production allowlist, with no self-service provisioning UI. See [rollout notes](engineering/EMAIL_INGESTION.md). |

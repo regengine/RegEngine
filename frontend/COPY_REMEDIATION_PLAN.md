@@ -218,8 +218,11 @@ Pure copy deletions/rewrites, one pass:
   label the portal sandbox-only.
 
 ### PR-8 — Dead CTAs and dead-ends (~half day) [Tier3]
-- `/#sandbox` → `/sandbox` (7 links: demo:237, compare×3, fsma-204/[cte]:497,
-  SharedSandboxResult:107,341).
+- `/#sandbox` links (demo:237, compare×3, fsma-204/[cte]:497): the `/sandbox`
+  route and SharedSandboxResult were deleted in #3557. The CSV upload flow is
+  `/ingest`, which requires sign-in (it is in `AUTHENTICATED_APP_ROUTE_PREFIXES`,
+  `src/lib/app-routes.ts`). For anonymous marketing CTAs, use the public
+  `/tools/drill-simulator` or `/signup`; link `/ingest` only where sign-in is expected.
 - Wire or remove each dead button: kde-checker Print/CSV Template/Explore
   (wire Print to `window.print()`, CSV to a real template file, else
   remove); sop-generator Download PDF/Print; tlc-validator Schedule a Demo
@@ -319,7 +322,7 @@ high-signal per its own guidance):
 `FSMA 204 Compliant`, `Tamper-proof`, `tamper-proof`, `Create Password`,
 `/#sandbox`, `we have identified`, `uptime_percent`, `rge_test_` (docs
 only), `Coming in v1.1`, `§ 1.1330` (scoped to ingest viewer), `dashboard_user`.
-Add `/sandbox` to the critical-route allowlist. Re-run in CI (already
+Re-run in CI (already
 wired). Note in PROMISE_AUDIT.md that COPY_AUDIT.md is the judgment-level
 companion.
 
