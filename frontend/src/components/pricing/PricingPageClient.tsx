@@ -139,7 +139,7 @@ export function PricingPageClient({
                     })}
                 </div>
                 <p className="mt-5 text-center text-small text-re-text-tertiary">
-                    Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Add CTEs at $0.002 each.{' '}
+                    Base plan includes 500 CTEs/month. Standard and Premium are unlimited. Need more on Base? Additional CTE pricing is set in your agreement.{' '}
                     <Link href="/terms" className="text-re-brand underline underline-offset-[3px] decoration-re-border-strong hover:decoration-re-brand">See Terms</Link> for full details.
                 </p>
 
@@ -194,7 +194,7 @@ export function PricingPageClient({
                         RegEngine is priced around facility operations, not a long enterprise procurement cycle.
                     </p>
                     <p className="mx-auto mb-10 max-w-[64ch] text-center text-small leading-relaxed text-re-text-tertiary">
-                        A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine&apos;s Founding rate starts at $425/mo (billed annually).
+                        A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine&apos;s Founding rate is documented in your executed design-partner agreement.
                     </p>
                     <div className="overflow-x-auto rounded-lg border border-re-border bg-re-surface-card">
                         <table className="w-full min-w-[640px] border-collapse text-ui">
@@ -251,7 +251,7 @@ export function PricingPageClient({
                         Become a founding design partner
                     </h2>
                     <p className="mx-auto mb-8 mt-3 max-w-[64ch] text-body text-re-text-secondary">
-                        The Founding rate starts at $425/mo, billed annually. Apply now and get the product shaped around real supplier data.
+                        Founding rates are documented in the executed design-partner agreement. Apply now and get the product shaped around real supplier data.
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">

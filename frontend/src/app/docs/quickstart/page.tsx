@@ -222,7 +222,7 @@ export default function QuickstartPage() {
                         Filter the records endpoint by lot code:
                     </p>
                     <CodeBlock
-                        code={`curl -s "${API_BASE}/records?tlc=TEST-00012345678901-LOT-001" \\
+                        code={`curl -s "${API_BASE}/records?tlc=<the lot code you sent>" \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY"`}
                         language="bash"
                     />
@@ -231,12 +231,12 @@ export default function QuickstartPage() {
   "tenant_id": "<your workspace ID>",
   "events": [
     {
-      "event_id": "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab",
+      "event_id": "<event UUID>",
       "event_type": "receiving",
-      "traceability_lot_code": "TEST-00012345678901-LOT-001",
-      "product_reference": "Romaine Lettuce",
-      "quantity": 500.0,
-      "unit_of_measure": "cases",
+      "traceability_lot_code": "<the lot code you sent>",
+      "product_reference": "<product name>",
+      "quantity": "<number>",
+      "unit_of_measure": "<unit>",
       "event_timestamp": "<the timestamp you sent>",
       "source_system": "webhook_api",
       "status": "active"

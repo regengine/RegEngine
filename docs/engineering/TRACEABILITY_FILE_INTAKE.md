@@ -93,8 +93,7 @@ tab does not pass `mode`.
 
 Validate-only calls `POST /api/v1/epcis/validate` once per JSON event and
 does not ingest. XML has no validate-only path; the tab tells the operator
-to ingest the XML file directly. A sample document is linked from the tab
-at `/samples/sample_epcis_2.0.json`.
+to ingest the XML file directly.
 
 Empty documents, empty arrays, and non-JSON text fail in the browser. No
 request is sent.

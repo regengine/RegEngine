@@ -18,9 +18,9 @@ import { shouldHideMarketingChrome } from '@/lib/app-routes';
 /**
  * Marketing footer.
  *
- * `<footer aria-label="Site footer">` is load-bearing: the Inflow Lab embed
- * shim hides the site chrome by `footer` selector. Every column, link and href
- * from `marketing-nav.ts` is unchanged — `public-site-fixes.test.tsx` asserts
+ * `<footer aria-label="Site footer">` is load-bearing: embed shims hide the
+ * site chrome by `footer` selector. Every column, link and href from
+ * `marketing-nav.ts` is unchanged — `public-site-fixes.test.tsx` asserts
  * the Product column's data directly.
  *
  * The row above the legal line carries the enforcement date in mono. It is the
