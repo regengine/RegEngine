@@ -138,7 +138,7 @@ const POSITIONING = [
     },
     {
         title: 'Full data portability',
-        detail: 'Supported workflows can export CTE events, KDE fields, lot records, and supplier relationships in EPCIS 2.0 (Preview) JSON-LD, FDA-oriented sortable spreadsheet, or CSV.',
+        detail: 'Supported workflows can export CTE events, KDE fields, lot records, and supplier relationships in EPCIS 2.0 JSON-LD (Preview), FDA-oriented sortable spreadsheet, or CSV.',
     },
     {
         title: 'Tenant isolation',
@@ -209,7 +209,7 @@ const EXPORT_FORMAT_GROUPS = [
     {
         title: 'Export formats',
         items: [
-            'GS1 EPCIS 2.0 (Preview) JSON-LD (industry standard)',
+            'GS1 EPCIS 2.0 JSON-LD (Preview, industry standard)',
             'FDA-oriented sortable spreadsheet aligned to 21 CFR 1.1455 where applicable',
             'CSV with all CTE/KDE fields',
             'Audit evidence bundle with manifest hashing',

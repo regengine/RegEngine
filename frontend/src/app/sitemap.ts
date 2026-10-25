@@ -74,15 +74,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'fsma-unified',
         // Added Sep 2026 — built after the April curation, never listed.
-        // ask, label-scanner and inflow-lab are experimental and drop out of
-        // the list below unless their flags are enabled.
+        // ask and label-scanner are experimental and drop out of the list
+        // below unless their flags are enabled.
         'records-request-checklist',
         'self-reported-checklist',
         'scan',
         'export',
         'ask',
         'label-scanner',
-        'inflow-lab',
     ]
         .filter((tool) => !EXPERIMENTAL_TOOL_SLUGS.has(tool) || isExperimentalToolEnabled(tool))
         .map((tool) => ({
@@ -124,7 +123,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/docs/errors`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/docs/rate-limits`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/docs/changelog`, changeFrequency: 'weekly' as const, priority: 0.5 },
-        { url: `${baseUrl}/docs/connectors/inflow-lab`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/architecture`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/retention`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/support`, changeFrequency: 'monthly' as const, priority: 0.5 },

@@ -56,7 +56,7 @@ const RETENTION_TIMELINE = [
 ];
 const EXPORT_FORMATS = [
     {
-        format: 'EPCIS 2.0 (Preview) JSON-LD',
+        format: 'EPCIS 2.0 JSON-LD (Preview)',
         standard: 'GS1 industry standard',
         useCase: 'Interoperable with other FSMA 204 platforms, trading partner systems, and FDA submissions',
         icon: FileCheck,

@@ -70,9 +70,9 @@ export default function ExportJobsPage() {
     const exportPrereqs = filterExperimentalLinks([
         {
             title: 'Connect source data',
-            detail: 'Use Inflow Lab or import tools to build the record set export jobs will package once scheduling ships.',
-            href: '/dashboard/inflow-lab',
-            action: 'Open Inflow Lab',
+            detail: 'Use the import tools to build the record set export jobs will package once scheduling ships.',
+            href: '/ingest',
+            action: 'Import records',
             icon: Database,
         },
         {

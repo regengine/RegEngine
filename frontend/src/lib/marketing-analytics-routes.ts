@@ -22,8 +22,7 @@ const PUBLIC_MARKETING_SECTIONS = new Set([
 ]);
 const PUBLIC_TOOL_SLUGS = new Set([
   'anomaly-simulator', 'ask', 'cte-mapper', 'data-import', 'drill-simulator',
-  'export', 'fsma-unified', 'ftl-checker', 'inflow-lab',
-  'inflow-lab-dashboard-preview', 'kde-checker', 'knowledge-graph',
+  'export', 'fsma-unified', 'ftl-checker', 'kde-checker', 'knowledge-graph',
   'label-scanner', 'notice-validator', 'obligation-scanner',
   'readiness-assessment', 'recall-readiness', 'records-request-checklist',
   'retailer-readiness', 'roi-calculator', 'scan', 'self-reported-checklist',

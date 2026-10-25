@@ -21,7 +21,6 @@ import {
     Copy,
     ArrowRight,
     Loader2,
-    Database,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { apiClient } from '@/lib/api-client';
@@ -75,28 +74,8 @@ const EXAMPLE_CURL = `curl -X POST https://regengine.co/api/v1/webhooks/ingest \
     ]
   }'`;
 
-// Synthetic FSMA 204 traceability dataset - mirrors test_data/regengine_test_traceability.csv
-const SAMPLE_EVENTS = [
-    { event_type: 'HARVESTING',     event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Green Valley Farm, Salinas, CA',             product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
-    { event_type: 'RECEIVING',      event_date: '2026-03-10', tlc: 'TLC1001', location_identifier: 'Salinas Cold Storage, Salinas, CA',           product_description: 'Romaine Lettuce', gtin: '09524000059109' },
-    { event_type: 'INITIAL_PACKING',event_date: '2026-03-11', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
-    { event_type: 'SHIPPING',       event_date: '2026-03-12', tlc: 'TLC1001', location_identifier: 'Pacific Produce Packers, Watsonville, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1200, uom: 'cases' },
-    { event_type: 'RECEIVING',      event_date: '2026-03-13', tlc: 'TLC1001', location_identifier: 'FreshChain Distribution, Los Angeles, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1185, uom: 'cases' },
-    { event_type: 'SHIPPING',       event_date: '2026-03-14', tlc: 'TLC1001', location_identifier: 'FreshChain Distribution, Los Angeles, CA',    product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 1185, uom: 'cases' },
-    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh Pasadena, Pasadena, CA',          product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 400,  uom: 'cases' },
-    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh Glendale, Glendale, CA',          product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 350,  uom: 'cases' },
-    { event_type: 'RECEIVING',      event_date: '2026-03-15', tlc: 'TLC1001', location_identifier: 'MarketFresh SantaMonica, Santa Monica, CA',   product_description: 'Romaine Lettuce', gtin: '09524000059109', quantity: 435,  uom: 'cases' },
-];
-
 type TabId = 'csv' | 'iot' | 'api';
 type UploadState = 'idle' | 'uploading' | 'success' | 'partial' | 'error';
-type SampleState = 'idle' | 'running' | 'done' | 'error';
-
-interface SampleStepResult {
-    label: string;
-    ok: boolean;
-    detail: string;
-}
 
 export function DataImportClient() {
     const { apiKey } = useAuth();
@@ -114,10 +93,6 @@ export function DataImportClient() {
     } | null>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isDragging, setIsDragging] = useState(false);
-
-    // Sample dataset simulation state
-    const [sampleState, setSampleState] = useState<SampleState>('idle');
-    const [sampleSteps, setSampleSteps] = useState<SampleStepResult[]>([]);
 
     const handleCopy = useCallback(() => {
         navigator.clipboard.writeText(EXAMPLE_CURL);
@@ -159,7 +134,6 @@ export function DataImportClient() {
     // mounted and clickable for a moment after a click: state alone cannot stop
     // a second click from storing the same file twice.
     const uploadInFlightRef = useRef(false);
-    const sampleInFlightRef = useRef(false);
 
     // ``cteType`` is set only by the "Import as <CTE>" prompt: the uploader
     // confirming the CTE Jev suggested for a file the server rejected.
@@ -195,71 +169,6 @@ export function DataImportClient() {
         const file = e.dataTransfer.files?.[0];
         if (file) handleFileChange(file);
     }, [handleFileChange]);
-
-    const handleLoadSample = useCallback(async () => {
-        if (sampleInFlightRef.current) return;
-        sampleInFlightRef.current = true;
-        trackToolRunStarted('data-import');
-        setSampleState('running');
-        setSampleSteps([]);
-
-        const addStep = (label: string, ok: boolean, detail: string) => {
-            setSampleSteps((prev) => [...prev, { label, ok, detail }]);
-        };
-
-        // Map sample events to webhook format
-        const CTE_MAP: Record<string, string> = {
-            HARVESTING: 'harvesting', RECEIVING: 'receiving',
-            INITIAL_PACKING: 'initial_packing', SHIPPING: 'shipping',
-        };
-
-        const webhookEvents = SAMPLE_EVENTS.map((evt) => ({
-            cte_type: CTE_MAP[evt.event_type] || evt.event_type.toLowerCase(),
-            traceability_lot_code: evt.tlc,
-            product_description: evt.product_description,
-            quantity: evt.quantity || 0,
-            unit_of_measure: evt.uom || 'cases',
-            location_name: evt.location_identifier,
-            timestamp: `${evt.event_date}T00:00:00Z`,
-            kdes: { gtin: evt.gtin },
-        }));
-
-        try {
-            const effectiveKey = apiKey || '';
-            const result = await apiClient.ingestWebhookEvents(
-                effectiveKey,
-                webhookEvents,
-                'sample_dataset',
-                'default',
-            );
-
-            // Show individual step results
-            for (const evt of SAMPLE_EVENTS) {
-                addStep(
-                    `${evt.event_type}: ${evt.location_identifier.split(',')[0]}`,
-                    true,
-                    `TLC ${evt.tlc} · ${evt.event_date}${evt.quantity ? ` · ${evt.quantity} ${evt.uom}` : ''}`,
-                );
-            }
-
-            addStep(
-                `Batch ingest complete`,
-                result.accepted > 0,
-                `${result.accepted}/${result.total} events persisted to database`,
-            );
-
-            setSampleState(result.accepted > 0 ? 'done' : 'error');
-            trackToolRunCompleted('data-import', result.accepted > 0 ? 'success' : 'error');
-        } catch (err: unknown) {
-            const axiosErr = err as { response?: { data?: { detail?: string } }; message?: string };
-            const msg = axiosErr?.response?.data?.detail || axiosErr?.message || 'JSON events API ingest failed';
-            addStep('Batch ingest', false, msg);
-            setSampleState('error');
-            trackToolRunCompleted('data-import', 'error');
-        } finally {
-            sampleInFlightRef.current = false;
-        }
-    }, [apiKey]);
 
     const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
         { id: 'csv', label: 'CSV Upload', icon: FileSpreadsheet },
@@ -467,66 +376,6 @@ export function DataImportClient() {
                                     )}
                                 </AnimatePresence>
                             </CardContent>
-                        </Card>
-
-                        {/* Sample Dataset */}
-                        <Card>
-                            <CardHeader>
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                        <Database className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                                        <div>
-                                            <CardTitle>Load Sample Dataset</CardTitle>
-                                            <CardDescription>
-                                                Push a synthetic Romaine Lettuce supply chain (TLC1001) through the full pipeline with 9 CTE events from farm to retailer.
-                                            </CardDescription>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        onClick={handleLoadSample}
-                                        disabled={sampleState === 'running'}
-                                        variant="secondary"
-                                        className="shrink-0"
-                                        leadingIcon={sampleState === 'running' ? <Loader2 className="animate-spin motion-reduce:animate-none" strokeWidth={1.75} aria-hidden="true" /> : undefined}
-                                    >
-                                        {sampleState === 'running' ? 'Running…' : 'Run Simulation'}
-                                    </Button>
-                                </div>
-                            </CardHeader>
-                            {sampleSteps.length > 0 && (
-                                <CardContent>
-                                    <div className="space-y-2">
-                                        {sampleSteps.map((step, i) => (
-                                            <motion.div
-                                                key={i}
-                                                initial={{ opacity: 0, x: -8 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: i * 0.05 }}
-                                                className="flex items-start gap-3 rounded-md border border-re-border bg-re-surface-card p-3"
-                                            >
-                                                {step.ok ? (
-                                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-re-success" strokeWidth={1.75} aria-hidden="true" />
-                                                ) : (
-                                                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
-                                                )}
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="truncate text-ui font-medium text-re-text-primary">{step.label}</div>
-                                                    <div className="text-small text-re-text-tertiary">{step.detail}</div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                        {sampleState === 'done' && (
-                                            <motion.div
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                className="pt-2 text-center text-small text-re-text-tertiary"
-                                            >
-                                                Dataset loaded. Run a recall drill from the Mock Audit Drill tool to trace TLC1001.
-                                            </motion.div>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            )}
                         </Card>
                     </TabsContent>
 

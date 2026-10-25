@@ -47,14 +47,15 @@ describe('pre-revenue public copy', () => {
         }
     });
 
-    it('keeps the published $425/mo price on pricing surfaces with the Founding rate wording', () => {
+    it('shows no hardcoded prices on pricing surfaces', () => {
         const client = read('src/components/pricing/PricingPageClient.tsx');
-        expect(client).toContain('RegEngine&apos;s Founding rate starts at $425/mo (billed annually).');
-        expect(client).toContain('The Founding rate starts at $425/mo, billed annually.');
+        expect(client).not.toContain('$425');
         expect(client).toContain('Founding rate\n');
 
         const page = read('src/app/pricing/page.tsx');
-        expect(page).toContain('FSMA 204 traceability readiness from $425/mo.');
+        expect(page).not.toContain('$425');
+        expect(page).not.toMatch(/gaMonthly: \d/);
+        expect(page).toContain('Pricing is temporarily unavailable');
         expect(page).toContain('What does the Founding rate include?');
     });
 });
