@@ -268,7 +268,9 @@ async def get_supplier_data_quality(
 ) -> SupplierDataQualityResponse:
     """Four separate data quality measures per facility over a rolling window.
 
-    Scoped to the tenant and to facilities owned by the calling user.
+    Scoped to the tenant and to facilities owned by the calling user, except
+    epcis_failed: EPCIS receipts carry no facility, so that share is tenant
+    wide and repeated on every facility.
     """
     tenant_id = TenantContext.get_tenant_context(db)
     if not tenant_id:

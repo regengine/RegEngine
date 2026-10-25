@@ -15,6 +15,8 @@ from shared.supplier_data_quality import (
     COLUMN_BACKED_KDES,
     DEFAULT_WINDOW_DAYS,
     DRILLDOWN_METRICS,
+    EPCIS_TENANT_SCOPE_REASON,
+    EPCIS_UNAVAILABLE_REASON,
     LATE_CTE_NO_HOURS_REASON,
     METRIC_EPCIS_FAILED,
     METRIC_LATE_CTE,
@@ -22,6 +24,7 @@ from shared.supplier_data_quality import (
     METRIC_UNLINKED_LOT,
     MIN_RECORDS,
     WEBHOOK_REQUIRED_KDES,
+    epcis_failed_metric,
     fetch_sending_hours,
     fetch_supplier_quality,
     flag_records,
@@ -326,7 +329,9 @@ def test_summarize_facility_keeps_four_separate_metrics():
     incomplete = [_record("shipping", {}) for _ in range(MIN_RECORDS - len(complete))]
     records = complete + incomplete
     lots = [_lot_row(str(uuid.uuid4()), "shipping", {}) for _ in range(MIN_RECORDS // 2)]
-    summary = summarize_facility(records, lots)
+    receipts = [uuid.uuid4() for _ in range(MIN_RECORDS)]
+    rejected = receipts[::2]
+    summary = summarize_facility(records, lots, epcis_counts=(len(rejected), len(receipts)))
 
     assert set(summary) == {METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE, METRIC_EPCIS_FAILED}
     assert summary[METRIC_MISSING_KDE]["share"] == len(incomplete) / len(records)
@@ -336,7 +341,72 @@ def test_summarize_facility_keeps_four_separate_metrics():
         len(lots),
     )
     assert summary[METRIC_LATE_CTE] == late_metric(records, None)
-    assert summary[METRIC_EPCIS_FAILED]["status"] == "unavailable"
+    assert summary[METRIC_EPCIS_FAILED]["share"] == len(rejected) / len(receipts)
+
+
+# --- EPCIS failed (tenant wide) ----------------------------------------------
+
+
+def test_epcis_failed_share_from_receipts_says_it_is_tenant_wide():
+    receipts = [uuid.uuid4() for _ in range(MIN_RECORDS)]
+    rejected = receipts[::2]
+    metric = epcis_failed_metric((len(rejected), len(receipts)))
+    assert metric == {
+        "key": METRIC_EPCIS_FAILED,
+        "status": "ok",
+        "numerator": len(rejected),
+        "denominator": len(receipts),
+        "share": len(rejected) / len(receipts),
+        "reason": EPCIS_TENANT_SCOPE_REASON,
+    }
+
+
+def test_epcis_failed_under_min_records_is_not_enough_data():
+    receipts = [uuid.uuid4() for _ in range(MIN_RECORDS - 1)]
+    rejected = receipts[::2]
+    metric = epcis_failed_metric((len(rejected), len(receipts)))
+    assert metric["status"] == "not_enough_data"
+    assert metric["share"] is None
+    assert (metric["numerator"], metric["denominator"]) == (len(rejected), len(receipts))
+    assert metric["reason"] == EPCIS_TENANT_SCOPE_REASON
+
+
+def test_epcis_failed_without_receipts_is_not_enough_data():
+    assert epcis_failed_metric((0, 0))["status"] == "not_enough_data"
+
+
+def test_epcis_failed_is_unavailable_when_receipts_cannot_be_read():
+    assert epcis_failed_metric(None) == unavailable_metric(METRIC_EPCIS_FAILED, EPCIS_UNAVAILABLE_REASON)
+
+
+def test_epcis_reasons_use_no_dashes():
+    for reason in (EPCIS_TENANT_SCOPE_REASON, EPCIS_UNAVAILABLE_REASON):
+        assert not any(dash in reason for dash in ("\u2013", "\u2014", " - "))
+
+
+def test_fetch_supplier_quality_repeats_tenant_epcis_counts_on_every_facility(monkeypatch):
+    import shared.supplier_data_quality as quality
+
+    tenant = str(uuid.uuid4())
+    facilities = [str(uuid.uuid4()) for _ in range(MIN_RECORDS // 10)]
+    receipts = [uuid.uuid4() for _ in range(MIN_RECORDS)]
+    rejected = receipts[::2]
+    calls = []
+
+    def fake_counts(_db, tenant_id, since):
+        calls.append(tenant_id)
+        return len(rejected), len(receipts)
+
+    monkeypatch.setattr(quality, "fetch_record_rows", lambda *args: [])
+    monkeypatch.setattr(quality, "fetch_lot_rows", lambda *args: [])
+    monkeypatch.setattr(quality, "fetch_receipt_counts", fake_counts)
+    result = fetch_supplier_quality(
+        object(), tenant, str(uuid.uuid4()), facilities, datetime.now(timezone.utc), sending_hours={}
+    )
+
+    assert calls == [tenant]
+    assert set(result) == set(facilities)
+    assert {result[key][METRIC_EPCIS_FAILED]["share"] for key in facilities} == {len(rejected) / len(receipts)}
 
 
 def test_summarize_facility_measures_late_records_with_agreed_hours():

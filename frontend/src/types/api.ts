@@ -524,7 +524,7 @@ export interface SupplierQualityMetric {
     numerator: number | null;
     denominator: number | null;
     share: number | null;
-    /** Set when status is unavailable, or late_cte has no agreed sending time. */
+    /** Set when status is unavailable, when late_cte has no agreed sending time, and on epcis_failed to say the count is tenant wide. */
     reason: string | null;
 }
 

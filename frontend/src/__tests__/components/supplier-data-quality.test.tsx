@@ -119,6 +119,29 @@ describe('DataQuality', () => {
         expect(screen.getByText(LATE_LABEL)).toBeInTheDocument();
     });
 
+    it('shows a computed EPCIS share with its tenant wide reason and no drill down', () => {
+        const receipts = uuids(MIN_RECORDS);
+        const rejected = receipts.filter((_, index) => index % 2 === 0);
+        const share = rejected.length / receipts.length;
+        const tenantReason = crypto.randomUUID();
+        renderQuality(
+            summary([
+                metric({
+                    key: 'epcis_failed',
+                    status: 'ok',
+                    numerator: rejected.length,
+                    denominator: receipts.length,
+                    share,
+                    reason: tenantReason,
+                }),
+            ]),
+        );
+        expect(screen.getByText('EPCIS (Preview) documents rejected across your whole account:')).toBeInTheDocument();
+        expect(screen.getByText(`${rejected.length} of ${receipts.length} documents (${formatShare(share)})`)).toBeInTheDocument();
+        expect(screen.getByText(tenantReason)).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'View records' })).not.toBeInTheDocument();
+    });
+
     it('offers drill down only for computable metrics with flagged records', () => {
         renderQuality();
         expect(screen.getAllByRole('button', { name: 'View records' })).toHaveLength(2);

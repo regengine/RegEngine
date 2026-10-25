@@ -21,11 +21,17 @@ separate on purpose; there is no combined score.
    ``event_time`` (received is ``created_at``). The denominator is the records
    in the window with both times. Our measure against the agreed sending time,
    not an FDA rule. With no agreed hours set, the status is not enough data.
-4. ``epcis_failed``: unavailable. EPCIS documents are not stored as files with
-   a validation result, and nothing ties an EPCIS upload to a facility.
+4. ``epcis_failed``: share of EPCIS documents received in the window that were
+   rejected (``fsma.epcis_document_receipts``, written by the EPCIS ingest
+   routes). Receipts are tenant scoped: an EPCIS upload carries no supplier
+   facility, so this cannot be mapped per facility. The tenant wide share is
+   computed once and shown on every facility, with
+   ``EPCIS_TENANT_SCOPE_REASON`` saying so. It is unavailable only when the
+   receipts table cannot be read.
 
-Read only. Every query filters on tenant, on the calling supplier user and on
-that user's facility ids.
+Read only. The record and lot queries filter on tenant, on the calling
+supplier user and on that user's facility ids. The EPCIS receipt count
+filters on tenant only (see above).
 """
 
 from __future__ import annotations
@@ -33,6 +39,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Mapping, Optional, Sequence
 
+from shared.epcis_receipts import fetch_receipt_counts
 from sqlalchemy import text
 
 MIN_RECORDS = 20
@@ -47,10 +54,11 @@ DRILLDOWN_METRICS = (METRIC_MISSING_KDE, METRIC_UNLINKED_LOT, METRIC_LATE_CTE)
 
 LATE_CTE_LABEL = "Our measure, based on the agreed sending time with this supplier; not a regulatory requirement"
 LATE_CTE_NO_HOURS_REASON = "No agreed sending time is set for this supplier, so late records cannot be measured."
-EPCIS_UNAVAILABLE_REASON = (
-    "EPCIS uploads are not stored as files with a validation result linked to a facility, "
-    "so failing files cannot be counted."
+EPCIS_TENANT_SCOPE_REASON = (
+    "Counted for your whole account, not for this facility: an EPCIS upload is not linked "
+    "to a facility, so every facility shows the same count."
 )
+EPCIS_UNAVAILABLE_REASON = "EPCIS document receipts could not be read."
 
 # Copy of services/ingestion/app/webhook_models.py REQUIRED_KDES_BY_CTE, keyed
 # by supplier CTE name. The admin service cannot import the ingestion package
@@ -265,6 +273,14 @@ def unavailable_metric(key: str, reason: str) -> dict[str, Any]:
     }
 
 
+def epcis_failed_metric(counts: Optional[tuple[int, int]]) -> dict[str, Any]:
+    """Tenant wide rejected share from (rejected, total) receipt counts."""
+    if counts is None:
+        return unavailable_metric(METRIC_EPCIS_FAILED, EPCIS_UNAVAILABLE_REASON)
+    rejected, total = counts
+    return {**share_metric(METRIC_EPCIS_FAILED, rejected, total), "reason": EPCIS_TENANT_SCOPE_REASON}
+
+
 def window_start(now: datetime, window_days: int) -> datetime:
     return now - timedelta(days=window_days)
 
@@ -311,14 +327,18 @@ def summarize_facility(
     record_rows: Sequence[Mapping[str, Any]],
     lot_rows: Sequence[Mapping[str, Any]],
     agreed_sending_hours: Optional[int] = None,
+    epcis_counts: Optional[tuple[int, int]] = None,
 ) -> dict[str, dict[str, Any]]:
-    """The four metrics for one facility, keyed by metric."""
+    """The four metrics for one facility, keyed by metric.
+
+    ``epcis_counts`` is the tenant wide (rejected, total), not per facility.
+    """
     lot_count = len(group_lots(lot_rows))
     return {
         METRIC_MISSING_KDE: share_metric(METRIC_MISSING_KDE, len(flag_records(record_rows)), len(record_rows)),
         METRIC_UNLINKED_LOT: share_metric(METRIC_UNLINKED_LOT, len(unlinked_lots(lot_rows)), lot_count),
         METRIC_LATE_CTE: late_metric(record_rows, agreed_sending_hours),
-        METRIC_EPCIS_FAILED: unavailable_metric(METRIC_EPCIS_FAILED, EPCIS_UNAVAILABLE_REASON),
+        METRIC_EPCIS_FAILED: epcis_failed_metric(epcis_counts),
     }
 
 
@@ -449,13 +469,19 @@ def fetch_supplier_quality(
 
     ``sending_hours`` is fetched when the caller has not already done so.
     """
+    if not facility_ids:
+        return {}
     records = _by_facility(
         fetch_record_rows(db_session, tenant_id, supplier_user_id, facility_ids, since), facility_ids
     )
     lots = _by_facility(fetch_lot_rows(db_session, tenant_id, supplier_user_id, facility_ids, since), facility_ids)
+    epcis_counts = fetch_receipt_counts(db_session, tenant_id, since)
     hours = (
         sending_hours
         if sending_hours is not None
         else fetch_sending_hours(db_session, tenant_id, supplier_user_id, facility_ids)
     )
-    return {key: summarize_facility(records[key], lots[key], hours.get(key)) for key in facility_ids}
+    return {
+        key: summarize_facility(records[key], lots[key], hours.get(key), epcis_counts)
+        for key in facility_ids
+    }
