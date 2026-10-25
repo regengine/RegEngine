@@ -367,11 +367,14 @@ _RECORD_ROWS_SQL = text(
     """
 )
 
-# One row per (active lot, record of that lot). A lot is active when the
-# caller sent a record for it, at one of the requested facilities, in the
-# window: the same record scope as _RECORD_ROWS_SQL, so another supplier's
-# record on a shared lot cannot make it active. Linkage looks at all of the
-# caller's records for it, any age.
+# One row per (active lot, record of that lot). A lot belongs to its own
+# facility (l.facility_id) and is active when the caller sent any record for
+# it in the window, at any facility. Another supplier's record on a shared
+# lot cannot make it active. The record's facility is deliberately NOT
+# filtered: a lot's recent record can sit at another facility, and filtering
+# it made the per-facility drilldown drop lots the all-facility summary
+# counted (#3597 follow-up). Linkage looks at all of the caller's records
+# for it, any age.
 _LOT_ROWS_SQL = text(
     """
     WITH active AS (
@@ -384,7 +387,6 @@ _LOT_ROWS_SQL = text(
            AND l.supplier_user_id = CAST(:uid AS uuid)
            AND l.facility_id = ANY(CAST(:fids AS uuid[]))
            AND w.supplier_user_id = CAST(:uid AS uuid)
-           AND w.facility_id = ANY(CAST(:fids AS uuid[]))
            AND w.created_at >= :since
     )
     SELECT a.id AS lot_id,
@@ -485,7 +487,4 @@ def fetch_supplier_quality(
         if sending_hours is not None
         else fetch_sending_hours(db_session, tenant_id, supplier_user_id, facility_ids)
     )
-    return {
-        key: summarize_facility(records[key], lots[key], hours.get(key), epcis_counts)
-        for key in facility_ids
-    }
+    return {key: summarize_facility(records[key], lots[key], hours.get(key), epcis_counts) for key in facility_ids}
