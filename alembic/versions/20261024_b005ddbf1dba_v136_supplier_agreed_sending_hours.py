@@ -1,6 +1,6 @@
 """Agreed sending time per supplier facility.
 
-Mirrors supabase/migrations/20261024070000_supplier_agreed_sending_hours.sql
+Mirrors supabase/migrations/20261024080000_supplier_agreed_sending_hours.sql
 exactly: adds public.supplier_facilities.agreed_sending_hours, integer NULL,
 CHECK (agreed_sending_hours > 0). No backfill. The supplier data quality view
 counts a CTE record as late when it is received more than this many hours
