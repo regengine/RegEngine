@@ -5,13 +5,7 @@ import { filterExperimentalToolLinks } from '@/lib/experimental-features';
 import { PageHeader } from '@/components/layout/page-header';
 import { Callout } from '@/components/ui/callout';
 import { CodeBlock } from '@/components/ui/code-block';
-import {
-  INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE,
-  INGEST_WALKTHROUGH_SHIPPING_CURL_SAMPLE,
-  INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE,
-  WALKTHROUGH_BAGGED_LOT,
-  WALKTHROUGH_RECEIVED_LOT,
-} from '@/lib/api-samples/ingest-samples';
+import { INGEST_CURL_SAMPLE } from '@/lib/api-samples/ingest-samples';
 
 export const metadata: Metadata = {
   title: 'End-to-End Walkthrough | RegEngine',
@@ -65,28 +59,30 @@ export default function WalkthroughPage() {
           <p className="mb-3 text-body text-re-text-secondary">You should have completed the Quickstart and have:</p>
           <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
             <li><code className={CODE}>$REGENGINE_API_KEY</code> and <code className={CODE}>$REGENGINE_SIGNING_SECRET</code> in your shell</li>
-            <li>A test workspace. Accepted events are permanent and can be billed, so every lot below starts with <code className={CODE}>TEST-</code></li>
+            <li>A test workspace. Accepted events are permanent and can be billed, so keep the <code className={CODE}>TEST-</code> prefix on your lot codes</li>
             <li>A working <code className={CODE}>curl</code> with <code className={CODE}>openssl</code>, and ~15 minutes</li>
           </ul>
           <p className="mt-3 text-ui text-re-text-tertiary">
-            The scenario: you&apos;re a fresh-cut produce processor. One supplier sent you a romaine
-            lot; you transform it; you ship it to a distributor. Three events in one supplier-to-shipping
-            chain. We&apos;ll post them, list them, and export them.
+            The flow: one receiving event, one transformation event, one shipping event —
+            three events in a single supplier-to-shipping chain. Fill each request-body
+            skeleton with your own lot codes, locations, and quantities, then list the
+            events and export them.
           </p>
         </Section>
 
         {/* Step 1 */}
         <Step n={1} title="Post the Receiving event">
           <p className="mb-3 text-body text-re-text-secondary">
-            You receive lot <code className={CODE}>{WALKTHROUGH_RECEIVED_LOT}</code> from
-            Supplier A. This is a Receiving CTE, the starting anchor for the chain.
+            Post a Receiving CTE for a lot that arrived at your facility — the starting anchor for
+            the chain. Fill the skeleton&apos;s <code className={CODE}>{'<traceability_lot_code>'}</code>,{' '}
+            <code className={CODE}>immediate_previous_source</code>, and the other fields with your own values.
           </p>
-          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE} />
+          <CodeBlock language="bash" code={INGEST_CURL_SAMPLE} />
           <ExpectedResponse>
             <CodeBlock
               language="json"
               code={`{ "accepted": 1, "rejected": 0, "total": 1, "events": [
-  { "traceability_lot_code": "${WALKTHROUGH_RECEIVED_LOT}",
+  { "traceability_lot_code": "<the lot code you sent>",
     "cte_type": "receiving", "status": "accepted",
     "event_id": "...", "sha256_hash": "...", "chain_hash": "..." }
 ] }`}
@@ -121,10 +117,11 @@ export default function WalkthroughPage() {
         {/* Step 2 */}
         <Step n={2} title="Post the Transformation event">
           <p className="mb-3 text-body text-re-text-secondary">
-            You wash and bag the lot. That&apos;s a Transformation CTE. The input lot is the
-            Receiving lot from Step 1; the output lot is new.
+            Post a Transformation CTE for the lot you process. Set <code className={CODE}>cte_type</code> to{' '}
+            <code className={CODE}>transformation</code> and point <code className={CODE}>kdes.input_lot_codes</code>{' '}
+            at the Receiving lot from Step 1; the output lot is new.
           </p>
-          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE} />
+          <CodeBlock language="bash" code={INGEST_CURL_SAMPLE} />
           <ExpectedResponse>
             <p className="text-ui text-re-text-secondary">
               Same shape as Step 1. The new event chains to the receiving event via{' '}
@@ -136,9 +133,11 @@ export default function WalkthroughPage() {
         {/* Step 3 */}
         <Step n={3} title="Post the Shipping event">
           <p className="mb-3 text-body text-re-text-secondary">
-            The bagged lot ships to a distributor. This closes the chain for this lot.
+            Post a Shipping CTE when the lot leaves for its next destination. Set{' '}
+            <code className={CODE}>cte_type</code> to <code className={CODE}>shipping</code> with the same lot code.
+            This closes the chain for the lot.
           </p>
-          <CodeBlock language="bash" code={INGEST_WALKTHROUGH_SHIPPING_CURL_SAMPLE} />
+          <CodeBlock language="bash" code={INGEST_CURL_SAMPLE} />
         </Step>
 
         {/* Step 4 */}
@@ -148,7 +147,7 @@ export default function WalkthroughPage() {
             /dashboard/compliance</Link>. You should see:
           </p>
           <ul className="list-disc space-y-1 pl-5 text-ui text-re-text-secondary marker:text-re-text-muted">
-            <li>3 events in your workspace, with lot codes that start <code className={CODE}>{WALKTHROUGH_RECEIVED_LOT}</code></li>
+            <li>3 events in your workspace, with the lot codes you posted</li>
             <li>The traceability lot code visible in the events list</li>
             <li>A compliance score (early-stage; will improve as more lots flow through)</li>
           </ul>
@@ -168,7 +167,7 @@ export default function WalkthroughPage() {
             code={`curl -G https://regengine.co/api/v1/fda/export \\
   -H "X-RegEngine-API-Key: $REGENGINE_API_KEY" \\
   -d "tenant_id=YOUR_WORKSPACE_ID" \\
-  -d "tlc=${WALKTHROUGH_BAGGED_LOT}" \\
+  -d "tlc=<the lot code you shipped>" \\
   -d "format=csv" \\
   -o lot-export.csv
 
@@ -207,8 +206,8 @@ head -20 lot-export.csv`}
           <ul className="mt-3 list-none border-t border-re-border-subtle p-0">
             {filterExperimentalToolLinks([
               { title: 'Try a Recall Drill', desc: 'Simulate an FDA recall request against the data you just posted', href: '/dashboard/recall-drills' },
-              { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through Inflow Workbench preflight', href: '/tools/inflow-lab' },
-              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/docs/connectors/inflow-lab' },
+              { title: 'CSV Bulk Ingest', desc: 'Upload a real supplier CSV through the Data Import Hub', href: '/tools/data-import' },
+              { title: 'EPCIS intake (Preview)', desc: 'Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview on the Ingest page.', href: '/ingest' },
             ]).map(({ title, desc, href }) => (
               <li key={href}>
                 <Link

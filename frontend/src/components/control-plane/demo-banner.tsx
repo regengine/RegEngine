@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Callout } from '@/components/ui/callout';
 
 export function DemoBanner({ visible }: { visible: boolean }) {
@@ -7,8 +8,11 @@ export function DemoBanner({ visible }: { visible: boolean }) {
   return (
     <Callout tone="warning" role="status">
       <span>
-        <strong className="font-medium text-re-text-primary">Sample Data</strong>: Backend unavailable.
-        Data will appear once services are connected.
+        <strong className="font-medium text-re-text-primary">No data yet</strong>: nothing
+        is connected for this view yet.{' '}
+        <Link href="/ingest" className="underline hover:no-underline">
+          Connect real data on the Ingest page
+        </Link>
       </span>
     </Callout>
   );
