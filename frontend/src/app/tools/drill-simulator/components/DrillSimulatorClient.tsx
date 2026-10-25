@@ -523,7 +523,7 @@ STATUS: ${
                             </div>
                             <Badge tone="info">{gapSummary}</Badge>
                             <p className="mt-2 text-small text-re-text-tertiary">
-                                Self-check on the records you uploaded. Not a compliance verdict.
+                                Self-check on the records analyzed. Not a compliance verdict.
                             </p>
                         </div>
                     </Card>
@@ -601,7 +601,7 @@ STATUS: ${
                                 <ScoreCircle score={result.scores.overallScore} />
                                 <Badge tone="info" className="mt-3">{gapSummary}</Badge>
                                 <p className="mt-2 text-center text-small text-re-text-tertiary">
-                                    Self-check on the records you uploaded. Not a compliance verdict.
+                                    Self-check on the records analyzed. Not a compliance verdict.
                                 </p>
                             </div>
                             <div className="space-y-4">
