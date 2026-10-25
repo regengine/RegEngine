@@ -82,12 +82,29 @@ function rewriteToBaseOrigin(loc: string, baseOrigin: string): string {
     }
 }
 
+/** Decode XML entities in a <loc> value; &amp; is decoded last. */
+function decodeXmlEntities(value: string): string {
+    return value
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_m: string, hex: string) =>
+            String.fromCodePoint(parseInt(hex, 16)),
+        )
+        .replace(/&#([0-9]+);/g, (_m: string, dec: string) =>
+            String.fromCodePoint(parseInt(dec, 10)),
+        )
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
+}
+
 /** Extract <loc> values from a sitemap or sitemap-index document. */
 function parseLocs(xml: string): string[] {
     const locs: string[] = [];
     const re = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
     let match: RegExpExecArray | null;
-    while ((match = re.exec(xml)) !== null) locs.push(match[1].trim());
+    while ((match = re.exec(xml)) !== null)
+        locs.push(decodeXmlEntities(match[1].trim()));
     return locs;
 }
 
@@ -109,11 +126,13 @@ async function fetchSitemapPaths(page: Page, baseOrigin: string): Promise<string
     if (locs.length > 0 && locs.every((loc) => isSitemapUrl(loc))) {
         const childPaths: string[] = [];
         for (const loc of locs) {
-            const response = await page.request.get(rewriteToBaseOrigin(loc, baseOrigin), {
+            const childUrl = rewriteToBaseOrigin(loc, baseOrigin);
+            const response = await page.request.get(childUrl, {
                 timeout: LINK_TIMEOUT_MS,
                 maxRedirects: 5,
             });
-            if (!response.ok()) continue;
+            if (!response.ok())
+                throw new Error(`child sitemap GET failed: ${childUrl} status ${response.status()}`);
             childPaths.push(...parseLocs(await response.text()));
         }
         locs = childPaths;
@@ -130,6 +149,7 @@ async function fetchSitemapPaths(page: Page, baseOrigin: string): Promise<string
         // Rewrite to the base URL's origin so preview runs crawl the preview.
         paths.add(url.pathname + (url.search || ''));
     }
+    if (paths.size === 0) throw new Error('sitemap has no usable page URLs');
     return [...paths].sort();
 }
 
@@ -265,8 +285,11 @@ test('crawl sitemap pages for broken links, dead ends, and errors', async ({
                 .evaluateAll((anchors) =>
                     anchors.map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
                 );
+            const normalizedPageUrl = normalizeLink(pageUrl, pageUrl, baseOrigin);
             for (const href of scopedHrefs) {
-                if (normalizeLink(href, pageUrl, baseOrigin)) scopedSameOrigin += 1;
+                const scopedTarget = normalizeLink(href, pageUrl, baseOrigin);
+                if (scopedTarget && scopedTarget !== normalizedPageUrl)
+                    scopedSameOrigin += 1;
             }
             for (const href of hrefs) {
                 const target = normalizeLink(href, pageUrl, baseOrigin);
