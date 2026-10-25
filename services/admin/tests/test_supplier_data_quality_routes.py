@@ -92,8 +92,11 @@ def calls():
     return []
 
 
-def _client(monkeypatch, calls, tenant=TENANT, session=None):
+def _client(monkeypatch, calls, tenant=TENANT, session=None, role=None):
     import app.supplier_compliance_routes as routes
+
+    # Membership role of the caller in the bound tenant; None means no membership.
+    monkeypatch.setattr(routes, "_get_user_role_name", lambda _tenant, _user, _db: role)
 
     session = session if session is not None else FakeSession()
 
@@ -252,38 +255,65 @@ def test_drilldown_rejects_bad_facility_id_and_limit(monkeypatch, calls):
 
 
 def _hours_url(facility) -> str:
-    return f"/v1/supplier/facilities/{facility}/agreed-sending-hours"
+    return f"/v1/supplier/admin/facilities/{facility}/agreed-sending-hours"
 
 
-def test_owner_sets_agreed_sending_hours(monkeypatch, calls):
+def _admin_role() -> str:
+    from app.tenant_settings_routes import _ADMIN_ROLE_NAMES
+
+    return sorted(_ADMIN_ROLE_NAMES)[0]
+
+
+def _admin(monkeypatch, calls, **kwargs):
+    return _client(monkeypatch, calls, role=_admin_role(), **kwargs)
+
+
+@pytest.mark.parametrize("facility", [OWN_FACILITY, FOREIGN_FACILITY])
+def test_tenant_admin_sets_agreed_sending_hours_for_any_facility_in_tenant(monkeypatch, calls, facility):
     session = FakeSession()
-    resp = _client(monkeypatch, calls, session=session).put(
-        _hours_url(OWN_FACILITY), json={"agreed_sending_hours": AGREED_HOURS}
-    )
+    resp = _admin(monkeypatch, calls, session=session).put(_hours_url(facility), json={"agreed_sending_hours": AGREED_HOURS})
     assert resp.status_code == 200
-    assert resp.json() == {"facility_id": str(OWN_FACILITY), "agreed_sending_hours": AGREED_HOURS}
-    assert session.facilities[OWN_FACILITY].agreed_sending_hours == AGREED_HOURS
+    assert resp.json() == {"facility_id": str(facility), "agreed_sending_hours": AGREED_HOURS}
+    assert session.facilities[facility].agreed_sending_hours == AGREED_HOURS
     assert session.commits == len([resp])
 
 
-def test_owner_clears_agreed_sending_hours_with_null(monkeypatch, calls):
+def test_tenant_admin_clears_agreed_sending_hours_with_null(monkeypatch, calls):
     session = FakeSession(own_hours=AGREED_HOURS)
-    resp = _client(monkeypatch, calls, session=session).put(
-        _hours_url(OWN_FACILITY), json={"agreed_sending_hours": None}
-    )
+    resp = _admin(monkeypatch, calls, session=session).put(_hours_url(OWN_FACILITY), json={"agreed_sending_hours": None})
     assert resp.status_code == 200
     assert resp.json()["agreed_sending_hours"] is None
     assert session.facilities[OWN_FACILITY].agreed_sending_hours is None
 
 
-@pytest.mark.parametrize("facility", [FOREIGN_FACILITY, OTHER_TENANT_FACILITY])
-def test_agreed_sending_hours_refuses_facility_not_owned_in_tenant(monkeypatch, calls, facility):
+@pytest.mark.parametrize("role", [None, "Member", "Viewer", "supplier"])
+def test_supplier_user_cannot_set_agreed_sending_hours(monkeypatch, calls, role):
+    # The supplier owns OWN_FACILITY and is still refused: the setting is the tenant's.
     session = FakeSession()
-    resp = _client(monkeypatch, calls, session=session).put(
-        _hours_url(facility), json={"agreed_sending_hours": AGREED_HOURS}
+    resp = _client(monkeypatch, calls, session=session, role=role).put(
+        _hours_url(OWN_FACILITY), json={"agreed_sending_hours": AGREED_HOURS}
+    )
+    assert resp.status_code == 403
+    assert session.facilities[OWN_FACILITY].agreed_sending_hours is None
+    assert session.commits == 0
+
+
+def test_old_supplier_write_path_is_gone(monkeypatch, calls):
+    session = FakeSession()
+    resp = _client(monkeypatch, calls, session=session, role=_admin_role()).put(
+        f"/v1/supplier/facilities/{OWN_FACILITY}/agreed-sending-hours", json={"agreed_sending_hours": AGREED_HOURS}
+    )
+    assert resp.status_code in (404, 405)
+    assert session.commits == 0
+
+
+def test_admin_of_another_tenant_gets_404(monkeypatch, calls):
+    session = FakeSession()
+    resp = _admin(monkeypatch, calls, session=session).put(
+        _hours_url(OTHER_TENANT_FACILITY), json={"agreed_sending_hours": AGREED_HOURS}
     )
     assert resp.status_code == 404
-    assert session.facilities[facility].agreed_sending_hours is None
+    assert session.facilities[OTHER_TENANT_FACILITY].agreed_sending_hours is None
     assert session.commits == 0
 
 
@@ -303,7 +333,7 @@ def test_agreed_sending_hours_refuses_facility_not_owned_in_tenant(monkeypatch, 
 )
 def test_agreed_sending_hours_must_be_positive_int_or_null(monkeypatch, calls, body):
     session = FakeSession()
-    resp = _client(monkeypatch, calls, session=session).put(_hours_url(OWN_FACILITY), json=body)
+    resp = _admin(monkeypatch, calls, session=session).put(_hours_url(OWN_FACILITY), json=body)
     assert resp.status_code == 422
     assert session.facilities[OWN_FACILITY].agreed_sending_hours is None
     assert session.commits == 0
@@ -311,5 +341,5 @@ def test_agreed_sending_hours_must_be_positive_int_or_null(monkeypatch, calls, b
 
 def test_agreed_sending_hours_rejects_bad_id_and_missing_tenant(monkeypatch, calls):
     body = {"agreed_sending_hours": AGREED_HOURS}
-    assert _client(monkeypatch, calls).put(_hours_url("not-a-uuid"), json=body).status_code == 400
-    assert _client(monkeypatch, calls, tenant=None).put(_hours_url(OWN_FACILITY), json=body).status_code == 400
+    assert _admin(monkeypatch, calls).put(_hours_url("not-a-uuid"), json=body).status_code == 400
+    assert _admin(monkeypatch, calls, tenant=None).put(_hours_url(OWN_FACILITY), json=body).status_code == 403

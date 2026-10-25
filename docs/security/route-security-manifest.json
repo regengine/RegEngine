@@ -2775,6 +2775,19 @@
       "test_adapter": "workload_metrics_key"
     },
     {
+      "operation": "admin:PUT:/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours",
+      "owner": "admin",
+      "method": "PUT",
+      "path": "/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "tenant.admin"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
       "operation": "admin:POST:/v1/supplier/bulk-upload/commit",
       "owner": "admin",
       "method": "POST",
@@ -2952,19 +2965,6 @@
       "authentication": "bearer-token-or-opaque-session-cookie",
       "required_permissions": [
         "owner"
-      ],
-      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
-      "test_adapter": "tenant_dual_session_csrf"
-    },
-    {
-      "operation": "admin:PUT:/v1/supplier/facilities/{facility_id}/agreed-sending-hours",
-      "owner": "admin",
-      "method": "PUT",
-      "path": "/v1/supplier/facilities/{facility_id}/agreed-sending-hours",
-      "classification": "tenant-scoped",
-      "authentication": "bearer-token-or-opaque-session-cookie",
-      "required_permissions": [
-        "authenticated"
       ],
       "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
       "test_adapter": "tenant_dual_session_csrf"

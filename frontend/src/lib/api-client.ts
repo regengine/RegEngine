@@ -893,7 +893,7 @@ class APIClient {
     agreedSendingHours: number | null,
   ): Promise<AgreedSendingHoursResponse> {
     const { data } = await this.adminClient.put<AgreedSendingHoursResponse>(
-      `/v1/supplier/facilities/${encodeURIComponent(facilityId)}/agreed-sending-hours`,
+      `/v1/supplier/admin/facilities/${encodeURIComponent(facilityId)}/agreed-sending-hours`,
       { agreed_sending_hours: agreedSendingHours },
     );
     return data;
