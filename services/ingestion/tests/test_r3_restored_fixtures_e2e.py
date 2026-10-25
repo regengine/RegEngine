@@ -7,7 +7,8 @@ format is covered by 21 CFR 1.1455(c)(3)(ii).
 
 Fixtures were restored byte-for-byte under C.Lee's scoped exception to the
 real-data-only rule:
-- ``sample_data/01_harvesting.csv`` (from a0911dc6^)
+- ``services/ingestion/tests/fixtures/01_harvesting.csv`` (originally
+  ``sample_data/01_harvesting.csv``, from a0911dc6^)
 - ``services/ingestion/tests/fixtures/edi_corpus/asn_856.edi`` and
   ``asn_856.expected.json`` (from 2a8f4887^)
 
@@ -28,7 +29,6 @@ from pathlib import Path
 import pytest
 
 SERVICE = Path(__file__).resolve().parents[1]
-REPO = SERVICE.parents[1]
 sys.path.insert(0, str(SERVICE))
 
 from app.csv_templates import parse_csv_rows  # noqa: E402
@@ -45,7 +45,7 @@ from shared.data_gap_tracking import (  # noqa: E402
     gaps_from_kde_errors,
 )
 
-CSV_FIXTURE = REPO / "sample_data" / "01_harvesting.csv"
+CSV_FIXTURE = SERVICE / "tests" / "fixtures" / "01_harvesting.csv"
 EDI_DIR = SERVICE / "tests" / "fixtures" / "edi_corpus"
 SLA = timedelta(hours=24)  # 21 CFR 1.1455(c)(1)
 
