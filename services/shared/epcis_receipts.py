@@ -45,13 +45,22 @@ _INSERT_SQL = text(
     """
 )
 
+# One vote per document: a client that retries the same body files one
+# receipt per attempt, so counting rows would inflate ``epcis_failed``. Each
+# (tenant, document_sha256) counts once, with the status of its latest
+# receipt in the window, so a rejected upload that is fixed and resent with
+# the same bytes still counts once. Every receipt row stays for audit.
 _COUNTS_SQL = text(
     """
     SELECT count(*) FILTER (WHERE status = 'rejected') AS rejected,
            count(*) AS total
-      FROM fsma.epcis_document_receipts
-     WHERE tenant_id = CAST(:tid AS uuid)
-       AND received_at >= :since
+      FROM (
+            SELECT DISTINCT ON (document_sha256) status
+              FROM fsma.epcis_document_receipts
+             WHERE tenant_id = CAST(:tid AS uuid)
+               AND received_at >= :since
+             ORDER BY document_sha256, received_at DESC, id DESC
+           ) AS latest_per_document
     """
 )
 
@@ -147,7 +156,9 @@ def record_epcis_receipt(
 
 
 def fetch_receipt_counts(db_session: Any, tenant_id: str, since: datetime) -> Optional[tuple[int, int]]:
-    """(rejected, total) receipts for the tenant since ``since``.
+    """(rejected, total) distinct documents for the tenant since ``since``.
+
+    Retries of the same body count once, using the latest receipt's status.
 
     Runs in a savepoint and returns None when the table cannot be read (for
     example before alembic v137 is applied), so the caller's transaction and
