@@ -70,7 +70,10 @@ describe('#3554 empty states and hidden sample artifacts', () => {
     it('CTE pages ask for the user\'s own file, not a sample', () => {
         const src = read('src/app/fsma-204/[cte]/page.tsx');
         expect(src).not.toContain('Upload a sample');
-        expect(src).toContain('Upload your {data.name.toLowerCase()} file');
+        // After merging main (#3557 retired /sandbox), the closing CTA copy comes from
+        // sandboxCta().blurb, which asks for the user's own records and links /ingest.
+        expect(src).toContain('{cta.blurb}');
+        expect(src).not.toContain('sandbox and get an instant');
         expect(src).not.toContain('data to the sandbox');
         expect(src).toMatch(/data to\{" "\}\s*<Link href="\/ingest"[^>]*>RegEngine<\/Link>/);
     });

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButton';
 import { MARKETING_FOOTER_PRODUCT_LINKS } from '@/components/layout/marketing-nav';
 import { EmailGate } from '@/components/tools/EmailGate';
-import { ARCHIVE_EXPORT_JOBS } from '@/lib/customer-readiness';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 const mocks = vi.hoisted(() => ({
@@ -161,13 +160,5 @@ describe('public site launch-blocker fixes', () => {
 
     it('keeps the hidden case-studies route out of the footer', () => {
         expect(MARKETING_FOOTER_PRODUCT_LINKS.map((link) => link.href)).not.toContain('/case-studies');
-    });
-
-    it('keeps public archive posture dates current for the demo workspace', () => {
-        for (const job of ARCHIVE_EXPORT_JOBS) {
-            expect(job.lastRun).not.toContain('2026-03');
-            expect(job.nextRun).not.toContain('2026-03');
-            expect(job.nextRun).not.toContain('2026-04');
-        }
     });
 });

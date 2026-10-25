@@ -465,9 +465,16 @@ export default function TrustCenterPage() {
                     <Card className="p-5">
                         <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">Scheduled exports</h2>
                         <p className="mb-4 text-ui text-re-text-secondary">
-                            Hashing, manifests, run history, and scheduled delivery depend on the configured
-                            workflow and customer agreement.
+                            Hashing, manifests, run history, and scheduled delivery depend on the
+                            configured workflow and customer agreement.
                         </p>
+                        <Card variant="inset" padding="compact">
+                            <div className="text-subheading text-re-text-primary">No data yet</div>
+                            <p className="mt-2 text-ui text-re-text-secondary">
+                                No public export-job configurations are published. Scheduled exports are
+                                configured per workspace.
+                            </p>
+                        </Card>
                         <Link href="/dashboard/export-jobs" className={`mt-4 inline-block text-ui ${PROSE_LINK}`}>
                             Open export jobs →
                         </Link>

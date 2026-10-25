@@ -398,8 +398,6 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
     },
 ];
 
-export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [];
-
 export const MAPPING_REVIEW_ITEMS: MappingReviewItem[] = [
     {
         id: 'map_po_001',

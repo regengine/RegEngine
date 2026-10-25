@@ -20,6 +20,12 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from shared.data_gap_tracking import (
+    ValidationOutcome,
+    gap_from_rule_reason,
+    gaps_from_kde_errors,
+    record_outcomes,
+)
 from shared.database import get_db_session
 from shared.idempotency import IdempotencyDependency
 from sqlalchemy.exc import SQLAlchemyError
@@ -141,6 +147,11 @@ async def ingest_events(
     # Batch deduplication — detect identical events within the same payload
     seen_in_batch: set[str] = set()
 
+    # Data gap time to fix: validation outcomes queued during the request and
+    # written after the ingest commit (fail-open, never blocks ingest).
+    gap_outcomes: list[ValidationOutcome] = []
+    event_order = {id(e): i for i, e in enumerate(payload.events)}
+
     # Get persistence layer from injected db_session (Depends(get_db_session))
     persistence = None
     if db_session is None:
@@ -215,6 +226,14 @@ async def ingest_events(
                     )
                 )
                 rejected += 1
+                gap_outcomes.append(
+                    ValidationOutcome(
+                        order=event_order[id(event)],
+                        lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        gaps=gaps_from_kde_errors(errors),
+                    )
+                )
                 continue
 
             # Generate alerts
@@ -250,6 +269,14 @@ async def ingest_events(
                         )
                     )
                     rejected += 1
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_order[id(_event)],
+                            lot_code=_event.traceability_lot_code,
+                            cte_type=_event.cte_type.value,
+                            gaps=(gap_from_rule_reason(_reason),),
+                        )
+                    )
                     continue
                 _filtered.append((_event, _alerts))
                 pre_eval_summaries.append(_summary)
@@ -292,6 +319,7 @@ async def ingest_events(
             # recorded above.
             _pre_batch_results_len = len(results)
             _pre_batch_accepted = accepted
+            _pre_batch_gap_outcomes_len = len(gap_outcomes)
 
             try:
                 store_results = persistence.store_events_batch(
@@ -314,6 +342,15 @@ async def ingest_events(
                     accepted += 1
                     # Billed below, only after db_session.commit() succeeds.
                     billable_event_ids.append(store_result.event_id)
+                    gap_outcomes.append(
+                        ValidationOutcome(
+                            order=event_order[id(event)],
+                            lot_code=event.traceability_lot_code,
+                            cte_type=event.cte_type.value,
+                            closing_record_id=store_result.event_id,
+                            closing_record_hash=store_result.sha256_hash,
+                        )
+                    )
 
                     # Tenant-configured obligation-CTE rules (#2901). Runs
                     # after the store because it keys its fsma.compliance_alerts
@@ -385,6 +422,7 @@ async def ingest_events(
                 # for the same physical label -- bypassing the
                 # UNIQUE(tenant_id, cte_event_id) idempotency guard entirely.
                 del results[_pre_batch_results_len:]
+                del gap_outcomes[_pre_batch_gap_outcomes_len:]
                 accepted = _pre_batch_accepted
                 billable_event_ids.clear()
                 # Fall back to per-event persistence
@@ -407,6 +445,14 @@ async def ingest_events(
                             )
                         )
                         rejected += 1
+                        gap_outcomes.append(
+                            ValidationOutcome(
+                                order=event_order[id(event)],
+                                lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                gaps=(gap_from_rule_reason(_fb_reason),),
+                            )
+                        )
                         continue
                     # Each event gets its own savepoint (same pattern as the
                     # webhook_compat v1 path) so one event's storage failure
@@ -467,6 +513,15 @@ async def ingest_events(
                         # releases the nested savepoint; it does not make
                         # this row durable against a later outer rollback.
                         billable_event_ids.append(store_result.event_id)
+                        gap_outcomes.append(
+                            ValidationOutcome(
+                                order=event_order[id(event)],
+                                lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                closing_record_id=store_result.event_id,
+                                closing_record_hash=store_result.sha256_hash,
+                            )
+                        )
 
                         _pkg._publish_graph_sync(store_result.event_id, event, tenant_id)
                         try:
@@ -523,6 +578,10 @@ async def ingest_events(
         # Commit all events in a single transaction
         if db_session:
             db_session.commit()
+
+        # Data gap time to fix. After the commit so closes reference durable
+        # records; record_outcomes catches and logs its own errors.
+        record_outcomes(db_session, tenant_id, gap_outcomes)
 
     except Exception as e:
         if db_session:
