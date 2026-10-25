@@ -28,6 +28,11 @@ logger = structlog.get_logger("fsma-utils")
 # facility on each row, i.e. by fabricating the association. This query
 # re-reads the (lot, event, facility) edges for the nodes the traversal
 # already returned, so the association survives to the exporter.
+# SEL-515: every capped trace query uses ``LIMIT 5000``. A query that returns
+# this many records may have been cut off, so the result is flagged
+# ``truncated`` (partial result, not a 413).
+TRACE_ROW_LIMIT = 5000
+
 _TRACE_ROWS_QUERY = """
 MATCH (l:Lot)-[:UNDERWENT|PRODUCED|CONSUMED]-(e:TraceEvent)
 WHERE l.tenant_id = $tenant_id
@@ -313,6 +318,21 @@ def _take_follow_up_facility(
     )
 
 
+def _truncation(path_records: int, trace_rows: List[Dict[str, Any]], *, direction: str, tlc: str) -> Dict[str, Any]:
+    """SEL-515: flag a trace whose capped queries hit ``TRACE_ROW_LIMIT``."""
+    truncated = path_records >= TRACE_ROW_LIMIT or len(trace_rows or []) >= TRACE_ROW_LIMIT
+    if truncated:
+        logger.warning(
+            "trace_truncated_at_cap",
+            direction=direction,
+            tlc=tlc,
+            path_records=path_records,
+            trace_rows=len(trace_rows or []),
+            limit=TRACE_ROW_LIMIT,
+        )
+    return {"truncated": truncated, "truncation_limit": TRACE_ROW_LIMIT if truncated else None}
+
+
 async def trace_forward(
     client: Neo4jClient,
     tlc: str,
@@ -446,6 +466,7 @@ async def trace_forward(
     seen_events = set()
     seen_lots = set()
     running = {"max_hops": 0, "total_quantity": 0.0}
+    path_records = 0
 
     # Use time-filtered query if enforcing time arrow
     active_query = query if enforce_time_arrow else query_no_time_filter
@@ -454,6 +475,7 @@ async def trace_forward(
         result = await session.run(active_query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
+            path_records += 1
             _take_path_node(
                 record,
                 tenant_id=tenant_id,
@@ -593,6 +615,7 @@ async def trace_forward(
         time_violations=time_violations if time_violations else None,
         risk_flags=risk_flags if risk_flags else None,
         trace_rows=trace_rows or None,
+        **_truncation(path_records, trace_rows, direction="forward", tlc=tlc),
     )
 
 
@@ -705,11 +728,13 @@ async def trace_backward(
     seen_events = set()
     seen_lots = set()
     running = {"max_hops": 0, "total_quantity": 0.0}
+    path_records = 0
 
     async with client.session() as session:
         result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
+            path_records += 1
             _take_path_node(
                 record,
                 tenant_id=tenant_id,
@@ -785,4 +810,5 @@ async def trace_backward(
         query_time_ms=round(query_time, 2),
         hop_count=max_hops,
         trace_rows=trace_rows or None,
+        **_truncation(path_records, trace_rows, direction="backward", tlc=tlc),
     )
