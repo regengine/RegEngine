@@ -30,6 +30,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -60,8 +61,8 @@ _UNIVERSAL_FIELDS = {"traceability_lot_code", "product_description", "quantity",
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
-# Test-only value for the HMAC check below. It is not a credential.
-_TEST_SIGNING_SECRET = "docs-sample-signing-secret"  # pragma: allowlist secret
+# HMAC key for the signature checks below, generated per run.
+_TEST_SIGNING_SECRET = secrets.token_hex(32)
 
 
 @pytest.fixture(autouse=True)
