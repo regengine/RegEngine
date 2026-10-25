@@ -68,7 +68,7 @@ const lateMeasured = summary(
     AGREED_HOURS,
 );
 
-function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false, onSendingHoursSaved?: () => void) {
+function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailable = false) {
     return render(
         <DataQuality
             facilityId={FACILITY_ID}
@@ -77,7 +77,6 @@ function renderQuality(data: SupplierDataQuality | null = fourMetrics, unavailab
             windowDays={WINDOW_DAYS}
             minRecords={MIN_RECORDS}
             lateCteLabel={LATE_LABEL}
-            onSendingHoursSaved={onSendingHoursSaved}
         />,
     );
 }
@@ -266,50 +265,13 @@ describe('DataQuality', () => {
         expect(screen.queryByRole('button', { name: 'View records' })).not.toBeInTheDocument();
     });
 
-    it('saves a new agreed sending time and reloads the measures', async () => {
-        const onSaved = vi.fn();
-        mocks.setFacilityAgreedSendingHours.mockResolvedValueOnce({
-            facility_id: FACILITY_ID,
-            agreed_sending_hours: AGREED_HOURS,
-        });
-        renderQuality(summary([fourMetrics.metrics[2]]), false, onSaved);
-
-        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
-        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: String(AGREED_HOURS) } });
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-        await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-        expect(mocks.setFacilityAgreedSendingHours).toHaveBeenCalledWith(FACILITY_ID, AGREED_HOURS);
-    });
-
-    it.each(['0', `-${AGREED_HOURS}`, `${AGREED_HOURS}.5`, ''])('refuses %j as an agreed sending time', (draft) => {
-        renderQuality(summary([fourMetrics.metrics[2]]));
-        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
-        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: draft } });
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-        expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number of hours above zero');
+    it.each([null, AGREED_HOURS])('shows the agreed sending time %j read only, with no way to change it', (hours) => {
+        renderQuality(summary([fourMetrics.metrics[2]], hours));
+        expect(screen.getByText('Set by your customer')).toBeInTheDocument();
+        for (const name of ['Set', 'Edit', 'Save', 'Clear']) {
+            expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+        }
+        expect(screen.queryByLabelText('Hours after the event')).not.toBeInTheDocument();
         expect(mocks.setFacilityAgreedSendingHours).not.toHaveBeenCalled();
-    });
-
-    it('clears the agreed sending time with null', async () => {
-        const onSaved = vi.fn();
-        mocks.setFacilityAgreedSendingHours.mockResolvedValueOnce({ facility_id: FACILITY_ID, agreed_sending_hours: null });
-        renderQuality(lateMeasured, false, onSaved);
-        fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-        expect(screen.getByLabelText('Hours after the event')).toHaveValue(AGREED_HOURS);
-        fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-        await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-        expect(mocks.setFacilityAgreedSendingHours).toHaveBeenCalledWith(FACILITY_ID, null);
-    });
-
-    it('says so when saving the agreed sending time fails', async () => {
-        const onSaved = vi.fn();
-        mocks.setFacilityAgreedSendingHours.mockRejectedValueOnce(new Error(crypto.randomUUID()));
-        renderQuality(summary([fourMetrics.metrics[2]]), false, onSaved);
-        fireEvent.click(screen.getByRole('button', { name: 'Set' }));
-        fireEvent.change(screen.getByLabelText('Hours after the event'), { target: { value: String(AGREED_HOURS) } });
-        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-        await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('The agreed sending time could not be saved'));
-        expect(onSaved).not.toHaveBeenCalled();
     });
 });

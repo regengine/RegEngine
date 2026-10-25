@@ -910,7 +910,6 @@ export default function SupplierDashboardPage() {
                                                     windowDays={dataQuality?.window_days ?? 30}
                                                     minRecords={dataQuality?.min_records ?? 20}
                                                     lateCteLabel={dataQuality?.late_cte_label ?? ''}
-                                                    onSendingHoursSaved={loadDataQuality}
                                                 />
                                             )}
                                             {comp.gaps.length > 0 && (
