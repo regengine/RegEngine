@@ -336,9 +336,7 @@ export default function ArchitecturePage() {
                     </div>
                     <p className="mx-auto mt-6 max-w-[68ch] text-ui text-re-text-secondary">
                         Verify supported evidence export bundles yourself: drop a supported bundle into{' '}
-                        <Link href="/verify" className={PROSE_LINK}>/verify</Link>{' '}
-                        or download a synthetic sample at{' '}
-                        <Link href="/proof" className={PROSE_LINK}>/proof</Link>.
+                        <Link href="/verify" className={PROSE_LINK}>/verify</Link>.
                     </p>
                 </div>
             </Section>
