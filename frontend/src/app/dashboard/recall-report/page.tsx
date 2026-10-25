@@ -26,9 +26,7 @@ import {
     AlertTriangle,
     ArrowUp,
     Play,
-    MapPin,
     Clock,
-    CheckCircle2,
     Info,
     ChevronDown,
     ChevronUp,
@@ -59,7 +57,7 @@ interface RecallReport {
     executive_summary: string;
     action_items: Array<{ priority: string; action: string; impact: string; effort: string }>;
     demo_mode: boolean;
-    demo_disclaimer?: string | null;
+    demo_disclaimer: string | null;
 }
 
 /* ── Icon + tone mappings ── */
@@ -85,42 +83,14 @@ const DIMENSION_ICONS: Record<string, React.ElementType> = {
 const NOTICE_BASE =
     'flex gap-3 rounded-md border border-l-[3px] border-re-border px-4 py-3 text-ui text-re-text-secondary';
 
-/* ── Demo Fallback Data (shown only when demo_mode=true from API) ── */
-
-const DEMO_INVESTIGATION = {
-    scenario: 'Romaine Lettuce (E. coli O157:H7)',
-    initiated: '2026-03-15T08:30:00Z',
-    response_time_hours: 4.2,
-    sla_target: 24,
-    lots_at_risk: 12,
-    suppliers_impacted: 3,
-    facilities_in_chain: 8,
-    consumers_potentially_affected: '~2,400',
-    total_quantity: '18,200 lbs',
-};
-
-const DEMO_AFFECTED_LOTS = [
-    { tlc: 'LOT-ROM-2026-0312A', product: 'Organic Romaine Hearts', facility: 'Salinas Valley Farms', status: 'traced', cte_count: 6, last_event: 'Retail Distribution', risk: 'high' },
-    { tlc: 'LOT-ROM-2026-0312B', product: 'Chopped Romaine Mix', facility: 'FreshCut Processing', status: 'traced', cte_count: 5, last_event: 'Transformation', risk: 'high' },
-    { tlc: 'LOT-ROM-2026-0311C', product: 'Romaine Hearts 3-Pack', facility: 'Salinas Valley Farms', status: 'traced', cte_count: 4, last_event: 'Shipping', risk: 'medium' },
-    { tlc: 'LOT-ROM-2026-0310D', product: 'Organic Romaine Bulk', facility: 'Pacific Coast Growers', status: 'partial', cte_count: 3, last_event: 'Receiving', risk: 'medium' },
-    { tlc: 'LOT-ROM-2026-0309E', product: 'Romaine Salad Kit', facility: 'FreshCut Processing', status: 'partial', cte_count: 2, last_event: 'Transformation', risk: 'low' },
-];
-
 /* ── Helpers ── */
 
 /** Grade as a badge tone. Numbers stay ink; only the grade pill carries colour. */
 function gradeTone(grade: string): BadgeTone {
     if (grade === 'A' || grade === 'B') return 'success';
     if (grade === 'C') return 'warning';
-    if (grade === '—') return 'neutral';
+    if (grade === '—' || grade === 'N/A') return 'neutral';
     return 'danger';
-}
-
-function riskTone(risk: string): BadgeTone {
-    if (risk === 'high') return 'danger';
-    if (risk === 'medium') return 'warning';
-    return 'success';
 }
 
 function priorityTone(priority: string): BadgeTone {
@@ -157,18 +127,19 @@ export default function RecallReportPage() {
     }
 
     const isDemo = report?.demo_mode === true;
+    // Backend PR #3536: no recall evidence => status "no_data", score 0,
+    // grade "N/A", demo_mode false, demo_disclaimer null. Treat legacy demo
+    // responses the same way and never render a demo disclaimer.
+    const isNoData = isDemo || report?.overall_status === 'no_data';
     const dimensions = report?.dimensions ?? [];
     const actionItems = report?.action_items ?? [];
     const overallScore = report?.overall_score ?? 0;
     const overallGrade = report?.overall_grade ?? '—';
     // Display-only: the sentinel above feeds gradeTone and the comparisons below;
     // this derived value is what the empty state renders.
-    const overallGradeDisplay = overallGrade === '—' ? NO_DATA_YET : overallGrade;
+    const overallGradeDisplay =
+        overallGrade === '—' || overallGrade === 'N/A' ? NO_DATA_YET : overallGrade;
     const responseTimeStr = report?.time_to_respond_estimate ?? NOT_SET;
-
-    // Demo-mode fallback stats for summary banner
-    const demoSlaPercent = Math.round((DEMO_INVESTIGATION.response_time_hours / DEMO_INVESTIGATION.sla_target) * 100);
-    const gaugeCircumference = 2 * Math.PI * 80;
 
     const handleExport = async () => {
         if (!tenantId) return;
@@ -275,17 +246,6 @@ export default function RecallReportPage() {
                     </div>
                 )}
 
-                {/* Demo notice */}
-                {isDemo && !isLoading && (
-                    <div className={`${NOTICE_BASE} border-l-re-info bg-re-surface-card`}>
-                        <Info className="mt-0.5 h-4 w-4 shrink-0 text-re-info" strokeWidth={1.75} aria-hidden="true" />
-                        <span>
-                            {report?.demo_disclaimer ??
-                                'Sample scenario only. Live recall evidence appears after data and export workflows are connected for this workspace.'}
-                        </span>
-                    </div>
-                )}
-
                 {/* Loading */}
                 {isLoading && (
                     <div className="space-y-4" aria-busy="true">
@@ -303,143 +263,23 @@ export default function RecallReportPage() {
 
                 {!isLoading && (
                     <>
-                        {/* ── DEMO ONLY: Risk Summary Banner ── */}
-                        {isDemo && (
-                            <dl className="grid grid-cols-2 gap-3 md:grid-cols-5">
-                                {[
-                                    { label: 'Lots at Risk', value: DEMO_INVESTIGATION.lots_at_risk },
-                                    { label: 'Suppliers Impacted', value: DEMO_INVESTIGATION.suppliers_impacted },
-                                    { label: 'Facilities in Chain', value: DEMO_INVESTIGATION.facilities_in_chain },
-                                    { label: 'Consumers at Risk', value: DEMO_INVESTIGATION.consumers_potentially_affected },
-                                    { label: 'Response Time', value: `${DEMO_INVESTIGATION.response_time_hours}h` },
-                                ].map((tile) => (
-                                    <Card key={tile.label} padding="compact">
-                                        <dt className="text-label text-re-text-muted">{tile.label}</dt>
-                                        <dd className="mt-2 text-title tabular-nums text-re-text-primary">{tile.value}</dd>
-                                    </Card>
-                                ))}
-                            </dl>
-                        )}
-
-                        {/* ── DEMO ONLY: SLA Gauge + Timeline ── */}
-                        {isDemo && (
-                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                                {/* SLA Gauge */}
-                                <Card>
-                                    <CardHeader>
-                                        <div className="min-w-0">
-                                            <CardTitle>24-Hour Response Status</CardTitle>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="flex flex-col items-center">
-                                        <div className="relative h-36 w-36 sm:h-44 sm:w-44">
-                                            <svg className="h-full w-full -rotate-90 text-re-brand" viewBox="0 0 200 200" aria-hidden="true">
-                                                <circle cx="100" cy="100" r="80" className="stroke-re-border" strokeWidth="10" fill="none" />
-                                                <circle
-                                                    cx="100" cy="100" r="80"
-                                                    stroke="currentColor"
-                                                    strokeWidth="12" fill="none" strokeLinecap="round"
-                                                    strokeDasharray={gaugeCircumference}
-                                                    strokeDashoffset={gaugeCircumference - (demoSlaPercent / 100) * gaugeCircumference}
-                                                />
-                                            </svg>
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                <div className="text-title tabular-nums text-re-text-primary">{DEMO_INVESTIGATION.response_time_hours}h</div>
-                                                <div className="mt-0.5 text-label text-re-text-muted">of 24h SLA</div>
-                                            </div>
-                                        </div>
-                                        <Badge tone="success" size="sm" className="mt-3">
-                                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            SLA Met: {(24 - DEMO_INVESTIGATION.response_time_hours).toFixed(1)}h to spare
-                                        </Badge>
-                                    </CardContent>
-                                </Card>
-
-                                {/* Investigation Timeline */}
-                                <Card className="lg:col-span-2">
-                                    <CardHeader>
-                                        <div className="min-w-0">
-                                            <CardTitle>Investigation Timeline</CardTitle>
-                                            <CardDescription>
-                                                {DEMO_INVESTIGATION.scenario}
-                                            </CardDescription>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-ui text-re-text-secondary">No recall timeline yet.</p>
-                                        <p className="mt-1 text-small text-re-text-tertiary">
-                                            Import records or run a trace to build the event timeline for an investigation.
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        )}
-
-                        {/* ── DEMO ONLY: Affected Lots ── */}
-                        {isDemo && (
-                            <Card>
-                                <CardHeader>
-                                    <div className="min-w-0">
-                                        <CardTitle>Affected Lots ({DEMO_AFFECTED_LOTS.length})</CardTitle>
-                                    </div>
-                                    <span className="shrink-0 font-mono text-label text-re-text-muted">{DEMO_INVESTIGATION.total_quantity} total</span>
-                                </CardHeader>
-                                <CardContent className="p-0">
-                                    <ul className="divide-y divide-re-border-subtle">
-                                        {DEMO_AFFECTED_LOTS.map((lot) => (
-                                            <li
-                                                key={lot.tlc}
-                                                className="flex flex-col gap-2 px-5 py-3 sm:flex-row sm:items-center sm:gap-4"
-                                            >
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="truncate font-mono text-[0.8125rem] text-re-text-primary">{lot.tlc}</div>
-                                                    <div className="truncate text-small text-re-text-tertiary">{lot.product}</div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
-                                                    <span className="flex items-center gap-1 text-small text-re-text-tertiary">
-                                                        <MapPin className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" /> {lot.facility}
-                                                    </span>
-                                                    <Badge size="sm">{lot.cte_count} CTEs</Badge>
-                                                    <Badge tone={riskTone(lot.risk)} size="sm" className="capitalize">
-                                                        {lot.risk}
-                                                    </Badge>
-                                                    <Badge
-                                                        tone={lot.status === 'traced' ? 'success' : 'warning'}
-                                                        size="sm"
-                                                        className="capitalize"
-                                                    >
-                                                        {lot.status === 'traced' ? (
-                                                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                                        ) : (
-                                                            <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                                        )}
-                                                        {lot.status}
-                                                    </Badge>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* ── LIVE ONLY: No Active Recall Empty State ── */}
-                        {!isDemo && (
+                        {/* ── Empty state: API reports no recall evidence (status "no_data") ── */}
+                        {isNoData && (
                             <EmptyState
                                 icon={ShieldCheck}
-                                title="No Active Recall Report"
-                                description={'This drill measures how quickly you could assemble a 24-hour FDA records-request package. Run a recall drill to validate your team’s response speed.'}
+                                title={NO_DATA_YET}
+                                description="Recall evidence appears here after your traceability records are imported."
                                 action={
-                                    <Link href="/dashboard/recall-drills">
-                                        <Button size="sm" leadingIcon={<Play strokeWidth={1.75} aria-hidden="true" />}>
-                                            Run Recall Drill
+                                    <Link href="/tools/data-import">
+                                        <Button size="sm" leadingIcon={<Upload strokeWidth={1.75} aria-hidden="true" />}>
+                                            Import Records
                                         </Button>
                                     </Link>
                                 }
                             />
                         )}
 
-                        {/* ── Readiness Score + Dimensions (always shown, live or demo) ── */}
+                        {/* ── Readiness Score + Dimensions ── */}
                         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                             {/* Overall Score */}
                             <Card>
@@ -450,7 +290,7 @@ export default function RecallReportPage() {
                                             {overallScore}
                                         </span>
                                         <span className="text-ui text-re-text-tertiary">/100</span>
-                                        {overallGrade !== '—' ? (
+                                        {overallGrade !== '—' && overallGrade !== 'N/A' ? (
                                             <Badge tone={gradeTone(overallGrade)}>{overallGrade}</Badge>
                                         ) : (
                                             <span className="text-ui text-re-text-tertiary">{overallGradeDisplay}</span>
@@ -465,7 +305,7 @@ export default function RecallReportPage() {
                                             ? new Date(report.generated_at).toLocaleDateString()
                                             : new Date().toLocaleDateString()}
                                     </div>
-                                    {!isDemo && report?.executive_summary && (
+                                    {report?.executive_summary && (
                                         <p className="mt-3 border-t border-re-border-subtle pt-3 text-small text-re-text-tertiary">
                                             {report.executive_summary}
                                         </p>
@@ -555,7 +395,7 @@ export default function RecallReportPage() {
                                     <div className="min-w-0">
                                         <CardTitle>Prioritized Actions</CardTitle>
                                         <CardDescription>
-                                            {isDemo ? 'Address these to improve recall readiness' : 'Personalized recommendations based on your traceability data'}
+                                            Personalized recommendations based on your traceability data
                                         </CardDescription>
                                     </div>
                                 </CardHeader>

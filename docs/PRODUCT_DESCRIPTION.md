@@ -8,13 +8,13 @@ RegEngine is an API-first FSMA 204 food traceability evidence platform: supplier
 
 ## Product description
 
-RegEngine works alongside an ERP, turning existing food supply-chain records into traceability evidence. It accepts webhook events, CSV uploads, EPCIS documents, and EDI records. Inflow Workbench provides a preparation workflow with preflight checks, readiness scoring, a fix queue, and a commit gate. Direct intake routes have their own validation and persistence paths; not every ingestion request passes through Workbench.
+RegEngine works alongside an ERP, turning existing food supply-chain records into traceability evidence. It accepts webhook events, CSV uploads, and EPCIS documents. Inflow Workbench provides a preparation workflow with preflight checks, readiness scoring, a fix queue, and a commit gate. Direct intake routes have their own validation and persistence paths; not every ingestion request passes through Workbench.
 
 Accepted events are stored with tenant boundaries in PostgreSQL. The platform evaluates versioned rules, records audit evidence, and provides FDA-oriented exports, request-response cases, auditor workflows, and recall readiness reports. Canonical and legacy persistence paths coexist during a documented cutover. Rule enforcement can be advisory or blocking according to configuration and route support.
 
 Optional Jev assistance suggests mappings for unfamiliar CSV columns and a file's CTE when none is declared. Upload screens expose suggestions for operator review. Automatic application defaults off, requests use headers without row samples by default, and model suggestions do not replace deterministic validation. Preview and evaluation tools let operators inspect suggestions before enabling automatic application.
 
-Public synthetic artifacts, a browser verifier, a downloadable Python bundle verifier, and a reproducible recall drill let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
+A browser verifier, a downloadable Python bundle verifier, and a reproducible recall drill let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
 
 ## Capability and availability matrix
 
@@ -22,7 +22,7 @@ Public synthetic artifacts, a browser verifier, a downloadable Python bundle ver
 
 | Capability | Availability and code evidence |
 | --- | --- |
-| Webhook, CSV, EPCIS, and EDI intake; CTE/KDE normalization | Core intake: [webhook routes](../services/ingestion/app/webhook_router_v2/routes.py), [CSV intake](../services/ingestion/app/csv_templates.py), [EPCIS](../services/ingestion/app/epcis/router.py), [EDI](../services/ingestion/app/edi_ingestion/). |
+| Webhook, CSV, and EPCIS intake; CTE/KDE normalization | Core intake: [webhook routes](../services/ingestion/app/webhook_router_v2/routes.py), [CSV intake](../services/ingestion/app/csv_templates.py), [EPCIS](../services/ingestion/app/epcis/router.py). |
 | Inflow Workbench and supplier preflight | Release-enabled: [Workbench](../services/ingestion/app/inflow_workbench.py), [supplier portal](../services/ingestion/app/supplier_portal.py). |
 | Jev CSV header and file-CTE suggestions | Optional integration: [settings and policies](../services/shared/jev/), [configuration and evaluation guide](engineering/JEV_HEADER_MAPPING.md). Requires provider configuration; automatic application is opt-in. |
 | Versioned rules and compliance scores | Release-enabled: [rules engine](../services/shared/rules/engine.py), [compliance validation](../services/compliance/app/routes.py), [score API](../services/ingestion/app/compliance_score.py). Enforcement is configuration-dependent. |
