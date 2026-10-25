@@ -472,7 +472,7 @@ class RegEngineClient:
         """
         Generate FDA-compliant sortable spreadsheet (CSV).
 
-        Per 21 CFR 1.1455(b)(3), produces a spreadsheet within 24 hours
+        Per 21 CFR 1.1455(c)(3)(ii), produces a spreadsheet within 24 hours
         containing all traceability records for the specified lot.
 
         Args:

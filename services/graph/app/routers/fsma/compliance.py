@@ -107,7 +107,7 @@ async def export_fda_request_sheet(
     formatted exactly according to the FDA's Excel template columns:
     [Traceability Lot Code, Product, Quantity, Unit, Location, Date, Time, ...]
 
-    Required by FSMA 204 Section 1.1455(b)(3) - must be provided within 24 hours.
+    Required by FSMA 204 Section 1.1455(c)(3)(ii) - must be provided within 24 hours.
     """
     logger.info("fda_request_export_initiated", start=start_date, end=end_date)
 
