@@ -43,7 +43,7 @@ const capabilities = [
     {
         Icon: FileSpreadsheet,
         title: 'Records Export',
-        description: 'Generate FDA-oriented sortable spreadsheet records and EPCIS 2.0 event exports where the enabled workflow and source data support them.',
+        description: 'Generate FDA-oriented sortable spreadsheet records and EPCIS 2.0 (Preview) event exports where the enabled workflow and source data support them.',
     },
     {
         Icon: BarChart3,
@@ -60,7 +60,7 @@ const capabilities = [
 /* ── SDKs (planned, not yet released) ── */
 
 /* ── Quick-start curl snippet ── */
-/* Rendered from one payload: src/lib/api-samples/ingest-receiving.json. */
+/* Rendered from the shared request-body skeleton in src/lib/api-samples/ingest-samples.ts. */
 const curlSnippet = `${INGEST_ENV_SETUP}
 
 ${INGEST_CURL_SAMPLE}`;

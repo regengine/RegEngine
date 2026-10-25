@@ -40,9 +40,8 @@ export default [
             'react-hooks/immutability': 'error',
             'react-hooks/refs': 'error',
 
-            // Pre-existing <a> tags in src/app/sandbox/results/[id]/SharedSandboxResult.tsx
-            // pointing at /#sandbox. Downgraded to warn to unblock CI; a
-            // separate PR should migrate to next/link.
+            // Downgraded to warn to unblock CI; a separate PR should
+            // migrate any remaining internal <a> tags to next/link.
             '@next/next/no-html-link-for-pages': 'warn',
         },
     },

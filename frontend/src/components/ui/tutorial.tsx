@@ -256,8 +256,8 @@ export function Tutorial({ steps, isOpen, onClose, onComplete, storageKey }: Tut
     : [{ key: 'full', style: { top: 0, left: 0, right: 0, bottom: 0 } }];
 
   // Portaled to <body>: the tour mounts inside arbitrary page containers, and
-  // page-scoped CSS (e.g. the inflow-lab shim styling every direct-child div)
-  // or transformed ancestors would otherwise re-style the fixed overlay.
+  // page-scoped CSS (e.g. a page shim styling every direct-child div) or
+  // transformed ancestors would otherwise re-style the fixed overlay.
   return createPortal(
     <>
       {backdropPanels.map((panel) => (
