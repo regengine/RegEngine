@@ -6,11 +6,9 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
     AlertTriangle,
     ArrowDownToLine,
-    CalendarDays,
     CheckCircle2,
     ClipboardList,
     Database,
-    FileJson,
     FileSpreadsheet,
     GitBranch,
     GraduationCap,
@@ -21,6 +19,7 @@ import {
     RotateCcw,
     Search,
     SlidersHorizontal,
+    Tag,
     Truck,
     Upload,
 } from "lucide-react";
@@ -586,8 +585,8 @@ function getLotFixGuidance(lot: {
     };
 }
 
-const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Test previews", "Event log", "Diagnostics"];
-const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Lots", "Lineage", "Test previews", "Record log", "Diagnostics"];
+const standaloneTabs = ["Control room", "Data feeder", "Fix queue", "Scenarios", "Suppliers", "Lots", "Lineage", "Event log", "Diagnostics"];
+const dashboardTabs = ["Overview", "Data feeder", "Fix queue", "Lots", "Lineage", "Record log", "Diagnostics"];
 
 const lotCodes = [
     "00614141000012-20260426-000001",
@@ -830,9 +829,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
     const [fixture, setFixture] = useState("leafy_greens_trace");
     const [deliveryMode, setDeliveryMode] = useState("mock");
     const [source, setSource] = useState("codex-simulator");
-    const [exportPreset, setExportPreset] = useState("all_records");
-    const [startDate, setStartDate] = useState("2026-04-26");
-    const [endDate, setEndDate] = useState("2026-04-27");
     const [feederCsv, setFeederCsv] = useState(FEEDER_SAMPLE_CSV);
     const [feederResult, setFeederResult] = useState<SandboxEvaluationResult | null>(null);
     const [feederError, setFeederError] = useState<string | null>(null);
@@ -1249,7 +1245,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
 
     const prepareExport = () => {
         setRunStage("exported");
-        setActiveTab("Test previews");
+        setActiveTab("Lots");
     };
 
     const startMachineDemo = async () => {
@@ -1279,8 +1275,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
         setIsTutorialOpen(true);
     };
 
-    const csvExportHref = `${servicePath(`/api/mock/regengine/export/fda-request?preset=${exportPreset}&traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
-    const epcisExportHref = `${servicePath(`/api/mock/regengine/export/epcis?traceability_lot_code=${encodeURIComponent(traceInput)}&start_date=${startDate}&end_date=${endDate}`)}`;
     const engineConnected = Boolean(health?.ok && !serviceError);
     const connectionLabel = engineConnected ? "Connection ready" : serviceError ? "Connection needs attention" : "Checking connection";
     const connectionTone = engineConnected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800";
@@ -1708,7 +1702,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                 </div>
                                                 <p className="mt-2 text-sm text-slate-700">{exportReadinessLabel}</p>
                                                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Test previews use the selected lot and date window. Formal production records come later from signed-in imports.
+                                                    Test completeness uses the selected lot. Formal production records come later from signed in imports.
                                                 </p>
                                             </div>
                                         </div>
@@ -1803,24 +1797,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                                 )}
                                                             </>
                                                         )}
-                                                    </div>
-                                                </div>
-
-                                                <div className={cn("rounded-lg border border-slate-200 bg-slate-950 text-white", isStandalone ? "p-4" : "p-3")}>
-                                                    <p className="text-sm font-semibold">Test handoff preview</p>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        Preview test CSV or EPCIS JSON-LD filters. Formal production records are generated only from imported production data.
-                                                    </p>
-                                                    <div className={cn("grid grid-cols-1 gap-2 sm:grid-cols-2", isStandalone ? "mt-4" : "mt-3")}>
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
-                                                        </Button>
-                                                        <a
-                                                            href={epcisExportHref}
-                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                                        >
-                                                            Preview test EPCIS
-                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2341,50 +2317,14 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                             <div className="grid gap-4 lg:grid-cols-2">
                                                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                                                     <div className="flex items-center gap-2">
-                                                        <CalendarDays className="h-4 w-4 text-slate-700" />
-                                                        <p className="text-sm font-semibold text-slate-950">Export filters</p>
+                                                        <Tag className="h-4 w-4 text-slate-700" />
+                                                        <p className="text-sm font-semibold text-slate-950">Lot code</p>
                                                     </div>
-                                                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                                        <label className="block text-xs font-medium text-slate-600">
-                                                            Preset
-                                                            <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                                                <option value="all_records">All records</option>
-                                                                <option value="lot_trace">Lot trace</option>
-                                                                <option value="shipment_handoff">Shipment handoff</option>
-                                                                <option value="receiving_log">Receiving log</option>
-                                                                <option value="transformation_batches">Transformation batches</option>
-                                                            </select>
-                                                        </label>
+                                                    <div className="mt-4">
                                                         <label className="block text-xs font-medium text-slate-600">
                                                             Traceability Lot Code
                                                             <Input value={traceInput} onChange={(event) => setTraceInput(event.target.value)} className="mt-1 h-9 bg-white text-xs" />
                                                         </label>
-                                                        <label className="block text-xs font-medium text-slate-600">
-                                                            Start date
-                                                            <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                                        </label>
-                                                        <label className="block text-xs font-medium text-slate-600">
-                                                            End date
-                                                            <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                                        </label>
-                                                    </div>
-                                                </div>
-
-                                                <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
-                                                    <p className="text-sm font-semibold">Test handoff preview</p>
-                                                    <p className="mt-1 text-xs leading-5 text-slate-300">
-                                                        {exportReadyCount} lots are test complete. {exceptionLots.length} exception lots remain visible. Formal production records require signed-in imports.
-                                                    </p>
-                                                    <div className="mt-4 grid grid-cols-2 gap-2">
-                                                        <Button asChild className="h-9 bg-emerald-600 text-white hover:bg-emerald-700">
-                                                            <a href={csvExportHref}>Preview test CSV</a>
-                                                        </Button>
-                                                        <a
-                                                            href={epcisExportHref}
-                                                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-600 bg-slate-800 px-3 text-[13px] font-semibold text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                                                        >
-                                                            Preview test EPCIS
-                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2567,38 +2507,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                                         <p className="mt-1 text-[11px] text-slate-500">{node.time}</p>
                                                     </div>
                                                 ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activeTab === "Test previews" && (
-                                    <div className="mt-4">
-                                        {!selectedIsExportReady && (
-                                            <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                                Selected lot is an exception. Test-complete counts include only complete mock lots; this lot stays visible until missing CTE/KDE evidence or delivery issues are resolved.
-                                            </div>
-                                        )}
-                                        <div className="grid gap-3 md:grid-cols-2">
-                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
-                                                <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test CSV preview</p>
-                                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Includes {exportReadyCount} test-complete lots. {exceptionLots.length} exception lots are flagged for review. Formal production records are generated only from imported production data.
-                                                </p>
-                                                <Button asChild className="mt-4 h-9 bg-emerald-700 text-white hover:bg-emerald-800">
-                                                    <a href={csvExportHref}>Preview test CSV</a>
-                                                </Button>
-                                            </div>
-                                            <div className="rounded-lg border border-slate-200 bg-white p-4">
-                                                <FileJson className="h-5 w-5 text-blue-700" />
-                                                <p className="mt-3 text-sm font-semibold text-slate-950">Test EPCIS preview</p>
-                                                <p className="mt-1 text-xs leading-5 text-slate-500">
-                                                    Uses the same lot and date filters for interoperability testing. It is not production evidence.
-                                                </p>
-                                                <Button asChild variant="outline" className="mt-4 h-9 border-slate-300 bg-white">
-                                                    <a href={epcisExportHref}>Preview test EPCIS</a>
-                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -2825,7 +2733,7 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                             </CardContent>
                         </Card>
 
-                        {isStandalone ? (
+                        {isStandalone && (
                             <>
                                 <Card className="rounded-lg border-amber-200 bg-amber-50/70 shadow-sm">
                                     <CardContent className="flex gap-3 p-4">
@@ -2849,35 +2757,6 @@ export function InflowLabClient({ mode = "standalone" }: InflowLabClientProps) {
                                     </CardContent>
                                 </Card>
                             </>
-                        ) : (
-                            <Card className="rounded-lg border-slate-200 bg-white shadow-sm">
-                                <CardHeader className="border-b border-slate-200 p-4">
-                                    <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-950">
-                                        <CalendarDays className="h-4 w-4 text-slate-700" />
-                                        Test preview filters
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-3 p-4">
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        Preset
-                                        <select value={exportPreset} onChange={(event) => setExportPreset(event.target.value)} className="mt-1 h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900">
-                                            <option value="all_records">All records</option>
-                                            <option value="lot_trace">Lot trace</option>
-                                            <option value="shipment_handoff">Shipment handoff</option>
-                                            <option value="receiving_log">Receiving log</option>
-                                            <option value="transformation_batches">Transformation batches</option>
-                                        </select>
-                                    </label>
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        Start date
-                                        <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                    </label>
-                                    <label className="block text-xs font-medium text-slate-600">
-                                        End date
-                                        <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 h-9 bg-white" />
-                                    </label>
-                                </CardContent>
-                            </Card>
                         )}
                     </aside>
                 </section>

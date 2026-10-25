@@ -6,7 +6,7 @@ RegEngine is a pre-production, API-first FSMA 204 food traceability evidence pla
 
 ## Scope
 
-- Webhook, CSV, EPCIS, and EDI ingestion for FSMA 204
+- Webhook, CSV, and EPCIS ingestion for FSMA 204
 - Inflow Workbench preflight, readiness, fix queues, and commit gates
 - Optional CSV column and event-type suggestions, subordinate to deterministic validation
 - CTE/KDE canonicalization
