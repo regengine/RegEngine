@@ -109,7 +109,7 @@ export function MetricsOverviewWidget({
           emptyCaption={
             servicesDown
               ? "Services unreachable"
-              : "No saved Inflow Workbench run yet"
+              : "No saved import readiness run yet"
           }
           status={
             score > 0 ? (
@@ -165,7 +165,7 @@ export function MetricsOverviewWidget({
           empty={typeof openFixes !== "number"}
           emptyLabel={readinessFailed ? "Couldn't load" : EMPTY_LABEL}
           emptyAction={readinessFailed ? undefined : <UploadCsvLink />}
-          emptyCaption="From the Inflow Workbench run"
+          emptyCaption="From the import readiness run"
         />
       </div>
     </div>

@@ -25,6 +25,12 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
+from shared.data_gap_tracking import (
+    ValidationOutcome,
+    gap_from_rule_reason,
+    gaps_from_kde_errors,
+    record_outcomes,
+)
 from shared.database import get_db_session as _get_db_session
 from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
@@ -297,13 +303,15 @@ async def ingest_events(
     accepted = 0
     rejected = 0
     seen_in_batch: set[str] = set()
+    # Data gap time to fix: written after the ingest commit, fail-open.
+    gap_outcomes: list[ValidationOutcome] = []
 
     try:
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
-        for event in payload.events:
+        for event_index, event in enumerate(payload.events):
             dedup_key = _batch_dedup_key(event)
             if dedup_key in seen_in_batch:
                 results.append(
@@ -329,6 +337,14 @@ async def ingest_events(
                     )
                 )
                 rejected += 1
+                gap_outcomes.append(
+                    ValidationOutcome(
+                        order=event_index,
+                        lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        gaps=gaps_from_kde_errors(errors),
+                    )
+                )
                 continue
 
             alerts = _generate_alerts(event)
@@ -457,6 +473,14 @@ async def ingest_events(
                             )
                         )
                         rejected += 1
+                        gap_outcomes.append(
+                            ValidationOutcome(
+                                order=event_index,
+                                lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                gaps=(gap_from_rule_reason(reject_reason),),
+                            )
+                        )
                         continue
 
                 # Accepted path. Savepoint commits the primary CTE write.
@@ -472,6 +496,15 @@ async def ingest_events(
                     )
                 )
                 accepted += 1
+                gap_outcomes.append(
+                    ValidationOutcome(
+                        order=event_index,
+                        lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        closing_record_id=store_result.event_id,
+                        closing_record_hash=store_result.sha256_hash,
+                    )
+                )
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate
@@ -522,6 +555,8 @@ async def ingest_events(
             )
         if db_session:
             db_session.commit()
+        # After the commit so closes reference durable records; never raises.
+        record_outcomes(db_session, tenant_id, gap_outcomes)
     except Exception:
         if db_session:
             db_session.rollback()

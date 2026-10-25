@@ -1,21 +1,15 @@
 import { API_BASE } from '@/lib/api-base';
-import ingestInflowLab from './ingest-inflow-lab.json';
-import ingestReceiving from './ingest-receiving.json';
-import ingestWalkthroughReceiving from './ingest-walkthrough-receiving.json';
-import ingestWalkthroughShipping from './ingest-walkthrough-shipping.json';
-import ingestWalkthroughTransformation from './ingest-walkthrough-transformation.json';
 
 /**
- * Code samples for `POST /webhooks/ingest`, all rendered from the payloads in
- * this directory (`ingest-*.json`).
+ * Code samples for `POST /webhooks/ingest`.
  *
- * Each JSON file keeps two placeholders instead of dates, so no page can ship a
- * timestamp that goes stale (events older than 90 days are rejected). Each
- * sample below swaps them for a time expression in its own language.
- * `tests/docs/test_ingest_samples_validate.py` fills the same placeholders with
- * "now minus 1 hour" and runs every `ingest-*.json` through the backend's real
- * ingest checks. A page that shows an ingest call renders it from here instead
- * of carrying its own payload.
+ * No sample carries an example record: a lot code, supplier, or quantity
+ * printed in the docs reads as real data, and an accepted lot is permanent.
+ * The body below is a skeleton of angle-bracket field descriptions to fill
+ * with your own records. `{{EVENT_TIMESTAMP}}` / `{{EVENT_DATE}}` stay
+ * placeholders so no page can ship a timestamp that goes stale (events older
+ * than 90 days are rejected); each sample swaps them for a clock expression
+ * in its own language.
  */
 const TIMESTAMP_PLACEHOLDER = '"{{EVENT_TIMESTAMP}}"';
 const DATE_PLACEHOLDER = '"{{EVENT_DATE}}"';
@@ -26,8 +20,31 @@ export const INGEST_ENV_SETUP = [
   'export REGENGINE_SIGNING_SECRET="..."       # from RegEngine', // pragma: allowlist secret
 ].join('\n');
 
-/** A sample payload as text (the receiving sample by default), with each quoted placeholder replaced by `timestamp` / `date` verbatim. */
-export function ingestSamplePayload(timestamp: string, date: string, payload: object = ingestReceiving): string {
+/** Request-body skeleton: field names are real, every value is a `<...>` description to replace with your own record. */
+const INGEST_BODY_SKELETON = {
+  source: '<your source system id>',
+  events: [
+    {
+      cte_type: 'receiving',
+      traceability_lot_code: '<the lot code you assigned>',
+      product_description: '<product name>',
+      quantity: '<number greater than 0>',
+      unit_of_measure: '<cases | lbs | kg | pallets | each>',
+      location_name: '<your facility name>',
+      timestamp: '{{EVENT_TIMESTAMP}}',
+      kdes: {
+        receive_date: '{{EVENT_DATE}}',
+        receiving_location: '<where the lot arrived>',
+        immediate_previous_source: '<who sent it to you>',
+        reference_document: '<your ASN or receipt id>',
+        tlc_source_reference: '<the lot reference your supplier gave you>',
+      },
+    },
+  ],
+};
+
+/** The skeleton as text, with each quoted placeholder replaced by `timestamp` / `date` verbatim. */
+export function ingestSamplePayload(timestamp: string, date: string, payload: object = INGEST_BODY_SKELETON): string {
   return JSON.stringify(payload, null, 2)
     .split(TIMESTAMP_PLACEHOLDER)
     .join(timestamp)
@@ -56,17 +73,7 @@ curl -X POST ${API_BASE}/webhooks/ingest \\
   --data-binary "$BODY"`;
 }
 
-export const INGEST_CURL_SAMPLE = signedCurl(ingestReceiving);
-
-/** Same recipe, other payloads: the three walkthrough steps (their own TEST-...-WALK lots) and the Inflow Lab connector page. */
-export const INGEST_WALKTHROUGH_RECEIVING_CURL_SAMPLE = signedCurl(ingestWalkthroughReceiving);
-export const INGEST_WALKTHROUGH_TRANSFORMATION_CURL_SAMPLE = signedCurl(ingestWalkthroughTransformation);
-export const INGEST_WALKTHROUGH_SHIPPING_CURL_SAMPLE = signedCurl(ingestWalkthroughShipping);
-export const INGEST_INFLOW_LAB_CURL_SAMPLE = signedCurl(ingestInflowLab);
-
-/** The walkthrough's receiving and shipping lot codes, for the prose around the samples. */
-export const WALKTHROUGH_RECEIVED_LOT = ingestWalkthroughReceiving.events[0].traceability_lot_code;
-export const WALKTHROUGH_BAGGED_LOT = ingestWalkthroughShipping.events[0].traceability_lot_code;
+export const INGEST_CURL_SAMPLE = signedCurl(INGEST_BODY_SKELETON);
 
 export const INGEST_PYTHON_SAMPLE = `import hashlib
 import hmac
@@ -120,22 +127,22 @@ const resp = await fetch("${API_BASE}/webhooks/ingest", {
 });
 console.log(resp.status, await resp.json());`;
 
-/** What a 200 looks like when the event is accepted. Hashes are shortened. */
+/** What a 200 looks like when the event is accepted. Values are `<...>` descriptions of what the API returns, not example records. */
 export const INGEST_RESPONSE_SAMPLE = `{
   "accepted": 1,
   "rejected": 0,
   "total": 1,
   "events": [
     {
-      "traceability_lot_code": "${ingestReceiving.events[0].traceability_lot_code}",
+      "traceability_lot_code": "<the lot code you sent>",
       "cte_type": "receiving",
       "status": "accepted",
-      "event_id": "0b9c2f4e-6d1a-4c53-9a7e-5f3d8e21c7ab",
-      "sha256_hash": "a3f2b891c4d5e6f7...",
-      "chain_hash": "7f6e5d4c3b2a1908...",
+      "event_id": "<event UUID>",
+      "sha256_hash": "<event hash>",
+      "chain_hash": "<chain hash>",
       "errors": []
     }
   ],
-  "ingestion_timestamp": "2026-10-03T14:05:12.481203+00:00",
+  "ingestion_timestamp": "<server time, ISO 8601>",
   "ingestion_run_id": null
 }`;

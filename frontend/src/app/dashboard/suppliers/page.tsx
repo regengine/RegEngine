@@ -48,7 +48,11 @@ import type {
     PortalLink,
     IntegrationProfile,
     FacilityRemovalCheck,
+    SupplierGapTimeToFix,
+    SupplierDataQualityResponse,
 } from '@/types/api';
+import { GapTimeToFix } from './gap-time-to-fix';
+import { DataQuality } from './data-quality';
 import {
     NO_COMPLIANCE_DATA,
     countOrNull,
@@ -140,6 +144,10 @@ export default function SupplierDashboardPage() {
     const [error, setError] = useState<string | null>(null);
     const [workbenchSummary, setWorkbenchSummary] = useState<WorkbenchReadinessSnapshot | null>(null);
     const [now, setNow] = useState(Date.now);
+    const [gapTimeToFix, setGapTimeToFix] = useState<Record<string, SupplierGapTimeToFix>>({});
+    const [gapTimeToFixUnavailable, setGapTimeToFixUnavailable] = useState(false);
+    const [dataQuality, setDataQuality] = useState<SupplierDataQualityResponse | null>(null);
+    const [dataQualityUnavailable, setDataQualityUnavailable] = useState(false);
 
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 60_000);
@@ -202,6 +210,18 @@ export default function SupplierDashboardPage() {
     const [newPostalCode, setNewPostalCode] = useState('');
     const [adding, setAdding] = useState(false);
 
+    const loadDataQuality = useCallback(() => {
+        apiClient.getSupplierDataQuality()
+            .then((res) => {
+                setDataQuality(res);
+                setDataQualityUnavailable(false);
+            })
+            .catch(() => {
+                setDataQuality(null);
+                setDataQualityUnavailable(true);
+            });
+    }, []);
+
     /* ---------- Fetch all data ------------------------------------ */
     // Phase 1: Load facility list fast (1 API call)
     // Phase 2: Lazy-enrich with compliance data in background (batched, non-blocking)
@@ -225,6 +245,18 @@ export default function SupplierDashboardPage() {
             apiClient.listIntegrationProfiles()
                 .then((res) => setIntegrationProfiles(res.profiles || []))
                 .catch(() => setIntegrationProfiles([]));
+
+            apiClient.getSupplierGapTimeToFix()
+                .then((res) => {
+                    setGapTimeToFix(Object.fromEntries(res.suppliers.map((s) => [s.supplier_key, s])));
+                    setGapTimeToFixUnavailable(false);
+                })
+                .catch(() => {
+                    setGapTimeToFix({});
+                    setGapTimeToFixUnavailable(true);
+                });
+
+            loadDataQuality();
 
             if (tenantId) {
                 fetchWorkbenchReadinessSummary(tenantId)
@@ -283,7 +315,7 @@ export default function SupplierDashboardPage() {
             setError(friendlyError(err, 'Unable to load supplier data. Please try again.'));
             setLoading(false);
         }
-    }, [isLoggedIn, tenantId]);
+    }, [isLoggedIn, tenantId, loadDataQuality]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -865,6 +897,21 @@ export default function SupplierDashboardPage() {
                                                     </span>
                                                 )}
                                             </div>
+                                            <GapTimeToFix
+                                                summary={gapTimeToFix[facility.id]}
+                                                unavailable={gapTimeToFixUnavailable}
+                                                now={now}
+                                            />
+                                            {(dataQuality || dataQualityUnavailable) && (
+                                                <DataQuality
+                                                    facilityId={facility.id}
+                                                    summary={dataQuality?.suppliers.find((s) => s.supplier_key === facility.id)}
+                                                    unavailable={dataQualityUnavailable}
+                                                    windowDays={dataQuality?.window_days ?? 30}
+                                                    minRecords={dataQuality?.min_records ?? 20}
+                                                    lateCteLabel={dataQuality?.late_cte_label ?? ''}
+                                                />
+                                            )}
                                             {comp.gaps.length > 0 && (
                                                 <ul className="mt-2 space-y-1 text-small text-re-text-secondary" aria-label={`Compliance gaps for ${facility.name}`}>
                                                     {comp.gaps.map((gap, index) => {

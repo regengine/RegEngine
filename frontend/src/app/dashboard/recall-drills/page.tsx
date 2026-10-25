@@ -164,7 +164,7 @@ export default function RecallDrillsPage() {
                         <Field label="Output package" htmlFor="drill-output-package">
                             <select id="drill-output-package" className={`${fieldControlClasses} h-11`}>
                                 <option>FDA package + manifest</option>
-                                <option>EPCIS export + warning summary</option>
+                                <option>EPCIS export (Preview) + warning summary</option>
                                 <option>Full audit bundle</option>
                             </select>
                         </Field>

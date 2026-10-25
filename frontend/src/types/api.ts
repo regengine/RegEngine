@@ -490,6 +490,85 @@ export interface SupplierComplianceGapsResponse {
     evaluated_at: string;
 }
 
+export interface SupplierGapTimeToFix {
+    /** Supplier facility id. */
+    supplier_key: string;
+    open_gap_count: number;
+    median_time_to_fix_seconds: number | null;
+    oldest_open_gap_opened_at: string | null;
+    /** A gap on a lot named in an unanswered records request is open at its response_due_at. */
+    at_risk: boolean;
+    at_risk_gap_count: number;
+    /** Internal target only: an open gap is older than 24 hours. Not a regulatory deadline. */
+    past_internal_target: boolean;
+    has_data: boolean;
+}
+
+export interface SupplierGapTimeToFixResponse {
+    suppliers: SupplierGapTimeToFix[];
+    internal_target_seconds: number;
+    evaluated_at: string;
+}
+
+export type SupplierQualityMetricKey = 'missing_kde' | 'unlinked_lot' | 'late_cte' | 'epcis_failed';
+export type SupplierQualityDrilldownMetric = 'missing_kde' | 'unlinked_lot' | 'late_cte';
+
+export interface SupplierQualityMetric {
+    key: SupplierQualityMetricKey;
+    /**
+     * not_enough_data: denominator is below min_records, so share is null. For
+     * late_cte with no agreed sending time, the counts are null too and reason
+     * says why.
+     */
+    status: 'ok' | 'not_enough_data' | 'unavailable';
+    numerator: number | null;
+    denominator: number | null;
+    share: number | null;
+    /** Set when status is unavailable, when late_cte has no agreed sending time, and on epcis_failed to say the count is tenant wide. */
+    reason: string | null;
+}
+
+export interface SupplierDataQuality {
+    /** Supplier facility id. */
+    supplier_key: string;
+    /** Hours after the event time the supplier agreed to send a record; null when not set. */
+    agreed_sending_hours: number | null;
+    metrics: SupplierQualityMetric[];
+}
+
+export interface AgreedSendingHoursResponse {
+    facility_id: string;
+    agreed_sending_hours: number | null;
+}
+
+export interface SupplierDataQualityResponse {
+    suppliers: SupplierDataQuality[];
+    window_days: number;
+    min_records: number;
+    late_cte_label: string;
+    evaluated_at: string;
+}
+
+export interface SupplierQualityRecordItem {
+    record_id: string | null;
+    lot_id: string | null;
+    lot_code: string;
+    cte_type: string | null;
+    event_time: string | null;
+    received_at: string | null;
+    missing_kdes: string[];
+}
+
+export interface SupplierQualityRecordsResponse {
+    supplier_key: string;
+    metric: SupplierQualityDrilldownMetric;
+    window_days: number;
+    total: number;
+    limit: number;
+    offset: number;
+    items: SupplierQualityRecordItem[];
+}
+
 export interface SupplierFDAExportRow {
     event_id: string;
     tlc_code: string;
