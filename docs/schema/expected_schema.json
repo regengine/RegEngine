@@ -6807,6 +6807,10 @@
   },
   "public.supplier_facilities": {
     "columns": {
+      "agreed_sending_hours": {
+        "nullable": true,
+        "type": "integer"
+      },
       "city": {
         "nullable": false,
         "type": "text"
