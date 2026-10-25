@@ -319,9 +319,9 @@ export default async function CTELandingPage({
   const { cte: cteSlug } = await params;
   const data = CTE_DATA[cteSlug];
   if (!data) notFound();
-  const cta = sandboxCta();
 
   const Icon = CTE_ICONS[cteSlug] ?? ClipboardList;
+  const cta = sandboxCta();
 
   return (
     <div className="bg-re-surface-base">
@@ -425,8 +425,17 @@ export default async function CTELandingPage({
         title="How RegEngine Helps"
         description={
           <>
-            Upload your {data.name.toLowerCase()} data and RegEngine
-            surfaces these issues before they become audit findings during a §1.1455 records request.
+            {cta.enabled ? (
+              <>
+                Upload your {data.name.toLowerCase()} data to the sandbox and
+                RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
+              </>
+            ) : (
+              <>
+                RegEngine surfaces these issues in your {data.name.toLowerCase()}{" "}
+                data before they become audit findings during a §1.1455 records request.
+              </>
+            )}
           </>
         }
       >
@@ -454,6 +463,8 @@ export default async function CTELandingPage({
           <h2 className="font-display text-heading-lg text-re-text-primary">
             See it in action.
           </h2>
+          {/* #2757 - copy and destination resolve together so the blurb can never
+              promise a CSV sandbox that this deployment does not serve. */}
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
             {cta.blurb}
           </p>

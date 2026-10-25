@@ -9,10 +9,11 @@
 // cannot honor.
 //
 // PR #2730 hit exactly this: it repointed the dead homepage sandbox hash
-// anchors at /demo
-// but left the sandbox prose above the buttons, so the copy promised a CSV
-// sandbox while the button opened a dashboard. Resolving copy and destination
-// together — from one flag — is what stops those two drifting apart again.
+// anchors at a dashboard page but left the sandbox prose above the buttons,
+// so the copy promised a CSV sandbox while the button opened a dashboard.
+// Resolving copy and destination together, from one flag, is what stops
+// those two drifting apart again. The fallback destination is /walkthrough;
+// the old /demo route was removed with the synthetic workspace cleanup.
 //
 // Enabling NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES (or listing 'sandbox' in
 // NEXT_PUBLIC_ENABLED_EXPERIMENTAL_TOOLS) alongside the backend's

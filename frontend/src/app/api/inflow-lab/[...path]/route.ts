@@ -13,7 +13,7 @@ const AUTH_SESSION_COOKIE = "__Host-regengine_session";
 const ALLOWED_METHODS = new Set(["GET", "POST"]);
 const JSON_CONTENT_TYPES = ["application/json", "application/problem+json"];
 
-type BoundaryMode = "simulator" | "mock-export" | "live-export";
+type BoundaryMode = "simulator" | "live-export";
 type EndpointContract = {
     name: "health" | "status" | "records" | "lineage" | "run" | "reset" | "fixture" | "export";
     boundary: BoundaryMode;
@@ -117,12 +117,6 @@ function endpointContract(path: string, method: string): EndpointContract | null
     }
     if (method === "POST" && path === "/api/simulate/reset") {
         return { name: "reset", boundary: "simulator", stream: false };
-    }
-    if (method === "GET" && path === "/api/mock/regengine/export/fda-request") {
-        return { name: "export", boundary: "mock-export", stream: true };
-    }
-    if (method === "GET" && path === "/api/mock/regengine/export/epcis") {
-        return { name: "export", boundary: "mock-export", stream: true };
     }
     if (method === "GET" && path === "/api/regengine/export/fda-request") {
         return { name: "export", boundary: "live-export", stream: true };
