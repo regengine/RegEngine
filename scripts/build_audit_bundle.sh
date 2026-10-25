@@ -27,7 +27,13 @@ usage() {
 [[ $# -ge 1 && -n "${1:-}" ]] || usage
 
 CSV="$1"
-OUT="${2:-$PWD/audit-bundle.zip}"
+OUT="${2:-audit-bundle.zip}"
+# Resolve a relative output path against the caller's directory now, before
+# anything changes into the temp directory (whose EXIT trap deletes it).
+case "$OUT" in
+  /*) ;;
+  *) OUT="$PWD/$OUT" ;;
+esac
 NAME="$(basename "$CSV")"
 
 if [[ ! -f "$CSV" ]]; then
@@ -94,5 +100,8 @@ manifest = {
 print(f"merkle_root={root}")
 PY
 
-(cd "$WORK" && zip -q -X "$OUT" "$NAME" manifest.json)
+# Build a fresh archive inside $WORK, then replace the destination only after
+# zip succeeds, so entries from an earlier build never survive a rebuild.
+(cd "$WORK" && zip -q -X "$WORK/bundle.zip" "$NAME" manifest.json)
+mv -f "$WORK/bundle.zip" "$OUT"
 echo "wrote $OUT"

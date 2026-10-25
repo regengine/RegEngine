@@ -579,7 +579,7 @@ HTTP 201
                     </div>
 
                     {/* EPCIS */}
-                    <div className="grid items-center gap-8 md:grid-cols-2">
+                    <div>
                         <div>
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 EPCIS 2.0 export (Preview)

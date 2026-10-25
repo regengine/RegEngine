@@ -75,6 +75,6 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         expect(src).toContain('{cta.blurb}');
         expect(src).not.toContain('sandbox and get an instant');
         expect(src).not.toContain('data to the sandbox');
-        expect(src).toMatch(/data to\{" "\}\s*<Link href="\/ingest"[^>]*>RegEngine<\/Link>/);
+        expect(src).toMatch(/data to\{" "\}\s*<Link href="\/ingest\?tab=file"[^>]*>RegEngine<\/Link>/);
     });
 });

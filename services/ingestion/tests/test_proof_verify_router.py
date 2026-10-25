@@ -571,14 +571,30 @@ class TestFailureModes:
         assert resp.status_code == 400
 
 
+def _build_script_bundle(tmp_path: Path) -> bytes:
+    """Build a bundle with scripts/build_audit_bundle.sh (the tool behind the
+    public /proof bundle). The input CSV is a header row only, so the test
+    carries no record data."""
+    import subprocess
+
+    csv_path = tmp_path / "export.csv"
+    csv_path.write_bytes(b"Event ID,Hash\n")
+    out = tmp_path / "audit-bundle.zip"
+    subprocess.run(
+        ["bash", str(REPO_ROOT / "scripts/build_audit_bundle.sh"), str(csv_path), str(out)],
+        check=True,
+        capture_output=True,
+    )
+    return out.read_bytes()
+
+
 # ---------------------------------------------------------------------------
 # Happy path — round-trip a real ZIP
 # ---------------------------------------------------------------------------
 class TestZipRoundTrip:
-    @pytest.mark.skip(reason="needs a real export bundle")
-    def test_checked_in_public_audit_bundle_verifies(self, client: TestClient):
-        """The ZIP linked from /proof must verify through the public API."""
-        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+    def test_checked_in_public_audit_bundle_verifies(self, client: TestClient, tmp_path: Path):
+        """A bundle from the public bundle builder must verify through the API."""
+        bundle = _build_script_bundle(tmp_path)
 
         resp = client.post(
             "/api/v1/proof/verify",
@@ -594,14 +610,13 @@ class TestZipRoundTrip:
         assert names["merkle_root_matches_declared"]["passed"] is True
         assert len(data["merkle_root_recomputed"]) == 64
 
-    @pytest.mark.skip(reason="needs a real export bundle")
     def test_generic_bundle_may_use_unrelated_verification_metadata(
         self,
         client: TestClient,
         tmp_path: Path,
     ):
         """Only FDA markers activate persisted-chain status semantics."""
-        original = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+        original = _build_script_bundle(tmp_path)
         modified = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(original), "r") as source:
             with zipfile.ZipFile(modified, "w", zipfile.ZIP_DEFLATED) as target:
@@ -626,10 +641,18 @@ class TestZipRoundTrip:
         bundle_path.write_bytes(bundle)
         assert sdk_verify_bundle(str(bundle_path)) == 0
 
-    @pytest.mark.skip(reason="needs a real export bundle")
-    def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient):
-        """The tampered ZIP linked from /proof must fail verification."""
-        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip").read_bytes()
+    def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient, tmp_path: Path):
+        """A builder bundle whose CSV bytes changed after packaging must fail."""
+        original = _build_script_bundle(tmp_path)
+        tampered = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original), "r") as source:
+            with zipfile.ZipFile(tampered, "w", zipfile.ZIP_DEFLATED) as target:
+                for member in source.infolist():
+                    data = source.read(member.filename)
+                    if member.filename.endswith(".csv"):
+                        data = data + b"\n"
+                    target.writestr(member, data)
+        bundle = tampered.getvalue()
 
         resp = client.post(
             "/api/v1/proof/verify",

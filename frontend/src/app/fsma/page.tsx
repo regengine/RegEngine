@@ -324,7 +324,7 @@ function FSMADashboardContent() {
                 drill={activeDrill}
                 onCancel={() => { recallDrills.refetch(); }}
                 onComplete={() => { recallDrills.refetch(); }}
-                onStartDrill={() => handleStartDrill('FORWARD')}
+                onStartDrill={activeTlc ? () => handleStartDrill('FORWARD') : undefined}
               />
 
               {/* Compliance Readiness */}
