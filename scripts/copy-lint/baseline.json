@@ -21,23 +21,6 @@
   "frontend/src/app/blog/regengine-vs-spreadsheets-traceability/page.tsx": {
     "epcis-unlabeled": 1
   },
-  "frontend/src/app/buyer-programs/page.tsx": {
-    "sample-demo": 2
-  },
-  "frontend/src/app/case-studies/page.tsx": {
-    "epcis-unlabeled": 1,
-    "invented-entity": 2,
-    "sample-demo": 7
-  },
-  "frontend/src/app/compare/foodlogiq/page.tsx": {
-    "sandbox": 1
-  },
-  "frontend/src/app/compare/repositrak/page.tsx": {
-    "sandbox": 1
-  },
-  "frontend/src/app/compare/tracegains/page.tsx": {
-    "sandbox": 1
-  },
   "frontend/src/app/compliance/page.tsx": {
     "epcis-unlabeled": 1
   },
@@ -81,16 +64,6 @@
   "frontend/src/app/dashboard/settings/users/page.tsx": {
     "empty-render": 1
   },
-  "frontend/src/app/demo/layout.tsx": {
-    "sample-demo": 3
-  },
-  "frontend/src/app/demo/opengraph-image.tsx": {
-    "sample-demo": 1
-  },
-  "frontend/src/app/demo/page.tsx": {
-    "invented-entity": 4,
-    "sample-demo": 1
-  },
   "frontend/src/app/design-system/page.tsx": {
     "invented-entity": 1,
     "sample-demo": 1,
@@ -123,8 +96,7 @@
     "empty-render": 2
   },
   "frontend/src/app/fsma-204/[cte]/page.tsx": {
-    "invented-entity": 1,
-    "sample-demo": 1
+    "invented-entity": 1
   },
   "frontend/src/app/fsma/page.tsx": {
     "sample-demo": 1
@@ -134,8 +106,8 @@
     "empty-render": 1
   },
   "frontend/src/app/ingest/page.tsx": {
-    "epcis-unlabeled": 7,
-    "sample-demo": 2,
+    "epcis-unlabeled": 6,
+    "sample-demo": 1,
     "sandbox": 3
   },
   "frontend/src/app/ingest/results/[id]/AnalysisResultClient.tsx": {
@@ -153,12 +125,8 @@
   "frontend/src/app/onboarding/bulk-upload/page.tsx": {
     "sample-demo": 1
   },
-  "frontend/src/app/page.tsx": {
-    "sample-demo": 6
-  },
   "frontend/src/app/pricing/page.tsx": {
-    "epcis-unlabeled": 1,
-    "sandbox": 1
+    "epcis-unlabeled": 1
   },
   "frontend/src/app/product/page.tsx": {
     "sandbox": 2
@@ -171,13 +139,8 @@
     "invented-entity": 6,
     "sample-demo": 7
   },
-  "frontend/src/app/proof/transformation/page.tsx": {
-    "invented-entity": 19,
-    "sample-demo": 5
-  },
   "frontend/src/app/records/page.tsx": {
     "dash-placeholder": 3,
-    "edi-sftp": 1,
     "empty-render": 1,
     "epcis-unlabeled": 2
   },
@@ -240,15 +203,13 @@
     "epcis-unlabeled": 2
   },
   "frontend/src/app/trust/page.tsx": {
-    "epcis-unlabeled": 3,
-    "sample-demo": 1
+    "epcis-unlabeled": 3
   },
   "frontend/src/app/trust/retention/page.tsx": {
     "epcis-unlabeled": 2
   },
   "frontend/src/app/walkthrough/page.tsx": {
-    "epcis-unlabeled": 1,
-    "invented-entity": 1
+    "epcis-unlabeled": 1
   },
   "frontend/src/app/why-regengine/page.tsx": {
     "epcis-unlabeled": 7
@@ -282,8 +243,7 @@
     "edi-sftp": 2
   },
   "frontend/src/lib/customer-readiness.ts": {
-    "epcis-unlabeled": 6,
-    "sample-demo": 3
+    "epcis-unlabeled": 4
   },
   "frontend/src/lib/dev-compliance-snapshots.ts": {
     "dash-placeholder": 2
