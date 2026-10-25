@@ -78,7 +78,7 @@
     "empty-render": 1
   },
   "frontend/src/app/ingest/page.tsx": {
-    "epcis-unlabeled": 4,
+    "epcis-unlabeled": 3,
     "sandbox": 3
   },
   "frontend/src/app/ingest/results/[id]/AnalysisResultClient.tsx": {
@@ -119,13 +119,10 @@
     "dash-placeholder": 3
   },
   "frontend/src/app/tools/drill-simulator/components/DrillSimulatorClient.tsx": {
-    "sample-demo": 3
+    "sample-demo": 1
   },
   "frontend/src/app/tools/export/page.tsx": {
     "empty-render": 2
-  },
-  "frontend/src/app/tools/fsma-unified/components/UnifiedDashboardClient.tsx": {
-    "sample-demo": 2
   },
   "frontend/src/app/tools/notice-validator/page.tsx": {
     "invented-entity": 1,
@@ -133,9 +130,6 @@
   },
   "frontend/src/app/tools/scan/page.tsx": {
     "empty-render": 1
-  },
-  "frontend/src/app/tools/sop-generator/components/SOPGeneratorClient.tsx": {
-    "invented-entity": 2
   },
   "frontend/src/app/tools/tlc-validator/components/TLCValidatorClient.tsx": {
     "sample-demo": 1

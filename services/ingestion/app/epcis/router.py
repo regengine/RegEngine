@@ -6,12 +6,20 @@ export, validation, XML ingestion, and batch processing.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from shared.epcis_receipts import (
+    RECEIPT_ACCEPTED,
+    RECEIPT_REJECTED,
+    record_epcis_receipt,
+    summarize_error,
+    summarize_failed_events,
+)
 from shared.tenant_context import TenantContext
 
 from ..shared.tenant_resolution import resolve_tenant_id
@@ -81,6 +89,31 @@ def _resolve_authenticated_tenant(
     return resolved_tenant
 
 
+def _receipt_for_error(tenant_id: Optional[str], raw_body: bytes, exc: BaseException) -> None:
+    """Rejected receipt for a document whose ingest raised. Never raises."""
+    if tenant_id:
+        record_epcis_receipt(tenant_id, raw_body, RECEIPT_REJECTED, summarize_error(exc))
+
+
+def _receipt_for_response(tenant_id: Optional[str], raw_body: bytes, response: JSONResponse) -> None:
+    """Receipt for a document that got a response: rejected from HTTP 400 up.
+
+    A partial batch (207) is accepted, with the failed event count as summary.
+    """
+    if not tenant_id:
+        return
+    try:
+        content = json.loads(response.body)
+        failed = content.get("failed") if isinstance(content, dict) else None
+        total = content.get("total") if isinstance(content, dict) else None
+        counts_are_ints = isinstance(failed, int) and isinstance(total, int)
+        summary = summarize_failed_events(failed, total) if counts_are_ints and failed else None
+    except (ValueError, TypeError):
+        summary = None
+    status = RECEIPT_REJECTED if response.status_code >= 400 else RECEIPT_ACCEPTED
+    record_epcis_receipt(tenant_id, raw_body, status, summary)
+
+
 class BatchIngestRequest(BaseModel):
     events: list[dict] = Field(default_factory=list)
 
@@ -135,9 +168,17 @@ async def ingest_epcis_event(
     ctx: TenantContext = Depends(require_tenant_context),
 ):
     resolved_tenant = ctx.tenant_id
+    # FastAPI already read and cached the body to parse ``event``.
+    raw_body = await request.body()
 
-    payload, status_code = _ingest_single_event(resolved_tenant, event)
-    return JSONResponse(content=payload, status_code=status_code)
+    try:
+        payload, status_code = _ingest_single_event(resolved_tenant, event)
+        response = JSONResponse(content=payload, status_code=status_code)
+    except Exception as exc:
+        _receipt_for_error(resolved_tenant, raw_body, exc)
+        raise
+    _receipt_for_response(resolved_tenant, raw_body, response)
+    return response
 
 
 @router.post("/events/batch", summary="Batch ingest EPCIS events")
@@ -159,6 +200,28 @@ async def ingest_epcis_batch(
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
     _: TenantContext | None = Depends(require_tenant_context),
 ):
+    # Without a dependency context (direct calls) the tenant is resolved
+    # inside _ingest_batch_document, so no tenant is known up front and no
+    # receipt is filed.
+    receipt_tenant = _.tenant_id if _ is not None else None
+    raw_body = await request.body() if receipt_tenant else b""
+    try:
+        response = _ingest_batch_document(request, body, mode, x_tenant_id, x_regengine_api_key, _)
+    except Exception as exc:
+        _receipt_for_error(receipt_tenant, raw_body, exc)
+        raise
+    _receipt_for_response(receipt_tenant, raw_body, response)
+    return response
+
+
+def _ingest_batch_document(
+    request: Request,
+    body: BatchIngestRequest,
+    mode: Optional[str],
+    x_tenant_id: Optional[str],
+    x_regengine_api_key: Optional[str],
+    _: TenantContext | None,
+) -> JSONResponse:
     if not body.events:
         raise HTTPException(status_code=400, detail="Batch ingest requires at least one event")
 
@@ -378,9 +441,17 @@ async def ingest_epcis_xml(
     # Stream the body with a hard cap. RequestSizeLimitMiddleware only enforces
     # the Content-Length header, so a chunked upload would otherwise buffer an
     # unbounded XML document into memory here before parsing (DoS).
-    raw_body = await read_request_body_with_limit(
-        request, max_bytes=MAX_FILE_SIZE_BYTES, label="EPCIS XML"
-    )
+    raw_body = await read_request_body_with_limit(request, max_bytes=MAX_FILE_SIZE_BYTES, label="EPCIS XML")
+    try:
+        response = _ingest_xml_document(resolved_tenant, raw_body, mode)
+    except Exception as exc:
+        _receipt_for_error(resolved_tenant, raw_body, exc)
+        raise
+    _receipt_for_response(resolved_tenant, raw_body, response)
+    return response
+
+
+def _ingest_xml_document(resolved_tenant: str, raw_body: bytes, mode: str) -> JSONResponse:
     if not raw_body:
         raise HTTPException(status_code=400, detail="Empty XML payload")
 
