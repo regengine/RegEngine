@@ -910,6 +910,74 @@ export function generateCsvTemplate(): string {
   return `${CSV_TEMPLATE_HEADERS}\n`;
 }
 
+export function generateSampleCSV(): string {
+  const lines = [
+    'Event Type,Product,Lot Code,GTIN,Facility GLN,Source GLN,Destination GLN,Timestamp,Quantity,Unit of Measure,Reference Document',
+  ];
+
+  // Harvest/Create
+  lines.push(
+    'Create,Romaine Lettuce: Head,LOT-2024-001,0123456789012,1234567890128,1234567890128,3456789012345,2024-01-15T08:30:00Z,500,cases,FARM-001-DOC'
+  );
+
+  // First transformation
+  lines.push(
+    'Transform,Romaine Lettuce: Packaged,LOT-2024-001,0123456789029,3456789012345,,3456789012345,2024-01-15T12:00:00Z,480,cases,PKG-2024-001'
+  );
+
+  // Ship from packer
+  lines.push(
+    'Ship,Romaine Lettuce: Packaged,LOT-2024-001,0123456789029,3456789012345,3456789012345,5678901234567,2024-01-16T14:00:00Z,480,cases,BOL-2024-001'
+  );
+
+  // Receive at distributor
+  lines.push(
+    'Receive,Romaine Lettuce: Packaged,LOT-2024-001,0123456789029,5678901234567,3456789012345,5678901234567,2024-01-17T08:30:00Z,475,cases,RCV-2024-001'
+  );
+
+  // Ship from distributor
+  lines.push(
+    'Ship,Romaine Lettuce: Packaged,LOT-2024-001,0123456789029,5678901234567,5678901234567,7890123456789,2024-01-18T10:00:00Z,450,cases,BOL-2024-002'
+  );
+
+  // Receive at retailer
+  lines.push(
+    'Receive,Romaine Lettuce: Packaged,LOT-2024-001,0123456789029,7890123456789,5678901234567,7890123456789,2024-01-18T15:30:00Z,450,cases,RCV-2024-002'
+  );
+
+  // Different lot - intentionally missing some KDEs
+  lines.push('Create,Spinach: Bulk,LOT-2024-002,,1234567890135,1234567890135,3456789012352,2024-01-15T07:00:00Z,800,cases,');
+
+  lines.push('Ship,Spinach: Bulk,LOT-2024-002,,3456789012352,3456789012352,5678901234574,2024-01-16T16:00:00Z,800,,BOL-2024-003');
+
+  lines.push('Receive,Spinach: Bulk,LOT-2024-002,,5678901234574,3456789012352,5678901234574,2024-01-17T09:00:00Z,800,cases,');
+
+  // Third lot with time gap
+  lines.push(
+    'Create,Tomatoes: Vine Ripe,LOT-2024-003,0123456789036,1234567890142,1234567890142,3456789012359,2024-01-10T06:00:00Z,1200,cases,FARM-003'
+  );
+
+  lines.push(
+    'Ship,Tomatoes: Vine Ripe,LOT-2024-003,0123456789036,3456789012359,3456789012359,5678901234581,2024-01-10T14:00:00Z,1200,cases,BOL-2024-004'
+  );
+
+  // Large gap here - 3 days
+  lines.push(
+    'Receive,Tomatoes: Vine Ripe,LOT-2024-003,0123456789036,5678901234581,3456789012359,5678901234581,2024-01-13T10:30:00Z,1150,cases,RCV-2024-003'
+  );
+
+  // Fourth lot with unmatched ship (no receive)
+  lines.push(
+    'Create,Cucumbers,LOT-2024-004,0123456789043,1234567890159,1234567890159,3456789012366,2024-01-14T08:00:00Z,600,cases,FARM-004'
+  );
+
+  lines.push(
+    'Ship,Cucumbers,LOT-2024-004,0123456789043,3456789012366,3456789012366,5678901234598,2024-01-15T12:00:00Z,600,cases,BOL-2024-005'
+  );
+
+  return lines.join('\n');
+}
+
 /**
  * Design-system colour helpers.
  *

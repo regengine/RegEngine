@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
-    parseCSV, validateRecords, generateCsvTemplate, getScoreColor,
+    parseCSV, validateRecords, generateSampleCSV, generateCsvTemplate, getScoreColor,
     getSeverityColor, getSeverityBadgeColor,
     type ValidationResult,
 } from '../lib/record-validator';
@@ -180,6 +180,13 @@ export function DrillSimulatorClient() {
         } finally {
             analysisInFlightRef.current = false;
         }
+    };
+
+    const handleLoadSampleData = async () => {
+        const csv = generateSampleCSV();
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const file = new File([blob], 'sample-records.csv', { type: 'text/csv' });
+        setState({ ...state, uploadedFile: file });
     };
 
     const handleDownloadTemplate = () => {
@@ -416,6 +423,13 @@ STATUS: ${
                     leadingIcon={<Zap size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
                     Analyze My Records
+                </Button>
+                <Button
+                    size="lg"
+                    variant="secondary"
+                    onClick={handleLoadSampleData}
+                >
+                    Load Sample Data
                 </Button>
             </div>
         </motion.div>
