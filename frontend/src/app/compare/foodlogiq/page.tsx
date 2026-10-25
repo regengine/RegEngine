@@ -29,7 +29,6 @@ const FEATURES = [
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom enterprise quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout; request access" },
 ];
 
 const WHY_SWITCH = [
