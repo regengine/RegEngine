@@ -692,7 +692,7 @@ export default function IngestPage() {
                             </label>
                           </div>
                           <p className="text-small text-re-text-tertiary">
-                            CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.
+                            CSV uploads skip bad rows. EPCIS (Preview) files are all or nothing: if any event fails, nothing is saved.
                           </p>
                         </div>
                       </TabsContent>

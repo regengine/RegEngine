@@ -66,7 +66,7 @@
     "empty-render": 1
   },
   "frontend/src/app/ingest/page.tsx": {
-    "epcis-unlabeled": 3,
+    "epcis-unlabeled": 2,
     "sandbox": 3
   },
   "frontend/src/app/ingest/results/[id]/AnalysisResultClient.tsx": {

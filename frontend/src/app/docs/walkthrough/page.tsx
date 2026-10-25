@@ -63,8 +63,8 @@ export default function WalkthroughPage() {
             <li>A working <code className={CODE}>curl</code> with <code className={CODE}>openssl</code>, and ~15 minutes</li>
           </ul>
           <p className="mt-3 text-ui text-re-text-tertiary">
-            The flow: one receiving event, one transformation event, one shipping event:
-            three events in a single supplier-to-shipping chain. Fill each request-body
+            The flow: one receiving event, one transformation event, one shipping event.
+            That is three events in a single supplier-to-shipping chain. Fill each request-body
             skeleton with your own lot codes, locations, and quantities, then list the
             events and export them.
           </p>
