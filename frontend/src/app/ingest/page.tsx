@@ -664,7 +664,7 @@ export default function IngestPage() {
                             htmlFor="epcis-file-upload"
                             className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                           >
-                            <span>Select EPCIS file</span>
+                            <span>Select EPCIS file (Preview)</span>
                             <Badge size="sm">Preview</Badge>
                             <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
                           </label>
