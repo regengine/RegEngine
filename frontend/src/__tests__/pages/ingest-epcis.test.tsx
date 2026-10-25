@@ -284,7 +284,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.validateEpcis).not.toHaveBeenCalled();
     expect(mocks.ingestFile).not.toHaveBeenCalled();
-    expect(screen.queryByText('EPCIS processed')).not.toBeInTheDocument();
+    expect(screen.queryByText('EPCIS (Preview) processed')).not.toBeInTheDocument();
   });
 
   it('shows backend failures with the same error pattern as the CSV tab', async () => {
@@ -296,7 +296,7 @@ describe('EPCIS 2.0 import on /ingest', () => {
 
     expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
     expect(screen.getByText('Batch ingest failed')).toBeInTheDocument();
-    expect(screen.queryByText('EPCIS processed')).not.toBeInTheDocument();
+    expect(screen.queryByText('EPCIS (Preview) processed')).not.toBeInTheDocument();
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 

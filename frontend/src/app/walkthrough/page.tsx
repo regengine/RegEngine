@@ -94,7 +94,7 @@ const TIMELINE = [
     packageDetails: [
       { label: 'Package', value: 'Immutable once assembled' },
       { label: 'SHA-256 manifest', value: 'Included with the package' },
-      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD' },
+      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD (Preview)' },
     ],
   },
   {

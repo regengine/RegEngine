@@ -33,7 +33,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
 import { ErrorState } from '@/components/ui/error-state';
-import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
+import { filterExperimentalLinks } from '@/lib/experimental-features';
 import { NO_DATA_YET } from '@/lib/empty-values';
 
 /* ── Types matching ComplianceScoreResponse from backend ── */
@@ -127,9 +127,9 @@ const STATUS_CONFIG = {
 const COMPLIANCE_SETUP_STEPS = [
     {
         title: 'Load traceability records',
-        detail: 'Import a CSV, scan labels, or run Inflow Lab so the score has CTE and KDE evidence to evaluate.',
-        href: '/dashboard/inflow-lab',
-        action: 'Open Inflow Lab',
+        detail: 'Import a CSV or scan labels so the score has CTE and KDE evidence to evaluate.',
+        href: '/ingest',
+        action: 'Import records',
         icon: Upload,
     },
     {
@@ -141,7 +141,7 @@ const COMPLIANCE_SETUP_STEPS = [
     },
     {
         title: 'Preview export readiness',
-        detail: 'Once records exist, configure FDA and EPCIS export jobs for audit-response workflows.',
+        detail: 'Once records exist, configure FDA and EPCIS (Preview) export jobs for audit-response workflows.',
         href: '/dashboard/export-jobs',
         action: 'Set up exports',
         icon: Download,
@@ -439,13 +439,6 @@ export default function ComplianceDashboardPage() {
                                     If this workspace is new, there may not be enough records yet. You can keep this page open, or jump directly to the setup paths below.
                                 </p>
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    {experimentalFeaturesEnabled() && (
-                                        <Link href="/dashboard/inflow-lab">
-                                            <Button variant="outline" size="sm" className="h-8 text-xs">
-                                                Open Inflow Lab
-                                            </Button>
-                                        </Link>
-                                    )}
                                     <Link href="/dashboard/receiving">
                                         <Button variant="outline" size="sm" className="h-8 text-xs">
                                             Start receiving
@@ -515,7 +508,7 @@ export default function ComplianceDashboardPage() {
 
                             <Card className="border-[var(--re-border-default)]">
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base">Inflow Workbench</CardTitle>
+                                    <CardTitle className="text-base">Import readiness</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     <div className="flex items-end justify-between gap-3">
@@ -552,13 +545,6 @@ export default function ComplianceDashboardPage() {
                                             </span>
                                         </div>
                                     </div>
-                                    {experimentalFeaturesEnabled() && (
-                                        <Link href="/dashboard/inflow-lab">
-                                            <Button variant="outline" className="w-full h-9 rounded-xl text-xs">
-                                                Open Workbench <ArrowRight className="ml-1 h-3 w-3" />
-                                            </Button>
-                                        </Link>
-                                    )}
                                 </CardContent>
                             </Card>
 
@@ -596,7 +582,7 @@ export default function ComplianceDashboardPage() {
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <Timer className="h-5 w-5 text-[var(--re-brand)]" />
                                             <span className="text-xs font-medium">Recall Drill</span>
-                                            <span className="text-label text-muted-foreground">24-hr simulation</span>
+                                            <span className="text-label text-muted-foreground">24-hr response</span>
                                         </Button>
                                     </Link>
                                     <Link href="/ingest">
@@ -616,7 +602,7 @@ export default function ComplianceDashboardPage() {
                                     <Link href="/dashboard/export-jobs">
                                         <Button variant="outline" className="w-full h-auto min-h-[56px] py-3 flex flex-col gap-1.5 rounded-xl hover:border-[var(--re-brand)] transition-colors">
                                             <FileText className="h-5 w-5 text-[var(--re-brand)]" />
-                                            <span className="text-xs font-medium">EPCIS Export</span>
+                                            <span className="text-xs font-medium">EPCIS Export (Preview)</span>
                                             <span className="text-label text-muted-foreground">GS1 2.0 format</span>
                                         </Button>
                                     </Link>
