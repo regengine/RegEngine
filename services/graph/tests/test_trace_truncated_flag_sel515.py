@@ -42,8 +42,9 @@ class _Result:
 
 
 class _Session:
-    def __init__(self, path_records):
+    def __init__(self, path_records, association_rows=()):
         self._path_records = path_records
+        self._association_rows = list(association_rows)
 
     async def __aenter__(self):
         return self
@@ -54,6 +55,8 @@ class _Session:
     async def run(self, query, **params):
         if "hop_count" in query:  # the capped traversal query
             return _Result(self._path_records)
+        if "AS lot" in query:  # the capped association query
+            return _Result(self._association_rows)
         return _Result([])
 
 
@@ -64,9 +67,10 @@ class _Client:
             for i in range(n)
         ]
         self._records = records
+        self._association_rows = []
 
     def session(self):
-        return _Session(self._records)
+        return _Session(self._records, self._association_rows)
 
 
 def test_limit_constant_matches_every_capped_query():
@@ -98,3 +102,25 @@ async def test_trace_under_cap_is_not_truncated(fn):
     result = await getattr(tracer, fn)(_Client(3), "0", tenant_id=TENANT)
     assert result.truncated is False
     assert result.truncation_limit is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fn", ["trace_forward", "trace_backward"])
+async def test_association_query_over_cap_alone_is_flagged_truncated(fn):
+    """CodeRabbit r4370185652: the association cap must flag on its own."""
+    client = _Client(3)
+    # One lot so the association query runs; position numbers only.
+    client._records.append({"labels": ["Lot"], "props": {"tlc": "0", "tenant_id": TENANT}, "hop_count": 1})
+    client._association_rows = [
+        {
+            "lot": {"tlc": "0", "tenant_id": TENANT},
+            "event": {"event_id": str(i % 3), "tenant_id": TENANT},
+            "facility": None,
+        }
+        for i in range(tracer.TRACE_ROW_LIMIT + 1)
+    ]
+    result = await getattr(tracer, fn)(client, "0", tenant_id=TENANT)
+    assert len(result.events) < tracer.TRACE_ROW_LIMIT
+    assert result.truncated is True
+    assert result.truncation_limit == tracer.TRACE_ROW_LIMIT
+    assert len(result.trace_rows) == tracer.TRACE_ROW_LIMIT
