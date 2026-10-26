@@ -15,10 +15,6 @@ on:
       - '.github/workflows/copy-gate.yml'
       - 'scripts/copy-lint/baseline.json'
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
