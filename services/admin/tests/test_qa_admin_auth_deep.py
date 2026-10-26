@@ -324,10 +324,14 @@ def test_challenge_pending_tolerates_naive_expires_at():
     )
 
 
-def test_browser_nonce_reuses_short_cookie_and_regenerates_overlong():
+def test_browser_nonce_reuses_well_formed_cookie_and_regenerates_overlong():
     service = _crypto()
+    well_formed = "A" * 43
 
-    assert _browser_nonce_for_request(_cookie_request({"regengine_auth_browser_nonce": "abc"}), service) == "abc"
+    assert (
+        _browser_nonce_for_request(_cookie_request({"regengine_auth_browser_nonce": well_formed}), service)
+        == well_formed
+    )
 
     fresh = _browser_nonce_for_request(_cookie_request({"regengine_auth_browser_nonce": "n" * 300}), service)
     assert fresh != "n" * 300
