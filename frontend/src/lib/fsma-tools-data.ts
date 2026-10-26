@@ -240,7 +240,7 @@ export const FREE_TOOLS = [
     },
     {
         id: 'drill-simulator',
-        title: '24-Hour Drill Simulator',
+        title: 'Recall drill (Preview)',
         description: 'Self-paced rehearsal for the §1.1455(c) records-on-request workflow.',
         icon: Timer,
         href: '/tools/drill-simulator'

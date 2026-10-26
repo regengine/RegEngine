@@ -10,7 +10,7 @@ import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'CTEs and KDEs Explained | FSMA 204 Data Requirements Guide | RegEngine',
-  description: 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 formats.',
+  description: 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 (Preview) formats.',
   openGraph: {
     url: 'https://regengine.co/blog/fsma-204-cte-kde-guide',
     siteName: 'RegEngine',
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 export default function CTEKDEGuidePage() {
   return (
     <div className="bg-re-surface-base">
-      <JSONLD data={blogPostingJsonLd('fsma-204-cte-kde-guide', 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 formats.')} />
+      <JSONLD data={blogPostingJsonLd('fsma-204-cte-kde-guide', 'Deep dive into the 7 Critical Tracking Events (CTEs) and Key Data Elements (KDEs) your system needs to capture. Technical implementation details, data mapping, and EPCIS 2.0 (Preview) formats.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         {/* Back to Blog Link */}
         <Link
@@ -282,11 +282,11 @@ export default function CTEKDEGuidePage() {
           {/* Data Format & Technical Implementation */}
           <h2 className="text-heading text-re-text-primary mb-8 mt-12 flex items-center gap-3">
             <Code className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            EPCIS 2.0 Data Format
+            EPCIS 2.0 Data Format (Preview)
           </h2>
 
           <p className="text-re-text-secondary mb-6">
-            EPCIS 2.0 can support trading-partner interoperability, and some buyers may request it. FDA records requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies. Here is a simplified EPCIS-style example:
+            EPCIS 2.0 (Preview) can support trading-partner interoperability, and some buyers may request it. FDA records requests may require records, including an electronic sortable spreadsheet under 21 CFR 1.1455(c)(3), unless an exemption or agreed alternative applies. Here is a simplified EPCIS-style example:
           </p>
 
           <Card variant="inset" className="mb-8 overflow-hidden">
@@ -329,7 +329,7 @@ export default function CTEKDEGuidePage() {
           </Card>
 
           <p className="text-re-text-secondary mb-8">
-            <strong>Note:</strong> Your system should generate EPCIS-compliant events automatically from CTE capture forms. The key is ensuring all required KDEs are captured and properly formatted.
+            <strong>Note:</strong> Your system should generate EPCIS-compliant (Preview) events automatically from CTE capture forms. The key is ensuring all required KDEs are captured and properly formatted.
           </p>
 
           {/* System Architecture */}
@@ -424,7 +424,7 @@ export default function CTEKDEGuidePage() {
 
           <Card variant="inset" padding="spacious" className="mb-8">
             <p className="text-re-text-secondary mb-4">
-              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS-oriented export workflows.
+              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS-oriented export workflows (Preview).
             </p>
             <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
               <Button asChild size="lg">

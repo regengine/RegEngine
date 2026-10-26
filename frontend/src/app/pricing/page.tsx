@@ -86,6 +86,7 @@ const PRICING_TIERS = [
     {
         id: 'standard',
         name: 'Standard',
+        beta: true,
         icon: 'rocket' as const,
         description: '2 to 3 facilities, scaling up',
         highlighted: true,
@@ -103,6 +104,7 @@ const PRICING_TIERS = [
     {
         id: 'premium',
         name: 'Premium',
+        beta: true,
         icon: 'crown' as const,
         description: '4+ facilities, full coverage',
         highlighted: false,
@@ -129,7 +131,7 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
 ];
 
 const FAQ: PricingFaqItem[] = [
-    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2 to 3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
+    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard (Beta) handles 2 to 3 facilities with unlimited CTEs. Premium (Beta) is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
     { q: 'What does the Founding rate include?', a: 'Founding rate discounts are documented in the executed order form or design-partner agreement, including term, scope, renewal, taxes, add-ons, plan-change treatment, onboarding, and integration support.' },
     { q: 'Can I switch plans anytime?', a: 'Plan changes are handled under your executed order form or design-partner agreement. We scope upgrades, downgrades, facility count, and billing changes before applying them.' },
     { q: 'Do you offer annual billing?', a: 'Annual and monthly billing can be scoped during procurement. Pricing shown is indicative; the executed agreement controls final plan, billing period, and checkout availability.' },

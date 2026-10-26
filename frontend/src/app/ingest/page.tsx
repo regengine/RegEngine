@@ -664,9 +664,9 @@ export default function IngestPage() {
                             htmlFor="epcis-file-upload"
                             className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                           >
-                            <span>Select EPCIS file</span>
+                            <span>Select EPCIS (Preview) file</span>
                             <Badge size="sm">Preview</Badge>
-                            <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
+                            <HelpTooltip content="Upload GS1 EPCIS 2.0 (Preview) events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
                           </label>
                           <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-8 text-center transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none">
                             <Input
@@ -848,7 +848,7 @@ export default function IngestPage() {
                           </>
                         ) : activeTab === 'epcis' ? (
                           <>
-                            <li>File must be a GS1 EPCIS 2.0 JSON document or XML file</li>
+                            <li>File must be a GS1 EPCIS 2.0 (Preview) JSON document or XML file</li>
                             <li>Upload a .json or .xml file up to 5MB</li>
                           </>
                         ) : (

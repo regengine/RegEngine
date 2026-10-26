@@ -71,17 +71,9 @@ export default function SecurityPage() {
         </div>
         <Card className="overflow-hidden">
           <CardHeader className="items-center py-3">
-            <p className="font-mono text-label uppercase text-re-text-muted">Verifier output</p>
-            <p className="font-mono text-label uppercase text-re-text-muted">Sample · illustrative</p>
+            <p className="font-mono text-label uppercase text-re-text-muted">Verification path</p>
           </CardHeader>
-          <div className="overflow-x-auto bg-re-surface-inset px-5 py-4 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
-            <p>$ python verify_chain.py --export fsma_package.json</p>
-            <p className="mt-3 text-re-success">verified: 430 records</p>
-            <p className="text-re-success">failed: 0 records</p>
-            <p className="text-re-success">manifest: hash matched</p>
-            <p className="mt-3 text-re-text-primary">result: evidence package intact</p>
-          </div>
-          <div className="grid gap-5 border-t border-re-border-subtle p-5 sm:grid-cols-3">
+          <div className="grid gap-5 p-5 sm:grid-cols-3">
             <div>
               <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Bundle</p>
               <p className="font-mono text-[0.8125rem] text-re-text-primary">fsma_package.json</p>

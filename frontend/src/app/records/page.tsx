@@ -35,8 +35,8 @@ const SOURCE_LABEL: Record<string, string> = {
   webhook_api: 'Webhook API',
   csv_upload: 'CSV Upload',
   xlsx_upload: 'XLSX Upload',
-  epcis_api: 'EPCIS API',
-  epcis_xml: 'EPCIS XML',
+  epcis_api: 'EPCIS API (Preview)',
+  epcis_xml: 'EPCIS XML (Preview)',
   manual: 'Manual',
   legacy_v002: 'Legacy',
 };
