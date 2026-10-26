@@ -97,6 +97,12 @@ async def export_fda_request_sheet(
     # RE-SEC-003: constrain shape of strings that flow into Content-Disposition.
     start_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="Start Date (YYYY-MM-DD or ISO)"),
     end_date: str = Query(..., pattern=r"^[0-9T:.\-]{1,32}$", description="End Date (YYYY-MM-DD or ISO)"),
+    tlc: Optional[str] = Query(
+        None,
+        min_length=1,
+        max_length=256,
+        description="Traceability Lot Code. When set, only events for this exact lot are exported.",
+    ),
     tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key=Depends(require_api_key),
 ):
@@ -109,7 +115,7 @@ async def export_fda_request_sheet(
 
     Required by FSMA 204 Section 1.1455(b)(3) - must be provided within 24 hours.
     """
-    logger.info("fda_request_export_initiated", start=start_date, end=end_date)
+    logger.info("fda_request_export_initiated", start=start_date, end=end_date, has_tlc_filter=tlc is not None)
 
     # #2511: reconcile the two tenant sources (middleware vs authenticated
     # API key) and scope Neo4j to the authenticated principal — fail closed
@@ -126,7 +132,7 @@ async def export_fda_request_sheet(
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
+            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id, tlc=tlc)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
