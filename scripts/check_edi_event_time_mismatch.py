@@ -27,7 +27,7 @@ TOLERANCE = timedelta(days=1)
 DATE_KDE_KEYS = ("ship_date", "event_date")
 
 MISMATCH_SQL = """
-SELECT COUNT(*)
+SELECT COUNT(DISTINCT e.id)
   FROM fsma.cte_events e
   JOIN fsma.cte_kdes k
     ON k.cte_event_id = e.id
@@ -39,7 +39,8 @@ SELECT COUNT(*)
 """
 # The event date is a calendar day (UTC); its timestamp may fall anywhere in
 # it, so a mismatch is more than one day before its start or after its end.
-# Mirrors is_mismatch() below.
+# Mirrors is_mismatch() below. COUNT(DISTINCT e.id) counts each event once
+# even when it carries both a ship_date and an event_date KDE.
 
 _PROD_MARKERS = ("prod", "production")
 

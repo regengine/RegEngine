@@ -62,7 +62,6 @@ from .parser import (
     _split_transaction_sets,
 )
 from .utils import (
-    _ingest_time_iso,
     _normalize_unit,
     _resolve_unit_code,
     _safe_float,
@@ -657,7 +656,6 @@ async def ingest_edi_856(
             source=source,
         )
 
-    ingested_at = _ingest_time_iso()
     timestamp, ship_date = _ship_timestamp_and_date(
         extracted.get("ship_date_raw"),
         extracted.get("ship_time_raw"),
@@ -683,7 +681,6 @@ async def ingest_edi_856(
         line_tlc = lot.strip() if isinstance(lot, str) and lot.strip() else traceability_lot_code
         kdes: dict[str, Any] = {
             "ship_date": ship_date,
-            "edi_ingested_at": ingested_at,
             "ship_from_location": ship_from_name,
             "ship_to_location": ship_to_name,
             "ship_from_gln": ship_from_gln or ship_from_gln_raw,
@@ -874,7 +871,6 @@ def _build_ingest_event_for_set(
         "edi_gs_control_number": extracted.get("gs_control_number"),
         "reference_document_number": extracted.get("reference_document_number"),
         "event_date": event_date,
-        "edi_ingested_at": _ingest_time_iso(),
     }
 
     if transaction_set == "856":

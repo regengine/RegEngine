@@ -122,15 +122,6 @@ def _valid_gln_or_none(value: Optional[str]) -> Optional[str]:
     return clean if verify_gs1_check_digit(clean) else None
 
 
-def _ingest_time_iso() -> str:
-    """Wall-clock ingest time (UTC), kept separate from the EDI event time.
-
-    The event ``timestamp`` always carries the real EDI date; this value is
-    stored as the ``edi_ingested_at`` KDE so the two clocks never mix.
-    """
-    return datetime.now(timezone.utc).isoformat()
-
-
 def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Optional[str]) -> tuple[str, str]:
     """Normalize an EDI shipment date/time into an ISO timestamp and date.
 
