@@ -12,7 +12,7 @@
 # routes. The cap this replaces also claimed a three-package migration; the
 # lock already resolved prometheus-fastapi-instrumentator 8.1.0 and starlette
 # 1.6.0, so only fastapi actually moved.
-fastapi>=0.141.1
+fastapi>=0.146.0
 uvicorn[standard]>=0.54.0
 sqlalchemy>=2.1.4
 # greenlet is a transitive of sqlalchemy on linux x86_64/aarch64 via env marker.
