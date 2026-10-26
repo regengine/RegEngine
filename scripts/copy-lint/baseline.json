@@ -96,10 +96,6 @@
   "frontend/src/app/product/page.tsx": {
     "sandbox": 2
   },
-  "frontend/src/app/proof/page.tsx": {
-    "epcis-unlabeled": 2,
-    "sample-demo": 5
-  },
   "frontend/src/app/records/page.tsx": {
     "dash-placeholder": 3,
     "empty-render": 1,
