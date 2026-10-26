@@ -215,19 +215,13 @@ jobs:
                     ].join('\n');
 
                     if (existingAlertComments.length > 0) {
-                      // Avoid redundant edits: every edit fires issue_comment "edited" on the PR,
-                      // which re-runs Engine Review Pass and PR Blocker Checklist on every open PR after each main push.
-                      if (primaryComment && primaryComment.body === commentBody) {
-                        core.info(`PR #${prNumber}: alert is unchanged.`);
-                      } else {
-                        core.info(`PR #${prNumber}: updating existing alert comment (id: ${primaryComment.id}, state: ${state}).`);
-                        await github.rest.issues.updateComment({
-                          owner,
-                          repo,
-                          comment_id: primaryComment.id,
-                          body: commentBody,
-                        });
-                      }
+                      core.info(`PR #${prNumber}: updating existing alert comment (id: ${primaryComment.id}, state: ${state}).`);
+                      await github.rest.issues.updateComment({
+                        owner,
+                        repo,
+                        comment_id: primaryComment.id,
+                        body: commentBody,
+                      });
                       for (let i = 1; i < existingAlertComments.length; i++) {
                         try {
                           await github.rest.issues.deleteComment({

@@ -13,8 +13,9 @@ on:
   deployment_status:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.deployment.environment || github.ref }}
+  # A later deployment_status event must never cancel an in-flight Production run; duplicates queue instead.
+  cancel-in-progress: false
 
 permissions:
   contents: read
