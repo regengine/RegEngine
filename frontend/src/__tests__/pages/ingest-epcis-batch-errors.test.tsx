@@ -140,4 +140,20 @@ describe('EPCIS all-failed batch shows per-event errors', () => {
     expect(screen.queryAllByText(/^Event \d+:/)).toHaveLength(0);
     expect(mocks.ingestEpcisBatch).not.toHaveBeenCalled();
   });
+
+  it('clears the previous per-event errors when the API-key save fails', async () => {
+    mocks.ingestEpcisBatch.mockRejectedValue(atomicRejection(EVENTS));
+    await uploadBatch();
+    expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
+    expectEveryEventListed();
+
+    mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    await userEvent.click(screen.getByRole('button', { name: /upload & process/i }));
+
+    expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+    expect(screen.queryAllByText(/^Event \d+:/)).toHaveLength(0);
+    expect(screen.queryByText(ATOMIC_MESSAGE)).not.toBeInTheDocument();
+    expect(mocks.ingestEpcisBatch).toHaveBeenCalledTimes(1);
+  });
 });
