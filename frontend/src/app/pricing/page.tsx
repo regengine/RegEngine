@@ -1,20 +1,24 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { PricingPageClient } from '@/components/pricing/PricingPageClient';
 import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/PricingPageClient';
+import { Container } from '@/components/layout/container';
+import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 traceability readiness from $425/mo. Transparent Founding rate pricing with onboarding terms controlled by your agreement.',
+    description: 'FSMA 204 traceability readiness with transparent Founding rate pricing. Onboarding terms are controlled by your agreement.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 traceability readiness from $425/mo. Transparent Founding rate pricing with onboarding terms controlled by your agreement.',
+        description: 'FSMA 204 traceability readiness with transparent Founding rate pricing. Onboarding terms are controlled by your agreement.',
         url: 'https://regengine.co/pricing',
         type: 'website',
     },
 };
 
 // Cache pricing for 1 hour server-side so the page stays fast even when
-// the billing service is slow. Falls back to hardcoded data on error.
+// the billing service is slow. When billing is unreachable the page renders
+// an honest unavailable state instead of hardcoded prices.
 export const revalidate = 3600;
 
 interface BillingPlan {
@@ -53,21 +57,19 @@ async function fetchBillingPlans(): Promise<BillingPlan[] | null> {
         if (!Array.isArray(plans) || plans.length === 0) return null;
         return plans;
     } catch {
-        // Billing service unreachable — graceful degradation to hardcoded data.
+        // Billing service unreachable: caller renders the unavailable state.
         return null;
     }
 }
 
+// Static tier copy (names, feature lists, CTAs). Prices come only from the
+// billing service; nothing here may carry a number.
 const PRICING_TIERS = [
     {
         id: 'base',
         name: 'Base',
         icon: 'zap' as const,
         description: '1 facility, getting started',
-        gaMonthly: 999,
-        gaAnnual: 849,
-        partnerMonthly: 499,
-        partnerAnnual: 425,
         highlighted: false,
         cta: 'Apply for Base',
         features: [
@@ -86,10 +88,6 @@ const PRICING_TIERS = [
         name: 'Standard',
         icon: 'rocket' as const,
         description: '2 to 3 facilities, scaling up',
-        gaMonthly: 1299,
-        gaAnnual: 1099,
-        partnerMonthly: 649,
-        partnerAnnual: 549,
         highlighted: true,
         cta: 'Apply for Standard',
         features: [
@@ -98,7 +96,7 @@ const PRICING_TIERS = [
             'Everything in Base',
             'Multi-facility operations',
             'Retailer-specific readiness benchmarks',
-            'FDA-oriented sortable export + EPCIS 2.0 export',
+            'FDA-oriented sortable export + EPCIS 2.0 export (Preview)',
             'Priority email support',
         ],
     },
@@ -107,10 +105,6 @@ const PRICING_TIERS = [
         name: 'Premium',
         icon: 'crown' as const,
         description: '4+ facilities, full coverage',
-        gaMonthly: 1499,
-        gaAnnual: 1275,
-        partnerMonthly: 749,
-        partnerAnnual: 639,
         highlighted: false,
         cta: 'Apply for Premium',
         features: [
@@ -129,7 +123,6 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
     { feature: 'Time to first FDA-oriented export', regengine: 'Design-partner workflow', foodlogiq: 'Enterprise implementation', repositrak: 'Retailer-coordinated', tracegains: 'Enterprise implementation' },
     { feature: 'Public API + OpenAPI Docs', regengine: 'Available for contracted workspaces', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Self-Serve Signup', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
-    { feature: 'Developer Sandbox', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Hash-manifested audit trail', regengine: 'Supported where export workflow creates manifests', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Free Trial', regengine: 'Design-partner terms', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Pricing Model', regengine: 'Indicative design-partner ranges; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
@@ -149,26 +142,61 @@ const FAQ: PricingFaqItem[] = [
 ];
 
 export default async function PricingPage() {
-    // Attempt to load live pricing from the billing service.
-    // On failure (service down, network error, bad payload) we silently fall
-    // back to the statically-defined PRICING_TIERS above.
+    // Load live pricing from the billing service. When it is unreachable or
+    // returns no usable plans, show an honest unavailable state rather than
+    // any hardcoded figures.
     const livePlans = await fetchBillingPlans();
 
-    const pricingTiers = livePlans
-        ? PRICING_TIERS.map((tier) => {
-              const live = livePlans.find((p) => p.id === tier.id);
-              if (!live) return tier;
-              return {
-                  ...tier,
-                  ...(live.ga_monthly !== undefined && { gaMonthly: live.ga_monthly }),
-                  ...(live.ga_annual !== undefined && { gaAnnual: live.ga_annual }),
-                  ...(live.partner_monthly !== undefined && { partnerMonthly: live.partner_monthly }),
-                  ...(live.partner_annual !== undefined && { partnerAnnual: live.partner_annual }),
-                  ...(live.description !== undefined && { description: live.description }),
-                  ...(Array.isArray(live.features) && live.features.length > 0 && { features: live.features }),
-              };
-          })
-        : PRICING_TIERS;
+    if (!livePlans) {
+        return (
+            <div className="re-page bg-re-surface-base text-re-text-secondary">
+                <Container as="section" width="prose" className="py-16 text-center sm:py-24">
+                    <h1 className="font-display text-display text-re-text-primary">
+                        Pricing is temporarily unavailable
+                    </h1>
+                    <p className="mx-auto mt-4 max-w-[60ch] text-body text-re-text-secondary">
+                        We could not load current plan pricing from our billing service, so no figures are shown here.
+                        Plan rates are confirmed in your executed order form or design-partner agreement.
+                    </p>
+                    <div className="mt-8 flex flex-wrap justify-center gap-3">
+                        <Button asChild size="lg">
+                            <Link href="/signup" className="no-underline">
+                                Apply as a founding design partner
+                            </Link>
+                        </Button>
+                        <Button asChild variant="secondary" size="lg">
+                            <Link href="/contact" className="no-underline">
+                                Contact us
+                            </Link>
+                        </Button>
+                    </div>
+                </Container>
+            </div>
+        );
+    }
+
+    const pricingTiers = PRICING_TIERS.flatMap((tier) => {
+        const live = livePlans.find((p) => p.id === tier.id);
+        if (!live) return [];
+        const { ga_monthly, ga_annual, partner_monthly, partner_annual } = live;
+        if (
+            typeof ga_monthly !== 'number' ||
+            typeof ga_annual !== 'number' ||
+            typeof partner_monthly !== 'number' ||
+            typeof partner_annual !== 'number'
+        ) {
+            return [];
+        }
+        return [{
+            ...tier,
+            gaMonthly: ga_monthly,
+            gaAnnual: ga_annual,
+            partnerMonthly: partner_monthly,
+            partnerAnnual: partner_annual,
+            description: live.description ?? tier.description,
+            features: Array.isArray(live.features) && live.features.length > 0 ? live.features : tier.features,
+        }];
+    });
 
     return <PricingPageClient pricingTiers={pricingTiers} comparisonRows={COMPETITOR_COMPARISON} faq={FAQ} />;
 }

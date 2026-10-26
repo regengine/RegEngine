@@ -1,10 +1,12 @@
 /**
  * Report-only visual regression + page monitoring config.
  *
- * Read-only by design: every project in this file visits pages with GET only,
- * except the two conditional projects below, which do not exist unless their
- * env flag is set (so nothing ever shows as "skipped"):
+ * Read-only by design: every project in this file visits pages with GET only.
+ * Conditional projects below do not exist unless their env flag is set
+ * (so nothing ever shows as "skipped"):
  *
+ * - crawl-desktop / crawl-mobile: sitemap crawler (crawl.spec.ts).
+ *   Opt-in via VISUAL_CRAWL=1. No workflow sets VISUAL_CRAWL.
  * - preview-forms: blank-submit validation screenshots on /login + /signup.
  *   Only on preview deploys, via VISUAL_ALLOW_FORM_SUBMIT=1. Never fills
  *   credentials, never creates an account.
@@ -21,6 +23,7 @@ import { defineConfig } from '@playwright/test';
 
 const allowFormSubmit = process.env.VISUAL_ALLOW_FORM_SUBMIT === '1';
 const allowSignedIn = process.env.VISUAL_AUTH === '1';
+const allowCrawl = process.env.VISUAL_CRAWL === '1';
 
 export default defineConfig({
     testDir: './tests/visual',
@@ -91,6 +94,25 @@ export default defineConfig({
             testMatch: ['smoke.spec.ts'],
         },
         /* Conditional projects: absent unless the env flag is set. */
+        ...(allowCrawl
+            ? [
+                  {
+                      name: 'crawl-desktop',
+                      testMatch: ['crawl.spec.ts'],
+                      use: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
+                  },
+                  {
+                      name: 'crawl-mobile',
+                      testMatch: ['crawl.spec.ts'],
+                      use: {
+                          viewport: { width: 390, height: 844 },
+                          isMobile: true,
+                          hasTouch: true,
+                          deviceScaleFactor: 1,
+                      },
+                  },
+              ]
+            : []),
         ...(allowFormSubmit
             ? [
                   {

@@ -28,6 +28,11 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
+  SupplierGapTimeToFixResponse,
+  SupplierDataQualityResponse,
+  AgreedSendingHoursResponse,
+  SupplierQualityDrilldownMetric,
+  SupplierQualityRecordsResponse,
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
   SupplierBulkUploadStatusResponse,
@@ -390,6 +395,7 @@ class APIClient {
         description: params.description,
         tenant_id: params.tenantId,
       },
+      { stepUpReason: "Confirm it's you to create an API key." },
     );
     return data;
   }
@@ -401,6 +407,7 @@ class APIClient {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
       },
+      { stepUpReason: "Confirm it's you to generate an API key." },
     );
     return data;
   }
@@ -411,7 +418,9 @@ class APIClient {
   }
 
   async revokeAPIKey(keyId: string): Promise<void> {
-    await this.adminClient.delete(`/v1/admin/keys/${encodeURIComponent(keyId)}`);
+    await this.adminClient.delete(`/v1/admin/keys/${encodeURIComponent(keyId)}`, {
+      stepUpReason: "Confirm it's you to revoke this API key.",
+    });
   }
 
   // Ingestion API
@@ -705,6 +714,7 @@ class APIClient {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',
       { name },
+      { stepUpReason: "Confirm it's you to create a tenant." },
     );
     return data;
   }
@@ -868,6 +878,48 @@ class APIClient {
     const { data } = await this.adminClient.get<SupplierComplianceGapsResponse>('/v1/supplier/gaps', {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
+    return data;
+  }
+
+  async getSupplierGapTimeToFix(): Promise<SupplierGapTimeToFixResponse> {
+    const { data } = await this.adminClient.get<SupplierGapTimeToFixResponse>('/v1/supplier/gap-time-to-fix');
+    return data;
+  }
+
+  async getSupplierDataQuality(windowDays?: number): Promise<SupplierDataQualityResponse> {
+    const { data } = await this.adminClient.get<SupplierDataQualityResponse>('/v1/supplier/data-quality', {
+      params: windowDays ? { window_days: windowDays } : undefined,
+    });
+    return data;
+  }
+
+  async setFacilityAgreedSendingHours(
+    facilityId: string,
+    agreedSendingHours: number | null,
+  ): Promise<AgreedSendingHoursResponse> {
+    const { data } = await this.adminClient.put<AgreedSendingHoursResponse>(
+      `/v1/supplier/admin/facilities/${encodeURIComponent(facilityId)}/agreed-sending-hours`,
+      { agreed_sending_hours: agreedSendingHours },
+    );
+    return data;
+  }
+
+  async getSupplierDataQualityRecords(
+    facilityId: string,
+    metric: SupplierQualityDrilldownMetric,
+    options: { windowDays?: number; limit?: number; offset?: number } = {},
+  ): Promise<SupplierQualityRecordsResponse> {
+    const { data } = await this.adminClient.get<SupplierQualityRecordsResponse>(
+      `/v1/supplier/data-quality/${encodeURIComponent(facilityId)}/records`,
+      {
+        params: {
+          metric,
+          window_days: options.windowDays,
+          limit: options.limit,
+          offset: options.offset,
+        },
+      },
+    );
     return data;
   }
 
@@ -1049,7 +1101,9 @@ class APIClient {
   // --- Tenant Settings & Onboarding ---
 
   async updateTenantSettings(tenantId: string, settings: Record<string, unknown>): Promise<void> {
-    await this.adminClient.patch(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, settings);
+    await this.adminClient.patch(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, settings, {
+      stepUpReason: "Confirm it's you to change tenant settings.",
+    });
   }
 
   async getOnboardingStatus(tenantId: string): Promise<{

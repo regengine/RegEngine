@@ -232,14 +232,18 @@ class TestKdeMissingLotTenantScope:
 
 class TestBrokenChainsQueries:
     @pytest.mark.asyncio
-    async def test_crypto_gap_query_has_row_cap(self):
-        """All three broken-chain queries must cap rows for large tenants."""
+    async def test_broken_chain_queries_are_paged_not_capped(self):
+        """R1: each broken-chain query fetches bounded pages, never a silent 2000-row cap."""
         client, session = _empty_client()
         await find_broken_chains(client, tenant_id=TENANT)
         assert session.run.call_count == 3
         for i, call in enumerate(session.run.call_args_list):
             cypher = _flatten(call.args[0])
-            assert "LIMIT 2000" in cypher, f"query {i} has no row cap"
+            assert "LIMIT 2000" not in cypher, f"query {i} still has a fixed row cap"
+            assert "LIMIT $page_size" in cypher, f"query {i} is not paged"
+            assert "SKIP" not in cypher, f"query {i} uses offset paging"
+            assert "$after_key" in cypher, f"query {i} is not keyset-paged"
+            assert call.kwargs["page_size"] > 0
 
     @pytest.mark.asyncio
     async def test_paradox_query_sorts_origins_before_collect(self):

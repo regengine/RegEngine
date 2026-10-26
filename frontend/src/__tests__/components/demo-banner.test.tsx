@@ -9,13 +9,13 @@ import { DemoBanner } from '@/components/control-plane/demo-banner';
 describe('DemoBanner Component', () => {
     it('renders when visible=true', () => {
         render(<DemoBanner visible={true} />);
-        expect(screen.getByText('Sample Data')).toBeInTheDocument();
+        expect(screen.getByText('No data yet')).toBeInTheDocument();
     });
 
-    it('shows "Sample Data" text and description', () => {
+    it('shows the empty-state text and a next-step link', () => {
         render(<DemoBanner visible={true} />);
-        expect(screen.getByText('Sample Data')).toBeInTheDocument();
-        expect(screen.getByText(/backend unavailable/i)).toBeInTheDocument();
+        expect(screen.getByText('No data yet')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: /connect real data/i })).toHaveAttribute('href', '/ingest');
     });
 
     it('does not render when visible=false', () => {

@@ -27,7 +27,7 @@ const TIMELINE = [
     time: 'T+0:00',
     title: 'FDA request arrives',
     icon: Clock,
-    description: 'The FDA sends a records request under 21 CFR 1.1455: "Provide all traceability records for Romaine Lettuce lots R-2026-0312 through R-2026-0318, from farm to retail, within 24 hours."',
+    description: 'The FDA sends a records request under 21 CFR 1.1455: provide all traceability records for the implicated lots, from farm to retail, within 24 hours.',
     detail: 'This is an illustrative scenario. Under §1.1455(c), the FDA can request records for products on the Food Traceability List, and you must produce a sortable electronic spreadsheet within 24 hours. Real timing varies by completeness of upstream supplier data.',
     color: 'red',
   },
@@ -35,7 +35,7 @@ const TIMELINE = [
     time: 'T+0:02',
     title: 'Request case created in RegEngine',
     icon: FileText,
-    description: 'An operator creates a Request Case, scoping the affected lots, products, and facilities. RegEngine immediately identifies 47 traceability events across 3 suppliers and 5 facilities.',
+    description: 'An operator creates a Request Case, scoping the affected lots, products, and facilities. RegEngine identifies the in-scope traceability events across the affected suppliers and facilities.',
     detail: 'The system searches canonical records by lot code, product, and facility reference. Events from different suppliers and source systems are already normalized into a common schema.',
     color: 'blue',
   },
@@ -43,7 +43,7 @@ const TIMELINE = [
     time: 'T+0:05',
     title: 'Data quality gaps surface',
     icon: Search,
-    description: 'The rules engine evaluates all 47 events against 36 FSMA 204 validation rules (33 stateless + 3 cross-event). Results: 38 pass, 6 have warnings, 3 have blocking defects.',
+    description: 'The rules engine evaluates each in-scope event against the FSMA 204 validation rules and separates passes, warnings, and blocking defects.',
     detail: null,
     color: 'amber',
   },
@@ -55,9 +55,9 @@ const TIMELINE = [
     detail: null,
     color: 'red',
     defects: [
-      { lot: 'R-2026-0312', issue: 'Missing required KDE: cooling_date', severity: 'critical' },
-      { lot: 'R-2026-0312', issue: 'Identity conflict: "Valley Fresh Farms LLC" vs "Valley Fresh" (>=85% match, unresolved)', severity: 'critical' },
-      { lot: 'R-2026-0314', issue: 'Invalid unit_of_measure: "bushels" not in FSMA standard units', severity: 'critical' },
+      { issue: 'Missing required KDE: cooling_date', severity: 'critical' },
+      { issue: 'Identity conflict between two supplier name variants at or above the match threshold, unresolved', severity: 'critical' },
+      { issue: 'Invalid unit_of_measure: "bushels" not in FSMA standard units', severity: 'critical' },
     ],
   },
   {
@@ -88,23 +88,20 @@ const TIMELINE = [
     time: 'T+1:35',
     title: 'FDA response package assembled',
     icon: Package,
-    description: 'The operator clicks "Assemble Package." RegEngine generates an immutable, SHA-256 hashed package containing all 47 records, rule evaluations, exception resolutions, and a manifest listing each file\'s hash.',
+    description: 'The operator clicks "Assemble Package." RegEngine generates an immutable, SHA-256 hashed package containing the in-scope records, rule evaluations, exception resolutions, and a manifest listing each file\'s hash.',
     detail: null,
     color: 'brand',
     packageDetails: [
-      { label: 'Records included', value: '47 of 47' },
-      { label: 'Rule evaluations', value: '47 passed' },
-      { label: 'Exceptions resolved', value: '3 of 3' },
-      { label: 'Package version', value: 'v1 (immutable)' },
-      { label: 'SHA-256 manifest hash', value: 'a7c3e9f2...d1b84c' },
-      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD' },
+      { label: 'Package', value: 'Immutable once assembled' },
+      { label: 'SHA-256 manifest', value: 'Included with the package' },
+      { label: 'Format', value: 'FDA 21 CFR 1.1455 sortable spreadsheet + EPCIS 2.0 JSON-LD (Preview)' },
     ],
   },
   {
     time: 'T+1:40',
     title: 'Package submitted to FDA',
     icon: CheckCircle2,
-    description: 'The package is submitted with a recorded submission method, recipient, and timestamp. The request case moves to "submitted" status. Total time: 1 hour 40 minutes.',
+    description: 'The package is submitted with a recorded submission method, recipient, and timestamp. The request case moves to "submitted" status.',
     detail: 'The SHA-256 manifest lets the FDA or your auditor check that the package files still match the manifest packaged with them. The verify_chain.py script can independently re-run that check. It is a self-consistency check, not a signature: the manifest is not signed, so it does not by itself establish who produced the package. Downstream message-bus signature verification is rolling out and not yet strict-mode by default.',
     color: 'emerald',
   },
@@ -123,7 +120,7 @@ export default function WalkthroughPage() {
           title={
             <>
               The FDA gives you 24&nbsp;hours.<br />
-              <span>Here&apos;s how you respond in&nbsp;2.</span>
+              <span>Here&apos;s how the response works.</span>
             </>
           }
           description="A step-by-step walkthrough of an illustrative FDA records-request scenario, from messy supplier data to a hash-manifested response package anyone can re-check."
@@ -134,10 +131,10 @@ export default function WalkthroughPage() {
             <Clock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 24-hour deadline
           </li>
           <li className="flex items-center gap-1.5 font-mono text-label uppercase text-re-text-muted">
-            <Package className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 47 records
+            <Package className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> Hash-manifested package
           </li>
           <li className="flex items-center gap-1.5 font-mono text-label uppercase text-re-text-muted">
-            <Shield className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> 3 blocking defects
+            <Shield className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" /> Blocking defects surfaced
           </li>
         </ul>
       </Container>
@@ -188,7 +185,6 @@ export default function WalkthroughPage() {
                       <div className="space-y-2">
                         {step.defects.map((d, j) => (
                           <div key={j} className="flex items-start gap-2">
-                            <span className="font-mono text-[0.8125rem] text-re-text-primary">{d.lot}</span>
                             <span className="text-ui text-re-text-secondary">{d.issue}</span>
                           </div>
                         ))}

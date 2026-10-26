@@ -7,16 +7,12 @@ import {
     ArrowRight,
     Archive,
     Braces,
-    CheckCircle2,
     ClipboardCheck,
     FileSpreadsheet,
-    FlaskConical,
-    GitBranch,
     Play,
     RefreshCcw,
     Save,
     ShieldCheck,
-    Terminal,
 } from 'lucide-react';
 import {
     CAPABILITY_REGISTRY,
@@ -44,7 +40,7 @@ import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
-import { experimentalFeaturesEnabled, filterExperimentalLinks } from '@/lib/experimental-features';
+import { filterExperimentalLinks } from '@/lib/experimental-features';
 import type {
     CreateIntegrationProfileRequest,
     IntegrationProfile,
@@ -72,19 +68,6 @@ const STATUS_TONES: Record<CustomerVisibleStatus, BadgeTone> = {
     contract_only: 'neutral',
 };
 
-const INFLOW_CONNECTOR = CAPABILITY_REGISTRY.find((item) => item.id === 'inflow-lab');
-
-const INFLOW_FACTS = [
-    ['Public slug', 'inflow-lab'],
-];
-
-const INFLOW_PATH = [
-    ['Simulator', 'FSMA 204 event batch'],
-    ['JSON events API', '/api/v1/webhooks/ingest'],
-    ['Alias resolution', 'inflow-lab -> inflow_lab'],
-    ['Dashboard source', 'Tagged as Inflow Lab'],
-];
-
 const ROUTE_GUIDANCE = [
     {
         title: 'Import Data',
@@ -97,12 +80,6 @@ const ROUTE_GUIDANCE = [
         description: 'Review normalized records and KDE mapping issues before publication.',
         href: '/ingest/curation',
         icon: ClipboardCheck,
-    },
-    {
-        title: 'Inflow Lab',
-        description: 'Run FSMA event simulations and event replay without mixing test traffic into normal imports.',
-        href: '/dashboard/inflow-lab',
-        icon: FlaskConical,
     },
     {
         title: 'FDA Export',
@@ -144,20 +121,6 @@ const DEFAULT_PROFILE_MAPPING = {
     reference_document: 'bol_number',
 };
 
-const DEFAULT_PREVIEW_EVENT = JSON.stringify([
-    {
-        event_type: 'shipping',
-        lot_code: 'TLC-ROMAINE-0426',
-        item_description: 'Romaine hearts',
-        case_count: 24,
-        uom: 'cases',
-        ship_date: '2026-04-30T15:00:00Z',
-        origin_facility: 'FreshPack Central',
-        destination_facility: 'DC-17',
-        bol_number: 'BOL-88921',
-    },
-], null, 2);
-
 export default function DashboardIntegrationsPage() {
     const { isAuthenticated } = useAuth();
     const { tenantId } = useTenant();
@@ -167,15 +130,15 @@ export default function DashboardIntegrationsPage() {
     const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
     const [profilesStatus, setProfilesStatus] = useState<'idle' | 'loading' | 'error'>('loading');
     const [profileError, setProfileError] = useState<string | null>(null);
-    const [profileName, setProfileName] = useState('FreshPack shipping CSV');
-    const [supplierName, setSupplierName] = useState('FreshPack Central');
+    const [profileName, setProfileName] = useState('');
+    const [supplierName, setSupplierName] = useState('');
     const [sourceType, setSourceType] = useState<IntegrationProfileSourceType>('csv');
     const [defaultCteType, setDefaultCteType] = useState('shipping');
-    const [profileNotes, setProfileNotes] = useState('Supplier uses BOL number for FSMA reference document.');
+    const [profileNotes, setProfileNotes] = useState('');
     const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({ ...DEFAULT_PROFILE_MAPPING });
     const [savingProfile, setSavingProfile] = useState(false);
     const [previewProfileId, setPreviewProfileId] = useState('');
-    const [previewEventText, setPreviewEventText] = useState(DEFAULT_PREVIEW_EVENT);
+    const [previewEventText, setPreviewEventText] = useState('');
     const [previewResult, setPreviewResult] = useState<MappingPreviewResponse | null>(null);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewing, setPreviewing] = useState(false);
@@ -345,7 +308,7 @@ export default function DashboardIntegrationsPage() {
         <PageContainer>
             <PageHeader
                 title="Integrations"
-                description="Track connector readiness, Inflow Lab validation, and mapping exceptions before upstream data is treated as compliance-ready."
+                description="Track connector readiness and mapping exceptions before upstream data is treated as compliance-ready."
                 secondaryActions={
                     <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
                         <RefreshCcw className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
@@ -383,7 +346,7 @@ export default function DashboardIntegrationsPage() {
                     <CardHeader className="flex-col items-start gap-1">
                         <h2 className="text-subheading text-re-text-primary">Data inflow entry points</h2>
                         <p className="text-small text-re-text-tertiary">
-                            Pick the route by intent so simulated connector traffic stays separate from customer imports and FDA export work.
+                            Pick the route by intent: import customer files, review mappings, then generate FDA exports when records are ready.
                         </p>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -612,7 +575,7 @@ export default function DashboardIntegrationsPage() {
                                         <h3 className="text-subheading text-re-text-primary">Validate-only preview</h3>
                                     </div>
                                     <label htmlFor="integration-preview-events" className="sr-only">
-                                        Sample events JSON
+                                        Events JSON
                                     </label>
                                     <Textarea
                                         id="integration-preview-events"
@@ -620,6 +583,7 @@ export default function DashboardIntegrationsPage() {
                                         onChange={(event) => setPreviewEventText(event.target.value)}
                                         rows={9}
                                         className="font-mono text-[0.8125rem]"
+                                        placeholder='[{"event_type": "...", "lot_code": "...", "...": "..."}]'
                                     />
                                     <Button
                                         variant="secondary"
@@ -648,83 +612,6 @@ export default function DashboardIntegrationsPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* Inflow Lab connector */}
-                {INFLOW_CONNECTOR && (
-                    <Card>
-                        <CardHeader className="flex-col items-start gap-1">
-                            <h2 className="text-subheading text-re-text-primary">Inflow Lab</h2>
-                            <p className="text-small text-re-text-tertiary">RegEngine-owned simulator connector</p>
-                        </CardHeader>
-                        <CardContent className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-                            <div className="space-y-4">
-                                <p className="max-w-[68ch] text-ui text-re-text-secondary">
-                                    {INFLOW_CONNECTOR.customer_copy} Use Inflow Lab for simulated FSMA event batches and webhook validation. Use Import Data for customer documents or files, then Curation Queue and FDA Export when records are ready. Inbound events use the public slug <code className="font-mono text-[0.8125rem]">inflow-lab</code>, then resolve to canonical backend id <code className="font-mono text-[0.8125rem]">inflow_lab</code>.
-                                </p>
-
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                    {INFLOW_FACTS.map(([label, value]) => (
-                                        <Card key={label} variant="inset" padding="compact">
-                                            <div className="text-label text-re-text-muted">{label}</div>
-                                            <div className="mt-1 font-mono text-[0.8125rem] text-re-text-primary">{value}</div>
-                                        </Card>
-                                    ))}
-                                </div>
-
-                                <div className="flex flex-wrap gap-2">
-                                    {experimentalFeaturesEnabled() && (
-                                        <Button asChild>
-                                            <Link href="/dashboard/inflow-lab">
-                                                <FlaskConical className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                                                Open Inflow Lab
-                                            </Link>
-                                        </Button>
-                                    )}
-                                    <Button variant="secondary" asChild>
-                                        <Link href="/docs/connectors/inflow-lab">
-                                            <Terminal className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                                            Connector docs
-                                        </Link>
-                                    </Button>
-                                    <Button variant="ghost" asChild>
-                                        <Link href="/integrations">
-                                            Public registry
-                                            <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                                        </Link>
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <h3 className="text-subheading text-re-text-primary">Reference path</h3>
-                                        <p className="mt-1 text-small text-re-text-tertiary">
-                                            Used for simulator replay and implementation validation workflows.
-                                        </p>
-                                    </div>
-                                    <Badge tone="neutral" size="sm">
-                                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                        Documented
-                                    </Badge>
-                                </div>
-                                <ol className="divide-y divide-re-border-subtle rounded-lg border border-re-border-subtle bg-re-surface-inset">
-                                    {INFLOW_PATH.map(([label, detail], index) => (
-                                        <li key={label} className="flex items-start gap-3 px-4 py-3">
-                                            <span className="font-mono text-label text-re-text-muted">
-                                                {String(index + 1).padStart(2, '0')}
-                                            </span>
-                                            <div className="min-w-0">
-                                                <div className="text-ui font-medium text-re-text-primary">{label}</div>
-                                                <div className="mt-0.5 font-mono text-[0.8125rem] text-re-text-tertiary">{detail}</div>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ol>
-                            </div>
-                        </CardContent>
-                    </Card>
-                )}
 
                 {/* Capability registry */}
                 <Card>
@@ -807,9 +694,6 @@ export default function DashboardIntegrationsPage() {
 
                         <Callout tone="warning" icon={AlertTriangle}>
                             Required KDE gaps block automated publication into recall-ready exports until they are resolved.
-                        </Callout>
-                        <Callout tone="info" icon={GitBranch}>
-                            Inflow Lab traffic is intentionally tagged by source so simulator events can be separated from generic webhook submissions during demos and CI replay.
                         </Callout>
                     </CardContent>
                 </Card>
