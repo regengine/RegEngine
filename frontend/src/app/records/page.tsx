@@ -7,15 +7,16 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Section } from '@/components/layout/section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { ErrorState } from '@/components/ui/error-state';
 import { fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
+import { getErrorRequestId } from '@/lib/api-error';
 import {
   useCanonicalEvents,
   useCanonicalEvent,
@@ -91,18 +92,11 @@ export default function CanonicalRecordsPage() {
     return (
       <PageContainer className="workspace-load-error">
         {pageHeader}
-        <Callout
-          tone="danger"
-          role="alert"
-          title="Unable to load data from the control plane API."
-          action={
-            <Button variant="secondary" size="sm" onClick={() => events.refetch()}>
-              Retry
-            </Button>
-          }
-        >
-          {(events.error as Error).message}
-        </Callout>
+        <ErrorState
+          message="We could not load your records."
+          onRetry={() => events.refetch()}
+          requestId={getErrorRequestId(events.error)}
+        />
       </PageContainer>
     );
   }

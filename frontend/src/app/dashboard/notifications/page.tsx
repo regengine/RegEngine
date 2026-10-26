@@ -24,6 +24,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { getErrorRequestId, withRequestId } from '@/lib/api-error';
 
 /* ── Types matching NotificationPreferences ── */
 
@@ -80,7 +81,7 @@ async function apiFetchPrefs(tenantId: string): Promise<NotificationPreferences>
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
     });
-    if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+    if (!res.ok) throw withRequestId(new Error(`API error: ${res.status} ${res.statusText}`), res);
     return res.json();
 }
 
@@ -243,7 +244,7 @@ export default function NotificationPrefsPage() {
                     <div className="flex justify-center py-16"><Spinner size="lg" /></div>
                 )}
 
-                {fetchFailed && <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} />}
+                {fetchFailed && <ErrorState message="We could not load this page." onRetry={() => refetchPrefs()} retrying={isFetching} requestId={getErrorRequestId(prefsError)} />}
 
                 {saveError && (
                     <Callout tone="danger" role="alert" icon={AlertTriangle}>

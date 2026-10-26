@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorState } from '@/components/ui/error-state';
+import { apiError } from '@/lib/api-error';
+import AlertsPage from '@/app/dashboard/alerts/page';
 import ProductsPage from '@/app/dashboard/products/page';
 import AuditLogPage from '@/app/dashboard/audit-log/page';
 import NotificationsPage from '@/app/dashboard/notifications/page';
@@ -23,6 +25,7 @@ const useSubscriptionMock = vi.hoisted(() => vi.fn());
 const fetchComplianceScoreMock = vi.hoisted(() => vi.fn());
 const fetchWorkbenchSummaryMock = vi.hoisted(() => vi.fn());
 const fetchRecallReportMock = vi.hoisted(() => vi.fn());
+const fetchAlertsMock = vi.hoisted(() => vi.fn());
 const tenantMock = vi.hoisted(() => ({ tenantId: 't' as string | null }));
 
 vi.mock('@/lib/fetch-with-csrf', () => ({ fetchWithCsrf: (...args: unknown[]) => fetchWithCsrfMock(...args) }));
@@ -40,6 +43,8 @@ vi.mock('@/lib/api-hooks', () => ({
     fetchComplianceScore: () => fetchComplianceScoreMock(),
     fetchWorkbenchReadinessSummary: () => fetchWorkbenchSummaryMock(),
     fetchRecallReport: () => fetchRecallReportMock(),
+    fetchAlerts: (...args: unknown[]) => fetchAlertsMock(...args),
+    acknowledgeAlert: vi.fn(),
 }));
 vi.mock('@/hooks/use-agent-reviews', () => ({
     useAgentReviewItems: () => useReviewItemsMock(),
@@ -59,11 +64,14 @@ function renderWithQuery(ui: React.ReactElement) {
 
 const failedResponse = Response.error();
 
+afterEach(() => vi.unstubAllEnvs());
+
 beforeEach(() => {
     fetchWithCsrfMock.mockReset();
     fetchComplianceScoreMock.mockReset();
     fetchWorkbenchSummaryMock.mockReset();
     fetchRecallReportMock.mockReset();
+    fetchAlertsMock.mockReset();
     tenantMock.tenantId = 't';
     authMock.mockReturnValue({ isAuthenticated: true, hasTenantSession: true, hasAdminSession: true, isHydrated: true, user: { is_sysadmin: false } });
     fetchWorkbenchSummaryMock.mockResolvedValue(null);
@@ -89,6 +97,45 @@ describe('shared dashboard load errors', () => {
     it('omits the request ID when none is available', () => {
         render(<ErrorState message="We could not load this page." onRetry={vi.fn()} />);
         expect(screen.queryByText(/Request ID:/)).not.toBeInTheDocument();
+    });
+
+    it('shows the alerts error state with retry, support, and the request ID', async () => {
+        vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
+        fetchAlertsMock.mockRejectedValue(apiError(500, 'Internal Server Error', 'alerts-req-1'));
+        const user = userEvent.setup();
+        renderWithQuery(<AlertsPage />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load your alerts.');
+        expect(screen.getByText('Request ID: alerts-req-1')).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/settings/support');
+        await user.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(fetchAlertsMock).toHaveBeenCalledTimes(2));
+    });
+
+    it('shows the failed response request ID on the products error state', async () => {
+        fetchWithCsrfMock.mockResolvedValue(
+            new Response(JSON.stringify({ detail: 'boom' }), {
+                status: 500,
+                headers: { 'x-request-id': 'products-req-1' },
+            }),
+        );
+        renderWithQuery(<ProductsPage />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this page.');
+        expect(screen.getByText('Request ID: products-req-1')).toBeInTheDocument();
+    });
+
+    it('shows the API client request ID on QA health failures', () => {
+        const refetch = vi.fn();
+        authMock.mockReturnValue({ user: { is_sysadmin: true }, isHydrated: true });
+        const qaError = Object.assign(new Error('Request failed'), {
+            response: { status: 500, headers: { 'x-request-id': 'qa-req-9' }, data: {} },
+        });
+        useQAHealthMock.mockReturnValue({ data: null, isLoading: false, error: qaError, refetch, isRefetching: false });
+        render(<QAHealthPage />);
+
+        expect(screen.getByRole('alert')).toHaveTextContent('We could not load this page.');
+        expect(screen.getByText('Request ID: qa-req-9')).toBeInTheDocument();
     });
 
     it('keeps Add Product unavailable until a failed catalog request succeeds on Retry', async () => {

@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { withRequestId } from '@/lib/api-error';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +43,7 @@ async function cpFetch<T>(
     // Backend errors arrive as {detail} (FastAPI HTTPException) or as the
     // monolith envelope {error: {type, message}} — read both so callers'
     // toasts show the domain message instead of a bare "HTTP 400".
-    throw new Error(error.detail || error?.error?.message || `HTTP ${response.status}`);
+    throw withRequestId(new Error(error.detail || error?.error?.message || `HTTP ${response.status}`), response);
   }
 
   const data = await response.json();
