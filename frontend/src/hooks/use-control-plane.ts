@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { withRequestId } from '@/lib/api-error';
+import { withRequestId, type StatusError } from '@/lib/api-error';
 import { POLL_CONTROL_PLANE_MS, POLL_DATA_MS, POLL_METRICS_MS } from '@/lib/polling-config';
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,21 @@ async function cpFetch<T>(
     // Backend errors arrive as {detail} (FastAPI HTTPException) or as the
     // monolith envelope {error: {type, message}} — read both so callers'
     // toasts show the domain message instead of a bare "HTTP 400".
-    throw withRequestId(new Error(error.detail || error?.error?.message || `HTTP ${response.status}`), response);
+    const thrown = withRequestId(
+      new Error(error.detail || error?.error?.message || `HTTP ${response.status}`),
+      response,
+    ) as StatusError;
+    // Keep the status machine-readable so pages can branch on it (e.g. 429
+    // rate-limit messaging) via getErrorStatus.
+    thrown.status = response.status;
+    const retryAfterHeader = response.headers?.get?.('retry-after');
+    if (retryAfterHeader != null && retryAfterHeader.trim() !== '') {
+      const seconds = Number(retryAfterHeader.trim());
+      if (Number.isInteger(seconds) && seconds >= 0) {
+        thrown.retryAfter = seconds;
+      }
+    }
+    throw thrown;
   }
 
   const data = await response.json();

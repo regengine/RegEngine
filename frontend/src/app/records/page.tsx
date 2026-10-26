@@ -16,7 +16,7 @@ import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge'
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
-import { getErrorRequestId } from '@/lib/api-error';
+import { getErrorRequestId, getErrorRetryAfter, getErrorStatus } from '@/lib/api-error';
 import {
   useCanonicalEvents,
   useCanonicalEvent,
@@ -50,6 +50,14 @@ const RESULT_STATE: Record<string, ComplianceState> = {
 };
 
 const FILTER_SELECT = 'h-8 w-auto max-w-[13rem] py-0 pr-8 text-small';
+
+/** Safe 429 copy; appends the Retry-After wait only when it is a plain second count. */
+function rateLimitMessage(retryAfterSeconds: number | null): string {
+  if (retryAfterSeconds === null) {
+    return 'Too many requests. Wait a moment before retrying.';
+  }
+  return `Too many requests. Wait a moment before retrying. Retry in ${retryAfterSeconds} seconds.`;
+}
 
 /** Key/value row for the record detail <dl> — label above value, hairline separated. */
 function DetailRow({ term, children }: { term: string; children: React.ReactNode }) {
@@ -89,11 +97,15 @@ export default function CanonicalRecordsPage() {
 
 
   if (events.error) {
+    // Fixed safe copy only — the raw backend detail is never rendered.
+    const loadErrorMessage = getErrorStatus(events.error) === 429
+      ? rateLimitMessage(getErrorRetryAfter(events.error))
+      : 'We could not load your records.';
     return (
       <PageContainer className="workspace-load-error">
         {pageHeader}
         <ErrorState
-          message="We could not load your records."
+          message={loadErrorMessage}
           onRetry={() => events.refetch()}
           requestId={getErrorRequestId(events.error)}
         />
