@@ -279,7 +279,7 @@ export default function FSMA204BusinessGuidePage() {
           <Card variant="inset" padding="compact">
             <p className="font-mono text-label uppercase text-re-text-muted">Without a system</p>
             <p className="mt-3 text-ui text-re-text-secondary">
-              Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. The rule does not wait: records must be provided within 24 hours of an FDA request (21 CFR 1.1455(c)(1)).
+              Dig through paper records, spreadsheets across multiple computers, call suppliers for missing info. The rule does not wait: records must be provided within 24 hours of an FDA request, or within some reasonable time to which FDA has agreed (21 CFR 1.1455(c)(1)).
             </p>
           </Card>
           <Card padding="compact">
