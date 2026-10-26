@@ -72,7 +72,6 @@ def test_summary_never_contains_raw_key(keygen, tmp_path):
         scopes=["webhooks.ingest"],
         billing_tier="ENTERPRISE",
         expires_at=None,
-        masked_key=keygen._mask_key(raw),
     )
     path = tmp_path / "key"
     text = keygen._format_summary(summary, path, "set to 'trialing'")

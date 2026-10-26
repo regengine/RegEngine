@@ -94,13 +94,6 @@ TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
 
 
-def _mask_key(raw_key: str) -> str:
-    """Log-safe display form of a raw key (key id plus short fingerprint)."""
-    from shared.secret_redaction import mask_secret
-
-    return mask_secret(raw_key)
-
-
 def _write_key_file(raw_key: str, path: Path) -> Path:
     """Write the raw key to ``path`` with owner-only (0600) permissions."""
     path = path.expanduser()
@@ -122,7 +115,6 @@ class _KeySummary:
     scopes: list
     billing_tier: str
     expires_at: object
-    masked_key: str
 
 
 def _format_summary(summary: _KeySummary, key_path: Path, billing_note: str) -> str:
@@ -137,7 +129,6 @@ API key created. The raw key is NOT shown; it was written once to:
   scopes:      {summary.scopes}
   tier:        {summary.billing_tier}
   expires_at:  {summary.expires_at or "never"}
-  key:         {summary.masked_key}
 
 Billing status for tenant: {billing_note}
 
@@ -375,7 +366,6 @@ async def _main() -> None:
         scopes=key.scopes,
         billing_tier=key.billing_tier,
         expires_at=key.expires_at,
-        masked_key=_mask_key(key.raw_key),
     )
     print(_format_summary(summary, key_path, billing_note))
 
