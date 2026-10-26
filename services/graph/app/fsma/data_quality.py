@@ -14,6 +14,7 @@ from typing import List
 import structlog
 
 from ..neo4j_utils import Neo4jClient
+from .chain_integrity import _run_paged, _sort_key
 from .types import DataQualityReport, KDECompletenessMetrics, OrphanLot
 
 logger = structlog.get_logger("fsma-utils")
@@ -128,20 +129,21 @@ async def find_orphaned_lots(
         MATCH (trans:TraceEvent)-[:CONSUMED]->(l)
         WHERE trans.tenant_id = $tenant_id
     }
+    // @page
 
     // Get the most recent event for this lot
     OPTIONAL MATCH (l)-[:UNDERWENT]->(last_event:TraceEvent)
     WHERE last_event.tenant_id = $tenant_id
-    WITH l, last_event
+    WITH l, _page_key, last_event
     ORDER BY last_event.event_date DESC
-    WITH l, collect(last_event)[0] as most_recent_event
+    WITH l, _page_key, collect(last_event)[0] as most_recent_event
 
-    // Filter by stagnant days
-    WHERE most_recent_event IS NULL
-       OR most_recent_event.event_date IS NULL
-       OR most_recent_event.event_date <= $cutoff_date
-
+    // Stagnant-days filter, as a flag so every paged lot yields one row
     RETURN
+        _page_key,
+        coalesce(most_recent_event IS NULL
+         OR most_recent_event.event_date IS NULL
+         OR most_recent_event.event_date <= $cutoff_date, false) AS _hit,
         l.tlc as tlc,
         l.product_description as product_description,
         l.quantity as quantity,
@@ -149,15 +151,24 @@ async def find_orphaned_lots(
         l.created_at as created_at,
         most_recent_event.type as last_event_type,
         most_recent_event.event_date as last_event_date
-    ORDER BY most_recent_event.event_date ASC
-    LIMIT 2000
     """
 
     orphans = []
+    # Keep the first occurrence of each lot so no lot is reported twice.
+    seen_tlcs: set = set()
     async with client.session() as session:
-        result = await session.run(query, tenant_id=tenant_id, cutoff_date=cutoff_date)
-
-        async for record in result:
+        async for record in _run_paged(
+            session,
+            query,
+            anchors="l",
+            key=("l.tlc",),
+            order=_sort_key("last_event_date", "tlc"),
+            tenant_id=tenant_id,
+            cutoff_date=cutoff_date,
+        ):
+            if record["tlc"] in seen_tlcs:
+                continue
+            seen_tlcs.add(record["tlc"])
             # Calculate stagnant days. The parsed date is naive, so anchor
             # it to UTC before subtracting: an aware minus naive
             # subtraction raises TypeError, which the fallback below would
