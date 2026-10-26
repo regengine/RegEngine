@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
-    parseCSV, validateRecords, generateSampleCSV, generateCsvTemplate, getScoreColor,
+    parseCSV, validateRecords, generateCsvTemplate, getScoreColor,
     getSeverityColor, getSeverityBadgeColor,
     type ValidationResult,
 } from '../lib/record-validator';
@@ -180,13 +180,6 @@ export function DrillSimulatorClient() {
         } finally {
             analysisInFlightRef.current = false;
         }
-    };
-
-    const handleLoadSampleData = async () => {
-        const csv = generateSampleCSV();
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const file = new File([blob], 'sample-records.csv', { type: 'text/csv' });
-        setState({ ...state, uploadedFile: file });
     };
 
     const handleDownloadTemplate = () => {
@@ -379,12 +372,12 @@ STATUS: ${
                     className="mx-auto mb-4 text-re-text-tertiary"
                 />
                 <h3 className="mb-2 text-subheading text-re-text-primary">
-                    {state.uploadedFile ? state.uploadedFile.name : 'Drop your file here'}
+                    {state.uploadedFile ? state.uploadedFile.name : 'Upload a CSV to get started'}
                 </h3>
                 <p className="text-ui text-re-text-secondary">
                     {state.uploadedFile
                         ? `${(state.uploadedFile.size / 1024).toFixed(0)} KB`
-                        : 'or click to browse'}
+                        : 'Drop your file here or click to browse'}
                 </p>
                 <p className="mt-2 text-small text-re-text-muted">
                     CSV, TSV, or XLSX • Max 10MB
@@ -427,9 +420,10 @@ STATUS: ${
                 <Button
                     size="lg"
                     variant="secondary"
-                    onClick={handleLoadSampleData}
+                    onClick={() => fileInputRef.current?.click()}
+                    leadingIcon={<Upload size={18} strokeWidth={1.75} aria-hidden="true" />}
                 >
-                    Load Sample Data
+                    Upload CSV
                 </Button>
             </div>
         </motion.div>
