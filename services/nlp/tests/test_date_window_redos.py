@@ -47,6 +47,18 @@ def test_since_window_with_trailing_filter():
     assert plan.end_date == "2026-03-10"
 
 
+def test_since_window_with_long_trailing_word_preserves_date():
+    # Regression: the capped trim regex ({1,128}) silently dropped the date
+    # when the trailing filler word exceeded 128 chars, defaulting to the
+    # 30-day window. The linear scan must strip trailing words of any length,
+    # matching main's parsing semantics.
+    query = "since January 5, 2026 for " + "x" * 130
+    plan = parse_query(query, today=TODAY)
+    assert plan.start_date == "2026-01-05"
+    assert plan.end_date == "2026-03-10"
+    assert not any("defaulted to last 30 days" in w for w in plan.warnings)
+
+
 def test_between_regex_is_linear_on_adversarial_input():
     # No " and " / no parseable date: previously quadratic/greedy backtracking.
     malicious = "events between " + "a " * 40000
@@ -59,11 +71,18 @@ def test_between_regex_is_linear_on_adversarial_input():
     assert plan.end_date == "2026-03-10"
 
 
-def test_date_prefix_trim_is_linear_on_punctuation_run():
-    # Long run of separator/punctuation chars that previously forced the
-    # overlapping "[sep]+[token]+$" classes to backtrack quadratically.
-    malicious = "show events since " + "." * 40000
+def test_date_prefix_trim_is_linear_on_long_trailing_run():
+    # The previous input ("since " + "." * 40000) never reached the trim
+    # logic: '.' is outside the ``since`` capture class, so the capture was
+    # empty and _parse_human_date_prefix was never invoked. Use a parseable
+    # date followed by a huge trailing token run so the trim path actually
+    # runs; the overlapping "[sep]+[token]+$" regex backtracked quadratically
+    # on such input, while the linear scan stays well under a second.
+    malicious = "show events since January 5, 2026 " + "x" * 200000
     start = time.perf_counter()
-    parse_query(malicious, today=TODAY)
+    plan = parse_query(malicious, today=TODAY)
     elapsed = time.perf_counter() - start
-    assert elapsed < 1.0, f"parse_query took {elapsed:.3f}s on punctuation run"
+    assert elapsed < 1.0, f"parse_query took {elapsed:.3f}s on long trailing run"
+    # The trailing filler is stripped and the explicit date is preserved.
+    assert plan.start_date == "2026-01-05"
+    assert plan.end_date == "2026-03-10"

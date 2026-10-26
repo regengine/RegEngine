@@ -17,6 +17,8 @@ from app.scrapers.state_adaptors.google_discovery import _jurisdiction_from_url
     "url,expected",
     [
         ("https://www.dec.ny.gov/regs/doc.pdf", "US-NY"),
+        # Fully-qualified host with a terminal DNS root dot still matches.
+        ("https://health.ny.gov./doc.pdf", "US-NY"),
         ("https://ny.gov/alert", "US-NY"),
         ("https://cppa.ca.gov/regulations/", "US-CA"),
         ("https://ca.gov", "US-CA"),

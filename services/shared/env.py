@@ -2,7 +2,7 @@
 
 import logging
 import os
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 _logger = logging.getLogger("regengine.env")
 
@@ -39,21 +39,41 @@ _LOCAL_AUTH_ENVIRONMENT_NAMES = {"development", "dev", "local", "test", "testing
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
+def _hostname_is_pooler(host: str) -> bool:
+    host = host.strip().lower()
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+
+
 def _is_supabase_pooler_database() -> bool:
     """Detect a Supabase pooler DATABASE_URL by exact hostname / subdomain.
 
     Parses the URL and compares the hostname instead of doing a substring
     check, so a value like ``postgres://u:p@host/db?x=pooler.supabase.com``
     cannot spoof the pooler host.
+
+    libpq honours a ``?host=`` query parameter, which overrides the URI
+    host (and may be a comma-separated list). A pooler reached that way is a
+    real production connection, so we fail closed and treat it as the pooler
+    too, rather than trusting only the URI authority.
     """
     db_url = os.getenv("DATABASE_URL", "")
     if not db_url:
         return False
     try:
-        host = (urlsplit(db_url).hostname or "").lower()
+        parts = urlsplit(db_url)
     except ValueError:
         return False
-    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+    if _hostname_is_pooler(parts.hostname or ""):
+        return True
+    try:
+        query = parse_qs(parts.query)
+    except ValueError:
+        return False
+    for raw_value in query.get("host", []):
+        for candidate in raw_value.split(","):
+            if _hostname_is_pooler(candidate):
+                return True
+    return False
 
 
 def is_production() -> bool:

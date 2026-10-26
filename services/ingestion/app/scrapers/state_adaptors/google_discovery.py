@@ -30,6 +30,11 @@ _STATE_GOV_DOMAINS: tuple[tuple[str, str], ...] = (
 def _jurisdiction_from_url(url: str) -> str:
     """Return the jurisdiction code for *url* based on its parsed hostname."""
     host = (urlsplit(url).hostname or "").lower()
+    # A fully-qualified host may carry a terminal DNS root dot
+    # (``health.ny.gov.``). Strip it so rooted hosts still match the
+    # jurisdiction suffixes below instead of falling back to "US".
+    if host.endswith("."):
+        host = host[:-1]
     for domain, code in _STATE_GOV_DOMAINS:
         if host == domain or host.endswith("." + domain):
             return code
