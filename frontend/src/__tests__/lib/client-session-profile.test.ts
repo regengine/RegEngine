@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { seedClientSessionUser } from '@/lib/client-session-profile';
+import { seedClientSessionUser, serializeClientSessionUser } from '@/lib/client-session-profile';
 
 function collectEmailValues(value: unknown, acc: unknown[] = []): unknown[] {
   if (Array.isArray(value)) {
@@ -17,6 +17,7 @@ function collectEmailValues(value: unknown, acc: unknown[] = []): unknown[] {
 describe('seedClientSessionUser', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
   });
 
   it('stores a non-sensitive placeholder profile without the email', () => {
@@ -28,6 +29,7 @@ describe('seedClientSessionUser', () => {
     expect(stored).not.toBeNull();
     expect(stored as string).not.toContain(email);
     expect(stored as string).not.toContain(email.split('@')[0]);
+    expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
 
     const parsed = JSON.parse(stored as string) as Record<string, unknown>;
     expect(parsed).toMatchObject({
@@ -44,5 +46,26 @@ describe('seedClientSessionUser', () => {
     for (const value of emailValues) {
       expect(value).toBe('');
     }
+  });
+});
+
+describe('serializeClientSessionUser', () => {
+  it('omits email without mutating the authenticated profile or its permissions', () => {
+    const user = {
+      id: crypto.randomUUID(),
+      email: `${crypto.randomUUID()}@example.test`,
+      is_sysadmin: false,
+      status: 'active',
+      role_name: 'member',
+      permissions: ['reports.read'],
+    };
+    const original = structuredClone(user);
+
+    const stored = serializeClientSessionUser(user);
+
+    expect(JSON.parse(stored)).toEqual({ ...original, email: '' });
+    expect(stored).not.toContain(original.email);
+    expect(stored).not.toContain(original.email.split('@')[0]);
+    expect(user).toEqual(original);
   });
 });
