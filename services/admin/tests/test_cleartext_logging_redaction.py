@@ -39,7 +39,7 @@ def test_ephemeral_secret_warning_names_env_without_leaking_secret(monkeypatch, 
     assert "ephemeral" in message
     # Safe: the actual secret value never reaches the log record.
     assert secret not in message
-    assert secret not in str(records[0].args)
+    assert records[0].args in (None, ())
 
 
 def test_fingerprint_repair_warning_names_env_without_leaking_secret(monkeypatch, caplog):
