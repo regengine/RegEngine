@@ -13,26 +13,24 @@ describe("HomePage Compliance OS foundation", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/ingest supply-chain data through webhooks, csv, epcis, or edi/i),
+      screen.getByText(/send records by csv upload or the json events api\. epcis 2\.0 is in preview\./i),
     ).toBeInTheDocument();
   });
 
-  it("labels the demo checklist and advisory checks", () => {
+  it("shows a No data yet empty state instead of a synthetic workspace", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("What the export checklist still flags")).toBeInTheDocument();
-    expect(screen.getAllByText("FreshPack Central").length).toBeGreaterThan(0);
-    expect(screen.getByText("Export checklist (advisory)")).toBeInTheDocument();
-    expect(screen.getAllByText("Hash verified").length).toBeGreaterThan(0);
+    expect(screen.getByText("No data yet")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /start setup/i })).toHaveAttribute("href", "/ingest");
   });
 
-  it("uses compliance-specific metrics instead of generic SaaS proof", () => {
-    render(<HomePage />);
+  it("contains no synthetic demo data", () => {
+    const { container } = render(<HomePage />);
+    const text = container.textContent ?? "";
 
-    expect(screen.getByText("Demo workspace · synthetic data · 3 open checklist items")).toBeInTheDocument();
-    expect(screen.getByText("FTL list overlap")).toBeInTheDocument();
-    expect(screen.getByText("KDE completeness")).toBeInTheDocument();
-    expect(screen.getByText("Export checklist")).toBeInTheDocument();
-    expect(screen.queryByText(/save time/i)).not.toBeInTheDocument();
+    expect(text).not.toMatch(/synthetic/i);
+    expect(text).not.toMatch(/demo workspace/i);
+    expect(text).not.toContain("RE-DEMO-PKG");
+    expect(text).not.toMatch(/FreshPack Central|Valley Farms|Cold Dock 7/);
   });
 });

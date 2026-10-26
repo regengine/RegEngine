@@ -2775,6 +2775,19 @@
       "test_adapter": "workload_metrics_key"
     },
     {
+      "operation": "admin:PUT:/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours",
+      "owner": "admin",
+      "method": "PUT",
+      "path": "/v1/supplier/admin/facilities/{facility_id}/agreed-sending-hours",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "tenant.admin"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
       "operation": "admin:POST:/v1/supplier/bulk-upload/commit",
       "owner": "admin",
       "method": "POST",
@@ -2853,6 +2866,32 @@
       "test_adapter": "tenant_dual_session_csrf"
     },
     {
+      "operation": "admin:GET:/v1/supplier/data-quality",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/data-quality",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/data-quality/{facility_id}/records",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/data-quality/{facility_id}/records",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
       "operation": "admin:POST:/v1/supplier/demo/reset",
       "owner": "admin",
       "method": "POST",
@@ -2918,6 +2957,19 @@
       "test_adapter": "tenant_dual_session_csrf"
     },
     {
+      "operation": "admin:DELETE:/v1/supplier/facilities/{facility_id}",
+      "owner": "admin",
+      "method": "DELETE",
+      "path": "/v1/supplier/facilities/{facility_id}",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "owner"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
       "operation": "admin:POST:/v1/supplier/facilities/{facility_id}/cte-events",
       "owner": "admin",
       "method": "POST",
@@ -2939,6 +2991,19 @@
       "authentication": "bearer-token-or-opaque-session-cookie",
       "required_permissions": [
         "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/facilities/{facility_id}/removal-check",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/facilities/{facility_id}/removal-check",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "owner"
       ],
       "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
       "test_adapter": "tenant_dual_session_csrf"
@@ -2987,6 +3052,19 @@
       "owner": "admin",
       "method": "GET",
       "path": "/v1/supplier/funnel-summary",
+      "classification": "tenant-scoped",
+      "authentication": "bearer-token-or-opaque-session-cookie",
+      "required_permissions": [
+        "authenticated"
+      ],
+      "storage_boundary": "admin-postgres:jwt-tenant-or-session-membership-tenant",
+      "test_adapter": "tenant_dual_session_csrf"
+    },
+    {
+      "operation": "admin:GET:/v1/supplier/gap-time-to-fix",
+      "owner": "admin",
+      "method": "GET",
+      "path": "/v1/supplier/gap-time-to-fix",
       "classification": "tenant-scoped",
       "authentication": "bearer-token-or-opaque-session-cookie",
       "required_permissions": [
@@ -4879,13 +4957,13 @@
     }
   ],
   "summary": {
-    "enabled_operation_count": 252,
+    "enabled_operation_count": 258,
     "disabled_operation_count": 180,
     "disabled_unique_path_count": 163,
     "enabled_by_classification": {
       "global-sysadmin": 16,
       "public": 30,
-      "tenant-scoped": 199,
+      "tenant-scoped": 205,
       "workload-only": 7
     }
   }

@@ -1,0 +1,364 @@
+# This workflow checks open pull requests against main whenever changes
+# land on main or when run manually.
+#
+# Alert-only: it never pushes changes or calls updateBranch.
+# For each open, non-bot, non-fork pull request without the 'no-auto-sync'
+# label, it checks whether the branch is behind main or has merge conflicts.
+# If behind main or dirty/unmergeable, it posts or updates an alert comment.
+# When the pull request is no longer behind, the alert comment is deleted
+# or updated to resolved.
+
+name: Sync main into PRs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: sync-main-into-prs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync-main-into-prs:
+    name: Sync main into PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Alert PRs needing sync with main
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const repoFullName = `${owner}/${repo}`.toLowerCase();
+            const ALERT_MARKER = '<!-- sync-main-alert -->';
+
+            core.info(`Fetching open pull requests targeting main for ${owner}/${repo}...`);
+
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
+
+            core.info(`Found ${pulls.length} total open pull request(s) targeting main.`);
+
+            const candidatePRs = pulls.filter((pr) => {
+              if (!pr.base || pr.base.ref !== 'main') {
+                core.info(`Skipping PR #${pr.number}: base is '${pr.base ? pr.base.ref : 'unknown'}', not 'main'.`);
+                return false;
+              }
+              if (!pr.head || !pr.head.repo) {
+                core.info(`Skipping PR #${pr.number}: head repository is missing or deleted.`);
+                return false;
+              }
+              const headFullName = (pr.head.repo.full_name || '').toLowerCase();
+              if (headFullName !== repoFullName) {
+                core.info(`Skipping PR #${pr.number}: head repo '${headFullName}' is a fork (not '${repoFullName}').`);
+                return false;
+              }
+              const userType = (pr.user?.type || '').toLowerCase();
+              const userLogin = (pr.user?.login || '').toLowerCase();
+              const isBot =
+                userType === 'bot' ||
+                userLogin.endsWith('[bot]') ||
+                userLogin.includes('dependabot');
+              if (isBot) {
+                core.info(`Skipping PR #${pr.number}: author '${pr.user?.login}' is a bot.`);
+                return false;
+              }
+              const hasNoAutoSync = Array.isArray(pr.labels) && pr.labels.some((label) => {
+                const name = typeof label === 'string' ? label : label?.name;
+                return (name || '').trim().toLowerCase() === 'no-auto-sync';
+              });
+              if (hasNoAutoSync) {
+                core.info(`Skipping PR #${pr.number}: labeled with 'no-auto-sync'.`);
+                return false;
+              }
+              return true;
+            });
+
+            core.info(`Identified ${candidatePRs.length} candidate PR(s) to evaluate.`);
+
+            const summary = {
+              alerted: [],
+              unchanged: [],
+              upToDate: [],
+              errors: [],
+            };
+
+            for (const pr of candidatePRs) {
+              const prNumber = pr.number;
+              const branchName = pr.head.ref;
+              const currentHeadSha = pr.head.sha;
+              const prTitle = pr.title;
+
+              core.info(`Evaluating PR #${prNumber} (${branchName})...`);
+
+              try {
+                const comparison = await github.rest.repos.compareCommits({
+                  owner,
+                  repo,
+                  base: 'main',
+                  head: currentHeadSha,
+                });
+
+                const behindBy = comparison.data.behind_by || 0;
+                const isBehind =
+                  behindBy > 0 ||
+                  comparison.data.status === 'behind' ||
+                  comparison.data.status === 'diverged';
+
+                let prDetails = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: prNumber,
+                });
+
+                if (prDetails.data.mergeable === null) {
+                  core.info(`PR #${prNumber}: mergeable status is pending, waiting 2s to re-fetch...`);
+                  await new Promise((resolve) => setTimeout(resolve, 2000));
+                  try {
+                    prDetails = await github.rest.pulls.get({
+                      owner,
+                      repo,
+                      pull_number: prNumber,
+                    });
+                  } catch (retryErr) {
+                    core.warning(`PR #${prNumber}: re-fetch of mergeable status failed: ${retryErr.message}`);
+                  }
+                }
+
+                const mergeable = prDetails.data.mergeable;
+                const mergeableState = (prDetails.data.mergeable_state || '').toLowerCase();
+                const hasConflict = mergeable === false || mergeableState === 'dirty';
+
+                const needsAlert = isBehind || hasConflict;
+
+                const comments = await github.paginate(github.rest.issues.listComments, {
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  per_page: 100,
+                });
+
+                const existingAlertComments = comments.filter(
+                  (c) => c.body && c.body.includes(ALERT_MARKER)
+                );
+
+                if (needsAlert) {
+                  let state = '';
+                  if (isBehind && hasConflict) {
+                    state = 'behind-and-conflict';
+                  } else if (hasConflict) {
+                    state = 'conflict';
+                  } else {
+                    state = 'behind';
+                  }
+
+                  let alertReason = '';
+                  if (state === 'behind-and-conflict') {
+                    alertReason = 'This pull request is behind `main` and has a conflict. It needs an update from `main`.';
+                  } else if (state === 'conflict') {
+                    alertReason = 'This pull request has a conflict with `main`. It needs an update from `main`.';
+                  } else {
+                    alertReason = 'This pull request is behind `main`. It needs an update from `main`.';
+                  }
+
+                  const primaryComment = existingAlertComments.length > 0 ? existingAlertComments[0] : null;
+                  const stateMatch = primaryComment && primaryComment.body
+                    ? primaryComment.body.match(/<!--\s*sync-main-alert\s+state=([a-z-]+)\s*-->/)
+                    : null;
+                  const existingState = stateMatch ? stateMatch[1] : null;
+
+                  if (existingAlertComments.length > 0 && existingState === state) {
+                    core.info(`PR #${prNumber} (${branchName}): alert comment state '${state}' is unchanged, skipping.`);
+                    summary.unchanged.push({
+                      number: prNumber,
+                      branch: branchName,
+                      title: prTitle,
+                      reason: alertReason,
+                      state,
+                    });
+                  } else {
+                    core.warning(`PR #${prNumber} (${branchName}): ${alertReason}`);
+
+                    const stateMarker = `<!-- sync-main-alert state=${state} -->`;
+                    const commentBody = [
+                      ALERT_MARKER,
+                      stateMarker,
+                      '### Branch update needed from main',
+                      '',
+                      alertReason,
+                      '',
+                      'Please update your branch with the latest changes from `main`:',
+                      '```bash',
+                      `git checkout ${branchName}`,
+                      'git fetch origin main',
+                      'git merge origin/main',
+                      '# resolve any merge conflicts if present and commit',
+                      `git push origin ${branchName}`,
+                      '```',
+                    ].join('\n');
+
+                    if (existingAlertComments.length > 0) {
+                      core.info(`PR #${prNumber}: updating existing alert comment (id: ${primaryComment.id}, state: ${state}).`);
+                      await github.rest.issues.updateComment({
+                        owner,
+                        repo,
+                        comment_id: primaryComment.id,
+                        body: commentBody,
+                      });
+                      for (let i = 1; i < existingAlertComments.length; i++) {
+                        try {
+                          await github.rest.issues.deleteComment({
+                            owner,
+                            repo,
+                            comment_id: existingAlertComments[i].id,
+                          });
+                        } catch (dupErr) {
+                          core.warning(`PR #${prNumber}: could not delete duplicate comment: ${dupErr.message}`);
+                        }
+                      }
+                    } else {
+                      core.info(`PR #${prNumber}: creating new alert comment (state: ${state}).`);
+                      await github.rest.issues.createComment({
+                        owner,
+                        repo,
+                        issue_number: prNumber,
+                        body: commentBody,
+                      });
+                    }
+
+                    summary.alerted.push({
+                      number: prNumber,
+                      branch: branchName,
+                      title: prTitle,
+                      reason: alertReason,
+                      state,
+                    });
+                  }
+                } else {
+                  core.info(`PR #${prNumber} (${branchName}): up to date with main and has no conflicts.`);
+
+                  if (existingAlertComments.length > 0) {
+                    core.info(`PR #${prNumber}: no longer behind main. Removing or resolving alert comment(s).`);
+                    for (const comment of existingAlertComments) {
+                      try {
+                        await github.rest.issues.deleteComment({
+                          owner,
+                          repo,
+                          comment_id: comment.id,
+                        });
+                        core.info(`PR #${prNumber}: deleted previous alert comment (id: ${comment.id}).`);
+                      } catch (delError) {
+                        const isAlreadyResolved =
+                          comment.body.includes('Resolved: Branch up to date with main') ||
+                          comment.body.includes('state=resolved') ||
+                          /\bresolved\b/i.test(comment.body);
+                        if (!isAlreadyResolved) {
+                          core.warning(`PR #${prNumber}: deleteComment failed (${delError.message}), updating to resolved.`);
+                          await github.rest.issues.updateComment({
+                            owner,
+                            repo,
+                            comment_id: comment.id,
+                            body: [
+                              ALERT_MARKER,
+                              '<!-- sync-main-alert state=resolved -->',
+                              '### Resolved: Branch up to date with main',
+                              '',
+                              `Branch \`${branchName}\` is no longer behind \`main\` and has no merge conflicts.`,
+                              '',
+                              `*Resolved: ${new Date().toISOString()}*`,
+                            ].join('\n'),
+                          });
+                        } else {
+                          core.info(`PR #${prNumber}: alert comment already says resolved (id: ${comment.id}), skipping edit.`);
+                        }
+                      }
+                    }
+                  }
+
+                  summary.upToDate.push({
+                    number: prNumber,
+                    branch: branchName,
+                    title: prTitle,
+                  });
+                }
+              } catch (error) {
+                const status = error.status || 500;
+                const errorMessage = error.message || String(error);
+                core.error(`PR #${prNumber} (${branchName}): error during evaluation: ${errorMessage}`);
+                summary.errors.push({
+                  number: prNumber,
+                  branch: branchName,
+                  title: prTitle,
+                  status,
+                  message: errorMessage,
+                });
+              }
+            }
+
+            core.info('');
+            core.info('========================================');
+            core.info('       Sync Main Alert Check Summary    ');
+            core.info('========================================');
+            core.info(`Total open PRs checked: ${pulls.length}`);
+            core.info(`Candidate PRs evaluated: ${candidatePRs.length}`);
+            core.info(`Alerts posted or updated: ${summary.alerted.length}`);
+            core.info(`Alerts unchanged: ${summary.unchanged.length}`);
+            core.info(`Up to date with main: ${summary.upToDate.length}`);
+            core.info(`Errors encountered: ${summary.errors.length}`);
+            core.info('========================================');
+
+            let summaryMd = '## Sync Main into PRs Summary (Alert Only)\n\n';
+            summaryMd += '| Metric | Count |\n|---|---|\n';
+            summaryMd += `| Total open PRs evaluated | ${pulls.length} |\n`;
+            summaryMd += `| Candidates eligible for alert check | ${candidatePRs.length} |\n`;
+            summaryMd += `| Alerts posted or updated | ${summary.alerted.length} |\n`;
+            summaryMd += `| Alerts unchanged | ${summary.unchanged.length} |\n`;
+            summaryMd += `| Up to date with main | ${summary.upToDate.length} |\n`;
+            summaryMd += `| Errors | ${summary.errors.length} |\n\n`;
+
+            if (summary.alerted.length > 0) {
+              summaryMd += '### PRs Needing Update from Main\n\n';
+              for (const p of summary.alerted) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.reason}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            if (summary.unchanged.length > 0) {
+              summaryMd += '### PRs with Unchanged Alert State\n\n';
+              for (const p of summary.unchanged) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.reason} (state: \`${p.state}\`)\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            if (summary.errors.length > 0) {
+              summaryMd += '### Errors Encountered\n\n';
+              for (const p of summary.errors) {
+                summaryMd += `- PR #${p.number} (\`${p.branch}\`): ${p.message || p.status}\n`;
+              }
+              summaryMd += '\n';
+            }
+
+            await core.summary.addRaw(summaryMd).write();
+
+            if (summary.errors.length > 0) {
+              core.setFailed(`Sync main alert check completed with ${summary.errors.length} error(s).`);
+            }

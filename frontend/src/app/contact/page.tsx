@@ -24,8 +24,8 @@ export default function ContactPage() {
         {/* Gap Analysis Offer */}
         <Card padding="compact" className="mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <span className="text-ui text-re-text-secondary">
-            <strong className="font-medium text-re-text-primary">Book a free gap-analysis call</strong>{' '}
-            — 30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
+            <strong className="font-medium text-re-text-primary">Book a free gap-analysis call:</strong>{' '}
+            30 minutes with the founder to walk through your FSMA 204 posture and identify coverage gaps.
           </span>
           <Button asChild variant="secondary" size="lg" className="shrink-0">
             <a

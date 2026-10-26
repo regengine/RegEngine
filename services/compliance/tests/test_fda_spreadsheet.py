@@ -39,12 +39,12 @@ class TestParseTimestamp:
     def test_iso_timestamp_with_timezone(self):
         date, time = _parse_timestamp("2026-03-15T14:30:00+00:00")
         assert date == "2026-03-15"
-        assert time == "14:30:00"
+        assert time == "14:30:00Z"
 
     def test_iso_timestamp_with_z_suffix(self):
         date, time = _parse_timestamp("2026-03-15T14:30:00Z")
         assert date == "2026-03-15"
-        assert time == "14:30:00"
+        assert time == "14:30:00Z"
 
     def test_empty_string_returns_empty_tuple(self):
         assert _parse_timestamp("") == ("", "")
@@ -79,7 +79,7 @@ class TestParseTimestamp:
         """Strict mode still round-trips valid ISO timestamps."""
         d, t = _parse_timestamp("2026-04-17T10:00:00Z", strict=True)
         assert d == "2026-04-17"
-        assert t == "10:00:00"
+        assert t == "10:00:00Z"
 
 
 # ─── _normalise_event ────────────────────────────────────────────────────

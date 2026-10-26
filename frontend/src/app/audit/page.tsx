@@ -21,6 +21,7 @@ import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import { useQuery } from '@tanstack/react-query';
 
 import { Lock, Shield } from 'lucide-react';
+import { NOT_SET } from '@/lib/empty-values';
 
 const INGESTION_API = '/api/ingestion';
 
@@ -115,7 +116,7 @@ function AuditReviewContent() {
       mono: true,
       width: '12rem',
       cell: (rule) => (
-        <span className="text-re-text-tertiary">{rule.citation_reference || '—'}</span>
+        <span className="text-re-text-tertiary">{rule.citation_reference || NOT_SET}</span>
       ),
     },
     {
@@ -156,7 +157,7 @@ function AuditReviewContent() {
     <PageContainer>
       <PageHeader
         title="Auditor Review"
-        description="Read-only compliance posture view — evidentiary chain, rule evaluations, exception history"
+        description="Read-only compliance posture view: evidentiary chain, rule evaluations, exception history"
         meta={
           <Badge>
             <Lock className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />

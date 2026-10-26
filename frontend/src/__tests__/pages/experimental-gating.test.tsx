@@ -8,11 +8,14 @@ import DashboardScanPage from '@/app/dashboard/scan/page';
 import FSMAFieldCapturePage from '@/app/fsma/field-capture/page';
 import { ToolsLandingClient } from '@/app/tools/components/ToolsLandingClient';
 import { useAuth } from '@/lib/auth-context';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, notFound } from 'next/navigation';
 
 vi.mock('next/navigation', () => ({
     usePathname: vi.fn(),
     useRouter: vi.fn(),
+    notFound: vi.fn(() => {
+        throw new Error('NEXT_NOT_FOUND');
+    }),
 }));
 
 vi.mock('@/lib/auth-context', () => ({
@@ -25,10 +28,6 @@ vi.mock('@/components/dashboard/breadcrumb', () => ({
 
 vi.mock('@/components/dashboard/error-boundary', () => ({
     DashboardErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('@/app/tools/inflow-lab/components/DashboardInflowLab', () => ({
-    DashboardInflowLab: () => <div data-testid="inflow-lab-dashboard" />,
 }));
 
 vi.mock('@/components/mobile/FieldCaptureClient', () => ({
@@ -65,12 +64,6 @@ describe('experimental feature gating (flag off)', () => {
         expect(screen.getByText(/Audit review is not enabled/i)).toBeInTheDocument();
     });
 
-    it('renders a feature-not-enabled state instead of the dashboard Inflow Lab', () => {
-        render(<DashboardInflowLabPage />);
-        expect(screen.getByTestId('feature-not-enabled')).toBeInTheDocument();
-        expect(screen.queryByTestId('inflow-lab-dashboard')).not.toBeInTheDocument();
-    });
-
     it('renders a feature-not-enabled state instead of the field capture scanner', () => {
         render(<FSMAFieldCapturePage />);
         expect(screen.getByTestId('feature-not-enabled')).toBeInTheDocument();
@@ -89,8 +82,8 @@ describe('experimental feature gating (flag off)', () => {
             </DashboardLayout>,
         );
         expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
-        expect(screen.queryByText('Readiness')).not.toBeInTheDocument();
-        expect(screen.queryByText('Scan')).not.toBeInTheDocument();
+        expect(screen.queryByText('FSMA 204 Dashboard')).not.toBeInTheDocument();
+        expect(screen.queryByText('Field Capture')).not.toBeInTheDocument();
         // Stable items remain
         expect(screen.getAllByText('Compliance').length).toBeGreaterThan(0);
     });
@@ -128,15 +121,14 @@ describe('experimental feature gating (flag on)', () => {
                 <div>content</div>
             </DashboardLayout>,
         );
-        expect(screen.getAllByText('Inflow Lab').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Readiness').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('Scan').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
+        expect(screen.getAllByText('FSMA 204 Dashboard').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Field Capture').length).toBeGreaterThan(0);
     });
 
-    it('renders the real dashboard Inflow Lab page', () => {
-        render(<DashboardInflowLabPage />);
-        expect(screen.getByTestId('inflow-lab-dashboard')).toBeInTheDocument();
-        expect(screen.queryByTestId('feature-not-enabled')).not.toBeInTheDocument();
+    it('returns 404 for the retired dashboard Inflow Lab route even when the flag is on', () => {
+        expect(() => DashboardInflowLabPage()).toThrow('NEXT_NOT_FOUND');
+        expect(notFound).toHaveBeenCalled();
     });
 
     it('renders the real field capture scanner', () => {

@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, FileText, Zap, Users } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs TraceGains — FSMA 204 Compliance Comparison",
+  title: "RegEngine vs TraceGains: FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.",
   openGraph: {
-    title: 'RegEngine vs TraceGains — FSMA 204 Compliance Comparison',
+    title: 'RegEngine vs TraceGains: FSMA 204 Compliance Comparison',
     description: 'Compare RegEngine and TraceGains for FSMA 204 compliance. Supplier document management vs CTE-level traceability rule evaluation.',
     url: 'https://regengine.co/compare/tracegains',
     type: 'website',
@@ -25,18 +25,17 @@ const FEATURES = [
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API; verify TraceGains' current integration surface" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "Per-event KDE validation; confirm TraceGains' current FSMA 204 coverage" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event" },
-  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify TraceGains' current ingestion options" },
+  { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify TraceGains' current ingestion options" },
   { feature: "Supplier document management (COAs, specs)", regengine: "partial", competitor: "check", note: "TraceGains' core strength" },
   { feature: "Supplier onboarding portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
-  { title: "CTE-level traceability", icon: Zap, desc: "TraceGains is strong at COA and supplier-spec collection. FSMA 204 also requires CTE-level KDE traceability \u2014 confirm coverage with each vendor for your commodities." },
+  { title: "CTE-level traceability", icon: Zap, desc: "TraceGains is strong at COA and supplier-spec collection. FSMA 204 also requires CTE-level KDE traceability. Confirm coverage with each vendor for your commodities." },
   { title: "Per-event rule evaluation", icon: Shield, desc: "RegEngine evaluates events against 36 FSMA 204 validation rules (33 stateless + 3 cross-event) as part of ingestion. Verify TraceGains' current validation features directly with their team." },
   { title: "Built for FTL commodities", icon: FileText, desc: "TraceGains is positioned for CPG supplier quality management. RegEngine is built for produce, seafood, and other FTL-covered commodities." },
-  { title: "Complement, don't replace", icon: Users, desc: "You can use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems \u2014 you may need both." },
+  { title: "Complement, don't replace", icon: Users, desc: "You can use TraceGains for supplier docs AND RegEngine for CTE traceability. They solve different problems, and you may need both." },
 ];
 
 
@@ -66,7 +65,7 @@ export default function TraceGainsCompare() {
         description={
           <>
             TraceGains is a supplier document management platform. RegEngine is a FSMA 204 traceability engine.
-            Different tools for different problems &mdash; here&apos;s how they compare.
+            Different tools for different problems. Here&apos;s how they compare.
           </>
         }
       />
@@ -121,7 +120,7 @@ export default function TraceGainsCompare() {
       {/* CTA */}
       <Card padding="spacious" className="text-center">
         <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
-        {/* #2757 — copy and destination resolve together so the blurb can never
+        {/* #2757 - copy and destination resolve together so the blurb can never
             promise a CSV sandbox that this deployment does not serve. */}
         <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
           {sandboxCta().blurb}

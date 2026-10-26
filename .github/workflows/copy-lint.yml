@@ -1,0 +1,35 @@
+name: Copy rules report
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-lint.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-lint.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --test scripts/copy-lint/check-copy.test.mjs
+      - run: node scripts/copy-lint/check-copy.mjs . --github

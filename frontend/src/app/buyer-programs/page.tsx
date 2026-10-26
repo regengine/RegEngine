@@ -57,8 +57,8 @@ export default function BuyerProgramsPage() {
             </BookCallLink>
           </Button>
           <Button asChild variant="secondary" size="lg">
-            <Link href="/verify" className="no-underline">
-              Verify a sample export
+            <Link href="/ingest" className="no-underline">
+              No data yet? Start with CSV upload
             </Link>
           </Button>
         </div>
@@ -86,7 +86,7 @@ export default function BuyerProgramsPage() {
                 <li>• FTL by that date; other products ASAP</li>
               </ul>
               <p className="mt-4 text-small leading-relaxed text-re-text-tertiary">
-                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks. EDI 856 / ASN mapping is scoped work.
+                We do not make you Walmart-ready, transmit ASN on Retail Link, certify labels, or assess chargebacks.
               </p>
             </Card>
 
@@ -137,7 +137,7 @@ export default function BuyerProgramsPage() {
                 <li>• Advisory coverage/completeness checklist</li>
                 <li>• Append-only commit</li>
                 <li>• FDA-oriented sortable spreadsheet</li>
-                <li>• EPCIS/CSV where enabled</li>
+                <li>• CSV upload, JSON events API, EPCIS export (Preview)</li>
                 <li>• Hash manifest re-checkable at /verify</li>
               </ul>
             </Card>
@@ -200,10 +200,10 @@ export default function BuyerProgramsPage() {
               Book a 30-min call <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
             </BookCallLink>
             <Link
-              href="/verify"
+              href="/ingest"
               className="inline-flex items-center gap-1.5 text-ui text-re-text-secondary no-underline transition-colors duration-120 hover:text-re-text-primary motion-reduce:transition-none"
             >
-              Verify a sample export <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
+              No data yet? Start with CSV upload <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} aria-hidden="true" />
             </Link>
           </div>
         </Container>

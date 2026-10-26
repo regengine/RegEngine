@@ -276,10 +276,11 @@ async def export_epcis(
             epc_urn = epc_id(event.get("tlc"), "sgtin")
             read_point = location(event.get("location_gln") or event.get("facility_gln"))
             event_time = event.get("event_date")
-            if not event_time:
+            event_clock = event.get("event_time")
+            if not event_time or not event_clock:
                 continue
             common = {
-                "eventTime": f"{event_time}T{event.get('event_time') or '00:00:00'}Z",
+                "eventTime": f"{event_time}T{event_clock}Z",
                 "eventTimeZoneOffset": "+00:00",
             }
             if read_point:

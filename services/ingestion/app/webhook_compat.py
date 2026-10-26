@@ -1,8 +1,8 @@
 """Compatibility helpers for webhook auth and ingestion.
 
 This module is the stable import surface for non-router ingestion modules.
-All auth logic delegates to ``shared.auth.require_api_key`` — the single
-canonical auth path for every RegEngine service.
+API-key callers delegate to ``shared.auth.require_api_key``. The EPCIS app
+path also accepts the existing verified workspace session.
 
 Legacy ``webhook_router.py`` has been retired; ``webhook_router_v2.py``
 remains the mounted HTTP router.
@@ -25,9 +25,17 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import Depends, Header, HTTPException, Request
 from shared.api_key_store import APIKeyResponse
 from shared.auth import APIKey, require_api_key
+from shared.data_gap_tracking import (
+    ValidationOutcome,
+    gap_from_rule_reason,
+    gaps_from_kde_errors,
+    record_outcomes,
+)
 from shared.database import get_db_session as _get_db_session
+from shared.permissions import has_permission
 from shared.tenant_context import TenantContext, resolve_tenant_context
 
+from .authz import IngestionPrincipal, get_ingestion_principal
 from .webhook_models import EventResult, IngestEvent, IngestResponse, WebhookPayload
 from .webhook_router_v2 import (
     _check_rate_limit,
@@ -64,15 +72,33 @@ def _batch_dedup_key(event: IngestEvent) -> str:
 async def _verify_api_key(
     request: Request,
     x_regengine_api_key: Optional[str] = Header(default=None, alias="X-RegEngine-API-Key"),
-) -> Union[APIKey, APIKeyResponse]:
-    """Auth gate — delegates to shared.auth.require_api_key.
+) -> Union[APIKey, APIKeyResponse, IngestionPrincipal]:
+    """Auth gate for API keys and EPCIS workspace sessions.
 
     This is the stable import surface for ingestion sub-routers.
-    All auth logic (preshared key, scoped keys, test bypass) lives
-    in ``shared/auth.py``. The accepted key is stored on ``request.state``
-    and resolved through the shared tenant context so legacy routers cannot
-    use path/query/header tenant claims to pivot across tenants.
+    API-key logic lives in ``shared/auth.py``. The accepted key or session
+    principal is stored on ``request.state`` and resolved through the shared
+    tenant context so legacy routers cannot use caller tenant claims to pivot.
     """
+    # EPCIS is an app import surface as well as a key-backed integration.
+    # Keep other webhook callers on their established API-key path.
+    if (
+        getattr(request, "scope", {}).get("path", "").startswith("/api/v1/epcis/")
+        and not x_regengine_api_key
+        and (
+            request.cookies.get("__Host-regengine_session")
+            or request.headers.get("authorization", "").lower().startswith("bearer ")
+        )
+    ):
+        principal = await get_ingestion_principal(request=request, x_regengine_api_key=None)
+        if not has_permission(principal.scopes, "webhooks.ingest"):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        # The session principal must win over any stale key state on this request.
+        request.state.api_key = None
+        request.state.principal = principal
+        request.state.tenant_context = await resolve_tenant_context(request)
+        return principal
+
     api_key = await require_api_key(
         request=request,
         x_regengine_api_key=x_regengine_api_key,
@@ -83,7 +109,7 @@ async def _verify_api_key(
 
 async def require_tenant_context(
     request: Request,
-    _api_key: Union[APIKey, APIKeyResponse] = Depends(_verify_api_key),
+    _api_key: Union[APIKey, APIKeyResponse, IngestionPrincipal] = Depends(_verify_api_key),
 ) -> TenantContext:
     """Return the authenticated tenant context for legacy route handlers."""
     ctx = getattr(request.state, "tenant_context", None)
@@ -209,6 +235,7 @@ async def ingest_events(
     *,
     principal_tenant_id: str,
     x_regengine_api_key: Optional[str] = None,
+    principal: Optional[IngestionPrincipal] = None,
     source_file: Optional[SourceFileReceipt] = None,
 ) -> IngestResponse:
     """Internal ingestion helper — not an HTTP route.
@@ -233,7 +260,13 @@ async def ingest_events(
     if not principal_tenant_id:
         raise PermissionError("ingest_events requires principal_tenant_id from authenticated context")
 
-    _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
+    if principal is not None and principal.tenant_id != principal_tenant_id:
+        raise PermissionError("principal tenant does not match authenticated context")
+    if principal is not None and principal.auth_mode == "session":
+        if not has_permission(principal.scopes, "webhooks.ingest"):
+            raise PermissionError("session lacks webhooks.ingest")
+    else:
+        _verify_api_key_sync(x_regengine_api_key=x_regengine_api_key)
 
     payload_tenant_id = payload.tenant_id
     if not payload_tenant_id:
@@ -270,13 +303,15 @@ async def ingest_events(
     accepted = 0
     rejected = 0
     seen_in_batch: set[str] = set()
+    # Data gap time to fix: written after the ingest commit, fail-open.
+    gap_outcomes: list[ValidationOutcome] = []
 
     try:
         if source_file is not None:
             # The receipt is written first so a run exists even if every row
             # is rejected; the same transaction carries run, blob and events.
             run_id = _open_ingestion_run(db_session, tenant_id, payload.source, source_file)
-        for event in payload.events:
+        for event_index, event in enumerate(payload.events):
             dedup_key = _batch_dedup_key(event)
             if dedup_key in seen_in_batch:
                 results.append(
@@ -302,6 +337,14 @@ async def ingest_events(
                     )
                 )
                 rejected += 1
+                gap_outcomes.append(
+                    ValidationOutcome(
+                        order=event_index,
+                        lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        gaps=gaps_from_kde_errors(errors),
+                    )
+                )
                 continue
 
             alerts = _generate_alerts(event)
@@ -430,6 +473,14 @@ async def ingest_events(
                             )
                         )
                         rejected += 1
+                        gap_outcomes.append(
+                            ValidationOutcome(
+                                order=event_index,
+                                lot_code=event.traceability_lot_code,
+                                cte_type=event.cte_type.value,
+                                gaps=(gap_from_rule_reason(reject_reason),),
+                            )
+                        )
                         continue
 
                 # Accepted path. Savepoint commits the primary CTE write.
@@ -445,6 +496,15 @@ async def ingest_events(
                     )
                 )
                 accepted += 1
+                gap_outcomes.append(
+                    ValidationOutcome(
+                        order=event_index,
+                        lot_code=event.traceability_lot_code,
+                        cte_type=event.cte_type.value,
+                        closing_record_id=store_result.event_id,
+                        closing_record_hash=store_result.sha256_hash,
+                    )
+                )
                 _publish_graph_sync(store_result.event_id, event, tenant_id)
 
                 # Non-blocking failures → exception queue. Separate
@@ -495,6 +555,8 @@ async def ingest_events(
             )
         if db_session:
             db_session.commit()
+        # After the commit so closes reference durable records; never raises.
+        record_outcomes(db_session, tenant_id, gap_outcomes)
     except Exception:
         if db_session:
             db_session.rollback()

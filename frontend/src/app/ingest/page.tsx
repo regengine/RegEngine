@@ -42,7 +42,6 @@ import {
   ArrowRight,
   Key,
   ClipboardCheck,
-  FlaskConical,
   Globe,
   Landmark,
   Scale
@@ -117,13 +116,17 @@ export default function IngestPage() {
   const [sandboxHandoffResult] = useState(() =>
     fromSandboxHandoff ? readSandboxHandoffFromSession() : null
   );
-  const { apiKey: storedApiKey, setApiKey: storeApiKey } = useAuth();
+  const { apiKey: storedApiKey, setApiKey: storeApiKey, isAuthenticated } = useAuth();
   const [url, setUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>('queued');
   const [statusError, setStatusError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState('url');
+  // Dashboard "No data yet" tiles deep-link to /ingest?tab=file (CSV upload).
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    const tab = searchParams.get('tab');
+    return tab === 'file' || tab === 'epcis' ? tab : 'url';
+  });
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -181,14 +184,15 @@ export default function IngestPage() {
   }, [storedApiKey, apiKey]);
 
   useEffect(() => {
-    if (!jobId || jobId === 'demo-job-123') return;
+    if (!jobId) return;
 
     const intervalId = window.setInterval(async () => {
       try {
         const statusResponse = await apiClient.getIngestionJob(jobId);
+        setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
-          setJobStatus(STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
+          setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
           if (['completed', 'failed'].includes(normalizedStatus)) {
             window.clearInterval(intervalId);
           }
@@ -207,7 +211,7 @@ export default function IngestPage() {
   // Returns false when the caller should stop without sending any request.
   const prepareSubmit = async (): Promise<boolean> => {
     // Store the API key for future use
-    if (apiKey !== storedApiKey) {
+    if (!isAuthenticated && apiKey !== storedApiKey) {
       // The browser proxy reads the cookie written by setApiKey and ignores
       // caller-supplied credential headers. Wait for that write before the
       // upload so a stale key or tenant cannot win the request race.
@@ -240,7 +244,7 @@ export default function IngestPage() {
   // and XML files go to the XML endpoint untouched. Validate-only calls the
   // validate endpoint per event and never touches an ingest endpoint.
   const runEpcisSubmit = async (validateOnly: boolean) => {
-    if (!apiKey || !epcisFile) return;
+    if ((!isAuthenticated && !apiKey) || !epcisFile) return;
     if (submitInFlightRef.current) return;
 
     submitInFlightRef.current = true;
@@ -259,7 +263,7 @@ export default function IngestPage() {
           setEpcisError('The XML file is empty.');
           return;
         }
-        const data = await ingestEpcisXmlMutation.mutateAsync({ apiKey, xml });
+        const data = await ingestEpcisXmlMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, xml });
         const normalized = normalizeEpcisIngestResult(data);
         setEpcisResult(normalized);
         if (normalized.accepted > 0) notifyDashboardRefresh();
@@ -278,7 +282,7 @@ export default function IngestPage() {
         let valid = 0;
         for (let index = 0; index < events.length; index += 1) {
           try {
-            const result = await validateEpcisMutation.mutateAsync({ apiKey, event: events[index] });
+            const result = await validateEpcisMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event: events[index] });
             if (result && result.valid) {
               valid += 1;
             } else {
@@ -293,13 +297,13 @@ export default function IngestPage() {
         return;
       }
       if (parsed.kind === 'batch') {
-        const data = await ingestEpcisBatchMutation.mutateAsync({ apiKey, events: parsed.events });
+        const data = await ingestEpcisBatchMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, events: parsed.events });
         const normalized = normalizeEpcisIngestResult(data);
         setEpcisResult(normalized);
         if (normalized.accepted > 0) notifyDashboardRefresh();
         return;
       }
-      await ingestEpcisEventMutation.mutateAsync({ apiKey, event: parsed.event });
+      await ingestEpcisEventMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event: parsed.event });
       setEpcisResult({ total: 1, accepted: 1, rejected: 0, errorMessages: [] });
       notifyDashboardRefresh();
     } catch (error) {
@@ -314,7 +318,7 @@ export default function IngestPage() {
   // confirming the CTE Jev suggested for a file the server rejected.
   const handleSubmit = async (e?: React.FormEvent, cteType?: string) => {
     e?.preventDefault();
-    if (!apiKey) return;
+    if (!isAuthenticated && !apiKey) return;
     if (activeTab === 'url' && !url) return;
     if (activeTab === 'file' && !file) return;
     if (activeTab === 'epcis') {
@@ -328,27 +332,16 @@ export default function IngestPage() {
     try {
       if (!(await prepareSubmit())) return;
 
-      // Demonstration Override for the Sales Demo flow
-      if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
-        setJobId('demo-job-123');
-
-        // Simulate real ingestion stages over 3.5 seconds
-        setTimeout(() => setJobStatus('parsing'), 800);
-        setTimeout(() => setJobStatus('extracting'), 1800);
-        setTimeout(() => setJobStatus('completed'), 3500);
-        return;
-      }
-
       try {
         if (activeTab === 'file') {
           if (!file) return;
-          const result = await ingestFileMutation.mutateAsync({ apiKey, file, cteType });
+          const result = await ingestFileMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, file, cteType });
           setCsvResult(result);
           if (result.accepted > 0) notifyDashboardRefresh();
           return;
         }
 
-        const result = await ingestMutation.mutateAsync({ apiKey, url });
+        const result = await ingestMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, url });
         const returnedJobId = result.job_id || result.doc_id || null;
         if (returnedJobId) {
           setJobId(returnedJobId);
@@ -398,8 +391,8 @@ export default function IngestPage() {
     ? epcisResult.accepted === 0
       ? 'No events accepted'
       : epcisResult.rejected > 0
-        ? 'EPCIS partially accepted'
-        : 'EPCIS processed'
+        ? 'EPCIS (Preview) partially accepted'
+        : 'EPCIS (Preview) processed'
     : '';
   const epcisTone = epcisResult
     ? epcisResult.accepted === 0
@@ -419,16 +412,10 @@ export default function IngestPage() {
       : 'warning'
     : 'neutral';
 
-  const demoBanner = (
-    <Callout tone="warning">
-      Simulated walkthrough — sample output
-    </Callout>
-  );
-
   return (
-    <PageContainer>
+    <PageContainer className={statusError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
       <div className="mb-6">
-        <WorkflowStepper currentStep="ingest" completedSteps={storedApiKey ? ['setup'] : []} />
+        <WorkflowStepper currentStep="ingest" completedSteps={isAuthenticated || storedApiKey ? ['setup'] : []} />
       </div>
 
       <PageHeader
@@ -527,7 +514,7 @@ export default function IngestPage() {
           </Card>
         )}
 
-        {!storedApiKey && (
+        {!isAuthenticated && !storedApiKey && (
           <Callout
             tone="warning"
             icon={Key}
@@ -567,7 +554,7 @@ export default function IngestPage() {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="flex flex-col gap-1.5">
+                    {!isAuthenticated && <div className="flex flex-col gap-1.5">
                       <label
                         htmlFor="ingest-api-key"
                         className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
@@ -589,13 +576,13 @@ export default function IngestPage() {
                           Using your saved API key
                         </p>
                       )}
-                    </div>
+                    </div>}
 
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
-                        <TabsTrigger value="epcis">EPCIS 2.0</TabsTrigger>
+                        <TabsTrigger value="epcis">EPCIS 2.0 <Badge size="sm">Preview</Badge></TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="url" className="space-y-4">
@@ -678,6 +665,7 @@ export default function IngestPage() {
                             className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                           >
                             <span>Select EPCIS file</span>
+                            <Badge size="sm">Preview</Badge>
                             <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
                           </label>
                           <div className="rounded-lg border border-dashed border-re-border bg-re-surface-card p-8 text-center transition-colors duration-120 hover:border-re-border-strong hover:bg-re-surface-inset motion-reduce:transition-none">
@@ -704,15 +692,8 @@ export default function IngestPage() {
                             </label>
                           </div>
                           <p className="text-small text-re-text-tertiary">
-                            CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.
+                            CSV uploads skip bad rows. EPCIS (Preview) files are all or nothing: if any event fails, nothing is saved.
                           </p>
-                          <div className="mt-1">
-                            <Button variant="link" size="sm" asChild>
-                              <a href="/samples/sample_epcis_2.0.json" download>
-                                Download a sample EPCIS file
-                              </a>
-                            </Button>
-                          </div>
                         </div>
                       </TabsContent>
                     </Tabs>
@@ -721,7 +702,7 @@ export default function IngestPage() {
                       type="submit"
                       className="w-full"
                       size="lg"
-                      disabled={!apiKey || (activeTab === 'url' ? !url : activeTab === 'file' ? !file : !epcisFile) || isPending}
+                      disabled={(!isAuthenticated && !apiKey) || (activeTab === 'url' ? !url : activeTab === 'file' ? !file : !epcisFile) || isPending}
                     >
                       {isPending ? (
                         <>
@@ -737,7 +718,7 @@ export default function IngestPage() {
                         type="button"
                         variant="secondary"
                         className="w-full"
-                        disabled={!apiKey || !epcisFile || isPending}
+                        disabled={(!isAuthenticated && !apiKey) || !epcisFile || isPending}
                         onClick={() => void runEpcisSubmit(true)}
                       >
                         Validate only
@@ -779,9 +760,8 @@ export default function IngestPage() {
                     </Callout>
                   )}
 
-                  {jobId && (
+                  {jobId && !statusError && jobStatus !== 'failed' && (
                     <div className="mt-6 space-y-4 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4">
-                      {jobId === 'demo-job-123' && demoBanner}
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-ui font-medium text-re-text-primary">Ingestion Progress</p>
                         <Badge size="sm" mono>Job {jobId}</Badge>
@@ -829,10 +809,13 @@ export default function IngestPage() {
                           />
                         </div>
                       </div>
-                      {statusError && (
-                        <p className="text-small text-re-text-tertiary">{statusError}</p>
-                      )}
                     </div>
+                  )}
+
+                  {jobId && (statusError || jobStatus === 'failed') && (
+                    <Callout tone="danger" role="alert" className="mt-4" title="Unable to load ingestion status">
+                      {statusError || 'The ingestion job failed.'}
+                    </Callout>
                   )}
 
                   {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError) || (activeTab === 'epcis' && epcisError)) && (
@@ -857,7 +840,7 @@ export default function IngestPage() {
                         Common issues:
                       </p>
                       <ul className="list-inside list-disc">
-                        <li>Invalid or expired API key</li>
+                        {!isAuthenticated && <li>Invalid or expired API key</li>}
                         {activeTab === 'file' ? (
                           <>
                             <li>CSV must include a cte_type or event_type column</li>
@@ -882,7 +865,6 @@ export default function IngestPage() {
             ) : (
               <Card>
                 <CardContent className="space-y-4">
-                  {jobId === 'demo-job-123' && demoBanner}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-subheading text-re-text-primary">
                       Ingestion request completed
@@ -928,26 +910,9 @@ export default function IngestPage() {
                     Normal import
                   </div>
                   <p className="mt-2 text-ui text-re-text-secondary">
-                    Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 for GS1 EPCIS JSON and XML files.
+                    Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 (Preview) for GS1 EPCIS JSON and XML files.
                   </p>
                 </div>
-                {experimentalFeaturesEnabled() && (
-                  <div className="border-t border-re-border-subtle pt-5">
-                    <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
-                      <FlaskConical className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                      Inflow Lab
-                    </div>
-                    <p className="mt-2 text-ui text-re-text-secondary">
-                      Use the lab for FSMA event simulation and webhook replay so test traffic stays tagged.
-                    </p>
-                    <Button size="sm" variant="secondary" className="mt-3" asChild>
-                      <Link href="/dashboard/inflow-lab">
-                        Open Inflow Lab
-                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                      </Link>
-                    </Button>
-                  </div>
-                )}
                 <div className="border-t border-re-border-subtle pt-5">
                   <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
                     <ClipboardCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
@@ -980,7 +945,6 @@ export default function IngestPage() {
                   {SUPPORTED_FORMATS.map((format) => (
                     <Badge key={format} size="sm">{format}</Badge>
                   ))}
-                  <Badge size="sm">EDI (X12/EDIFACT)</Badge>
                 </div>
                 <p className="mt-3 text-ui text-re-text-secondary">
                   URL ingestion requires the document to be publicly accessible. For private documents, use the File Upload tab above.

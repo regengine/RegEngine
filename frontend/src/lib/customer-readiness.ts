@@ -37,7 +37,7 @@ export const INTEGRATION_TYPE_LABELS: Record<IntegrationType, string> = {
 export const INTEGRATION_TYPE_DESCRIPTIONS: Record<IntegrationType, string> = {
     standards_based: 'Standards-oriented ingest and export support without a claim of managed two-way sync or source-system write-back.',
     api_based_custom: 'Customer-managed integration via RegEngine API and implementation guidance. The customer builds and maintains the workflow unless otherwise scoped.',
-    file_based_import: 'Scheduled or manual CSV/XLSX ingestion with field mapping and exception handling.',
+    file_based_import: 'Manual CSV/XLSX upload with field mapping and exception handling. Scheduled file delivery is on the roadmap.',
     one_way_export: 'RegEngine prepares outbound packages. No write-back to source system.',
 };
 
@@ -132,7 +132,7 @@ export const STATUS_LABELS: Record<CustomerVisibleStatus, string> = {
 export const DELIVERY_MODE_LABELS: Record<DeliveryMode, string> = {
     native_api: 'Native API',
     webhook: 'Webhook',
-    csv_sftp_import: 'CSV / SFTP Import',
+    csv_sftp_import: 'CSV Import',
     export_only: 'Export Only',
     custom_scoped: 'Custom Scoped',
 };
@@ -190,12 +190,12 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
     },
     {
         id: 'csv-sftp',
-        name: 'CSV / SFTP Import',
+        name: 'CSV Import',
         category: 'erp_warehouse',
         status: 'file_import_supported',
         delivery_mode: 'csv_sftp_import',
         integration_type: 'file_based_import',
-        customer_copy: 'Use CSV or scheduled file delivery for ERP and warehouse data that is not available over API.',
+        customer_copy: 'Upload CSV files for ERP and warehouse data that is not available over API.',
         evidence_url: '/tools/data-import',
     },
     {
@@ -215,7 +215,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'custom_scoped',
         delivery_mode: 'csv_sftp_import',
         integration_type: 'file_based_import',
-        customer_copy: 'NetSuite data can be onboarded via CSV or SFTP export with RegEngine mapping review.',
+        customer_copy: 'NetSuite data can be onboarded via CSV export with RegEngine mapping review.',
         evidence_url: '/trust',
     },
     {
@@ -245,7 +245,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         status: 'export_supported',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
-        customer_copy: 'RegEngine can prepare EPCIS-oriented export packages for retailer submission workflows.',
+        customer_copy: 'RegEngine can prepare EPCIS (Preview) export packages for retailer submission workflows.',
         evidence_url: '/trust',
     },
     {
@@ -290,43 +290,23 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
     },
     {
         id: 'webhooks',
-        name: 'Webhook ingestion (inbound)',
-        category: 'developer_api',
-        status: 'implemented',
-        delivery_mode: 'webhook',
-        integration_type: 'api_based_custom',
-        customer_copy: 'Webhook ingestion is available for inbound event submission and downstream normalization (one-way inbound).',
-        evidence_url: '/docs/api',
-    },
-    {
-        id: 'inflow-lab',
-        name: 'Inflow Lab',
-        category: 'developer_api',
-        status: 'pilot',
-        delivery_mode: 'webhook',
-        integration_type: 'api_based_custom',
-        customer_copy: 'RegEngine-owned FSMA 204 simulator for webhook demos, contract tests, and developer validation.',
-        evidence_url: '/docs/connectors/inflow-lab',
-    },
-    {
-        id: 'epcis',
-        name: 'GS1 EPCIS 2.0',
+        name: 'JSON events API (inbound)',
         category: 'developer_api',
         status: 'implemented',
         delivery_mode: 'native_api',
-        integration_type: 'standards_based',
-        customer_copy: 'JSON-LD EPCIS ingest and export are supported. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
-        evidence_url: '/developers',
+        integration_type: 'api_based_custom',
+        customer_copy: 'Submit CTE events as JSON to POST /api/v1/webhooks/ingest for validation and downstream normalization (one-way inbound).',
+        evidence_url: '/docs/api',
     },
     {
-        id: 'edi-856',
-        name: 'EDI 856',
+        id: 'epcis',
+        name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',
-        status: 'pilot',
-        delivery_mode: 'custom_scoped',
-        integration_type: 'file_based_import',
-        customer_copy: 'ASN inbound processing exists, but production rollout should be treated as guided integration work.',
-        evidence_url: '/trust',
+        status: 'export_supported',
+        delivery_mode: 'export_only',
+        integration_type: 'one_way_export',
+        customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',
+        evidence_url: '/developers',
     },
     {
         id: 'design-partner',
@@ -402,52 +382,7 @@ export const SUPPORT_CHANNELS: SupportChannel[] = [
         tier: 'Premium',
         responseWindow: 'Per contract',
         escalation: 'Named contacts, negotiated escalation tree, and security review support',
-        notes: 'All commitments — response time, named escalations, security obligations — live in the executed agreement.',
-    },
-];
-
-// Sample export-job configurations rendered on the Trust Center page as
-// examples of supported configurations — NOT live production telemetry.
-// Timestamps and manifest hashes below are placeholder strings and must
-// not be presented as real run data; the Trust Center renderer hides
-// timestamps for this reason. If you add a renderer that surfaces
-// `lastRun` / `nextRun` / `manifestHash`, label the area "Sample data".
-export const ARCHIVE_EXPORT_JOBS: ArchiveExportJob[] = [
-    {
-        id: 'job_fda_daily',
-        name: 'Sample — Daily FDA package archive',
-        format: 'FDA Package',
-        cadence: 'Daily',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
-        id: 'job_epcis_weekly',
-        name: 'Sample — Weekly EPCIS outbound bundle',
-        format: 'GS1 EPCIS 2.0',
-        cadence: 'Weekly',
-        destination: 'Downloadable bundle',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
-    },
-    {
-        id: 'job_audit_monthly',
-        name: 'Sample — Monthly audit evidence bundle',
-        format: 'Audit Bundle',
-        cadence: 'Monthly',
-        destination: 'Object storage archive',
-        status: 'active',
-        lastRun: 'sample',
-        nextRun: 'sample',
-        manifestHash: 'sha256:sample-…',
-        tenantId: 'tenant_demo_001',
+        notes: 'All commitments (response time, named escalations, security obligations) live in the executed agreement.',
     },
 ];
 
@@ -486,7 +421,7 @@ export const MAPPING_REVIEW_ITEMS: MappingReviewItem[] = [
     },
     {
         id: 'map_case_005',
-        source: 'EDI 856 ASN',
+        source: 'JSON events API',
         sourceField: 'Case Count',
         mappedField: null,
         status: 'needs_review',
@@ -502,7 +437,7 @@ export const RECALL_DRILL_RUNS: RecallDrillRun[] = [
         dateRange: '2026-02-01 to 2026-02-28',
         status: 'completed',
         elapsed: '18m 24s',
-        artifacts: ['FDA package', 'EPCIS export', 'drill report'],
+        artifacts: ['FDA package', 'EPCIS export (Preview)', 'drill report'],
         warnings: [],
     },
     {

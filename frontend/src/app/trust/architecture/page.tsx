@@ -47,7 +47,7 @@ const STACK_LAYERS = [
         layer: 'Backend',
         technology: 'FastAPI monolith on Railway',
         detail:
-            'Single consolidated Python service for CTE ingestion, webhook validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
+            'Single consolidated Python service for CTE ingestion, JSON events API validation, CSV parsing, compliance coverage and completeness checking, exports, and alert generation. The services directories are code-organization boundaries, not separate default deploys.',
     },
     {
         Icon: Database,
@@ -69,7 +69,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '1',
         title: 'Ingest',
-        description: 'CTE events arrive via CSV upload, webhook, or EPCIS. CSV and webhook paths run validation synchronously; EPCIS validation runs asynchronously. All paths persist before coverage checks.',
+        description: 'CTE events arrive via CSV upload or the JSON events API. Both paths run validation synchronously and persist before coverage checks. EPCIS 2.0 is in Preview.',
     },
     {
         step: '2',
@@ -79,7 +79,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '3',
         title: 'Hash & Chain',
-        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure — not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
+        description: 'Validated events are SHA-256 hashed and chain-linked at ingest, scoped per tenant. Commit means accepted records are appended after checks you configure; this is not a certification. Independent verification of exported bundles is offered at /verify. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.',
     },
     {
         step: '4',
@@ -89,7 +89,7 @@ const DATA_FLOW_STEPS = [
     {
         step: '5',
         title: 'Export',
-        description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0, FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
+        description: 'Compliance records may be exported in one or more supported formats such as EPCIS 2.0 (Preview), FDA-oriented spreadsheets, or CSV, depending on the enabled workflow.',
     },
 ];
 
@@ -120,7 +120,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Globe,
         title: 'Source systems',
-        detail: 'ERP, WMS, supplier files, webhooks, or EPCIS feeds',
+        detail: 'ERP, WMS, and supplier data sent as CSV uploads or JSON events API calls',
         boundary: 'Customer-owned data quality',
     },
     {
@@ -144,7 +144,7 @@ const SYSTEM_FLOW = [
     {
         Icon: Workflow,
         title: 'Evidence exports',
-        detail: 'FDA-oriented spreadsheets, EPCIS/CSV packages, and manifests where configured',
+        detail: 'FDA-oriented spreadsheets, EPCIS (Preview) and CSV packages, and manifests where configured',
         boundary: 'Customer review and archive',
     },
 ];
@@ -336,9 +336,7 @@ export default function ArchitecturePage() {
                     </div>
                     <p className="mx-auto mt-6 max-w-[68ch] text-ui text-re-text-secondary">
                         Verify supported evidence export bundles yourself: drop a supported bundle into{' '}
-                        <Link href="/verify" className={PROSE_LINK}>/verify</Link>{' '}
-                        or download a synthetic sample at{' '}
-                        <Link href="/proof" className={PROSE_LINK}>/proof</Link>.
+                        <Link href="/verify" className={PROSE_LINK}>/verify</Link>.
                     </p>
                 </div>
             </Section>

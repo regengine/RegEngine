@@ -50,6 +50,12 @@ function csvResult(accepted: number, rejected: number) {
 describe('Data Import Hub CSV results', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('does not render the sample dataset simulation control', () => {
+    render(<DataImportClient />);
+    expect(screen.queryByText('Load Sample Dataset')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /run simulation/i })).not.toBeInTheDocument();
+  });
+
   it.each([
     [2, 0, 'CSV processed'],
     [1, 1, 'CSV partially accepted'],

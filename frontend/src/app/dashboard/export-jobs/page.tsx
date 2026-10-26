@@ -49,7 +49,7 @@ export default function ExportJobsPage() {
     const createJobMutation = useMutation({
         mutationFn: async () => {
             throw new Error(
-                'Export job scheduling is not yet available — records remain exportable on demand.',
+                'Export job scheduling is not yet available. Records remain exportable on demand.',
             );
         },
     });
@@ -69,9 +69,9 @@ export default function ExportJobsPage() {
     const exportPrereqs = filterExperimentalLinks([
         {
             title: 'Connect source data',
-            detail: 'Use Inflow Lab or import tools to build the record set export jobs will package once scheduling ships.',
-            href: '/dashboard/inflow-lab',
-            action: 'Open Inflow Lab',
+            detail: 'Use the import tools to build the record set export jobs will package once scheduling ships.',
+            href: '/ingest',
+            action: 'Import records',
             icon: Database,
         },
         {
@@ -90,10 +90,26 @@ export default function ExportJobsPage() {
         },
     ]);
 
+    if (!exportResponse || notConnected) {
+        return (
+            <PageContainer>
+                <PageHeader
+                    title="Scheduled Exports"
+                    description="Scheduled export jobs are coming soon."
+                    primaryAction={<Button variant="secondary" disabled>Save export job (coming soon)</Button>}
+                />
+                <Callout tone="warning" icon={Link2Off} title="Scheduled export jobs aren't available on this workspace yet.">
+                    <p>Recurring archive scheduling is still in development. This workspace cannot create an export job here today.</p>
+                    <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
+                </Callout>
+            </PageContainer>
+        );
+    }
+
     return (
         <PageContainer>
             <PageHeader
-                title="FDA Export"
+                title="Scheduled Exports"
                 description="Configure export jobs for connected workspaces so off-platform retention does not depend on an active in-app subscription alone."
                 primaryAction={
                     <Button
@@ -115,7 +131,7 @@ export default function ExportJobsPage() {
                         icon={Link2Off}
                         title={"Scheduled export jobs aren't available on this workspace yet."}
                     >
-                        Recurring archive scheduling is still in development — no amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
+                        Recurring archive scheduling is still in development. No amount of connected data unlocks it today. Your records stay exportable on demand from FDA Export, and this page will activate when scheduling ships.
                     </Callout>
                 ) : (
                     <Callout tone="info" icon={Archive}>
@@ -166,7 +182,7 @@ export default function ExportJobsPage() {
                                 className={`${fieldControlClasses} h-11`}
                             >
                                 <option value="FDA Package">FDA Package</option>
-                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0</option>
+                                <option value="GS1 EPCIS 2.0">GS1 EPCIS 2.0 (Preview)</option>
                                 <option value="Audit Bundle">Audit Bundle</option>
                             </select>
                         </Field>
@@ -234,7 +250,7 @@ export default function ExportJobsPage() {
                             <EmptyState
                                 icon={Archive}
                                 title="No export jobs yet"
-                                description="Export jobs package accepted traceability records into FDA, EPCIS, or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
+                                description="Export jobs package accepted traceability records into FDA, EPCIS (Preview), or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
                             />
                             <div className="grid gap-4 md:grid-cols-3">
                                 {exportPrereqs.map((step) => (
@@ -263,7 +279,7 @@ export default function ExportJobsPage() {
                                     <dl className="divide-y divide-re-border-subtle">
                                         {[
                                             ['Cadence', 'Weekly / Daily / Monthly'],
-                                            ['Bundle', 'FDA or EPCIS'],
+                                            ['Bundle', 'FDA or EPCIS (Preview)'],
                                             ['Integrity', 'Manifest hash'],
                                         ].map(([term, detail]) => (
                                             <div key={term} className="flex items-center justify-between gap-4 px-5 py-3 text-ui">

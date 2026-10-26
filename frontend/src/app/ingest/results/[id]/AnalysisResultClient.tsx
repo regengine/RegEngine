@@ -107,7 +107,7 @@ export default function AnalysisResultClient() {
                         <div className="min-w-0">
                             <CardTitle>Cryptographic Timeline</CardTitle>
                             <CardDescription className="mt-1">
-                                Simulated example — not a verification record
+                                Simulated example, not a verification record
                             </CardDescription>
                         </div>
                     </CardHeader>

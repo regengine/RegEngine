@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { CodeBlock } from "@/components/ui/code-block";
 import { API_BASE } from "@/lib/api-base";
 
-/** Inline identifier — SPEC §2.3. */
+/** Inline identifier - SPEC §2.3. */
 const CODE =
     "rounded-sm bg-re-surface-inset px-1.5 py-0.5 font-mono text-[0.8125rem] text-re-text-primary";
 
@@ -109,7 +109,7 @@ export default function AuthenticationDocsPage() {
                             <p className="mb-3 text-ui text-re-text-secondary">
                                 Keys carry scopes in a <code className={CODE}>resource.action</code> vocabulary.
                                 The <code className={CODE}>.</code> and <code className={CODE}>:</code> separators
-                                are equivalent — <code className={CODE}>records.read</code> and{' '}
+                                are equivalent: <code className={CODE}>records.read</code> and{' '}
                                 <code className={CODE}>records:read</code> name the same scope. A key only needs the scopes for the
                                 endpoints you call:
                             </p>
@@ -133,8 +133,8 @@ export default function AuthenticationDocsPage() {
                         <Callout tone="warning" title="Scopes do not make a key read-only">
                             <p className="text-ui text-re-text-secondary">
                                 Scopes limit which of the endpoints above a key can call. They are not a read-only guarantee: some other
-                                operations on the RegEngine backend, for example EPCIS ingest, compliance snapshots, SLA request updates
-                                and onboarding steps, accept any valid tenant key without checking a named scope. Treat every key as
+                                operations on the RegEngine backend, for example compliance snapshots, SLA request updates, onboarding steps
+                                and the EPCIS intake endpoint (in Preview), accept any valid tenant key without checking a named scope. Treat every key as
                                 read-write for its workspace. Keep it on your server, never in client-side code, and ask RegEngine to
                                 revoke it if it leaks.
                             </p>

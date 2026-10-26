@@ -85,13 +85,13 @@ export default function ExceptionQueuePage() {
   const pageHeader = (
     <PageHeader
       title="Exception Queue"
-      description="Manage compliance exceptions — resolve defects before they block response packages"
+      description="Manage compliance exceptions: resolve defects before they block response packages"
       meta={
-        blockingCount > 0 ? (
+        !exceptions.error && !blocking.error && blocking.data ? (blockingCount > 0 ? (
           <StatusBadge state="blocked" label={`${blockingCount} Blocking`} />
         ) : (
           <StatusBadge state="compliant" label="No Blockers" />
-        )
+        )) : undefined
       }
     />
   );
@@ -99,14 +99,14 @@ export default function ExceptionQueuePage() {
 
   if (exceptions.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"
           role="alert"
           title="Unable to load data from the control plane API."
           action={
-            <Button variant="secondary" size="sm" onClick={() => exceptions.refetch()}>
+            <Button variant="secondary" size="sm" onClick={() => { void exceptions.refetch(); void blocking.refetch(); }}>
               Retry
             </Button>
           }
@@ -238,6 +238,17 @@ export default function ExceptionQueuePage() {
   return (
     <PageContainer>
       {pageHeader}
+
+      {blocking.error && (
+        <Callout
+          tone="danger"
+          role="alert"
+          title="Unable to load blocking exception count."
+          action={<Button variant="secondary" size="sm" onClick={() => { void blocking.refetch(); }}>Retry count</Button>}
+        >
+          {(blocking.error as Error).message}
+        </Callout>
+      )}
 
       <DemoBanner visible={!!(exceptions.data?.__isDemo)} />
 

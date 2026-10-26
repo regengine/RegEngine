@@ -56,7 +56,7 @@ const RETENTION_TIMELINE = [
 ];
 const EXPORT_FORMATS = [
     {
-        format: 'EPCIS 2.0 JSON-LD',
+        format: 'EPCIS 2.0 JSON-LD (Preview)',
         standard: 'GS1 industry standard',
         useCase: 'Interoperable with other FSMA 204 platforms, trading partner systems, and FDA submissions',
         icon: FileCheck,
@@ -96,7 +96,7 @@ const ARCHIVE_NOTES = [
     },
     {
         title: 'No vendor lock-in',
-        body: 'Exports are intended to use industry-standard formats such as EPCIS 2.0, FDA spreadsheet layouts, and CSV. Format coverage depends on the workflow enabled for your account.',
+        body: 'Exports are intended to use industry-standard formats such as EPCIS 2.0 (Preview), FDA spreadsheet layouts, and CSV. Format coverage depends on the workflow enabled for your account.',
     },
 ];
 
@@ -217,7 +217,7 @@ export default function RetentionPage() {
                     <h3 className="text-subheading text-re-text-primary">Our recommendation</h3>
                     <p className="mt-1">
                         Set up weekly automated exports to your own object storage within the first week of onboarding.
-                        Use the audit evidence bundle format — it ships with a SHA-256 manifest so records can be verified out-of-band. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.
+                        Use the audit evidence bundle format. It ships with a SHA-256 manifest so records can be verified out-of-band. Default deployments use PostgreSQL-backed task processing rather than a managed message bus.
                         This supports FSMA 204&apos;s two-year retention requirement regardless of your RegEngine subscription status.
                     </p>
                 </Callout>

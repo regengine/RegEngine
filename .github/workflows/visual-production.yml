@@ -1,0 +1,58 @@
+# Report-only visual regression + page monitoring for production.
+#
+# Non-required, never blocks anything (continue-on-error). Strictly read-only:
+# GET page visits only — no sign-ins, no form submits (no
+# VISUAL_ALLOW_FORM_SUBMIT here), no writes. Findings land in the run's
+# artifacts and the HTML report; nothing opens issues or comments.
+name: Visual Production Monitor
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+  deployment_status:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.deployment.environment || github.ref }}
+  # A later deployment_status event must never cancel an in-flight Production run; duplicates queue instead.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  visual-report:
+    name: visual-report (non-required)
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run visual suite (read-only)
+        env:
+          VISUAL_BASE_URL: ${{ github.event.deployment_status.environment_url || 'https://regengine.co' }}
+        run: npx playwright test --config=playwright.visual.config.ts
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        if: always()
+        with:
+          name: visual-report-production
+          path: |
+            frontend/playwright-visual-report
+            frontend/test-results-visual

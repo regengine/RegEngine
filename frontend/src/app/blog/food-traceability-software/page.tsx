@@ -53,7 +53,7 @@ export default function FoodTraceabilitySoftwarePage() {
           <div className="mb-12">
             <h2 className="mb-4 text-heading text-re-text-primary">The Selection Challenge</h2>
             <p className="text-body text-re-text-secondary mb-6">
-              Food traceability software ranges from basic Excel-based tracking to enterprise-grade platforms with automated supply chain visibility. Some vendors pitch themselves as FSMA 204 specialists. Others are generic supply chain tools retrofitted with compliance features. Many promise integration with your ERP—until you learn the integration costs $50K+ and takes six months.
+              Food traceability software ranges from basic Excel-based tracking to enterprise-grade platforms with automated supply chain visibility. Some vendors pitch themselves as FSMA 204 specialists. Others are generic supply chain tools retrofitted with compliance features. Many promise integration with your ERP, until you learn the integration costs $50K+ and takes six months.
             </p>
             <p className="text-body text-re-text-secondary mb-6">
               The problem: most vendor comparison tools are written by vendors. They highlight features that make their product look best, not features that matter most for FDA's July 2028 enforcement date or your budget.
@@ -120,7 +120,7 @@ export default function FoodTraceabilitySoftwarePage() {
           <div className="mb-12">
             <h2 className="mb-4 text-heading text-re-text-primary">2. Integration: Will It Connect to Your Existing Systems?</h2>
             <p className="text-body text-re-text-secondary mb-6">
-              A food traceability platform doesn't live in isolation. It needs to pull data from your ERP, WMS, inventory system, or supplier networks—and push compliance data to FDA systems, retailers, or auditors.
+              A food traceability platform doesn't live in isolation. It needs to pull data from your ERP, WMS, inventory system, or supplier networks, and push compliance data to FDA systems, retailers, or auditors.
             </p>
             
             <Card variant="inset" padding="spacious" className="mb-6">
@@ -128,11 +128,11 @@ export default function FoodTraceabilitySoftwarePage() {
               <div className="space-y-4">
                 <div>
                   <p className="mb-1 text-subheading text-re-text-primary">Tier 1: Native Connectors (Low Cost)</p>
-                  <p className="text-ui text-re-text-secondary">Pre-built integrations to popular ERPs (SAP, NetSuite, Salesforce). Usually $0–$5K setup, 2–4 weeks implementation.</p>
+                  <p className="text-ui text-re-text-secondary">Pre-built integrations to popular ERPs (SAP, NetSuite, Salesforce). Usually $0 to $5K setup, 2 to 4 weeks implementation.</p>
                 </div>
                 <div>
                   <p className="mb-1 text-subheading text-re-text-primary">Tier 2: API-Based Integration (Medium Cost)</p>
-                  <p className="text-ui text-re-text-secondary">RESTful or SOAP APIs requiring custom development. $10K–$30K, 4–8 weeks. Your IT team or a consultant builds the bridge.</p>
+                  <p className="text-ui text-re-text-secondary">RESTful or SOAP APIs requiring custom development. $10K to $30K, 4 to 8 weeks. Your IT team or a consultant builds the bridge.</p>
                 </div>
                 <div>
                   <p className="mb-1 text-subheading text-re-text-primary">Tier 3: Manual Data Entry or Middleware (High Cost)</p>
@@ -159,7 +159,7 @@ export default function FoodTraceabilitySoftwarePage() {
           <div className="mb-12">
             <h2 className="mb-4 text-heading text-re-text-primary">3. Compliance Feature Depth: Does It Enforce FSMA 204 Requirements?</h2>
             <p className="text-body text-re-text-secondary mb-6">
-              Not all platforms enforce FSMA 204 compliance equally. Some are passive trackers—they record what you tell them to record. Better platforms actively enforce data validation, deviation tracking, and 24-hour response requirements.
+              Not all platforms enforce FSMA 204 compliance equally. Some are passive trackers: they record what you tell them to record. Better platforms actively enforce data validation, deviation tracking, and 24-hour response requirements.
             </p>
 
             <div className="space-y-4 mb-8">
@@ -209,11 +209,11 @@ export default function FoodTraceabilitySoftwarePage() {
               <ul className="space-y-3">
                 <li className="flex flex-col gap-1 sm:flex-row sm:gap-3">
                   <span className="shrink-0 text-subheading text-re-text-primary sm:w-56">Setup & Onboarding</span>
-                  <span className="text-ui text-re-text-secondary">Configuration, data migration, user training: $5K–$50K depending on platform and complexity.</span>
+                  <span className="text-ui text-re-text-secondary">Configuration, data migration, user training: $5K to $50K depending on platform and complexity.</span>
                 </li>
                 <li className="flex flex-col gap-1 sm:flex-row sm:gap-3">
                   <span className="shrink-0 text-subheading text-re-text-primary sm:w-56">Integration Development</span>
-                  <span className="text-ui text-re-text-secondary">Connecting to your ERP or supplier systems: $10K–$100K+ if custom development is required.</span>
+                  <span className="text-ui text-re-text-secondary">Connecting to your ERP or supplier systems: $10K to $100K+ if custom development is required.</span>
                 </li>
                 <li className="flex flex-col gap-1 sm:flex-row sm:gap-3">
                   <span className="shrink-0 text-subheading text-re-text-primary sm:w-56">Per-User or Per-Transaction Fees</span>
@@ -221,7 +221,7 @@ export default function FoodTraceabilitySoftwarePage() {
                 </li>
                 <li className="flex flex-col gap-1 sm:flex-row sm:gap-3">
                   <span className="shrink-0 text-subheading text-re-text-primary sm:w-56">Custom Development & Support</span>
-                  <span className="text-ui text-re-text-secondary">Premium support tiers, custom reporting, or feature development: $100–$500/hour or flat retainers.</span>
+                  <span className="text-ui text-re-text-secondary">Premium support tiers, custom reporting, or feature development: $100 to $500/hour or flat retainers.</span>
                 </li>
                 <li className="flex flex-col gap-1 sm:flex-row sm:gap-3">
                   <span className="shrink-0 text-subheading text-re-text-primary sm:w-56">Data Storage & Archival</span>
@@ -245,12 +245,12 @@ export default function FoodTraceabilitySoftwarePage() {
                 <li>Improved supplier relationships and transparency</li>
               </ul>
               <p className="text-ui text-re-text-secondary mt-4">
-                If the platform saves your team 5–10 hours/week in compliance work, that alone justifies the cost.
+                If the platform saves your team 5 to 10 hours/week in compliance work, that alone justifies the cost.
               </p>
             </Card>
 
             <p className="text-body text-re-text-secondary">
-              Request a detailed cost breakdown from every vendor. Ask for references—especially from companies of similar size—and ask them directly about hidden costs.
+              Request a detailed cost breakdown from every vendor. Ask for references (especially from companies of similar size) and ask them directly about hidden costs.
             </p>
           </div>
 
@@ -272,7 +272,7 @@ export default function FoodTraceabilitySoftwarePage() {
               <li className="flex gap-4">
                 <span className="shrink-0 font-mono text-ui tabular-nums text-re-text-muted">2.</span>
                 <div>
-                  <p className="text-subheading text-re-text-primary mb-1">Shortlist 3–5 Vendors</p>
+                  <p className="text-subheading text-re-text-primary mb-1">Shortlist 3 to 5 Vendors</p>
                   <p>Request demos focused on your specific use cases, not generic feature tours.</p>
                 </div>
               </li>
@@ -287,7 +287,7 @@ export default function FoodTraceabilitySoftwarePage() {
                 <span className="shrink-0 font-mono text-ui tabular-nums text-re-text-muted">4.</span>
                 <div>
                   <p className="text-subheading text-re-text-primary mb-1">Contact References</p>
-                  <p>Speak to 2–3 companies using each platform. Ask about implementation reality vs. promises, hidden costs, and support quality.</p>
+                  <p>Speak to 2 or 3 companies using each platform. Ask about implementation reality vs. promises, hidden costs, and support quality.</p>
                 </div>
               </li>
               <li className="flex gap-4">
@@ -317,7 +317,7 @@ export default function FoodTraceabilitySoftwarePage() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span className="text-re-text-secondary"><strong className="text-re-text-primary">Integration costs are hidden costs.</strong> Factor in setup, development, and ongoing maintenance—not just monthly SaaS fees.</span>
+                <span className="text-re-text-secondary"><strong className="text-re-text-primary">Integration costs are hidden costs.</strong> Factor in setup, development, and ongoing maintenance, not just monthly SaaS fees.</span>
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
@@ -329,7 +329,7 @@ export default function FoodTraceabilitySoftwarePage() {
               </li>
               <li className="flex gap-3">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary shrink-0 mt-0.5" strokeWidth={1.75} aria-hidden="true" />
-                <span className="text-re-text-secondary"><strong className="text-re-text-primary">You have time, but not much.</strong> With the July 2028 deadline, start evaluation now. The right platform will take 3–6 months to implement properly.</span>
+                <span className="text-re-text-secondary"><strong className="text-re-text-primary">You have time, but not much.</strong> With the July 2028 deadline, start evaluation now. The right platform will take 3 to 6 months to implement properly.</span>
               </li>
             </ul>
           </Card>

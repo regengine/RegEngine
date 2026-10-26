@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { PlayCircle, ShieldAlert, TimerReset, FileText, Link2Off } from 'lucide-react';
@@ -76,7 +77,7 @@ export default function RecallDrillsPage() {
     const startDrillMutation = useMutation({
         mutationFn: async () => {
             throw new Error(
-                'Recall drill automation is not yet available — use the Requests workflow for a manual drill.',
+                'Recall drill automation is not yet available. Use the Requests workflow for a manual drill.',
             );
         },
     });
@@ -91,6 +92,26 @@ export default function RecallDrillsPage() {
 
     function handleStartDrill() {
         startDrillMutation.mutate();
+    }
+
+    if (!drillsResponse || notConnected) {
+        return (
+            <PageContainer>
+                <PageHeader
+                    title="Recall Drills"
+                    description="Automated recall drills are coming soon."
+                    primaryAction={<Button variant="secondary" disabled>Start drill (coming soon)</Button>}
+                />
+                <div className={`${NOTICE_BASE} border-l-re-warning bg-re-surface-card`}>
+                    <Link2Off className="mt-0.5 h-4 w-4 shrink-0 text-re-warning" strokeWidth={1.75} aria-hidden="true" />
+                    <div>
+                        <p>Automated drill scheduling is still in development. This workspace cannot start a drill here today.</p>
+                        <p className="mt-2">You can run a full manual drill today: open <Link href="/requests" className="underline">Requests (Internal Drill)</Link>, create an Internal Drill case, and walk it scope → collect → gap analysis → assemble → submit.</p>
+                        <p className="mt-2">To prepare traceability records now, use <Link href="/ingest" className="underline">CSV upload</Link> or the <Link href="/developers" className="underline">JSON events API</Link>.</p>
+                    </div>
+                </div>
+            </PageContainer>
+        );
     }
 
     return (
@@ -143,7 +164,7 @@ export default function RecallDrillsPage() {
                         <Field label="Output package" htmlFor="drill-output-package">
                             <select id="drill-output-package" className={`${fieldControlClasses} h-11`}>
                                 <option>FDA package + manifest</option>
-                                <option>EPCIS export + warning summary</option>
+                                <option>EPCIS export (Preview) + warning summary</option>
                                 <option>Full audit bundle</option>
                             </select>
                         </Field>

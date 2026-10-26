@@ -16,7 +16,7 @@ function getGraphUrl(): string {
     // Guard: *.railway.internal URLs are unreachable from Vercel serverless
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
-        console.warn('[proxy/graph] GRAPH_SERVICE_URL points to internal Railway URL — unreachable from Vercel. Set a public Railway URL.');
+        console.warn('[proxy/graph] GRAPH_SERVICE_URL points to internal Railway URL; unreachable from Vercel. Set a public Railway URL.');
         return getServerServiceURL('graph');
     }
     return url;

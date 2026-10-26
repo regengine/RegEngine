@@ -467,7 +467,7 @@ jobs:
           # Passwordless OTP specs against the same local stack as auth-flow
           # (#2878). rbac-gates / tenant-isolation / security-audit-fixes /
           # invite_flow still drive the removed password login UI and would
-          # fail this gate; demo-smoke / inflow-lab / sandbox / snapshot
+          # fail this gate; inflow-lab / sandbox / snapshot
           # specs need extra services or demo data.
           npm run test:e2e -- \
             tests/e2e/auth-flow.spec.ts \

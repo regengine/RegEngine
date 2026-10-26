@@ -2,14 +2,15 @@
  * The portal pages are static: they read the signed-in session from useAuth
  * and make no network calls. Every link they offer must land on a real page.
  *
- * The key create / revoke / step-up state machine that used to be tested here
- * belonged to the Supabase key page, which is replaced by a static card. It
- * stays in git history (5239d3c3) for a later keys screen.
+ * SEL-419: The developer portal features live JSON events API status,
+ * endpoints dynamically derived from publicOpenApiSpec, and API keys list
+ * with revocation action.
  */
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import ApiKeysPage from '@/app/developer/portal/keys/page';
 import DeveloperPortalPage from '@/app/developer/portal/page';
+import { publicOpenApiSpec } from '@/lib/public-openapi';
 
 const mocks = vi.hoisted(() => ({
     authValue: {
@@ -17,10 +18,24 @@ const mocks = vi.hoisted(() => ({
             { id: string; email: string; role_name?: string } | null,
         tenantId: '11111111-2222-4333-8444-555555555555' as string | null,
     },
+    useAPIKeysValue: {
+        data: [] as unknown[] | null,
+        isLoading: false,
+        error: null as Error | null,
+    },
+    revokeMutateAsync: vi.fn(),
 }));
 
 vi.mock('@/lib/auth-context', () => ({
     useAuth: () => mocks.authValue,
+}));
+
+vi.mock('@/hooks/use-api', () => ({
+    useAPIKeys: () => mocks.useAPIKeysValue,
+    useRevokeAPIKey: () => ({
+        mutateAsync: mocks.revokeMutateAsync,
+        isPending: false,
+    }),
 }));
 
 describe('developer portal page', () => {
@@ -31,6 +46,12 @@ describe('developer portal page', () => {
         vi.stubGlobal('fetch', fetchMock);
         mocks.authValue.user = { id: 'dev-1', email: 'dev@example.com', role_name: 'Owner' };
         mocks.authValue.tenantId = '11111111-2222-4333-8444-555555555555';
+        mocks.useAPIKeysValue = {
+            data: [],
+            isLoading: false,
+            error: null,
+        };
+        mocks.revokeMutateAsync.mockReset();
     });
 
     it('shows the email, role and workspace from the session', () => {
@@ -91,6 +112,107 @@ describe('developer portal page', () => {
         }
         expect(hrefs).toEqual(expect.arrayContaining(['/contact', '/docs/quickstart', '/docs/authentication', '/docs/api']));
     });
+
+    it('renders the exact live header and labels EPCIS as (Preview)', () => {
+        render(<DeveloperPortalPage />);
+
+        expect(screen.getByRole('heading', { name: 'The JSON events API is live.' })).toBeInTheDocument();
+        expect(screen.getByText('The JSON events API is live.')).toBeInTheDocument();
+        expect(screen.getByText(/EPCIS \(Preview\)/)).toBeInTheDocument();
+
+        const containerHtml = document.body.innerHTML;
+        const invalidEpcisMatches = containerHtml.match(/\bEPCIS\b(?!\s*\(Preview\))/g);
+        expect(invalidEpcisMatches).toBeNull();
+    });
+
+    it('renders the endpoint list dynamically generated from publicOpenApiSpec linking to /docs/api', () => {
+        render(<DeveloperPortalPage />);
+
+        const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'] as const;
+        const expectedEndpoints: { method: string; path: string; summary: string }[] = [];
+
+        for (const [pathStr, pathItem] of Object.entries(publicOpenApiSpec.paths)) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+                if (HTTP_METHODS.includes(method.toLowerCase() as typeof HTTP_METHODS[number])) {
+                    const op = operation as { summary?: string };
+                    expectedEndpoints.push({
+                        method: method.toUpperCase(),
+                        path: pathStr,
+                        summary: op.summary || '',
+                    });
+                }
+            }
+        }
+
+        expect(expectedEndpoints.length).toBeGreaterThan(0);
+
+        for (const ep of expectedEndpoints) {
+            expect(screen.getAllByText(ep.method).length).toBeGreaterThan(0);
+            expect(screen.getByText(ep.path)).toBeInTheDocument();
+            if (ep.summary) {
+                const expectedSummary = ep.summary.replace(/\btenant(s?)\b/gi, (match, plural) => {
+                    const isPlural = Boolean(plural);
+                    const base = isPlural ? 'workspaces' : 'workspace';
+                    if (match === match.toUpperCase()) return base.toUpperCase();
+                    if (match[0] === match[0].toUpperCase()) return isPlural ? 'Workspaces' : 'Workspace';
+                    return base;
+                });
+                expect(screen.getByText(expectedSummary)).toBeInTheDocument();
+            }
+        }
+
+        const endpointLinks = screen.getAllByRole('link').filter((link) => link.getAttribute('href') === '/docs/api');
+        expect(endpointLinks.length).toBeGreaterThanOrEqual(expectedEndpoints.length);
+        expect(screen.queryByText(/Verify a tenant hash chain/i)).not.toBeInTheDocument();
+    });
+
+    it('displays the empty state "No keys yet" when no API keys exist', () => {
+        mocks.useAPIKeysValue = {
+            data: [],
+            isLoading: false,
+            error: null,
+        };
+
+        render(<DeveloperPortalPage />);
+
+        expect(screen.getByText('No keys yet')).toBeInTheDocument();
+        expect(screen.getByText('No API keys have been issued for this workspace yet.')).toBeInTheDocument();
+    });
+
+    it('renders the loading state when API keys are loading', () => {
+        mocks.useAPIKeysValue = {
+            data: [],
+            isLoading: true,
+            error: null,
+        };
+
+        render(<DeveloperPortalPage />);
+
+        expect(screen.getByText('Loading keys...')).toBeInTheDocument();
+        expect(screen.queryByText('No keys yet')).not.toBeInTheDocument();
+    });
+
+    it('handles API keys error state without crashing and renders empty state fallback', () => {
+        mocks.useAPIKeysValue = {
+            data: null,
+            isLoading: false,
+            error: new Error('Failed to load API keys'),
+        };
+
+        render(<DeveloperPortalPage />);
+
+        expect(screen.getByText('No keys yet')).toBeInTheDocument();
+        expect(screen.queryByText('Loading keys...')).not.toBeInTheDocument();
+    });
+
+    it('contains no em dashes or en dashes in any user visible copy', () => {
+        render(<DeveloperPortalPage />);
+
+        const bodyHtml = document.body.innerHTML;
+        // \u2014 is em dash, \u2013 is en dash
+        expect(bodyHtml).not.toContain('\u2014');
+        expect(bodyHtml).not.toContain('\u2013');
+    });
 });
 
 describe('developer portal keys page', () => {
@@ -115,5 +237,13 @@ describe('developer portal keys page', () => {
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         expect(screen.queryByPlaceholderText(/./)).not.toBeInTheDocument();
         expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('contains no em dashes or en dashes on the keys page', () => {
+        render(<ApiKeysPage />);
+
+        const bodyHtml = document.body.innerHTML;
+        expect(bodyHtml).not.toContain('\u2014');
+        expect(bodyHtml).not.toContain('\u2013');
     });
 });

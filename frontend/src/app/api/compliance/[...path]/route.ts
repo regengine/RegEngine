@@ -10,7 +10,7 @@ function getComplianceUrl(): string {
     // Guard: *.railway.internal URLs are unreachable from Vercel serverless
     const onVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
     if (onVercel && url.includes('.railway.internal')) {
-        console.warn('[proxy/compliance] COMPLIANCE_SERVICE_URL points to internal Railway URL — unreachable from Vercel. Set a public Railway URL.');
+        console.warn('[proxy/compliance] COMPLIANCE_SERVICE_URL points to internal Railway URL; unreachable from Vercel. Set a public Railway URL.');
         return getServerServiceURL('compliance'); // Will fail with a clear connection error
     }
     return url;

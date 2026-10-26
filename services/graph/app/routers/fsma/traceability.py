@@ -40,6 +40,7 @@ def idempotent_document_id(tenant_id: str, idempotency_key: str) -> str:
     """Derive a stable evidence document id from (tenant, key)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"regengine:trace-document:{tenant_id}:{idempotency_key}"))
 
+
 from ...audit_failure_policy import handle_audit_failure
 from ...fsma_audit import FSMAAuditAction, FSMAAuditActorType, FSMAAuditDiff, get_audit_log
 from ...fsma_metrics import record_trace_query
@@ -186,6 +187,9 @@ async def trace_forward_endpoint(
             "total_quantity": result.total_quantity,
             "query_time_ms": result.query_time_ms,
             "hop_count": result.hop_count,
+            # SEL-515: partial result when a capped query hit its limit.
+            "truncated": result.truncated,
+            "truncation_limit": result.truncation_limit,
             # Physics Engine additions
             "time_violations": result.time_violations,
             "risk_flags": result.risk_flags,
@@ -312,6 +316,9 @@ async def trace_backward_endpoint(
             "total_quantity": result.total_quantity,
             "query_time_ms": result.query_time_ms,
             "hop_count": result.hop_count,
+            # SEL-515: partial result when a capped query hit its limit.
+            "truncated": result.truncated,
+            "truncation_limit": result.truncation_limit,
         }
     except (neo4j.exceptions.Neo4jError, ConnectionError, ValueError) as e:
         duration = time.time() - start_time

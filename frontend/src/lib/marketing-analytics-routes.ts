@@ -10,20 +10,19 @@ export const MARKETING_APP_ROUTE_PREFIXES = [
 ] as const;
 
 const INTERNAL_STORAGE_KEY = 're_internal';
-const SENSITIVE_ROUTE_PREFIXES = ['/sandbox/results', '/portal'] as const;
+const SENSITIVE_ROUTE_PREFIXES = ['/portal'] as const;
 const PUBLIC_MARKETING_SECTIONS = new Set([
   '/about', '/alpha', '/blog', '/buyer-programs', '/case-studies',
-  '/compare', '/contact', '/demo', '/design-system', '/developers',
+  '/compare', '/contact', '/design-system', '/developers',
   '/docs', '/dpa', '/fsma', '/fsma-204', '/integrations', '/legal',
   '/pricing', '/privacy', '/product', '/proof', '/retailer-readiness',
-  '/sandbox', '/security', '/status', '/supplier-compliance', '/terms',
+  '/security', '/status', '/supplier-compliance', '/terms',
   '/tools', '/trust', '/trust-center', '/verify', '/verticals',
   '/walkthrough', '/why-regengine',
 ]);
 const PUBLIC_TOOL_SLUGS = new Set([
   'anomaly-simulator', 'ask', 'cte-mapper', 'data-import', 'drill-simulator',
-  'export', 'fsma-unified', 'ftl-checker', 'inflow-lab',
-  'inflow-lab-dashboard-preview', 'kde-checker', 'knowledge-graph',
+  'export', 'fsma-unified', 'ftl-checker', 'kde-checker', 'knowledge-graph',
   'label-scanner', 'notice-validator', 'obligation-scanner',
   'readiness-assessment', 'recall-readiness', 'records-request-checklist',
   'retailer-readiness', 'roi-calculator', 'scan', 'self-reported-checklist',

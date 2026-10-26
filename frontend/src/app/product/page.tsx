@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
 import {
   ArrowRight,
   ClipboardCheck,
@@ -106,7 +105,7 @@ function InflowImpactDiagram() {
             <div>
               <p className="font-mono text-label uppercase text-re-text-muted">Raw supplier feed</p>
               <p className="mt-1 text-subheading text-re-text-primary">
-                CSV, portal, API, EPCIS, or EDI-shaped records
+                CSV/XLSX upload or supplier portal, the JSON events API, or EPCIS-shaped records (EPCIS in Preview)
               </p>
             </div>
           </div>
@@ -191,15 +190,6 @@ export default function ProductPage() {
           eyebrow="Product"
           title="A workbench for deciding what can become evidence."
           description="RegEngine is built around one simple operating rule: supplier data is useful only after it is mapped, checked, fixed, persisted, and explicitly committed."
-          primaryAction={
-            experimentalFeaturesEnabled() ? (
-              <Button asChild size="lg">
-                <Link href="/tools/inflow-lab">
-                  Preflight a supplier file <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                </Link>
-              </Button>
-            ) : undefined
-          }
           secondaryActions={
             <Button asChild variant="secondary" size="lg">
               <Link href="/security">Verify security</Link>

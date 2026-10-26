@@ -18,6 +18,7 @@ import {
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/layout/section";
+import { sandboxCta } from "@/lib/sandbox-cta";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
@@ -70,15 +71,15 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Harvester Business Name", description: "Legal name of the entity that harvested", example: "Sunny Acres Farm LLC" },
     ],
     commonMistakes: [
-      "Missing field or growing area — the FDA requires this, not just the farm address. Each field needs a distinct identifier.",
-      "Inconsistent lot code formats — mixing formats like LOT-001, Lot001, and lot_001 across seasons or crews breaks traceability.",
-      "Date format chaos — switching between MM/DD/YYYY and DD/MM/YYYY within the same file. The FDA expects a consistent, unambiguous format.",
+      "Missing field or growing area: the FDA requires this, not just the farm address. Each field needs a distinct identifier.",
+      "Inconsistent lot code formats: mixing formats like LOT-001, Lot001, and lot_001 across seasons or crews breaks traceability.",
+      "Date format chaos: switching between MM/DD/YYYY and DD/MM/YYYY within the same file. The FDA expects a consistent, unambiguous format.",
     ],
     howRegEngineHelps: [
-      "Validates that every required KDE is present before you submit — no more surprise gaps during an audit.",
+      "Validates that every required KDE is present before you submit. No more surprise gaps during an audit.",
       "Flags inconsistent lot code formats and suggests standardized alternatives.",
       "Catches date format mismatches and normalizes them to ISO 8601 (YYYY-MM-DD).",
-      "Checks that field/growing area is populated — the most commonly missed KDE for harvesting events.",
+      "Checks that field/growing area is populated. It is the most commonly missed KDE for harvesting events.",
     ],
   },
   cooling: {
@@ -98,9 +99,9 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Temperature (recommended)", description: "Temperature the product was cooled to. Recommended for cold-chain practice; not required by §1.1325.", example: "34°F" },
     ],
     commonMistakes: [
-      "Missing cooling date — data entry delays mean the cooling event is recorded hours or days late, often without the actual date.",
-      "Temperature not captured — temperature isn't required by FSMA 204, but most cooling-chain audits expect it.",
-      "Facility name inconsistency — using 'CoolCo', 'Cool Co LLC', and 'CoolCo Pre-Cool' interchangeably across records.",
+      "Missing cooling date: data entry delays mean the cooling event is recorded hours or days late, often without the actual date.",
+      "Temperature not captured: temperature isn't required by FSMA 204, but most cooling-chain audits expect it.",
+      "Facility name inconsistency: using 'CoolCo', 'Cool Co LLC', and 'CoolCo Pre-Cool' interchangeably across records.",
     ],
     howRegEngineHelps: [
       "Flags missing cooling dates and prompts for the actual date, not the upload date.",
@@ -126,12 +127,12 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Input Lot Codes", description: "TLCs of the harvested lots that went into this pack run", example: "LOT-2026-04-15-BLU-001, LOT-2026-04-15-BLU-002" },
     ],
     commonMistakes: [
-      "Missing input lot codes — this is the single most common packing error. Without input TLCs, the traceability chain breaks at the packhouse.",
-      "Duplicate rows from ERP exports — many ERP systems export one row per case rather than one row per lot, creating thousands of duplicate CTE records.",
-      "CTE type aliases — some systems label this event as 'packing', 'pack', 'IP', or 'initial pack'. Mixed labels cause mapping failures.",
+      "Missing input lot codes: this is the single most common packing error. Without input TLCs, the traceability chain breaks at the packhouse.",
+      "Duplicate rows from ERP exports: many ERP systems export one row per case rather than one row per lot, creating thousands of duplicate CTE records.",
+      "CTE type aliases: some systems label this event as 'packing', 'pack', 'IP', or 'initial pack'. Mixed labels cause mapping failures.",
     ],
     howRegEngineHelps: [
-      "Requires input lot codes before an export can build — preventing the most common traceability break.",
+      "Requires input lot codes before an export can build, preventing the most common traceability break.",
       "Deduplicates rows automatically when it detects ERP-style per-case exports.",
       "Normalizes CTE type labels so 'packing', 'pack', and 'initial_packing' all map correctly.",
       "Validates that input TLCs reference real harvesting or cooling events in your data.",
@@ -157,9 +158,9 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Bill of Lading (BOL)", description: "Unique shipping document reference number", example: "BOL-78234" },
     ],
     commonMistakes: [
-      "Missing destination (ship-to) — WMS systems often omit the full destination address, recording only a customer code.",
-      "Abbreviated headers from WMS — column names like 'SHP_DT', 'DEST_CD', or 'QTY_CS' may not map cleanly to FDA-oriented field names.",
-      "Carrier name inconsistency — the same carrier appearing as 'Pacific Cold', 'Pacific Cold Freight', and 'PCF Logistics'.",
+      "Missing destination (ship-to): WMS systems often omit the full destination address, recording only a customer code.",
+      "Abbreviated headers from WMS: column names like 'SHP_DT', 'DEST_CD', or 'QTY_CS' may not map cleanly to FDA-oriented field names.",
+      "Carrier name inconsistency: the same carrier appearing as 'Pacific Cold', 'Pacific Cold Freight', and 'PCF Logistics'.",
     ],
     howRegEngineHelps: [
       "Validates that ship-to includes a full address or GLN, not just a customer code.",
@@ -193,9 +194,9 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Reference Document", description: "BOL, PO, or ASN number associated with the shipment", example: "PO-44210" },
     ],
     commonMistakes: [
-      "Missing immediate previous source — receivers often record what arrived but not who sent it, breaking the trace-back chain.",
-      "Product name mismatch vs. shipped — the shipper calls it 'Blueberries 6oz' and the receiver logs 'Fresh Blueberry Clamshell'. The FDA sees two different products.",
-      "Missing reference document — without a BOL or PO number, there is no way to link the receiving event to the corresponding shipping event.",
+      "Missing immediate previous source: receivers often record what arrived but not who sent it, breaking the trace-back chain.",
+      "Product name mismatch vs. shipped: the shipper calls it 'Blueberries 6oz' and the receiver logs 'Fresh Blueberry Clamshell'. The FDA sees two different products.",
+      "Missing reference document: without a BOL or PO number, there is no way to link the receiving event to the corresponding shipping event.",
     ],
     howRegEngineHelps: [
       "Requires immediate previous source before an export can build.",
@@ -217,7 +218,7 @@ const CTE_DATA: Record<string, CTEData> = {
       "Anyone who creates new products from FTL ingredients",
     ],
     kdes: [
-      { field: "Traceability Lot Code (TLC) — New", description: "New lot code assigned to the output product", example: "TFM-2026-04-18-MIX-001" },
+      { field: "New Traceability Lot Code (TLC)", description: "New lot code assigned to the output product", example: "TFM-2026-04-18-MIX-001" },
       { field: "Product Description", description: "FDA-standard description of the output product", example: "Spring Mix, 5oz bag" },
       { field: "Quantity", description: "Amount of the output product", example: "6,000" },
       { field: "Unit of Measure", description: "UOM for the output quantity", example: "bags" },
@@ -226,9 +227,9 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Input TLCs", description: "All lot codes of ingredients that went into this product", example: "LOT-ROM-042, LOT-SPN-038, LOT-KAL-019" },
     ],
     commonMistakes: [
-      "Missing input TLCs — this is the most critical transformation error. Without input lot codes, trace-back stops at the processor.",
-      "Mass balance violations — 100 lbs of inputs producing 120 lbs of output. The math must add up (minus documented waste/trim).",
-      "No transformation date — the system records when the data was entered, not when the transformation actually occurred.",
+      "Missing input TLCs: this is the most critical transformation error. Without input lot codes, trace-back stops at the processor.",
+      "Mass balance violations: 100 lbs of inputs producing 120 lbs of output. The math must add up (minus documented waste/trim).",
+      "No transformation date: the system records when the data was entered, not when the transformation actually occurred.",
     ],
     howRegEngineHelps: [
       "Requires input TLCs and validates that each one references a real lot in the system.",
@@ -242,7 +243,7 @@ const CTE_DATA: Record<string, CTEData> = {
     name: "First Land-Based Receiving",
     cfr: "21 CFR 1.1335",
     description:
-      "Records the first land-based receipt of food obtained from a fishing vessel — the point at which seafood lands and enters the domestic traceability chain. This CTE applies only to food obtained from a fishing vessel; generic imported food entry is covered by ordinary Receiving (§1.1345).",
+      "Records the first land-based receipt of food obtained from a fishing vessel: the point at which seafood lands and enters the domestic traceability chain. This CTE applies only to food obtained from a fishing vessel; generic imported food entry is covered by ordinary Receiving (§1.1345).",
     whoNeedsThis: [
       "Seafood docks and first receivers landing fish from vessels",
       "Processors receiving directly from a fishing vessel",
@@ -257,16 +258,16 @@ const CTE_DATA: Record<string, CTEData> = {
       { field: "Immediate Previous Source", description: "Vessel name or foreign shipper information", example: "F/V Ocean Harvest, Fiji registry" },
     ],
     commonMistakes: [
-      "Handwritten dock logs — many port facilities still use paper logs, leading to transcription errors and illegible records.",
-      "Unparseable dates — international date formats (18/04/2026 vs 04/18/2026) and handwritten dates create ambiguity.",
-      "Vessel name inconsistency — the same vessel logged as 'Ocean Harvest', 'F/V OCEAN HARVEST', and 'OceanHarvest-FJ'.",
-      "Missing everything — first land-based receiving has the lowest data quality of any CTE because dock operations are fast-paced and often paper-based.",
+      "Handwritten dock logs: many port facilities still use paper logs, leading to transcription errors and illegible records.",
+      "Unparseable dates: international date formats (18/04/2026 vs 04/18/2026) and handwritten dates create ambiguity.",
+      "Vessel name inconsistency: the same vessel logged as 'Ocean Harvest', 'F/V OCEAN HARVEST', and 'OceanHarvest-FJ'.",
+      "Missing everything: first land-based receiving has the lowest data quality of any CTE because dock operations are fast-paced and often paper-based.",
     ],
     howRegEngineHelps: [
       "Accepts scanned or typed dock logs and validates that all required KDEs are present.",
       "Normalizes international date formats and flags ambiguous dates for manual review.",
       "Detects vessel name variations and maintains a canonical vessel registry.",
-      "Provides a pre-formatted template designed for dock operations — fast to fill out, impossible to miss a required field.",
+      "Provides a pre-formatted template designed for dock operations: fast to fill out, impossible to miss a required field.",
     ],
   },
 };
@@ -301,7 +302,7 @@ export async function generateMetadata({
   if (!data) return {};
 
   return {
-    title: `${data.name} CTE — FSMA 204 ${data.cfr} Compliance | RegEngine`,
+    title: `${data.name} CTE: FSMA 204 ${data.cfr} Compliance | RegEngine`,
     description: `Everything you need to know about the ${data.name} Critical Tracking Event under FSMA 204 (${data.cfr}). Required KDEs, common mistakes, and how to validate your data.`,
   };
 }
@@ -320,10 +321,11 @@ export default async function CTELandingPage({
   if (!data) notFound();
 
   const Icon = CTE_ICONS[cteSlug] ?? ClipboardList;
+  const cta = sandboxCta();
 
   return (
     <div className="bg-re-surface-base">
-      {/* — HERO — */}
+      {/* - HERO - */}
       <Container width="marketing" className="pt-12 sm:pt-16">
         <Link
           href="/fsma-204"
@@ -351,7 +353,7 @@ export default async function CTELandingPage({
           className="border-b-0 pb-0"
         />
 
-        {/* — WHO NEEDS THIS — */}
+        {/* - WHO NEEDS THIS - */}
         <Callout tone="neutral" className="mt-8 max-w-[68ch]">
           <p className="font-medium text-re-text-primary">
             Who needs to record this CTE
@@ -360,7 +362,7 @@ export default async function CTELandingPage({
         </Callout>
       </Container>
 
-      {/* — REQUIRED KDEs TABLE — */}
+      {/* - REQUIRED KDEs TABLE - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Required Data Elements</span>}
@@ -394,7 +396,7 @@ export default async function CTELandingPage({
         </Table>
       </Section>
 
-      {/* — COMMON DATA QUALITY ISSUES — */}
+      {/* - COMMON DATA QUALITY ISSUES - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Watch out for these</span>}
@@ -416,15 +418,24 @@ export default async function CTELandingPage({
         </div>
       </Section>
 
-      {/* — HOW REGENGINE HELPS — */}
+      {/* - HOW REGENGINE HELPS - */}
       <Section
         width="marketing"
         eyebrow={<span className="font-mono uppercase">Automated validation</span>}
         title="How RegEngine Helps"
         description={
           <>
-            Upload your {data.name.toLowerCase()} data to the sandbox and
-            RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
+            {cta.enabled ? (
+              <>
+                Upload your {data.name.toLowerCase()} data to the sandbox and
+                RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
+              </>
+            ) : (
+              <>
+                RegEngine surfaces these issues in your {data.name.toLowerCase()}{" "}
+                data before they become audit findings during a §1.1455 records request.
+              </>
+            )}
           </>
         }
       >
@@ -446,21 +457,21 @@ export default async function CTELandingPage({
         </ul>
       </Section>
 
-      {/* — CTA — */}
+      {/* - CTA - */}
       <Section width="marketing" tone="inset">
         <div className="mx-auto max-w-[640px] text-center">
           <h2 className="font-display text-heading-lg text-re-text-primary">
             See it in action.
           </h2>
+          {/* #2757 - copy and destination resolve together so the blurb can never
+              promise a CSV sandbox that this deployment does not serve. */}
           <p className="mx-auto mt-4 max-w-[500px] text-body text-re-text-secondary">
-            Upload a sample {data.name.toLowerCase()} file to the RegEngine
-            sandbox and get an instant validation report — free, no signup
-            required.
+            {cta.blurb}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button asChild size="lg">
-              <Link href="/demo">
-                Try it now — free
+              <Link href={cta.href}>
+                {cta.label}
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -471,7 +482,7 @@ export default async function CTELandingPage({
         </div>
       </Section>
 
-      {/* — OTHER CTEs NAV — */}
+      {/* - OTHER CTEs NAV - */}
       <Section width="marketing" className="py-12 sm:py-12">
         <p className="mb-5 text-center font-mono text-label uppercase text-re-text-muted">
           Other Critical Tracking Events

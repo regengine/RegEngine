@@ -37,7 +37,6 @@ const SOURCE_LABEL: Record<string, string> = {
   xlsx_upload: 'XLSX Upload',
   epcis_api: 'EPCIS API',
   epcis_xml: 'EPCIS XML',
-  edi: 'EDI',
   manual: 'Manual',
   legacy_v002: 'Legacy',
 };
@@ -83,14 +82,14 @@ export default function CanonicalRecordsPage() {
     <PageHeader
       title="Canonical Records"
       description="Every record answers: what is it, where did it come from, what rules applied, what failed, what happens next"
-      meta={<Badge>{events.data?.total ?? 0} total records</Badge>}
+      meta={!events.error && events.data ? <Badge>{events.data.total} total records</Badge> : undefined}
     />
   );
 
 
   if (events.error) {
     return (
-      <PageContainer>
+      <PageContainer className="workspace-load-error">
         {pageHeader}
         <Callout
           tone="danger"

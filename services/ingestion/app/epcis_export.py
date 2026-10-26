@@ -15,24 +15,45 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
-from .disclaimers import SAMPLE_EXPORT_DISCLAIMER
 from .shared.csv_safety import sanitize_cell
 from .webhook_compat import require_tenant_context
 
 logger = logging.getLogger("epcis-export")
 
+FDA_CSV_HEADER = (
+    "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,"
+    "Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,"
+    "Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
+)
+
+
+# Hard cap on events buffered into one synchronous export. Exceeding it
+# returns HTTP 413 rather than silently dropping the oldest events (SEL-506),
+# matching the compliance FDA spreadsheet export (services/compliance
+# routes.py ``_MAX_EXPORT_EVENTS``).
+_MAX_EXPORT_EVENTS = 50_000
+
+
+class ExportStorageUnavailable(RuntimeError):
+    """The event store could not be read; never report this as "no data"."""
+
 
 def _query_tenant_events(
     tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
 ) -> list[dict]:
-    """Query real CTE events from fsma.cte_events for export."""
+    """Query real CTE events from fsma.cte_events for export.
+
+    Returns at most ``_MAX_EXPORT_EVENTS + 1`` rows so callers can detect
+    an over-cap export. Raises :class:`ExportStorageUnavailable` on any
+    database error instead of returning an empty list (SEL-508).
+    """
     db = get_db_safe()
     try:
         where = ["e.tenant_id = :tenant_id"]
@@ -81,16 +102,38 @@ def _query_tenant_events(
                 LEFT JOIN fsma.cte_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
                 WHERE {" AND ".join(where)}
                 ORDER BY e.event_timestamp DESC
-                LIMIT 5000
+                LIMIT :row_limit
             """),
-            params,
+            {**params, "row_limit": _MAX_EXPORT_EVENTS + 1},
         ).fetchall()
         return [dict(row._mapping) for row in rows]
     except Exception as exc:
-        logger.warning("db_query_failed_for_export", extra={"error": str(exc)})
-        return []
+        logger.error("db_query_failed_for_export", extra={"error": str(exc)})
+        raise ExportStorageUnavailable(str(exc)) from exc
     finally:
         db.close()
+
+
+def _load_export_rows(tenant_id: str, request: "ExportRequest") -> list[dict]:
+    """Load rows for an export, failing loudly instead of returning partial data.
+
+    503 when storage is unavailable (never "No data yet"), 413 when the
+    result would exceed ``_MAX_EXPORT_EVENTS`` (never a silent truncation).
+    """
+    try:
+        rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
+    except ExportStorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Event storage unavailable; export not generated") from exc
+    if len(rows) > _MAX_EXPORT_EVENTS:
+        logger.warning(
+            "export_exceeded_hard_cap",
+            extra={"tenant_id": tenant_id, "cap": _MAX_EXPORT_EVENTS},
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=(f"Export exceeds the {_MAX_EXPORT_EVENTS:,}-event hard cap; narrow your date range or lot code"),
+        )
+    return rows
 
 
 _CTE_TO_BIZSTEP = {
@@ -262,50 +305,6 @@ class ExportRequest(BaseModel):
     date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
 
 
-# Sample EPCIS 2.0 event data (in production, pulled from database)
-SAMPLE_EPCIS_EVENTS = [
-    {
-        "type": "ObjectEvent",
-        "eventTime": "2026-02-26T14:30:00.000Z",
-        "eventTimeZoneOffset": "-08:00",
-        "action": "OBSERVE",
-        "bizStep": "shipping",
-        "disposition": "in_transit",
-        "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
-        "readPoint": {"id": "urn:epc:id:sgln:0614141.00000.0"},
-        "bizLocation": {"id": "urn:epc:id:sgln:0614141.00000.0"},
-        "quantityList": [
-                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-        ],
-        "sourceList": [
-                {"type": "possessing_party", "source": "urn:epc:id:pgln:0614141.00000"}
-        ],
-        "destinationList": [
-                {"type": "possessing_party", "destination": "urn:epc:id:pgln:0614141.00001"}
-        ],
-        "regengine:sha256": "a3f8c1d2e4b5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
-        "regengine:chainHash": "b4c9e2c7d5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3",
-    },
-    {
-        "type": "ObjectEvent",
-        "eventTime": "2026-02-27T09:15:00.000Z",
-        "eventTimeZoneOffset": "-08:00",
-        "action": "ADD",
-        "bizStep": "receiving",
-        "disposition": "in_progress",
-        "epcList": ["urn:epc:id:sgtin:0614141.000001.001"],
-        "readPoint": {"id": "urn:epc:id:sgln:0614141.00001.0"},
-        "bizLocation": {"id": "urn:epc:id:sgln:0614141.00001.0"},
-        "quantityList": [
-                {"epcClass": "urn:epc:class:lgtin:0614141.000001.TOM-0226-F3-001", "quantity": 200, "uom": "CS"}
-        ],
-        "ilmd": {"https://regengine.co/ns/temperatureCelsius": 3.2, "https://regengine.co/ns/inspectionResult": "PASS"},
-        "regengine:sha256": "c5dae3d8e6f7a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4",
-        "regengine:chainHash": "d6ebf4e9f7a8b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5",
-    },
-]
-
-
 @router.post(
     "/epcis",
     summary="Export in GS1 EPCIS 2.0 JSON-LD format",
@@ -323,12 +322,12 @@ async def export_epcis(
     now = datetime.now(timezone.utc)
     tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
-    data_source = "tenant" if rows else "sample"
+    rows = _load_export_rows(tenant_id, request)
+    data_source = "tenant" if rows else "empty"
 
+    event_list = []
+    skipped = 0
     if rows:
-        event_list = []
-        skipped = 0
         for r in rows:
             epc_class = _epc_class(r)
             if (
@@ -362,10 +361,6 @@ async def export_epcis(
             if r.get("sha256_hash"):
                 event["regengine:sha256"] = r["sha256_hash"]
             event_list.append(event)
-    else:
-        event_list = SAMPLE_EPCIS_EVENTS
-        skipped = 0
-
     epcis_document = {
         "@context": [
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
@@ -396,7 +391,7 @@ async def export_epcis(
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
-            **({"regengine:disclaimer": SAMPLE_EXPORT_DISCLAIMER} if data_source == "sample" else {}),
+            **({"regengine:message": "No data yet"} if not event_list else {}),
         },
     }
 
@@ -447,14 +442,12 @@ async def export_fda(
     now = datetime.now(timezone.utc)
     tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
-    data_source = "tenant" if rows else "sample"
+    rows = _load_export_rows(tenant_id, request)
+    data_source = "tenant" if rows else "empty"
 
     if rows:
         # Build CSV from real data
-        lines = [
-            "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
-        ]
+        lines = [FDA_CSV_HEADER]
         for r in rows:
             ts = r["event_timestamp"]
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
@@ -482,16 +475,8 @@ async def export_fda(
         csv_content = "\n".join(lines) + "\n"
         event_count = len(rows)
     else:
-        # Sample data fallback for tenants with no events yet
-        csv_content = """CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash
-SHIPPING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-26,14:30:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000012,Cold Express Logistics,3.2,a3f8c1d2e4b5...
-RECEIVING,TOM-0226-F3-001,Roma Tomatoes 12ct,200,cases,2026-02-27,09:15:00Z,Valley Fresh Farms Salinas CA,0614141000005,Metro Distribution Center LA,0614141000012,,3.5,c5dae3d8e6f7...
-SHIPPING,LET-0226-A2-003,Romaine Lettuce Hearts 12ct,150,cases,2026-02-26,16:00:00Z,Green Valley Farms Salinas CA,0614141000029,Metro Distribution Center LA,0614141000012,Fresh Fleet Inc,2.8,e7f0a1b2c3d4...
-HARVESTING,CUC-0226-F2-015,English Cucumbers,500,cases,2026-02-25,08:00:00Z,Sunrise Farms Field 2,,,,,,f8a1b2c3d4e5...
-COOLING,SAL-0226-B1-007,Atlantic Salmon Fillets,300,lbs,2026-02-26,06:00:00Z,Pacific Seafood Portland OR,0614141000036,,,,-1.5,a9b0c1d2e3f4...
-TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:00Z,Metro Processing Plant LA,0614141000012,,,,,b0c1d2e3f4a5...
-"""
-        event_count = 6
+        csv_content = FDA_CSV_HEADER + "\n"
+        event_count = 0
 
     # EPIC-L (#1655): route filename through the shared safe_filename
     # builder so tenant_id can't carry CRLF / quotes into the header value.
@@ -511,8 +496,8 @@ TRANSFORMATION,SALAD-0226-001,Garden Salad Mix 16oz,1000,bags,2026-02-28,10:00:0
         "X-RegEngine-Format": "FDA_21CFR1.1455",
         "X-RegEngine-Data-Source": data_source,
     }
-    if data_source == "sample":
-        fda_headers["X-RegEngine-Disclaimer"] = SAMPLE_EXPORT_DISCLAIMER
+    if data_source == "empty":
+        fda_headers["X-RegEngine-Message"] = "No data yet"
 
     return StreamingResponse(
         iter([csv_content]),

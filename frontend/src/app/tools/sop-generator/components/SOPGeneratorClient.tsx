@@ -112,7 +112,7 @@ ${ctes.join('\n')}
 
 ## Operations
 ${formData.has_iot ? '✅ IoT Temperature Monitoring (Sensitech)' : '⬜ No IoT monitoring'}
-${formData.has_erp ? '✅ ERP/WMS Integration via Webhook API' : '⬜ Manual data entry / CSV upload'}
+${formData.has_erp ? '✅ ERP/WMS Integration via the JSON events API' : '⬜ Manual data entry / CSV upload'}
 
 ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.map(r => `- ${r}`).join('\n')}\n\n*Specific retailer traceability requirements vary, change frequently, and should be confirmed directly with each buyer.*` : ''}
 
@@ -145,7 +145,7 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs font-medium text-muted-foreground mb-1 block">Company Name *</label>
-                                        <Input name="company_name" value={formData.company_name} onChange={handleChange} placeholder="Valley Fresh Farms" className="rounded-xl" />
+                                        <Input name="company_name" value={formData.company_name} onChange={handleChange} className="rounded-xl" />
                                     </div>
                                     <div>
                                         <label className="text-xs font-medium text-muted-foreground mb-1 block">Company Type *</label>
@@ -161,11 +161,11 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs font-medium text-muted-foreground mb-1 block">Compliance Contact *</label>
-                                        <Input name="primary_contact" value={formData.primary_contact} onChange={handleChange} placeholder="Jane Smith" className="rounded-xl" />
+                                        <Input name="primary_contact" value={formData.primary_contact} onChange={handleChange} className="rounded-xl" />
                                     </div>
                                     <div>
                                         <label className="text-xs font-medium text-muted-foreground mb-1 block">Title</label>
-                                        <Input name="contact_title" value={formData.contact_title} onChange={handleChange} placeholder="VP Food Safety" className="rounded-xl" />
+                                        <Input name="contact_title" value={formData.contact_title} onChange={handleChange} className="rounded-xl" />
                                     </div>
                                 </div>
                             </CardContent>
@@ -190,7 +190,6 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                                                 updated[i] = e.target.value;
                                                 setProducts(updated);
                                             }}
-                                            placeholder="e.g. Roma Tomatoes, Romaine Lettuce"
                                             className="rounded-xl"
                                         />
                                         {products.length > 1 && (
@@ -221,7 +220,6 @@ ${retailers.length > 0 ? `## Retailer Requirements (informational)\n${retailers.
                                                 updated[i] = e.target.value;
                                                 setFacilities(updated);
                                             }}
-                                            placeholder="e.g. Valley Fresh Farms, Salinas CA"
                                             className="rounded-xl"
                                         />
                                         {facilities.length > 1 && (

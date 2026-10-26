@@ -8,11 +8,11 @@ import { PageHeader } from "@/components/layout/page-header";
 import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison",
+  title: "RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison",
   description:
     "Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
   openGraph: {
-    title: 'RegEngine vs FoodLogiQ (Aptean) — FSMA 204 Compliance Comparison',
+    title: 'RegEngine vs FoodLogiQ (Aptean): FSMA 204 Compliance Comparison',
     description: 'Compare RegEngine and FoodLogiQ for FSMA 204 compliance. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
     url: 'https://regengine.co/compare/foodlogiq',
     type: 'website',
@@ -25,18 +25,17 @@ const FEATURES = [
   { feature: "Public API + OpenAPI docs", regengine: "check", competitor: "partial", note: "Full REST API with interactive docs; verify FoodLogiQ's current API surface" },
   { feature: "FSMA 204 rule engine (KDE + relational)", regengine: "check", competitor: "partial", note: "36 FSMA 204 validation rules (33 stateless + 3 cross-event); rule enforcement is configurable per workflow" },
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs batch reporting" },
-  { feature: "CSV / API / webhook ingestion", regengine: "check", competitor: "partial", note: "All three; verify FoodLogiQ's current ingestion surface" },
+  { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom enterprise quotes" },
-  { feature: "Developer sandbox", regengine: "partial", competitor: "x", note: "Staged rollout — request access" },
 ];
 
 const WHY_SWITCH = [
-  // #2757 — this used to assert the sandbox returns results "in seconds" regardless of
+  // #2757 - this used to assert the sandbox returns results "in seconds" regardless of
   // whether the sandbox surface is enabled on the deployment. Reworded to the claim the
   // product makes unconditionally: rule evaluation runs on the first CSV you upload.
-  { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload — no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
+  { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload, with no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
   { title: "Published pricing", desc: "Facility-based list pricing from $849/mo, with Founding rates from $425/mo (billed annually) and no multi-year commitment required. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },
@@ -130,7 +129,7 @@ export default function FoodLogiQCompare() {
       {/* CTA */}
       <Card padding="spacious" className="text-center">
         <h2 className="mb-2 text-heading text-re-text-primary">See the difference yourself</h2>
-        {/* #2757 — copy and destination resolve together so the blurb can never
+        {/* #2757 - copy and destination resolve together so the blurb can never
             promise a CSV sandbox that this deployment does not serve. */}
         <p className="mx-auto mb-6 max-w-[68ch] text-ui text-re-text-secondary">
           {sandboxCta().blurb}

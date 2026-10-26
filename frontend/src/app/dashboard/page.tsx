@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { experimentalFeaturesEnabled } from "@/lib/experimental-features";
+import { experimentalFeaturesEnabled, filterExperimentalLinks, isExperimentalPageEnabled } from "@/lib/experimental-features";
 import { FSMA_ENFORCEMENT_DATE } from "@/lib/fsma-enforcement";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
@@ -27,6 +27,8 @@ import { fetchWorkbenchReadinessSummary } from "@/lib/api-hooks";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { GettingStartedCard } from "@/components/dashboard/getting-started-card";
 import { useOnboardingStatus } from "@/hooks/use-onboarding";
+import { useQASignal } from "@/hooks/use-qa-signal";
+import { TimedSkeleton } from "@/components/ui/timed-skeleton";
 
 /**
  * Dashboard overview.
@@ -34,18 +36,18 @@ import { useOnboardingStatus } from "@/hooks/use-onboarding";
  * An operator opens this page every morning and after every import. The first
  * viewport answers three questions without scrolling: where do we stand, what
  * is wrong, and what do I do next. Everything else is folded into those three
- * or demoted below the fold — see SPEC §7 for the mapping of every widget that
+ * or demoted below the fold - see SPEC §7 for the mapping of every widget that
  * used to sit up here.
  */
 
-/** The six quick actions, unchanged in label and href — now one link row. */
+/** The six quick actions, labelled as in the sidebar nav — one link row. */
 const QUICK_LINKS = [
-  { title: "FSMA Readiness Score", href: "/dashboard/compliance" },
+  { title: "Compliance", href: "/dashboard/compliance" },
   { title: "Alerts", href: "/dashboard/alerts" },
-  { title: "Import Data", href: "/ingest" },
-  { title: "Supplier Network", href: "/dashboard/suppliers" },
+  { title: "Document Ingestion", href: "/ingest" },
+  { title: "Supplier Management", href: "/dashboard/suppliers" },
   { title: "Product Catalog", href: "/dashboard/products" },
-  { title: "Recall Readiness", href: "/dashboard/recall-report" },
+  { title: "Recall Report", href: "/dashboard/recall-report" },
 ];
 
 type AttentionRow = {
@@ -58,7 +60,7 @@ type AttentionRow = {
 
 function DashboardPageSkeleton() {
   return (
-    <div aria-busy="true">
+    <TimedSkeleton>
       <PageContainer>
         <div className="space-y-6">
           <div className="space-y-2 border-b border-re-border-subtle pb-5">
@@ -79,7 +81,7 @@ function DashboardPageSkeleton() {
           </div>
         </div>
       </PageContainer>
-    </div>
+    </TimedSkeleton>
   );
 }
 
@@ -93,7 +95,7 @@ export default function DashboardPage() {
   const effectiveTenantId = tenantId;
 
   // Derive the health signal from the same useSystemStatus() data the widget
-  // uses — one source of truth, so the strip and the widget never contradict.
+  // uses - one source of truth, so the strip and the widget never contradict.
   const { data: systemStatus, isLoading: statusLoading } = useSystemStatus();
   const { data: metrics } = useSystemMetrics();
 
@@ -117,12 +119,15 @@ export default function DashboardPage() {
   }, [isHydrated, effectiveUser, router]);
 
   // Check design partner status from tenant settings. Wait for tenant
-  // hydration — pre-hydration the id is the DEFAULT_TENANT_ID placeholder
+  // hydration - pre-hydration the id is the DEFAULT_TENANT_ID placeholder
   // and every cold load fired a doomed onboarding call against it.
   const { data: onboardingData } = useOnboardingStatus(isTenantReady ? effectiveTenantId : null);
   const partnerTier = onboardingData?.partner_tier as string | undefined;
 
-  const { data: workbenchReadiness } = useQuery({
+  // Same selector the QA Health widget reads, so the two never disagree.
+  const qa = useQASignal();
+
+  const { data: workbenchReadiness, isError: readinessFailed } = useQuery({
     queryKey: ["dashboard-workbench-readiness", effectiveTenantId],
     queryFn: () => fetchWorkbenchReadinessSummary(effectiveTenantId || ""),
     enabled: !!effectiveTenantId && isAuthenticated && isTenantReady,
@@ -155,16 +160,16 @@ export default function DashboardPage() {
       rows.push({
         id: "workbench-fixes",
         state: "needs-correction",
-        item: `${fixes} unresolved ${fixes === 1 ? "fix" : "fixes"} in the Inflow Workbench`,
+        item: `${fixes} unresolved ${fixes === 1 ? "fix" : "fixes"} in imported records`,
         source: workbenchReadiness?.source && workbenchReadiness.source !== "none"
           ? workbenchReadiness.source
-          : "Inflow Workbench",
-        href: "/dashboard/inflow-lab",
+          : "Import readiness",
+        href: "/ingest",
       });
     }
 
     const openAlerts = metrics?.open_alerts ?? 0;
-    if (openAlerts > 0) {
+    if (isExperimentalPageEnabled("/dashboard/alerts") && openAlerts > 0) {
       rows.push({
         id: "open-alerts",
         state: "at-risk",
@@ -184,8 +189,23 @@ export default function DashboardPage() {
       });
     }
 
+    // While QA health loads, its row shows "Checking QA signal" (in-progress)
+    // instead of the whole panel going to a loading state.
+    if (qa.status !== "disabled" && !qa.passing) {
+      rows.push({
+        id: "qa-health",
+        state: qa.state,
+        item: qa.label,
+        source: "QA health",
+        href: "/dashboard/qa-health",
+      });
+    }
+
     return rows;
-  }, [systemStatus, workbenchReadiness, metrics]);
+  }, [systemStatus, workbenchReadiness, metrics, qa.status, qa.passing, qa.state, qa.label]);
+
+  // A QA row that is still loading is not an item needing attention yet.
+  const attentionCount = attentionRows.filter((row) => row.state !== "in-progress").length;
 
   const attentionColumns: DataTableColumn<AttentionRow>[] = [
     {
@@ -204,18 +224,18 @@ export default function DashboardPage() {
     const fixes = workbenchReadiness?.unresolved_fix_count ?? 0;
     if (fixes > 0) {
       actions.push({
-        label: `Resolve ${fixes} open ${fixes === 1 ? "fix" : "fixes"} in the workbench`,
-        href: "/dashboard/inflow-lab",
+        label: `Resolve ${fixes} open ${fixes === 1 ? "fix" : "fixes"} in imported records`,
+        href: "/ingest",
         cta: "Open",
       });
     }
-    if ((metrics?.open_alerts ?? 0) > 0) {
+    if (isExperimentalPageEnabled("/dashboard/alerts") && (metrics?.open_alerts ?? 0) > 0) {
       actions.push({ label: "Review open compliance alerts", href: "/dashboard/alerts", cta: "Review" });
     }
     if ((metrics?.events_ingested ?? 0) === 0) {
       actions.push({ label: "Import your first traceability records", href: "/ingest", cta: "Import" });
     }
-    actions.push({ label: "Run a recall drill", href: "/dashboard/recall-drills" });
+    actions.push({ label: "Recall drills (coming soon)", href: "/dashboard/recall-drills" });
     return actions.slice(0, 4);
   }, [workbenchReadiness, metrics]);
 
@@ -240,16 +260,6 @@ export default function DashboardPage() {
             <Link href="/ingest">Import data</Link>
           </Button>
         }
-        primaryAction={
-          experimentalFeaturesEnabled() ? (
-            <Button asChild>
-              <Link href="/dashboard/inflow-lab">
-                Open Inflow Lab
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : undefined
-        }
       />
 
       <div className="space-y-6">
@@ -261,15 +271,15 @@ export default function DashboardPage() {
           </Callout>
         )}
 
-        <MetricsOverviewWidget readiness={workbenchReadiness} />
+        <MetricsOverviewWidget readiness={workbenchReadiness} readinessFailed={readinessFailed} />
 
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section aria-labelledby="needs-attention-heading" className="space-y-3">
             <h2 id="needs-attention-heading" className="text-subheading text-re-text-primary">
               Needs attention
-              {attentionRows.length > 0 && (
+              {attentionCount > 0 && (
                 <Badge tone="neutral" size="sm" className="ml-2">
-                  {attentionRows.length}
+                  {attentionCount}
                 </Badge>
               )}
             </h2>
@@ -324,7 +334,7 @@ export default function DashboardPage() {
           </h2>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <span className="text-label text-re-text-muted">Go to</span>
-            {QUICK_LINKS.map((link) => (
+            {filterExperimentalLinks(QUICK_LINKS).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -342,19 +352,19 @@ export default function DashboardPage() {
           <ScanHistoryWidget />
         </div>
 
-        <Card variant="interactive">
+        {isExperimentalPageEnabled("/dashboard/heartbeat") && <Card variant="interactive">
           <Link href="/dashboard/heartbeat" className="block no-underline">
             <CardContent className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
               <div>
                 <p className="text-subheading text-re-text-primary">Daily Compliance Heartbeat</p>
                 <p className="text-ui text-re-text-tertiary">
-                  Score, alerts, chain status &amp; next actions — your morning check
+                  Score, alerts, chain status &amp; next actions: your morning check
                 </p>
               </div>
               <ArrowRight className="h-4 w-4 shrink-0 text-re-text-muted" aria-hidden="true" />
             </CardContent>
           </Link>
-        </Card>
+        </Card>}
 
         {experimentalFeaturesEnabled() && (
           <Card>

@@ -1,0 +1,252 @@
+name: Vercel Preview Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+concurrency:
+  group: vercel-preview-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    name: Vercel Preview Built
+    runs-on: ubuntu-latest
+    timeout-minutes: 26
+    permissions:
+      contents: read
+      deployments: read
+      statuses: read
+      checks: read
+    outputs:
+      preview_url: ${{ steps.wait.outputs.preview_url }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check frontend scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          DIFF=$(git diff --name-only "$MERGE_BASE" "$HEAD_SHA" -- frontend/)
+          if [ -n "$DIFF" ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for the regengine preview
+        id: wait
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') && steps.scope.outputs.frontend == 'true' }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = process.env.HEAD_SHA;
+            const environments = ['Preview – regengine', 'Preview'];
+            const statusContexts = ['Vercel – regengine', 'Vercel'];
+            const deadline = Date.now() + 25 * 60 * 1000;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const rejected = /\b(skip(?:ped)?|ignor(?:e|ed)|cancel(?:ed|led)|error|fail(?:ed|ure)?)\b/i;
+
+            const callWithRetry = async (fn) => {
+              let otherRetries = 0;
+              while (Date.now() < deadline) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (Date.now() >= deadline) {
+                    throw error;
+                  }
+                  const status = error.status || error.response?.status;
+                  const headers = error.response?.headers || error.headers || {};
+                  const remaining = headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'];
+                  const isRateLimit = status === 429 ||
+                    remaining === '0' ||
+                    ((status === 403 || status === 429) && (
+                      remaining === '0' ||
+                      headers['x-ratelimit-reset'] != null ||
+                      headers['X-RateLimit-Reset'] != null ||
+                      headers['retry-after'] != null ||
+                      headers['Retry-After'] != null ||
+                      /rate[- ]limit/i.test(error.message || '')
+                    ));
+
+                  if (isRateLimit) {
+                    let waitMs = 60000;
+                    const retryAfter = headers['retry-after'] || headers['Retry-After'];
+                    const resetHeader = headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'];
+                    if (retryAfter) {
+                      const sec = parseInt(retryAfter, 10);
+                      if (!isNaN(sec) && sec > 0) {
+                        waitMs = (sec + 5) * 1000;
+                      } else {
+                        const dateMs = Date.parse(retryAfter);
+                        if (!isNaN(dateMs)) {
+                          waitMs = Math.max(0, dateMs - Date.now()) + 5000;
+                        }
+                      }
+                    } else if (resetHeader) {
+                      const resetSec = parseInt(resetHeader, 10);
+                      if (!isNaN(resetSec) && resetSec > 0) {
+                        waitMs = Math.max(0, (resetSec * 1000) - Date.now()) + 5000;
+                      }
+                    }
+                    const remainingDeadline = Math.max(0, deadline - Date.now());
+                    const sleepMs = Math.min(waitMs, remainingDeadline);
+                    core.warning(`Rate limit hit (${status || 'exhausted'}). Sleeping ${Math.round(sleepMs / 1000)}s until reset.`);
+                    await sleep(sleepMs);
+                    continue;
+                  }
+
+                  if (otherRetries < 3) {
+                    otherRetries++;
+                    const backoffMs = Math.min(5000 * Math.pow(2, otherRetries - 1), Math.max(0, deadline - Date.now()));
+                    core.warning(`API error (${error.message || status}). Retry ${otherRetries}/3 in ${Math.round(backoffMs / 1000)}s.`);
+                    await sleep(backoffMs);
+                    continue;
+                  }
+
+                  throw error;
+                }
+              }
+              return null;
+            };
+
+            let delay = 20000;
+            let iteration = 0;
+
+            while (Date.now() < deadline) {
+              const deployRes = await callWithRetry(() =>
+                github.rest.repos.listDeployments({
+                  owner, repo, sha, per_page: 100,
+                })
+              );
+              if (!deployRes) break;
+              const deployments = deployRes.data;
+
+              // Use only the newest deployment for this SHA and project.
+              const deployment = deployments.find(d =>
+                d.sha === sha && environments.includes(d.environment));
+              if (deployment) {
+                const statusRes = await callWithRetry(() =>
+                  github.rest.repos.listDeploymentStatuses({
+                    owner, repo, deployment_id: deployment.id, per_page: 100,
+                  })
+                );
+                if (!statusRes) break;
+                const statuses = statusRes.data;
+                const latest = statuses[0];
+                if (latest) {
+                  const detail = latest.description || '';
+                  if (rejected.test(detail) || ['error', 'failure', 'inactive'].includes(latest.state)) {
+                    throw new Error(`Vercel preview ended ${latest.state}: ${detail || 'no detail'}`);
+                  }
+                  if (latest.state === 'success') {
+                    const url = latest.environment_url || latest.target_url;
+                    const preview = url && new URL(url);
+                    // Reject dashboard links and other projects' deployments.
+                    if (preview?.protocol === 'https:' &&
+                        preview.hostname.startsWith('regengine-') &&
+                        preview.hostname.endsWith('-petrefiedthunders-projects.vercel.app')) {
+                      core.setOutput('preview_url', url);
+                      core.info('Vercel preview is ready for the PR head SHA.');
+                      return;
+                    }
+                  }
+                }
+              }
+
+              // An ignored build can produce a green commit status and no ready
+              // deployment. Inspect its description and the Vercel check conclusion.
+              if (iteration % 2 === 0) {
+                const commitStatusRes = await callWithRetry(() =>
+                  github.rest.repos.listCommitStatusesForRef({
+                    owner, repo, ref: sha, per_page: 100,
+                  })
+                );
+                if (!commitStatusRes) break;
+                const commitStatuses = commitStatusRes.data;
+                const vercelStatus = commitStatuses.find(s => statusContexts.includes(s.context));
+                if (vercelStatus && (rejected.test(vercelStatus.description || '') ||
+                    ['error', 'failure'].includes(vercelStatus.state))) {
+                  throw new Error(`Vercel preview status ended ${vercelStatus.state}: ${vercelStatus.description || 'no detail'}`);
+                }
+
+                const checksRes = await callWithRetry(() =>
+                  github.rest.checks.listForRef({
+                    owner, repo, ref: sha, per_page: 100,
+                  })
+                );
+                if (!checksRes) break;
+                const checks = checksRes.data;
+                const vercelCheck = checks.check_runs.find(c =>
+                  c.app?.slug === 'vercel' && statusContexts.includes(c.name));
+                if (vercelCheck && ['skipped', 'cancelled', 'failure', 'timed_out', 'action_required', 'neutral', 'stale'].includes(vercelCheck.conclusion)) {
+                  throw new Error(`Vercel preview check ended ${vercelCheck.conclusion}`);
+                }
+              }
+
+              const sleepDuration = Math.min(delay, Math.max(0, deadline - Date.now()));
+              await sleep(sleepDuration);
+              delay = Math.min(Math.round(delay * 1.5), 60000);
+              iteration++;
+            }
+            throw new Error(`No ready regengine Vercel preview for ${sha} after 25 minutes`);
+
+      - name: Preview skipped
+        if: ${{ steps.scope.outputs.frontend == 'false' }}
+        run: echo "No frontend changes; Vercel preview intentionally skipped by ignore step."
+
+  access-link:
+    name: Preview Access Link
+    needs: preview
+    if: needs.preview.outputs.frontend == 'true' && needs.preview.outputs.preview_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Create or update preview access comment
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          PREVIEW_URL: ${{ needs.preview.outputs.preview_url }}
+          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }} # pragma: allowlist secret
+        with:
+          github-token: ${{ github.token }}
+          script: | # pragma: allowlist secret
+            const marker = '<!-- vercel-preview-access -->';
+            const bypassValue = process.env.BYPASS_SECRET;
+            if (bypassValue) core.setSecret(bypassValue); // Emits ::add-mask:: before using it.
+            const preview = process.env.PREVIEW_URL;
+            if (!preview) throw new Error('The preview job did not return an access URL');
+            const url = new URL(preview);
+            if (bypassValue) {
+              url.searchParams.set('x-vercel-protection-bypass', bypassValue);
+              url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
+            }
+            const body = `${marker}\nVercel preview: ${url.toString()}` +
+              (bypassValue ? '' : '\n\nThe bypass secret is not configured.');
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c =>
+              c.user?.login === 'github-actions[bot]' && c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+            core.info('Preview access comment updated.');

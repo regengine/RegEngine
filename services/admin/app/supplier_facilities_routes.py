@@ -7,20 +7,21 @@ All shared models, helpers, and constants are imported from the original module.
 from __future__ import annotations
 
 import uuid as uuid_module
-from typing import Any
+from typing import Any, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from shared.pagination import PaginationParams
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.orm import Session
 
 from .database import get_session
-from .dependencies import get_current_user
+from .dependencies import PermissionChecker, get_current_user, require_owner
 from .models import TenantContext
 from .sqlalchemy_models import (
     SupplierCTEEventModel,
     SupplierFacilityFTLCategoryModel,
     SupplierFacilityModel,
+    SupplierFunnelEventModel,
     SupplierTraceabilityLotModel,
     UserModel,
 )
@@ -31,6 +32,7 @@ from .supplier_onboarding_routes import (
     FTL_CATEGORY_LOOKUP,
     FacilityFTLScopingRequest,
     FacilityFTLScopingResponse,
+    FacilityRemovalCheckResponse,
     SupplierCTEEventCreateRequest,
     SupplierCTEEventResponse,
     SupplierFacilityCreateRequest,
@@ -130,6 +132,201 @@ async def create_supplier_facility(
         fda_registration_number=facility.fda_registration_number,
         roles=facility.roles or [],
     )
+
+
+_LINKED_RECORD_MODELS = (
+    SupplierTraceabilityLotModel,
+    SupplierCTEEventModel,
+    SupplierFunnelEventModel,
+)
+
+
+def _linked_record_counts(
+    db: Session,
+    tenant_id: uuid_module.UUID,
+    facility_id: uuid_module.UUID,
+) -> tuple[int, int, int]:
+    counts: list[int] = []
+    for model in _LINKED_RECORD_MODELS:
+        counts.append(
+            db.execute(
+                select(func.count())
+                .select_from(model)
+                .where(model.tenant_id == tenant_id, model.facility_id == facility_id)
+            ).scalar()
+            or 0
+        )
+    return counts[0], counts[1], counts[2]
+
+
+def _no_linked_records(tenant_id: uuid_module.UUID, facility_id: uuid_module.UUID) -> tuple[Any, ...]:
+    """WHERE clauses that match only a facility with no linked rows."""
+    return tuple(
+        ~exists(
+            select(model.id).where(model.tenant_id == tenant_id, model.facility_id == facility_id)
+        )
+        for model in _LINKED_RECORD_MODELS
+    )
+
+
+def _load_facility_for_removal(
+    db: Session,
+    facility_id: uuid_module.UUID,
+    tenant_id: uuid_module.UUID,
+) -> SupplierFacilityModel | None:
+    stmt = select(SupplierFacilityModel).where(
+        SupplierFacilityModel.id == facility_id,
+        SupplierFacilityModel.tenant_id == tenant_id,
+    )
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        stmt = stmt.with_for_update()
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def _reject_linked_facility(
+    facility_name: str,
+    lots_count: int,
+    cte_events_count: int,
+    funnel_events_count: int,
+) -> NoReturn:
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"Cannot remove facility '{facility_name}' with linked records: "
+            f"{lots_count} lots/TLCs, {cte_events_count} CTE events, "
+            f"{funnel_events_count} other records. "
+            f"Delete only when zero linked rows."
+        ),
+    )
+
+
+@router.get("/facilities/{facility_id}/removal-check", response_model=FacilityRemovalCheckResponse)
+async def check_supplier_facility_removal(
+    facility_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _perm: bool = Depends(require_owner),
+    db: Session = Depends(get_session),
+) -> FacilityRemovalCheckResponse:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    facility = db.get(SupplierFacilityModel, facility_uuid)
+    if facility is None or facility.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    lots_count, cte_events_count, funnel_events_count = _linked_record_counts(
+        db, tenant_id, facility_uuid
+    )
+
+    scoping_config_count = db.execute(
+        select(func.count()).select_from(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+        )
+    ).scalar() or 0
+
+    allowed = (lots_count == 0 and cte_events_count == 0 and funnel_events_count == 0)
+
+    return FacilityRemovalCheckResponse(
+        facility_id=str(facility.id),
+        facility_name=facility.name,
+        allowed=allowed,
+        linked_counts={
+            "lots": lots_count,
+            "events": cte_events_count,
+            "cte_events": cte_events_count,
+            "records": funnel_events_count,
+            "funnel_events": funnel_events_count,
+            "scoping_config": scoping_config_count,
+        },
+        lots_count=lots_count,
+        cte_events_count=cte_events_count,
+        funnel_events_count=funnel_events_count,
+        scoping_config_count=scoping_config_count,
+        address={
+            "street": facility.street,
+            "city": facility.city,
+            "state": facility.state,
+            "postal_code": facility.postal_code,
+        },
+    )
+
+
+@router.delete("/facilities/{facility_id}")
+async def delete_supplier_facility(
+    facility_id: str,
+    current_user: UserModel = Depends(get_current_user),
+    _perm: bool = Depends(require_owner),
+    db: Session = Depends(get_session),
+) -> dict[str, Any]:
+    tenant_id = TenantContext.get_tenant_context(db)
+    if not tenant_id:
+        raise HTTPException(status_code=400, detail="Tenant context required")
+
+    try:
+        facility_uuid = uuid_module.UUID(facility_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid facility id") from exc
+
+    # Lock the facility on PostgreSQL before counting. A lot or CTE insert
+    # takes a key share lock on this row, so it cannot commit until this
+    # transaction ends. Lots and CTE events are ON DELETE CASCADE: a count
+    # in an earlier statement would miss a row that commits before the
+    # DELETE, and the cascade would destroy it.
+    facility = _load_facility_for_removal(db, facility_uuid, tenant_id)
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+
+    lots_count, cte_events_count, funnel_events_count = _linked_record_counts(
+        db, tenant_id, facility_uuid
+    )
+    if lots_count or cte_events_count or funnel_events_count:
+        _reject_linked_facility(facility.name, lots_count, cte_events_count, funnel_events_count)
+
+    facility_name = facility.name
+    # The DELETE re-checks linked rows in the same statement. A row that
+    # arrived after the count above makes this match nothing, so the
+    # cascade never runs.
+    result = db.execute(
+        delete(SupplierFacilityModel).where(
+            SupplierFacilityModel.id == facility_uuid,
+            SupplierFacilityModel.tenant_id == tenant_id,
+            *_no_linked_records(tenant_id, facility_uuid),
+        ),
+        execution_options={"synchronize_session": "fetch"},
+    )
+    if result.rowcount != 1:
+        db.rollback()
+        if _load_facility_for_removal(db, facility_uuid, tenant_id) is None:
+            raise HTTPException(status_code=404, detail="Facility not found")
+        lots_count, cte_events_count, funnel_events_count = _linked_record_counts(
+            db, tenant_id, facility_uuid
+        )
+        _reject_linked_facility(facility_name, lots_count, cte_events_count, funnel_events_count)
+
+    # FTL scoping is configuration, not traceability evidence. Postgres
+    # already cascades it with the facility; this covers databases that
+    # are not enforcing that foreign key.
+    db.execute(
+        delete(SupplierFacilityFTLCategoryModel).where(
+            SupplierFacilityFTLCategoryModel.tenant_id == tenant_id,
+            SupplierFacilityFTLCategoryModel.facility_id == facility_uuid,
+        )
+    )
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "id": str(facility_uuid),
+        "facility_name": facility_name,
+    }
 
 
 @router.put("/facilities/{facility_id}/ftl-categories", response_model=FacilityFTLScopingResponse)

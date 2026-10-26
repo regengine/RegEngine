@@ -902,6 +902,14 @@ function calculateScores(
 // UTILITY FUNCTIONS
 // ============================================================================
 
+/** Header row only: the columns the drill simulator expects, with no example records. */
+export const CSV_TEMPLATE_HEADERS =
+  'Event Type,Product,Lot Code,GTIN,Facility GLN,Source GLN,Destination GLN,Timestamp,Quantity,Unit of Measure,Reference Document';
+
+export function generateCsvTemplate(): string {
+  return `${CSV_TEMPLATE_HEADERS}\n`;
+}
+
 export function generateSampleCSV(): string {
   const lines = [
     'Event Type,Product,Lot Code,GTIN,Facility GLN,Source GLN,Destination GLN,Timestamp,Quantity,Unit of Measure,Reference Document',

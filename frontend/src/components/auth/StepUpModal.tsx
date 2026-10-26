@@ -1,15 +1,17 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Fingerprint, Loader2 } from 'lucide-react';
 
+import { PasskeyRequiredNotice } from '@/components/auth/PasskeyRequiredNotice';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -17,27 +19,51 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { isValidEmail, performPasskeyLogin, seedPasswordlessClientUser } from '@/lib/passwordless-auth';
-import { STEP_UP_REQUIRED_EVENT } from '@/lib/step-up-events';
+import {
+  DEFAULT_STEP_UP_REASON,
+  STEP_UP_REQUIRED_EVENT,
+  type StepUpEventDetail,
+} from '@/lib/step-up-events';
 
 export function StepUpModal() {
   const { user } = useAuth();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState(DEFAULT_STEP_UP_REASON);
+  const [returnTo, setReturnTo] = useState<string | undefined>();
+  const [onSuccess, setOnSuccess] = useState<(() => void) | undefined>();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
-    const onStepUpRequired = () => {
+    const onStepUpRequired = (event: Event) => {
+      const detail = (event as CustomEvent<StepUpEventDetail | null>).detail;
+      requestIdRef.current += 1;
       if (user?.email) {
         setEmail(user.email);
       }
+      setReason(detail?.reason || DEFAULT_STEP_UP_REASON);
+      setReturnTo(detail?.returnTo);
+      setOnSuccess(() => detail?.onSuccess);
       setOpen(true);
       setError(null);
+      setIsSubmitting(false);
     };
 
     window.addEventListener(STEP_UP_REQUIRED_EVENT, onStepUpRequired);
     return () => window.removeEventListener(STEP_UP_REQUIRED_EVENT, onStepUpRequired);
   }, [user?.email]);
+
+  const handleCancel = () => {
+    requestIdRef.current += 1;
+    setOpen(false);
+    setError(null);
+    if (returnTo) {
+      router.push(returnTo);
+    }
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -49,40 +75,41 @@ export function StepUpModal() {
 
     setIsSubmitting(true);
     setError(null);
+    const requestId = requestIdRef.current;
     try {
       await performPasskeyLogin(normalizedEmail);
+      if (requestId !== requestIdRef.current) return;
       seedPasswordlessClientUser(normalizedEmail);
       setOpen(false);
-      window.location.reload();
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        window.location.reload();
+      }
     } catch (err: unknown) {
+      if (requestId !== requestIdRef.current) return;
       const browserError = err instanceof Error || err instanceof DOMException;
       setError(browserError && err.name === 'SecurityError'
         ? 'Passkey verification is unavailable on this domain. Contact support to verify the passkey domain configuration. This action remains blocked.'
         : browserError ? err.message : 'Passkey authentication failed.');
     } finally {
-      setIsSubmitting(false);
+      if (requestId === requestIdRef.current) setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : handleCancel())}>
       <DialogContent className="border-re-border bg-re-surface-card sm:max-w-md">
         <DialogHeader>
           <Badge tone="neutral" mono className="mb-2 w-fit uppercase">
             <Fingerprint className="h-3.5 w-3.5" aria-hidden="true" />
-            Step-up required
+            Passkey required
           </Badge>
-          <DialogTitle>Authenticate with your passkey</DialogTitle>
-          <DialogDescription>
-            This action requires a high-assurance session before it can continue.
-          </DialogDescription>
+          <DialogTitle>Confirm it&apos;s you</DialogTitle>
+          <DialogDescription>{reason}</DialogDescription>
         </DialogHeader>
 
-        {error && (
-          <Callout tone="danger" role="alert">
-            {error}
-          </Callout>
-        )}
+        {error && <PasskeyRequiredNotice>{error}</PasskeyRequiredNotice>}
 
         <form onSubmit={handleSubmit} className="space-y-3">
           <Field label="Email address" htmlFor="step-up-email">
@@ -111,6 +138,12 @@ export function StepUpModal() {
             )}
           </Button>
         </form>
+
+        <DialogFooter>
+          <Button type="button" variant="ghost" className="w-full" onClick={handleCancel}>
+            Cancel
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

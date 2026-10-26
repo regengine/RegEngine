@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
-    ARCHIVE_EXPORT_JOBS,
     CAPABILITY_REGISTRY,
     DELIVERY_MODE_LABELS,
     INTEGRATION_TYPE_LABELS,
@@ -63,7 +62,7 @@ const STATUS_SUMMARY = [
     },
     {
         label: 'File Import Supported',
-        detail: 'Customer data can be onboarded through CSV or SFTP with mapping review and exception handling.',
+        detail: 'Customer data can be onboarded through CSV upload with mapping review and exception handling.',
     },
     {
         label: 'Custom Scoped',
@@ -139,7 +138,7 @@ const POSITIONING = [
     },
     {
         title: 'Full data portability',
-        detail: 'Supported workflows can export CTE events, KDE fields, lot records, and supplier relationships in EPCIS 2.0 JSON-LD, FDA-oriented sortable spreadsheet, or CSV.',
+        detail: 'Supported workflows can export CTE events, KDE fields, lot records, and supplier relationships in EPCIS 2.0 JSON-LD (Preview), FDA-oriented sortable spreadsheet, or CSV.',
     },
     {
         title: 'Tenant isolation',
@@ -210,7 +209,7 @@ const EXPORT_FORMAT_GROUPS = [
     {
         title: 'Export formats',
         items: [
-            'GS1 EPCIS 2.0 JSON-LD (industry standard)',
+            'GS1 EPCIS 2.0 JSON-LD (Preview, industry standard)',
             'FDA-oriented sortable spreadsheet aligned to 21 CFR 1.1455 where applicable',
             'CSV with all CTE/KDE fields',
             'Audit evidence bundle with manifest hashing',
@@ -250,7 +249,7 @@ export default function TrustCenterPage() {
                 <PageHeader
                     size="hero"
                     title="Trust Center"
-                    description="Product status, data ownership, retention terms, and diligence materials in one place. Specific commitments — SLAs, retention, security obligations — live in your contract; this page is a starting point for diligence, not a substitute for it."
+                    description="Product status, data ownership, retention terms, and diligence materials in one place. Specific commitments (SLAs, retention, security obligations) live in your contract; this page is a starting point for diligence, not a substitute for it."
                     className="mb-0 border-b-0 pb-0"
                 />
                 <Callout tone="warning" className="mt-6">
@@ -344,7 +343,7 @@ export default function TrustCenterPage() {
                 <Card className="p-5">
                     <div className="text-subheading text-re-text-primary">Verify supported evidence bundles yourself</div>
                     <p className="mt-2 text-ui text-re-text-secondary">
-                        Supported evidence export workflows can include SHA-256 manifests for independent verification. Drop a supported bundle into <Link href="/verify" className={PROSE_LINK}>/verify</Link> or download a synthetic sample at <Link href="/proof" className={PROSE_LINK}>/proof</Link>.
+                        Supported evidence export workflows can include SHA-256 manifests for independent verification. Drop a supported bundle into <Link href="/verify" className={PROSE_LINK}>/verify</Link> to check it yourself.
                     </p>
                 </Card>
             </Section>
@@ -375,7 +374,7 @@ export default function TrustCenterPage() {
             <Section
                 width="marketing"
                 title="Data portability and exit rights"
-                description="Exports use open standards (GS1 EPCIS 2.0, the FDA sortable spreadsheet, CSV) so records can be read and stored outside RegEngine. Re-import into another system depends on that system's ingest support for the chosen format."
+                description="Exports use open standards (GS1 EPCIS 2.0 (Preview), the FDA sortable spreadsheet, CSV) so records can be read and stored outside RegEngine. Re-import into another system depends on that system's ingest support for the chosen format."
             >
                 <div className="grid gap-3 md:grid-cols-2">
                     <Card padding="compact">
@@ -466,19 +465,16 @@ export default function TrustCenterPage() {
                     <Card className="p-5">
                         <h2 className="mb-2 font-display text-heading-lg text-re-text-primary">Scheduled exports</h2>
                         <p className="mb-4 text-ui text-re-text-secondary">
-                            Examples of supported export configurations. Hashing, manifests, run history, and
-                            scheduled delivery depend on the configured workflow and customer agreement.
+                            Hashing, manifests, run history, and scheduled delivery depend on the
+                            configured workflow and customer agreement.
                         </p>
-                        <div className="space-y-3">
-                            {ARCHIVE_EXPORT_JOBS.map((job) => (
-                                <Card key={job.id} variant="inset" padding="compact">
-                                    <div className="text-subheading text-re-text-primary">{job.name}</div>
-                                    <p className="mt-2 text-ui text-re-text-secondary">
-                                        {job.format} · {job.cadence} · {job.destination}
-                                    </p>
-                                </Card>
-                            ))}
-                        </div>
+                        <Card variant="inset" padding="compact">
+                            <div className="text-subheading text-re-text-primary">No data yet</div>
+                            <p className="mt-2 text-ui text-re-text-secondary">
+                                No public export-job configurations are published. Scheduled exports are
+                                configured per workspace.
+                            </p>
+                        </Card>
                         <Link href="/dashboard/export-jobs" className={`mt-4 inline-block text-ui ${PROSE_LINK}`}>
                             Open export jobs →
                         </Link>

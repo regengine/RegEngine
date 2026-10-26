@@ -1,93 +1,53 @@
-import os
-from pathlib import Path
+"""Data-free checks for the CSV input previously used by the E2E test."""
 
-import httpx
+from __future__ import annotations
+
+import csv
+import io
+
 import pytest
-
-# Target the ingestion service running in Docker (map to 8002 locally)
-BASE_URL = os.getenv("INGESTION_SERVICE_URL", "http://localhost:8002")
-API_KEY = os.getenv("API_KEY", "")  # Default is blank as seen in config
-
-
-def _ingestion_reachable() -> bool:
-    """Quick check whether the ingestion service is up."""
-    try:
-        import httpx as _httpx
-
-        resp = _httpx.get(f"{BASE_URL}/health", timeout=3.0)
-        return resp.status_code == 200
-    except Exception:
-        return False
+from app.csv_templates import CTE_COLUMNS, parse_csv_rows
+from app.shared.xlsx_rows import reject_unsupported_excel
+from app.webhook_models import REQUIRED_KDES_BY_CTE, WebhookCTEType
+from fastapi import HTTPException
 
 
-pytestmark = [
-    pytest.mark.integration,
-    pytest.mark.skipif(
-        not _ingestion_reachable(),
-        reason=f"Ingestion service not reachable at {BASE_URL}",
-    ),
-]
+def _header_only_csv() -> str:
+    output = io.StringIO()
+    csv.writer(output).writerow([name for name, _example, _description in CTE_COLUMNS["harvesting"]])
+    return output.getvalue()
 
 
-@pytest.mark.asyncio
-async def test_compliance_golden_path():
-    """
-    E2E Test:
-    1. Upload Harvest CSV
-    2. Check Compliance Score
-    3. Verify Chain Integrity
-    """
-    # Use a real UUID as expected by some middleware components
-    tenant_id = "123e4567-e89b-12d3-a456-426614174000"
-    headers = {
-        "X-RegEngine-API-Key": "regengine-universal-test-key-2026",
-        "X-RegEngine-Tenant-ID": tenant_id,
-        "X-RegEngine-Internal-Secret": "trusted-internal-v1",
-    }
-
-    # 1. Upload FSMA 204 Harvest CSV
-    csv_path = Path(__file__).parent / "data" / "fsma_harvest_sample.csv"
-    with open(csv_path, "rb") as f:
-        files = {"file": ("fsma_harvest.csv", f, "text/csv")}
-        data = {"cte_type": "harvesting", "source": "e2e_integration_test", "tenant_id": tenant_id}
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{BASE_URL}/api/v1/ingest/csv", data=data, files=files, headers=headers, timeout=30.0
-            )
-
-            assert response.status_code == 200, f"CSV upload failed: {response.text}"
-            resp_json = response.json()
-            assert resp_json["accepted"] > 0, "No rows were accepted"
-
-            # Capture the last chain hash
-            last_event = resp_json["events"][-1]
-            last_chain_hash = last_event["chain_hash"]
-            assert last_chain_hash is not None
-
-            # 2. Fetch Compliance Score
-            score_response = await client.get(f"{BASE_URL}/api/v1/compliance/score/{tenant_id}", headers=headers)
-
-            assert score_response.status_code == 200, f"Score fetch failed: {score_response.text}"
-            score_json = score_response.json()
-
-            assert score_json["overall_score"] > 0, (
-                f"Score should be > 0 after ingestion. Got {score_json['overall_score']}"
-            )
-            assert score_json["last_chain_hash"] == last_chain_hash, "Chain hash mismatch in score"
-            assert len(score_json["next_actions"]) > 0, "Should have next actions"
-
-            # 3. Verify Breakdown
-            breakdown = score_json["breakdown"]
-            assert "chain_integrity" in breakdown
-            assert breakdown["chain_integrity"]["score"] == 100
-
-            print(f"\n✅ E2E Compliance Path Verified for Tenant: {tenant_id}")
-            print(f"✅ Final Chain Hash: {last_chain_hash}")
-            print(f"✅ Overall Score: {score_json['overall_score']} (Grade: {score_json['grade']})")
+def test_harvest_header_only_has_no_events():
+    events, errors, warnings = parse_csv_rows(_header_only_csv(), fallback_cte="harvesting")
+    assert events == []
+    assert errors == []
+    assert warnings == []
 
 
-if __name__ == "__main__":
-    import asyncio
+def test_harvest_template_has_required_headers():
+    headers = set(next(csv.reader(io.StringIO(_header_only_csv()))))
+    required = set(REQUIRED_KDES_BY_CTE[WebhookCTEType.HARVESTING])
+    assert required <= headers
+    assert required - (headers - {"traceability_lot_code"}) == {"traceability_lot_code"}
 
-    asyncio.run(test_compliance_golden_path())
+
+def test_missing_header_is_rejected():
+    events, errors, warnings = parse_csv_rows("\n", fallback_cte="harvesting")
+    assert events == []
+    assert errors == ["CSV has no header row: the first line must list the column names"]
+    assert warnings == []
+
+
+def test_duplicate_header_is_rejected_without_data_rows():
+    header = _header_only_csv().strip()
+    events, errors, warnings = parse_csv_rows(f"{header},quantity\n", fallback_cte="harvesting")
+    assert events == []
+    assert len(errors) == 1 and "duplicate column" in errors[0]
+    assert warnings == []
+
+
+def test_unsupported_content_type_is_rejected():
+    with pytest.raises(HTTPException) as excinfo:
+        reject_unsupported_excel("manifest.csv", "application/vnd.ms-excel.sheet.macroenabled.12")
+    assert excinfo.value.status_code == 415

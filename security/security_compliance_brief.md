@@ -2,21 +2,12 @@
 
 ## 1. Security Posture Overview
 
-RegEngine is designed to operate in security-conscious, regulated environments. Our architecture incorporates:
-
-- Network isolation (VPC, private subnets)
-- Least-privilege access via IAM roles
-- Encrypted data at rest and in transit
-- Structured logging and auditability
+- Hosting: the backend runs on Railway and the frontend runs on Vercel
+- Structured (JSON) application logging
 
 ---
 
 ## 2. Data Handling and Segregation
-
-- **Environments**
-  - `demo`: synthetic, non-sensitive data only
-  - `sandbox`: limited, pseudonymized datasets for evaluation
-  - `production`: customer-controlled data with explicit contracts
 
 - **Data Types**
   - Regulatory content (public or licensed)
@@ -24,7 +15,7 @@ RegEngine is designed to operate in security-conscious, regulated environments. 
   - Configuration and mapping data
 
 We strongly recommend:
-- No PII or sensitive customer data in demo/sandbox
+- No PII or sensitive customer data in non-production environments
 - Using data minimization principles
 - Clear separation of duties between environment access levels
 
@@ -32,32 +23,22 @@ We strongly recommend:
 
 ## 3. Encryption
 
-- **At Rest**
-  - Storage and databases: encrypted via cloud-native mechanisms (e.g., managed KMS)
 - **In Transit**
-  - TLS for all external and internal service communication
+  - The Vercel-hosted frontend sends a Strict-Transport-Security (HSTS) header on all routes
 
 ---
 
 ## 4. Access Control
 
-- Role-based access control (RBAC) enforced by:
-  - Service-level roles (ingestion, nlp, graph, opportunity)
-  - Scoped API keys for external access
-  - Centralized identity provider integration recommended for enterprise deployments
+- Role- and permission-based access checks
+- API keys carry explicit scopes
 
 ---
 
 ## 5. Logging and Monitoring
 
-- Structured logging (JSON) for:
-  - Authentication and authorization events
-  - API usage
-  - Infrastructure events and deployment lifecycle
-
-- Monitoring:
-  - Metrics on latency, error rates, resource usage
-  - Alerts on abnormal access patterns and error spikes
+- Structured (JSON) logging
+- Prometheus metrics in the admin service
 
 ---
 

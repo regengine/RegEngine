@@ -43,7 +43,7 @@ const checklistItems = [
         id: "kdes",
         title: "All KDEs populated",
         description: "Key Data Elements recorded for each Critical Tracking Event type",
-        regulation: "21 CFR §§ 1.1325–1.1350",
+        regulation: "21 CFR §§ 1.1325 to 1.1350",
         url: "https://www.ecfr.gov/current/title-21/chapter-I/subchapter-A/part-1/subpart-S/section-1.1325",
     },
     {
@@ -127,7 +127,7 @@ export default function FSMAChecklist() {
         }
     };
 
-    // Band colour for the readiness meter. The number itself stays ink — the
+    // Band colour for the readiness meter. The number itself stays ink - the
     // meter is a supporting mark, and "N/8" carries the meaning on its own.
     const scoreBarClass =
         checkedCount <= 3
@@ -162,7 +162,7 @@ export default function FSMAChecklist() {
                     </h2>
                     <p className="text-body text-re-text-secondary">
                         Check off each FSMA 204 requirement your company currently meets.
-                        Be honest — gaps are fixable, surprises during an FDA audit aren&apos;t.
+                        Be honest: gaps are fixable, surprises during an FDA audit aren&apos;t.
                     </p>
                 </div>
 

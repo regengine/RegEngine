@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 
+import { PasskeyRequiredNotice } from '@/components/auth/PasskeyRequiredNotice';
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,8 +23,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useAuth } from '@/lib/auth-context';
 import { useAPIKeys, useCreateAPIKey, useGenerateAPIKey, useRevokeAPIKey } from '@/hooks/use-api';
-import { Key, Plus, Trash2, CheckCircle, Copy, Shield, ArrowRight } from 'lucide-react';
+import { Key, Plus, Trash2, CheckCircle, Copy, Shield, ArrowRight, Fingerprint } from 'lucide-react';
+import { isRequiresStepUpPayload, requestStepUp } from '@/lib/step-up-events';
 import { formatDate } from '@/lib/utils';
+
+const API_KEYS_STEP_UP_REASON = "Confirm it's you to view and manage live API keys.";
 
 export default function AdminPage() {
   const {
@@ -42,6 +46,9 @@ export default function AdminPage() {
   const canManageKeys = isAuthenticated && isHighAssuranceSession && user?.is_sysadmin === true;
 
   const { data: apiKeys, isLoading, refetch, error } = useAPIKeys(canManageKeys);
+  const keysNeedStepUp = isRequiresStepUpPayload(
+    (error as { response?: { data?: unknown } } | null)?.response?.data,
+  );
   const createKeyMutation = useCreateAPIKey();
   const generateKeyMutation = useGenerateAPIKey();
   const revokeKeyMutation = useRevokeAPIKey();
@@ -170,7 +177,19 @@ export default function AdminPage() {
 
         {canManageKeys && (
           <>
-            {error && (
+            {keysNeedStepUp ? (
+              <div className="space-y-3">
+                <PasskeyRequiredNotice>
+                  Your session needs a fresh passkey confirmation before API keys can load.
+                </PasskeyRequiredNotice>
+                <Button
+                  onClick={() => requestStepUp({ reason: API_KEYS_STEP_UP_REASON, returnTo: '/dashboard', onSuccess: () => void refetch() })}
+                  leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
+                >
+                  Confirm with passkey
+                </Button>
+              </div>
+            ) : error && (
               <Callout tone="danger" role="alert">
                 This session is not authorized to manage live credentials.
               </Callout>

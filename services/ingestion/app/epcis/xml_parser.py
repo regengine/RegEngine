@@ -44,10 +44,12 @@ _EPCIS_QUERY_NS = "urn:epcglobal:epcis-query:xsd:2"
 _FSMA_NS = "urn:fsma:food:traceability"
 _GS1_NS = "https://ref.gs1.org/standards/epcis/2.0.0"
 _SBDH_NS = "http://www.unece.org/cefact/namespaces/StandardBusinessDocumentHeader"
+_CBVMDA_NS = "urn:epcglobal:cbv:mda"
 
 _NS_MAP = {
     "epcis": _EPCIS_NS,
     "cbv": _CBV_NS,
+    "cbvmda": _CBVMDA_NS,
     "fsma": _FSMA_NS,
     "gs1": _GS1_NS,
     "sbdh": _SBDH_NS,
@@ -62,16 +64,30 @@ _EVENT_TYPE_TAGS = [
 ]
 
 
-def _xml_local(tag: str) -> str:
-    """Strip namespace from an XML tag."""
+def _xml_local(tag: object) -> str:
+    """Strip namespace from an XML tag.
+
+    Comment and processing-instruction nodes have a callable ``tag``.
+    Those are not elements; callers skip them, and this returns ``""``
+    if one is passed in anyway.
+    """
+    if not isinstance(tag, str):
+        return ""
     if "}" in tag:
         return tag.split("}", 1)[1]
     return tag
 
 
+def _xml_elements(parent):
+    """Child elements only. Comments and processing instructions are skipped."""
+    for node in parent:
+        if isinstance(getattr(node, "tag", None), str):
+            yield node
+
+
 def _xml_child_text(element, path: str) -> str | None:
     """Get text from a direct child element by local name."""
-    for child in element:
+    for child in _xml_elements(element):
         if _xml_local(child.tag) == path:
             return (child.text or "").strip() or None
     return None
@@ -97,9 +113,9 @@ def _xml_find_events(parent) -> list:
 def _xml_collect_list(element, list_tag: str, item_tag: str) -> list[str]:
     """Collect text values from a list container element."""
     items = []
-    for child in element:
+    for child in _xml_elements(element):
         if _xml_local(child.tag) == list_tag:
-            for item in child:
+            for item in _xml_elements(child):
                 if _xml_local(item.tag) == item_tag and item.text:
                     items.append(item.text.strip())
     return items
@@ -109,10 +125,10 @@ def _xml_collect_quantity_list(element) -> list[dict]:
     """Extract quantityList elements from an event."""
     quantity_tags = {"quantityList", "childQuantityList", "inputQuantityList", "outputQuantityList"}
     quantities: list[dict] = []
-    for child in element:
+    for child in _xml_elements(element):
         if _xml_local(child.tag) not in quantity_tags:
             continue
-        for qe in child:
+        for qe in _xml_elements(child):
             if _xml_local(qe.tag) != "quantityElement":
                 continue
             q = _xml_parse_quantity_element(qe)
@@ -121,10 +137,38 @@ def _xml_collect_quantity_list(element) -> list[dict]:
     return quantities
 
 
+_QUANTITY_LIST_TAGS = ("quantityList", "childQuantityList", "inputQuantityList", "outputQuantityList")
+
+
+def _xml_quantity_lists_by_name(element) -> dict[str, list[dict]]:
+    """Quantity lists keyed by their element name.
+
+    ``_xml_collect_quantity_list`` still concatenates every list for the
+    callers that walk one tag at a time. The event dict keeps them apart:
+    a TransformationEvent's output list must not be prefixed by its inputs,
+    and an AggregationEvent's ``childQuantityList`` is not a ``quantityList``.
+    """
+    found: dict[str, list[dict]] = {}
+    for child in _xml_elements(element):
+        local = _xml_local(child.tag)
+        if local not in _QUANTITY_LIST_TAGS:
+            continue
+        quantities: list[dict] = []
+        for qe in _xml_elements(child):
+            if _xml_local(qe.tag) != "quantityElement":
+                continue
+            parsed = _xml_parse_quantity_element(qe)
+            if parsed:
+                quantities.append(parsed)
+        if quantities:
+            found.setdefault(local, []).extend(quantities)
+    return found
+
+
 def _xml_parse_quantity_element(qe) -> dict[str, Any]:
     """Parse a single quantityElement."""
     q: dict[str, Any] = {}
-    for field in qe:
+    for field in _xml_elements(qe):
         fl = _xml_local(field.tag)
         if fl == "epcClass" and field.text:
             q["epcClass"] = field.text.strip()
@@ -140,7 +184,7 @@ def _xml_parse_quantity_element(qe) -> dict[str, Any]:
 
 def _xml_extract_location(element, tag_name: str) -> dict | None:
     """Extract bizLocation or readPoint as {id: ...}."""
-    for child in element:
+    for child in _xml_elements(element):
         if _xml_local(child.tag) == tag_name:
             loc_id = _xml_child_text(child, "id")
             if loc_id:
@@ -151,10 +195,10 @@ def _xml_extract_location(element, tag_name: str) -> dict | None:
 def _xml_extract_source_dest_list(element, list_tag: str, item_tag: str) -> list[dict]:
     """Extract sourceList/destinationList."""
     results: list[dict] = []
-    for child in element:
+    for child in _xml_elements(element):
         if _xml_local(child.tag) != list_tag:
             continue
-        for item in child:
+        for item in _xml_elements(child):
             if _xml_local(item.tag) != item_tag:
                 continue
             entry: dict[str, str] = {}
@@ -168,9 +212,9 @@ def _xml_extract_source_dest_list(element, list_tag: str, item_tag: str) -> list
     return results
 
 
-def _xml_ns_prefix(tag: str) -> str:
+def _xml_ns_prefix(tag: object) -> str:
     """Reconstruct namespace prefix for downstream compatibility."""
-    if "}" not in tag:
+    if not isinstance(tag, str) or "}" not in tag:
         return ""
     ns_uri = tag.split("}")[0].lstrip("{")
     for prefix, uri in _NS_MAP.items():
@@ -182,7 +226,7 @@ def _xml_ns_prefix(tag: str) -> str:
 def _xml_extract_ilmd(element) -> dict:
     """Extract ILMD (Instance/Lot Master Data) including FSMA extensions."""
     ilmd: dict[str, Any] = {}
-    for child in element:
+    for child in _xml_elements(element):
         local = _xml_local(child.tag)
         if local == "ilmd":
             _xml_populate_ilmd_fields(child, ilmd)
@@ -194,13 +238,13 @@ def _xml_extract_ilmd(element) -> dict:
 
 def _xml_populate_ilmd_fields(ilmd_element, ilmd: dict) -> None:
     """Populate ilmd dict from an ilmd XML element."""
-    for field in ilmd_element:
+    for field in _xml_elements(ilmd_element):
         fl = _xml_local(field.tag)
         ns = _xml_ns_prefix(field.tag)
         key = f"{ns}{fl}" if ns else fl
         if field.text and field.text.strip():
             ilmd[key] = field.text.strip()
-        for sub in field:
+        for sub in _xml_elements(field):
             sub_local = _xml_local(sub.tag)
             sub_ns = _xml_ns_prefix(sub.tag)
             sub_key = f"{sub_ns}{sub_local}" if sub_ns else sub_local
@@ -211,10 +255,10 @@ def _xml_populate_ilmd_fields(ilmd_element, ilmd: dict) -> None:
 def _xml_extract_biz_transactions(ev_element) -> list[dict]:
     """Extract bizTransactionList from an event element."""
     biz_transactions: list[dict] = []
-    for child in ev_element:
+    for child in _xml_elements(ev_element):
         if _xml_local(child.tag) != "bizTransactionList":
             continue
-        for bt in child:
+        for bt in _xml_elements(child):
             if _xml_local(bt.tag) != "bizTransaction":
                 continue
             bt_entry: dict[str, str] = {}
@@ -265,10 +309,14 @@ def _xml_event_to_dict(ev_element) -> dict:
     if parent_id:
         event["parentID"] = parent_id
 
-    # Quantity lists
-    quantities = _xml_collect_quantity_list(ev_element)
-    if quantities:
-        event.setdefault("extension", {})["quantityList"] = quantities
+    # Quantity lists. ``quantityList`` stays under ``extension`` — that is
+    # the shape the EPCIS 1.x XML path and the existing full-event test
+    # use. The other three lists are distinct members.
+    for list_name, quantities in _xml_quantity_lists_by_name(ev_element).items():
+        if list_name == "quantityList":
+            event.setdefault("extension", {})["quantityList"] = quantities
+        else:
+            event[list_name] = quantities
 
     # Locations
     for tag, key in [("bizLocation", "bizLocation"), ("readPoint", "readPoint")]:
@@ -295,6 +343,48 @@ def _xml_event_to_dict(ev_element) -> dict:
         event["bizTransactionList"] = biz_transactions
 
     return event
+
+
+def _malformed_xml_detail(exc: BaseException) -> str | None:
+    """Client-facing detail for a real XML parse failure, or None.
+
+    Only lxml syntax errors and defusedxml's own rejections (DTD, entities,
+    external references) count. Anything else is a bug and must not be
+    relabelled as malformed input. The detail is the words "malformed XML"
+    plus line and column when the parser reported them. The parser's own
+    message is omitted: it can contain filesystem paths and library internals.
+    """
+    syntax_types: tuple[type, ...] = ()
+    defused_types: tuple[type, ...] = ()
+    try:
+        from lxml.etree import XMLSyntaxError
+
+        syntax_types = (XMLSyntaxError,)
+    except ImportError:
+        pass
+    try:
+        from defusedxml.common import DefusedXmlException
+
+        defused_types = (DefusedXmlException,)
+    except ImportError:
+        pass
+    if not isinstance(exc, syntax_types + defused_types):
+        return None
+
+    line = getattr(exc, "lineno", None)
+    column = getattr(exc, "offset", None)
+    position = getattr(exc, "position", None)
+    if not isinstance(line, int) or line <= 0:
+        if isinstance(position, tuple) and position and isinstance(position[0], int):
+            line = position[0]
+    if not isinstance(column, int) or column <= 0:
+        if isinstance(position, tuple) and len(position) > 1 and isinstance(position[1], int):
+            column = position[1]
+    if isinstance(line, int) and line > 0 and isinstance(column, int) and column > 0:
+        return f"malformed XML at line {line}, column {column}"
+    if isinstance(line, int) and line > 0:
+        return f"malformed XML at line {line}"
+    return "malformed XML"
 
 
 def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
@@ -326,8 +416,12 @@ def _parse_epcis_xml(raw: bytes | str) -> list[dict]:
         tree = _safe_parse(io.BytesIO(raw))
         root = tree.getroot()
     except Exception as exc:
-        logger.warning("epcis_xml_parse_failed error=%s", str(exc))
-        return []
+        detail = _malformed_xml_detail(exc)
+        if detail is None:
+            # Not an XML parse failure. Propagate so the API returns 500.
+            raise
+        logger.warning("epcis_xml_parse_failed error=%s", detail)
+        raise HTTPException(status_code=400, detail=detail) from None
 
     event_elements = _xml_find_events(root)
     events = [_xml_event_to_dict(ev) for ev in event_elements]

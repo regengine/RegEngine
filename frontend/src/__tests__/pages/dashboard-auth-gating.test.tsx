@@ -279,13 +279,14 @@ describe('dashboard auth gating cleanup', () => {
     });
 
     it('team route redirects to the canonical people-management page without fetching', async () => {
-        // /dashboard/team was consolidated into /settings/users (copy PR-11).
-        // The route must hand off to the canonical page and make no API calls
-        // of its own — authenticated or not.
+        // /dashboard/team was consolidated into team management, which now
+        // lives at /dashboard/settings/users (copy PR-11, SEL-412). The route
+        // must hand off to the canonical page and make no API calls of its
+        // own — authenticated or not.
         const { default: TeamPage } = await import('@/app/dashboard/team/page');
 
         expect(() => TeamPage()).toThrowError('NEXT_REDIRECT');
-        expect(mockRedirect).toHaveBeenCalledWith('/settings/users');
+        expect(mockRedirect).toHaveBeenCalledWith('/dashboard/settings/users');
         expect(fetchWithCsrfMock).not.toHaveBeenCalled();
     });
 });

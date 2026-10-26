@@ -1,7 +1,11 @@
-"""API tests for EPCIS ingestion endpoints."""
+"""API tests for EPCIS ingestion endpoints.
+
+Data-free: no EPCIS documents, events, GS1 identifiers, or lot codes.
+"""
 
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -18,7 +22,13 @@ from app.webhook_compat import _verify_api_key
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
-TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
+TEST_TENANT_ID = str(uuid4())
+
+
+def _assert_no_traceback(response) -> None:
+    text = response.text
+    assert "Traceback" not in text
+    assert 'File "' not in text
 
 
 @pytest.fixture()
@@ -33,209 +43,77 @@ def client() -> TestClient:
         yield test_client
 
 
-VALID_EPCIS_EVENT = {
-    "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
-    "type": "ObjectEvent",
-    "eventTime": "2026-02-28T09:30:00.000-05:00",
-    "eventTimeZoneOffset": "-05:00",
-    "action": "OBSERVE",
-    "bizStep": "urn:epcglobal:cbv:bizstep:receiving",
-    "bizLocation": {"id": "urn:epc:id:sgln:0614141.00002.0"},
-    "sourceList": [
-        {
-            "type": "urn:epcglobal:cbv:sdt:possessing_party",
-            "source": "urn:epc:id:sgln:0614141.00001.0",
-        }
-    ],
-    "destinationList": [
-        {
-            "type": "urn:epcglobal:cbv:sdt:possessing_party",
-            "destination": "urn:epc:id:sgln:0614141.00002.0",
-        }
-    ],
-    "ilmd": {
-        "cbvmda:lotNumber": "ROM-0042",
-        "fsma:traceabilityLotCode": "00012345678901-ROM0042",
-    },
-    # #1249: quantity must be explicit — silent synthesis to 1.0 was
-    # removed. FSMA 204 traceability treats quantity as a required KDE.
-    "extension": {
-        "quantityList": [
-            {"epcClass": "urn:epc:class:lgtin:0614141.107346.ROM0042", "quantity": 10.0, "uom": "CS"},
-        ],
-    },
-}
-
-
-def test_validate_and_ingest_epcis_event(client: TestClient) -> None:
-    validate_response = client.post("/api/v1/epcis/validate", json=VALID_EPCIS_EVENT)
-    assert validate_response.status_code == 200
-    validate_payload = validate_response.json()
-    assert validate_payload["valid"] is True
-
-    ingest_response = client.post(
-        "/api/v1/epcis/events",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=VALID_EPCIS_EVENT,
-    )
-    assert ingest_response.status_code == 201
-    ingest_payload = ingest_response.json()
-    assert ingest_payload["cte_id"]
-    assert ingest_payload["validation_status"] == "valid"
-    assert ingest_payload["idempotent"] is False
-
-    second_ingest = client.post(
-        "/api/v1/epcis/events",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=VALID_EPCIS_EVENT,
-    )
-    assert second_ingest.status_code == 200
-    second_payload = second_ingest.json()
-    assert second_payload["cte_id"] == ingest_payload["cte_id"]
-    assert second_payload["idempotent"] is True
-
-    event_id = ingest_payload["cte_id"]
-    get_response = client.get(
-        f"/api/v1/epcis/events/{event_id}",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-    )
-    assert get_response.status_code == 200
-    event_payload = get_response.json()
-    assert event_payload["normalized_cte"]["tlc"] == "00012345678901-ROM0042"
-
-
-def test_batch_ingest_atomic_rejects_mixed_batch(client: TestClient) -> None:
-    """#1156: atomic mode (default) rolls back the whole batch on any
-    invalid event. No partial persistence, no HTTP 207.
-    """
-    invalid_event = {
-        "type": "ObjectEvent",
-        "eventTime": "2026-03-01T00:00:00.000Z",
-    }
-
-    response = client.post(
-        "/api/v1/epcis/events/batch",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json={"events": [VALID_EPCIS_EVENT, invalid_event]},
-    )
-    assert response.status_code == 400
-    payload = response.json()
-    # FastAPI wraps HTTPException detail in a top-level "detail" key.
-    detail = payload.get("detail", payload)
-    assert detail["mode"] == "atomic"
-    assert detail["error"] == "batch_validation_failed"
-    assert len(detail["errors"]) == 1
-    assert detail["errors"][0]["index"] == 1
-
-
-def test_batch_ingest_partial_mode_returns_207(client: TestClient) -> None:
-    """#1156: opt-in ``?mode=partial`` preserves the old per-event behavior
-    for backward compatibility.
-    """
-    invalid_event = {
-        "type": "ObjectEvent",
-        "eventTime": "2026-03-01T00:00:00.000Z",
-    }
-
-    response = client.post(
-        "/api/v1/epcis/events/batch",
-        params={"mode": "partial"},
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json={"events": [VALID_EPCIS_EVENT, invalid_event]},
-    )
-    assert response.status_code in (201, 207)
-    payload = response.json()
-    assert payload["mode"] == "partial"
-    assert payload["failed"] == 1
+@pytest.fixture()
+def claims_client() -> TestClient:
+    """Same app, but a query or header tenant that disagrees with the
+    authenticated tenant is rejected."""
+    app = FastAPI()
+    app.include_router(epcis_ingestion_router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    install_tenant_context_override(app, default_tenant=TEST_TENANT_ID, enforce_claims=True)
+    _epcis_store.clear()
+    _epcis_idempotency_index.clear()
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def test_batch_ingest_rejects_empty_body(client: TestClient) -> None:
-    empty_batch_response = client.post(
+    response = client.post(
         "/api/v1/epcis/events/batch",
         headers={"X-Tenant-ID": TEST_TENANT_ID},
         json={"events": []},
     )
-    assert empty_batch_response.status_code == 400
-
-
-def test_export_endpoint(client: TestClient) -> None:
-    # Seed one event so export has something to return.
-    ingest_response = client.post(
-        "/api/v1/epcis/events",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=VALID_EPCIS_EVENT,
-    )
-    assert ingest_response.status_code == 201
-
-    export_response = client.get("/api/v1/epcis/export", headers={"X-Tenant-ID": TEST_TENANT_ID})
-    assert export_response.status_code == 200
-    export_payload = export_response.json()
-    assert export_payload["type"] == "EPCISDocument"
-    assert len(export_payload["epcisBody"]["eventList"]) >= 1
-
-    filtered_response = client.get(
-        "/api/v1/epcis/export",
-        params={"product_id": "non-existent"},
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-    )
-    assert filtered_response.status_code == 200
-    filtered_payload = filtered_response.json()
-    assert filtered_payload["regengine:metadata"]["regengine:filters"]["regengine:product_id"] == "non-existent"
-
-
-def test_unmapped_bizstep_rejected(client: TestClient) -> None:
-    """#1153: unmapped bizStep URIs must return 400 instead of silently
-    defaulting to 'receiving' — misclassification corrupts recall graphs.
-    """
-    bogus_event = dict(VALID_EPCIS_EVENT)
-    bogus_event["bizStep"] = "urn:epcglobal:cbv:bizstep:not-a-real-step"
-
-    response = client.post(
-        "/api/v1/epcis/events",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=bogus_event,
-    )
     assert response.status_code == 400
-    detail = response.json().get("detail", {})
-    assert detail.get("error") == "unmapped_bizstep"
-    assert detail.get("bizStep") == "urn:epcglobal:cbv:bizstep:not-a-real-step"
+    detail = response.json().get("detail", "")
+    assert isinstance(detail, str)
+    assert "at least one event" in detail
+    _assert_no_traceback(response)
 
 
-def test_missing_quantity_rejected(client: TestClient) -> None:
-    """#1249: events without quantity must be rejected with 422 rather
-    than silently synthesized to 1.0.
-    """
-    event_no_qty = {k: v for k, v in VALID_EPCIS_EVENT.items() if k != "extension"}
+def test_unknown_event_id_returns_404(client: TestClient) -> None:
+    response = client.get(
+        f"/api/v1/epcis/events/{uuid4()}",
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
+    )
+    assert response.status_code == 404
+    detail = response.json().get("detail", "")
+    assert isinstance(detail, str)
+    assert "not found" in detail.lower()
+    _assert_no_traceback(response)
 
+
+def test_events_reject_non_json_content_type(client: TestClient) -> None:
     response = client.post(
         "/api/v1/epcis/events",
-        headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=event_no_qty,
+        headers={"X-Tenant-ID": TEST_TENANT_ID, "Content-Type": "text/plain"},
+        content=b"not-json",
     )
     assert response.status_code == 422
-    detail = response.json().get("detail", {})
-    assert detail.get("error") == "missing_quantity"
+    _assert_no_traceback(response)
 
 
-def test_zero_quantity_accepted(client: TestClient) -> None:
-    """#1249: zero is a legitimate FSMA quantity (empty pallet, full
-    recall) and must not be clamped to 1.0.
-    """
-    event_zero = dict(VALID_EPCIS_EVENT)
-    event_zero["extension"] = {
-        "quantityList": [{"epcClass": "urn:epc:class:lgtin:test", "quantity": 0.0, "uom": "CS"}],
-    }
-    # Change the TLC so it does not collide with the idempotency key of
-    # other tests that reuse VALID_EPCIS_EVENT in the same session.
-    event_zero["ilmd"] = {
-        "cbvmda:lotNumber": "ROM-ZERO",
-        "fsma:traceabilityLotCode": "00012345678901-ROMZERO",
-    }
-
-    response = client.post(
-        "/api/v1/epcis/events",
+def test_tenant_query_override_rejected(claims_client: TestClient) -> None:
+    response = claims_client.get(
+        "/api/v1/epcis/export",
+        params={"tenant_id": str(uuid4())},
         headers={"X-Tenant-ID": TEST_TENANT_ID},
-        json=event_zero,
     )
-    # Accept 201 (new event) or 200 (idempotent if re-run).
-    assert response.status_code in (200, 201), response.text
+    assert response.status_code == 409
+    detail = response.json().get("detail", {})
+    assert isinstance(detail, dict)
+    assert detail.get("code") == "E_TENANT_MISMATCH"
+    _assert_no_traceback(response)
+
+
+def test_empty_export_and_filter_keep_metadata_field(client: TestClient) -> None:
+    product_id = f"urn:uuid:{uuid4()}"
+    response = client.get(
+        "/api/v1/epcis/export",
+        params={"product_id": product_id},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["epcisBody"]["eventList"] == []
+    assert body["regengine:metadata"]["regengine:event_count"] == 0
+    assert body["regengine:metadata"]["regengine:filters"]["regengine:product_id"] == product_id

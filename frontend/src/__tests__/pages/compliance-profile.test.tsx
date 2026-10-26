@@ -140,4 +140,58 @@ describe('ComplianceProfilePage', () => {
         expect(headers.get('X-RegEngine-API-Key')).toBeNull();
         expect(headers.get('X-Tenant-ID')).toBeNull();
     });
+
+    it('lists no placeholder retailers and shows "No data yet" until the user adds one', async () => {
+        fetchWithCsrfMock.mockResolvedValue({
+            ok: true,
+            json: async () => ({
+                tenant_id: 'tenant-123',
+                product_categories: [],
+                supply_regions: [],
+                supplier_identifiers: [],
+                fda_product_codes: [],
+                retailer_relationships: [],
+            }),
+        });
+
+        render(<ComplianceProfilePage />);
+
+        expect(await screen.findByText('No data yet')).toBeInTheDocument();
+        for (const name of [
+            'National Retailer A', 'Wholesale Club', 'Regional Grocery Chain', 'Multi-Banner Group',
+            'Southeast Grocer', 'Organic Market', 'Mass Merchant', 'Specialty Grocer',
+            'West Coast Chain', 'Discount Grocer',
+        ]) {
+            expect(screen.queryByText(name)).not.toBeInTheDocument();
+        }
+    });
+
+    it('saves a retailer the user typed in', async () => {
+        fetchWithCsrfMock
+            .mockResolvedValueOnce({
+                ok: true,
+                json: async () => ({
+                    tenant_id: 'tenant-123',
+                    product_categories: [],
+                    supply_regions: [],
+                    supplier_identifiers: [],
+                    fda_product_codes: [],
+                    retailer_relationships: [],
+                }),
+            })
+            .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+
+        const user = userEvent.setup();
+        render(<ComplianceProfilePage />);
+
+        await user.type(await screen.findByLabelText('Retailer name'), 'typed-retailer{Enter}');
+        expect(screen.queryByText('No data yet')).not.toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+        await waitFor(() => {
+            expect(fetchWithCsrfMock).toHaveBeenCalledTimes(2);
+        });
+        const [, init] = fetchWithCsrfMock.mock.calls[1] as [string, RequestInit];
+        expect(JSON.parse(String(init.body)).retailer_relationships).toEqual(['typed-retailer']);
+    });
 });

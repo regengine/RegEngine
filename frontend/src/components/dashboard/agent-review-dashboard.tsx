@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorState } from '@/components/ui/error-state';
 import { StatTile } from '@/components/ui/stat-tile';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import {
@@ -547,20 +548,20 @@ export function AgentReviewDashboard() {
                 />
 
                 <div className="space-y-6">
-                    <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+                    {query.data && !query.error && <section className="grid grid-cols-2 gap-4 xl:grid-cols-4">
                         <StatTile label="Needs review" value={metrics.pending} />
                         <StatTile label="High risk" value={metrics.highRisk} />
                         <StatTile label="Compliance gaps" value={metrics.gaps} />
                         <StatTile label="Broken chains" value={metrics.brokenChains} />
-                    </section>
+                    </section>}
 
                     <Card>
                         <CardHeader className="flex-col items-stretch gap-3">
                             <div className="flex items-center justify-between gap-3">
                                 <h2 className="text-subheading text-re-text-primary">Review queue</h2>
-                                <Badge tone="neutral" size="sm">
+                                {!query.error && <Badge tone="neutral" size="sm">
                                     {query.data?.total ?? sortedItems.length} total
-                                </Badge>
+                                </Badge>}
                             </div>
 
                             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
@@ -635,12 +636,7 @@ export function AgentReviewDashboard() {
                                     <p className="text-ui text-re-text-tertiary">Loading agent reviews...</p>
                                 </div>
                             ) : query.error ? (
-                                <EmptyState
-                                    bare
-                                    icon={AlertTriangle}
-                                    title="Review queue unavailable"
-                                    description={query.error instanceof Error ? query.error.message : 'Unable to load agent review items.'}
-                                />
+                                <ErrorState message="We could not load this page." onRetry={() => query.refetch()} retrying={query.isFetching} className="m-4" />
                             ) : sortedItems.length === 0 ? (
                                 <EmptyState
                                     bare

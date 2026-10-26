@@ -1,7 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { BLOG_POST_PUBLISHED, BLOG_POST_SLUGS } from '@/lib/blog-posts';
 import { EXPERIMENTAL_TOOL_SLUGS, isExperimentalToolEnabled } from '@/lib/experimental-features';
-import { isSandboxEnabled } from '@/lib/sandbox-cta';
 
 /**
  * Date-only lastmod. Next prints a Date through toISOString(), and an invalid
@@ -46,7 +45,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/why-regengine`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/about`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/product`, changeFrequency: 'monthly' as const, priority: 0.8 },
-        { url: `${baseUrl}/demo`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/buyer-programs`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/supplier-compliance`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/compare/foodlogiq`, changeFrequency: 'monthly' as const, priority: 0.8 },
@@ -55,12 +53,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/integrations`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/trust`, changeFrequency: 'monthly' as const, priority: 0.7 },
         { url: `${baseUrl}/contact`, changeFrequency: 'yearly' as const, priority: 0.5 },
-        // #2757 — only advertise the sandbox when its (experimental) router is
-        // mounted; listing a page that answers "not enabled here" is worse for
-        // search than not listing it.
-        ...(isSandboxEnabled()
-            ? [{ url: `${baseUrl}/sandbox`, changeFrequency: 'monthly' as const, priority: 0.9 }]
-            : []),
         { url: `${baseUrl}/privacy`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/terms`, changeFrequency: 'yearly' as const, priority: 0.3 },
         { url: `${baseUrl}/dpa`, changeFrequency: 'yearly' as const, priority: 0.3 },
@@ -82,15 +74,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
         'data-import',
         'fsma-unified',
         // Added Sep 2026 — built after the April curation, never listed.
-        // ask, label-scanner and inflow-lab are experimental and drop out of
-        // the list below unless their flags are enabled.
+        // ask and label-scanner are experimental and drop out of the list
+        // below unless their flags are enabled.
         'records-request-checklist',
         'self-reported-checklist',
         'scan',
         'export',
         'ask',
         'label-scanner',
-        'inflow-lab',
     ]
         .filter((tool) => !EXPERIMENTAL_TOOL_SLUGS.has(tool) || isExperimentalToolEnabled(tool))
         .map((tool) => ({
@@ -133,7 +124,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/docs/errors`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/docs/rate-limits`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/docs/changelog`, changeFrequency: 'weekly' as const, priority: 0.5 },
-        { url: `${baseUrl}/docs/connectors/inflow-lab`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/architecture`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/retention`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/support`, changeFrequency: 'monthly' as const, priority: 0.5 },

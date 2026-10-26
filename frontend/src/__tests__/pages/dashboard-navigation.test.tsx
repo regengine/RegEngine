@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DashboardLayout from '@/app/dashboard/layout';
 import { useAuth } from '@/lib/auth-context';
@@ -67,22 +67,73 @@ describe('Dashboard navigation discoverability', () => {
         expect(screen.queryByText('All Systems Operational')).not.toBeInTheDocument();
     });
 
-    it('exposes Inflow Lab as a top-level active dashboard link', async () => {
+    it('does not surface Inflow Lab in the dashboard navigation', async () => {
         render(
             <DashboardLayout>
                 <div>Inflow content</div>
             </DashboardLayout>,
         );
 
-        const inflowLink = screen
-            .getAllByText('Inflow Lab')
-            .map((node) => node.closest('a'))
-            .find((link) => link?.getAttribute('aria-current') === 'page');
-        expect(inflowLink).not.toBeNull();
-        expect(inflowLink).toHaveAttribute('href', '/dashboard/inflow-lab');
-        expect(inflowLink).toHaveAttribute('aria-current', 'page');
+        expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
-        expect(screen.getAllByText('Import files')[0].closest('a')).toHaveAttribute('href', '/ingest');
+        expect(screen.getAllByText('Document Ingestion')[0].closest('a')).toHaveAttribute('href', '/ingest');
+    });
+
+    it('puts Trace one click away as a top-level link to /trace', () => {
+        (usePathname as any).mockReturnValue('/trace');
+
+        render(
+            <DashboardLayout>
+                <div>Trace content</div>
+            </DashboardLayout>,
+        );
+
+        const sidebar = within(screen.getByRole('navigation', { name: 'Dashboard navigation' }));
+        const traceLink = sidebar.getByText('Trace').closest('a');
+        expect(traceLink).toHaveAttribute('href', '/trace');
+        expect(traceLink).toHaveAttribute('aria-current', 'page');
+
+        const mobileBar = within(screen.getByRole('navigation', { name: 'Dashboard quick navigation' }));
+        expect(mobileBar.getByText('Trace').closest('a')).toHaveAttribute('href', '/trace');
+    });
+
+    it('labels each nav item with the title of the page it opens', () => {
+        render(
+            <DashboardLayout>
+                <div>Dashboard content</div>
+            </DashboardLayout>,
+        );
+
+        const expected: Array<[string, string]> = [
+            ['Document Ingestion', '/ingest'],
+            ['Product Profile', '/compliance/profile'],
+            ['Scheduled Exports', '/dashboard/export-jobs'],
+            ['Team Management', '/dashboard/settings/users'],
+            ['Account Settings', '/dashboard/settings'],
+        ];
+        for (const [label, href] of expected) {
+            expect(screen.getByText(label).closest('a')).toHaveAttribute('href', href);
+        }
+
+        for (const stale of ['Import files', 'Controls', 'FDA Export', 'Team', 'Review']) {
+            expect(screen.queryByText(stale)).not.toBeInTheDocument();
+        }
+        // Curator Review validates ML extractions, not traceability: off the nav.
+        expect(document.querySelector('a[href="/review"]')).toBeNull();
+        expect(document.querySelector('a[href="/settings/users"]')).toBeNull();
+    });
+
+    it('marks only Team Management current on the nested settings route', () => {
+        (usePathname as any).mockReturnValue('/dashboard/settings/users');
+
+        render(
+            <DashboardLayout>
+                <div>Team content</div>
+            </DashboardLayout>,
+        );
+
+        expect(screen.getByText('Team Management').closest('a')).toHaveAttribute('aria-current', 'page');
+        expect(screen.getByText('Account Settings').closest('a')).not.toHaveAttribute('aria-current');
     });
 
     it('shows QA Health navigation only to sysadmins', async () => {

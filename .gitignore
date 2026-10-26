@@ -48,7 +48,9 @@ node_modules/
 !.env.*.example
 .DS_Store
 .idea/
-.vscode/
+.vscode/*
+!.vscode/mcp.json
+!.vscode/launch.json
 
 # Logs
 *.log
@@ -83,12 +85,11 @@ secrets.json
 
 # Artifacts that should never be tracked
 *.zip
-# ...except the public proof/sample bundles the frontend serves. These are
+# ...except the public proof bundles the frontend serves. These are
 # intentionally tracked fixtures (the audit-bundle pair backs the public
 # /api/v1/proof/verify demo, including the deliberately tampered one), and
 # the bare *.zip rule above was silently covering them (#2873).
 !frontend/public/proof/*.zip
-!frontend/public/samples/*.zip
 login_resp.json
 frontend/build_log.txt
 frontend/build_output.txt
@@ -99,8 +100,8 @@ fsma_stress_test_*
 test_data/
 # ...except services/test_data/audit/, which holds 25 intentionally-tracked
 # audit job fixtures that the bare test_data/ rule above was covering (#2873).
-# Same shape as the sample_data/ and demo_exports/ blocks below: re-include the
-# directories, re-ignore their contents, then allow only the fixture extension,
+# Re-include the services/test_data directory, re-ignore its contents, then
+# allow only the fixture extension,
 # so bulk scratch dumps under services/test_data/ stay ignored. Each parent
 # directory must be re-included explicitly — a negation for a file inside an
 # excluded directory has no effect.
@@ -175,24 +176,9 @@ test-write
 .qa-health/
 frontend/test-results/
 
-# Development sample data — public synthetic CTE CSVs are tracked
-# (see sample_data/SYNTHETIC.md). Anything else under the dir stays
-# ignored so local scratch CSVs don't leak.
-sample_data/*
-!sample_data/*.csv
-!sample_data/*.md
-!sample_data/README.md
-# The recall reconstruction fixture (synthetic, see its README.md) is tracked in full,
-# including the retained ERP snapshot and the answer key.
-!sample_data/recall_fixture/
-!sample_data/recall_fixture/**
-
-# Non-code artifacts — public synthetic exports are tracked
-# (see demo_exports/SYNTHETIC.md). Local pilot/sales output stays ignored.
-demo_exports/*
-!demo_exports/*.csv
-!demo_exports/*.json
-!demo_exports/*.md
+# Local data and exports are never tracked.
+sample_data/
+demo_exports/
 sales_enablement/
 output/
 

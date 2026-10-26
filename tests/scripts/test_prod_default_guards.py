@@ -40,13 +40,6 @@ def _load(name: str, path: Path):
     return module
 
 
-def _load_seed_lifecycle(monkeypatch):
-    monkeypatch.setenv("REGENGINE_API_KEY", "test-key")
-    monkeypatch.delenv("REGENGINE_BASE_URL", raising=False)
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    return _load("seed_lifecycle_test", SCRIPTS / "seed_lifecycle_test.py")
-
-
 def _load_regctl():
     # tenant.py imports Neo4jClient at module top; stub it so the test does
     # not need a live Neo4j driver. Scoped stubs: never mutate a preexisting
@@ -73,40 +66,6 @@ def _load_regctl():
             stub.Neo4jClient = object
             mp.setitem(sys.modules, target, stub)
         return _load("regctl_tenant", SCRIPTS / "regctl" / "tenant.py")
-
-
-# --- seed_lifecycle_test.py: localhost default, production needs the flag ---
-
-
-def test_lifecycle_defaults_to_localhost(monkeypatch):
-    module = _load_seed_lifecycle(monkeypatch)
-    assert module.LOCAL_DEFAULT_BASE == "http://localhost:8000"
-    assert module.BASE == "http://localhost:8000"
-    assert "railway" not in module.BASE
-    assert "regengine.co" not in module.BASE
-
-
-def test_lifecycle_refuses_production_without_flag(monkeypatch, capsys):
-    module = _load_seed_lifecycle(monkeypatch)
-    assert module.is_production_base("https://regengine-production.up.railway.app")
-    assert not module.is_production_base("http://localhost:8000")
-    with pytest.raises(SystemExit):
-        module.ensure_local_target("https://regengine-production.up.railway.app", False)
-    capsys.readouterr()
-
-
-def test_lifecycle_production_allowed_with_flag(monkeypatch):
-    module = _load_seed_lifecycle(monkeypatch)
-    module.ensure_local_target("https://regengine-production.up.railway.app", True)
-    module.ensure_local_target("http://localhost:8000", False)
-
-
-def test_lifecycle_main_parses_allow_production(monkeypatch):
-    module = _load_seed_lifecycle(monkeypatch)
-    args = module._parse_args(["--allow-production"])
-    assert args.allow_production is True
-    args = module._parse_args([])
-    assert args.allow_production is False
 
 
 # --- smoke_test_ingest.sh: localhost default, production needs the flag ---
@@ -206,9 +165,6 @@ def test_compose_hostnames_count_as_local(monkeypatch):
     diag = _load("diag_db_compose", SCRIPTS / "utilities" / "diag_db.py")
     monkeypatch.delenv("REGENGINE_ENV", raising=False)
     diag.ensure_local_database("postgresql://regengine:regengine@postgres:5432/regengine", False)
-    chaos = _load("seed_chaos_data_compose", SCRIPTS / "seed_chaos_data.py")
-    assert not chaos.is_production_target("postgresql://regengine:regengine@postgres:5432/regengine")
-    assert not chaos.is_production_target("bolt://neo4j:7687")
     inflow = _load("verify_inflow_e2e_compose", SCRIPTS / "verify_inflow_to_regengine_e2e.py")
     inflow.ensure_local_database("postgresql://regengine:regengine@postgres:5432/regengine", False)
 
@@ -273,19 +229,6 @@ def test_diag_db_refuses_production_env_on_localhost(monkeypatch):
         module.ensure_local_database("postgresql://regengine@localhost:5432/regengine", False)
 
 
-def test_chaos_seeder_refuses_query_host_override(monkeypatch):
-    module = _load("seed_chaos_data_query_host", SCRIPTS / "seed_chaos_data.py")
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    assert module.is_production_target("postgresql://regengine@localhost:5432/regengine?host=10.0.0.5")
-    assert not module.is_production_target("postgresql://regengine@localhost:5432/regengine?sslmode=require")
-    with pytest.raises(SystemExit):
-        module.ensure_local_targets(
-            "postgresql://regengine@localhost:5432/regengine?hostaddr=10.0.0.5",
-            "bolt://localhost:7687",
-            False,
-        )
-
-
 def test_inflow_verifier_refuses_query_host_override(monkeypatch):
     module = _load("verify_inflow_e2e_query_host", SCRIPTS / "verify_inflow_to_regengine_e2e.py")
     monkeypatch.delenv("REGENGINE_ENV", raising=False)
@@ -297,44 +240,6 @@ def test_inflow_verifier_refuses_query_host_override(monkeypatch):
 
 
 # --- entrypoint wiring: the guard must run inside main(), not just as a helper ---
-
-
-def test_lifecycle_main_refuses_production_before_posting(monkeypatch):
-    module = _load_seed_lifecycle(monkeypatch)
-    with pytest.raises(SystemExit) as excinfo:
-        module.main(["--base-url", "https://regengine-production.up.railway.app"])
-    assert excinfo.value.code == 2
-
-
-def test_lifecycle_main_refuses_production_env_on_localhost(monkeypatch):
-    module = _load_seed_lifecycle(monkeypatch)
-    monkeypatch.setenv("REGENGINE_ENV", "production")
-    with pytest.raises(SystemExit) as excinfo:
-        module.main(["--base-url", "http://localhost:8000"])
-    assert excinfo.value.code == 2
-
-
-def test_chaos_main_refuses_remote_store_before_seeding(monkeypatch):
-    module = _load("seed_chaos_data_main", SCRIPTS / "seed_chaos_data.py")
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    monkeypatch.setattr(sys, "argv", ["seed_chaos_data.py"])
-    monkeypatch.setattr(module, "POSTGRES_URL", "postgresql://user@db.supabase.co:5432/postgres")
-    monkeypatch.setattr(module, "NEO4J_URI", "bolt://localhost:7687")
-    # Code 2 is the guard refusal; a seeding failure exits 1, success exits 0.
-    with pytest.raises(SystemExit) as excinfo:
-        module.main()
-    assert excinfo.value.code == 2
-
-
-def test_chaos_cleanup_still_guarded(monkeypatch):
-    module = _load("seed_chaos_data_cleanup", SCRIPTS / "seed_chaos_data.py")
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    monkeypatch.setattr(sys, "argv", ["seed_chaos_data.py", "--cleanup"])
-    monkeypatch.setattr(module, "POSTGRES_URL", "postgresql://user@db.supabase.co:5432/postgres")
-    monkeypatch.setattr(module, "NEO4J_URI", "bolt://localhost:7687")
-    with pytest.raises(SystemExit) as excinfo:
-        module.main()
-    assert excinfo.value.code == 2
 
 
 def test_diag_main_refuses_remote_database(monkeypatch):
@@ -384,24 +289,6 @@ def test_diag_db_refuses_hosted_database(monkeypatch):
         module.ensure_local_database("postgresql://user@db.supabase.co:5432/postgres", False)
     module.ensure_local_database("postgresql://regengine@localhost:5432/regengine", False)
     assert module._parse_args(["--allow-production"]).allow_production is True
-
-
-# --- seed_chaos_data.py: store guard ---
-
-
-def test_chaos_seeder_refuses_remote_stores(monkeypatch):
-    module = _load("seed_chaos_data", SCRIPTS / "seed_chaos_data.py")
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    assert module.is_production_target("postgresql://user@db.supabase.co:5432/postgres")
-    assert not module.is_production_target("postgresql://regengine@localhost:5432/regengine")
-    assert not module.is_production_target("bolt://localhost:7687")
-    with pytest.raises(SystemExit):
-        module.ensure_local_targets("postgresql://user@db.supabase.co:5432/postgres", "bolt://localhost:7687", False)
-    module.ensure_local_targets(
-        "postgresql://regengine@localhost:5432/regengine",
-        "bolt://localhost:7687",
-        False,
-    )
 
 
 # --- regctl: masked keys in list output, 0600 secret file ---
@@ -714,105 +601,6 @@ def test_load_regctl_restores_absent_stubs():
         for name in watched:
             sys.modules.pop(name, None)
         sys.modules.update(saved)
-
-
-# --- seed_lifecycle_test.py: redirects must not carry the API key ---
-
-
-def test_lifecycle_post_does_not_follow_redirect(monkeypatch):
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    received = []
-
-    class TargetHandler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            received.append(dict(self.headers))
-            body = b"{}"
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, *args):
-            pass
-
-    target = HTTPServer(("127.0.0.1", 0), TargetHandler)
-    thread_b = threading.Thread(target=target.serve_forever, daemon=True)
-    thread_b.start()
-    target_url = f"http://127.0.0.1:{target.server_port}/collect"
-
-    class RedirectHandler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            self.send_response(302)
-            self.send_header("Location", target_url)
-            self.end_headers()
-
-        def log_message(self, *args):
-            pass
-
-    redirect = HTTPServer(("127.0.0.1", 0), RedirectHandler)
-    thread_a = threading.Thread(target=redirect.serve_forever, daemon=True)
-    thread_a.start()
-    try:
-        module = _load_seed_lifecycle(monkeypatch)
-        with pytest.raises(SystemExit):
-            module.api_post(f"http://127.0.0.1:{redirect.server_port}/seed", {"ping": True})
-    finally:
-        redirect.shutdown()
-        target.shutdown()
-        thread_a.join(timeout=5)
-        thread_b.join(timeout=5)
-    assert received == []
-
-
-def test_lifecycle_get_does_not_follow_redirect(monkeypatch):
-    import threading
-    from http.server import BaseHTTPRequestHandler, HTTPServer
-
-    received = []
-
-    class TargetHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            received.append(dict(self.headers))
-            body = b"{}"
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, *args):
-            pass
-
-    target = HTTPServer(("127.0.0.1", 0), TargetHandler)
-    thread_b = threading.Thread(target=target.serve_forever, daemon=True)
-    thread_b.start()
-    target_url = f"http://127.0.0.1:{target.server_port}/collect"
-
-    class RedirectHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(302)
-            self.send_header("Location", target_url)
-            self.end_headers()
-
-        def log_message(self, *args):
-            pass
-
-    redirect = HTTPServer(("127.0.0.1", 0), RedirectHandler)
-    thread_a = threading.Thread(target=redirect.serve_forever, daemon=True)
-    thread_a.start()
-    try:
-        module = _load_seed_lifecycle(monkeypatch)
-        with pytest.raises(SystemExit):
-            module.api_get(f"http://127.0.0.1:{redirect.server_port}/seed")
-    finally:
-        redirect.shutdown()
-        target.shutdown()
-        thread_a.join(timeout=5)
-        thread_b.join(timeout=5)
-    assert received == []
 
 
 # --- the guard suite itself must run in the required merge gate ---
