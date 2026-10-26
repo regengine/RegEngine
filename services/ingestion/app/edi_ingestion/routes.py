@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from collections.abc import Callable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -280,6 +281,69 @@ def _reject_legacy_856_placeholders(
     )
 
 
+# Event-date field (and optional time field) per transaction set.
+_EVENT_DATE_FIELDS: dict[str, tuple[str | None, str | None]] = {
+    "856": ("ship_date_raw", "ship_time_raw"),
+    "850": ("po_date_raw", None),
+    "810": ("invoice_date_raw", None),
+    "861": ("receive_date_raw", None),
+    "944": ("receive_date_raw", None),
+    "945": ("ship_date_raw", None),
+}
+
+
+def _preflight_event_date(
+    *,
+    transaction_set: str,
+    extracted: dict[str, Any],
+    sender_tenant_id: str,
+    traceability_lot_code: str,
+    partner_id: str | None,
+    source: str,
+) -> None:
+    """Reject a bad EDI event date BEFORE the ISA13 is reserved.
+
+    ``_enforce_envelope_integrity`` records the interchange control number,
+    so a date rejection raised after it would make the corrected resend a
+    409 replay. Run this first. Every rejection is written to the EDI
+    rejection log with ``needs_review=True`` and its id is returned to the
+    caller.
+    """
+    date_field, time_field = _EVENT_DATE_FIELDS.get(transaction_set, (None, None))
+    if transaction_set in ("944", "945"):
+        time_field = None
+    try:
+        _ship_timestamp_and_date(
+            extracted.get(date_field) if date_field else None,
+            extracted.get(time_field) if time_field else None,
+        )
+    except HTTPException as exc:
+        if exc.status_code != 400 or not isinstance(exc.detail, dict):
+            raise
+        detail = dict(exc.detail)
+        record = _record_edi_rejection(
+            tenant_id=sender_tenant_id,
+            transaction_set=transaction_set,
+            traceability_lot_code=traceability_lot_code,
+            errors=[
+                {
+                    "loc": [date_field or "event_date"],
+                    "type": detail.get("error"),
+                    "msg": detail.get("message"),
+                    "input": detail.get("raw"),
+                }
+            ],
+            extracted=extracted,
+            partner_id=partner_id,
+            source=source,
+            reason=str(detail.get("error") or "invalid_edi_date"),
+            needs_review=True,
+        )
+        detail["needs_review"] = True
+        detail["rejection_id"] = record["rejection_id"]
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 router = APIRouter(prefix="/api/v1/ingest/edi", tags=["EDI Import"])
 
 _resolve_tenant_id = resolve_tenant_id
@@ -290,8 +354,14 @@ def _enforce_envelope_integrity(
     extracted: dict[str, Any],
     sender_tenant_id: str,
     transaction_set: str,
+    before_reserve: Callable[[], None] | None = None,
 ) -> None:
     """Apply #1160 + #1165 envelope validation.
+
+    ``before_reserve`` runs after the envelope and allowlist checks and
+    before the ISA13 is recorded. Content rejections (event dates) go
+    there so a disallowed sender still gets 403 and a rejected document
+    does not burn its interchange number.
 
     - Reject on ISA/GS sender/receiver mismatch (X12 tenant-smuggling).
     - Reject on GS sender not in tenant's allowed trading-partner list.
@@ -341,6 +411,9 @@ def _enforce_envelope_integrity(
                 "gs_sender_id": extracted.get("gs_sender_id"),
             },
         )
+
+    if before_reserve is not None:
+        before_reserve()
 
     # #1165: retransmission dedup on ISA13.
     is_duplicate, _prev = check_and_record_interchange(
@@ -537,8 +610,21 @@ async def ingest_edi_856(
 
     extracted = _extract_856_fields(segments)
 
-    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
-    _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
+    # Event-date rejections run after the allowlist and before the ISA13
+    # is reserved, so a corrected resend is not refused as a 409 replay.
+    _enforce_envelope_integrity(
+        extracted,
+        sender_tenant_id,
+        "856",
+        before_reserve=lambda: _preflight_event_date(
+            transaction_set="856",
+            extracted=extracted,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            partner_id=x_partner_id,
+            source=source,
+        ),
+    )
 
     lines = extracted.get("line_items") or []
     if len(lines) > 1:
@@ -774,15 +860,7 @@ def _build_ingest_event_for_set(
         location_gln = _valid_gln_or_none(extracted.get("receiving_location_gln"))
 
     # Resolve timestamp
-    date_field_map = {
-        "856": ("ship_date_raw", "ship_time_raw"),
-        "850": ("po_date_raw", None),
-        "810": ("invoice_date_raw", None),
-        "861": ("receive_date_raw", None),
-        "944": ("receive_date_raw", None),
-        "945": ("ship_date_raw", None),
-    }
-    date_field, time_field = date_field_map.get(transaction_set, (None, None))
+    date_field, time_field = _EVENT_DATE_FIELDS.get(transaction_set, (None, None))
     if transaction_set in ("944", "945") and extracted.get("_event_timestamp"):
         timestamp, event_date = extracted["_event_timestamp"], extracted["_event_date"]
     else:
@@ -961,7 +1039,9 @@ async def ingest_edi_document(
         ...,
         description="FSMA Traceability Lot Code for 856/850/810/861; required but ignored for 944/945 event TLCs, which use each line's lot code",
     ),
-    tlc_source_reference: Optional[str] = Form(None, description="Optional TLC source reference copied to 944/945 KDEs"),
+    tlc_source_reference: Optional[str] = Form(
+        None, description="Optional TLC source reference copied to 944/945 KDEs"
+    ),
     tenant_id: Optional[str] = Form(None, description="Optional tenant override"),
     source: str = Form("edi_inbound", description="Source system identifier"),
     product_description: Optional[str] = Form(None, description="Optional product description override"),
@@ -1084,7 +1164,20 @@ async def ingest_edi_document(
 
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.
-    _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
+    def _preflight_all_sets() -> None:
+        for slice_set, slice_extracted in zip(slice_sets, extractions):
+            _preflight_event_date(
+                transaction_set=slice_set,
+                extracted=slice_extracted,
+                sender_tenant_id=sender_tenant_id,
+                traceability_lot_code=traceability_lot_code,
+                partner_id=x_partner_id,
+                source=source,
+            )
+
+    # Event-date rejections run after the allowlist and before the ISA13
+    # is reserved, so a corrected resend is not refused as a 409 replay.
+    _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set, before_reserve=_preflight_all_sets)
 
     # 856 SN1, 861 RCD, and warehouse W07/W12 lines are each one CTE.
     # ST/SE extraction and envelope handling stay at document scope, then
