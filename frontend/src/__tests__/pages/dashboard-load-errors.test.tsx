@@ -101,41 +101,44 @@ describe('shared dashboard load errors', () => {
 
     it('shows the alerts error state with retry, support, and the request ID', async () => {
         vi.stubEnv('NEXT_PUBLIC_ENABLE_EXPERIMENTAL_FEATURES', 'true');
-        fetchAlertsMock.mockRejectedValue(apiError(500, 'Internal Server Error', 'alerts-req-1'));
+        const alertsRequestId = crypto.randomUUID();
+        fetchAlertsMock.mockRejectedValue(apiError(500, 'Internal Server Error', alertsRequestId));
         const user = userEvent.setup();
         renderWithQuery(<AlertsPage />);
 
         expect(await screen.findByRole('alert')).toHaveTextContent('We could not load your alerts.');
-        expect(screen.getByText('Request ID: alerts-req-1')).toBeInTheDocument();
+        expect(screen.getByText(`Request ID: ${alertsRequestId}`)).toBeInTheDocument();
         expect(screen.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/settings/support');
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         await waitFor(() => expect(fetchAlertsMock).toHaveBeenCalledTimes(2));
     });
 
     it('shows the failed response request ID on the products error state', async () => {
+        const productsRequestId = crypto.randomUUID();
         fetchWithCsrfMock.mockResolvedValue(
             new Response(JSON.stringify({ detail: 'boom' }), {
                 status: 500,
-                headers: { 'x-request-id': 'products-req-1' },
+                headers: { 'x-request-id': productsRequestId },
             }),
         );
         renderWithQuery(<ProductsPage />);
 
         expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this page.');
-        expect(screen.getByText('Request ID: products-req-1')).toBeInTheDocument();
+        expect(screen.getByText(`Request ID: ${productsRequestId}`)).toBeInTheDocument();
     });
 
     it('shows the API client request ID on QA health failures', () => {
         const refetch = vi.fn();
         authMock.mockReturnValue({ user: { is_sysadmin: true }, isHydrated: true });
+        const qaRequestId = crypto.randomUUID();
         const qaError = Object.assign(new Error('Request failed'), {
-            response: { status: 500, headers: { 'x-request-id': 'qa-req-9' }, data: {} },
+            response: { status: 500, headers: { 'x-request-id': qaRequestId }, data: {} },
         });
         useQAHealthMock.mockReturnValue({ data: null, isLoading: false, error: qaError, refetch, isRefetching: false });
         render(<QAHealthPage />);
 
         expect(screen.getByRole('alert')).toHaveTextContent('We could not load this page.');
-        expect(screen.getByText('Request ID: qa-req-9')).toBeInTheDocument();
+        expect(screen.getByText(`Request ID: ${qaRequestId}`)).toBeInTheDocument();
     });
 
     it('keeps Add Product unavailable until a failed catalog request succeeds on Retry', async () => {

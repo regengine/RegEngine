@@ -183,7 +183,9 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
                         targetUrl,
                         detail: data,
                     });
-                    return proxyError(`${config.serviceName} request failed`, response.status);
+                    return proxyError(`${config.serviceName} request failed`, response.status, {
+                        requestId: response.headers.get('x-request-id') ?? undefined,
+                    });
                 }
                 return NextResponse.json(
                     { error: detail ?? `${config.serviceName} request failed` },
@@ -248,6 +250,7 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
     'content-disposition',
     'cache-control',
     'x-fda-record-count',
+    'x-request-id',
 ];
 const AUTH_BROWSER_NONCE_COOKIE = 'regengine_auth_browser_nonce';
 const OPAQUE_SESSION_COOKIE = '__Host-regengine_session';
@@ -417,7 +420,9 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                             targetUrl,
                             upstreamError: await readUpstreamErrorForLog(response),
                         });
-                        return proxyError(`${config.serviceName} request failed`, response.status);
+                        return proxyError(`${config.serviceName} request failed`, response.status, {
+                            requestId: response.headers.get('x-request-id') ?? undefined,
+                        });
                     }
 
                     const outgoing = new Headers();

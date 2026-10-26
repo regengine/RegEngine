@@ -112,6 +112,60 @@ describe('privileged frontend session forwarding', () => {
         assertOpaqueSessionOnly(fetchMock.mock.calls[0][1]);
     });
 
+    it('copies the upstream x-request-id onto review queue error responses', async () => {
+        const requestId = crypto.randomUUID();
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'boom' }), {
+            status: 500,
+            headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        }));
+
+        const response = await getReviewItems(
+            browserRequest('https://app.regengine.test/api/review/items'),
+        );
+
+        expect(response.status).toBe(500);
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+        expect(await response.json()).toEqual({ error: 'boom' });
+    });
+
+    it('copies the upstream x-request-id onto transformed review queue success responses', async () => {
+        const requestId = crypto.randomUUID();
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+            items: [{
+                review_id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8',
+                doc_hash: 'abc123',
+                confidence_score: 0.42,
+                created_at: '2026-10-01T00:00:00Z',
+                updated_at: '2026-10-02T00:00:00Z',
+                status: 'PENDING',
+                tenant_id: 'tenant-123',
+                text_preview: 'preview text',
+                extraction: { lot: 'L1' },
+            }],
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        }));
+
+        const response = await getReviewItems(
+            browserRequest('https://app.regengine.test/api/review/items'),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+        expect(await response.json()).toEqual([{
+            id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8',
+            doc_hash: 'abc123',
+            confidence_score: 0.42,
+            created_at: '2026-10-01T00:00:00Z',
+            updated_at: '2026-10-02T00:00:00Z',
+            status: 'PENDING',
+            tenant_id: 'tenant-123',
+            source_text: 'preview text',
+            extracted_data: { lot: 'L1' },
+        }]);
+    });
+
     it('sends no reviewer identity or retired credential on a decision', async () => {
         fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
             status: 'approved',
