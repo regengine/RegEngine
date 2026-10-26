@@ -12,12 +12,15 @@ Public recall-drill endpoint. Coverage:
 - Failure modes: the 6th request inside a one-minute window returns
   429 (rate-limit triggers), and the response is deterministic across
   successive successful calls.
+- Real data only: the endpoint returns an honest empty result (no
+  steps, no lot code, no trace time, no CSV) instead of a synthetic drill.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+import uuid
 from itertools import count
 
 import app.proof_recall_router as proof_recall_module
@@ -28,8 +31,6 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 FDA_24H_MANDATE_SECONDS = proof_recall_module.FDA_24H_MANDATE_SECONDS
-FROZEN_LOT_CODE = proof_recall_module.FROZEN_LOT_CODE
-OUTPUT_CSV_URL = proof_recall_module.OUTPUT_CSV_URL
 proof_recall_router = proof_recall_module.router
 limiter = proof_recall_module.limiter
 _client_counter = count(1)
@@ -107,8 +108,8 @@ class TestTenantIsolation:
         resp = client.post("/api/v1/proof/recall-drill")
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        assert data["lot_code"] == FROZEN_LOT_CODE
-        assert data["output_csv_url"] == OUTPUT_CSV_URL
+        assert data["lot_code"] is None
+        assert data["output_csv_url"] is None
 
     def test_module_does_not_import_tenant_scoped_clients(self):
         """Defense-in-depth: the recall-drill module must not import
@@ -139,7 +140,7 @@ class TestTenantIsolation:
         resp_a = client.post("/api/v1/proof/recall-drill")
         resp_b = client.post(
             "/api/v1/proof/recall-drill",
-            headers={"X-Tenant-ID": "00000000-0000-0000-0000-000000000000"},
+            headers={"X-Tenant-ID": str(uuid.uuid4())},
         )
         assert resp_a.status_code == 200
         assert resp_b.status_code == 200
@@ -167,33 +168,20 @@ class TestSchemaValidation:
             "output_csv_url",
             "lot_code",
             "fda_24h_mandate_seconds",
+            "data_available",
+            "message",
         }
 
         # Constants.
         assert data["fda_24h_mandate_seconds"] == FDA_24H_MANDATE_SECONDS
-        assert data["lot_code"] == FROZEN_LOT_CODE
-        assert data["output_csv_url"] == OUTPUT_CSV_URL
+        assert data["lot_code"] is None
+        assert data["output_csv_url"] is None
 
-        # time_to_trace_seconds must be a positive number well under
-        # the FDA 24h mandate (otherwise the demo is misleading).
-        assert isinstance(data["time_to_trace_seconds"], (int, float))
-        assert 0 < data["time_to_trace_seconds"] < FDA_24H_MANDATE_SECONDS
-
-        # Steps shape.
-        steps = data["steps"]
-        assert isinstance(steps, list) and len(steps) >= 1
-        valid_status = {"ok", "warning", "error"}
-        total_ms = 0
-        for s in steps:
-            assert set(s.keys()) >= {"name", "duration_ms", "status"}
-            assert isinstance(s["name"], str) and s["name"]
-            assert isinstance(s["duration_ms"], int) and s["duration_ms"] >= 0
-            assert s["status"] in valid_status
-            total_ms += s["duration_ms"]
-
-        # time_to_trace_seconds must equal the sum of step durations
-        # (deterministic by construction).
-        assert abs(data["time_to_trace_seconds"] - total_ms / 1000.0) < 1e-6
+        # Honest empty result: no invented drill, steps, timings or CSV.
+        assert data["data_available"] is False
+        assert data["steps"] == []
+        assert data["time_to_trace_seconds"] is None
+        assert isinstance(data["message"], str) and data["message"]
 
     def test_get_method_not_allowed(self, client: TestClient):
         """GET on a POST-only route returns 405."""
@@ -245,3 +233,17 @@ class TestFailureModes:
         a.pop("timestamp", None)
         b.pop("timestamp", None)
         assert a == b
+
+
+# ---------------------------------------------------------------------------
+# Real data only — no synthetic drill content is served
+# ---------------------------------------------------------------------------
+class TestNoSyntheticData:
+    def test_module_has_no_frozen_dataset(self):
+        for name in ("FROZEN_LOT_CODE", "OUTPUT_CSV_URL", "_FROZEN_STEPS"):
+            assert not hasattr(proof_recall_module, name), name
+
+    def test_response_references_no_sample_assets(self, client: TestClient):
+        resp = client.post("/api/v1/proof/recall-drill")
+        assert resp.status_code == 200, resp.text
+        assert "/samples/" not in resp.text
