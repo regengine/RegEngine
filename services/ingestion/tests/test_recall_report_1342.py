@@ -326,8 +326,10 @@ class TestGenerateReportNoData:
 class TestGenerateReportDbError:
     @pytest.mark.parametrize("exc_type", [RuntimeError, OSError, ValueError])
     def test_db_error_returns_5xx_not_no_data(self, client, monkeypatch, exc_type):
+        sentinel = str(uuid4())
+
         def _fail(tid):
-            raise exc_type(str(uuid4()))
+            raise exc_type(sentinel)
 
         monkeypatch.setattr(rr, "_query_scoring_data", _fail)
 
@@ -337,17 +339,20 @@ class TestGenerateReportDbError:
         assert "overall_status" not in body
         assert "no_data" not in r.text
         assert "No data yet" not in r.text
+        assert sentinel not in r.text
 
     def test_sessionlocal_failure_end_to_end_is_5xx(self, client, monkeypatch):
+        sentinel = str(uuid4())
         import shared.database as db_mod
 
         def _boom():
-            raise RuntimeError(str(uuid4()))
+            raise RuntimeError(sentinel)
 
         monkeypatch.setattr(db_mod, "SessionLocal", _boom)
         r = client.get(f"/api/v1/recall/{uuid4()}/report")
         assert r.status_code == 503
         assert "no_data" not in r.text
+        assert sentinel not in r.text
 
 
 # ---------------------------------------------------------------------------
