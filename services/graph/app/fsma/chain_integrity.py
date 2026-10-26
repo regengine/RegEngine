@@ -45,39 +45,52 @@ def _after_condition(width: int) -> str:
     return " OR ".join(terms)
 
 
+_PAGE_MARKER = "// @page"
+
+
+def _hit(record: Any) -> bool:
+    """True unless the row carries a false ``_hit`` flag (anchor kept only for paging)."""
+    try:
+        return record["_hit"] is not False
+    except (KeyError, LookupError):
+        return True
+
+
 async def _run_paged(
     session: Any,
     query: str,
     *,
+    anchors: str,
     key: Sequence[str],
     order: Optional[Callable[[Any], Any]] = None,
     **params: Any,
 ) -> AsyncIterator[Any]:
-    """Yield every record of ``query``, fetched ``_PAGE_SIZE`` rows at a time.
+    """Yield every record of ``query``, fetched ``_PAGE_SIZE`` anchors at a time.
 
-    ``query`` must end with a RETURN and no ORDER BY / SKIP / LIMIT. ``key``
-    names returned columns that are unique together; pages are ordered by
-    them and each page starts strictly after the last key read. Records are
-    yielded once all pages are read, sorted by ``order`` when given.
+    ``query`` holds a ``// @page`` line right after the MATCH that binds the
+    ``anchors`` variables. The keyset filter, ORDER BY and LIMIT are put
+    there, so each page reads only its own anchors instead of the whole match.
+    ``key`` lists Cypher expressions over the anchors that are unique
+    together. The rest of the query must carry ``_page_key`` along and return
+    exactly one row per anchor; a row whose ``_hit`` is false is used only to
+    advance the cursor and is not yielded. Records are yielded once all pages
+    are read, sorted by ``order`` when given.
     """
+    if _PAGE_MARKER not in query:
+        raise ValueError("paged query needs a // @page marker")
     key_expr = ", ".join(f"coalesce(toString({c}), '')" for c in key)
-    paged_query = (
-        "CALL {\n"
-        + query.rstrip()
-        + "\n}\n"
-        + f"WITH *, [{key_expr}] AS _page_key\n"
-        + f"WHERE $after_key IS NULL OR {_after_condition(len(key))}\n"
-        + "RETURN *\n"
-        + "ORDER BY _page_key[0]"
-        + "".join(f", _page_key[{i}]" for i in range(1, len(key)))
-        + "\nLIMIT $page_size\n"
+    page_clause = (
+        f"WITH {anchors}, [{key_expr}] AS _page_key\n"
+        f"WHERE $after_key IS NULL OR {_after_condition(len(key))}\n"
+        "ORDER BY _page_key[0]" + "".join(f", _page_key[{i}]" for i in range(1, len(key))) + "\nLIMIT $page_size"
     )
+    paged_query = query.replace(_PAGE_MARKER, page_clause, 1)
     records: List[Any] = []
     after_key: Optional[List[str]] = None
     while True:
         result = await session.run(paged_query, after_key=after_key, page_size=_PAGE_SIZE, **params)
         page = [record async for record in result]
-        records.extend(page)
+        records.extend(r for r in page if _hit(r))
         if len(page) < _PAGE_SIZE:
             break
         after_key = list(page[-1]["_page_key"])
@@ -89,7 +102,8 @@ async def _run_paged(
 
 # Broken-chain rows are (shipping event, lot) pairs: unique together. They
 # are reported in event-date order, then event id, then lot.
-_CHAIN_KEY = ("event_id", "lot_tlc")
+_CHAIN_ANCHORS = "l, shipping"
+_CHAIN_KEY = ("shipping.event_id", "l.tlc")
 _CHAIN_ORDER = _sort_key("event_date", "event_id", "lot_tlc")
 
 
@@ -130,7 +144,9 @@ async def find_gaps(
         e.responsible_party_contact IS NULL OR
         e.responsible_party_contact = ''
     )
+    // @page
     RETURN
+        _page_key,
         e.event_id as event_id,
         e.type as type,
         e.event_date as event_date,
@@ -144,7 +160,7 @@ async def find_gaps(
     # Keep the first occurrence of each event so no event is reported twice.
     seen_event_ids: set = set()
     async with client.session() as session:
-        async for record in _run_paged(session, query, key=("event_id",), tenant_id=tenant_id):
+        async for record in _run_paged(session, query, anchors="e", key=("e.event_id",), tenant_id=tenant_id):
             if record["event_id"] in seen_event_ids:
                 continue
             seen_event_ids.add(record["event_id"])
@@ -235,7 +251,9 @@ async def find_broken_chains(
         WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
           AND origin.tenant_id = $tenant_id
     }
+    // @page
     RETURN
+        _page_key,
         shipping.event_id    AS event_id,
         shipping.type         AS type,
         shipping.event_date   AS event_date,
@@ -258,8 +276,9 @@ async def find_broken_chains(
     WHERE l.tenant_id = $tenant_id
       AND shipping.tenant_id = $tenant_id
       AND shipping.event_date IS NOT NULL
-    WITH l, shipping
-    MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
+    // @page
+    // OPTIONAL so every paged (lot, shipping) anchor yields one row.
+    OPTIONAL MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
     WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING', 'TRANSFORMATION']
       AND origin.tenant_id = $tenant_id
       AND origin.event_date IS NOT NULL
@@ -267,12 +286,13 @@ async def find_broken_chains(
     // encounter order, so head(collect(...)) is the id of the earliest
     // origin matching min(origin.event_date). Without this the reported
     // origin_event_id can point at a different origin than origin_date.
-    WITH l, shipping, origin ORDER BY origin.event_date ASC
-    WITH l, shipping,
+    WITH l, shipping, _page_key, origin ORDER BY origin.event_date ASC
+    WITH l, shipping, _page_key,
          min(origin.event_date) AS earliest_origin_date,
          head(collect(origin.event_id)) AS earliest_origin_id
-    WHERE earliest_origin_date > shipping.event_date
     RETURN
+        _page_key,
+        coalesce(earliest_origin_date > shipping.event_date, false) AS _hit,
         shipping.event_id            AS event_id,
         shipping.type                AS type,
         shipping.event_date          AS event_date,
@@ -289,7 +309,12 @@ async def find_broken_chains(
     async with client.session() as session:
         # --- Missing origin violations --------------------------------
         async for record in _run_paged(
-            session, missing_origin_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+            session,
+            missing_origin_query,
+            anchors=_CHAIN_ANCHORS,
+            key=_CHAIN_KEY,
+            order=_CHAIN_ORDER,
+            tenant_id=tenant_id,
         ):
             eid = record["event_id"]
             if eid in seen_event_ids:
@@ -311,7 +336,12 @@ async def find_broken_chains(
 
         # --- Temporal paradox violations ------------------------------
         async for record in _run_paged(
-            session, temporal_paradox_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+            session,
+            temporal_paradox_query,
+            anchors=_CHAIN_ANCHORS,
+            key=_CHAIN_KEY,
+            order=_CHAIN_ORDER,
+            tenant_id=tenant_id,
         ):
             eid = record["event_id"]
             if eid in seen_event_ids:
@@ -383,20 +413,21 @@ async def find_broken_chains(
             WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
               AND origin.tenant_id = $tenant_id
         }
-        WITH l, shipping
+        // @page
         MATCH (l)-[:UNDERWENT]->(origin:TraceEvent)
         WHERE origin.type IN ['CREATION', 'RECEIVING', 'INITIAL_PACKING']
           AND origin.tenant_id = $tenant_id
-        WITH shipping, l,
+        WITH shipping, l, _page_key,
              collect({
                  event_id: origin.event_id,
                  type: origin.type,
                  event_date: origin.event_date,
                  merkle_hash: origin.merkle_hash
              }) AS origins
-        WHERE shipping.merkle_prev_hash IS NULL
-           OR NOT any(o IN origins WHERE o.merkle_hash = shipping.merkle_prev_hash)
         RETURN
+            _page_key,
+            (shipping.merkle_prev_hash IS NULL
+             OR NOT any(o IN origins WHERE o.merkle_hash = shipping.merkle_prev_hash)) AS _hit,
             shipping.event_id          AS event_id,
             shipping.type              AS type,
             shipping.event_date        AS event_date,
@@ -409,7 +440,7 @@ async def find_broken_chains(
         """
 
         async for record in _run_paged(
-            session, crypto_gap_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+            session, crypto_gap_query, anchors=_CHAIN_ANCHORS, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
         ):
             eid = record["event_id"]
             if eid in seen_event_ids:

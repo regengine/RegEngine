@@ -2,8 +2,8 @@
 
 Rows are fully synthetic: every id is a fresh ``uuid4`` and business fields
 are empty or ``None``. Where a sortable field needs a value, the row index is
-used. The fake Neo4j session honours ``$page_skip`` / ``$page_size`` so the
-tests exercise real paging.
+used. The fake Neo4j session honours ``$after_key`` / ``$page_size`` so the
+tests exercise real keyset paging.
 """
 
 from __future__ import annotations
@@ -46,12 +46,14 @@ class _PagingSession:
     The page key columns are read from the generated Cypher; each page holds
     the rows whose key is strictly after ``$after_key``, sorted by key.
     ``on_page(n, rows)`` runs after page ``n`` is served, so a test can
-    delete rows between pages.
+    delete rows between pages. ``dup_in_page(n, page)`` may return a changed
+    page ``n`` (for example one row served twice) before it is sent.
     """
 
-    def __init__(self, rows_for, on_page=None):
+    def __init__(self, rows_for, on_page=None, dup_in_page=None):
         self._rows_for = rows_for
         self._on_page = on_page
+        self._dup_in_page = dup_in_page
         self.calls: list[tuple[str, dict]] = []
 
     async def run(self, query, **params):
@@ -59,9 +61,19 @@ class _PagingSession:
         assert "LIMIT 2000" not in query
         assert "SKIP" not in query
         assert "LIMIT $page_size" in query
-        cols = re.findall(r"coalesce\(toString\((\w+)\), ''\)", query)
-        assert cols, query
+        assert "CALL {" not in query
+        assert "// @page" not in query
+        exprs = re.findall(r"coalesce\(toString\((\w+\.\w+)\), ''\)", query)
+        assert exprs, query
         rows = self._rows_for(query)
+        # The cursor filter runs on anchor properties (``l.tlc``); map each to
+        # the returned column (``tlc``, or ``lot_tlc`` for chain rows).
+        cols = []
+        for expr in exprs:
+            col = expr.split(".")[1]
+            if rows and col not in rows[0]:
+                col = f"lot_{col}"
+            cols.append(col)
 
         def key(r):
             return ["" if r[c] is None else str(r[c]) for c in cols]
@@ -69,6 +81,8 @@ class _PagingSession:
         after = params["after_key"]
         page = sorted((r for r in rows if after is None or key(r) > after), key=key)
         page = [{**r, "_page_key": key(r)} for r in page[: params["page_size"]]]
+        if self._dup_in_page:
+            page = self._dup_in_page(len(self.calls), page)
         if self._on_page:
             self._on_page(len(self.calls), rows)
         return _Result(page)
@@ -250,3 +264,63 @@ async def test_find_orphaned_lots_deletion_between_pages_skips_nothing():
     expected = [r["tlc"] for r in rows if r is not unread]
     orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
     _assert_each_once(expected, [o.tlc for o in orphans])
+
+
+def _repeat_row_in_first_page(n, page):
+    # Serve row 4 a second time, inside page 1, before the cursor moves on.
+    if n == 1:
+        return page[:5] + [dict(page[4])] + page[5:]
+    return page
+
+
+@pytest.mark.asyncio
+async def test_find_gaps_drops_row_repeated_within_one_page():
+    rows = _shipping_rows(TOTAL_ROWS)
+    session = _PagingSession(lambda q: rows, dup_in_page=_repeat_row_in_first_page)
+    gaps = await find_gaps(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
+
+
+@pytest.mark.asyncio
+async def test_find_broken_chains_drops_row_repeated_within_one_page():
+    rows = _shipping_rows(TOTAL_ROWS)
+
+    def rows_for(q):
+        if "NOT EXISTS" in q and "merkle_prev_hash" not in q and "origin_date" not in q:
+            return rows
+        return []
+
+    session = _PagingSession(rows_for, dup_in_page=_repeat_row_in_first_page)
+    violations = await find_broken_chains(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["event_id"] for r in rows], [v["event_id"] for v in violations])
+
+
+@pytest.mark.asyncio
+async def test_find_orphaned_lots_drops_row_repeated_within_one_page():
+    rows = _orphan_rows(TOTAL_ROWS)
+    session = _PagingSession(lambda q: rows, dup_in_page=_repeat_row_in_first_page)
+    orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["tlc"] for r in rows], [o.tlc for o in orphans])
+
+
+@pytest.mark.asyncio
+async def test_non_hit_anchor_rows_advance_cursor_but_are_not_reported():
+    rows = _orphan_rows(TOTAL_ROWS)
+    for i, r in enumerate(rows):
+        r["_hit"] = i % 2 == 0
+    session = _PagingSession(lambda q: rows)
+    orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["tlc"] for r in rows if r["_hit"]], [o.tlc for o in orphans])
+    assert len(session.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_page_filter_and_limit_sit_inside_the_match():
+    session = _PagingSession(lambda q: [])
+    await find_broken_chains(_client(session), tenant_id=TENANT)
+    await find_gaps(_client(session), tenant_id=TENANT)
+    for query, _ in session.calls:
+        assert "CALL {" not in query
+        # The cursor filter and LIMIT come before the final RETURN.
+        assert query.index("LIMIT $page_size") < query.rindex("RETURN")
+        assert query.index("$after_key") < query.rindex("RETURN")

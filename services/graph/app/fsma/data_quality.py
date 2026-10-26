@@ -129,20 +129,21 @@ async def find_orphaned_lots(
         MATCH (trans:TraceEvent)-[:CONSUMED]->(l)
         WHERE trans.tenant_id = $tenant_id
     }
+    // @page
 
     // Get the most recent event for this lot
     OPTIONAL MATCH (l)-[:UNDERWENT]->(last_event:TraceEvent)
     WHERE last_event.tenant_id = $tenant_id
-    WITH l, last_event
+    WITH l, _page_key, last_event
     ORDER BY last_event.event_date DESC
-    WITH l, collect(last_event)[0] as most_recent_event
+    WITH l, _page_key, collect(last_event)[0] as most_recent_event
 
-    // Filter by stagnant days
-    WHERE most_recent_event IS NULL
-       OR most_recent_event.event_date IS NULL
-       OR most_recent_event.event_date <= $cutoff_date
-
+    // Stagnant-days filter, as a flag so every paged lot yields one row
     RETURN
+        _page_key,
+        (most_recent_event IS NULL
+         OR most_recent_event.event_date IS NULL
+         OR most_recent_event.event_date <= $cutoff_date) AS _hit,
         l.tlc as tlc,
         l.product_description as product_description,
         l.quantity as quantity,
@@ -159,7 +160,8 @@ async def find_orphaned_lots(
         async for record in _run_paged(
             session,
             query,
-            key=("tlc",),
+            anchors="l",
+            key=("l.tlc",),
             order=_sort_key("last_event_date", "tlc"),
             tenant_id=tenant_id,
             cutoff_date=cutoff_date,
