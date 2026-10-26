@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Fingerprint, Loader2 } from 'lucide-react';
 
@@ -35,10 +35,12 @@ export function StepUpModal() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const onStepUpRequired = (event: Event) => {
       const detail = (event as CustomEvent<StepUpEventDetail | null>).detail;
+      requestIdRef.current += 1;
       if (user?.email) {
         setEmail(user.email);
       }
@@ -47,6 +49,7 @@ export function StepUpModal() {
       setOnSuccess(() => detail?.onSuccess);
       setOpen(true);
       setError(null);
+      setIsSubmitting(false);
     };
 
     window.addEventListener(STEP_UP_REQUIRED_EVENT, onStepUpRequired);
@@ -54,6 +57,7 @@ export function StepUpModal() {
   }, [user?.email]);
 
   const handleCancel = () => {
+    requestIdRef.current += 1;
     setOpen(false);
     setError(null);
     if (returnTo) {
@@ -71,8 +75,10 @@ export function StepUpModal() {
 
     setIsSubmitting(true);
     setError(null);
+    const requestId = requestIdRef.current;
     try {
       await performPasskeyLogin(normalizedEmail);
+      if (requestId !== requestIdRef.current) return;
       seedPasswordlessClientUser(normalizedEmail);
       setOpen(false);
       if (onSuccess) {
@@ -81,12 +87,13 @@ export function StepUpModal() {
         window.location.reload();
       }
     } catch (err: unknown) {
+      if (requestId !== requestIdRef.current) return;
       const browserError = err instanceof Error || err instanceof DOMException;
       setError(browserError && err.name === 'SecurityError'
         ? 'Passkey verification is unavailable on this domain. Contact support to verify the passkey domain configuration. This action remains blocked.'
         : browserError ? err.message : 'Passkey authentication failed.');
     } finally {
-      setIsSubmitting(false);
+      if (requestId === requestIdRef.current) setIsSubmitting(false);
     }
   };
 
