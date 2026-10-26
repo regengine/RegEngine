@@ -8,7 +8,7 @@ temporal paradoxes, and cryptographic hash-chain gaps.
 from __future__ import annotations
 
 import time
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Sequence
 
 import structlog
 from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
@@ -18,29 +18,79 @@ from ..neo4j_utils import Neo4jClient
 logger = structlog.get_logger("fsma-utils")
 
 
-# Rows fetched per round trip. Results are read page by page (SKIP/LIMIT on a
-# stable ORDER BY) so every matching row is reported; nothing is silently
-# dropped at a fixed cap, and each query round trip stays bounded.
+# Rows fetched per round trip. Results are read page by page with keyset
+# pagination on a unique key, so every matching row is reported, nothing is
+# silently dropped at a fixed cap, and each round trip stays bounded. Unlike
+# SKIP/offset paging, a row deleted (or inserted) between pages cannot shift
+# the next page past a row that has not been read yet: each page starts
+# strictly after the last key already returned.
 _PAGE_SIZE = 2000
 
 
-async def _run_paged(session: Any, query: str, **params: Any) -> AsyncIterator[Any]:
+def _sort_key(*fields: str) -> Callable[[Any], tuple]:
+    """Python sort key for records: ascending, nulls last (Neo4j ASC order)."""
+
+    def key(record: Any) -> tuple:
+        return tuple((record[f] is None, "" if record[f] is None else str(record[f])) for f in fields)
+
+    return key
+
+
+def _after_condition(width: int) -> str:
+    """Cypher for ``_page_key > $after_key``, compared element by element."""
+    terms = []
+    for i in range(width):
+        equal = [f"_page_key[{j}] = $after_key[{j}]" for j in range(i)]
+        terms.append("(" + " AND ".join(equal + [f"_page_key[{i}] > $after_key[{i}]"]) + ")")
+    return " OR ".join(terms)
+
+
+async def _run_paged(
+    session: Any,
+    query: str,
+    *,
+    key: Sequence[str],
+    order: Optional[Callable[[Any], Any]] = None,
+    **params: Any,
+) -> AsyncIterator[Any]:
     """Yield every record of ``query``, fetched ``_PAGE_SIZE`` rows at a time.
 
-    ``query`` must end with a deterministic ORDER BY (unique tiebreaker) and
-    no SKIP/LIMIT; paging is appended here.
+    ``query`` must end with a RETURN and no ORDER BY / SKIP / LIMIT. ``key``
+    names returned columns that are unique together; pages are ordered by
+    them and each page starts strictly after the last key read. Records are
+    yielded once all pages are read, sorted by ``order`` when given.
     """
-    paged_query = query.rstrip() + "\n    SKIP $page_skip LIMIT $page_size\n"
-    skip = 0
+    key_expr = ", ".join(f"coalesce(toString({c}), '')" for c in key)
+    paged_query = (
+        "CALL {\n"
+        + query.rstrip()
+        + "\n}\n"
+        + f"WITH *, [{key_expr}] AS _page_key\n"
+        + f"WHERE $after_key IS NULL OR {_after_condition(len(key))}\n"
+        + "RETURN *\n"
+        + "ORDER BY _page_key[0]"
+        + "".join(f", _page_key[{i}]" for i in range(1, len(key)))
+        + "\nLIMIT $page_size\n"
+    )
+    records: List[Any] = []
+    after_key: Optional[List[str]] = None
     while True:
-        result = await session.run(paged_query, page_skip=skip, page_size=_PAGE_SIZE, **params)
-        fetched = 0
-        async for record in result:
-            fetched += 1
-            yield record
-        if fetched < _PAGE_SIZE:
-            return
-        skip += fetched
+        result = await session.run(paged_query, after_key=after_key, page_size=_PAGE_SIZE, **params)
+        page = [record async for record in result]
+        records.extend(page)
+        if len(page) < _PAGE_SIZE:
+            break
+        after_key = list(page[-1]["_page_key"])
+    if order is not None:
+        records.sort(key=order)
+    for record in records:
+        yield record
+
+
+# Broken-chain rows are (shipping event, lot) pairs: unique together. They
+# are reported in event-date order, then event id, then lot.
+_CHAIN_KEY = ("event_id", "lot_tlc")
+_CHAIN_ORDER = _sort_key("event_date", "event_id", "lot_tlc")
 
 
 async def find_gaps(
@@ -88,15 +138,13 @@ async def find_gaps(
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
         CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
-    ORDER BY event_id
     """
 
     gaps = []
-    # SKIP/LIMIT pages can overlap if rows shift between pages; keep the
-    # first occurrence of each event so no event is reported twice.
+    # Keep the first occurrence of each event so no event is reported twice.
     seen_event_ids: set = set()
     async with client.session() as session:
-        async for record in _run_paged(session, query, tenant_id=tenant_id):
+        async for record in _run_paged(session, query, key=("event_id",), tenant_id=tenant_id):
             if record["event_id"] in seen_event_ids:
                 continue
             seen_event_ids.add(record["event_id"])
@@ -168,7 +216,7 @@ async def find_broken_chains(
     # ------------------------------------------------------------------ #
     # Query 1: SHIPPING with no origin event at all
     # Optimization: single-hop UNDERWENT only (no variable-length path),
-    # Results are paged (_run_paged) instead of capped, so large tenants
+    # Results are keyset-paged (_run_paged) instead of capped, so large tenants
     # get every violation.
     # ------------------------------------------------------------------ #
     # #1301: Every event node joined via UNDERWENT must be tenant-scoped,
@@ -194,7 +242,6 @@ async def find_broken_chains(
         shipping.document_id  AS document_id,
         l.tlc                 AS lot_tlc,
         l.product_description AS product_description
-    ORDER BY shipping.event_date, shipping.event_id, l.tlc
     """
 
     # ------------------------------------------------------------------ #
@@ -234,7 +281,6 @@ async def find_broken_chains(
         l.product_description        AS product_description,
         earliest_origin_id           AS origin_event_id,
         earliest_origin_date         AS origin_date
-    ORDER BY shipping.event_date, shipping.event_id, l.tlc
     """
 
     violations: List[Dict[str, Any]] = []
@@ -242,7 +288,9 @@ async def find_broken_chains(
 
     async with client.session() as session:
         # --- Missing origin violations --------------------------------
-        async for record in _run_paged(session, missing_origin_query, tenant_id=tenant_id):
+        async for record in _run_paged(
+            session, missing_origin_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+        ):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue
@@ -262,7 +310,9 @@ async def find_broken_chains(
             )
 
         # --- Temporal paradox violations ------------------------------
-        async for record in _run_paged(session, temporal_paradox_query, tenant_id=tenant_id):
+        async for record in _run_paged(
+            session, temporal_paradox_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+        ):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue
@@ -356,10 +406,11 @@ async def find_broken_chains(
             l.tlc                      AS lot_tlc,
             l.product_description      AS product_description,
             origins                    AS expected_predecessors
-        ORDER BY shipping.event_date, shipping.event_id, l.tlc
         """
 
-        async for record in _run_paged(session, crypto_gap_query, tenant_id=tenant_id):
+        async for record in _run_paged(
+            session, crypto_gap_query, key=_CHAIN_KEY, order=_CHAIN_ORDER, tenant_id=tenant_id
+        ):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue

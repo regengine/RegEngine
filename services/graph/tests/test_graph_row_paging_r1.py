@@ -8,6 +8,7 @@ tests exercise real paging.
 
 from __future__ import annotations
 
+import re
 import sys
 import uuid
 from collections import Counter
@@ -40,19 +41,37 @@ class _Result:
 
 
 class _PagingSession:
-    """Fake session: routes by query text, slices rows by SKIP/LIMIT params."""
+    """Fake session: routes by query text and serves keyset pages.
 
-    def __init__(self, rows_for):
+    The page key columns are read from the generated Cypher; each page holds
+    the rows whose key is strictly after ``$after_key``, sorted by key.
+    ``on_page(n, rows)`` runs after page ``n`` is served, so a test can
+    delete rows between pages.
+    """
+
+    def __init__(self, rows_for, on_page=None):
         self._rows_for = rows_for
+        self._on_page = on_page
         self.calls: list[tuple[str, dict]] = []
 
     async def run(self, query, **params):
         self.calls.append((query, params))
         assert "LIMIT 2000" not in query
-        assert "SKIP $page_skip LIMIT $page_size" in query
+        assert "SKIP" not in query
+        assert "LIMIT $page_size" in query
+        cols = re.findall(r"coalesce\(toString\((\w+)\), ''\)", query)
+        assert cols, query
         rows = self._rows_for(query)
-        skip, size = params["page_skip"], params["page_size"]
-        return _Result(rows[skip : skip + size])
+
+        def key(r):
+            return ["" if r[c] is None else str(r[c]) for c in cols]
+
+        after = params["after_key"]
+        page = sorted((r for r in rows if after is None or key(r) > after), key=key)
+        page = [{**r, "_page_key": key(r)} for r in page[: params["page_size"]]]
+        if self._on_page:
+            self._on_page(len(self.calls), rows)
+        return _Result(page)
 
     async def __aenter__(self):
         return self
@@ -78,7 +97,7 @@ def _shipping_rows(n: int) -> list[dict]:
         {
             "event_id": str(uuid.uuid4()),
             "type": "SHIPPING",
-            "event_date": i,  # sortable: row index
+            "event_date": f"{i:05d}",  # sortable: row index
             "document_id": None,
             "lot_tlc": str(uuid.uuid4()),
             "product_description": "",
@@ -102,10 +121,10 @@ async def test_find_gaps_returns_more_than_2000_rows():
     gaps = await find_gaps(_client(session), tenant_id=TENANT)
     assert len(gaps) == TOTAL_ROWS
     _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
-    assert [c[1]["page_skip"] for c in session.calls] == [0, 2000, 4000]
+    assert len(session.calls) == 3
+    assert session.calls[0][1]["after_key"] is None
     assert all(c[1]["page_size"] == 2000 for c in session.calls)
     assert all(c[1]["tenant_id"] == TENANT for c in session.calls)
-    assert all("ORDER BY event_id" in c[0] for c in session.calls)
 
 
 @pytest.mark.asyncio
@@ -133,8 +152,8 @@ async def test_find_broken_chains_returns_more_than_2000_rows():
     violations = await find_broken_chains(_client(session), tenant_id=TENANT)
     assert len(violations) == TOTAL_ROWS
     _assert_each_once([r["lot_tlc"] for r in rows], [v["lot_tlc"] for v in violations])
-    for q, _ in session.calls:
-        assert "ORDER BY shipping.event_date, shipping.event_id, l.tlc" in q
+    # Reported in event-date order (the row index here).
+    assert [v["event_date"] for v in violations] == [f"{i:05d}" for i in range(TOTAL_ROWS)]
 
 
 def _orphan_rows(n: int) -> list[dict]:
@@ -160,7 +179,7 @@ async def test_find_orphaned_lots_returns_more_than_2000_rows():
     assert len(orphans) == TOTAL_ROWS
     _assert_each_once([r["tlc"] for r in rows], [o.tlc for o in orphans])
     assert len(session.calls) == 3
-    assert "ORDER BY most_recent_event.event_date ASC, l.tlc ASC" in session.calls[0][0]
+    assert [o.tlc for o in orphans] == sorted(r["tlc"] for r in rows)
 
 
 @pytest.mark.asyncio
@@ -179,4 +198,55 @@ async def test_exact_page_boundary_issues_one_empty_followup():
     gaps = await find_gaps(_client(session), tenant_id=TENANT)
     assert len(gaps) == 2000
     _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
-    assert [c[1]["page_skip"] for c in session.calls] == [0, 2000]
+    assert len(session.calls) == 2
+
+
+def _delete_after_first_page(victims):
+    def on_page(n, rows):
+        if n == 1:
+            for v in victims:
+                rows.remove(v)
+
+    return on_page
+
+
+@pytest.mark.asyncio
+async def test_find_gaps_deletion_between_pages_skips_nothing():
+    rows = _shipping_rows(TOTAL_ROWS)
+    ordered = sorted(rows, key=lambda r: r["event_id"])
+    # One already-read row and one unread row vanish after page 1. With
+    # offset paging the next page would start one row late and skip a row.
+    read, unread = ordered[10], ordered[3000]
+    session = _PagingSession(lambda q: rows, on_page=_delete_after_first_page([read, unread]))
+    expected = [r["event_id"] for r in rows if r is not unread]
+    gaps = await find_gaps(_client(session), tenant_id=TENANT)
+    _assert_each_once(expected, [g["event_id"] for g in gaps])
+
+
+@pytest.mark.asyncio
+async def test_find_broken_chains_deletion_between_pages_skips_nothing():
+    rows = _shipping_rows(TOTAL_ROWS)
+    ordered = sorted(rows, key=lambda r: (r["event_id"], r["lot_tlc"]))
+    read = ordered[0]
+
+    def rows_for(q):
+        if "NOT EXISTS" in q and "merkle_prev_hash" not in q and "origin_date" not in q:
+            return rows
+        return []
+
+    unread = ordered[2500]
+    session = _PagingSession(rows_for, on_page=_delete_after_first_page([read, unread]))
+    expected = [r["event_id"] for r in rows if r is not unread]
+    violations = await find_broken_chains(_client(session), tenant_id=TENANT)
+    _assert_each_once(expected, [v["event_id"] for v in violations])
+
+
+@pytest.mark.asyncio
+async def test_find_orphaned_lots_deletion_between_pages_skips_nothing():
+    rows = _orphan_rows(TOTAL_ROWS)
+    ordered = sorted(rows, key=lambda r: r["tlc"])
+    read, unread = ordered[5], ordered[4400]
+    session = _PagingSession(lambda q: rows, on_page=_delete_after_first_page([read, unread]))
+    expected = [r["tlc"] for r in rows if r is not unread]
+    orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    _assert_each_once(expected, [o.tlc for o in orphans])

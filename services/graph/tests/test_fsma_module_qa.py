@@ -240,7 +240,9 @@ class TestBrokenChainsQueries:
         for i, call in enumerate(session.run.call_args_list):
             cypher = _flatten(call.args[0])
             assert "LIMIT 2000" not in cypher, f"query {i} still has a fixed row cap"
-            assert "SKIP $page_skip LIMIT $page_size" in cypher, f"query {i} is not paged"
+            assert "LIMIT $page_size" in cypher, f"query {i} is not paged"
+            assert "SKIP" not in cypher, f"query {i} uses offset paging"
+            assert "$after_key" in cypher, f"query {i} is not keyset-paged"
             assert call.kwargs["page_size"] > 0
 
     @pytest.mark.asyncio

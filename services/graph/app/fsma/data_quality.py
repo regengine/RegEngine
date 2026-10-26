@@ -14,7 +14,7 @@ from typing import List
 import structlog
 
 from ..neo4j_utils import Neo4jClient
-from .chain_integrity import _run_paged
+from .chain_integrity import _run_paged, _sort_key
 from .types import DataQualityReport, KDECompletenessMetrics, OrphanLot
 
 logger = structlog.get_logger("fsma-utils")
@@ -150,15 +150,20 @@ async def find_orphaned_lots(
         l.created_at as created_at,
         most_recent_event.type as last_event_type,
         most_recent_event.event_date as last_event_date
-    ORDER BY most_recent_event.event_date ASC, l.tlc ASC
     """
 
     orphans = []
-    # SKIP/LIMIT pages can overlap if rows shift between pages; keep the
-    # first occurrence of each lot so no lot is reported twice.
+    # Keep the first occurrence of each lot so no lot is reported twice.
     seen_tlcs: set = set()
     async with client.session() as session:
-        async for record in _run_paged(session, query, tenant_id=tenant_id, cutoff_date=cutoff_date):
+        async for record in _run_paged(
+            session,
+            query,
+            key=("tlc",),
+            order=_sort_key("last_event_date", "tlc"),
+            tenant_id=tenant_id,
+            cutoff_date=cutoff_date,
+        ):
             if record["tlc"] in seen_tlcs:
                 continue
             seen_tlcs.add(record["tlc"])
