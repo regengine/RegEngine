@@ -35,7 +35,8 @@ import urllib.request
 from pathlib import Path
 
 FDA_TEMPLATE_URL = "https://www.fda.gov/media/179616/download"
-FDA_TEMPLATE_SHA256 = "632ed553b9f2f0a2705c59e94189fd63de45a9481478bea06390285f4f5212a4"
+# Public SHA-256 of the FDA template download, not a credential.
+FDA_TEMPLATE_SHA256 = "632ed553b9f2f0a2705c59e94189fd63de45a9481478bea06390285f4f5212a4"  # pragma: allowlist secret
 _TITLE = "sortable spreadsheet template"
 
 # CTE tabs in FDA's template, in template order (page titles of the PDF).
