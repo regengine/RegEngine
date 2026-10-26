@@ -189,6 +189,15 @@ def _install_stubs(
 
     monkeypatch.setattr(wc, "_publish_graph_sync", _publish)
 
+    # Data gap writes run in their own transaction after the ingest commit;
+    # stubbed here so commit_count measures only the ingest transaction.
+    captured["gap_record_calls"] = []
+
+    def _record_outcomes(db_session, tenant_id, outcomes):
+        captured["gap_record_calls"].append((tenant_id, len(outcomes), db_session.commit_count if db_session else None))
+
+    monkeypatch.setattr(wc, "record_outcomes", _record_outcomes)
+
     # _get_db_session generator factory on wc
     def _db_gen_factory():
         def _gen():
@@ -519,6 +528,8 @@ class TestEventProcessing:
         # Savepoint committed, session committed once at the end
         assert any(a == ("commit", "sp-0") for a in sess.actions)
         assert sess.commit_count == 1
+        # Gap outcomes recorded once per accepted event, after the ingest commit
+        assert cap["gap_record_calls"] == [("t", len(payload.events), sess.commit_count)]
         # Graph sync, canonical path, rules + exc queue all fire in happy path
         assert cap["publish_graph_calls"] == [("ev-1", "t")]
         assert cap["normalize_calls"] and cap["normalize_calls"][0][1] == "t"

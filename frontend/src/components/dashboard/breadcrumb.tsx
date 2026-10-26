@@ -16,7 +16,6 @@ const LABEL_MAP: Record<string, string> = {
     'audit-log': 'Audit Log',
     'export-jobs': 'Scheduled Exports',
     heartbeat: 'Daily Heartbeat',
-    'inflow-lab': 'Inflow Lab',
     integrations: 'Integrations',
     issues: 'Issues',
     notifications: 'Notification Preferences',

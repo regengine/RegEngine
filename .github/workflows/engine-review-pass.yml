@@ -7,15 +7,18 @@ on:
     types: [opened, synchronize, reopened]
   pull_request_review:
     types: [submitted, dismissed]
+  issue_comment:
+    types: [created, edited, deleted]
 
 # Review bursts must not cancel in-progress runs.
 concurrency:
-  group: engine-review-pass-${{ github.event.pull_request.number }}
+  group: engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
   cancel-in-progress: false
 
 permissions:
   statuses: write
   pull-requests: read
+  issues: read
   contents: read
 
 jobs:
@@ -30,7 +33,20 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const pr = context.payload.pull_request;
+            let pr = context.payload.pull_request;
+
+            if (!pr) {
+              if (!context.payload.issue?.pull_request) {
+                core.info('Issue comment is not on a pull request. Skipping.');
+                return;
+              }
+              const prResponse = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: context.payload.issue.number,
+              });
+              pr = prResponse.data;
+            }
 
             if (!pr) {
               core.setFailed('Could not determine pull request from event payload.');
@@ -50,6 +66,9 @@ jobs:
               'grok',
               'muse',
               'kimi',
+              'pi',
+              'deepseek',
+              'hermes',
               'visual-designer',
               'product-designer',
             ]);
@@ -107,7 +126,30 @@ jobs:
 
               core.info(`Total reviews retrieved: ${reviews.length}`);
 
-              const eligibleReviews = reviews.filter((r) => {
+              core.info(`Fetching comments for pull request #${prNumber}...`);
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: prNumber,
+                per_page: 100,
+              });
+
+              core.info(`Total issue comments retrieved: ${comments.length}`);
+
+              const normalizedComments = comments.map((c) => ({
+                id: c.id,
+                body: c.body,
+                // Edits take effect at their edit time, so use updated_at.
+                submitted_at: c.updated_at || c.created_at,
+                author_association: c.author_association,
+                user: c.user,
+                state: 'COMMENTED',
+              }));
+
+              const allReviews = reviews.concat(normalizedComments);
+
+              const eligibleReviews = allReviews.filter((r) => {
                 if (r.state === 'DISMISSED' || !r.submitted_at || !r.body) {
                   return false;
                 }
@@ -131,7 +173,7 @@ jobs:
               });
 
               // The marker must be alone on its own line.
-              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/;
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
               const headShaLower = headSha.toLowerCase();
               const authorEngineLower = authorEngine.toLowerCase();
 
@@ -154,7 +196,7 @@ jobs:
                     continue;
                   }
 
-                  if (!headShaLower.startsWith(markerSha.toLowerCase())) {
+                  if (markerSha.toLowerCase() !== headShaLower) {
                     core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
                     continue;
                   }

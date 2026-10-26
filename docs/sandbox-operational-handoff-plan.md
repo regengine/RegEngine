@@ -1,5 +1,7 @@
 # Sandbox Operational Handoff Plan
 
+> **Superseded:** the frontend `/sandbox` route (and `/sandbox/results/[id]`) was deleted in #3557; the upload flow is `/ingest` (sign-in required).
+
 Branch: `codex/sandbox-operational-handoff`
 
 ## Goal

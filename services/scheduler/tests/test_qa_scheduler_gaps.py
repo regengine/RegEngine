@@ -227,16 +227,18 @@ class TestMarkItemsSeenContract:
 
 
 class TestDrainWebhookOutboxContract:
-    """The drain tick is telemetry: it must never crash the scheduler."""
+    """#2697 / SEL-516: a failing drain must surface so it is recorded as failed."""
 
-    def test_notifier_exception_does_not_propagate(self):
+    def test_notifier_exception_is_reraised(self):
         from services.scheduler.service import SchedulerService
 
         service = SchedulerService.__new__(SchedulerService)
         service.notifier = MagicMock()
         service.notifier.retry_outbox_once.side_effect = RuntimeError("disk gone")
 
-        assert service.drain_webhook_outbox() is None
+        # Swallowing here made APScheduler record a phantom success.
+        with pytest.raises(RuntimeError, match="disk gone"):
+            service.drain_webhook_outbox()
 
     def test_quiet_drain_stays_quiet(self):
         from services.scheduler.service import SchedulerService

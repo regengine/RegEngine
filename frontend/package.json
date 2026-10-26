@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -28,6 +31,7 @@
       "src/lib/capabilities.ts"
     ]
   },
+  "//knip": "src/lib/capabilities.ts is read by scripts/copy-lint/check-copy.mjs (the SEL-452 copy gate registry), not imported by frontend code.",
   "//": "Pinning policy (#569): next, eslint-config-next, @sentry/nextjs, and @supabase/supabase-js are pinned to exact versions (no ^ or ~ prefix) because breaking changes in these packages have caused production incidents. Bump them deliberately after testing. All other deps use ^ for minor/patch auto-updates.",
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.4.1",

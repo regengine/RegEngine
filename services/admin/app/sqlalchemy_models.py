@@ -422,12 +422,18 @@ class SupplierFacilityModel(Base):
     postal_code = Column(String, nullable=False)
     fda_registration_number = Column(String, nullable=True)
     roles = Column(JSONType(), nullable=False, default=list)
+    # Hours after a CTE's event time the supplier agreed to send it. NULL: none.
+    agreed_sending_hours = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     __table_args__ = (
         Index("ix_supplier_facilities_tenant", "tenant_id"),
         Index("ix_supplier_facilities_user", "supplier_user_id"),
+        CheckConstraint(
+            "agreed_sending_hours > 0",
+            name="supplier_facilities_agreed_sending_hours_check",
+        ),
     )
 
 

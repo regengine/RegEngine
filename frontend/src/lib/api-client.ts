@@ -28,6 +28,11 @@ import type {
   SupplierCTEEventResponse,
   SupplierComplianceGapsResponse,
   SupplierComplianceScore,
+  SupplierGapTimeToFixResponse,
+  SupplierDataQualityResponse,
+  AgreedSendingHoursResponse,
+  SupplierQualityDrilldownMetric,
+  SupplierQualityRecordsResponse,
   SupplierBulkUploadCommitResponse,
   SupplierBulkUploadParseResponse,
   SupplierBulkUploadStatusResponse,
@@ -868,6 +873,48 @@ class APIClient {
     const { data } = await this.adminClient.get<SupplierComplianceGapsResponse>('/v1/supplier/gaps', {
       params: facilityId ? { facility_id: facilityId } : undefined,
     });
+    return data;
+  }
+
+  async getSupplierGapTimeToFix(): Promise<SupplierGapTimeToFixResponse> {
+    const { data } = await this.adminClient.get<SupplierGapTimeToFixResponse>('/v1/supplier/gap-time-to-fix');
+    return data;
+  }
+
+  async getSupplierDataQuality(windowDays?: number): Promise<SupplierDataQualityResponse> {
+    const { data } = await this.adminClient.get<SupplierDataQualityResponse>('/v1/supplier/data-quality', {
+      params: windowDays ? { window_days: windowDays } : undefined,
+    });
+    return data;
+  }
+
+  async setFacilityAgreedSendingHours(
+    facilityId: string,
+    agreedSendingHours: number | null,
+  ): Promise<AgreedSendingHoursResponse> {
+    const { data } = await this.adminClient.put<AgreedSendingHoursResponse>(
+      `/v1/supplier/admin/facilities/${encodeURIComponent(facilityId)}/agreed-sending-hours`,
+      { agreed_sending_hours: agreedSendingHours },
+    );
+    return data;
+  }
+
+  async getSupplierDataQualityRecords(
+    facilityId: string,
+    metric: SupplierQualityDrilldownMetric,
+    options: { windowDays?: number; limit?: number; offset?: number } = {},
+  ): Promise<SupplierQualityRecordsResponse> {
+    const { data } = await this.adminClient.get<SupplierQualityRecordsResponse>(
+      `/v1/supplier/data-quality/${encodeURIComponent(facilityId)}/records`,
+      {
+        params: {
+          metric,
+          window_days: options.windowDays,
+          limit: options.limit,
+          offset: options.offset,
+        },
+      },
+    );
     return data;
   }
 
