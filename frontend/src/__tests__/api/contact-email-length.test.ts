@@ -50,10 +50,18 @@ describe('POST /api/contact email length cap', () => {
         expect((await res.json()).error).toBe('invalid_email');
     });
 
-    it('rejects a very long regex-hostile email quickly', async () => {
-        const started = Date.now();
-        const res = await post('@' + 'a.'.repeat(50_000));
+    it('rejects a very long email before regex validation', async () => {
+        const email = 'a@' + 'a.'.repeat(50_000) + '@';
+        const originalTest = RegExp.prototype.test;
+        const regexTest = vi.spyOn(RegExp.prototype, 'test').mockImplementation(function (this: RegExp, value: string) {
+            // A missing length guard must fail this test without running the expensive regex.
+            return value === email ? false : originalTest.call(this, value);
+        });
+
+        const res = await post(email);
         expect(res.status).toBe(400);
-        expect(Date.now() - started).toBeLessThan(2000);
+        expect((await res.json()).error).toBe('invalid_email');
+        expect(regexTest).not.toHaveBeenCalledWith(email);
+        expect(fetch).not.toHaveBeenCalled();
     });
 });

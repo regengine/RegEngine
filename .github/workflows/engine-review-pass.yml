@@ -69,6 +69,7 @@ jobs:
               'pi',
               'deepseek',
               'hermes',
+              'antigravity',
               'visual-designer',
               'product-designer',
             ]);

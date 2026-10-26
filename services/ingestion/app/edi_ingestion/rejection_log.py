@@ -55,6 +55,8 @@ def record_edi_rejection(
     extracted: dict[str, Any] | None = None,
     partner_id: str | None = None,
     source: str | None = None,
+    reason: str = "fsma_validation_failed",
+    needs_review: bool = False,
 ) -> dict[str, Any]:
     """Record an EDI FSMA validation rejection.
 
@@ -78,7 +80,8 @@ def record_edi_rejection(
         # Snapshot of the extracted fields for forensic review. Drops
         # any non-serializable values defensively.
         "extracted": _scrub(extracted or {}),
-        "reason": "fsma_validation_failed",
+        "reason": reason,
+        "needs_review": needs_review,
     }
 
     store = _rejection_store_for(tenant_id)
