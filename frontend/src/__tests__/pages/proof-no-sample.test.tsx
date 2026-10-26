@@ -11,7 +11,8 @@ describe('/proof without sample data', () => {
         expect(screen.getByText(/no public artifacts are published yet/i)).toBeInTheDocument();
         expect(text).not.toMatch(/fsma-204-sample|epcis-sample|audit-bundle/i);
         expect(text).not.toMatch(/\b[0-9a-f]{12,}\b/i);
-        expect(container.querySelector('a[download]')).toBeNull();
+        expect(container.querySelector('a[download]:not([href="/sdk/verify_chain.py"])')).toBeNull();
+        expect(container.querySelector('a[href="/sdk/verify_chain.py"][download]')).not.toBeNull();
         expect(container.querySelector('a[href^="/proof/"]')).toBeNull();
         expect(container.querySelector('a[href="/verify"]')).not.toBeNull();
     });
