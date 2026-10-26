@@ -181,6 +181,54 @@ describe('ingestion status terminal abort and no-regression', () => {
     mocks.storeApiKey.mockResolvedValue(undefined);
   });
 
+  it('ignores a late retry rejection after the poll observes a terminal status', async () => {
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
+
+    let rejectHeldRetry: ((reason: unknown) => void) | null = null;
+    let callCount = 0;
+    mocks.getIngestionJob.mockImplementation(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return Promise.reject(new Error('status fetch failed'));
+      }
+      if (callCount === 2) {
+        // The retry's status call is held pending while the interval tick runs.
+        return new Promise<{ status: string }>((resolve, reject) => {
+          void resolve;
+          rejectHeldRetry = reject;
+        });
+      }
+      return Promise.resolve({ status: 'completed' });
+    });
+
+    render(<IngestPage />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: 'https://example.org/late-retry.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
+
+    const retryButton = await screen.findByRole('button', { name: 'Retry' });
+    await userEvent.click(retryButton);
+
+    // Wait for the 2s interval tick to observe the terminal status while the
+    // retry is still held pending.
+    await waitFor(() => expect(mocks.getIngestionJob).toHaveBeenCalledTimes(3), { timeout: 8000 });
+    expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
+    // The terminal poll cleared the earlier status error.
+    expect(screen.queryByText('Unable to fetch ingestion status.')).not.toBeInTheDocument();
+
+    // The held retry rejects after the terminal status landed: its error must
+    // not surface, and the terminal view must remain. The completed view
+    // unmounts the form card (including the error Callout), so a stray
+    // setStatusError would only surface as the container's error class.
+    rejectHeldRetry?.(new Error('late retry fetch failed'));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByText('Unable to fetch ingestion status.')).not.toBeInTheDocument();
+    expect(document.querySelector('.workspace-load-error')).not.toBeInTheDocument();
+    expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
+  }, 15000);
+
   it('aborts the in-flight poll when Retry observes terminal and ignores its late result', async () => {
     const jobId = crypto.randomUUID();
     mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });

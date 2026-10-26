@@ -318,6 +318,9 @@ export default function IngestPage() {
       // Same rule as the poll above: only our own abort is silent; a
       // timeout must surface as a status error.
       if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
+      // Same terminal guard as the success path: a retry that rejects after
+      // the poll observed a terminal status must not set a status error.
+      if (isTerminalIngestStatus(jobStatusRef.current)) return;
       console.error('Failed to fetch ingestion status:', error);
       setStatusError('Unable to fetch ingestion status.');
     } finally {
