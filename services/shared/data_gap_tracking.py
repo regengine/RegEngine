@@ -14,6 +14,12 @@ State transitions, per (tenant, lot_code, cte_type):
   that lot and CTE, stamping the closing record id and its canonical SHA-256
   (the persisted ledger hash) as the receipt.
 
+Clock: time to fix is measured on ingest-time clocks only. ``opened_at``
+defaults to the database ``now()`` when the gap is flagged and ``closed_at``
+is ``now()`` when the fixing record lands. Neither reads the event
+``timestamp``/``event_date``, so backfilled EDI events (whose event time is
+months old) never inflate or shrink time to fix. Keep it that way.
+
 Gap logging is observability. It must never block or roll back ingest, so the
 writer catches every error, logs it, and returns.
 """
