@@ -56,6 +56,9 @@ def _current_environment() -> str:
 
 def _hostname_is_pooler(host: str) -> bool:
     host = host.strip().lower()
+    hostname, separator, port = host.rpartition(":")
+    if separator and (not port or port.isdecimal()):
+        host = hostname
     return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
 
 
@@ -67,7 +70,9 @@ def _is_supabase_pooler_database() -> bool:
     cannot spoof the pooler host.
 
     libpq honours a ``?host=`` query parameter, which overrides the URI
-    host (and may be a comma-separated list). A pooler reached that way is a
+    host (and may be a comma-separated list). SQLAlchemy also accepts
+    ``host:port`` query values, with an empty port selecting the default.
+    A pooler reached that way is a
     real production connection, so we fail closed and treat it as the pooler
     too, rather than trusting only the URI authority.
     """

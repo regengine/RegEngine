@@ -9,7 +9,6 @@ subdomain), not by a substring check on the raw connection string.
 from __future__ import annotations
 
 import pytest
-
 from shared import cors, env
 
 _POOLER_URLS = [
@@ -21,6 +20,12 @@ _POOLER_URLS = [
     "postgresql://u:p@db.internal/postgres?host=aws-0-us-east-1.pooler.supabase.com",
     # Comma-separated libpq host list where one entry is the pooler.
     "postgresql://u:p@db.internal/postgres?host=db.internal,pooler.supabase.com",
+    # SQLAlchemy also accepts host:port query values, including repeated hosts.
+    "postgresql://u:p@db.internal/postgres?host=pooler.supabase.com:5432",
+    "postgresql://u:p@db.internal/postgres?host=aws-0-us-east-1.pooler.supabase.com:6543",
+    "postgresql://u:p@db.internal/postgres?host=pooler.supabase.com:",
+    "postgresql://u:p@db.internal/postgres?host=db.internal:5432&host=pooler.supabase.com:6543",
+    "postgresql://u:p@db.internal/postgres?host=db.internal,pooler.supabase.com:5432",
 ]
 
 # Hostname is NOT a Supabase pooler; the literal only appears in userinfo,
@@ -34,6 +39,9 @@ _SPOOFED_URLS = [
     "postgresql://u:p@db.internal/postgres?sslhost=pooler.supabase.com",
     # ?host= points at a lookalike domain, not the real pooler.
     "postgresql://u:p@db.internal/postgres?host=pooler.supabase.com.evil.test",
+    "postgresql://u:p@db.internal/postgres?host=pooler.supabase.com.evil.test:5432",
+    "postgresql://u:p@db.internal/postgres?host=notpooler.supabase.com:5432",
+    "postgresql://u:p@db.internal/postgres?sslhost=pooler.supabase.com:5432",
 ]
 
 
@@ -65,3 +73,13 @@ def test_missing_database_url_is_not_pooler(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     assert env._is_supabase_pooler_database() is False
     assert cors._is_supabase_pooler_database() is False
+
+
+def test_query_pooler_with_port_rejects_wildcard_cors(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://db.internal/postgres?host=pooler.supabase.com:5432")
+    monkeypatch.setenv("CORS_ALLOWED_ORIGINS", "*")
+    for name in cors.CLOUD_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(ValueError, match=r"wildcard .* production or cloud"):
+        cors.get_allowed_origins()
