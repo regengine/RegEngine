@@ -29,7 +29,7 @@ from fastapi import HTTPException  # noqa: E402
 
 TENANT = str(uuid4())
 TLC = str(uuid4())
-PRIVATE_TEXT = f"{uuid4()} {TLC} {TENANT}"
+PRIVATE_TEXT = f"private-exception-{uuid4()}"
 
 
 def _log_text(caplog) -> str:
