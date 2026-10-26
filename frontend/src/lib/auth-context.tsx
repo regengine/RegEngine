@@ -5,6 +5,7 @@ import type { User, SessionAuthMethod } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
+import { identifyUser, resetAnalyticsIdentity } from './posthog-provider';
 
 interface AuthContextType {
   user: User | null;
@@ -478,6 +479,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clearCredentials]);
 
   const isAuthenticated = !!(user && accessToken);
+
+  // Analytics identity follows the verified session: identify on sign-in, reset on sign-out.
+  const userEmail = user?.email ?? null;
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (userEmail) identifyUser(userEmail);
+    else resetAnalyticsIdentity();
+  }, [isHydrated, userEmail]);
   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
   const hasTenantSession = isAuthenticated && !!tenantId;
   const hasAdminSession = Boolean(

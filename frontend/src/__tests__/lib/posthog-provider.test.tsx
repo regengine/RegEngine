@@ -10,6 +10,8 @@ const sdk = vi.hoisted(() => ({
     has_opted_out_capturing: vi.fn(() => false),
     opt_in_capturing: vi.fn(),
     opt_out_capturing: vi.fn(),
+    identify: vi.fn(),
+    reset: vi.fn(),
   },
 }));
 
@@ -453,5 +455,71 @@ describe('PostHog App Router pageviews', () => {
     expect(sdk.client.opt_in_capturing).toHaveBeenCalledTimes(1);
     expect(sdk.client.opt_in_capturing.mock.invocationCallOrder[0])
       .toBeLessThan(sdk.client.capture.mock.invocationCallOrder[0]);
+  });
+});
+
+describe('PostHog identity', () => {
+  it('identifies a consented visitor by email and sends only the email to the person profile', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    identifyUser('  Lead@Example.com ');
+    const { before_send: beforeSend } = await initializedOptions();
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledWith(
+      'lead@example.com', { email: 'lead@example.com' },
+    ));
+    expect(sdk.client.identify).toHaveBeenCalledTimes(1);
+
+    const identify = beforeSend({
+      event: '$identify',
+      properties: {
+        token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+        $current_url: 'https://regengine.co/?x=1',
+      },
+      $set: { email: 'lead@example.com', name: 'Jane Sellers' },
+      $set_once: { $initial_current_url: 'https://regengine.co/?x=1' },
+    });
+    expect(identify?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', $anon_distinct_id: 'anon-123',
+    });
+    expect(identify?.$set).toEqual({ email: 'lead@example.com' });
+    expect(identify?.$set_once).toBeUndefined();
+
+    const toolEvent = beforeSend({
+      event: 'tool_run_started',
+      properties: { token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker' },
+    });
+    expect(toolEvent?.properties).toEqual({
+      token: 'phc_test', distinct_id: 'lead@example.com', tool: 'ftl-checker',
+    });
+  });
+
+  it('does not identify without consent and drops $identify for other distinct ids', async () => {
+    const { identifyUser } = await providerModule();
+    identifyUser('lead@example.com');
+    expect(sdk.imported).not.toHaveBeenCalled();
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    const { before_send: beforeSend } = await initializedOptions();
+    expect(beforeSend({
+      event: '$identify',
+      properties: { token: 'phc_test', distinct_id: 'other@example.com' },
+    })).toBeNull();
+  });
+
+  it('ignores values that are not an email and resets on sign-out', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { identifyUser, resetAnalyticsIdentity, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    await initializedOptions();
+    identifyUser('not an email');
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+    identifyUser('lead@example.com');
+    await waitFor(() => expect(sdk.client.identify).toHaveBeenCalledTimes(1));
+    resetAnalyticsIdentity();
+    expect(sdk.client.reset).toHaveBeenCalledTimes(1);
   });
 });

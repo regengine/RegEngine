@@ -16,6 +16,7 @@ type CTAClickProps = { cta_label: string; page: string; destination?: string };
 type SignupStartProps = { plan?: string; source?: string };
 type OnboardingCompleteProps = { step: string; tenant_id?: string };
 type ToolVisitProps = { tool: string; path: string };
+type SignupProps = { source?: string };
 type Capture = { event: string; properties: Record<string, unknown> };
 
 const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
@@ -23,8 +24,10 @@ const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 const SAFE_PROPERTY_KEYS = new Set([
   'tool_id', 'lead_captured', 'categories_selected', 'covered_count',
   'risk_level', 'status', 'total_events', 'non_compliant_events',
-  'compliant_events',
+  'compliant_events', 'tool', 'outcome', 'error_code', 'placement', 'form', 'step',
+  'grade', 'webinar',
 ]);
+const EMAIL_SHAPE = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{2,63}$/;
 const SAFE_LABEL = /^[a-z0-9][a-z0-9_-]{0,79}$/i;
 const SAFE_SOURCE_LABEL = /^[a-z0-9][a-z0-9_.-]{0,79}$/i;
 const SAFE_SDK_STRING = /^[a-z0-9](?:[a-z0-9_. -]{0,78}[a-z0-9])?$/i;
@@ -36,6 +39,21 @@ const PHONE_SHAPE = /\d{3}[-_. ]\d{3}[-_. ]\d{4}/;
 const pendingCaptures: Capture[] = [];
 let client: typeof posthog | null = null;
 let initPromise: Promise<void> | null = null;
+/** The signed-in or signed-up visitor's email; the only person property ever sent. */
+let identifiedEmail: string | null = null;
+let identifyApplied = false;
+
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const email = value.trim().toLowerCase();
+  return email.length <= 254 && EMAIL_SHAPE.test(email) ? email : null;
+}
+
+function applyIdentify(): void {
+  if (!client || !identifiedEmail || identifyApplied) return;
+  identifyApplied = true;
+  client.identify(identifiedEmail, { email: identifiedEmail });
+}
 
 function hasConsent(): boolean {
   return getStoredConsent() === 'accepted';
@@ -104,14 +122,30 @@ function safeProperties(properties: Record<string, unknown> = {}): Record<string
 /** PostHog adds URL, referrer, title, and campaign data; only approved fields leave this callback. */
 function beforeSend(capture: CaptureResult | null): CaptureResult | null {
   if (!capture || !hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return null;
-  if (capture.event.startsWith('$') && capture.event !== '$pageview') return null;
+  const isIdentify = capture.event === '$identify';
+  if (capture.event.startsWith('$') && capture.event !== '$pageview' && !isIdentify) return null;
   const token = capture.properties.token;
   const distinctId = capture.properties.distinct_id;
-  if (typeof token !== 'string' || typeof distinctId !== 'string' || !SAFE_LABEL.test(distinctId)) return null;
+  const isIdentified = identifiedEmail !== null && distinctId === identifiedEmail;
+  if (typeof token !== 'string' || typeof distinctId !== 'string'
+    || (!SAFE_LABEL.test(distinctId) && !isIdentified)) return null;
+  if (isIdentify && !isIdentified) return null;
   const properties = safeProperties(capture.properties) as CaptureResult['properties'];
   properties.token = token;
   properties.distinct_id = distinctId;
-  properties.$process_person_profile = false;
+  if (isIdentify) {
+    const anonId = capture.properties.$anon_distinct_id;
+    if (typeof anonId === 'string' && SAFE_LABEL.test(anonId)) properties.$anon_distinct_id = anonId;
+    // Only the email reaches the person profile; no other $set keys are sent.
+    return {
+      ...capture,
+      properties,
+      $set: { email: identifiedEmail },
+      $set_once: undefined,
+      $unset: undefined,
+    };
+  }
+  if (!isIdentified) properties.$process_person_profile = false;
 
   const host = safeHostname(capture.properties.$host, false);
   if (host) properties.$host = host;
@@ -183,11 +217,12 @@ async function initializePostHog(): Promise<void> {
       save_referrer: false,
       advanced_disable_flags: true,
       disable_surveys: true,
-      person_profiles: 'never',
+      person_profiles: 'identified_only',
       before_send: beforeSend,
     });
     if (posthogClient.has_opted_out_capturing()) posthogClient.opt_in_capturing();
     client = posthogClient;
+    applyIdentify();
     for (const { event, properties } of pendingCaptures.splice(0)) {
       if (!hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) break;
       client.capture(event, properties);
@@ -218,7 +253,31 @@ export function captureEvent(event: string, properties?: Record<string, unknown>
   }
 }
 
-const posthogClient = { capture: captureEvent };
+/**
+ * Ties this browser's events to the visitor's real email once it is known
+ * (verified sign-in session or a successful signup). Consent-gated like capture.
+ */
+export function identifyUser(email: unknown): void {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return;
+  if (normalized !== identifiedEmail) {
+    identifiedEmail = normalized;
+    identifyApplied = false;
+  }
+  if (!configuredKey() || !hasConsent() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return;
+  if (client) applyIdentify();
+  else void initializePostHog();
+}
+
+/** Clears the identified email on sign-out so later events are anonymous again. */
+export function resetAnalyticsIdentity(): void {
+  const wasIdentified = identifiedEmail !== null;
+  identifiedEmail = null;
+  identifyApplied = false;
+  if (client && wasIdentified) client.reset();
+}
+
+const posthogClient = { capture: captureEvent, identify: identifyUser };
 
 export function usePostHog() {
   return posthogClient;
@@ -229,6 +288,7 @@ export const ph = {
   signupStart: (props: SignupStartProps) => captureEvent('signup_started', props),
   onboardingComplete: (props: OnboardingCompleteProps) => captureEvent('onboarding_completed', props),
   toolVisit: (props: ToolVisitProps) => captureEvent('tool_visited', props),
+  signup: (props: SignupProps) => captureEvent('signup', props),
 };
 
 function PostHogPageviewTracker({ consentGranted }: { consentGranted: boolean }) {
