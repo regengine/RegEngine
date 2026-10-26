@@ -26,8 +26,10 @@ Tracks GitHub issue #1342.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-from uuid import UUID
+from datetime import datetime, timezone
+from typing import NamedTuple
+from unittest.mock import MagicMock
+from uuid import UUID, uuid4
 
 import pytest
 from app.sqlalchemy_models import (
@@ -45,8 +47,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-TEST_TENANT_ID = UUID("00000000-0000-0000-0000-000000000001")
-TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
+
+class TestIds(NamedTuple):
+    tenant_id: UUID
+    user_id: UUID
+
+
+@pytest.fixture
+def ids() -> TestIds:
+    return TestIds(tenant_id=uuid4(), user_id=uuid4())
 
 
 # ---------------------------------------------------------------------------
@@ -55,7 +64,7 @@ TEST_USER_ID = UUID("00000000-0000-0000-0000-000000000002")
 
 
 @pytest.fixture
-def db_session() -> Session:
+def db_session(ids: TestIds) -> Session:
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -76,9 +85,22 @@ def db_session() -> Session:
 
     SM = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
     session = SM()
-    session.add(TenantModel(id=TEST_TENANT_ID, name="T", slug="t", status="active", settings={}))
     session.add(
-        UserModel(id=TEST_USER_ID, email="u@example.com", status="active", is_sysadmin=False)
+        TenantModel(
+            id=ids.tenant_id,
+            name=f"name-{uuid4().hex}",
+            slug=f"slug-{uuid4().hex}",
+            status="active",
+            settings={},
+        )
+    )
+    session.add(
+        UserModel(
+            id=ids.user_id,
+            email=f"{uuid4().hex}@invalid",
+            status="active",
+            is_sysadmin=False,
+        )
     )
     session.commit()
 
@@ -97,13 +119,13 @@ def db_session() -> Session:
 
 
 @pytest.fixture
-def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def client(db_session: Session, ids: TestIds, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     import app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
     app.include_router(fac_routes.router, prefix="/v1")
 
-    current_user = db_session.get(UserModel, TEST_USER_ID)
+    current_user = db_session.get(UserModel, ids.user_id)
 
     def _get_session():
         yield db_session
@@ -115,7 +137,7 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app.dependency_overrides[fac_routes.get_current_user] = _get_user
     app.dependency_overrides[fac_routes.require_owner] = lambda: True
 
-    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: TEST_TENANT_ID)
+    monkeypatch.setattr(fac_routes.TenantContext, "get_tenant_context", lambda _db: ids.tenant_id)
     monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_facility_ftl_scoping", lambda **_kw: None)
     monkeypatch.setattr(fac_routes.supplier_graph_sync, "record_cte_event", lambda **_kw: None)
     monkeypatch.setattr(fac_routes.supplier_graph_sync, "get_required_ctes_for_facility", lambda *_a, **_kw: None)
@@ -125,14 +147,14 @@ def client(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
 
 @pytest.fixture
-def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def client_no_tenant(db_session: Session, ids: TestIds, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Client where TenantContext.get_tenant_context returns None."""
     import app.supplier_facilities_routes as fac_routes
 
     app = FastAPI()
     app.include_router(fac_routes.router, prefix="/v1")
 
-    current_user = db_session.get(UserModel, TEST_USER_ID)
+    current_user = db_session.get(UserModel, ids.user_id)
 
     def _get_session():
         yield db_session
@@ -155,16 +177,36 @@ def client_no_tenant(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> Te
 # ---------------------------------------------------------------------------
 
 
-def _make_facility(db: Session, name: str = "Warehouse A") -> SupplierFacilityModel:
+def _make_facility(
+    db: Session,
+    ids: TestIds | tuple[UUID, UUID] | None = None,
+    name: str | None = None,
+    *,
+    tenant_id: UUID | None = None,
+    supplier_user_id: UUID | None = None,
+    street: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    postal_code: str | None = None,
+    roles: list[str] | None = None,
+) -> SupplierFacilityModel:
+    if ids is not None:
+        tenant_id = ids[0]
+        supplier_user_id = ids[1]
+    if tenant_id is None:
+        tenant_id = db.query(TenantModel.id).scalar()
+    if supplier_user_id is None:
+        supplier_user_id = db.query(UserModel.id).scalar()
+
     f = SupplierFacilityModel(
-        tenant_id=TEST_TENANT_ID,
-        supplier_user_id=TEST_USER_ID,
-        name=name,
-        street="1 Main St",
-        city="Salinas",
-        state="CA",
-        postal_code="93901",
-        roles=["Grower"],
+        tenant_id=tenant_id,
+        supplier_user_id=supplier_user_id,
+        name=name if name is not None else f"name-{uuid4().hex}",
+        street=street if street is not None else f"street-{uuid4().hex}",
+        city=city if city is not None else f"city-{uuid4().hex}",
+        state=state if state is not None else f"state-{uuid4().hex[:4]}",
+        postal_code=postal_code if postal_code is not None else f"zip-{uuid4().hex[:6]}",
+        roles=roles if roles is not None else ["Grower"],
     )
     db.add(f)
     db.commit()
@@ -202,20 +244,21 @@ class TestListSupplierFacilities:
         assert body["items"] == []
         assert body["total"] == 0
 
-    def test_returns_facility(self, client: TestClient, db_session: Session):
+    def test_returns_facility(self, client: TestClient, db_session: Session, ids: TestIds):
         """Lines 63-97: one facility → items has one element."""
-        _make_facility(db_session)
+        name = f"name-{uuid4().hex}"
+        _make_facility(db_session, ids, name=name)
         resp = client.get("/v1/supplier/facilities")
         assert resp.status_code == 200
         body = resp.json()
         assert body["total"] == 1
         assert len(body["items"]) == 1
-        assert body["items"][0]["name"] == "Warehouse A"
+        assert body["items"][0]["name"] == name
 
-    def test_pagination_params_forwarded(self, client: TestClient, db_session: Session):
+    def test_pagination_params_forwarded(self, client: TestClient, db_session: Session, ids: TestIds):
         """Lines 63-97: pagination skip/limit reflected in response."""
-        for i in range(3):
-            _make_facility(db_session, name=f"Facility {i}")
+        for _ in range(3):
+            _make_facility(db_session, ids, name=f"name-{uuid4().hex}")
         resp = client.get("/v1/supplier/facilities?skip=1&limit=1")
         assert resp.status_code == 200
         body = resp.json()
@@ -240,11 +283,11 @@ class TestCreateSupplierFacility:
         resp = client_no_tenant.post(
             "/v1/supplier/facilities",
             json={
-                "name": "Warehouse X",
-                "street": "1 Main St",
-                "city": "Salinas",
-                "state": "CA",
-                "postal_code": "93901",
+                "name": f"name-{uuid4().hex}",
+                "street": f"street-{uuid4().hex}",
+                "city": f"city-{uuid4().hex}",
+                "state": f"state-{uuid4().hex[:4]}",
+                "postal_code": f"zip-{uuid4().hex[:6]}",
                 "roles": [],
             },
         )
@@ -252,21 +295,26 @@ class TestCreateSupplierFacility:
 
     def test_create_facility_happy_path(self, client: TestClient):
         """Lines 110-125: valid request creates facility and returns response."""
+        name = f"name-{uuid4().hex}"
+        street = f"street-{uuid4().hex}"
+        city = f"city-{uuid4().hex}"
+        state = f"state-{uuid4().hex[:4]}"
+        postal_code = f"zip-{uuid4().hex[:6]}"
         resp = client.post(
             "/v1/supplier/facilities",
             json={
-                "name": "New Packhouse",
-                "street": "100 Depot Rd",
-                "city": "Salinas",
-                "state": "CA",
-                "postal_code": "93901",
+                "name": name,
+                "street": street,
+                "city": city,
+                "state": state,
+                "postal_code": postal_code,
                 "roles": ["Packer"],
             },
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["name"] == "New Packhouse"
-        assert body["state"] == "CA"
+        assert body["name"] == name
+        assert body["state"] == state
         assert "id" in body
 
 
@@ -278,9 +326,7 @@ class TestCreateSupplierFacility:
 class TestSetFtlCategories:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 146: missing tenant → 400."""
-        import uuid
-
-        fid = str(uuid.uuid4())
+        fid = str(uuid4())
         resp = client_no_tenant.put(
             f"/v1/supplier/facilities/{fid}/ftl-categories",
             json={"category_ids": ["1"]},
@@ -296,19 +342,20 @@ class TestSetFtlCategories:
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_unknown_category_returns_400(self, client: TestClient, db_session: Session):
+    def test_unknown_category_returns_400(self, client: TestClient, db_session: Session, ids: TestIds):
         """Line 165: unknown FTL category id → 400."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
+        unknown_id = f"missing-{uuid4().hex}"
         resp = client.put(
             f"/v1/supplier/facilities/{f.id}/ftl-categories",
-            json={"category_ids": ["9999"]},
+            json={"category_ids": [unknown_id]},
         )
         assert resp.status_code == 400
         assert "Unknown FTL category" in resp.json()["detail"]
 
-    def test_valid_category_succeeds(self, client: TestClient, db_session: Session):
+    def test_valid_category_succeeds(self, client: TestClient, db_session: Session, ids: TestIds):
         """Happy path: valid category → 200."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
         resp = client.put(
             f"/v1/supplier/facilities/{f.id}/ftl-categories",
             json={"category_ids": ["1"]},
@@ -327,9 +374,7 @@ class TestSetFtlCategories:
 class TestGetRequiredCtes:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 219: missing tenant → 400."""
-        import uuid
-
-        resp = client_no_tenant.get(f"/v1/supplier/facilities/{uuid.uuid4()}/required-ctes")
+        resp = client_no_tenant.get(f"/v1/supplier/facilities/{uuid4()}/required-ctes")
         assert resp.status_code == 400
 
     def test_invalid_uuid_returns_400(self, client: TestClient):
@@ -339,14 +384,15 @@ class TestGetRequiredCtes:
         assert "Invalid facility id" in resp.json()["detail"]
 
     def test_graph_payload_returned_when_present(
-        self, client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+        self, client: TestClient, db_session: Session, ids: TestIds, monkeypatch: pytest.MonkeyPatch
     ):
         """Line 237: when graph_sync returns a payload, use it (neo4j path)."""
         import app.supplier_facilities_routes as fac_routes
 
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
+        cat_name = f"name-{uuid4().hex}"
         graph_response = {
-            "categories": [{"id": "1", "name": "Leafy Greens", "ctes": ["harvesting"]}],
+            "categories": [{"id": "1", "name": cat_name, "ctes": ["harvesting"]}],
             "required_ctes": ["harvesting"],
             "source": "neo4j",
         }
@@ -361,10 +407,13 @@ class TestGetRequiredCtes:
         body = resp.json()
         assert body["source"] == "neo4j"
         assert body["required_ctes"] == ["harvesting"]
+        assert body["categories"][0]["name"] == cat_name
 
-    def test_falls_back_to_postgres_when_graph_returns_none(self, client: TestClient, db_session: Session):
+    def test_falls_back_to_postgres_when_graph_returns_none(
+        self, client: TestClient, db_session: Session, ids: TestIds
+    ):
         """Lines 244-264: graph returns None → read from postgres."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
         # No FTL categories, so postgres returns empty
         resp = client.get(f"/v1/supplier/facilities/{f.id}/required-ctes")
         assert resp.status_code == 200
@@ -381,14 +430,12 @@ class TestGetRequiredCtes:
 class TestSubmitCteEvent:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 277: missing tenant → 400."""
-        import uuid
-
         resp = client_no_tenant.post(
-            f"/v1/supplier/facilities/{uuid.uuid4()}/cte-events",
+            f"/v1/supplier/facilities/{uuid4()}/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-001",
-                "event_time": "2026-03-01T00:00:00Z",
+                "tlc_code": f"tlc-{uuid4().hex}",
+                "event_time": datetime.now(timezone.utc).isoformat(),
                 "kde_data": {},
             },
         )
@@ -400,23 +447,25 @@ class TestSubmitCteEvent:
             "/v1/supplier/facilities/not-a-uuid/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-001",
-                "event_time": "2026-03-01T00:00:00Z",
+                "tlc_code": f"tlc-{uuid4().hex}",
+                "event_time": datetime.now(timezone.utc).isoformat(),
                 "kde_data": {},
             },
         )
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_submit_cte_event_happy_path(self, client: TestClient, db_session: Session):
+    def test_submit_cte_event_happy_path(self, client: TestClient, db_session: Session, ids: TestIds):
         """Lines 284-323: valid facility + existing TLC → 200 with merkle fields."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
+        tlc_code = f"tlc-{uuid4().hex}"
+        product_description = f"desc-{uuid4().hex}"
         lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
+            tenant_id=ids.tenant_id,
+            supplier_user_id=ids.user_id,
             facility_id=f.id,
-            tlc_code="TLC-EVENT-001",
-            product_description="Baby Spinach",
+            tlc_code=tlc_code,
+            product_description=product_description,
             status="active",
         )
         db_session.add(lot)
@@ -426,14 +475,14 @@ class TestSubmitCteEvent:
             f"/v1/supplier/facilities/{f.id}/cte-events",
             json={
                 "cte_type": "harvesting",
-                "tlc_code": "TLC-EVENT-001",
-                "event_time": "2026-03-01T12:00:00Z",
-                "kde_data": {"quantity": 50, "unit_of_measure": "cases"},
+                "tlc_code": tlc_code,
+                "event_time": datetime.now(timezone.utc).isoformat(),
+                "kde_data": {},
             },
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["tlc_code"] == "TLC-EVENT-001"
+        assert body["tlc_code"] == tlc_code
         assert body["cte_type"] == "harvesting"
         assert body["merkle_hash"] is not None
 
@@ -446,14 +495,12 @@ class TestSubmitCteEvent:
 class TestCreateTlc:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
         """Line 343: missing tenant → 400."""
-        import uuid
-
         resp = client_no_tenant.post(
             "/v1/supplier/tlcs",
             json={
-                "facility_id": str(uuid.uuid4()),
-                "tlc_code": "TLC-X",
-                "product_description": "Spinach",
+                "facility_id": str(uuid4()),
+                "tlc_code": f"tlc-{uuid4().hex}",
+                "product_description": f"desc-{uuid4().hex}",
             },
         )
         assert resp.status_code == 400
@@ -464,20 +511,22 @@ class TestCreateTlc:
             "/v1/supplier/tlcs",
             json={
                 "facility_id": "not-a-uuid",
-                "tlc_code": "TLC-X",
-                "product_description": "Spinach",
+                "tlc_code": f"tlc-{uuid4().hex}",
+                "product_description": f"desc-{uuid4().hex}",
             },
         )
         assert resp.status_code == 400
         assert "Invalid facility id" in resp.json()["detail"]
 
-    def test_duplicate_tlc_returns_409(self, client: TestClient, db_session: Session):
+    def test_duplicate_tlc_returns_409(self, client: TestClient, db_session: Session, ids: TestIds):
         """Line 365: creating same TLC code twice → 409."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
+        tlc_code = f"tlc-{uuid4().hex}"
+        product_description = f"desc-{uuid4().hex}"
         payload = {
             "facility_id": str(f.id),
-            "tlc_code": "TLC-DUP-001",
-            "product_description": "Baby Spinach",
+            "tlc_code": tlc_code,
+            "product_description": product_description,
         }
         r1 = client.post("/v1/supplier/tlcs", json=payload)
         assert r1.status_code == 200
@@ -511,15 +560,17 @@ class TestListTlcs:
         assert body["items"] == []
         assert body["total"] == 0
 
-    def test_lots_with_facility_filter(self, client: TestClient, db_session: Session):
+    def test_lots_with_facility_filter(self, client: TestClient, db_session: Session, ids: TestIds):
         """Lines 406-417: facility_id filter applied; also exercises count-map path."""
-        f = _make_facility(db_session)
+        f = _make_facility(db_session, ids)
+        tlc_code = f"tlc-{uuid4().hex}"
+        product_description = f"desc-{uuid4().hex}"
         lot = SupplierTraceabilityLotModel(
-            tenant_id=TEST_TENANT_ID,
-            supplier_user_id=TEST_USER_ID,
+            tenant_id=ids.tenant_id,
+            supplier_user_id=ids.user_id,
             facility_id=f.id,
-            tlc_code="TLC-FILTER-001",
-            product_description="Spinach",
+            tlc_code=tlc_code,
+            product_description=product_description,
             status="active",
         )
         db_session.add(lot)
@@ -529,7 +580,7 @@ class TestListTlcs:
         assert resp.status_code == 200
         body = resp.json()
         assert body["total"] == 1
-        assert body["items"][0]["tlc_code"] == "TLC-FILTER-001"
+        assert body["items"][0]["tlc_code"] == tlc_code
         assert body["items"][0]["event_count"] == 0
 
 
@@ -540,7 +591,7 @@ class TestListTlcs:
 
 class TestCheckSupplierFacilityRemoval:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
-        resp = client_no_tenant.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
+        resp = client_no_tenant.get(f"/v1/supplier/facilities/{uuid4()}/removal-check")
         assert resp.status_code == 400
 
     def test_invalid_uuid_returns_400(self, client: TestClient):
@@ -561,7 +612,7 @@ class TestCheckSupplierFacilityRemoval:
         app.dependency_overrides[fac_routes.require_owner] = _deny_owner
 
         with TestClient(app) as member_client:
-            resp = member_client.get("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000/removal-check")
+            resp = member_client.get(f"/v1/supplier/facilities/{uuid4()}/removal-check")
             assert resp.status_code == 403
 
 
@@ -572,7 +623,7 @@ class TestCheckSupplierFacilityRemoval:
 
 class TestDeleteSupplierFacility:
     def test_no_tenant_returns_400(self, client_no_tenant: TestClient):
-        resp = client_no_tenant.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
+        resp = client_no_tenant.delete(f"/v1/supplier/facilities/{uuid4()}")
         assert resp.status_code == 400
 
     def test_invalid_uuid_returns_400(self, client: TestClient):
@@ -593,6 +644,5 @@ class TestDeleteSupplierFacility:
         app.dependency_overrides[fac_routes.require_owner] = _deny_owner
 
         with TestClient(app) as member_client:
-            resp = member_client.delete("/v1/supplier/facilities/00000000-0000-0000-0000-000000000000")
+            resp = member_client.delete(f"/v1/supplier/facilities/{uuid4()}")
             assert resp.status_code == 403
-
