@@ -62,12 +62,24 @@ def test_store_does_not_follow_symlink_created_after_path_check(store_root, monk
 
     monkeypatch.setattr(workbench, "_store_path", swap_path)
     if operation == "read":
-        assert workbench._read_store(tenant_id) == workbench._empty_store()
+        with pytest.raises(HTTPException) as error:
+            workbench._read_store(tenant_id)
+        assert error.value.status_code == 503
+        assert error.value.detail == "Workbench persistence unavailable"
     else:
         with pytest.raises(OSError):
             workbench._write_store(tenant_id, workbench._empty_store())
 
     assert json.loads(target.read_text(encoding="utf-8")) == payload
+
+
+@pytest.mark.parametrize("store_state", ["missing", "invalid_json"])
+def test_normal_unavailable_store_read_keeps_empty_fallback(store_root, store_state):
+    tenant_id = str(uuid.uuid4())
+    if store_state == "invalid_json":
+        workbench._store_path(tenant_id).write_text("{", encoding="utf-8")
+
+    assert workbench._read_store(tenant_id) == workbench._empty_store()
 
 
 def test_tenants_with_same_sanitized_prefix_keep_distinct_stores(store_root):

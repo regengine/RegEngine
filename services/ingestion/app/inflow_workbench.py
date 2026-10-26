@@ -7,6 +7,7 @@ and explicit commit-gate decisions between sandbox/staging/evidence modes.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
@@ -381,7 +382,9 @@ def _read_store(tenant_id: str) -> dict[str, Any]:
     try:
         with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "r", encoding="utf-8") as store_file:
             payload = json.load(store_file)
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        if isinstance(exc, OSError) and exc.errno == errno.ELOOP:
+            raise HTTPException(status_code=503, detail="Workbench persistence unavailable") from None
         return _empty_store()
     return {
         "scenarios": list(payload.get("scenarios") or []),
