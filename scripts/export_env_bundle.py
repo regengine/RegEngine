@@ -17,6 +17,9 @@ What it *does* do:
   printed — never values.
 * **Emit** (``--emit-bundle``): write the bundle as JSON to **stdout only**,
   for piping straight into a secret manager. It is never written to a file.
+  Full values are only ever written to a pipe. If stdout is a terminal the
+  run is refused, and ``--allow-tty`` shows a masked preview (short prefix
+  plus fingerprint) instead of the values.
 
 Rotation is done by the platform's own secret manager, not here. To set
 production values, use the platform directly, e.g.::
@@ -36,6 +39,9 @@ import json
 import os
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from services.shared.secret_redaction import mask_secret  # noqa: E402
 
 try:
     from dotenv import load_dotenv
@@ -96,6 +102,32 @@ def build_secret_payload(environment: str) -> dict[str, str]:
     return payload
 
 
+# Payload entries that are not credentials and may be shown in the clear.
+NON_SECRET_KEYS = frozenset(
+    {
+        "ENVIRONMENT",
+        "POSTGRES_USER",
+        "POSTGRES_HOST",
+        "POSTGRES_PORT",
+        "POSTGRES_DB",
+        "NEO4J_URI",
+        "NEO4J_USER",
+        "KAFKA_BOOTSTRAP_SERVERS",
+        "KAFKA_SECURITY_PROTOCOL",
+        "OBJECT_STORAGE_REGION",
+        "OBJECT_STORAGE_ENDPOINT_URL",
+    }
+)
+
+
+def mask_payload(payload: dict[str, str]) -> dict[str, str]:
+    """Return a display-safe copy: credential values become prefix + fingerprint."""
+    return {
+        name: value if name in NON_SECRET_KEYS else mask_secret(value)
+        for name, value in payload.items()
+    }
+
+
 def validate_payload(payload: dict[str, str]) -> list[str]:
     """Return missing required secret keys."""
     return [name for name in REQUIRED_SECRETS if not payload.get(name)]
@@ -118,7 +150,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--allow-tty",
         action="store_true",
-        help="Permit --emit-bundle when stdout is a terminal (prints secrets to your screen).",
+        help=(
+            "When stdout is a terminal, show a masked preview of the bundle "
+            "instead of refusing. Full values are never printed to a terminal."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -170,13 +205,21 @@ def main() -> None:
         print(f"  - {key}", file=sys.stderr)
 
     if args.emit_bundle:
-        if sys.stdout.isatty() and not args.allow_tty:
+        if sys.stdout.isatty():
+            if not args.allow_tty:
+                print(
+                    "\nERROR: refusing to print secrets to a terminal.\n"
+                    "Pipe stdout somewhere, or pass --allow-tty for a masked preview.",
+                    file=sys.stderr,
+                )
+                sys.exit(2)
+            json.dump(mask_payload(payload), sys.stdout, indent=2)
+            sys.stdout.write("\n")
             print(
-                "\nERROR: refusing to print secrets to a terminal.\n"
-                "Pipe stdout somewhere, or pass --allow-tty if you truly mean to.",
+                "\nMasked preview only. Pipe stdout to a secret manager to emit full values.",
                 file=sys.stderr,
             )
-            sys.exit(2)
+            return
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
         print("\nBundle written to stdout. It was not saved to disk.", file=sys.stderr)

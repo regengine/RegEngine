@@ -17,8 +17,10 @@ Usage:
     ./venv/bin/python scripts/create_test_api_key.py --name "EDI smoke key" \
         --scopes webhooks.ingest --expires-days 7
 
-The raw key is printed ONCE and never stored — only its hash lands in the
-``api_keys`` table. Remember: in development the backend validates DB-backed
+The raw key is never printed in full. It is written once to a file only
+you can read (``--key-file``, default ``~/.regengine/test-api-key``, mode
+0600) and the console shows only its key id plus a short fingerprint. Only
+its hash lands in the ``api_keys`` table. Remember: in development the backend validates DB-backed
 keys only when ``ENABLE_DB_API_KEYS=true`` (shared.auth.get_key_store falls
 back to the in-memory store otherwise).
 
@@ -35,6 +37,7 @@ import asyncio
 import os
 import sys
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -87,6 +90,67 @@ def _is_local_url(database_url: str) -> bool:
 # Matches the AUTH_TEST_BYPASS default tenant and the legacy phase-2b seed
 # tenant, so a key minted here composes with existing local fixtures.
 TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
+
+DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
+
+
+def _mask_key(raw_key: str) -> str:
+    """Log-safe display form of a raw key (key id plus short fingerprint)."""
+    from shared.secret_redaction import mask_secret
+
+    return mask_secret(raw_key)
+
+
+def _write_key_file(raw_key: str, path: Path) -> Path:
+    """Write the raw key to ``path`` with owner-only (0600) permissions."""
+    path = path.expanduser()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        # Tighten permissions even if the file already existed.
+        os.fchmod(fd, 0o600)
+        os.write(fd, (raw_key + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    return path
+
+
+@dataclass(frozen=True)
+class _KeySummary:
+    key_id: str
+    tenant_id: str
+    scopes: list
+    billing_tier: str
+    expires_at: object
+    masked_key: str
+
+
+def _format_summary(summary: _KeySummary, key_path: Path, billing_note: str) -> str:
+    """Console summary. Never includes the raw key."""
+    return f"""
+API key created. The raw key is NOT shown; it was written once to:
+
+  {key_path}   (mode 0600, readable only by you)
+
+  key_id:      {summary.key_id}
+  tenant_id:   {summary.tenant_id}
+  scopes:      {summary.scopes}
+  tier:        {summary.billing_tier}
+  expires_at:  {summary.expires_at or "never"}
+  key:         {summary.masked_key}
+
+Billing status for tenant: {billing_note}
+
+Use it:
+
+  export REGENGINE_TEST_API_KEY="$(cat {key_path})"
+  curl -H "X-RegEngine-API-Key: $REGENGINE_TEST_API_KEY" http://localhost:8000/<endpoint>
+
+Delete the file when you no longer need the key.
+
+Reminder: with REGENGINE_ENV=development the backend only checks DB-backed
+keys when ENABLE_DB_API_KEYS=true is set on the server process.
+"""
 
 
 def _parse_args() -> argparse.Namespace:
@@ -142,6 +206,12 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip marking the tenant's subscription 'trialing' in Redis "
         "(without it, subscription-gated routes return 402)",
+    )
+    parser.add_argument(
+        "--key-file",
+        type=Path,
+        default=DEFAULT_KEY_FILE,
+        help=f"Where to write the raw key (mode 0600). Default {DEFAULT_KEY_FILE}",
     )
     parser.add_argument(
         "--allow-production",
@@ -298,29 +368,16 @@ async def _main() -> None:
     else:
         billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
-    print(
-        f"""
-API key created — the raw key is shown ONCE and cannot be recovered:
-
-  key_id:      {key.key_id}
-  tenant_id:   {key.tenant_id}
-  scopes:      {key.scopes}
-  tier:        {key.billing_tier}
-  expires_at:  {key.expires_at or "never"}
-  raw key:     {key.raw_key}
-
-Billing status for tenant: {billing_note}
-
-Use it:
-
-  export REGENGINE_TEST_API_KEY='{key.raw_key}'
-  curl -H "X-RegEngine-API-Key: $REGENGINE_TEST_API_KEY" http://localhost:8000/<endpoint>
-
-Reminder: with REGENGINE_ENV=development the backend only checks DB-backed
-keys when ENABLE_DB_API_KEYS=true is set on the server process.
-"""
+    key_path = _write_key_file(key.raw_key, args.key_file)
+    summary = _KeySummary(
+        key_id=key.key_id,
+        tenant_id=key.tenant_id,
+        scopes=key.scopes,
+        billing_tier=key.billing_tier,
+        expires_at=key.expires_at,
+        masked_key=_mask_key(key.raw_key),
     )
-
+    print(_format_summary(summary, key_path, billing_note))
 
 if __name__ == "__main__":
     asyncio.run(_main())
