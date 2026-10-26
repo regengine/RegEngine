@@ -33,6 +33,7 @@ agent-sweep.yml
 api-surface-issue.yml
 backend-ci.yml
 bundle-analysis.yml
+cache-cleanup-on-pr-close.yml
 copy-gate.yml
 copy-lint.yml
 dependabot-lock-sync.yml
