@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -110,6 +110,14 @@ function stepNumeral(index: number) {
   return String(index + 1).padStart(2, '0');
 }
 
+/**
+ * Terminal ingestion states stop the status poll, whether the regular poll
+ * or a manual retry observes them first.
+ */
+function isTerminalIngestStatus(status: string): boolean {
+  return status === 'completed' || status === 'failed';
+}
+
 export default function IngestPage() {
   const searchParams = useSearchParams();
   const fromSandboxHandoff = searchParams.get('from') === 'sandbox-handoff';
@@ -146,6 +154,16 @@ export default function IngestPage() {
   const jobIdRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
   const retryControllerRef = useRef<AbortController | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+
+  // Shared terminal-stop for the status poll: both the interval tick and a
+  // manual retry clear the same interval when they see a terminal status.
+  const stopStatusPolling = useCallback(() => {
+    if (pollIntervalRef.current !== null) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  }, []);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
@@ -223,13 +241,15 @@ export default function IngestPage() {
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
           setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
-          if (['completed', 'failed'].includes(normalizedStatus)) {
-            window.clearInterval(intervalId);
+          if (isTerminalIngestStatus(normalizedStatus)) {
+            stopStatusPolling();
           }
         }
       } catch (error) {
+        // Only our own abort (unmount / job switch) is silent. A timeout
+        // aborts api-client's internal controller with a TimeoutError while
+        // this controller stays live, so it must surface below.
         if (cancelled || controller.signal.aborted) return;
-        if (error instanceof Error && error.name === 'AbortError') return;
         console.error('Failed to fetch ingestion status:', error);
         setStatusError('Unable to fetch ingestion status.');
       } finally {
@@ -238,14 +258,18 @@ export default function IngestPage() {
     };
 
     const intervalId = window.setInterval(() => void poll(), 2000);
+    pollIntervalRef.current = intervalId;
     void poll();
 
     return () => {
       cancelled = true;
       controller.abort();
       window.clearInterval(intervalId);
+      if (pollIntervalRef.current === intervalId) {
+        pollIntervalRef.current = null;
+      }
     };
-  }, [jobId]);
+  }, [jobId, stopStatusPolling]);
 
   const handleRetryStatus = async () => {
     const requestedJobId = jobId;
@@ -261,10 +285,14 @@ export default function IngestPage() {
       const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
       if (normalizedStatus) {
         setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
+        if (isTerminalIngestStatus(normalizedStatus)) {
+          stopStatusPolling();
+        }
       }
     } catch (error) {
+      // Same rule as the poll above: only our own abort is silent; a
+      // timeout must surface as a status error.
       if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
-      if (error instanceof Error && error.name === 'AbortError') return;
       console.error('Failed to fetch ingestion status:', error);
       setStatusError('Unable to fetch ingestion status.');
     } finally {

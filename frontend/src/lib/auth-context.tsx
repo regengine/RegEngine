@@ -272,6 +272,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Last session check was indeterminate (the BFF could not reach /auth/me).
+  // While true with a stored profile, the user keeps their last-known
+  // authenticated state instead of being bounced to login.
+  const [sessionUnknown, setSessionUnknownState] = useState(false);
   const logoutInProgressRef = useRef(false);
   // Set once login() has established a cookie session. Guards the hydrate
   // effect's stale-state cleanup: if the /api/session GET was in flight while
@@ -327,10 +331,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Indeterminate: the BFF could not reach /auth/me (timeout, network,
           // 5xx). Keep the localStorage-hydrated profile/session; only a real
           // unauthenticated (authenticated === false) result may clear it.
+          setSessionUnknownState(true);
           if (session.has_api_key) {
             setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
           }
         } else {
+          setSessionUnknownState(false);
           const sessionAuthMethod = normalizeAuthMethod(session.auth_method);
           setAuthMethodState(sessionAuthMethod);
           if (session.tenant_id && session.tenant_id !== storedTenantId) {
@@ -487,6 +493,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Cookie should be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setAuthMethodState(null);
+    setSessionUnknownState(false);
     setUserState(normalizedLoginUser);
     if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
@@ -496,6 +503,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenantIdState(null);
     setAccessTokenState(null);
     setAuthMethodState(null);
+    setSessionUnknownState(false);
     setUserState(null);
     setIsOnboarded(false);
     setDemoModeState(false);
@@ -516,7 +524,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logoutInProgressRef.current = false;
   }, [clearCredentials]);
 
-  const isAuthenticated = !!(user && accessToken);
+  // An unknown session is indeterminate, not logged-out: with a stored
+  // profile the user stays authenticated so dashboard layouts never bounce
+  // to login over a transient /auth/me failure.
+  const isAuthenticated = !!user && (!!accessToken || sessionUnknown);
   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
   const hasTenantSession = isAuthenticated && !!tenantId;
   const hasAdminSession = Boolean(

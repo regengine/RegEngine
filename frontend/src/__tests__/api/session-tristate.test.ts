@@ -108,6 +108,17 @@ describe('GET /api/session opaque lookup tri-state', () => {
         );
         vi.stubGlobal('fetch', fetchMock);
 
+        // Pin every getAdminTargets input: without these the target list
+        // depends on ambient env (CI sets VERCEL_*, shells may export API
+        // overrides). Forced local runtime + fixed URLs = exactly 5 targets.
+        // (NEXT_PUBLIC_ADMIN_URL is stubbed in beforeEach; all restored by
+        // unstubAllEnvs in afterEach.)
+        vi.stubEnv('NEXT_PUBLIC_API_BASE_URL', 'https://api.regengine.test');
+        vi.stubEnv('ADMIN_SERVICE_URL', '');
+        vi.stubEnv('VERCEL', '');
+        vi.stubEnv('VERCEL_URL', '');
+        vi.stubEnv('VERCEL_ENV', '');
+
         const startedAt = Date.now();
         const response = await GET(
             makeRequest({ cookies: { '__Host-regengine_session': 'opaque-session-token' } }),

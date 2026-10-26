@@ -86,3 +86,91 @@ describe('ingestion status polling across job switches', () => {
     expect(seen[0].signal?.aborted).toBe(true);
   });
 });
+
+describe('ingestion status timeout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.storeApiKey.mockResolvedValue(undefined);
+  });
+
+  it('shows the status error when a status poll times out', async () => {
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
+    // The internal 8s timeout aborts api-client's controller with a
+    // TimeoutError while the page's own controller stays live.
+    mocks.getIngestionJob.mockRejectedValue(
+      new DOMException('Request timed out after 8000ms', 'TimeoutError'),
+    );
+
+    render(<IngestPage />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: 'https://example.org/slow.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
+
+    expect(mocks.getIngestionJob).toHaveBeenCalledWith(jobId, { signal: expect.any(AbortSignal) });
+    expect(await screen.findByText('Unable to fetch ingestion status.')).toBeInTheDocument();
+  });
+
+  it('does not swallow failures by error name while the poll is live', async () => {
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
+    // Timeouts used to surface as AbortError and were ignored by name.
+    // Only the page's own aborted controller may silence an error now.
+    mocks.getIngestionJob.mockRejectedValue(
+      new DOMException('The operation was aborted', 'AbortError'),
+    );
+
+    render(<IngestPage />);
+    fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+      target: { value: 'https://example.org/flaky.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
+
+    expect(await screen.findByText('Unable to fetch ingestion status.')).toBeInTheDocument();
+  });
+});
+
+describe('ingestion status retry on terminal status', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.storeApiKey.mockResolvedValue(undefined);
+  });
+
+  it('stops the polling interval when Retry receives a terminal status', async () => {
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
+    // First poll fails so the Retry action appears; the retry then resolves
+    // terminal. Later ticks (if any) stay non-terminal.
+    mocks.getIngestionJob
+      .mockRejectedValueOnce(new Error('status fetch failed'))
+      .mockResolvedValueOnce({ status: 'completed' })
+      .mockResolvedValue({ status: 'queued' });
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    try {
+      render(<IngestPage />);
+      fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+        target: { value: 'https://example.org/terminal.pdf' },
+      });
+      await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
+
+      const retryButton = await screen.findByRole('button', { name: 'Retry' });
+      // The poll interval started by this job's effect is the most recent one.
+      const intervals = setIntervalSpy.mock.results;
+      const pollIntervalId = intervals[intervals.length - 1]?.value;
+      expect(pollIntervalId).toBeDefined();
+
+      await userEvent.click(retryButton);
+
+      await waitFor(() => {
+        expect(clearIntervalSpy).toHaveBeenCalledWith(pollIntervalId);
+      });
+      // Terminal status applied: the form card flips to the completed view.
+      expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
+    } finally {
+      setIntervalSpy.mockRestore();
+      clearIntervalSpy.mockRestore();
+    }
+  });
+});

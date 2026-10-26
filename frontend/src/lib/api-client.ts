@@ -290,8 +290,14 @@ class APIClient {
 
       const controller = new AbortController();
       const timeoutMs = config.timeout ?? 30000;
+      // Abort with a TimeoutError (not a bare abort) so callers can tell an
+      // internal timeout from a caller cancel, which forwards the caller's
+      // own abort reason below.
       const timeoutId = timeoutMs > 0
-        ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+        ? globalThis.setTimeout(
+            () => controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError')),
+            timeoutMs,
+          )
         : undefined;
       const externalSignal = config.signal;
       const onExternalAbort = () => controller.abort(externalSignal?.reason);

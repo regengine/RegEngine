@@ -103,4 +103,61 @@ describe('AuthProvider hydrate on unknown vs unauthenticated session', () => {
         expect(result.current.user).toBeNull();
         expect(localStorage.getItem('regengine_user')).toBeNull();
     });
+
+    it('treats a stored profile as authenticated while the session is unknown', async () => {
+        const user = storedProfile();
+        localStorage.setItem('regengine_user', JSON.stringify(user));
+        localStorage.setItem('regengine_tenant_id', user.tenant_id);
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 503,
+            json: () =>
+                Promise.resolve({
+                    authenticated: null,
+                    status: 'unknown',
+                    has_api_key: false,
+                    has_credentials: null,
+                    tenant_id: user.tenant_id,
+                    auth_method: null,
+                    user,
+                }),
+        }) as unknown as typeof fetch;
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await waitFor(() => {
+            expect(result.current.isHydrated).toBe(true);
+        });
+
+        // Last-known authenticated state is kept: dashboard layouts gate on
+        // isAuthenticated, so unknown must never bounce to /login.
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(result.current.user).toMatchObject({ id: user.id, email: user.email });
+    });
+
+    it('stays unauthenticated when the session is unknown with no stored profile', async () => {
+        global.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 503,
+            json: () =>
+                Promise.resolve({
+                    authenticated: null,
+                    status: 'unknown',
+                    has_api_key: false,
+                    has_credentials: null,
+                    tenant_id: null,
+                    auth_method: null,
+                    user: null,
+                }),
+        }) as unknown as typeof fetch;
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await waitFor(() => {
+            expect(result.current.isHydrated).toBe(true);
+        });
+
+        expect(result.current.isAuthenticated).toBe(false);
+        expect(result.current.user).toBeNull();
+    });
 });
