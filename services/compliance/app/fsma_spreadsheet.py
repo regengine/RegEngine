@@ -179,6 +179,14 @@ def _parse_timestamp(raw: str, *, strict: bool = False) -> tuple[str, str]:
         return ("", "")
     try:
         dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            # SEL-519: normalise zone-aware timestamps to UTC and label the
+            # zone with a ``Z`` suffix. Dropping the offset made events
+            # from different zones sort in the wrong order on the FDA
+            # sortable spreadsheet. Naive timestamps carry no zone, so we
+            # cannot honestly label them and leave them unlabelled.
+            dt = dt.astimezone(timezone.utc)
+            return (dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%SZ"))
         return (dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M:%S"))
     except (ValueError, AttributeError) as exc:
         if strict:

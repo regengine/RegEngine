@@ -144,7 +144,7 @@ baseline:
     scope: _query_tenant_events
     rule: sql-without-tenant-predicate
     target: fsma.cte_events,fsma.cte_kdes
-    qhash: "87bb48c02e1970fb"
+    qhash: "c9b46a2dd14590f8"  # pragma: allowlist secret
     reason: "WHERE list seeded with e.tenant_id = :tenant_id; verified scoped at runtime (cte_kdes joined on the scoped event)."
   - file: services/ingestion/app/incident_router.py
     scope: list_incidents

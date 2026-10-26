@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
@@ -25,7 +24,11 @@ logger = logging.getLogger("mock-audit")
 
 
 def _get_real_tlc(tenant_id: str) -> str | None:
-    """Pick a random real TLC from tenant's CTE events."""
+    """Return the tenant's most recently recorded TLC, or None.
+
+    Deterministic on purpose (SEL-513): a drill targets a real lot from the
+    tenant's own records, never a randomly picked or invented one.
+    """
     try:
         from shared.database import SessionLocal
         from sqlalchemy import text
@@ -36,7 +39,7 @@ def _get_real_tlc(tenant_id: str) -> str | None:
                 text(
                     "SELECT traceability_lot_code FROM fsma.cte_events "
                     "WHERE tenant_id = :tid AND traceability_lot_code IS NOT NULL "
-                    "ORDER BY random() LIMIT 1"
+                    "ORDER BY event_timestamp DESC NULLS LAST, id DESC LIMIT 1"
                 ),
                 {"tid": tenant_id},
             ).fetchone()
@@ -45,6 +48,31 @@ def _get_real_tlc(tenant_id: str) -> str | None:
             db.close()
     except Exception:
         logger.warning("Mock audit TLC lookup failed", exc_info=True)
+        return None
+
+
+def _get_product_for_tlc(tenant_id: str, tlc: str) -> str | None:
+    """Return the recorded product description for a tenant's TLC, or None."""
+    try:
+        from shared.database import SessionLocal
+        from sqlalchemy import text
+
+        db = SessionLocal()
+        try:
+            row = db.execute(
+                text(
+                    "SELECT product_description FROM fsma.cte_events "
+                    "WHERE tenant_id = :tid AND traceability_lot_code = :tlc "
+                    "AND product_description IS NOT NULL "
+                    "ORDER BY event_timestamp DESC NULLS LAST, id DESC LIMIT 1"
+                ),
+                {"tid": tenant_id, "tlc": tlc},
+            ).fetchone()
+            return row[0] if row else None
+        finally:
+            db.close()
+    except Exception:
+        logger.warning("Mock audit product lookup failed", exc_info=True)
         return None
 
 
@@ -156,56 +184,46 @@ router = APIRouter(prefix="/api/v1/audit", tags=["Mock Audit"])
 _active_drills: dict[str, dict] = {}
 
 # Simulated FDA request scenarios
-# NOTE: TLCs below are demo placeholders. In production, the start_drill endpoint
-# queries the tenant's actual CTE events to select a real TLC for the drill.
-_DEMO_FDA_SCENARIOS = [
+# Request templates only. The target lot and product always come from the
+# tenant's own CTE records (SEL-513); there are no placeholder lots.
+_FDA_REQUEST_TEMPLATES = [
     {
-        "scenario": "Outbreak Investigation — Romaine Lettuce",
+        "scenario": "Outbreak Investigation",
         "request_text": (
-            "The FDA has identified a potential link between a multi-state Salmonella outbreak "
-            "and romaine lettuce distributed in the western United States. Under 21 CFR 1.1455, "
-            "you are required to provide all traceability records for the following lot within 24 hours."
+            "The FDA has identified a potential link between a multi-state foodborne illness outbreak "
+            "and a product you handled. Under 21 CFR 1.1455, you are required to provide all "
+            "traceability records for the following lot within 24 hours."
         ),
-        "target_product": "Romaine Lettuce",
-        "target_tlc": "ROM-0226-A1-001",
         "cfr_citation": "21 CFR 1.1455(a)",
-        "demo_mode": True,
     },
     {
-        "scenario": "Routine Compliance Check — Fresh Tomatoes",
+        "scenario": "Routine Compliance Check",
         "request_text": (
             "As part of a routine compliance assessment under FSMA 204, the FDA requests "
             "traceability records demonstrating your ability to trace the following product "
             "from receipt through distribution. Records must be provided within 24 hours."
         ),
-        "target_product": "Roma Tomatoes",
-        "target_tlc": "TOM-0226-F3-001",
         "cfr_citation": "21 CFR 1.1455(a)",
-        "demo_mode": True,
     },
     {
-        "scenario": "Retailer-Initiated Trace — Atlantic Salmon",
+        "scenario": "Retailer-Initiated Trace",
         "request_text": (
-            "A major retailer has flagged a potential temperature excursion affecting imported "
-            "seafood products. The FDA is requesting full chain-of-custody records for the following "
-            "product as part of a First Land-Based Receiving investigation."
+            "A retailer has flagged a potential safety issue affecting the following product. "
+            "The FDA is requesting full chain-of-custody records for this lot."
         ),
-        "target_product": "Atlantic Salmon Fillets",
-        "target_tlc": "SAL-0226-B1-007",
-        "cfr_citation": "21 CFR 1.1455(a), 21 CFR 1.1325(c)",
-        "demo_mode": True,
+        "cfr_citation": "21 CFR 1.1455(a)",
     },
 ]
 
 # Alias for backward compat
-FDA_SCENARIOS = _DEMO_FDA_SCENARIOS
+FDA_SCENARIOS = _FDA_REQUEST_TEMPLATES
 
 
 class StartDrillRequest(BaseModel):
     """Request to start a mock audit drill."""
 
     tenant_id: str = Field(..., description="Tenant ID to audit")
-    scenario_index: Optional[int] = Field(None, description="Specific scenario (0-2), or random if null")
+    scenario_index: Optional[int] = Field(None, description="Specific scenario (0-2); defaults to 0")
 
 
 class DrillStatus(BaseModel):
@@ -230,7 +248,7 @@ class DrillStatus(BaseModel):
     disclaimer: str = "Practice drill based on client assertions; supporting evidence has not been verified."
     demo_mode: bool = Field(
         default=False,
-        description="True when drill uses demo TLCs instead of real tenant data.",
+        description="Always False: drills only run against real tenant data (SEL-513).",
     )
 
 
@@ -276,18 +294,22 @@ async def start_drill(
 ) -> DrillStatus:
     """Start a mock audit drill."""
     tenant_id = ctx.tenant_id
-    # Pick scenario
-    idx = request.scenario_index if request.scenario_index is not None else random.randint(0, len(FDA_SCENARIOS) - 1)
+    # Pick scenario (deterministic; no random selection)
+    idx = request.scenario_index if request.scenario_index is not None else 0
     scenario = FDA_SCENARIOS[idx % len(FDA_SCENARIOS)].copy()
 
-    # Try to use a real TLC from tenant's data
+    # Drills only target the tenant's real records (SEL-513).
     real_tlc = _get_real_tlc(tenant_id)
-    use_demo = real_tlc is None
-    if real_tlc:
-        scenario["target_tlc"] = real_tlc
-        scenario["demo_mode"] = False
-    else:
-        scenario["demo_mode"] = True
+    if not real_tlc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No traceability records found for this tenant. Ingest CTE events before starting a mock audit drill."
+            ),
+        )
+    scenario["target_tlc"] = real_tlc
+    scenario["target_product"] = _get_product_for_tlc(tenant_id, real_tlc) or "Not recorded"
+    scenario["demo_mode"] = False
 
     drill_id = str(uuid4())[:12]
     now = datetime.now(timezone.utc)

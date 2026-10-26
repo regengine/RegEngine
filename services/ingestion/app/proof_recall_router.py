@@ -1,48 +1,32 @@
 """Public recall-drill endpoint.
 
-Why this belongs in the FSMA pipeline (production-surface promotion rule
-per ``PRODUCTION_SURFACE.md``):
-
-The core production contract is::
-
-    ingest -> canonicalize -> validate -> persist evidence -> export
-
-This router adds a public, tenantless surface that demonstrates the
-*recall-response* capability built on top of the export stage. It is
-the FSMA pipeline's public proof surface for recall capability: a
-prospect, regulator, or trade partner can run a deterministic recall
-drill against a frozen synthetic dataset and observe the wall-clock
-trace time vs. the FDA 24-hour mandate, without an account, without
-tenant context, and without reading any tenant data.
-
 Endpoint: ``POST /api/v1/proof/recall-drill``
 
-- No auth (public). Rate limit: 5 requests per minute per IP via the
-  shared slowapi ``limiter`` (``shared.rate_limit``).
-- Operates *only* against a frozen synthetic dataset baked into this
-  module. The endpoint MUST NEVER read real tenant data: static
-  analysis of this module should show zero imports of
-  ``shared.database``, ``CTEPersistence``, or any tenant-scoped
-  client.
-- Output is deterministic — every call returns the same step list,
-  ``time_to_trace_seconds`` (sum of step durations), ``lot_code``,
-  and ``output_csv_url``.
-- The pre-generated recall CSV referenced by ``output_csv_url`` lives
-  in the frontend's public assets (``/samples/sample_recall_drill.csv``)
-  and was produced from the synthetic 7-CTE dataset.
+This is a public, tenantless, unauthenticated surface (rate limit: 5
+requests per minute per IP via the shared slowapi ``limiter``). It MUST
+NEVER read tenant data: this module imports no ``shared.database``,
+``CTEPersistence`` or other tenant-scoped client.
+
+Because it cannot read tenant data, it has no real recall to trace. It
+previously returned a frozen synthetic drill (an invented lot, invented
+facilities, invented step durations and a pre-generated sample CSV).
+That was fake data presented as a proof, so it was removed. The endpoint
+now returns an honest empty result: no steps, no lot code, no trace time
+and no CSV, with ``data_available: false``. The only populated value is
+the FDA 24-hour records-production window from 21 CFR 1.1455(c)(3),
+which is a regulatory constant, not data.
 
 Returned JSON shape::
 
     {
-      "steps": [
-        {"name": str, "duration_ms": int,
-         "status": "ok"|"warning"|"error", "detail": str?},
-        ...
-      ],
-      "time_to_trace_seconds": float,
-      "output_csv_url": str,
-      "lot_code": str,
-      "fda_24h_mandate_seconds": 86400
+      "data_available": false,
+      "steps": [],
+      "time_to_trace_seconds": null,
+      "output_csv_url": null,
+      "lot_code": null,
+      "fda_24h_mandate_seconds": 86400,
+      "message": str,
+      "timestamp": str
     }
 """
 
@@ -61,65 +45,12 @@ logger = logging.getLogger("proof-recall")
 
 router = APIRouter(prefix="/api/v1/proof", tags=["Public Proof"])
 
-
-# ---------------------------------------------------------------------------
-# Frozen synthetic drill -- deterministic by construction
-# ---------------------------------------------------------------------------
-# This corresponds to the public CSV at
-# ``frontend/public/samples/sample_recall_drill.csv`` -- a known-contaminated
-# romaine lot harvested at Sunny Valley Farms, traced forward through the
-# 7 CTEs (harvesting, cooling, initial packing, shipping, receiving,
-# transformation, shipping) into Metro Foods, Valley Wholesale, and
-# SuperMart #42.
-FROZEN_LOT_CODE = "SV-20240115-001"
-OUTPUT_CSV_URL = "/samples/sample_recall_drill.csv"
+# 21 CFR 1.1455(c)(3): records must be provided to FDA within 24 hours.
 FDA_24H_MANDATE_SECONDS = 86400
 
-# Steps mirror the synthetic frontend script so a UI consuming this
-# endpoint produces the same per-step animation. Durations sum to
-# 7.0 seconds — well inside the 24h FDA mandate.
-_FROZEN_STEPS: tuple[dict, ...] = (
-    {
-        "name": "Identifying source lot",
-        "duration_ms": 1200,
-        "status": "ok",
-        "detail": (
-            "Loaded contaminated lot SV-20240115-001 (Romaine Lettuce, "
-            "500 cases) from Sunny Valley Farms (GLN 1234567890128)."
-        ),
-    },
-    {
-        "name": "Tracing forward through 7 CTEs",
-        "duration_ms": 2400,
-        "status": "ok",
-        "detail": (
-            "Walked CTE-1 HARVESTING -> CTE-2 COOLING -> CTE-3 "
-            "INITIAL_PACKING -> CTE-4 SHIPPING -> CTE-5 RECEIVING -> "
-            "CTE-6 TRANSFORMATION -> CTE-7 SHIPPING. Resolved 2 child "
-            "lots (FC-20240116-A, FC-20240116-B) at the transformation "
-            "node."
-        ),
-    },
-    {
-        "name": "Walking downstream graph edges",
-        "duration_ms": 1800,
-        "status": "ok",
-        "detail": (
-            "Visited 11 events across 5 facilities. Reached 3 "
-            "downstream receivers: Metro Foods, Valley Wholesale, "
-            "SuperMart #42."
-        ),
-    },
-    {
-        "name": "Generating FDA-oriented recall CSV",
-        "duration_ms": 1600,
-        "status": "ok",
-        "detail": (
-            "Wrote 21 CFR §§1.1325–1.1350 Key Data Elements for each downstream "
-            "lot. Hash-anchored each record (SHA-256 chain integrity "
-            "preserved)."
-        ),
-    },
+NO_DATA_MESSAGE = (
+    "No recall drill data is available on this public endpoint. "
+    "Run a recall trace against your own records after signing in."
 )
 
 
@@ -134,11 +65,13 @@ class DrillStep(BaseModel):
 
 
 class RecallDrillResponse(BaseModel):
-    steps: list[DrillStep]
-    time_to_trace_seconds: float
-    output_csv_url: str
-    lot_code: str
+    data_available: bool = False
+    steps: list[DrillStep] = Field(default_factory=list)
+    time_to_trace_seconds: Optional[float] = None
+    output_csv_url: Optional[str] = None
+    lot_code: Optional[str] = None
     fda_24h_mandate_seconds: int = FDA_24H_MANDATE_SECONDS
+    message: str = NO_DATA_MESSAGE
     timestamp: str
 
 
@@ -157,22 +90,8 @@ def _hash_ip(client_host: Optional[str]) -> str:
 
 
 def _build_response() -> RecallDrillResponse:
-    """Build the deterministic drill response.
-
-    Pure function of module constants — no I/O, no tenant lookups.
-    Two calls return identical ``steps`` / ``time_to_trace_seconds``
-    (only ``timestamp`` differs).
-    """
-    steps = [DrillStep(**s) for s in _FROZEN_STEPS]
-    total_ms = sum(s.duration_ms for s in steps)
-    return RecallDrillResponse(
-        steps=steps,
-        time_to_trace_seconds=round(total_ms / 1000.0, 3),
-        output_csv_url=OUTPUT_CSV_URL,
-        lot_code=FROZEN_LOT_CODE,
-        fda_24h_mandate_seconds=FDA_24H_MANDATE_SECONDS,
-        timestamp=_now_iso(),
-    )
+    """Build the honest empty response. No I/O, no tenant lookups."""
+    return RecallDrillResponse(timestamp=_now_iso())
 
 
 # ---------------------------------------------------------------------------
@@ -181,30 +100,20 @@ def _build_response() -> RecallDrillResponse:
 @router.post(
     "/recall-drill",
     response_model=RecallDrillResponse,
-    summary="Run a deterministic recall drill against a frozen synthetic dataset",
+    summary="Public recall drill: returns an honest empty result (no tenant data is read)",
 )
 @limiter.limit("5/minute")
 async def run_recall_drill(request: Request) -> RecallDrillResponse:
-    """Run a public recall drill against the frozen synthetic dataset.
+    """Return an honest empty recall-drill result.
 
-    Takes no body. Returns a deterministic step list plus the
-    wall-clock ``time_to_trace_seconds`` for the synthetic drill, the
-    FDA 24-hour response target for client-side comparison, and the
-    URL of a pre-generated FDA-oriented recall CSV.
-
-    This endpoint MUST NOT read any tenant data: it operates entirely
-    against module-level constants derived from
-    ``frontend/public/samples/sample_recall_drill.csv``. No database,
-    queue, or tenant store is touched.
+    Takes no body and reads no tenant data, so there is nothing real to
+    trace: ``steps`` is empty, ``lot_code``, ``time_to_trace_seconds``
+    and ``output_csv_url`` are null, and ``data_available`` is false.
     """
     ip_hash = _hash_ip(request.client.host if request.client else None)
     response = _build_response()
     logger.info(
         "proof_recall_drill_call",
-        extra={
-            "ip_hash": ip_hash,
-            "lot_code": response.lot_code,
-            "time_to_trace_seconds": response.time_to_trace_seconds,
-        },
+        extra={"ip_hash": ip_hash, "data_available": response.data_available},
     )
     return response
