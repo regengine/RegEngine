@@ -63,6 +63,13 @@ _CTE_KEYWORDS: list[tuple[str, str]] = [
 ]
 
 
+# Upper bound on query text fed to the regex extractors (ReDoS guard).
+MAX_QUERY_CHARS = 500
+
+_BETWEEN_RE = re.compile(r"\bbetween\s+([A-Za-z0-9,\-\s]+)")
+_AND_SEP_RE = re.compile(r"\sand\s")
+
+
 def parse_query(
     query: str,
     *,
@@ -74,7 +81,7 @@ def parse_query(
     if not isinstance(query, str):
         raise TypeError(f"parse_query requires str, got {type(query).__name__}")
 
-    normalized = _normalize(query)
+    normalized = _normalize(query)[:MAX_QUERY_CHARS]
     lowered = normalized.lower()
     effective_today = today or datetime.now(timezone.utc).date()
 
@@ -209,13 +216,15 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
         if parsed:
             return parsed.isoformat(), today.isoformat()
 
-    between = re.search(
-        r"\bbetween\s+([A-Za-z0-9,\-\s]+)\s+and\s+([A-Za-z0-9,\-\s]+)",
-        lowered_query,
-    )
-    if between:
-        start_raw = _clean_capture(between.group(1))
-        end_raw = _clean_capture(between.group(2))
+    # Single capture plus a plain split on the last " and " keeps the
+    # original greedy semantics without overlapping quantified groups.
+    between = _BETWEEN_RE.search(lowered_query)
+    separators = list(_AND_SEP_RE.finditer(between.group(1))) if between else []
+    if separators:
+        segment = between.group(1)
+        last = separators[-1]
+        start_raw = _clean_capture(segment[: last.start()])
+        end_raw = _clean_capture(segment[last.end() :])
         start_dt = _parse_human_date_prefix(start_raw, today)
         end_dt = _parse_human_date_prefix(end_raw, today)
         if start_dt and end_dt:
