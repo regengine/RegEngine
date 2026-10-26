@@ -142,7 +142,10 @@ export default function IngestPage() {
   const [errorColumnSuggestions, setErrorColumnSuggestions] = useState<ColumnSuggestion[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
-  const pollInFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
+  const jobIdRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const retryControllerRef = useRef<AbortController | null>(null);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
@@ -185,17 +188,37 @@ export default function IngestPage() {
   }, [storedApiKey, apiKey]);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      retryControllerRef.current?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    jobIdRef.current = jobId;
+    // A retry for the previous job must not overwrite the new job's status.
+    retryControllerRef.current?.abort();
+    retryControllerRef.current = null;
+  }, [jobId]);
+
+  useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
+    // Per-effect guard: the previous shared ref let an old job's in-flight
+    // request skip the new job's first poll. A local flag plus abort on
+    // cleanup keeps each job's polling independent.
+    let pollInFlight = false;
+    const controller = new AbortController();
 
     const poll = async () => {
       // A slow status call must not pile up overlapping ticks: skip while one
       // is in flight. Each call is bounded by the api-client timeout (8s).
-      if (pollInFlightRef.current) return;
-      pollInFlightRef.current = true;
+      if (pollInFlight) return;
+      pollInFlight = true;
       try {
-        const statusResponse = await apiClient.getIngestionJob(jobId);
-        if (cancelled) return;
+        const statusResponse = await apiClient.getIngestionJob(jobId, { signal: controller.signal });
+        if (cancelled || controller.signal.aborted) return;
         setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
@@ -205,11 +228,12 @@ export default function IngestPage() {
           }
         }
       } catch (error) {
-        if (cancelled) return;
+        if (cancelled || controller.signal.aborted) return;
+        if (error instanceof Error && error.name === 'AbortError') return;
         console.error('Failed to fetch ingestion status:', error);
         setStatusError('Unable to fetch ingestion status.');
       } finally {
-        pollInFlightRef.current = false;
+        pollInFlight = false;
       }
     };
 
@@ -218,25 +242,36 @@ export default function IngestPage() {
 
     return () => {
       cancelled = true;
+      controller.abort();
       window.clearInterval(intervalId);
     };
   }, [jobId]);
 
   const handleRetryStatus = async () => {
-    if (!jobId || pollInFlightRef.current) return;
-    pollInFlightRef.current = true;
+    const requestedJobId = jobId;
+    if (!requestedJobId || retryInFlightRef.current) return;
+    retryControllerRef.current?.abort();
+    const controller = new AbortController();
+    retryControllerRef.current = controller;
+    retryInFlightRef.current = true;
     try {
-      const statusResponse = await apiClient.getIngestionJob(jobId);
+      const statusResponse = await apiClient.getIngestionJob(requestedJobId, { signal: controller.signal });
+      if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
       setStatusError(null);
       const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
       if (normalizedStatus) {
         setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
       }
     } catch (error) {
+      if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
+      if (error instanceof Error && error.name === 'AbortError') return;
       console.error('Failed to fetch ingestion status:', error);
       setStatusError('Unable to fetch ingestion status.');
     } finally {
-      pollInFlightRef.current = false;
+      if (retryControllerRef.current === controller) {
+        retryControllerRef.current = null;
+      }
+      retryInFlightRef.current = false;
     }
   };
 
@@ -312,24 +347,22 @@ export default function IngestPage() {
       }
       if (validateOnly) {
         const events = parsed.kind === 'batch' ? parsed.events : [parsed.event];
-        // Validate in parallel: the serial await made total time N x latency,
-        // so a file with many events always hit the page-level timeout.
-        const outcomes = await Promise.all(
-          events.map(async (event, index) => {
-            try {
-              const result = await validateEpcisMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event });
-              if (result && result.valid) {
-                return { valid: true as const, error: null as string | null };
-              }
+        const errors: string[] = [];
+        let valid = 0;
+        for (let index = 0; index < events.length; index += 1) {
+          try {
+            const result = await validateEpcisMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event: events[index] });
+            if (result && result.valid) {
+              valid += 1;
+            } else {
               const details = Array.isArray(result?.errors) ? result.errors.join(': ') : '';
-              return { valid: false as const, error: `Event ${index + 1}: ${details || 'invalid'}` };
-            } catch (error) {
-              return { valid: false as const, error: `Event ${index + 1}: ${epcisErrorMessage(error)}` };
+              errors.push(`Event ${index + 1}: ${details || 'invalid'}`);
             }
-          }),
-        );
-        const errors = outcomes.map((outcome) => outcome.error).filter((error): error is string => error !== null);
-        setEpcisValidation({ checked: events.length, valid: outcomes.filter((outcome) => outcome.valid).length, errors });
+          } catch (error) {
+            errors.push(`Event ${index + 1}: ${epcisErrorMessage(error)}`);
+          }
+        }
+        setEpcisValidation({ checked: events.length, valid, errors });
         return;
       }
       if (parsed.kind === 'batch') {

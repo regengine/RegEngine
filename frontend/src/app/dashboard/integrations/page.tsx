@@ -130,6 +130,7 @@ export default function DashboardIntegrationsPage() {
     const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
     const [profilesStatus, setProfilesStatus] = useState<'idle' | 'loading' | 'error'>('loading');
     const [profileError, setProfileError] = useState<string | null>(null);
+    const [saveProfileError, setSaveProfileError] = useState<string | null>(null);
     const [profilesRetryNonce, setProfilesRetryNonce] = useState(0);
     const [profileName, setProfileName] = useState('');
     const [supplierName, setSupplierName] = useState('');
@@ -209,7 +210,7 @@ export default function DashboardIntegrationsPage() {
         if (!profileName.trim() || savingProfile) return;
 
         setSavingProfile(true);
-        setProfileError(null);
+        setSaveProfileError(null);
         try {
             const request: CreateIntegrationProfileRequest = {
                 display_name: profileName.trim(),
@@ -228,7 +229,7 @@ export default function DashboardIntegrationsPage() {
             setSupplierName('');
             setProfileNotes('');
         } catch {
-            setProfileError('Unable to save the integration profile. Check workspace access and try again.');
+            setSaveProfileError('Unable to save the integration profile. Check workspace access and try again.');
         } finally {
             setSavingProfile(false);
         }
@@ -417,7 +418,7 @@ export default function DashboardIntegrationsPage() {
                                 Sign in to create workspace-scoped supplier profiles and attach them to portal invites.
                             </Callout>
                         )}
-                        {profileError && (
+                        {profilesStatus === 'error' && profileError && (
                             <Callout
                                 tone="danger"
                                 role="alert"
@@ -510,6 +511,25 @@ export default function DashboardIntegrationsPage() {
                                         rows={3}
                                     />
                                 </Field>
+
+                                {saveProfileError && (
+                                    <Callout
+                                        tone="danger"
+                                        role="alert"
+                                        action={
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={handleCreateProfile}
+                                                disabled={savingProfile}
+                                            >
+                                                Retry save
+                                            </Button>
+                                        }
+                                    >
+                                        {saveProfileError}
+                                    </Callout>
+                                )}
 
                                 <Button
                                     onClick={handleCreateProfile}

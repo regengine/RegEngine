@@ -73,9 +73,9 @@ export function QAHealthWidget() {
             <Button variant="secondary" size="sm" onClick={() => void qa.refetch()}>
               Retry
             </Button>
-            <a href="/settings/support" className="text-small underline">
+            <Link href="/settings/support" className="text-small underline">
               Contact support
-            </a>
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
