@@ -11,6 +11,8 @@ included. The route now forwards ``tlc`` unchanged and the query filters on
 from __future__ import annotations
 
 import sys
+import uuid
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,11 +23,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "shared"))
 
+from datetime import datetime, timezone  # noqa: E402
+
+from shared.auth import APIKey, require_api_key  # noqa: E402
+from shared.middleware import get_current_tenant_id  # noqa: E402
+
 from services.graph.app.fsma.queries import query_events_by_range  # noqa: E402
-from services.graph.tests.test_fda_request_export_header import TENANT, _build_app, _neo4j_stub  # noqa: E402
+from services.graph.tests.test_fda_request_export_header import _build_app, _neo4j_stub  # noqa: E402
 
 URL = "/v1/fsma/compliance/export/fda-request"
-DATES = {"start_date": "2026-01-01", "end_date": "2026-12-31"}
+_TODAY = date.today()
+START_DATE = (_TODAY - timedelta(days=30)).isoformat()
+END_DATE = _TODAY.isoformat()
+DATES = {"start_date": START_DATE, "end_date": END_DATE}
+
+
+def _lot_code() -> str:
+    """A lot code made at runtime, mixed case so case handling is visible."""
+    return f"Lot-{uuid.uuid4().hex[:8]}"
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +59,17 @@ def _clean_slowapi_bucket():
 
 def _call_route(params):
     query = AsyncMock(return_value=[])
-    client = TestClient(_build_app(), raise_server_exceptions=False)
+    tenant = uuid.uuid4()
+    app = _build_app()
+    app.dependency_overrides[require_api_key] = lambda: APIKey(
+        key_id="preshared-master",
+        key_hash="",
+        name="test",
+        tenant_id=str(tenant),
+        created_at=datetime.now(timezone.utc),
+    )
+    app.dependency_overrides[get_current_tenant_id] = lambda: tenant
+    client = TestClient(app, raise_server_exceptions=False)
     with (
         patch("services.graph.app.routers.fsma.compliance.Neo4jClient", _neo4j_stub()),
         patch("services.graph.app.fsma_utils.query_events_by_range", new=query),
@@ -54,7 +79,7 @@ def _call_route(params):
 
 
 def test_route_forwards_exact_tlc_to_query():
-    tlc = " Lot-ABC-001 "
+    tlc = f" {_lot_code()} "
     resp, query = _call_route({**DATES, "tlc": tlc})
     assert resp.status_code == 200, resp.text
     assert query.await_args.kwargs["tlc"] == tlc
@@ -87,14 +112,18 @@ def _client_with_session():
 @pytest.mark.asyncio
 async def test_query_binds_tlc_as_exact_lot_filter():
     client, session = _client_with_session()
-    await query_events_by_range(client, "2026-01-01", "2026-12-31", TENANT, tlc="LOT-ABC-001")
+    lot = _lot_code()
+    upper = lot.upper()
+    assert upper != lot
+    await query_events_by_range(client, START_DATE, END_DATE, str(uuid.uuid4()), tlc=upper)
     args = session.run.await_args
     assert "l.tlc = $tlc" in args.args[0]
-    assert args.kwargs["tlc"] == "LOT-ABC-001"
+    assert args.kwargs["tlc"] == upper
+    assert args.kwargs["tlc"] != lot
 
 
 @pytest.mark.asyncio
 async def test_query_without_tlc_binds_null():
     client, session = _client_with_session()
-    await query_events_by_range(client, "2026-01-01", "2026-12-31", TENANT)
+    await query_events_by_range(client, START_DATE, END_DATE, str(uuid.uuid4()))
     assert session.run.await_args.kwargs["tlc"] is None
