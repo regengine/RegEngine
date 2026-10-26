@@ -68,11 +68,12 @@ describe('client-side auth bypass attempts (adversarial, must hold)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+        window.sessionStorage.clear();
         unauthenticatedSession();
     });
 
     it('a forged localStorage sysadmin profile grants no session without cookies', async () => {
-        localStorageMock.setItem('regengine_user', JSON.stringify({
+        window.sessionStorage.setItem('regengine_user', JSON.stringify({
             id: 'attacker',
             email: 'attacker@example.com',
             is_sysadmin: true,
@@ -92,7 +93,7 @@ describe('client-side auth bypass attempts (adversarial, must hold)', () => {
     });
 
     it('a forged member profile cannot flip isAuthenticated after expiry', async () => {
-        localStorageMock.setItem('regengine_user', JSON.stringify({
+        window.sessionStorage.setItem('regengine_user', JSON.stringify({
             id: 'attacker',
             email: 'attacker@example.com',
             is_sysadmin: false,
@@ -111,7 +112,8 @@ describe('client-side auth bypass attempts (adversarial, must hold)', () => {
     it('XSS-shaped email text seeded client-side stays inert data, not markup', async () => {
         const { seedPasswordlessClientUser } = await import('@/lib/passwordless-auth');
         seedPasswordlessClientUser('<img src=x onerror=alert(1)>@example.com');
-        const raw = localStorageMock.getItem('regengine_user');
+        const raw = window.sessionStorage.getItem('regengine_user');
+        expect(localStorageMock.getItem('regengine_user')).toBeNull();
         expect(raw).toContain('<img src=x onerror=alert(1)>');
         const parsed = JSON.parse(raw as string) as {
             email: string; is_sysadmin: boolean; permissions: string[];

@@ -66,6 +66,7 @@ describe('useAuth Hook', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         localStorageMock.clear();
+        window.sessionStorage.clear();
         (isSupabaseConfigured as any).mockReturnValue(false);
         (createSupabaseBrowserClient as any).mockImplementation(() => {
             throw new Error('Supabase not configured');
@@ -116,7 +117,7 @@ describe('useAuth Hook', () => {
                 updated_at: '2026-01-27T00:00:00Z',
             };
 
-            localStorageMock.setItem('regengine_user', JSON.stringify(mockUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(mockUser));
 
             // Session endpoint says user is authenticated (cookie has token)
             mockFetch.mockImplementation((url: string, options?: RequestInit) => {
@@ -184,7 +185,7 @@ describe('useAuth Hook', () => {
             expect(result.current.accessToken).toBe('cookie-managed');
         });
 
-        it('persists user to localStorage on login', async () => {
+        it('persists a minimal user profile to sessionStorage on login', async () => {
             const mockUser = {
                 id: '123',
                 email: 'test@example.com',
@@ -204,8 +205,15 @@ describe('useAuth Hook', () => {
                 await result.current.login('test-token', mockUser, 'tenant-123');
             });
 
-            // User profile is still stored in localStorage (non-sensitive)
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+            // User profile is cached in sessionStorage with only the fields the UI reads
+            expect(JSON.parse(window.sessionStorage.getItem('regengine_user') as string)).toEqual({
+                id: '123',
+                email: 'test@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_id: 'role-1',
+            });
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
             // Tenant ID is still stored in localStorage (non-sensitive)
             expect(localStorageMock.getItem('regengine_tenant_id')).toBe('tenant-123');
         });
@@ -414,7 +422,7 @@ describe('useAuth Hook', () => {
                 status: 'active',
                 permissions: ['inflow.write', 'reports.read'],
             };
-            localStorageMock.setItem('regengine_user', JSON.stringify(storedUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(storedUser));
 
             mockFetch.mockImplementation((url: string, options?: RequestInit) => {
                 if (typeof url === 'string' && url.includes('/api/session')) {
@@ -442,7 +450,14 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.permissions).toEqual(['inflow.write', 'reports.read']);
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(supabaseUser));
+            expect(JSON.parse(window.sessionStorage.getItem('regengine_user') as string)).toEqual({
+                id: 'supabase-user',
+                email: 'stored@example.com',
+                is_sysadmin: false,
+                status: 'active',
+                role_name: 'member',
+                permissions: ['inflow.write', 'reports.read'],
+            });
             expect(createSupabaseBrowserClient).not.toHaveBeenCalled();
         });
 
@@ -577,7 +592,7 @@ describe('useAuth Hook', () => {
                 await result.current.logout();
             });
 
-            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
             expect(localStorageMock.getItem('regengine_tenant_id')).toBeNull();
         });
 
@@ -815,7 +830,7 @@ describe('useAuth Hook', () => {
         };
 
         it('clears the localStorage-hydrated user when the session reports unauthenticated', async () => {
-            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(staleUser));
             // Default beforeEach mock: GET /api/session → authenticated: false
 
             const { result } = renderHook(() => useAuth(), { wrapper });
@@ -826,12 +841,12 @@ describe('useAuth Hook', () => {
 
             expect(result.current.user).toBeNull();
             expect(result.current.isAuthenticated).toBe(false);
-            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
             expect(apiClient.setUser).toHaveBeenLastCalledWith(null);
         });
 
         it('does not re-persist a session user echoed back from a stale re_user cookie', async () => {
-            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(staleUser));
 
             // re_access_token expired but the non-httpOnly re_user cookie
             // survived — the route echoes it back with authenticated: false.
@@ -861,11 +876,11 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user).toBeNull();
-            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
         });
 
         it('keeps the hydrated user when the session check fails with a network error', async () => {
-            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(staleUser));
 
             mockFetch.mockImplementation((url: string, options?: RequestInit) => {
                 if (typeof url === 'string' && url.includes('/api/session') &&
@@ -882,11 +897,11 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('stale-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+            expect(window.sessionStorage.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
         });
 
         it('keeps the hydrated user when the session check returns a non-2xx response', async () => {
-            localStorageMock.setItem('regengine_user', JSON.stringify(staleUser));
+            window.sessionStorage.setItem('regengine_user', JSON.stringify(staleUser));
 
             mockFetch.mockImplementation((url: string, options?: RequestInit) => {
                 if (typeof url === 'string' && url.includes('/api/session') &&
@@ -903,7 +918,7 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('stale-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
+            expect(window.sessionStorage.getItem('regengine_user')).toBe(JSON.stringify(staleUser));
         });
 
         it('does not wipe a login that completed while the hydrate session check was in flight', async () => {
@@ -968,7 +983,7 @@ describe('useAuth Hook', () => {
             });
 
             expect(result.current.user?.id).toBe('fresh-user');
-            expect(localStorageMock.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
+            expect(window.sessionStorage.getItem('regengine_user')).toBe(JSON.stringify(mockUser));
 
             document.cookie = 're_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         });
@@ -976,7 +991,7 @@ describe('useAuth Hook', () => {
 
     describe('Error Handling', () => {
         it('handles corrupted localStorage data gracefully', async () => {
-            localStorageMock.setItem('regengine_user', 'invalid-json');
+            window.sessionStorage.setItem('regengine_user', 'invalid-json');
 
             const { result } = renderHook(() => useAuth(), { wrapper });
 
@@ -993,6 +1008,37 @@ describe('useAuth Hook', () => {
             const { result } = renderHook(() => useAuth(), { wrapper });
 
             expect(result.current.user).toBeNull();
+        });
+    });
+
+    describe('Session profile storage (code-scanning alert 69)', () => {
+        it('removes a legacy localStorage profile on load', async () => {
+            localStorageMock.setItem('regengine_user', JSON.stringify({ id: 'legacy', email: 'legacy@regengine.co' }));
+
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await waitFor(() => expect(result.current.isHydrated).toBe(true));
+
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
+        });
+
+        it('clears the sessionStorage profile on logout', async () => {
+            const { result } = renderHook(() => useAuth(), { wrapper });
+            await act(async () => {
+                await result.current.login('test-token', {
+                    id: 'logout-user',
+                    email: 'logout@regengine.co',
+                    is_sysadmin: false,
+                    status: 'active',
+                });
+            });
+            expect(window.sessionStorage.getItem('regengine_user')).not.toBeNull();
+
+            await act(async () => {
+                await result.current.logout();
+            });
+
+            expect(window.sessionStorage.getItem('regengine_user')).toBeNull();
+            expect(localStorageMock.getItem('regengine_user')).toBeNull();
         });
     });
 });

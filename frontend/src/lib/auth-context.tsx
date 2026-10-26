@@ -5,6 +5,12 @@ import type { User, SessionAuthMethod } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
+import {
+  clearClientSessionUser,
+  purgeLegacyClientSessionUser,
+  readClientSessionUser,
+  writeClientSessionUser,
+} from './client-session-profile';
 
 interface AuthContextType {
   user: User | null;
@@ -42,8 +48,10 @@ type LoginOptions = {
  * ONLY in HTTP-only cookies via /api/session. They are never readable
  * by client-side JavaScript, eliminating XSS credential theft.
  *
- * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
- * remains in localStorage for fast hydration.
+ * Non-sensitive flags (tenant_id, onboarded, demo_mode) remain in
+ * localStorage for fast hydration. The user profile is cached in
+ * sessionStorage with minimal fields (client-session-profile.ts) and is
+ * cleared on logout.
  *
  * The deprecated apiKey field in the context is still set to a placeholder
  * value ("cookie-managed") for transitional compatibility. Human privileged
@@ -58,7 +66,10 @@ const STORAGE_KEYS = {
   TENANT_ID: 'regengine_tenant_id',
   ONBOARDED: 'regengine_onboarded',
   DEMO_MODE: 'regengine_demo_mode',
-  USER: 'regengine_user',
+  // DEPRECATED - the user profile now lives in sessionStorage (see
+  // client-session-profile.ts); this key is only read once for migration
+  // and then removed from localStorage.
+  _LEGACY_USER: 'regengine_user',
   // DEPRECATED - migrated to HTTP-only cookies, then removed from localStorage
   _LEGACY_API_KEY: 'regengine_api_key',
   _LEGACY_ACCESS_TOKEN: 'regengine_access_token',
@@ -204,7 +215,7 @@ async function migrateLocalStorageToCookies(): Promise<void> {
     console.info('[auth] Migrating credentials from localStorage to HTTP-only cookies...');
   }
   const tenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
-  const userStr = localStorage.getItem(STORAGE_KEYS.USER);
+  const userStr = localStorage.getItem(STORAGE_KEYS._LEGACY_USER);
   let user: User | null = null;
   try {
     if (userStr) user = JSON.parse(userStr);
@@ -263,6 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (isAuthError) {
         Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+        clearClientSessionUser();
         clearSessionCookies();
         setAuthMethodState(null);
         setIsHydrated(true);
@@ -271,23 +283,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Step 1: If localStorage still has secrets, migrate them to cookies
       await migrateLocalStorageToCookies();
+      // Older builds kept the user profile in localStorage; drop that copy.
+      purgeLegacyClientSessionUser();
 
       // Step 2: Read non-sensitive state from localStorage
       const storedTenantId = localStorage.getItem(STORAGE_KEYS.TENANT_ID);
       const storedOnboarded = localStorage.getItem(STORAGE_KEYS.ONBOARDED);
       const storedDemoMode = localStorage.getItem(STORAGE_KEYS.DEMO_MODE);
-      const storedUser = localStorage.getItem(STORAGE_KEYS.USER);
+      const storedUser = readClientSessionUser();
 
       if (storedTenantId) setTenantIdState(storedTenantId);
       if (storedOnboarded === 'true') setIsOnboarded(true);
       if (storedDemoMode === 'true') setDemoModeState(true);
 
       if (storedUser) {
-        try {
-          const parsedUser = normalizeUserProfile(JSON.parse(storedUser) as User);
-          setUserState(parsedUser);
-          apiClient.setUser(parsedUser);
-        } catch { /* ignore corrupt data */ }
+        const parsedUser = normalizeUserProfile(storedUser);
+        setUserState(parsedUser);
+        apiClient.setUser(parsedUser);
       }
 
       // Step 3: Check cookie-based session for credentials
@@ -307,7 +319,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const normalizedSessionUser = normalizeUserProfile(session.user);
             setUserState(normalizedSessionUser);
             apiClient.setUser(normalizedSessionUser);
-            localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
+            writeClientSessionUser(normalizedSessionUser);
           }
           setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
           apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
@@ -320,7 +332,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // user profile, so this doesn't affect them.
           setUserState(null);
           apiClient.setUser(null);
-          localStorage.removeItem(STORAGE_KEYS.USER);
+          clearClientSessionUser();
         }
         if (session.has_api_key) {
           setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
@@ -411,7 +423,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
+      writeClientSessionUser(normalizedLoginUser);
       if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
     }
 
@@ -467,6 +479,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined') {
       Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+      clearClientSessionUser();
     }
     await clearSessionCookies();
   }, []);
