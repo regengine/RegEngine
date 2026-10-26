@@ -1,8 +1,11 @@
 """SEL-515: a trace that hits the query cap must say it is partial.
 
-The traversal queries stop at ``LIMIT 5000``. A result that reaches the cap
-returns what it has with ``truncated=True`` (partial result, not a 413), so a
-recall trace never looks complete when it is not.
+The capped queries fetch ``TRACE_ROW_LIMIT + 1`` rows. A result over the cap
+returns the first ``TRACE_ROW_LIMIT`` with ``truncated=True`` (partial result,
+not a 413), so a recall trace never looks complete when it is not. Exactly the
+cap is complete and is not flagged.
+
+Data-free: records carry only positional ids, no lot codes or sample records.
 """
 
 from __future__ import annotations
@@ -55,7 +58,7 @@ class _Session:
 class _Client:
     def __init__(self, n):
         records = [
-            {"labels": ["TraceEvent"], "props": {"event_id": f"evt-{i}", "tenant_id": TENANT}, "hop_count": 1}
+            {"labels": ["TraceEvent"], "props": {"event_id": str(i), "tenant_id": TENANT}, "hop_count": 1}
             for i in range(n)
         ]
         self._records = records
@@ -66,13 +69,13 @@ class _Client:
 
 def test_limit_constant_matches_every_capped_query():
     src = Path(tracer.__file__).read_text()
-    assert set(re.findall(r"LIMIT (\d+)", src)) == {str(tracer.TRACE_ROW_LIMIT)}
+    assert set(re.findall(r"^\s*LIMIT (\d+)", src, re.M)) == {str(tracer.TRACE_ROW_LIMIT + 1)}
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fn", ["trace_forward", "trace_backward"])
-async def test_trace_at_cap_is_flagged_truncated(fn):
-    result = await getattr(tracer, fn)(_Client(tracer.TRACE_ROW_LIMIT), "TLC-SEL515", tenant_id=TENANT)
+async def test_trace_over_cap_is_flagged_truncated(fn):
+    result = await getattr(tracer, fn)(_Client(tracer.TRACE_ROW_LIMIT + 1), "0", tenant_id=TENANT)
     assert result.truncated is True
     assert result.truncation_limit == tracer.TRACE_ROW_LIMIT
     assert len(result.events) == tracer.TRACE_ROW_LIMIT  # partial data is still returned
@@ -80,7 +83,16 @@ async def test_trace_at_cap_is_flagged_truncated(fn):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fn", ["trace_forward", "trace_backward"])
+async def test_trace_exactly_at_cap_is_complete(fn):
+    result = await getattr(tracer, fn)(_Client(tracer.TRACE_ROW_LIMIT), "0", tenant_id=TENANT)
+    assert result.truncated is False
+    assert result.truncation_limit is None
+    assert len(result.events) == tracer.TRACE_ROW_LIMIT
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fn", ["trace_forward", "trace_backward"])
 async def test_trace_under_cap_is_not_truncated(fn):
-    result = await getattr(tracer, fn)(_Client(3), "TLC-SEL515", tenant_id=TENANT)
+    result = await getattr(tracer, fn)(_Client(3), "0", tenant_id=TENANT)
     assert result.truncated is False
     assert result.truncation_limit is None
