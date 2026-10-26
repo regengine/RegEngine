@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { TimedSkeleton } from "@/components/ui/timed-skeleton";
-import { useQASignal } from "@/hooks/use-qa-signal";
+import { QA_TIMEOUT_MESSAGE, useQASignal } from "@/hooks/use-qa-signal";
 
 /**
  * QA Health card. Status, label and figures all come from useQASignal(), the
@@ -25,7 +25,7 @@ export function QAHealthWidget() {
           <CardTitle>QA Health</CardTitle>
         </CardHeader>
         <CardContent>
-          <TimedSkeleton onRetry={() => void qa.refetch()} errorMessage="The QA signal did not respond.">
+          <TimedSkeleton onRetry={() => void qa.refetch()} errorMessage={QA_TIMEOUT_MESSAGE}>
             <div className="space-y-3">
               <Skeleton className="h-7 w-36" />
               <Skeleton className="h-2 w-full" />
@@ -69,9 +69,14 @@ export function QAHealthWidget() {
         )}
 
         {qa.status === "failed" ? (
-          <Button variant="secondary" size="sm" onClick={() => void qa.refetch()}>
-            Retry
-          </Button>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button variant="secondary" size="sm" onClick={() => void qa.refetch()}>
+              Retry
+            </Button>
+            <a href="/settings/support" className="text-small underline">
+              Contact support
+            </a>
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             <div>

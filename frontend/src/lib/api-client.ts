@@ -577,7 +577,11 @@ class APIClient {
   }
 
   async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`);
+    // Polled every 2s from /ingest: bound each tick so a slow backend cannot
+    // pile up overlapping requests. The page skips a tick while one is in flight.
+    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`, {
+      timeout: 8000,
+    });
     return data;
   }
 
@@ -1049,8 +1053,11 @@ class APIClient {
   async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
+    // Bound the integrations-page load: the default 30s left the page on
+    // "Loading saved profiles..." until the BFF gave up.
     const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
       `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}`,
+      { timeout: 8000 },
     );
     return data;
   }

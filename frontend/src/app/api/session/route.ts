@@ -272,6 +272,10 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
     for (const target of getAdminTargets()) {
         const baseUrl = target.replace(/\/+$/, '');
         try {
+            // Bound each target: a slow or cold admin backend previously held
+            // GET /api/session (and the dashboard shell skeleton on /ingest and
+            // /dashboard/integrations) indefinitely. The client aborts at 10s;
+            // fail fast here so the BFF does not hold the connection longer.
             const response = await fetch(`${baseUrl}/auth/me`, {
                 method: 'GET',
                 headers: {
@@ -280,6 +284,7 @@ async function getOpaqueSessionInfo(request: NextRequest): Promise<{
                 },
                 cache: 'no-store',
                 redirect: 'manual',
+                signal: AbortSignal.timeout(5000),
             });
 
             if (response.status >= 300 && response.status < 400) {

@@ -142,6 +142,7 @@ export default function IngestPage() {
   const [errorColumnSuggestions, setErrorColumnSuggestions] = useState<ColumnSuggestion[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
@@ -185,10 +186,16 @@ export default function IngestPage() {
 
   useEffect(() => {
     if (!jobId) return;
+    let cancelled = false;
 
-    const intervalId = window.setInterval(async () => {
+    const poll = async () => {
+      // A slow status call must not pile up overlapping ticks: skip while one
+      // is in flight. Each call is bounded by the api-client timeout (8s).
+      if (pollInFlightRef.current) return;
+      pollInFlightRef.current = true;
       try {
         const statusResponse = await apiClient.getIngestionJob(jobId);
+        if (cancelled) return;
         setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
@@ -198,13 +205,40 @@ export default function IngestPage() {
           }
         }
       } catch (error) {
+        if (cancelled) return;
         console.error('Failed to fetch ingestion status:', error);
         setStatusError('Unable to fetch ingestion status.');
+      } finally {
+        pollInFlightRef.current = false;
       }
-    }, 2000);
+    };
 
-    return () => window.clearInterval(intervalId);
+    const intervalId = window.setInterval(() => void poll(), 2000);
+    void poll();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, [jobId]);
+
+  const handleRetryStatus = async () => {
+    if (!jobId || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    try {
+      const statusResponse = await apiClient.getIngestionJob(jobId);
+      setStatusError(null);
+      const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
+      if (normalizedStatus) {
+        setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
+      }
+    } catch (error) {
+      console.error('Failed to fetch ingestion status:', error);
+      setStatusError('Unable to fetch ingestion status.');
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  };
 
   // Shared preamble for every submit path: persist a changed API key so the
   // browser proxy reads it from the cookie, then clear prior result state.
@@ -278,22 +312,24 @@ export default function IngestPage() {
       }
       if (validateOnly) {
         const events = parsed.kind === 'batch' ? parsed.events : [parsed.event];
-        const errors: string[] = [];
-        let valid = 0;
-        for (let index = 0; index < events.length; index += 1) {
-          try {
-            const result = await validateEpcisMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event: events[index] });
-            if (result && result.valid) {
-              valid += 1;
-            } else {
+        // Validate in parallel: the serial await made total time N x latency,
+        // so a file with many events always hit the page-level timeout.
+        const outcomes = await Promise.all(
+          events.map(async (event, index) => {
+            try {
+              const result = await validateEpcisMutation.mutateAsync({ apiKey: isAuthenticated ? undefined : apiKey, event });
+              if (result && result.valid) {
+                return { valid: true as const, error: null as string | null };
+              }
               const details = Array.isArray(result?.errors) ? result.errors.join(': ') : '';
-              errors.push(`Event ${index + 1}: ${details || 'invalid'}`);
+              return { valid: false as const, error: `Event ${index + 1}: ${details || 'invalid'}` };
+            } catch (error) {
+              return { valid: false as const, error: `Event ${index + 1}: ${epcisErrorMessage(error)}` };
             }
-          } catch (error) {
-            errors.push(`Event ${index + 1}: ${epcisErrorMessage(error)}`);
-          }
-        }
-        setEpcisValidation({ checked: events.length, valid, errors });
+          }),
+        );
+        const errors = outcomes.map((outcome) => outcome.error).filter((error): error is string => error !== null);
+        setEpcisValidation({ checked: events.length, valid: outcomes.filter((outcome) => outcome.valid).length, errors });
         return;
       }
       if (parsed.kind === 'batch') {
@@ -813,7 +849,19 @@ export default function IngestPage() {
                   )}
 
                   {jobId && (statusError || jobStatus === 'failed') && (
-                    <Callout tone="danger" role="alert" className="mt-4" title="Unable to load ingestion status">
+                    <Callout
+                      tone="danger"
+                      role="alert"
+                      className="mt-4"
+                      title="Unable to load ingestion status"
+                      action={
+                        statusError ? (
+                          <Button size="sm" variant="secondary" onClick={() => void handleRetryStatus()}>
+                            Retry
+                          </Button>
+                        ) : undefined
+                      }
+                    >
                       {statusError || 'The ingestion job failed.'}
                     </Callout>
                   )}
