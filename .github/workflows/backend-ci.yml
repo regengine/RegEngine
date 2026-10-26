@@ -1029,6 +1029,7 @@ jobs:
           # sys.path per service between collectors, making a mixed
           # tests/… + services/… invocation fragile.
           pytest services/shared/tests/test_rls_enforcement_live.py \
+            services/shared/tests/test_supplier_data_quality_live.py \
             -v --no-cov -rs -o "testpaths=services/shared/tests" \
             | tee /tmp/rls_live.log
           # A skip is visually identical to a pass in the checks UI, and a
