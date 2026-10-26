@@ -103,11 +103,22 @@ class TestQueryTenantEvents:
 
         assert _query_tenant_events("t", None, None, None) == []
 
-    def test_swallow_exception_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        session = _FakeSession(execute_queue=[RuntimeError()])
+    def test_db_error_raises_instead_of_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # SEL-508: a storage failure must never look like an empty tenant.
+        session = _FakeSession(execute_queue=[RuntimeError("db down")])
         monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
-        result = _query_tenant_events("t", None, None, None)
-        assert result == []
+        with pytest.raises(epcis_export.ExportStorageUnavailable):
+            _query_tenant_events("t", None, None, None)
+        assert session.closed
+
+    def test_query_is_bounded_by_cap_plus_one_not_5000(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # SEL-506: the old LIMIT 5000 silently dropped the oldest events.
+        session = _FakeSession(execute_queue=[[]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        _query_tenant_events("t", None, None, None)
+        sql, params = session.calls[0][1]
+        assert "LIMIT 5000" not in sql
+        assert params["row_limit"] == epcis_export._MAX_EXPORT_EVENTS + 1
 
 
 # ---------------------------------------------------------------------------
@@ -260,3 +271,42 @@ class TestListExportFormats:
             assert "name" in fmt
             assert "content_type" in fmt
             assert "retailers" in fmt
+
+
+def _raise_storage(*_a: Any, **_k: Any) -> list[dict]:
+    raise epcis_export.ExportStorageUnavailable("db down")
+
+
+class TestExportFailsLoudly:
+    """SEL-506 / SEL-508: partial or failed reads are never reported as complete."""
+
+    @pytest.mark.parametrize("path", ["/api/v1/export/epcis", "/api/v1/export/fda"])
+    def test_storage_error_returns_503_not_no_data_yet(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, path: str
+    ) -> None:
+        session = _FakeSession(execute_queue=[RuntimeError("db down")])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        response = client.post(path, json={"tenant_id": "t"})
+        assert response.status_code == 503
+        assert "No data yet" not in response.text
+        assert response.headers.get("X-RegEngine-Data-Source") != "empty"
+
+    def test_5001_events_export_5001(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        rows = [_event_row() for _ in range(5001)]
+        session = _FakeSession(execute_queue=[rows])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        response = client.post("/api/v1/export/epcis", json={"tenant_id": "t"})
+        assert response.status_code == 200
+        assert len(response.json()["epcisBody"]["eventList"]) == 5001
+        assert response.headers["X-RegEngine-Events-Count"] == "5001"
+
+    @pytest.mark.parametrize("path", ["/api/v1/export/epcis", "/api/v1/export/fda"])
+    def test_over_cap_returns_413_not_truncated(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch, path: str
+    ) -> None:
+        monkeypatch.setattr(epcis_export, "_MAX_EXPORT_EVENTS", 3)
+        session = _FakeSession(execute_queue=[[_event_row() for _ in range(4)]])
+        monkeypatch.setattr(epcis_export, "get_db_safe", lambda: session)
+        response = client.post(path, json={"tenant_id": "t"})
+        assert response.status_code == 413
+        assert session.calls[0][1][1]["row_limit"] == 4
