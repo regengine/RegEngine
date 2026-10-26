@@ -379,6 +379,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // NEXT_PUBLIC_API_KEY fallback was removed because baking secrets into
         // the JS bundle is unsafe. BFF routes forward caller-owned credentials;
         // they do not substitute an ambient tenant key.
+        setSessionUnknownState(true);
         setAuthMethodState(null);
       }
 

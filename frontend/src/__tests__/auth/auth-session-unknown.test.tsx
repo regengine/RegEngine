@@ -160,4 +160,24 @@ describe('AuthProvider hydrate on unknown vs unauthenticated session', () => {
         expect(result.current.isAuthenticated).toBe(false);
         expect(result.current.user).toBeNull();
     });
+
+    it('keeps the stored profile and stays authenticated when the session fetch throws', async () => {
+        const user = storedProfile();
+        localStorage.setItem('regengine_user', JSON.stringify(user));
+        localStorage.setItem('regengine_tenant_id', user.tenant_id);
+        global.fetch = vi
+            .fn()
+            .mockRejectedValue(new Error(`session fetch failed ${Date.now()}`)) as unknown as typeof fetch;
+
+        const { result } = renderHook(() => useAuth(), { wrapper });
+
+        await waitFor(() => {
+            expect(result.current.isHydrated).toBe(true);
+        });
+
+        expect(result.current.user).toMatchObject({ id: user.id, email: user.email });
+        expect(result.current.tenantId).toBe(user.tenant_id);
+        expect(result.current.isAuthenticated).toBe(true);
+        expect(localStorage.getItem('regengine_user')).toBe(JSON.stringify(user));
+    });
 });

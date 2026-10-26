@@ -155,14 +155,18 @@ export default function IngestPage() {
   const mountedRef = useRef(true);
   const retryControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  const pollControllerRef = useRef<AbortController | null>(null);
+  const jobStatusRef = useRef<string>('queued');
 
   // Shared terminal-stop for the status poll: both the interval tick and a
-  // manual retry clear the same interval when they see a terminal status.
+  // manual retry clear the same interval and abort the in-flight poll fetch
+  // when they see a terminal status.
   const stopStatusPolling = useCallback(() => {
     if (pollIntervalRef.current !== null) {
       window.clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
+    pollControllerRef.current?.abort();
   }, []);
 
   const ingestMutation = useIngestURL();
@@ -215,10 +219,17 @@ export default function IngestPage() {
 
   useEffect(() => {
     jobIdRef.current = jobId;
+    // New job resets the terminal guard so the previous job's terminal
+    // status cannot suppress the new job's first poll.
+    jobStatusRef.current = 'queued';
     // A retry for the previous job must not overwrite the new job's status.
     retryControllerRef.current?.abort();
     retryControllerRef.current = null;
   }, [jobId]);
+
+  useEffect(() => {
+    jobStatusRef.current = jobStatus;
+  }, [jobStatus]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -228,6 +239,7 @@ export default function IngestPage() {
     // cleanup keeps each job's polling independent.
     let pollInFlight = false;
     const controller = new AbortController();
+    pollControllerRef.current = controller;
 
     const poll = async () => {
       // A slow status call must not pile up overlapping ticks: skip while one
@@ -237,11 +249,16 @@ export default function IngestPage() {
       try {
         const statusResponse = await apiClient.getIngestionJob(jobId, { signal: controller.signal });
         if (cancelled || controller.signal.aborted) return;
+        // Once terminal, late or out-of-order results are ignored so the
+        // status cannot regress to a non-terminal state.
+        if (isTerminalIngestStatus(jobStatusRef.current)) return;
         setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
-          setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
-          if (isTerminalIngestStatus(normalizedStatus)) {
+          const nextStatus = normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued';
+          jobStatusRef.current = nextStatus;
+          setJobStatus(nextStatus);
+          if (isTerminalIngestStatus(nextStatus)) {
             stopStatusPolling();
           }
         }
@@ -268,6 +285,9 @@ export default function IngestPage() {
       if (pollIntervalRef.current === intervalId) {
         pollIntervalRef.current = null;
       }
+      if (pollControllerRef.current === controller) {
+        pollControllerRef.current = null;
+      }
     };
   }, [jobId, stopStatusPolling]);
 
@@ -281,11 +301,16 @@ export default function IngestPage() {
     try {
       const statusResponse = await apiClient.getIngestionJob(requestedJobId, { signal: controller.signal });
       if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
+      // Same terminal guard as the poll: a late retry must not regress a
+      // terminal status observed by the interval tick.
+      if (isTerminalIngestStatus(jobStatusRef.current)) return;
       setStatusError(null);
       const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
       if (normalizedStatus) {
-        setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
-        if (isTerminalIngestStatus(normalizedStatus)) {
+        const nextStatus = normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued';
+        jobStatusRef.current = nextStatus;
+        setJobStatus(nextStatus);
+        if (isTerminalIngestStatus(nextStatus)) {
           stopStatusPolling();
         }
       }

@@ -174,3 +174,67 @@ describe('ingestion status retry on terminal status', () => {
     }
   });
 });
+
+describe('ingestion status terminal abort and no-regression', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.storeApiKey.mockResolvedValue(undefined);
+  });
+
+  it('aborts the in-flight poll when Retry observes terminal and ignores its late result', async () => {
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
+
+    let resolveHangingPoll: ((value: { status: string }) => void) | null = null;
+    let hangingSignal: AbortSignal | undefined;
+    let callCount = 0;
+    mocks.getIngestionJob.mockImplementation((_id: string, options?: { signal?: AbortSignal }) => {
+      callCount += 1;
+      if (callCount === 1) {
+        return Promise.reject(new Error('status fetch failed'));
+      }
+      if (callCount === 2) {
+        hangingSignal = options?.signal;
+        return new Promise<{ status: string }>((resolve) => {
+          resolveHangingPoll = resolve;
+        });
+      }
+      if (callCount === 3) {
+        return Promise.resolve({ status: 'completed' });
+      }
+      return Promise.resolve({ status: 'queued' });
+    });
+
+    const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
+    try {
+      render(<IngestPage />);
+      fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), {
+        target: { value: 'https://example.org/abort.pdf' },
+      });
+      await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
+
+      const retryButton = await screen.findByRole('button', { name: 'Retry' });
+
+      // Wait for the 2s interval tick to start the hanging second poll.
+      await waitFor(() => expect(mocks.getIngestionJob).toHaveBeenCalledTimes(2), { timeout: 8000 });
+      expect(hangingSignal).toBeInstanceOf(AbortSignal);
+      expect(hangingSignal?.aborted).toBe(false);
+
+      await userEvent.click(retryButton);
+
+      // Retry terminal: completed view, interval cleared.
+      expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
+      expect(clearIntervalSpy).toHaveBeenCalled();
+
+      // The in-flight poll fetch was aborted via its AbortController.
+      expect(hangingSignal?.aborted).toBe(true);
+
+      // Its late non-terminal result must not regress the terminal status.
+      resolveHangingPoll?.({ status: 'queued' });
+      await new Promise((r) => setTimeout(r, 100));
+      expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
+    } finally {
+      clearIntervalSpy.mockRestore();
+    }
+  }, 15000);
+});
