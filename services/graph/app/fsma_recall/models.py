@@ -120,7 +120,10 @@ class RecallDrill:
         sla_limit = 24 * 3600  # 24 hours in seconds
 
         if self.status == RecallStatus.COMPLETED:
-            if self.duration_seconds and self.duration_seconds <= sla_limit:
+            duration = self.duration_seconds
+            # 0 seconds is a valid (instant) completion, so compare against
+            # None rather than relying on truthiness.
+            if duration is not None and duration <= sla_limit:
                 return SLAStatus.MET
             return SLAStatus.BREACHED
 
