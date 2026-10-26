@@ -41,7 +41,61 @@ interface PageFinding {
 }
 
 function baseOriginOf(page: Page): string {
-    return new URL(test.info().project.use.baseURL ?? page.url()).origin;
+    const raw =
+        test.info().project.use.baseURL ??
+        process.env.VISUAL_BASE_URL ??
+        page.url();
+    let origin: string;
+    try {
+        origin = new URL(raw).origin;
+    } catch {
+        throw new Error(`Cannot determine crawl base origin from "${raw}": invalid URL`);
+    }
+    if (origin === 'null' || origin === '') {
+        const fallback = process.env.VISUAL_BASE_URL ?? 'https://regengine.co';
+        try {
+            const fallbackOrigin = new URL(fallback).origin;
+            if (fallbackOrigin !== 'null' && fallbackOrigin !== '') {
+                return fallbackOrigin;
+            }
+        } catch {
+            // Fall through to the clear error below.
+        }
+        throw new Error(
+            `Cannot determine crawl base origin from "${raw}": got opaque origin 'null'. ` +
+                'Set VISUAL_BASE_URL to a valid http(s) URL.',
+        );
+    }
+    return origin;
+}
+
+/** Rewrite a sitemap URL to the base origin so preview runs crawl the preview. */
+function rewriteToBaseOrigin(loc: string, baseOrigin: string): string {
+    try {
+        const url = new URL(loc, baseOrigin);
+        const base = new URL(baseOrigin);
+        url.protocol = base.protocol;
+        url.host = base.host;
+        return url.toString();
+    } catch {
+        return loc;
+    }
+}
+
+/** Decode XML entities in a <loc> value; &amp; is decoded last. */
+function decodeXmlEntities(value: string): string {
+    return value
+        .replace(/&#x([0-9A-Fa-f]+);/g, (_m: string, hex: string) =>
+            String.fromCodePoint(parseInt(hex, 16)),
+        )
+        .replace(/&#([0-9]+);/g, (_m: string, dec: string) =>
+            String.fromCodePoint(parseInt(dec, 10)),
+        )
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
 }
 
 /** Extract <loc> values from a sitemap or sitemap-index document. */
@@ -49,7 +103,8 @@ function parseLocs(xml: string): string[] {
     const locs: string[] = [];
     const re = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
     let match: RegExpExecArray | null;
-    while ((match = re.exec(xml)) !== null) locs.push(match[1].trim());
+    while ((match = re.exec(xml)) !== null)
+        locs.push(decodeXmlEntities(match[1].trim()));
     return locs;
 }
 
@@ -71,11 +126,13 @@ async function fetchSitemapPaths(page: Page, baseOrigin: string): Promise<string
     if (locs.length > 0 && locs.every((loc) => isSitemapUrl(loc))) {
         const childPaths: string[] = [];
         for (const loc of locs) {
-            const response = await page.request.get(loc, {
+            const childUrl = rewriteToBaseOrigin(loc, baseOrigin);
+            const response = await page.request.get(childUrl, {
                 timeout: LINK_TIMEOUT_MS,
                 maxRedirects: 5,
             });
-            if (!response.ok()) continue;
+            if (!response.ok())
+                throw new Error(`child sitemap GET failed: ${childUrl} status ${response.status()}`);
             childPaths.push(...parseLocs(await response.text()));
         }
         locs = childPaths;
@@ -92,6 +149,7 @@ async function fetchSitemapPaths(page: Page, baseOrigin: string): Promise<string
         // Rewrite to the base URL's origin so preview runs crawl the preview.
         paths.add(url.pathname + (url.search || ''));
     }
+    if (paths.size === 0) throw new Error('sitemap has no usable page URLs');
     return [...paths].sort();
 }
 
@@ -196,6 +254,7 @@ test('crawl sitemap pages for broken links, dead ends, and errors', async ({
         page.on('pageerror', onPageError);
         page.on('console', onConsole);
         let status = 0;
+        let navigationFailed = false;
         try {
             const response = await page.goto(crawlPath, {
                 waitUntil: 'domcontentloaded',
@@ -206,6 +265,7 @@ test('crawl sitemap pages for broken links, dead ends, and errors', async ({
                 .waitForLoadState('networkidle', { timeout: 15_000 })
                 .catch(() => undefined);
         } catch (error) {
+            navigationFailed = true;
             pageErrors.push(`navigation failed: ${String(error).slice(0, 300)}`);
         } finally {
             page.off('pageerror', onPageError);
@@ -213,34 +273,49 @@ test('crawl sitemap pages for broken links, dead ends, and errors', async ({
         }
 
         const pageUrl = page.url();
-        const hrefs = await page.locator('a[href]').evaluateAll((anchors) =>
-            anchors.map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
-        );
-        const scopedHrefs = await page
-            .locator('main a[href], nav a[href], footer a[href]')
-            .evaluateAll((anchors) =>
+        // Scope links per page: a failed load keeps the previous page's DOM,
+        // so it must record no links rather than crediting them to this path.
+        let scopedSameOrigin = 0;
+        if (!navigationFailed) {
+            const hrefs = await page.locator('a[href]').evaluateAll((anchors) =>
                 anchors.map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
             );
-        let scopedSameOrigin = 0;
-        for (const href of scopedHrefs) {
-            if (normalizeLink(href, pageUrl, baseOrigin)) scopedSameOrigin += 1;
-        }
-        for (const href of hrefs) {
-            const target = normalizeLink(href, pageUrl, baseOrigin);
-            if (target && !linkSources.has(target)) linkSources.set(target, crawlPath);
+            const scopedHrefs = await page
+                .locator('main a[href], nav a[href], footer a[href]')
+                .evaluateAll((anchors) =>
+                    anchors.map((a) => (a as HTMLAnchorElement).getAttribute('href') ?? ''),
+                );
+            const normalizedPageUrl = normalizeLink(pageUrl, pageUrl, baseOrigin);
+            for (const href of scopedHrefs) {
+                const scopedTarget = normalizeLink(href, pageUrl, baseOrigin);
+                if (scopedTarget && scopedTarget !== normalizedPageUrl)
+                    scopedSameOrigin += 1;
+            }
+            for (const href of hrefs) {
+                const target = normalizeLink(href, pageUrl, baseOrigin);
+                if (target && !linkSources.has(target)) linkSources.set(target, crawlPath);
+            }
         }
 
         let deadEndReason: string | null = null;
-        if (status >= 400) {
+        // A failed navigation leaves stale DOM behind and is already recorded
+        // in pageErrors, so skip dead-end classification entirely.
+        if (!navigationFailed && status >= 400) {
             deadEndReason = `HTTP ${status}`;
-        } else {
+        } else if (!navigationFailed) {
             let finalPath = '';
             try {
                 finalPath = new URL(pageUrl).pathname;
             } catch {
                 finalPath = '';
             }
-            const h1 = ((await page.locator('h1').first().textContent().catch(() => '')) ?? '').trim();
+            const h1 = (
+                (await page
+                    .locator('h1')
+                    .first()
+                    .textContent({ timeout: 5_000 })
+                    .catch(() => '')) ?? ''
+            ).trim();
             if (finalPath === '/404' || finalPath === '/not-found' || h1 === '404') {
                 deadEndReason = `ends on 404 page (${finalPath || pageUrl})`;
             } else if (scopedSameOrigin === 0) {

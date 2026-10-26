@@ -74,7 +74,7 @@ def _drill_dict(tenant_id: str = "t1", *, status: str = "active", hours_ago: flo
     started = now - timedelta(hours=hours_ago)
     return {
         "tenant_id": tenant_id,
-        "scenario": FDA_SCENARIOS[0].copy(),
+        "scenario": {**FDA_SCENARIOS[0], "target_tlc": "TLC-PERSIST-1", "target_product": "Recorded Product"},
         "started_at": started.isoformat(),
         "deadline": (started + timedelta(hours=24)).isoformat(),
         "status": status,
@@ -112,7 +112,7 @@ class TestPersistDrill:
         params = session.execute.call_args[0][1]
         assert params["drill_id"] == "drill-123"
         assert params["tid"] == "t1"
-        assert params["target_tlc"] == FDA_SCENARIOS[0]["target_tlc"]
+        assert params["target_tlc"] == "TLC-PERSIST-1"
         assert params["status"] == "active"
         assert session.commit.called
         assert session.close.called
@@ -212,7 +212,8 @@ class TestMarkDrillCompleted:
 
 class TestStartDrillPersists:
     def test_start_drill_writes_row(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
+        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "TLC-PERSIST-1")
+        monkeypatch.setattr(ma, "_get_product_for_tlc", lambda tid, tlc: None)
         persisted: dict = {}
         monkeypatch.setattr(ma, "_persist_drill", lambda drill_id, drill: persisted.update({drill_id: drill}))
 

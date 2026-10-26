@@ -44,7 +44,7 @@ export function isRequiresStepUpPayload(payload: unknown): boolean {
 
 /** Opens the step-up dialog for an action the user just tried. */
 export function requestStepUp(request: StepUpRequest, payload?: unknown): void {
-  if (typeof window === 'undefined') {
+  if (typeof window === 'undefined' || !request.reason.trim()) {
     return;
   }
 
