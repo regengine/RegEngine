@@ -4,8 +4,7 @@
 
 RegEngine is designed to operate in security-conscious, regulated environments. Our architecture incorporates:
 
-- Network isolation (VPC, private subnets)
-- Least-privilege access via IAM roles
+- Hosting: the backend runs on Railway and the frontend runs on Vercel
 - Encrypted data at rest and in transit
 - Structured logging and auditability
 
