@@ -1,17 +1,16 @@
 """R1: chain_integrity / data_quality must not silently cap results at 2000 rows.
 
-Business field values (TLC, product description, quantity, unit, harvest date,
-reference document) are taken verbatim from the checked-in ingestion fixture
-``services/ingestion/tests/fixtures/01_harvesting.csv``. The only generated
-value per row is an opaque synthetic test identifier (``r1-synthetic-NNNNN``)
-used to make rows distinct; it is not business data. The fake Neo4j session
-honours ``$page_skip`` / ``$page_size`` so the tests exercise real paging.
+Rows are fully synthetic: every id is a fresh ``uuid4`` and business fields
+are empty or ``None``. Where a sortable field needs a value, the row index is
+used. The fake Neo4j session honours ``$page_skip`` / ``$page_size`` so the
+tests exercise real paging.
 """
 
 from __future__ import annotations
 
-import csv
 import sys
+import uuid
+from collections import Counter
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -24,16 +23,8 @@ from services.graph.app.fsma import chain_integrity
 from services.graph.app.fsma.chain_integrity import find_broken_chains, find_gaps
 from services.graph.app.fsma.data_quality import find_orphaned_lots
 
-TENANT = "11111111-1111-1111-1111-111111111111"
+TENANT = str(uuid.uuid4())
 TOTAL_ROWS = 4501  # > 2 full pages of 2000, plus a partial page
-FIXTURE = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtures" / "01_harvesting.csv"
-
-
-def _fixture_rows() -> list[dict]:
-    with FIXTURE.open(newline="") as fh:
-        rows = list(csv.DictReader(fh))
-    assert rows, "fixture must not be empty"
-    return rows
 
 
 class _Result:
@@ -76,26 +67,28 @@ def _client(session):
     return client
 
 
+def _assert_each_once(input_ids: list[str], output_ids: list[str]) -> None:
+    counts = Counter(output_ids)
+    assert set(counts) == set(input_ids)
+    assert all(n == 1 for n in counts.values())
+
+
 def _shipping_rows(n: int) -> list[dict]:
-    fx = _fixture_rows()
-    out = []
-    for i in range(n):
-        src = fx[i % len(fx)]
-        out.append(
-            {
-                "event_id": f"r1-synthetic-{i:05d}",
-                "type": "SHIPPING",
-                "event_date": src["harvest_date"],
-                "document_id": src["reference_document"],
-                "lot_tlc": src["traceability_lot_code"],
-                "product_description": src["product_description"],
-                "merkle_hash": None,
-                "merkle_prev_hash": None,
-                "expected_predecessors": [],
-                "gaps": "missing_lot",
-            }
-        )
-    return out
+    return [
+        {
+            "event_id": str(uuid.uuid4()),
+            "type": "SHIPPING",
+            "event_date": i,  # sortable: row index
+            "document_id": None,
+            "lot_tlc": str(uuid.uuid4()),
+            "product_description": "",
+            "merkle_hash": None,
+            "merkle_prev_hash": None,
+            "expected_predecessors": [],
+            "gaps": "",
+        }
+        for i in range(n)
+    ]
 
 
 def test_page_size_is_positive():
@@ -108,10 +101,22 @@ async def test_find_gaps_returns_more_than_2000_rows():
     session = _PagingSession(lambda q: rows)
     gaps = await find_gaps(_client(session), tenant_id=TENANT)
     assert len(gaps) == TOTAL_ROWS
-    assert len({g["event_id"] for g in gaps}) == TOTAL_ROWS
+    _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
     assert [c[1]["page_skip"] for c in session.calls] == [0, 2000, 4000]
     assert all(c[1]["page_size"] == 2000 for c in session.calls)
+    assert all(c[1]["tenant_id"] == TENANT for c in session.calls)
     assert all("ORDER BY event_id" in c[0] for c in session.calls)
+
+
+@pytest.mark.asyncio
+async def test_find_gaps_drops_rows_repeated_across_pages():
+    rows = _shipping_rows(TOTAL_ROWS)
+    # Simulate a row shifting forward between pages: page 2 repeats the
+    # last row of page 1.
+    shifted = rows[:2000] + [rows[1999]] + rows[2000:]
+    session = _PagingSession(lambda q: shifted)
+    gaps = await find_gaps(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
 
 
 @pytest.mark.asyncio
@@ -127,33 +132,44 @@ async def test_find_broken_chains_returns_more_than_2000_rows():
     session = _PagingSession(rows_for)
     violations = await find_broken_chains(_client(session), tenant_id=TENANT)
     assert len(violations) == TOTAL_ROWS
-    assert {v["lot_tlc"] for v in violations} == {r["traceability_lot_code"] for r in _fixture_rows()}
+    _assert_each_once([r["lot_tlc"] for r in rows], [v["lot_tlc"] for v in violations])
     for q, _ in session.calls:
         assert "ORDER BY shipping.event_date, shipping.event_id, l.tlc" in q
 
 
+def _orphan_rows(n: int) -> list[dict]:
+    return [
+        {
+            "tlc": str(uuid.uuid4()),
+            "product_description": "",
+            "quantity": None,
+            "unit_of_measure": "",
+            "created_at": None,
+            "last_event_type": "",
+            "last_event_date": None,
+        }
+        for _ in range(n)
+    ]
+
+
 @pytest.mark.asyncio
 async def test_find_orphaned_lots_returns_more_than_2000_rows():
-    fx = _fixture_rows()
-    rows = []
-    for i in range(TOTAL_ROWS):
-        src = fx[i % len(fx)]
-        rows.append(
-            {
-                "tlc": src["traceability_lot_code"],
-                "product_description": src["product_description"],
-                "quantity": float(src["quantity"]),
-                "unit_of_measure": src["unit_of_measure"],
-                "created_at": src["harvest_date"],
-                "last_event_type": "RECEIVING",
-                "last_event_date": src["harvest_date"],
-            }
-        )
+    rows = _orphan_rows(TOTAL_ROWS)
     session = _PagingSession(lambda q: rows)
     orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
     assert len(orphans) == TOTAL_ROWS
+    _assert_each_once([r["tlc"] for r in rows], [o.tlc for o in orphans])
     assert len(session.calls) == 3
     assert "ORDER BY most_recent_event.event_date ASC, l.tlc ASC" in session.calls[0][0]
+
+
+@pytest.mark.asyncio
+async def test_find_orphaned_lots_drops_rows_repeated_across_pages():
+    rows = _orphan_rows(TOTAL_ROWS)
+    shifted = rows[:2000] + [rows[1999]] + rows[2000:]
+    session = _PagingSession(lambda q: shifted)
+    orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    _assert_each_once([r["tlc"] for r in rows], [o.tlc for o in orphans])
 
 
 @pytest.mark.asyncio
@@ -162,4 +178,5 @@ async def test_exact_page_boundary_issues_one_empty_followup():
     session = _PagingSession(lambda q: rows)
     gaps = await find_gaps(_client(session), tenant_id=TENANT)
     assert len(gaps) == 2000
+    _assert_each_once([r["event_id"] for r in rows], [g["event_id"] for g in gaps])
     assert [c[1]["page_skip"] for c in session.calls] == [0, 2000]

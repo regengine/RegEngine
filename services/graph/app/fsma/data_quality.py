@@ -154,8 +154,14 @@ async def find_orphaned_lots(
     """
 
     orphans = []
+    # SKIP/LIMIT pages can overlap if rows shift between pages; keep the
+    # first occurrence of each lot so no lot is reported twice.
+    seen_tlcs: set = set()
     async with client.session() as session:
         async for record in _run_paged(session, query, tenant_id=tenant_id, cutoff_date=cutoff_date):
+            if record["tlc"] in seen_tlcs:
+                continue
+            seen_tlcs.add(record["tlc"])
             # Calculate stagnant days. The parsed date is naive, so anchor
             # it to UTC before subtracting: an aware minus naive
             # subtraction raises TypeError, which the fallback below would

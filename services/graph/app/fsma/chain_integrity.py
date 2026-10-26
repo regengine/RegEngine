@@ -92,8 +92,14 @@ async def find_gaps(
     """
 
     gaps = []
+    # SKIP/LIMIT pages can overlap if rows shift between pages; keep the
+    # first occurrence of each event so no event is reported twice.
+    seen_event_ids: set = set()
     async with client.session() as session:
         async for record in _run_paged(session, query, tenant_id=tenant_id):
+            if record["event_id"] in seen_event_ids:
+                continue
+            seen_event_ids.add(record["event_id"])
             gaps.append(
                 {
                     "event_id": record["event_id"],
