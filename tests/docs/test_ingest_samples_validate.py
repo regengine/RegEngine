@@ -1,38 +1,37 @@
-"""The ingest samples shown in the developer docs must pass the real ingest checks.
+"""The ingest docs must match the real ingest checks.
 
-Every ``frontend/src/lib/api-samples/ingest-*.json`` file is a payload the docs
-render into curl, Python and JavaScript (quickstart, docs index, developers page,
-API reference, FSMA 204 guide, walkthrough, Inflow Lab connector page). Their
-timestamps are placeholders so a page can render them as shell/Python/JS time
-expressions. This test fills them with "now minus 1 hour" and runs each sample
-through the same checks ``POST /api/v1/webhooks/ingest`` runs:
+The docs no longer ship example payload files: #3544 removed every
+``frontend/src/lib/api-samples/ingest-*.json`` sample because a printed lot code,
+supplier or quantity reads as real data. The docs now render a skeleton from
+``frontend/src/lib/api-samples/ingest-samples.ts`` whose values are ``<...>``
+descriptions, plus ``required-kdes.json``, the per-event-type table the API
+reference prints.
 
-* the Pydantic model in ``services/ingestion/app/webhook_models.py``;
-* the required-KDE check in ``webhook_router_v2/validation.py``;
-* the event-timestamp window in ``webhook_router_v2/security.py`` (90 days back,
-  24 hours ahead; a stale event comes back ``rejected`` inside a 200);
-* the ``X-Webhook-Signature`` check (HMAC-SHA256 of the exact body bytes).
+This test keeps the docs honest against ``POST /api/v1/webhooks/ingest``:
 
-``required-kdes.json`` is the per-event-type table the API reference prints. It
-is diffed against ``REQUIRED_KDES_BY_CTE`` so it cannot drift from the backend.
+* ``required-kdes.json`` is diffed against ``REQUIRED_KDES_BY_CTE``;
+* the skeleton's field names are diffed against ``IngestEvent`` and the
+  receiving KDEs the backend requires;
+* the skeleton keeps ``{{EVENT_TIMESTAMP}}`` / ``{{EVENT_DATE}}`` placeholders,
+  never a fixed date;
+* the event-timestamp window the docs describe (90 days back, 24 hours ahead)
+  and the ``X-Webhook-Signature`` check (HMAC-SHA256 of the exact body bytes)
+  behave as documented. Events for these checks are built at runtime from the
+  backend's own required-KDE table; no sample record is stored.
 
-A fixed date in a sample would silently start failing 90 days later, which is
-how the old docs samples broke. The negative tests prove the checks that guard
-against that actually fire.
-
-Run with an interpreter that has ``requirements.lock`` installed (for example
-``venv/bin/python``): importing ``webhook_router_v2`` needs ``typesafe-sdk``,
-which the shared ``.venv`` does not have.
+Run with an interpreter that has ``requirements.lock`` installed: importing
+``webhook_router_v2`` needs ``typesafe-sdk``.
 """
 
 from __future__ import annotations
 
 import asyncio
-import copy
 import hashlib
 import hmac
 import json
 import re
+import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -54,54 +53,16 @@ from services.ingestion.app.webhook_router_v2 import (
 )
 
 SAMPLE_DIR = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "api-samples"
-SAMPLE_PATH = SAMPLE_DIR / "ingest-receiving.json"
 REQUIRED_KDES_PATH = SAMPLE_DIR / "required-kdes.json"
-
-# Every payload a docs page renders. A renamed or moved file must not silently
-# drop out of coverage, so the list is checked against the files we know exist.
-SAMPLE_PATHS = sorted(SAMPLE_DIR.glob("ingest-*.json"))
-EXPECTED_SAMPLES = {
-    "ingest-inflow-lab.json",
-    "ingest-receiving.json",
-    "ingest-walkthrough-receiving.json",
-    "ingest-walkthrough-shipping.json",
-    "ingest-walkthrough-transformation.json",
-}
+SKELETON_PATH = SAMPLE_DIR / "ingest-samples.ts"
 
 # Event fields that every CTE needs and that sit on the event itself, not in kdes.
 _UNIVERSAL_FIELDS = {"traceability_lot_code", "product_description", "quantity", "unit_of_measure"}
 
 _ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
-# Test-only value for the HMAC check below. It is not a credential.
-_TEST_SIGNING_SECRET = "docs-sample-signing-secret"  # pragma: allowlist secret
-
-
-def _render(when: datetime, path: Path = SAMPLE_PATH) -> dict:
-    """Fill the sample's placeholders the way the docs pages do."""
-    text = path.read_text(encoding="utf-8")
-    text = text.replace("{{EVENT_TIMESTAMP}}", when.strftime("%Y-%m-%dT%H:%M:%SZ"))
-    text = text.replace("{{EVENT_DATE}}", when.strftime("%Y-%m-%d"))
-    assert "{{" not in text, "sample has a placeholder this test does not fill"
-    return json.loads(text)
-
-
-def _one_hour_ago() -> datetime:
-    return datetime.now(timezone.utc) - timedelta(hours=1)
-
-
-def _sample_id(path: Path) -> str:
-    return path.stem
-
-
-def _missing_kde_cases() -> list[tuple[Path, str]]:
-    """(sample, kde) for every required KDE a sample carries inside ``kdes``."""
-    cases: list[tuple[Path, str]] = []
-    for path in SAMPLE_PATHS:
-        for event in json.loads(path.read_text(encoding="utf-8"))["events"]:
-            required = REQUIRED_KDES_BY_CTE[WebhookCTEType(event["cte_type"])]
-            cases.extend((path, kde) for kde in required if kde in event["kdes"])
-    return cases
+# HMAC key for the signature checks below, generated per run.
+_TEST_SIGNING_SECRET = secrets.token_hex(32)
 
 
 @pytest.fixture(autouse=True)
@@ -112,115 +73,88 @@ def _default_replay_window(monkeypatch):
     monkeypatch.delenv("WEBHOOK_MAX_EVENT_FUTURE_HOURS", raising=False)
 
 
-def test_every_docs_sample_file_is_covered():
-    assert {p.name for p in SAMPLE_PATHS} == EXPECTED_SAMPLES, (
-        "a docs ingest sample was added, renamed or removed: update EXPECTED_SAMPLES and the page that renders it"
-    )
+def _skeleton_block() -> str:
+    text = SKELETON_PATH.read_text(encoding="utf-8")
+    start = text.index("const INGEST_BODY_SKELETON")
+    return text[start : text.index("\n};", start)]
 
 
-@pytest.mark.parametrize("path", SAMPLE_PATHS, ids=_sample_id)
-def test_sample_file_has_no_fixed_date_and_uses_test_lot_prefix(path):
-    raw = path.read_text(encoding="utf-8")
-    assert not _ISO_DATE.search(raw), "a shared sample must keep placeholders, never a fixed date"
-    payload = _render(_one_hour_ago(), path)
-    for event in payload["events"]:
-        assert event["traceability_lot_code"].startswith("TEST-"), "writes are permanent: samples use a TEST- lot"
+def _skeleton_keys(block: str) -> set[str]:
+    return set(re.findall(r"^\s*([a-z_]+):", block, flags=re.MULTILINE))
 
 
-@pytest.mark.parametrize("path", SAMPLE_PATHS, ids=_sample_id)
-def test_sample_passes_model_kde_and_timestamp_checks(path):
-    payload = WebhookPayload.model_validate(_render(_one_hour_ago(), path))
+def _runtime_payload(when: datetime) -> dict:
+    """A receiving event built from the backend's required-KDE table, values generated at runtime."""
+    token = uuid.uuid4().hex
+    kdes: dict[str, object] = {}
+    event: dict[str, object] = {
+        "cte_type": WebhookCTEType.RECEIVING.value,
+        "traceability_lot_code": f"TEST-{token}",
+        "product_description": f"product-{token}",
+        "quantity": 1,
+        "unit_of_measure": "cases",
+        "location_name": f"location-{token}",
+        "timestamp": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "kdes": kdes,
+    }
+    for kde in REQUIRED_KDES_BY_CTE[WebhookCTEType.RECEIVING]:
+        if kde in event:
+            continue
+        kdes[kde] = when.strftime("%Y-%m-%d") if kde.endswith("_date") else f"{kde}-{token}"
+    return {"source": f"source-{token}", "events": [event]}
 
-    assert payload.events, "sample must contain at least one event"
+
+def test_no_example_payload_files_are_shipped():
+    # #3544 removed the ingest-*.json samples on purpose; they must not come back.
+    assert sorted(p.name for p in SAMPLE_DIR.glob("ingest-*.json")) == []
+
+
+def test_skeleton_keeps_placeholders_and_no_fixed_date():
+    block = _skeleton_block()
+    assert "{{EVENT_TIMESTAMP}}" in block and "{{EVENT_DATE}}" in block
+    assert not _ISO_DATE.search(block), "the docs skeleton must keep placeholders, never a fixed date"
+
+
+def test_skeleton_fields_match_the_backend_receiving_event():
+    keys = _skeleton_keys(_skeleton_block())
+    required = set(REQUIRED_KDES_BY_CTE[WebhookCTEType.RECEIVING])
+    event_fields = set(IngestEvent.model_fields)
+
+    documented_kdes = keys - event_fields - {"source", "events"}
+    assert documented_kdes == required - event_fields, "skeleton kdes differ from the receiving KDEs the backend requires"
+    assert (keys & event_fields) >= _UNIVERSAL_FIELDS
+
+
+def test_runtime_event_passes_model_kde_and_timestamp_checks():
+    payload = WebhookPayload.model_validate(_runtime_payload(datetime.now(timezone.utc) - timedelta(hours=1)))
     for event in payload.events:
         assert _validate_event_timestamp_window(event.timestamp) is None
         assert _validate_event_kdes(event) == []
 
 
-def test_quickstart_sample_is_a_receiving_event():
-    payload = WebhookPayload.model_validate(_render(_one_hour_ago()))
-    assert [e.cte_type for e in payload.events] == [WebhookCTEType.RECEIVING]
+def test_stale_timestamp_is_rejected_by_the_replay_window():
+    payload = WebhookPayload.model_validate(_runtime_payload(datetime.now(timezone.utc) - timedelta(days=91)))
+    error = _validate_event_timestamp_window(payload.events[0].timestamp)
+    assert error and "WEBHOOK_MAX_EVENT_AGE_DAYS=90" in error
 
 
-@pytest.mark.parametrize("path", SAMPLE_PATHS, ids=_sample_id)
-def test_stale_timestamp_is_rejected_by_the_replay_window(path):
-    stale = datetime.now(timezone.utc) - timedelta(days=91)
-    payload = WebhookPayload.model_validate(_render(stale, path))
-
-    # The Pydantic model accepts old dates (backfill); the route rejects the event
-    # inside a 200, so the docs call this case "rejected".
-    errors = [_validate_event_timestamp_window(e.timestamp) for e in payload.events]
-    assert all(errors), "a sample dated more than 90 days ago must fail the replay window"
-    assert "WEBHOOK_MAX_EVENT_AGE_DAYS=90" in errors[0]
-
-
-@pytest.mark.parametrize("path", SAMPLE_PATHS, ids=_sample_id)
-def test_future_timestamp_fails_the_whole_request_not_one_event(path):
-    # More than 24 hours ahead never reaches the per-event loop: the model refuses
-    # the body, so FastAPI answers 422 for the whole request and nothing is stored.
-    # The docs must say that, not "comes back rejected".
-    ahead = datetime.now(timezone.utc) + timedelta(hours=25)
+def test_future_timestamp_fails_the_whole_request_not_one_event():
     with pytest.raises(ValidationError) as excinfo:
-        WebhookPayload.model_validate(_render(ahead, path))
-
-    locations = [error["loc"] for error in excinfo.value.errors()]
-    assert ("events", 0, "timestamp") in locations
+        WebhookPayload.model_validate(_runtime_payload(datetime.now(timezone.utc) + timedelta(hours=25)))
+    assert ("events", 0, "timestamp") in [error["loc"] for error in excinfo.value.errors()]
     assert "more than 24 hours in the future" in str(excinfo.value)
 
 
 def test_timestamp_just_inside_the_future_window_is_accepted():
-    ahead = datetime.now(timezone.utc) + timedelta(hours=23)
-    payload = WebhookPayload.model_validate(_render(ahead))
-
+    payload = WebhookPayload.model_validate(_runtime_payload(datetime.now(timezone.utc) + timedelta(hours=23)))
     assert _validate_event_timestamp_window(payload.events[0].timestamp) is None
-
-
-@pytest.mark.parametrize(("path", "kde"), _missing_kde_cases(), ids=lambda v: v.stem if isinstance(v, Path) else v)
-def test_missing_required_kde_is_rejected(path, kde):
-    payload = _render(_one_hour_ago(), path)
-    cte = WebhookCTEType(payload["events"][0]["cte_type"])
-    assert kde in REQUIRED_KDES_BY_CTE[cte], "a docs sample carries a KDE the backend does not require"
-    broken = copy.deepcopy(payload)
-    del broken["events"][0]["kdes"][kde]
-
-    event = WebhookPayload.model_validate(broken).events[0]
-    assert _validate_event_kdes(event) == [f"Missing required KDE '{kde}' for {cte.value} CTE"]
-
-
-def test_walkthrough_samples_form_one_chain():
-    # Walkthrough steps 1-3 tell one story: receive a lot, transform it, ship the new lot.
-    received = _render(_one_hour_ago(), SAMPLE_DIR / "ingest-walkthrough-receiving.json")["events"][0]
-    transformed = _render(_one_hour_ago(), SAMPLE_DIR / "ingest-walkthrough-transformation.json")["events"][0]
-    shipped = _render(_one_hour_ago(), SAMPLE_DIR / "ingest-walkthrough-shipping.json")["events"][0]
-
-    assert transformed["kdes"]["input_lot_codes"] == [received["traceability_lot_code"]]
-    assert shipped["traceability_lot_code"] == transformed["traceability_lot_code"]
-    assert received["traceability_lot_code"] != transformed["traceability_lot_code"]
-
-
-def test_receiving_sample_carries_every_documented_receiving_kde():
-    # The quickstart and API reference list these five by name.
-    event = _render(_one_hour_ago())["events"][0]
-    documented = {
-        "receive_date",
-        "receiving_location",
-        "immediate_previous_source",
-        "reference_document",
-        "tlc_source_reference",
-    }
-
-    assert documented <= set(event["kdes"])
-    assert documented <= set(REQUIRED_KDES_BY_CTE[WebhookCTEType.RECEIVING]), (
-        "docs list a KDE the backend no longer requires"
-    )
 
 
 def test_required_kdes_table_matches_the_backend():
     documented = json.loads(REQUIRED_KDES_PATH.read_text(encoding="utf-8"))
 
     # The docs list the 7 FDA-defined CTEs. GROWING is accepted for backwards
-    # compatibility only and has no required-KDE row; any other member without a
-    # row is a CTE the docs table is missing.
+    # compatibility only and has no required-KDE row.
     assert set(WebhookCTEType) - set(REQUIRED_KDES_BY_CTE) == {WebhookCTEType.GROWING}
     assert set(documented) == {cte.value for cte in REQUIRED_KDES_BY_CTE}, (
         "a CTE type is missing from, or extra in, the docs table"
@@ -250,23 +184,23 @@ def _signature_check(monkeypatch, secret: str, body: bytes, signature: str | Non
     asyncio.run(_verify_webhook_signature(_request_with_body(body), signature))
 
 
-def test_signature_is_hmac_sha256_of_the_exact_body_bytes(monkeypatch):
-    secret = _TEST_SIGNING_SECRET
-    body = json.dumps(_render(_one_hour_ago())).encode()
-    signature = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+def _signed_body() -> tuple[bytes, str]:
+    body = json.dumps(_runtime_payload(datetime.now(timezone.utc) - timedelta(hours=1))).encode()
+    return body, "sha256=" + hmac.new(_TEST_SIGNING_SECRET.encode(), body, hashlib.sha256).hexdigest()
 
-    _signature_check(monkeypatch, secret, body, signature)  # no exception == accepted
+
+def test_signature_is_hmac_sha256_of_the_exact_body_bytes(monkeypatch):
+    body, signature = _signed_body()
+    _signature_check(monkeypatch, _TEST_SIGNING_SECRET, body, signature)  # no exception == accepted
 
 
 def test_signature_over_different_bytes_or_missing_is_rejected(monkeypatch):
-    secret = _TEST_SIGNING_SECRET
-    body = json.dumps(_render(_one_hour_ago())).encode()
-    signature = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    body, signature = _signed_body()
 
     with pytest.raises(HTTPException) as tampered:
-        _signature_check(monkeypatch, secret, body + b" ", signature)  # one extra byte
+        _signature_check(monkeypatch, _TEST_SIGNING_SECRET, body + b" ", signature)  # one extra byte
     assert tampered.value.status_code == 401
 
     with pytest.raises(HTTPException) as missing:
-        _signature_check(monkeypatch, secret, body, None)
+        _signature_check(monkeypatch, _TEST_SIGNING_SECRET, body, None)
     assert missing.value.status_code == 401

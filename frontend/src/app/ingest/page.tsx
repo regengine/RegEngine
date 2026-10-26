@@ -42,7 +42,6 @@ import {
   ArrowRight,
   Key,
   ClipboardCheck,
-  FlaskConical,
   Globe,
   Landmark,
   Scale
@@ -185,7 +184,7 @@ export default function IngestPage() {
   }, [storedApiKey, apiKey]);
 
   useEffect(() => {
-    if (!jobId || jobId === 'demo-job-123') return;
+    if (!jobId) return;
 
     const intervalId = window.setInterval(async () => {
       try {
@@ -333,17 +332,6 @@ export default function IngestPage() {
     try {
       if (!(await prepareSubmit())) return;
 
-      // Demonstration Override for the Sales Demo flow
-      if (activeTab === 'url' && url === EXAMPLE_URLS[0].url) {
-        setJobId('demo-job-123');
-
-        // Simulate real ingestion stages over 3.5 seconds
-        setTimeout(() => setJobStatus('parsing'), 800);
-        setTimeout(() => setJobStatus('extracting'), 1800);
-        setTimeout(() => setJobStatus('completed'), 3500);
-        return;
-      }
-
       try {
         if (activeTab === 'file') {
           if (!file) return;
@@ -403,8 +391,8 @@ export default function IngestPage() {
     ? epcisResult.accepted === 0
       ? 'No events accepted'
       : epcisResult.rejected > 0
-        ? 'EPCIS partially accepted'
-        : 'EPCIS processed'
+        ? 'EPCIS (Preview) partially accepted'
+        : 'EPCIS (Preview) processed'
     : '';
   const epcisTone = epcisResult
     ? epcisResult.accepted === 0
@@ -423,12 +411,6 @@ export default function IngestPage() {
       ? 'success'
       : 'warning'
     : 'neutral';
-
-  const demoBanner = (
-    <Callout tone="warning">
-      Simulated walkthrough: sample output
-    </Callout>
-  );
 
   return (
     <PageContainer className={statusError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
@@ -710,15 +692,8 @@ export default function IngestPage() {
                             </label>
                           </div>
                           <p className="text-small text-re-text-tertiary">
-                            CSV uploads skip bad rows. EPCIS files are all or nothing: if any event fails, nothing is saved.
+                            CSV uploads skip bad rows. EPCIS (Preview) files are all or nothing: if any event fails, nothing is saved.
                           </p>
-                          <div className="mt-1">
-                            <Button variant="link" size="sm" asChild>
-                              <a href="/samples/sample_epcis_2.0.json" download>
-                                Download a sample EPCIS file
-                              </a>
-                            </Button>
-                          </div>
                         </div>
                       </TabsContent>
                     </Tabs>
@@ -787,7 +762,6 @@ export default function IngestPage() {
 
                   {jobId && !statusError && jobStatus !== 'failed' && (
                     <div className="mt-6 space-y-4 rounded-lg border border-re-border-subtle bg-re-surface-inset p-4">
-                      {jobId === 'demo-job-123' && demoBanner}
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-ui font-medium text-re-text-primary">Ingestion Progress</p>
                         <Badge size="sm" mono>Job {jobId}</Badge>
@@ -891,7 +865,6 @@ export default function IngestPage() {
             ) : (
               <Card>
                 <CardContent className="space-y-4">
-                  {jobId === 'demo-job-123' && demoBanner}
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-subheading text-re-text-primary">
                       Ingestion request completed
@@ -940,23 +913,6 @@ export default function IngestPage() {
                     Use URL ingestion for public documents, File Upload for CSV traceability events, or EPCIS 2.0 (Preview) for GS1 EPCIS JSON and XML files.
                   </p>
                 </div>
-                {experimentalFeaturesEnabled() && (
-                  <div className="border-t border-re-border-subtle pt-5">
-                    <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
-                      <FlaskConical className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-                      Inflow Lab
-                    </div>
-                    <p className="mt-2 text-ui text-re-text-secondary">
-                      Use the lab for FSMA event simulation and event replay so test traffic stays tagged.
-                    </p>
-                    <Button size="sm" variant="secondary" className="mt-3" asChild>
-                      <Link href="/dashboard/inflow-lab">
-                        Open Inflow Lab
-                        <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-                      </Link>
-                    </Button>
-                  </div>
-                )}
                 <div className="border-t border-re-border-subtle pt-5">
                   <div className="flex items-center gap-2 text-ui font-medium text-re-text-primary">
                     <ClipboardCheck className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
