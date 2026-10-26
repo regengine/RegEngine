@@ -14,6 +14,7 @@ from typing import List
 import structlog
 
 from ..neo4j_utils import Neo4jClient
+from .chain_integrity import _run_paged
 from .types import DataQualityReport, KDECompletenessMetrics, OrphanLot
 
 logger = structlog.get_logger("fsma-utils")
@@ -149,15 +150,12 @@ async def find_orphaned_lots(
         l.created_at as created_at,
         most_recent_event.type as last_event_type,
         most_recent_event.event_date as last_event_date
-    ORDER BY most_recent_event.event_date ASC
-    LIMIT 2000
+    ORDER BY most_recent_event.event_date ASC, l.tlc ASC
     """
 
     orphans = []
     async with client.session() as session:
-        result = await session.run(query, tenant_id=tenant_id, cutoff_date=cutoff_date)
-
-        async for record in result:
+        async for record in _run_paged(session, query, tenant_id=tenant_id, cutoff_date=cutoff_date):
             # Calculate stagnant days. The parsed date is naive, so anchor
             # it to UTC before subtracting: an aware minus naive
             # subtraction raises TypeError, which the fallback below would

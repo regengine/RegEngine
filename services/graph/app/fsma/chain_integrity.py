@@ -8,7 +8,7 @@ temporal paradoxes, and cryptographic hash-chain gaps.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 import structlog
 from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
@@ -16,6 +16,31 @@ from shared.fsma_rules import TimeArrowRule, TraceEvent as SharedTraceEvent
 from ..neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("fsma-utils")
+
+
+# Rows fetched per round trip. Results are read page by page (SKIP/LIMIT on a
+# stable ORDER BY) so every matching row is reported; nothing is silently
+# dropped at a fixed cap, and each query round trip stays bounded.
+_PAGE_SIZE = 2000
+
+
+async def _run_paged(session: Any, query: str, **params: Any) -> AsyncIterator[Any]:
+    """Yield every record of ``query``, fetched ``_PAGE_SIZE`` rows at a time.
+
+    ``query`` must end with a deterministic ORDER BY (unique tiebreaker) and
+    no SKIP/LIMIT; paging is appended here.
+    """
+    paged_query = query.rstrip() + "\n    SKIP $page_skip LIMIT $page_size\n"
+    skip = 0
+    while True:
+        result = await session.run(paged_query, page_skip=skip, page_size=_PAGE_SIZE, **params)
+        fetched = 0
+        async for record in result:
+            fetched += 1
+            yield record
+        if fetched < _PAGE_SIZE:
+            return
+        skip += fetched
 
 
 async def find_gaps(
@@ -37,9 +62,7 @@ async def find_gaps(
             callers read every tenant's events, so callers must pass a tenant.
     """
     if not tenant_id or not str(tenant_id).strip():
-        raise ValueError(
-            "find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
-        )
+        raise ValueError("find_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported")
 
     start_time = time.time()
 
@@ -65,13 +88,12 @@ async def find_gaps(
         CASE WHEN e.event_date IS NULL OR e.event_date = '' THEN 'missing_date' ELSE '' END +
         CASE WHEN NOT EXISTS { MATCH (e)<-[:UNDERWENT]-(l:Lot) WHERE l.tenant_id = $tenant_id } THEN ',missing_lot' ELSE '' END +
         CASE WHEN e.responsible_party_contact IS NULL OR e.responsible_party_contact = '' THEN ',missing_responsible_party_contact' ELSE '' END as gaps
-    LIMIT 2000
+    ORDER BY event_id
     """
 
     gaps = []
     async with client.session() as session:
-        result = await session.run(query, tenant_id=tenant_id)
-        async for record in result:
+        async for record in _run_paged(session, query, tenant_id=tenant_id):
             gaps.append(
                 {
                     "event_id": record["event_id"],
@@ -140,7 +162,8 @@ async def find_broken_chains(
     # ------------------------------------------------------------------ #
     # Query 1: SHIPPING with no origin event at all
     # Optimization: single-hop UNDERWENT only (no variable-length path),
-    # LIMIT 2000 caps result set on large tenants for sub-second response.
+    # Results are paged (_run_paged) instead of capped, so large tenants
+    # get every violation.
     # ------------------------------------------------------------------ #
     # #1301: Every event node joined via UNDERWENT must be tenant-scoped,
     # not just the Lot. A cross-tenant UNDERWENT edge (possible because of
@@ -165,8 +188,7 @@ async def find_broken_chains(
         shipping.document_id  AS document_id,
         l.tlc                 AS lot_tlc,
         l.product_description AS product_description
-    ORDER BY shipping.event_date
-    LIMIT 2000
+    ORDER BY shipping.event_date, shipping.event_id, l.tlc
     """
 
     # ------------------------------------------------------------------ #
@@ -206,8 +228,7 @@ async def find_broken_chains(
         l.product_description        AS product_description,
         earliest_origin_id           AS origin_event_id,
         earliest_origin_date         AS origin_date
-    ORDER BY shipping.event_date
-    LIMIT 2000
+    ORDER BY shipping.event_date, shipping.event_id, l.tlc
     """
 
     violations: List[Dict[str, Any]] = []
@@ -215,8 +236,7 @@ async def find_broken_chains(
 
     async with client.session() as session:
         # --- Missing origin violations --------------------------------
-        result = await session.run(missing_origin_query, tenant_id=tenant_id)
-        async for record in result:
+        async for record in _run_paged(session, missing_origin_query, tenant_id=tenant_id):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue
@@ -236,8 +256,7 @@ async def find_broken_chains(
             )
 
         # --- Temporal paradox violations ------------------------------
-        result = await session.run(temporal_paradox_query, tenant_id=tenant_id)
-        async for record in result:
+        async for record in _run_paged(session, temporal_paradox_query, tenant_id=tenant_id):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue
@@ -331,12 +350,10 @@ async def find_broken_chains(
             l.tlc                      AS lot_tlc,
             l.product_description      AS product_description,
             origins                    AS expected_predecessors
-        ORDER BY shipping.event_date
-        LIMIT 2000
+        ORDER BY shipping.event_date, shipping.event_id, l.tlc
         """
 
-        result = await session.run(crypto_gap_query, tenant_id=tenant_id)
-        async for record in result:
+        async for record in _run_paged(session, crypto_gap_query, tenant_id=tenant_id):
             eid = record["event_id"]
             if eid in seen_event_ids:
                 continue
@@ -392,9 +409,7 @@ async def find_all_gaps(
             the underlying gap queries, which require a tenant).
     """
     if not tenant_id or not str(tenant_id).strip():
-        raise ValueError(
-            "find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported"
-        )
+        raise ValueError("find_all_gaps requires a non-empty tenant_id; null-tenant queries are no longer supported")
 
     gaps = await find_gaps(client, tenant_id)
     broken_chains = await find_broken_chains(client, tenant_id)
