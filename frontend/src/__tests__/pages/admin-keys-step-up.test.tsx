@@ -9,9 +9,10 @@ import { StepUpModal } from '@/components/auth/StepUpModal';
 const mocks = vi.hoisted(() => ({
   listAPIKeys: vi.fn(),
   performPasskeyLogin: vi.fn(),
+  push: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({
     isAuthenticated: true,
@@ -45,6 +46,7 @@ describe('Admin keys list step-up', () => {
   beforeEach(() => {
     mocks.listAPIKeys.mockReset();
     mocks.performPasskeyLogin.mockReset().mockResolvedValue(undefined);
+    mocks.push.mockReset();
     mocks.listAPIKeys
       .mockRejectedValueOnce(Object.assign(new Error('Forbidden'), {
         response: { status: 403, data: { detail: { code: 'requires_step_up' } } },
@@ -74,5 +76,17 @@ describe('Admin keys list step-up', () => {
     await waitFor(() => expect(mocks.listAPIKeys).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/no api keys found/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /confirm with passkey/i })).not.toBeInTheDocument();
+  });
+
+  it('returns to the dashboard on Cancel without retrying the blocked load', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /confirm with passkey/i }));
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/dashboard');
+    expect(mocks.performPasskeyLogin).not.toHaveBeenCalled();
+    expect(mocks.listAPIKeys).toHaveBeenCalledTimes(1);
   });
 });

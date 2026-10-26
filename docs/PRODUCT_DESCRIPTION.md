@@ -14,7 +14,7 @@ Accepted events are stored with tenant boundaries in PostgreSQL. The platform ev
 
 Optional Jev assistance suggests mappings for unfamiliar CSV columns and a file's CTE when none is declared. Upload screens expose suggestions for operator review. Automatic application defaults off, requests use headers without row samples by default, and model suggestions do not replace deterministic validation. Preview and evaluation tools let operators inspect suggestions before enabling automatic application.
 
-A browser verifier, a downloadable Python bundle verifier, and a reproducible recall drill let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
+A browser verifier and a downloadable Python bundle verifier let reviewers inspect the evidence format. Successful hash or Merkle verification establishes artifact integrity; it does not establish source-data accuracy or regulatory approval.
 
 ## Capability and availability matrix
 
@@ -29,7 +29,7 @@ A browser verifier, a downloadable Python bundle verifier, and a reproducible re
 | Tenant-scoped records and tamper-evident chains | [Tenant authority](../services/shared/tenant_context.py), [canonical persistence](../services/shared/canonical_persistence/writer.py), [canonical chain verification](../services/shared/canonical_persistence/verification.py), [admin audit integrity](../services/admin/app/audit_integrity.py). See [persistence cutover](persistence/dual-write-cutover.md). |
 | FDA-oriented exports and request-response packages | Release-enabled: [FDA export](../services/ingestion/app/fda_export/router.py), [request workflow](../services/ingestion/app/request_workflow_router.py), [auditor API](../services/ingestion/app/auditor_router.py). |
 | Readiness assessments and recall reporting | Release-enabled: [readiness](../services/ingestion/app/readiness_router.py), [recall reports](../services/ingestion/app/recall_report.py). |
-| Bundle verifier and synthetic recall drill | [Browser verifier](https://regengine.co/verify), [verifier source](../frontend/public/sdk/verify_chain.py). The recall drill runs in the signed-in dashboard ([recall drills](../frontend/src/app/dashboard/recall-drills/page.tsx)). Synthetic demonstration data. |
+| Bundle verifier and recall-drill endpoint | [Browser verifier](https://regengine.co/verify), [verifier source](../frontend/public/sdk/verify_chain.py). The recall-drill endpoint currently returns no drill data. |
 | Supplier manifest remediation and correction links | Implemented in [remediation](../services/ingestion/app/remediation/) and the [buyer dashboard](../frontend/src/app/remediation/page.tsx); excluded from the production router allowlist. Notification delivery also requires recipient/provider configuration. |
 | EPCIS JSON-LD export and broader recall simulations | Implemented in [EPCIS export](../services/ingestion/app/epcis_export.py) and [simulations](../services/ingestion/app/recall_simulations.py); these routers are experimental and excluded from the production allowlist. Public sample EPCIS downloads are a separate proof surface. |
 | Inbound email CSV ingestion | [Postmark integration](../services/ingestion/app/email_ingest/); excluded from the production allowlist, with no self-service provisioning UI. See [rollout notes](engineering/EMAIL_INGESTION.md). |

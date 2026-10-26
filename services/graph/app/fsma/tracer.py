@@ -28,6 +28,12 @@ logger = structlog.get_logger("fsma-utils")
 # facility on each row, i.e. by fabricating the association. This query
 # re-reads the (lot, event, facility) edges for the nodes the traversal
 # already returned, so the association survives to the exporter.
+# SEL-515: every capped trace query fetches ``TRACE_ROW_LIMIT + 1`` rows
+# (``LIMIT 5001``). Only a query that returns more than the cap was really cut
+# off: the extra row is dropped and the result is flagged ``truncated``
+# (partial result, not a 413). Exactly ``TRACE_ROW_LIMIT`` rows is complete.
+TRACE_ROW_LIMIT = 5000
+
 _TRACE_ROWS_QUERY = """
 MATCH (l:Lot)-[:UNDERWENT|PRODUCED|CONSUMED]-(e:TraceEvent)
 WHERE l.tenant_id = $tenant_id
@@ -37,7 +43,7 @@ WHERE l.tenant_id = $tenant_id
 OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
 WHERE f.tenant_id = $tenant_id
 RETURN properties(l) AS lot, properties(e) AS event, properties(f) AS facility
-LIMIT 5000
+LIMIT 5001
 """
 
 
@@ -69,6 +75,10 @@ async def _collect_trace_rows(
                 event_ids=event_ids,
             )
             async for record in result:
+                if len(rows) >= TRACE_ROW_LIMIT:
+                    # SEL-515: the cap-plus-one row only signals truncation.
+                    rows.append(None)  # type: ignore[arg-type]
+                    break
                 lot_props = record["lot"] or {}
                 event_props = record["event"] or {}
                 facility_props = record["facility"] or None
@@ -313,6 +323,21 @@ def _take_follow_up_facility(
     )
 
 
+def _truncation(path_records: int, trace_rows: List[Dict[str, Any]], *, direction: str, tlc: str) -> Dict[str, Any]:
+    """SEL-515: flag a trace whose capped queries hit ``TRACE_ROW_LIMIT``."""
+    truncated = path_records > TRACE_ROW_LIMIT or len(trace_rows or []) > TRACE_ROW_LIMIT
+    if truncated:
+        logger.warning(
+            "trace_truncated_at_cap",
+            direction=direction,
+            tlc=tlc,
+            path_records=path_records,
+            trace_rows=len(trace_rows or []),
+            limit=TRACE_ROW_LIMIT,
+        )
+    return {"truncated": truncated, "truncation_limit": TRACE_ROW_LIMIT if truncated else None}
+
+
 async def trace_forward(
     client: Neo4jClient,
     tlc: str,
@@ -370,7 +395,7 @@ async def trace_forward(
     # - USING INDEX hint on Lot(tlc) forces the planner to anchor on
     #   the indexed start node rather than scanning all Lot nodes
     # - Dropped unused `rels` variable from WITH to reduce memory
-    # - LIMIT 5000 caps result set to prevent runaway expansion on
+    # - LIMIT 5001 (cap plus one, SEL-515) caps result set to prevent runaway expansion on
     #   dense supply chain graphs
     #
     # SECURITY (#1256): variable-length paths must enforce tenant scope
@@ -410,7 +435,7 @@ async def trace_forward(
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
-    LIMIT 5000
+    LIMIT 5001
     """
     )
 
@@ -435,7 +460,7 @@ async def trace_forward(
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
-    LIMIT 5000
+    LIMIT 5001
     """
     )
 
@@ -446,6 +471,7 @@ async def trace_forward(
     seen_events = set()
     seen_lots = set()
     running = {"max_hops": 0, "total_quantity": 0.0}
+    path_records = 0
 
     # Use time-filtered query if enforcing time arrow
     active_query = query if enforce_time_arrow else query_no_time_filter
@@ -454,6 +480,10 @@ async def trace_forward(
         result = await session.run(active_query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
+            path_records += 1
+            if path_records > TRACE_ROW_LIMIT:
+                # SEL-515: the cap-plus-one row only signals truncation.
+                break
             _take_path_node(
                 record,
                 tenant_id=tenant_id,
@@ -567,6 +597,8 @@ async def trace_forward(
 
     # #2945: preserve the lot<->event<->facility association for exporters.
     trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)
+    truncation = _truncation(path_records, trace_rows, direction="forward", tlc=tlc)
+    trace_rows = trace_rows[:TRACE_ROW_LIMIT]
 
     query_time = (time.time() - start_time) * 1000  # Convert to ms
 
@@ -593,6 +625,7 @@ async def trace_forward(
         time_violations=time_violations if time_violations else None,
         risk_flags=risk_flags if risk_flags else None,
         trace_rows=trace_rows or None,
+        **truncation,
     )
 
 
@@ -664,7 +697,7 @@ async def trace_backward(
     # Performance notes:
     # - USING INDEX hint anchors on indexed Lot(tlc) start node
     # - Capped rel_depth prevents combinatorial blowup
-    # - LIMIT 5000 provides a safety net on dense graphs
+    # - LIMIT 5001 (cap plus one, SEL-515) provides a safety net on dense graphs
     #
     # SECURITY (#1256): enforce tenant_id on every node in the path, not
     # just the start node, so transitive traversals cannot cross tenant
@@ -694,7 +727,7 @@ async def trace_backward(
         properties(node) as props,
         length(path) as hop_count
     ORDER BY hop_count
-    LIMIT 5000
+    LIMIT 5001
     """
     )
 
@@ -705,11 +738,16 @@ async def trace_backward(
     seen_events = set()
     seen_lots = set()
     running = {"max_hops": 0, "total_quantity": 0.0}
+    path_records = 0
 
     async with client.session() as session:
         result = await session.run(query, tlc=tlc, tenant_id=tenant_id)
 
         async for record in result:
+            path_records += 1
+            if path_records > TRACE_ROW_LIMIT:
+                # SEL-515: the cap-plus-one row only signals truncation.
+                break
             _take_path_node(
                 record,
                 tenant_id=tenant_id,
@@ -763,6 +801,8 @@ async def trace_backward(
 
     # #2945: preserve the lot<->event<->facility association for exporters.
     trace_rows = await _collect_trace_rows(client, tlc, tenant_id, lots, events)
+    truncation = _truncation(path_records, trace_rows, direction="backward", tlc=tlc)
+    trace_rows = trace_rows[:TRACE_ROW_LIMIT]
 
     query_time = (time.time() - start_time) * 1000
 
@@ -785,4 +825,5 @@ async def trace_backward(
         query_time_ms=round(query_time, 2),
         hop_count=max_hops,
         trace_rows=trace_rows or None,
+        **truncation,
     )
