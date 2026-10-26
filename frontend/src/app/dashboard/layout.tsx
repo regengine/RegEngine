@@ -46,7 +46,6 @@ import {
     Fingerprint,
     ClipboardList,
     Route,
-    FlaskConical,
     Bot,
     ShieldAlert,
     Code2,
@@ -84,7 +83,6 @@ interface CollapsibleSection {
 const TOP_ITEMS: NavItem[] = [
     { label: 'Overview', href: '/dashboard', icon: Activity },
     { label: 'Trace', href: '/trace', icon: Route },
-    { label: 'Inflow Lab', href: '/dashboard/inflow-lab', icon: FlaskConical, experimentalPage: true },
     { label: 'Compliance', href: '/dashboard/compliance', icon: BarChart3 },
     { label: 'Alerts', href: '/dashboard/alerts', icon: Bell, experimentalPage: true },
 ];
@@ -566,9 +564,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {demoMode && (
                 <Callout tone="warning" className="rounded-none border-r-0 border-t-0 px-4 py-2 text-small">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span>Sandbox mode: using sample data for demonstration.</span>
+                        <span>No data yet. This workspace has no live records connected.</span>
                         <Link href="/ingest" className="underline hover:no-underline">
-                            Connect real data to exit sample mode
+                            Connect real data to get started
                         </Link>
                     </span>
                 </Callout>

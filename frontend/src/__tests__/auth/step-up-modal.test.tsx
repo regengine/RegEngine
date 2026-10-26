@@ -6,7 +6,7 @@ import { DEFAULT_STEP_UP_REASON, STEP_UP_REQUIRED_EVENT, requestStepUp } from '@
 
 const mocks = vi.hoisted(() => ({ login: vi.fn(), seed: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
-vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ user: { email: 'tester@example.com' } }) }));
+vi.mock('@/lib/auth-context', () => ({ useAuth: () => ({ user: null }) }));
 vi.mock('@/lib/passwordless-auth', () => ({
     isValidEmail: () => true,
     performPasskeyLogin: mocks.login,
@@ -19,7 +19,7 @@ describe('step-up error recovery', () => {
     it('keeps the protected action blocked and allows recovery after a domain error', async () => {
         mocks.login.mockRejectedValue(new DOMException('Invalid relying party ID', 'SecurityError'));
         render(<StepUpModal />);
-        act(() => window.dispatchEvent(new Event(STEP_UP_REQUIRED_EVENT)));
+        act(() => requestStepUp({ reason: "Confirm it's you to view QA Health." }));
         const user = userEvent.setup();
         await user.click(screen.getByRole('button', { name: /authenticate with passkey/i }));
         expect(await screen.findByRole('alert')).toHaveTextContent(/unavailable on this domain/i);
@@ -32,7 +32,7 @@ describe('step-up error recovery', () => {
     it('preserves cancellation errors without claiming a domain misconfiguration', async () => {
         mocks.login.mockRejectedValue(new DOMException('User cancelled', 'NotAllowedError'));
         render(<StepUpModal />);
-        act(() => window.dispatchEvent(new Event(STEP_UP_REQUIRED_EVENT)));
+        act(() => requestStepUp({ reason: "Confirm it's you to view QA Health." }));
         await userEvent.setup().click(screen.getByRole('button', { name: /authenticate with passkey/i }));
         expect(await screen.findByRole('alert')).toHaveTextContent('User cancelled');
         expect(mocks.seed).not.toHaveBeenCalled();
@@ -70,9 +70,26 @@ describe('step-up prompt reason and cancel', () => {
 
     it('cancel without a return path keeps the user on the current page', async () => {
         render(<StepUpModal />);
-        act(() => requestStepUp({ reason: "Confirm it's you to complete this action." }));
+        act(() => requestStepUp({ reason: "Confirm it's you to revoke this API key." }));
         await userEvent.setup().click(screen.getByRole('button', { name: /^cancel$/i }));
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
         expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    it('does not run the protected follow-up when cancelled during passkey verification', async () => {
+        let completeLogin: (() => void) | undefined;
+        mocks.login.mockImplementation(() => new Promise<void>((resolve) => { completeLogin = resolve; }));
+        const onSuccess = vi.fn();
+        render(<StepUpModal />);
+        act(() => requestStepUp({ reason: "Confirm it's you to view QA Health.", onSuccess }));
+        const user = userEvent.setup();
+
+        await user.click(screen.getByRole('button', { name: /authenticate with passkey/i }));
+        await user.click(screen.getByRole('button', { name: /^cancel$/i }));
+        await act(async () => completeLogin?.());
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        expect(onSuccess).not.toHaveBeenCalled();
+        expect(mocks.seed).not.toHaveBeenCalled();
     });
 });

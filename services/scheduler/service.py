@@ -955,9 +955,13 @@ class SchedulerService:
         """
         try:
             counter = self.notifier.retry_outbox_once()
-        except Exception as exc:  # pragma: no cover — telemetry must not crash
+        except Exception as exc:
+            # #2697 convention (SEL-516): log, then RE-RAISE so APScheduler
+            # fires EVENT_JOB_ERROR and the #1144 listener records the
+            # failure in scheduler_job_runs; returning recorded success
+            # while the outbox was not draining.
             logger.exception("webhook_outbox_drain_failed", error=str(exc))
-            return
+            raise
         if counter["attempted"]:
             logger.info("webhook_outbox_drain_tick", **counter)
 

@@ -183,7 +183,7 @@ export default function AdminPage() {
                   Your session needs a fresh passkey confirmation before API keys can load.
                 </PasskeyRequiredNotice>
                 <Button
-                  onClick={() => requestStepUp({ reason: API_KEYS_STEP_UP_REASON, onSuccess: () => void refetch() })}
+                  onClick={() => requestStepUp({ reason: API_KEYS_STEP_UP_REASON, returnTo: '/dashboard', onSuccess: () => void refetch() })}
                   leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
                 >
                   Confirm with passkey

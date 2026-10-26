@@ -67,20 +67,14 @@ describe('Dashboard navigation discoverability', () => {
         expect(screen.queryByText('All Systems Operational')).not.toBeInTheDocument();
     });
 
-    it('exposes Inflow Lab as a top-level active dashboard link', async () => {
+    it('does not surface Inflow Lab in the dashboard navigation', async () => {
         render(
             <DashboardLayout>
                 <div>Inflow content</div>
             </DashboardLayout>,
         );
 
-        const inflowLink = screen
-            .getAllByText('Inflow Lab')
-            .map((node) => node.closest('a'))
-            .find((link) => link?.getAttribute('aria-current') === 'page');
-        expect(inflowLink).not.toBeNull();
-        expect(inflowLink).toHaveAttribute('href', '/dashboard/inflow-lab');
-        expect(inflowLink).toHaveAttribute('aria-current', 'page');
+        expect(screen.queryByText('Inflow Lab')).not.toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Intake/i })).toBeInTheDocument();
         expect(screen.getAllByText('Document Ingestion')[0].closest('a')).toHaveAttribute('href', '/ingest');
     });

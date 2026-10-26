@@ -6,7 +6,6 @@ import AlphaRedirect from '@/app/alpha/page';
 import DevelopersPage from '@/app/developers/page';
 import DocsHomePage from '@/app/docs/page';
 import AuthenticationDocsPage from '@/app/docs/authentication/page';
-import InflowLabConnectorPage from '@/app/docs/connectors/inflow-lab/page';
 import ErrorCodesPage from '@/app/docs/errors/page';
 import FSMA204GuidePage from '@/app/docs/fsma-204/page';
 import QuickstartPage from '@/app/docs/quickstart/page';
@@ -15,7 +14,6 @@ import SDKsDocsPage, { metadata as sdksMetadata } from '@/app/docs/sdks/page';
 import WalkthroughPage from '@/app/docs/walkthrough/page';
 import WebhooksDocsPage, { metadata as webhooksMetadata } from '@/app/docs/webhooks/page';
 import { ApiReferenceClient } from '@/app/docs/api/ApiReferenceClient';
-import ingestReceiving from '@/lib/api-samples/ingest-receiving.json';
 import requiredKdes from '@/lib/api-samples/required-kdes.json';
 import {
   INGEST_CURL_SAMPLE,
@@ -63,14 +61,6 @@ describe('docs API key prefix is unified across surfaces (issue #2309)', () => {
     }
   });
 
-  it('inflow-lab connector doc uses only rge_live_', () => {
-    render(<InflowLabConnectorPage />);
-    const pageText = document.body.textContent ?? '';
-    expect(pageText).toContain('rge_live_');
-    for (const bad of FORBIDDEN_PREFIXES) {
-      expect(pageText).not.toContain(bad);
-    }
-  });
 });
 
 /**
@@ -88,7 +78,6 @@ const DEVELOPER_PAGES: [string, () => ReactElement][] = [
   ['developers', () => <DevelopersPage />],
   ['FSMA 204 guide', () => <FSMA204GuidePage />],
   ['walkthrough', () => <WalkthroughPage />],
-  ['Inflow Lab connector', () => <InflowLabConnectorPage />],
 ];
 
 /** Pages that show a full ingest call. Each must render it from src/lib/api-samples, never carry its own payload. */
@@ -96,7 +85,6 @@ const INGEST_CALL_PAGES: [string, () => ReactElement][] = [
   ['quickstart', () => <QuickstartPage />],
   ['FSMA 204 guide', () => <FSMA204GuidePage />],
   ['walkthrough', () => <WalkthroughPage />],
-  ['Inflow Lab connector', () => <InflowLabConnectorPage />],
 ];
 
 /** The API reference hides endpoint detail until a card is opened. */
@@ -148,11 +136,12 @@ describe('developer docs stay true against the backend', () => {
     expect(pageText).toContain('"timestamp": "$NOW"');
     // The unsigned samples sent their payload with an inline -d '{...}'.
     expect(pageText).not.toMatch(/-d '\{/);
-    // A created lot is permanent: every lot code in a sample carries the TEST- prefix.
+    // Docs carry no invented records: every lot code shown is a `<...>` field
+    // description to fill in, never a fabricated lot (a posted lot is permanent).
     const lots = Array.from(pageText.matchAll(/"traceability_lot_code":\s*"([^"]+)"/g)).map((m) => m[1]);
-    expect(lots.length).toBeGreaterThan(0);
     for (const lot of lots) {
-      expect(lot.startsWith('TEST-'), lot).toBe(true);
+      expect(lot.startsWith('<'), lot).toBe(true);
+      expect(lot.startsWith('TEST-'), lot).toBe(false);
     }
   });
 
@@ -243,27 +232,22 @@ describe('developer docs stay true against the backend', () => {
 });
 
 describe('shared ingest sample', () => {
-  it('keeps placeholders in the JSON and a TEST- lot code (writes are permanent and billed)', () => {
-    const raw = JSON.stringify(ingestReceiving);
-
-    expect(raw).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    expect(raw).toContain('{{EVENT_TIMESTAMP}}');
-    expect(raw).toContain('{{EVENT_DATE}}');
-    for (const event of ingestReceiving.events) {
-      expect(event.traceability_lot_code.startsWith('TEST-')).toBe(true);
+  it('carries no invented records: no TEST- lots, no fabricated suppliers, no fixed dates', () => {
+    for (const sample of [INGEST_CURL_SAMPLE, INGEST_PYTHON_SAMPLE, INGEST_JS_SAMPLE]) {
+      expect(sample).not.toContain('TEST-');
+      expect(sample).not.toContain('{{');
+      expect(sample).not.toMatch(/"timestamp":\s*"\d{4}-\d{2}-\d{2}/);
+      expect(sample).not.toMatch(/"\w+_date":\s*"\d{4}-\d{2}-\d{2}"/);
+      // Every value in the body skeleton is a `<...>` field description.
+      expect(sample).toContain('"<');
     }
   });
 
-  it('renders every language from the same payload with a clock-derived timestamp', () => {
-    const lot = ingestReceiving.events[0].traceability_lot_code;
-
+  it('renders every language from the same skeleton with a clock-derived timestamp', () => {
     for (const sample of [INGEST_CURL_SAMPLE, INGEST_PYTHON_SAMPLE, INGEST_JS_SAMPLE]) {
-      expect(sample).toContain(lot);
-      expect(sample).not.toContain('{{');
       expect(sample).toContain('X-Webhook-Signature');
       expect(sample).toContain('Idempotency-Key');
       expect(sample).not.toMatch(/X-Tenant-ID/);
-      expect(sample).not.toMatch(/"timestamp":\s*"\d{4}-\d{2}-\d{2}/);
     }
 
     expect(INGEST_CURL_SAMPLE).toContain('"timestamp": "$NOW"');

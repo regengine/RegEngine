@@ -9,21 +9,13 @@ fi
 
 BASE=""
 
-if [ -n "${VERCEL_GIT_PREVIOUS_SHA:-}" ]; then
-  if git cat-file -e "${VERCEL_GIT_PREVIOUS_SHA}^{commit}" 2>/dev/null; then
-    BASE="$VERCEL_GIT_PREVIOUS_SHA"
-  fi
-fi
-
+git fetch --quiet --depth=200 origin main 2>/dev/null || true
+BASE="$(git merge-base HEAD FETCH_HEAD 2>/dev/null || true)"
 if [ -z "$BASE" ]; then
-  git fetch --quiet --depth=100 origin main 2>/dev/null || true
-  BASE="$(git merge-base HEAD FETCH_HEAD 2>/dev/null || true)"
-  if [ -z "$BASE" ]; then
-    if git cat-file -e origin/main^{commit} 2>/dev/null; then
-      BASE="origin/main"
-    elif git rev-parse --verify origin/main >/dev/null 2>&1; then
-      BASE="origin/main"
-    fi
+  if git cat-file -e origin/main^{commit} 2>/dev/null; then
+    BASE="origin/main"
+  elif git rev-parse --verify origin/main >/dev/null 2>&1; then
+    BASE="origin/main"
   fi
 fi
 

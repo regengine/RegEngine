@@ -1,0 +1,59 @@
+name: Copy gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-gate.yml'
+      - 'scripts/copy-lint/baseline.json'
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'scripts/copy-lint/**'
+      - '.github/workflows/copy-gate.yml'
+      - 'scripts/copy-lint/baseline.json'
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Copy gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v6
+        with:
+          node-version: '20'
+      - run: node --test scripts/copy-lint/check-copy.test.mjs
+      - name: Read base copy baseline
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base_ref="origin/${BASE_REF}"
+          else
+            if [[ "$BEFORE_SHA" =~ ^0{40}$ ]]; then
+              exit 0
+            fi
+            base_ref="$BEFORE_SHA"
+          fi
+          base_commit=$(git rev-parse --verify "${base_ref}^{commit}") || exit 1
+          baseline_path="scripts/copy-lint/baseline.json"
+          if git cat-file -e "${base_commit}:${baseline_path}" 2>/dev/null; then
+            git show "${base_commit}:${baseline_path}" > "$RUNNER_TEMP/base-baseline.json" || exit 1
+          else
+            baseline_entry=$(git ls-tree -r --name-only "$base_commit" -- "$baseline_path") || exit 1
+            if [ -n "$baseline_entry" ]; then
+              echo "Unable to read base copy baseline" >&2
+              exit 1
+            fi
+          fi
+      - run: node scripts/copy-lint/check-copy.mjs . --gate --github --base-baseline "$RUNNER_TEMP/base-baseline.json"
