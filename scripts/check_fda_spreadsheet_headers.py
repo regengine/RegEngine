@@ -127,14 +127,14 @@ def _find_header_row(rows: list[list[str]]) -> list[str]:
     raise ValueError("export has no blank line before its header row")
 
 
-def regengine_tabs() -> dict[str, list[str]]:
-    """Tabs RegEngine emits. The export is a single CSV with no tab name."""
+def regengine_tabs(events: list[dict] | None = None) -> dict[str, list[str]]:
+    """Tabs RegEngine emits for ``events``. The export is a single CSV with no tab name."""
     repo = Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(repo / "services"))
     sys.path.insert(0, str(repo / "services" / "compliance"))
     from app.fsma_spreadsheet import generate_fda_csv
 
-    rows = list(csv.reader(io.StringIO(generate_fda_csv([]))))
+    rows = list(csv.reader(io.StringIO(generate_fda_csv(events or []))))
     return {"(single CSV, no tab)": _find_header_row(rows)}
 
 

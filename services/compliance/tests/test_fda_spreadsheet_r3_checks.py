@@ -186,7 +186,16 @@ def test_regengine_header_row_is_what_the_script_reads():
 
 @pytest.mark.xfail(strict=True, reason="R3-A1: export is one untitled CSV, FDA template has 13 CTE tabs")
 def test_every_emitted_tab_is_an_fda_cte_tab():
-    assert set(hdr.regengine_tabs()) <= set(hdr.FDA_CTE_TABS)
+    # A request built from the R3 fixture: its harvesting rows, plus a
+    # shipping event derived from the first row. The export must emit
+    # exactly the FDA tabs these CTEs need, no more and no fewer.
+    rows = _fixture_rows()
+    events = [{**_event(r), "type": "HARVESTING"} for r in rows]
+    events.append({**_event(rows[0]), "type": "SHIPPING"})
+    required = {"Harvesting", "Shipping"}
+    assert rows and required <= set(hdr.FDA_CTE_TABS)
+    # Equality, not subset: an empty or placeholder tab set cannot pass.
+    assert set(hdr.regengine_tabs(events)) == required
 
 
 @pytest.mark.skipif(
