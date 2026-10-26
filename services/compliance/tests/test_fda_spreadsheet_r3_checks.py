@@ -99,13 +99,45 @@ def _blank_flagged(out) -> bool:
     return not out.get("event_time") and bool(out.get("risk_flag"))
 
 
-def _zone_ok_or_blank_flagged(out) -> bool:
-    """Valid R3-B3 outcome when not rejected: an Event Time with a valid UTC
-    offset, or no Event Time plus a flag."""
+def _parse_zoned(t: str):
+    for parse in (time.fromisoformat, datetime.fromisoformat):
+        try:
+            return parse(t)
+        except ValueError:
+            continue
+    return None
+
+
+def _keeps_recorded_time(t: str, recorded: str, event_date: str) -> bool:
+    """True only if ``t`` is the recorded wall-clock time with the event's offset."""
+    if not _has_valid_offset(t):
+        return False
+    parsed = _parse_zoned(t)
+    clock = parsed.timetz() if isinstance(parsed, datetime) else parsed
+    want = time.fromisoformat(recorded)
+    offset = datetime.fromisoformat(event_date).utcoffset()
+    return clock.replace(tzinfo=None) == want and clock.utcoffset() == offset
+
+
+def _zone_ok_or_blank_flagged(out, recorded: str, event_date: str) -> bool:
+    """Valid R3-B3 outcome when not rejected: the recorded kdes.event_time
+    with the event's UTC offset, or no Event Time plus a flag. An invented
+    time such as 00:00:00Z fails even though its offset is valid."""
     t = out.get("event_time")
     if t:
-        return _has_valid_offset(t)
+        return _keeps_recorded_time(t, recorded, event_date)
     return _blank_flagged(out)
+
+
+def test_zoned_outcome_must_keep_the_recorded_time():
+    ed = "2026-03-12T01:11:00-07:00"
+    assert _zone_ok_or_blank_flagged({"event_time": "01:11:00-07:00"}, "01:11:00", ed)
+    assert _zone_ok_or_blank_flagged({"event_time": "2026-03-12T01:11:00-07:00"}, "01:11:00", ed)
+    assert not _zone_ok_or_blank_flagged({"event_time": "00:00:00Z"}, "01:11:00", ed)
+    assert not _zone_ok_or_blank_flagged({"event_time": "01:11:00+00:00"}, "01:11:00", ed)
+    assert not _zone_ok_or_blank_flagged({"event_time": "01:11:00"}, "01:11:00", ed)
+    assert _zone_ok_or_blank_flagged({"event_time": "", "risk_flag": "missing_zone"}, "01:11:00", ed)
+    assert not _zone_ok_or_blank_flagged({"event_time": "", "risk_flag": ""}, "01:11:00", ed)
 
 
 def test_event_time_offset_check_rejects_partial_offsets():
@@ -202,7 +234,7 @@ def test_kde_event_time_without_zone_is_rejected():
         out = _normalise_event(ev, strict_dates=True)
     except ValueError:
         return  # rejecting a zoneless kdes.event_time is a valid fix
-    assert _zone_ok_or_blank_flagged(out)
+    assert _zone_ok_or_blank_flagged(out, ev["kdes"]["event_time"], ev["event_date"])
 
 
 # ─── (c) real GTIN / GLN only (SEL-504) ─────────────────────────────────
