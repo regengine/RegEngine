@@ -25,11 +25,17 @@ from app.edi_ingestion import (
     rejection_log,  # noqa: E402
     router as edi_router,  # noqa: E402
 )
+from app.webhook_models import EventResult, IngestResponse  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 FIXTURE = service_dir / "tests" / "fixtures" / "edi_corpus" / "asn_856.edi"
 FIXTURE_BSN = "BSN*00*ASN-12345*20260310*1200~"
+TENANT = "00000000-0000-0000-0000-000000000123"
+# GTIN-14 + lot suffix, the FSMA 204 TLC format strict validation accepts
+# (same value test_edi_wire_format_2974_2976_2978 uses).
+VALID_TLC = "00012345678901-LOT001"
+ALLOWLIST_ENV = "EDI_PARTNER_ALLOWLIST_" + TENANT.upper().replace("-", "_")
 
 
 class _NxStore:
@@ -56,13 +62,44 @@ def store(monkeypatch: pytest.MonkeyPatch) -> _NxStore:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def ingested(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Stub the canonical write; capture each accepted payload."""
+    calls: list = []
+
+    async def _fake_ingest_events(payload, *, principal_tenant_id=None, x_regengine_api_key=None):
+        calls.append(payload)
+        return IngestResponse(
+            accepted=len(payload.events),
+            rejected=0,
+            total=len(payload.events),
+            events=[
+                EventResult(
+                    traceability_lot_code=event.traceability_lot_code,
+                    cte_type=event.cte_type.value,
+                    status="accepted",
+                    event_id=f"evt-{idx}",
+                    sha256_hash="hash",
+                    chain_hash="chain",
+                )
+                for idx, event in enumerate(payload.events)
+            ],
+        )
+
+    monkeypatch.setattr(edi_routes, "ingest_events", _fake_ingest_events)
+    return calls
+
+
+@pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, ingested: list) -> TestClient:
     monkeypatch.delenv("EDI_REQUIRE_PARTNER_ID", raising=False)
-    monkeypatch.setattr(edi_routes, "_resolve_principal_tenant_id", lambda *args: "tenant-a")
+    monkeypatch.delenv(ALLOWLIST_ENV, raising=False)
+    monkeypatch.delenv("EDI_PARTNER_ALLOWLIST", raising=False)
     rejection_log.reset_edi_rejections()
     app = FastAPI()
     app.include_router(edi_router)
-    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(key_id="", scopes=["edi.ingest"])
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], auth_mode="test"
+    )
     with TestClient(app) as test_client:
         yield test_client
 
@@ -77,13 +114,13 @@ def _future_variant() -> bytes:
 def _post(client: TestClient, raw: bytes, route: str):
     return client.post(
         f"/api/v1/ingest/edi{route}",
-        data={"traceability_lot_code": "ASN-12345"},
+        data={"traceability_lot_code": VALID_TLC, "tenant_id": TENANT},
         files={"file": ("asn_856.edi", raw, "application/edi-x12")},
     )
 
 
 @pytest.mark.parametrize("route", ["", "/document"])
-def test_reject_then_corrected_resend_is_not_a_replay(client, store, route):
+def test_reject_then_corrected_resend_is_accepted(client, store, ingested, route):
     rejected = _post(client, _future_variant(), route)
     assert rejected.status_code == 400
     detail = rejected.json()["detail"]
@@ -91,18 +128,25 @@ def test_reject_then_corrected_resend_is_not_a_replay(client, store, route):
     assert detail["needs_review"] is True
     assert store.keys == {}, "ISA13 must not be reserved by a date rejection"
 
-    records = rejection_log.list_edi_rejections("tenant-a")
+    assert ingested == []
+    records = rejection_log.list_edi_rejections(TENANT)
     assert [r["rejection_id"] for r in records] == [detail["rejection_id"]]
     assert records[0]["needs_review"] is True
     assert records[0]["reason"] == "edi_date_in_future"
 
     resend = _post(client, FIXTURE.read_bytes(), route)
-    assert resend.status_code != 409, resend.json()
+    assert resend.status_code == 201, resend.json()
+    assert resend.json()["ingestion_result"]["accepted"] == 1
+    assert len(ingested) == 1
+    event = ingested[0].events[0]
+    assert event.traceability_lot_code == VALID_TLC
+    assert event.timestamp.startswith("2026-03-10")
     assert len(store.keys) == 1, "corrected resend reserves the ISA13"
 
     replay = _post(client, FIXTURE.read_bytes(), route)
     assert replay.status_code == 409
     assert replay.json()["detail"]["error"] == "duplicate_interchange"
+    assert len(ingested) == 1
 
 
 def test_missing_date_rejection_is_logged_for_review(client, store):
@@ -112,7 +156,18 @@ def test_missing_date_rejection_is_logged_for_review(client, store):
     detail = response.json()["detail"]
     assert detail["error"] == "missing_edi_date"
     assert detail["needs_review"] is True
-    record = rejection_log.list_edi_rejections("tenant-a")[0]
+    record = rejection_log.list_edi_rejections(TENANT)[0]
     assert record["rejection_id"] == detail["rejection_id"]
     assert record["needs_review"] is True
     assert store.keys == {}
+
+
+@pytest.mark.parametrize("route", ["", "/document"])
+def test_disallowed_sender_with_bad_date_gets_403_and_no_rejection(client, store, ingested, monkeypatch, route):
+    monkeypatch.setenv(ALLOWLIST_ENV, "SOMEONEELSE")
+    response = _post(client, _future_variant(), route)
+    assert response.status_code == 403, response.json()
+    assert response.json()["detail"]["error"] == "trading_partner_not_allowed"
+    assert rejection_log.list_edi_rejections(TENANT) == []
+    assert store.keys == {}
+    assert ingested == []
