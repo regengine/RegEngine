@@ -141,7 +141,7 @@ export default function QuickstartPage() {
                         </p>
                     </Callout>
                     <p className="text-body text-re-text-secondary">
-                        Post to <code className={CODE}>/api/v1/webhooks/ingest</code>. The sample builds a current timestamp,
+                        Post to <code className={CODE}>/api/v1/webhooks/ingest</code>. The command builds a current timestamp,
                         signs the exact body, and sends the same bytes with <code className={CODE}>--data-binary</code>:
                     </p>
 

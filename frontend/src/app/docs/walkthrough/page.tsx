@@ -98,7 +98,7 @@ export default function WalkthroughPage() {
               <strong className="font-medium text-re-text-primary">401</strong>: the key is missing or not recognized, or{' '}
               <code className={CODE}>X-Webhook-Signature</code> is missing or wrong. The key header is{' '}
               <code className={CODE}>X-RegEngine-API-Key</code> (not <code className={CODE}>Authorization</code>). Sign the exact bytes
-              you send, which is why the sample uses <code className={CODE}>--data-binary</code>.{' '}
+              you send, which is why the command uses <code className={CODE}>--data-binary</code>.{' '}
               <strong className="font-medium text-re-text-primary">403</strong>: the key lacks the{' '}
               <code className={CODE}>webhooks.ingest</code> scope.
             </li>

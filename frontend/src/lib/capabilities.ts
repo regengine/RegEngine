@@ -3,7 +3,7 @@ export const capabilities = {
   live: ['CSV upload', 'JSON events API'],
   preview: ['EPCIS intake', 'EPCIS export'],
   planned: [],
-  off: ['EDI', 'SFTP'],
+  off: [],
 } as const;
 
 export type CapabilityStatus = keyof typeof capabilities;
