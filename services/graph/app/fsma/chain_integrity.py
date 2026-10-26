@@ -49,9 +49,12 @@ _PAGE_MARKER = "// @page"
 
 
 def _hit(record: Any) -> bool:
-    """True unless the row carries a false ``_hit`` flag (anchor kept only for paging)."""
+    """True unless the row carries a ``_hit`` flag that is not true.
+
+    A null flag (Cypher ``null``) is not a hit; queries coalesce it to false.
+    """
     try:
-        return record["_hit"] is not False
+        return record["_hit"] is True
     except (KeyError, LookupError):
         return True
 
@@ -82,6 +85,7 @@ async def _run_paged(
     page_clause = (
         f"WITH {anchors}, [{key_expr}] AS _page_key\n"
         f"WHERE $after_key IS NULL OR {_after_condition(len(key))}\n"
+        f"WITH {anchors}, _page_key\n"
         "ORDER BY _page_key[0]" + "".join(f", _page_key[{i}]" for i in range(1, len(key))) + "\nLIMIT $page_size"
     )
     paged_query = query.replace(_PAGE_MARKER, page_clause, 1)
@@ -426,8 +430,8 @@ async def find_broken_chains(
              }) AS origins
         RETURN
             _page_key,
-            (shipping.merkle_prev_hash IS NULL
-             OR NOT any(o IN origins WHERE o.merkle_hash = shipping.merkle_prev_hash)) AS _hit,
+            coalesce(shipping.merkle_prev_hash IS NULL
+             OR NOT any(o IN origins WHERE o.merkle_hash = shipping.merkle_prev_hash), false) AS _hit,
             shipping.event_id          AS event_id,
             shipping.type              AS type,
             shipping.event_date        AS event_date,

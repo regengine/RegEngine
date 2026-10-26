@@ -141,9 +141,9 @@ async def find_orphaned_lots(
     // Stagnant-days filter, as a flag so every paged lot yields one row
     RETURN
         _page_key,
-        (most_recent_event IS NULL
+        coalesce(most_recent_event IS NULL
          OR most_recent_event.event_date IS NULL
-         OR most_recent_event.event_date <= $cutoff_date) AS _hit,
+         OR most_recent_event.event_date <= $cutoff_date, false) AS _hit,
         l.tlc as tlc,
         l.product_description as product_description,
         l.quantity as quantity,

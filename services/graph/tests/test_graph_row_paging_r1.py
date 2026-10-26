@@ -324,3 +324,62 @@ async def test_page_filter_and_limit_sit_inside_the_match():
         # The cursor filter and LIMIT come before the final RETURN.
         assert query.index("LIMIT $page_size") < query.rindex("RETURN")
         assert query.index("$after_key") < query.rindex("RETURN")
+
+
+def _hit_expr(query: str) -> str:
+    """The RETURN expression aliased ``_hit``, whitespace collapsed."""
+    ret = query[query.rindex("RETURN") :]
+    return " ".join(ret[: ret.index("AS _hit")].split())
+
+
+@pytest.mark.asyncio
+async def test_hit_flags_coalesce_cypher_null_to_false():
+    session = _PagingSession(lambda q: [])
+    await find_broken_chains(_client(session), tenant_id=TENANT)
+    await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    hits = [_hit_expr(q) for q, _ in session.calls if "AS _hit" in q]
+    assert len(hits) == 3  # temporal paradox, crypto gap, orphan
+    assert all(h.split("_page_key,", 1)[1].strip().startswith("coalesce(") for h in hits)
+    assert all(h.endswith(", false)") for h in hits)
+
+
+@pytest.mark.asyncio
+async def test_null_merkle_hash_hit_is_not_a_crypto_gap():
+    # Null merkle_hash on shipping and origin: the comparison is null in
+    # Cypher, so the row must not be reported.
+    rows = _shipping_rows(5)
+    for r in rows:
+        r["_hit"] = None
+
+    def rows_for(q):
+        return rows if "merkle_prev_hash" in q else []
+
+    session = _PagingSession(rows_for)
+    violations = await find_broken_chains(_client(session), tenant_id=TENANT)
+    assert violations == []
+
+
+@pytest.mark.asyncio
+async def test_uncomparable_dates_hit_is_not_an_orphan():
+    # last_event_date empty vs a cutoff date: the comparison is null.
+    rows = _orphan_rows(5)
+    for r in rows:
+        r["last_event_date"] = ""
+        r["_hit"] = None
+    session = _PagingSession(lambda q: rows)
+    orphans = await find_orphaned_lots(_client(session), tenant_id=TENANT)
+    assert orphans == []
+
+
+@pytest.mark.asyncio
+async def test_page_clause_orders_and_limits_in_its_own_with():
+    # openCypher: WITH <items> [ORDER BY] [SKIP] [LIMIT] [WHERE]. A WHERE
+    # before ORDER BY is not valid, so filter and order use separate WITHs.
+    session = _PagingSession(lambda q: [])
+    await find_gaps(_client(session), tenant_id=TENANT)
+    for query, _ in session.calls:
+        lines = [ln.strip() for ln in query.splitlines()]
+        w = next(i for i, ln in enumerate(lines) if ln.startswith("WHERE $after_key IS NULL"))
+        assert lines[w + 1].startswith("WITH ")
+        assert lines[w + 2].startswith("ORDER BY _page_key[0]")
+        assert lines[w + 3] == "LIMIT $page_size"
