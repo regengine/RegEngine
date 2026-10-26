@@ -26,6 +26,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from collections.abc import Callable
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
@@ -353,8 +354,14 @@ def _enforce_envelope_integrity(
     extracted: dict[str, Any],
     sender_tenant_id: str,
     transaction_set: str,
+    before_reserve: Callable[[], None] | None = None,
 ) -> None:
     """Apply #1160 + #1165 envelope validation.
+
+    ``before_reserve`` runs after the envelope and allowlist checks and
+    before the ISA13 is recorded. Content rejections (event dates) go
+    there so a disallowed sender still gets 403 and a rejected document
+    does not burn its interchange number.
 
     - Reject on ISA/GS sender/receiver mismatch (X12 tenant-smuggling).
     - Reject on GS sender not in tenant's allowed trading-partner list.
@@ -404,6 +411,9 @@ def _enforce_envelope_integrity(
                 "gs_sender_id": extracted.get("gs_sender_id"),
             },
         )
+
+    if before_reserve is not None:
+        before_reserve()
 
     # #1165: retransmission dedup on ISA13.
     is_duplicate, _prev = check_and_record_interchange(
@@ -600,19 +610,21 @@ async def ingest_edi_856(
 
     extracted = _extract_856_fields(segments)
 
-    # Date rejections must happen before the ISA13 is reserved, or the
-    # corrected resend would be refused as a 409 replay.
-    _preflight_event_date(
-        transaction_set="856",
-        extracted=extracted,
-        sender_tenant_id=sender_tenant_id,
-        traceability_lot_code=traceability_lot_code,
-        partner_id=x_partner_id,
-        source=source,
+    # Event-date rejections run after the allowlist and before the ISA13
+    # is reserved, so a corrected resend is not refused as a 409 replay.
+    _enforce_envelope_integrity(
+        extracted,
+        sender_tenant_id,
+        "856",
+        before_reserve=lambda: _preflight_event_date(
+            transaction_set="856",
+            extracted=extracted,
+            sender_tenant_id=sender_tenant_id,
+            traceability_lot_code=traceability_lot_code,
+            partner_id=x_partner_id,
+            source=source,
+        ),
     )
-
-    # #1160 + #1165: envelope mismatch / allowlist / ISA13 dedup.
-    _enforce_envelope_integrity(extracted, sender_tenant_id, "856")
 
     lines = extracted.get("line_items") or []
     if len(lines) > 1:
@@ -1152,18 +1164,20 @@ async def ingest_edi_document(
 
     # #1160 + #1165: validate and reserve the shared envelope once per
     # document, before validating any transaction set or warehouse line.
-    # Date rejections happen before the ISA13 is reserved so a corrected
-    # resend is not refused as a 409 replay.
-    for slice_set, slice_extracted in zip(slice_sets, extractions):
-        _preflight_event_date(
-            transaction_set=slice_set,
-            extracted=slice_extracted,
-            sender_tenant_id=sender_tenant_id,
-            traceability_lot_code=traceability_lot_code,
-            partner_id=x_partner_id,
-            source=source,
-        )
-    _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set)
+    def _preflight_all_sets() -> None:
+        for slice_set, slice_extracted in zip(slice_sets, extractions):
+            _preflight_event_date(
+                transaction_set=slice_set,
+                extracted=slice_extracted,
+                sender_tenant_id=sender_tenant_id,
+                traceability_lot_code=traceability_lot_code,
+                partner_id=x_partner_id,
+                source=source,
+            )
+
+    # Event-date rejections run after the allowlist and before the ISA13
+    # is reserved, so a corrected resend is not refused as a 409 replay.
+    _enforce_envelope_integrity(extracted, sender_tenant_id, transaction_set, before_reserve=_preflight_all_sets)
 
     # 856 SN1, 861 RCD, and warehouse W07/W12 lines are each one CTE.
     # ST/SE extraction and envelope handling stay at document scope, then
