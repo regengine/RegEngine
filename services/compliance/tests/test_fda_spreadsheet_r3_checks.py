@@ -18,7 +18,7 @@ docs/handoffs/r3-fda-spreadsheet-handoff.md for the fix list.
 import csv
 import io
 import sys
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 
 service_dir = Path(__file__).parent.parent
@@ -84,13 +84,42 @@ def _data_rows(csv_text):
 # ─── (a) tabs and headers ───────────────────────────────────────────────
 
 
+def _has_valid_offset(t: str) -> bool:
+    """True only if ``t`` parses as a time (or datetime) with a real UTC offset."""
+    for parse in (time.fromisoformat, datetime.fromisoformat):
+        try:
+            parsed = parse(t)
+        except ValueError:
+            continue
+        return parsed.utcoffset() is not None
+    return False
+
+
+def _blank_flagged(out) -> bool:
+    return not out.get("event_time") and bool(out.get("risk_flag"))
+
+
 def _zone_ok_or_blank_flagged(out) -> bool:
-    """Valid R3-B outcome when not rejected: a zoned Event Time, or no
-    Event Time plus a flag (handoff: "reject, or emit no time and flag it")."""
+    """Valid R3-B3 outcome when not rejected: an Event Time with a valid UTC
+    offset, or no Event Time plus a flag."""
     t = out.get("event_time")
     if t:
-        return any(c in t for c in "+-Z")
-    return bool(out.get("risk_flag"))
+        return _has_valid_offset(t)
+    return _blank_flagged(out)
+
+
+def test_event_time_offset_check_rejects_partial_offsets():
+    assert _has_valid_offset("01:11:00+00:00")
+    assert _has_valid_offset("01:11:00-07:00")
+    assert _has_valid_offset("2026-03-12T01:11:00Z")
+    for bad in ("01:11:00-", "01:11:00+", "01:11:00", "Z", "", "01:11:00+99:99"):
+        assert not _has_valid_offset(bad), bad
+
+
+def test_date_only_outcome_rejects_an_invented_zoned_time():
+    assert not _blank_flagged({"event_time": "00:00:00Z", "risk_flag": "x"})
+    assert not _blank_flagged({"event_time": "", "risk_flag": ""})
+    assert _blank_flagged({"event_time": "", "risk_flag": "missing_event_time"})
 
 
 def test_header_compare_detects_exact_match_and_mismatch():
@@ -160,7 +189,8 @@ def test_date_only_event_is_not_emitted_without_time_zone():
         out = _normalise_event(_event(row, ts=row["harvest_date"]), strict_dates=True)
     except ValueError:
         return  # rejecting the date-only timestamp is a valid fix
-    assert _zone_ok_or_blank_flagged(out)
+    # A date-only input has no time: any emitted time (zoned or not) is invented.
+    assert _blank_flagged(out)
 
 
 @pytest.mark.xfail(strict=True, reason="R3-B3: kdes.event_time is copied verbatim with no zone check")
