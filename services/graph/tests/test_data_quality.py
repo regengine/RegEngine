@@ -302,6 +302,7 @@ class TestOrphanDetectionLogic:
             "created_at": "2025-01-01",
             "last_event_type": "RECEIVING",
             "last_event_date": "2025-01-05",
+            "_hit": True,  # the query flags reported lots; null is not a hit
         }.get(key)
 
         # Mock async iterator that yields one record

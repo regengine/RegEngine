@@ -23,7 +23,7 @@ These surfaces are part of the core production spine when their corresponding ro
   token-scoped supplier correction session (`remediation`; compliance-critical,
   see "Boot-critical routers" below)
 - FDA export and export monitoring
-- Public proof endpoints: export-bundle verification and the recall drill
+- Public proof endpoints: export-bundle verification and the recall-drill endpoint (currently returns no drill data)
   (`proof_verify`, `proof_recall`; tenantless and unauthenticated, see below)
 - Tenant, user, API-key, supplier, and audit-log administration
 - Billing routes required for customer subscription management
@@ -85,7 +85,7 @@ so `ENABLE_EXPERIMENTAL_ROUTERS` does not gate them:
   Public export-bundle hash-chain/Merkle verifier. No auth, no tenant
   context. Rate limit 10 req/min/IP.
 - `proof_recall` — `POST /api/v1/proof/recall-drill` (`server/main.py:654`).
-  Public deterministic recall drill over a frozen synthetic dataset. No auth,
+  Public recall-drill endpoint. It reads no customer data and currently returns an honest empty result (`data_available: false`, no steps, no lot, no trace time, no CSV) with an explanatory message. No auth,
   no tenant context. Rate limit 5 req/min/IP.
 
 Both carry an in-module justification docstring arguing they belong to the
