@@ -118,9 +118,6 @@
   "frontend/src/app/sysadmin/page.tsx": {
     "dash-placeholder": 3
   },
-  "frontend/src/app/tools/drill-simulator/components/DrillSimulatorClient.tsx": {
-    "sample-demo": 1
-  },
   "frontend/src/app/tools/export/page.tsx": {
     "empty-render": 2
   },
