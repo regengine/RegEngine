@@ -21,6 +21,7 @@ jobs:
       checks: read
     outputs:
       preview_url: ${{ steps.wait.outputs.preview_url }}
+      frontend: ${{ steps.scope.outputs.frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -209,6 +210,7 @@ jobs:
   access-link:
     name: Preview Access Link
     needs: preview
+    if: needs.preview.outputs.frontend == 'true' && needs.preview.outputs.preview_url != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
