@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import sys
+import uuid
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from services.graph.app.fsma import tracer  # noqa: E402
 
-TENANT = "11111111-1111-1111-1111-111111111111"
+# Generated per run: no hardcoded tenant id.
+TENANT = str(uuid.uuid4())
 
 
 class _Result:
