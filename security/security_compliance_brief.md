@@ -24,7 +24,7 @@ We strongly recommend:
 ## 3. Encryption
 
 - **In Transit**
-  - The gateway configuration sets a Strict-Transport-Security (HSTS) header
+  - The Vercel-hosted frontend sends a Strict-Transport-Security (HSTS) header on all routes
 
 ---
 
