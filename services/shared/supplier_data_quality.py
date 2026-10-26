@@ -367,9 +367,10 @@ _RECORD_ROWS_SQL = text(
     """
 )
 
-# One row per (active lot, record of that lot). A lot is active when it has a
-# record received in the window; linkage looks at all of the caller's records
-# for it, any age.
+# One row per (active lot, record of that lot). A lot belongs to its own
+# facility and is active when the caller sent a record for it anywhere in the
+# window. Another supplier's record cannot activate it. Linkage looks at all
+# of the caller's records for it, any age.
 _LOT_ROWS_SQL = text(
     """
     WITH active AS (
@@ -381,6 +382,7 @@ _LOT_ROWS_SQL = text(
          WHERE l.tenant_id = CAST(:tid AS uuid)
            AND l.supplier_user_id = CAST(:uid AS uuid)
            AND l.facility_id = ANY(CAST(:fids AS uuid[]))
+           AND w.supplier_user_id = CAST(:uid AS uuid)
            AND w.created_at >= :since
     )
     SELECT a.id AS lot_id,
