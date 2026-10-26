@@ -122,8 +122,11 @@ class RecallDrill:
         if self.status == RecallStatus.COMPLETED:
             duration = self.duration_seconds
             # 0 seconds is a valid (instant) completion, so compare against
-            # None rather than relying on truthiness.
-            if duration is not None and duration <= sla_limit:
+            # None rather than relying on truthiness. A negative duration
+            # (completed_at before started_at) is corrupt timing data; it must
+            # never certify compliance, so fail closed as BREACHED rather than
+            # introducing a new status value API consumers don't expect.
+            if duration is not None and 0 <= duration <= sla_limit:
                 return SLAStatus.MET
             return SLAStatus.BREACHED
 
