@@ -187,9 +187,14 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
                         requestId: response.headers.get('x-request-id') ?? undefined,
                     });
                 }
+                const clientHeaders = new Headers();
+                const requestId = response.headers.get('x-request-id');
+                if (requestId) clientHeaders.set('x-request-id', requestId);
+                const retryAfter = response.headers.get('retry-after');
+                if (retryAfter) clientHeaders.set('retry-after', retryAfter);
                 return NextResponse.json(
                     { error: detail ?? `${config.serviceName} request failed` },
-                    { status: response.status },
+                    { status: response.status, headers: clientHeaders },
                 );
             }
 
@@ -249,6 +254,7 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
     'content-type',
     'content-disposition',
     'cache-control',
+    'retry-after',
     'x-fda-record-count',
     'x-request-id',
 ];

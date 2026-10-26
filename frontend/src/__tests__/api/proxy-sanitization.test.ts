@@ -491,6 +491,84 @@ describe('proxy x-request-id passthrough', () => {
         expect(errorSpy).toHaveBeenCalled();
     });
 
+    it.each([400, 422])('preserves the upstream x-request-id on rebuilt JSON proxy %i responses', async (status) => {
+        const requestId = crypto.randomUUID();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            detail: 'invalid payload',
+        }), {
+            status,
+            headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        })));
+        const handlers = createJsonProxy({
+            serviceName: 'compliance',
+            buildTargetUrl: () => 'http://internal.service.local/compliance/check',
+            buildHeaders: () => new Headers(),
+            methods: ['POST'],
+        });
+
+        const response = await handlers.POST!(
+            makeRouteRequest({ jsonBody: { bad: true } }),
+            { params: Promise.resolve({ path: ['check'] }) },
+        );
+
+        expect(response.status).toBe(status);
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+        const body = await responseJson(response);
+        expect(body).toEqual({ error: 'invalid payload' });
+    });
+
+    it('passes the upstream Retry-After through on stream proxy 429 responses', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            detail: 'rate limited',
+        }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'retry-after': '45' },
+        })));
+        const handlers = createStreamProxy({
+            serviceName: 'ingestion',
+            resolveTargetBases: () => ['http://internal.service.local'],
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['api/v1/records'] }) },
+        );
+
+        expect(response.status).toBe(429);
+        expect(response.headers.get('retry-after')).toBe('45');
+    });
+
+    it('preserves Retry-After and x-request-id on rebuilt JSON proxy 429 responses', async () => {
+        const requestId = crypto.randomUUID();
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            detail: 'rate limited',
+        }), {
+            status: 429,
+            headers: {
+                'content-type': 'application/json',
+                'retry-after': '30',
+                'x-request-id': requestId,
+            },
+        })));
+        const handlers = createJsonProxy({
+            serviceName: 'compliance',
+            buildTargetUrl: () => 'http://internal.service.local/compliance/check',
+            buildHeaders: () => new Headers(),
+            methods: ['GET'],
+        });
+
+        const response = await handlers.GET!(
+            makeRouteRequest(),
+            { params: Promise.resolve({ path: ['check'] }) },
+        );
+
+        expect(response.status).toBe(429);
+        expect(response.headers.get('retry-after')).toBe('30');
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+    });
+
     it('sets x-request-id on proxyError responses only when a request ID is provided', () => {
         const requestId = crypto.randomUUID();
 
