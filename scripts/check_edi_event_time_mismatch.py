@@ -33,10 +33,12 @@ SELECT COUNT(DISTINCT e.id)
     ON k.cte_event_id = e.id
    AND k.tenant_id = e.tenant_id
    AND k.kde_key IN ('ship_date', 'event_date')
- WHERE k.kde_value ~ '^\\d{4}-\\d{2}-\\d{2}$'
-   AND (e.event_timestamp < (CAST(k.kde_value AS date)::timestamp AT TIME ZONE 'UTC') - INTERVAL '1 day'
-        OR e.event_timestamp > (CAST(k.kde_value AS date)::timestamp AT TIME ZONE 'UTC') + INTERVAL '2 days')
+ WHERE (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'
+   AND (e.event_timestamp < ((k.kde_value #>> '{}')::date::timestamp AT TIME ZONE 'UTC') - INTERVAL '1 day'
+        OR e.event_timestamp > ((k.kde_value #>> '{}')::date::timestamp AT TIME ZONE 'UTC') + INTERVAL '2 days')
 """
+# fsma.cte_kdes.kde_value is JSONB (since v078); ``#>> '{}'`` extracts the
+# scalar as text before matching and casting, as compliance_score.py does.
 # The event date is a calendar day (UTC); its timestamp may fall anywhere in
 # it, so a mismatch is more than one day before its start or after its end.
 # Mirrors is_mismatch() below. COUNT(DISTINCT e.id) counts each event once
