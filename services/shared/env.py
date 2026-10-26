@@ -2,6 +2,7 @@
 
 import logging
 import os
+from urllib.parse import urlsplit
 
 _logger = logging.getLogger("regengine.env")
 
@@ -38,6 +39,23 @@ _LOCAL_AUTH_ENVIRONMENT_NAMES = {"development", "dev", "local", "test", "testing
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
+def _is_supabase_pooler_database() -> bool:
+    """Detect a Supabase pooler DATABASE_URL by exact hostname / subdomain.
+
+    Parses the URL and compares the hostname instead of doing a substring
+    check, so a value like ``postgres://u:p@host/db?x=pooler.supabase.com``
+    cannot spoof the pooler host.
+    """
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        return False
+    try:
+        host = (urlsplit(db_url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+
+
 def is_production() -> bool:
     """Check if running in production.
 
@@ -51,7 +69,7 @@ def is_production() -> bool:
     if env:
         return env == "production"
     # Last resort: detect Supabase pooler in DATABASE_URL
-    return "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+    return _is_supabase_pooler_database()
 
 
 def get_environment() -> str:

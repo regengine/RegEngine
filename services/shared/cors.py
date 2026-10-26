@@ -54,6 +54,23 @@ def _current_environment() -> str:
     return os.getenv("REGENGINE_ENV", "").strip().lower() or os.getenv("ENV", "").strip().lower() or "development"
 
 
+def _is_supabase_pooler_database() -> bool:
+    """Detect a Supabase pooler DATABASE_URL by exact hostname / subdomain.
+
+    Parses the URL and compares the hostname instead of doing a substring
+    check, so a value like ``postgres://u:p@host/db?x=pooler.supabase.com``
+    cannot spoof the pooler host.
+    """
+    db_url = os.getenv("DATABASE_URL", "")
+    if not db_url:
+        return False
+    try:
+        host = (urlsplit(db_url).hostname or "").lower()
+    except ValueError:
+        return False
+    return host == "pooler.supabase.com" or host.endswith(".pooler.supabase.com")
+
+
 def _is_restricted_cors_environment() -> bool:
     """Return true outside explicit local/test environments or in cloud."""
     env = _current_environment()
@@ -61,7 +78,7 @@ def _is_restricted_cors_environment() -> bool:
         return True
     if any(os.getenv(var) for var in CLOUD_ENV_VARS):
         return True
-    return "pooler.supabase.com" in os.getenv("DATABASE_URL", "")
+    return _is_supabase_pooler_database()
 
 
 def _validate_exact_preview_origins(origins: List[str]) -> None:

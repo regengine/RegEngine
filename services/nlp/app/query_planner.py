@@ -209,8 +209,13 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
         if parsed:
             return parsed.isoformat(), today.isoformat()
 
+    # Linear, non-backtracking form: tokens (no whitespace) separated by
+    # single whitespace runs, so the capture classes never overlap the
+    # ``\s+`` delimiters. This avoids polynomial ReDoS while matching the
+    # same spans as ``[A-Za-z0-9,\-\s]+`` for normal date-range input.
     between = re.search(
-        r"\bbetween\s+([A-Za-z0-9,\-\s]+)\s+and\s+([A-Za-z0-9,\-\s]+)",
+        r"\bbetween\s+([A-Za-z0-9,\-]+(?:\s+[A-Za-z0-9,\-]+)*?)"
+        r"\s+and\s+([A-Za-z0-9,\-]+(?:\s+[A-Za-z0-9,\-]+)*)",
         lowered_query,
     )
     if between:
@@ -241,7 +246,10 @@ def _parse_human_date_prefix(raw_value: str, today: date) -> Optional[date]:
         parsed = _parse_human_date(value, today)
         if parsed:
             return parsed
-        trimmed = re.sub(r"[\s,;:.()\[\]]+[A-Za-z0-9\-./]+$", "", value).strip()
+        # Disjoint, bounded character classes (the separator class no longer
+        # contains '.') so there is no overlap between the trailing
+        # separator run and the token run -- linear, no polynomial ReDoS.
+        trimmed = re.sub(r"[\s,;:()\[\]]{1,64}[A-Za-z0-9\-./]{1,128}$", "", value).strip()
         if not trimmed or trimmed == value:
             return None
         value = trimmed
