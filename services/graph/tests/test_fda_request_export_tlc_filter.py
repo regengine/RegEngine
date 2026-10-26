@@ -21,9 +21,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "shared"))
 
-from services.graph.tests.test_fda_request_export_header import TENANT, _build_app, _neo4j_stub  # noqa: E402
-
 from services.graph.app.fsma.queries import query_events_by_range  # noqa: E402
+from services.graph.tests.test_fda_request_export_header import TENANT, _build_app, _neo4j_stub  # noqa: E402
 
 URL = "/v1/fsma/compliance/export/fda-request"
 DATES = {"start_date": "2026-01-01", "end_date": "2026-12-31"}
