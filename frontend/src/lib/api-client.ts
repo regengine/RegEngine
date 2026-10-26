@@ -395,6 +395,7 @@ class APIClient {
         description: params.description,
         tenant_id: params.tenantId,
       },
+      { stepUpReason: "Confirm it's you to create an API key." },
     );
     return data;
   }
@@ -406,6 +407,7 @@ class APIClient {
         name: 'Developer Portal Generated Key',
         tenant_id: tenantId,
       },
+      { stepUpReason: "Confirm it's you to generate an API key." },
     );
     return data;
   }
@@ -416,7 +418,9 @@ class APIClient {
   }
 
   async revokeAPIKey(keyId: string): Promise<void> {
-    await this.adminClient.delete(`/v1/admin/keys/${encodeURIComponent(keyId)}`);
+    await this.adminClient.delete(`/v1/admin/keys/${encodeURIComponent(keyId)}`, {
+      stepUpReason: "Confirm it's you to revoke this API key.",
+    });
   }
 
   // Ingestion API
@@ -710,6 +714,7 @@ class APIClient {
     const { data } = await this.adminClient.post(
       '/v1/admin/tenants',
       { name },
+      { stepUpReason: "Confirm it's you to create a tenant." },
     );
     return data;
   }
@@ -1096,7 +1101,9 @@ class APIClient {
   // --- Tenant Settings & Onboarding ---
 
   async updateTenantSettings(tenantId: string, settings: Record<string, unknown>): Promise<void> {
-    await this.adminClient.patch(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, settings);
+    await this.adminClient.patch(`/v1/tenants/${encodeURIComponent(tenantId)}/settings`, settings, {
+      stepUpReason: "Confirm it's you to change tenant settings.",
+    });
   }
 
   async getOnboardingStatus(tenantId: string): Promise<{
