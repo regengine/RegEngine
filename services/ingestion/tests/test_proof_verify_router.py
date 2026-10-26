@@ -576,8 +576,8 @@ class TestFailureModes:
 # ---------------------------------------------------------------------------
 class TestZipRoundTrip:
     def test_checked_in_public_audit_bundle_verifies(self, client: TestClient):
-        """The ZIP linked from /proof must verify through the public API."""
-        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+        """The checked-in fixture ZIP must verify through the public API."""
+        bundle = (REPO_ROOT / "services/ingestion/tests/fixtures/proof/audit-bundle.zip").read_bytes()
 
         resp = client.post(
             "/api/v1/proof/verify",
@@ -599,7 +599,7 @@ class TestZipRoundTrip:
         tmp_path: Path,
     ):
         """Only FDA markers activate persisted-chain status semantics."""
-        original = (REPO_ROOT / "frontend/public/proof/audit-bundle.zip").read_bytes()
+        original = (REPO_ROOT / "services/ingestion/tests/fixtures/proof/audit-bundle.zip").read_bytes()
         modified = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(original), "r") as source:
             with zipfile.ZipFile(modified, "w", zipfile.ZIP_DEFLATED) as target:
@@ -625,8 +625,8 @@ class TestZipRoundTrip:
         assert sdk_verify_bundle(str(bundle_path)) == 0
 
     def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient):
-        """The tampered ZIP linked from /proof must fail verification."""
-        bundle = (REPO_ROOT / "frontend/public/proof/audit-bundle-tampered.zip").read_bytes()
+        """The tampered fixture ZIP must fail verification."""
+        bundle = (REPO_ROOT / "services/ingestion/tests/fixtures/proof/audit-bundle-tampered.zip").read_bytes()
 
         resp = client.post(
             "/api/v1/proof/verify",
