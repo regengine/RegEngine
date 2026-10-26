@@ -23,15 +23,20 @@ from pathlib import Path
 
 service_dir = Path(__file__).parent.parent
 repo_root = service_dir.parent.parent
-for key in [k for k in sys.modules if k == "app" or k.startswith("app.") or k == "main"]:
-    del sys.modules[key]
-sys.path.insert(0, str(service_dir))
+# Only evict a cached ``app`` package that belongs to a different service;
+# never drop this service's own modules (other tests in the session hold them).
+_cached_app = sys.modules.get("app")
+_own_app = (service_dir / "app").resolve()
+if _cached_app is not None and Path(getattr(_cached_app, "__file__", "") or "").resolve().parent != _own_app:
+    for key in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+        del sys.modules[key]
+if str(service_dir) not in sys.path:
+    sys.path.insert(0, str(service_dir))
 sys.path.insert(0, str(repo_root / "scripts"))
 
+import check_fda_spreadsheet_headers as hdr
 import pytest
 from app.fsma_spreadsheet import FDA_HEADERS, _normalise_event, generate_fda_csv
-
-import check_fda_spreadsheet_headers as hdr
 
 FIXTURE = repo_root / "services" / "ingestion" / "tests" / "fixtures" / "01_harvesting.csv"
 
@@ -56,7 +61,7 @@ def _event(row, *, ts=None, gln=None):
         "product_description": row["product_description"],
         "quantity": row["quantity"],
         "uom": row["unit_of_measure"],
-        "event_date": ts if ts is not None else row["harvest_date"],
+        "event_date": ts if ts is not None else _tz_aware_timestamp(row),
         "facility_gln": row["location_gln"] if gln is None else gln,
         "facility_name": row["location_name"],
         "kdes": {"reference_document_number": row["reference_document"]},
@@ -79,12 +84,39 @@ def _data_rows(csv_text):
 # ─── (a) tabs and headers ───────────────────────────────────────────────
 
 
+def _zone_ok_or_blank_flagged(out) -> bool:
+    """Valid R3-B outcome when not rejected: a zoned Event Time, or no
+    Event Time plus a flag (handoff: "reject, or emit no time and flag it")."""
+    t = out.get("event_time")
+    if t:
+        return any(c in t for c in "+-Z")
+    return bool(out.get("risk_flag"))
+
+
 def test_header_compare_detects_exact_match_and_mismatch():
     tab = hdr.FDA_CTE_TABS[0]
-    fda = {tab: " ".join(FDA_HEADERS[:2])}
+    fda = {tab: list(FDA_HEADERS[:2])}
     assert hdr.compare({tab: FDA_HEADERS[:2]}, fda)["ok"] is True
     bad = hdr.compare({tab: FDA_HEADERS[:3]}, fda)
     assert bad["ok"] is False and bad["tabs"][0]["mismatched_headers"] == [FDA_HEADERS[2]]
+
+
+def test_header_compare_ignores_body_text_and_fragments():
+    tab = hdr.FDA_CTE_TABS[0]
+    header = FDA_HEADERS[3]  # "Traceability Lot Code (TLC)"
+    fda = {tab: [header]}
+    # A header that is not a header cell on the tab does not match.
+    assert hdr.compare({tab: [FDA_HEADERS[4]]}, fda)["ok"] is False
+    # A fragment of a longer header cell is not a header.
+    assert hdr.compare({tab: ["Lot"]}, fda)["ok"] is False
+    # A header cell split over two lines still matches as a whole.
+    words = header.split(" ")
+    assert hdr.compare({tab: [header]}, {tab: [" ".join(words[:2]), " ".join(words[2:])]})["ok"] is True
+
+
+def test_header_row_is_found_after_a_label_change():
+    rows = [["FSMA"], ["Record Count", "0"], [], ["Renamed CTE label", "Event Date"], ["x", "y"]]
+    assert hdr._find_header_row(rows) == ["Renamed CTE label", "Event Date"]
 
 
 def test_regengine_header_row_is_what_the_script_reads():
@@ -96,7 +128,9 @@ def test_every_emitted_tab_is_an_fda_cte_tab():
     assert set(hdr.regengine_tabs()) <= set(hdr.FDA_CTE_TABS)
 
 
-@pytest.mark.skipif(not __import__("os").environ.get("FDA_TEMPLATE_PDF"), reason="set FDA_TEMPLATE_PDF to the FDA template")
+@pytest.mark.skipif(
+    not __import__("os").environ.get("FDA_TEMPLATE_PDF"), reason="set FDA_TEMPLATE_PDF to the FDA template"
+)
 @pytest.mark.xfail(strict=True, reason="R3-A2: 29/29 headers do not match an FDA tab")
 def test_headers_match_fda_template_pdf():
     import os
@@ -117,11 +151,16 @@ def test_event_time_keeps_time_zone_offset():
     assert offset[:3] in out["event_time"]
 
 
-@pytest.mark.xfail(strict=True, reason="R3-B2: date-only event_date yields Event Time 00:00:00 with no zone, not a rejection")
+@pytest.mark.xfail(
+    strict=True, reason="R3-B2: date-only event_date yields Event Time 00:00:00 with no zone, not a rejection"
+)
 def test_date_only_event_is_not_emitted_without_time_zone():
     row = _fixture_rows()[0]
-    out = _normalise_event(_event(row), strict_dates=True)
-    assert out["event_time"] and any(c in out["event_time"] for c in "+-Z")
+    try:
+        out = _normalise_event(_event(row, ts=row["harvest_date"]), strict_dates=True)
+    except ValueError:
+        return  # rejecting the date-only timestamp is a valid fix
+    assert _zone_ok_or_blank_flagged(out)
 
 
 @pytest.mark.xfail(strict=True, reason="R3-B3: kdes.event_time is copied verbatim with no zone check")
@@ -129,8 +168,11 @@ def test_kde_event_time_without_zone_is_rejected():
     row = _fixture_rows()[0]
     ev = _event(row, ts=_tz_aware_timestamp(row))
     ev["kdes"]["event_time"] = datetime.fromisoformat(ev["event_date"]).strftime("%H:%M:%S")
-    out = _normalise_event(ev, strict_dates=True)
-    assert any(c in out["event_time"] for c in "+-Z")
+    try:
+        out = _normalise_event(ev, strict_dates=True)
+    except ValueError:
+        return  # rejecting a zoneless kdes.event_time is a valid fix
+    assert _zone_ok_or_blank_flagged(out)
 
 
 # ─── (c) real GTIN / GLN only (SEL-504) ─────────────────────────────────
