@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL('https://regengine.co'),
   title: 'FSMA 204 Recordkeeping Software | RegEngine',
-  description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.',
+  description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.',
   icons: {
     icon: '/icon.png',
     apple: '/icon.png',
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'FSMA 204 Recordkeeping Software | RegEngine',
-    description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.',
+    description: 'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.',
     siteName: 'RegEngine',
     // Relative, like alternates.canonical above: pages that do not declare
     // their own openGraph inherit this block, and an absolute root URL made
