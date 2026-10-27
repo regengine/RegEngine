@@ -85,6 +85,9 @@ secrets.json
 
 # Artifacts that should never be tracked
 *.zip
+# ...except any public bundles the frontend serves from these folders (#2873).
+# None are published at the moment.
+!frontend/public/proof/*.zip
 login_resp.json
 frontend/build_log.txt
 frontend/build_output.txt

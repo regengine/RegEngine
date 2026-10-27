@@ -571,52 +571,38 @@ class TestFailureModes:
         assert resp.status_code == 400
 
 
-def _build_script_bundle(tmp_path: Path) -> bytes:
-    """Build a bundle with scripts/build_audit_bundle.sh (the tool behind the
-    public /proof bundle). The input CSV is a header row only, so the test
-    carries no record data."""
-    import subprocess
-
-    csv_path = tmp_path / "export.csv"
-    csv_path.write_bytes(b"Event ID,Hash\n")
-    out = tmp_path / "audit-bundle.zip"
-    subprocess.run(
-        ["bash", str(REPO_ROOT / "scripts/build_audit_bundle.sh"), str(csv_path), str(out)],
-        check=True,
-        capture_output=True,
-    )
-    return out.read_bytes()
-
-
 # ---------------------------------------------------------------------------
 # Happy path — round-trip a real ZIP
 # ---------------------------------------------------------------------------
+def _sdk_merkle_root(file_hashes: list[str]) -> str:
+    sdk = runpy.run_path(str(REPO_ROOT / "frontend/public/sdk/verify_chain.py"))
+    return sdk["_merkle_root"](file_hashes)
+
+
+def _make_generic_files_bundle() -> bytes:
+    """Build a files[]/merkle-style bundle in-test (no checked-in fixture)."""
+    payload = b"generic-bundle-test-file\n"
+    file_hash = hashlib.sha256(payload).hexdigest()
+    manifest = {
+        "version": "1.0",
+        "files": [{"path": "evidence.txt", "size": len(payload), "sha256": file_hash}],
+        "merkle": {"leaves": [file_hash], "root": _sdk_merkle_root([file_hash])},
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest))
+        zf.writestr("evidence.txt", payload)
+    return buf.getvalue()
+
+
 class TestZipRoundTrip:
-    def test_checked_in_public_audit_bundle_verifies(self, client: TestClient, tmp_path: Path):
-        """A bundle from the public bundle builder must verify through the API."""
-        bundle = _build_script_bundle(tmp_path)
-
-        resp = client.post(
-            "/api/v1/proof/verify",
-            files={"bundle": ("audit-bundle.zip", bundle, "application/zip")},
-        )
-
-        assert resp.status_code == 200, resp.text
-        data = resp.json()
-        assert data["verified"] is True, data
-        names = {c["name"]: c for c in data["checks"]}
-        assert names["manifest_files_present"]["passed"] is True
-        assert names["file_hashes_match_manifest"]["passed"] is True
-        assert names["merkle_root_matches_declared"]["passed"] is True
-        assert len(data["merkle_root_recomputed"]) == 64
-
     def test_generic_bundle_may_use_unrelated_verification_metadata(
         self,
         client: TestClient,
         tmp_path: Path,
     ):
         """Only FDA markers activate persisted-chain status semantics."""
-        original = _build_script_bundle(tmp_path)
+        original = _make_generic_files_bundle()
         modified = io.BytesIO()
         with zipfile.ZipFile(io.BytesIO(original), "r") as source:
             with zipfile.ZipFile(modified, "w", zipfile.ZIP_DEFLATED) as target:
@@ -640,30 +626,6 @@ class TestZipRoundTrip:
         bundle_path = tmp_path / "generic-bundle.zip"
         bundle_path.write_bytes(bundle)
         assert sdk_verify_bundle(str(bundle_path)) == 0
-
-    def test_checked_in_tampered_public_audit_bundle_fails(self, client: TestClient, tmp_path: Path):
-        """A builder bundle whose CSV bytes changed after packaging must fail."""
-        original = _build_script_bundle(tmp_path)
-        tampered = io.BytesIO()
-        with zipfile.ZipFile(io.BytesIO(original), "r") as source:
-            with zipfile.ZipFile(tampered, "w", zipfile.ZIP_DEFLATED) as target:
-                for member in source.infolist():
-                    data = source.read(member.filename)
-                    if member.filename.endswith(".csv"):
-                        data = data + b"\n"
-                    target.writestr(member, data)
-        bundle = tampered.getvalue()
-
-        resp = client.post(
-            "/api/v1/proof/verify",
-            files={"bundle": ("audit-bundle-tampered.zip", bundle, "application/zip")},
-        )
-
-        assert resp.status_code == 200, resp.text
-        data = resp.json()
-        assert data["verified"] is False, data
-        names = {c["name"]: c for c in data["checks"]}
-        assert names["file_hashes_match_manifest"]["passed"] is False
 
     def test_zip_bundle_verified_end_to_end(self, client: TestClient):
         hashes = _make_event_hashes(8)

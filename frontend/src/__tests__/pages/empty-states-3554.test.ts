@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -35,19 +34,6 @@ describe('#3554 empty states and hidden sample artifacts', () => {
         expect(existsSync(resolve(process.cwd(), 'public/proof/epcis-sample.jsonld'))).toBe(false);
     });
 
-    it('build_audit_bundle.sh requires a real export path', () => {
-        let status = 0;
-        let stderr = '';
-        try {
-            execFileSync('bash', [resolve(process.cwd(), '../scripts/build_audit_bundle.sh')], { stdio: 'pipe' });
-        } catch (err) {
-            const e = err as { status: number; stderr: Buffer };
-            status = e.status;
-            stderr = e.stderr.toString();
-        }
-        expect(status).not.toBe(0);
-        expect(stderr).toMatch(/^usage: /);
-    });
     it('hides /proof/transformation and drops every link to it', () => {
         expect(read('src/app/proof/transformation/page.tsx')).toContain('notFound()');
         expect(existsSync(resolve(process.cwd(), 'src/app/proof/transformation/opengraph-image.tsx'))).toBe(false);

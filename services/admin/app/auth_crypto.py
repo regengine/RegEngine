@@ -104,9 +104,12 @@ class AuthCryptoService:
         global _DEV_EPHEMERAL_HMAC_SECRET
         if _DEV_EPHEMERAL_HMAC_SECRET is None:
             _DEV_EPHEMERAL_HMAC_SECRET = secrets.token_urlsafe(_MIN_SECRET_BYTES)
+            # Log the env var *name* as a literal; do not pass the
+            # secret-named constant through the logging data flow
+            # (py/clear-text-logging-sensitive-data).
             logger.warning(
-                "%s not set; using process-local ephemeral OTP HMAC secret",
-                _HMAC_SECRET_ENV,
+                "AUTH_OTP_HMAC_SECRET not set; using process-local ephemeral "
+                "OTP HMAC secret"
             )
         return _DEV_EPHEMERAL_HMAC_SECRET
 

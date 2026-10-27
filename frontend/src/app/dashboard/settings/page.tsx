@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { useCurrentSubscription } from '@/hooks/use-billing';
+import { getErrorRequestId } from '@/lib/api-error';
 import {
     Building2, Key, Database, Plug,
     Save, CheckCircle2, CreditCard,
@@ -105,7 +106,7 @@ export default function SettingsPage() {
     const { user, isAuthenticated } = useAuth();
     const { tenantId, isSystemTenant } = useTenant();
     const effectiveTenantId = isSystemTenant ? null : tenantId;
-    const { data: subscriptionData, isLoading: subLoading, isError: subError, refetch: refetchSubscription, isFetching: subFetching } = useCurrentSubscription(effectiveTenantId ?? undefined);
+    const { data: subscriptionData, isLoading: subLoading, isError: subError, error: subQueryError, refetch: refetchSubscription, isFetching: subFetching } = useCurrentSubscription(effectiveTenantId ?? undefined);
 
     const [saved, setSaved] = useState(false);
     const [activeTab, setActiveTab] = useState<'profile' | 'api' | 'retention' | 'integrations'>('profile');
@@ -271,7 +272,7 @@ export default function SettingsPage() {
                                 ) : subError ? (
                                     <div className="min-w-0">
                                         <span className="text-ui font-medium text-re-text-secondary">{planName}</span>
-                                        <ErrorState message="We could not load this page." onRetry={() => refetchSubscription()} retrying={subFetching} className="mt-2" />
+                                        <ErrorState message="We could not load this page." onRetry={() => refetchSubscription()} retrying={subFetching} requestId={getErrorRequestId(subQueryError)} className="mt-2" />
                                     </div>
                                 ) : (
                                     <>

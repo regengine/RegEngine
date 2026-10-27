@@ -2,6 +2,7 @@ name: Copy gate
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'scripts/copy-lint/**'
