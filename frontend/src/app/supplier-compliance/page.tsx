@@ -70,7 +70,7 @@ const FAQ = [
     },
     {
         q: 'Is my data secure?',
-        a: 'Yes. Every submission is SHA-256 hashed and cryptographically chain-linked. Data is stored in tenant-isolated databases with row-level security. Your data is only visible to you and the buyer who generated your portal link.',
+        a: 'Submissions are SHA-256 hashed and cryptographically chain-linked where enabled. Hashing is a RegEngine feature, not an FDA requirement. Data is stored in tenant-isolated databases with row-level security. Your data is only visible to you and the buyer who generated your portal link.',
     },
     {
         q: 'What does this cost me?',
