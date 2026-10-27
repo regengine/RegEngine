@@ -160,6 +160,21 @@ describe('CSV import results on /ingest', () => {
     expect(mocks.ingestFile).not.toHaveBeenCalled();
   });
 
+  it('shows the API-key save error on the URL tab without sending a request', async () => {
+    mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+    render(<IngestPage />);
+    await userEvent.click(screen.getByRole('tab', { name: /url ingestion/i }));
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    fireEvent.change(screen.getByPlaceholderText('https://example.com/regulatory-document.pdf'), {
+      target: { value: 'https://example.com/regulatory-document.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+    expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+    expect(screen.getByText('Ingestion Failed')).toBeInTheDocument();
+    expect(mocks.ingestURL).not.toHaveBeenCalled();
+  });
+
   it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {
     const rejected = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
       response: {
