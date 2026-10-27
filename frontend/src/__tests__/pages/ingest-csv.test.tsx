@@ -176,6 +176,33 @@ describe('CSV import results on /ingest', () => {
     expect(mocks.ingestURL).not.toHaveBeenCalled();
   });
 
+  it('clears URL API-key save error when switching tabs and does not reappear on returning to URL tab', async () => {
+    mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+    render(<IngestPage />);
+    await userEvent.click(screen.getByRole('tab', { name: /url ingestion/i }));
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    fireEvent.change(screen.getByPlaceholderText('https://example.com/regulatory-document.pdf'), {
+      target: { value: 'https://example.com/regulatory-document.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+    expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+    expect(screen.getByText('Ingestion Failed')).toBeInTheDocument();
+    expect(document.querySelector('.workspace-load-error')).not.toBeNull();
+
+    await userEvent.click(screen.getByRole('tab', { name: /file upload/i }));
+
+    expect(screen.queryByText('API key could not be saved. Please try again.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ingestion Failed')).not.toBeInTheDocument();
+    expect(document.querySelector('.workspace-load-error')).toBeNull();
+
+    await userEvent.click(screen.getByRole('tab', { name: /url ingestion/i }));
+
+    expect(screen.queryByText('API key could not be saved. Please try again.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ingestion Failed')).not.toBeInTheDocument();
+    expect(document.querySelector('.workspace-load-error')).toBeNull();
+  });
+
   it('keeps previous job progress visible when API key save fails on subsequent submit', async () => {
     mocks.ingestURL.mockResolvedValue({ job_id: 'job-previous-123', status: 'queued' });
     mocks.getIngestionJob.mockResolvedValue({ status: 'queued' });

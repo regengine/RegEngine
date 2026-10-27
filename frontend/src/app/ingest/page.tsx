@@ -131,6 +131,11 @@ export default function IngestPage() {
     const tab = searchParams.get('tab');
     return tab === 'file' || tab === 'epcis' ? tab : 'url';
   });
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setUrlError(null);
+  };
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -162,6 +167,7 @@ export default function IngestPage() {
   const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending || epcisPending;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrlError(null);
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setCsvResult(null);
@@ -172,6 +178,7 @@ export default function IngestPage() {
   };
 
   const handleEpcisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrlError(null);
     if (e.target.files && e.target.files[0]) {
       setEpcisFile(e.target.files[0]);
       setEpcisResult(null);
@@ -516,7 +523,7 @@ export default function IngestPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setActiveTab('file')}
+                      onClick={() => handleTabChange('file')}
                       trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                     >
                       Continue File Mapping
@@ -596,7 +603,7 @@ export default function IngestPage() {
                       )}
                     </div>}
 
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
@@ -631,7 +638,7 @@ export default function IngestPage() {
                                 type="button"
                                 onClick={() => {
                                   setUrl(example.url);
-                                  setActiveTab('url');
+                                  handleTabChange('url');
                                 }}
                               >
                                 {example.label}
