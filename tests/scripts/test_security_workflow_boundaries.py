@@ -25,10 +25,15 @@ def test_secret_scans_cover_main_and_non_main_prs():
     assert other_pr is None  # No branch or path filter can omit a non-main PR.
     assert other["jobs"]["secrets"]["if"] == "github.base_ref != 'main'"
     assert "secrets" in main["jobs"]["ci-status-gate"]["needs"]
+    assert "detect-secrets-hook" in (ROOT / "scripts/ci/check_secrets_baseline.sh").read_text()
     for workflow in (main, other):
         steps = workflow["jobs"]["secrets"]["steps"]
         assert any("gitleaks detect" in step.get("run", "") for step in steps)
-        assert any("detect-secrets-hook" in step.get("run", "") for step in steps)
+        assert any(
+            "detect-secrets-hook" in step.get("run", "")
+            or "scripts/ci/check_secrets_baseline.sh" in step.get("run", "")
+            for step in steps
+        )
 
 
 def test_tenant_job_filters_pr_only_and_uses_only_disposable_role_targets():
