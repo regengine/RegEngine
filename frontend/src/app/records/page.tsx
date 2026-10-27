@@ -7,15 +7,16 @@ import { PageHeader } from '@/components/layout/page-header';
 import { Section } from '@/components/layout/section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable, type DataTableColumn } from '@/components/ui/data-table';
+import { ErrorState } from '@/components/ui/error-state';
 import { fieldControlClasses } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge, type ComplianceState } from '@/components/ui/status-badge';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
+import { getErrorRequestId, getErrorRetryAfter, getErrorStatus } from '@/lib/api-error';
 import {
   useCanonicalEvents,
   useCanonicalEvent,
@@ -35,8 +36,8 @@ const SOURCE_LABEL: Record<string, string> = {
   webhook_api: 'Webhook API',
   csv_upload: 'CSV Upload',
   xlsx_upload: 'XLSX Upload',
-  epcis_api: 'EPCIS API',
-  epcis_xml: 'EPCIS XML',
+  epcis_api: 'EPCIS API (Preview)',
+  epcis_xml: 'EPCIS XML (Preview)',
   manual: 'Manual',
   legacy_v002: 'Legacy',
 };
@@ -49,6 +50,14 @@ const RESULT_STATE: Record<string, ComplianceState> = {
 };
 
 const FILTER_SELECT = 'h-8 w-auto max-w-[13rem] py-0 pr-8 text-small';
+
+/** Safe 429 copy; appends the Retry-After wait only when it is a plain second count. */
+function rateLimitMessage(retryAfterSeconds: number | null): string {
+  if (retryAfterSeconds === null) {
+    return 'Too many requests. Wait a moment before retrying.';
+  }
+  return `Too many requests. Wait a moment before retrying. Retry in ${retryAfterSeconds} seconds.`;
+}
 
 /** Key/value row for the record detail <dl> — label above value, hairline separated. */
 function DetailRow({ term, children }: { term: string; children: React.ReactNode }) {
@@ -88,21 +97,18 @@ export default function CanonicalRecordsPage() {
 
 
   if (events.error) {
+    // Fixed safe copy only — the raw backend detail is never rendered.
+    const loadErrorMessage = getErrorStatus(events.error) === 429
+      ? rateLimitMessage(getErrorRetryAfter(events.error))
+      : 'We could not load your records.';
     return (
       <PageContainer className="workspace-load-error">
         {pageHeader}
-        <Callout
-          tone="danger"
-          role="alert"
-          title="Unable to load data from the control plane API."
-          action={
-            <Button variant="secondary" size="sm" onClick={() => events.refetch()}>
-              Retry
-            </Button>
-          }
-        >
-          {(events.error as Error).message}
-        </Callout>
+        <ErrorState
+          message={loadErrorMessage}
+          onRetry={() => events.refetch()}
+          requestId={getErrorRequestId(events.error)}
+        />
       </PageContainer>
     );
   }

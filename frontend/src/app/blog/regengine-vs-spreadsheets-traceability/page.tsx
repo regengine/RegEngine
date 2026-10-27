@@ -172,7 +172,7 @@ export default function RegEngineVsSpreadsheets() {
                 <ul className="space-y-2 text-re-text-secondary text-sm">
                   <li>• One-click query: search by product name, date range, lot code, or customer</li>
                   <li>• Instant results: within seconds, see all matching transactions</li>
-                  <li>• Export workflow: data can be organized into FDA-oriented sortable records and EPCIS 2.0 where buyer workflows require it</li>
+                  <li>• Export workflow: data can be organized into FDA-oriented sortable records and EPCIS 2.0 (Preview) where buyer workflows require it</li>
                   <li>• Traceability links: immediate source and recipient are already linked in the system</li>
                   <li>• One-click export: generate a complete, review-ready report in minutes</li>
                   <li>• Total time: 5-30 minutes from request to delivery. You exceed the requirement.</li>

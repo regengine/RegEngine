@@ -125,17 +125,30 @@ def _valid_gln_or_none(value: Optional[str]) -> Optional[str]:
 def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Optional[str]) -> tuple[str, str]:
     """Normalize an EDI shipment date/time into an ISO timestamp and date.
 
-    #1167: unparseable dates now raise HTTP 400 rather than silently
-    falling back to ``datetime.now()`` — retransmitted archival EDI was
-    being re-stamped as today's shipment. Stale dates (> 90 days old)
-    still snap to "now" for the ingest timestamp to keep webhook model
-    bounds valid, but the original parsed date is preserved separately
-    so downstream FSMA 204 lookback sees the real event date.
+    The returned timestamp is always the real event time from the EDI
+    source, never the ingest time. Backfilled EDI older than 90 days keeps
+    its real date (the webhook model accepts historical events for the
+    FSMA 204 2-year retention backfill). Previously the timestamp snapped
+    to ``now`` for such events, which gave each event two clocks and
+    corrupted EPCIS eventTime and R1 time to fix.
+
+    Missing, unparseable, or > 24h-future dates raise HTTP 400 so the
+    event is rejected for review instead of being re-stamped (#1167).
     """
     now = datetime.now(timezone.utc)
 
-    if not ship_date_raw:
-        return now.isoformat(), now.date().isoformat()
+    if not ship_date_raw or not str(ship_date_raw).strip():
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "missing_edi_date",
+                "raw": ship_date_raw,
+                "message": (
+                    "EDI event date is missing. The ingest time is not "
+                    "substituted for the event time; supply the source date."
+                ),
+            },
+        )
 
     clean_date = re.sub(r"\D", "", ship_date_raw)
 
@@ -170,12 +183,22 @@ def _ship_timestamp_and_date(ship_date_raw: Optional[str], ship_time_raw: Option
                 },
             ) from exc
 
-    # Keep webhook model bounds to avoid stale/future rejection — the
-    # ingest timestamp snaps to "now" if the EDI claims a shipment
-    # older than 90 days or > 24h in the future. The parsed event_date
-    # is returned unchanged so FSMA 204 traceability sees the real date.
-    if parsed < now - timedelta(days=90) or parsed > now + timedelta(hours=24):
-        return now.isoformat(), parsed.date().isoformat()
+    # Never replace the real event time with the ingest time. Historical
+    # dates are kept as-is; a date more than 24h ahead is rejected for
+    # review rather than overwritten.
+    if parsed > now + timedelta(hours=24):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "edi_date_in_future",
+                "raw": ship_date_raw,
+                "needs_review": True,
+                "message": (
+                    "EDI event date is more than 24 hours in the future; "
+                    "flagged for review instead of being replaced with now()."
+                ),
+            },
+        )
 
     return parsed.isoformat(), parsed.date().isoformat()
 
