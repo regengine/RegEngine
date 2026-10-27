@@ -23,11 +23,11 @@ import { Card } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
   description:
-    "FSMA 204 recordkeeping software. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.",
+    "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Not legal advice.",
   openGraph: {
     title: "FSMA 204 Recordkeeping Software | RegEngine",
     description:
-      "FSMA 204 recordkeeping software. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.",
+      "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Not legal advice.",
     url: "https://regengine.co",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 recordkeeping software" }],

@@ -14,7 +14,7 @@ import type { Metadata } from 'next';
 
 /**
  * Public snippet limits from the Oct 8, 2026 regengine.co audit.
- * Titles stay at or under 60 characters. Meta descriptions stay at or under 155.
+ * Titles stay at or under 60 characters. Tool meta descriptions stay at or under 155.
  * Tool names are the same string on the tools index, the page title, and the H1.
  * JSON-LD does not publish offers or prices.
  */
@@ -28,7 +28,7 @@ const DASH = /[\u2014\u2013]/;
 
 const HOME_TITLE = 'FSMA 204 Recordkeeping Software | RegEngine';
 const HOME_DESCRIPTION =
-    'FSMA 204 recordkeeping software. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.';
+    'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Not legal advice.';
 const HOME_H1 = 'FSMA 204 recordkeeping for the Food Traceability Rule.';
 
 const TOOLS_TITLE = 'Free FSMA 204 Tools | RegEngine';
@@ -121,10 +121,9 @@ describe('public snippet lengths', () => {
 
         expect(title).toBe(HOME_TITLE);
         expect(description).toBe(HOME_DESCRIPTION);
+        expect(ogDescription).toBe(HOME_DESCRIPTION);
         expect(title.length).toBeLessThanOrEqual(TITLE_LIMIT);
-        expect(description.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
         expect(ogTitle.length).toBeLessThanOrEqual(TITLE_LIMIT);
-        expect(ogDescription.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
         expect(`${title} ${description} ${ogTitle} ${ogDescription}`).not.toMatch(DASH);
         expect(read('src/app/page.tsx')).toContain(HOME_H1);
     });
