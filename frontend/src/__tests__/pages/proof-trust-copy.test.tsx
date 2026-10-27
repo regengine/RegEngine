@@ -56,8 +56,14 @@ describe('public proof-bundle trust copy', () => {
         }
     });
 
-    it('/proof is hidden until it can publish artifacts from a real export', () => {
-        expect(() => ProofPage()).toThrow();
+    it('/proof shows the empty state instead of artifacts', () => {
+        const text = renderedText(<ProofPage />);
+
+        expect(text).toMatch(/no public artifacts are published yet/i);
+
+        for (const claim of UNBACKED_AUTHENTICITY_CLAIMS) {
+            expect(text).not.toMatch(claim);
+        }
     });
 
     it('verify_chain.py documents that the uploaded manifest is an untrusted commitment', () => {
