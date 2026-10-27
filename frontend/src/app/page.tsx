@@ -89,7 +89,7 @@ export default function HomePage() {
           </p>
           <Callout tone="neutral" className="mt-6 max-w-[68ch]">
             <p>
-              The federal compliance date for the Food Traceability Rule is <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. That is the FDA date. Buyer programs are separate and must be confirmed with your buyer.
+              FDA has said it will not enforce the Food Traceability Rule before <strong className="font-medium text-re-text-primary">July 20, 2028</strong>, following a Congressional directive. Buyer programs are separate and must be confirmed with your buyer.
             </p>
           </Callout>
           <div className="mt-8 flex flex-wrap gap-3">
