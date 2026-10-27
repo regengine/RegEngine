@@ -193,7 +193,7 @@ export default function SupplierCompliancePage() {
                             {
                                 icon: Clock,
                                 title: 'The deadline',
-                                body: 'Current public FDA posture points to July 20, 2028 as the earliest enforcement date under congressional direction. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
+                                body: 'FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Many major retailers are signaling traceability expectations to suppliers ahead of that date. Specific retailer requirements vary by buyer and should be confirmed directly with your buyer.',
                             },
                             {
                                 icon: AlertTriangle,
