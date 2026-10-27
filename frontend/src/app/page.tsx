@@ -23,11 +23,11 @@ import { Card } from "@/components/ui/card";
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
   description:
-    "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.",
+    "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Not legal advice.",
   openGraph: {
     title: "FSMA 204 Recordkeeping Software | RegEngine",
     description:
-      "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.",
+      "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Not legal advice.",
     url: "https://regengine.co",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 recordkeeping software" }],
@@ -196,7 +196,7 @@ export default function HomePage() {
             RegEngine · Pasadena, CA · early-stage · design-partner · pre-revenue
           </p>
           <p className="mt-2 text-small text-re-text-muted">
-            FDA date July 20, 2028. Buyer programs are not FDA. No seals, certifications, or FDA logo.
+            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Buyer programs are not FDA. No seals, certifications, or FDA logo.
           </p>
         </Container>
       </footer>
