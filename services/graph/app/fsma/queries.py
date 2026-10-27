@@ -16,6 +16,12 @@ from ..neo4j_utils import Neo4jClient
 
 logger = structlog.get_logger("fsma-utils")
 
+# Search pages stay small. The shared range query also feeds the FDA and
+# EPCIS exports, which pass ``export_cap=True`` and may read up to one past
+# ``EXPORT_EVENT_CAP`` so the caller can refuse a truncated file.
+SEARCH_LIMIT_CEILING = 1_000
+EXPORT_EVENT_CAP = 50_000
+
 
 async def get_lot_timeline(
     client: Neo4jClient,
@@ -129,6 +135,12 @@ async def get_lot_timeline(
     return timeline
 
 
+def _bounded_range_limit(limit: int, *, export_cap: bool) -> int:
+    """Clamp a range-query limit. Search cannot raise the export ceiling."""
+    ceiling = (EXPORT_EVENT_CAP + 1) if export_cap else SEARCH_LIMIT_CEILING
+    return max(1, min(ceiling, int(limit)))
+
+
 async def query_events_by_range(
     client: Neo4jClient,
     start_date: str,
@@ -141,6 +153,7 @@ async def query_events_by_range(
     tlc: Optional[str] = None,
     limit: int = 500,
     starting_after: Optional[str] = None,
+    export_cap: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Query all TraceEvents within a date range for FDA reporting.
@@ -156,6 +169,10 @@ async def query_events_by_range(
         tlc: Optional Traceability Lot Code. When set, only events whose
             joined Lot has exactly this ``tlc`` are returned (no trimming
             or case folding).
+        export_cap: When true, ``limit`` may be as high as
+            ``EXPORT_EVENT_CAP + 1`` (the FDA/EPCIS export probe). Search
+            calls leave this false and stay clamped at
+            ``SEARCH_LIMIT_CEILING``.
 
     Returns:
         List of event objects with lot and facility details
@@ -240,7 +257,7 @@ async def query_events_by_range(
             facility_contains=facility_contains,
             cte_type=cte_type,
             tlc=tlc,
-            limit=max(1, min(1000, int(limit))),
+            limit=_bounded_range_limit(limit, export_cap=export_cap),
             starting_after=starting_after,
         )
         async for record in result:
