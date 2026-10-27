@@ -2,6 +2,7 @@ export type CustomerVisibleStatus =
     | 'implemented'
     | 'supported'
     | 'pilot'
+    | 'preview'
     | 'design_partner'
     | 'export_supported'
     | 'file_import_supported'
@@ -121,6 +122,7 @@ export const STATUS_LABELS: Record<CustomerVisibleStatus, string> = {
     implemented: 'Implemented',
     supported: 'Supported',
     pilot: 'Pilot',
+    preview: 'Preview',
     design_partner: 'Design Partner',
     export_supported: 'Export Supported',
     file_import_supported: 'File Import Supported',
@@ -302,7 +304,7 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'epcis',
         name: 'GS1 EPCIS 2.0 (Preview)',
         category: 'developer_api',
-        status: 'export_supported',
+        status: 'preview',
         delivery_mode: 'export_only',
         integration_type: 'one_way_export',
         customer_copy: 'EPCIS export and ingest are in Preview. Default deployments use PostgreSQL-backed task processing; legacy Kafka-compatible signing is opt-in.',

@@ -372,8 +372,6 @@ export default function FSMA204BusinessGuidePage() {
           </p>
           <p className="mt-3 text-small text-re-text-muted">
             Try it:{" "}
-            <Link href="/proof" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/proof</Link>
-            {" "}→{" "}
             <Link href="/verify" className="text-re-brand underline decoration-re-border-strong underline-offset-[3px] hover:decoration-re-brand">/verify</Link>.
           </p>
         </div>
