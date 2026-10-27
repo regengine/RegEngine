@@ -218,8 +218,6 @@ export default function IngestPage() {
   const prepareSubmit = async (): Promise<boolean> => {
     // Clear the previous upload's results and errors first, so a failed
     // API-key save below never leaves stale error lines on screen.
-    setJobId(null);
-    setJobStatus('queued');
     setStatusError(null);
     setCsvResult(null);
     setCsvError(null);
@@ -251,6 +249,9 @@ export default function IngestPage() {
         return false;
       }
     }
+    // A failed API-key save must keep the previous job tracked and visible.
+    setJobId(null);
+    setJobStatus('queued');
     return true;
   };
 

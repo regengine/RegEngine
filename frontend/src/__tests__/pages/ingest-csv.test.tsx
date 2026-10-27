@@ -176,6 +176,29 @@ describe('CSV import results on /ingest', () => {
     expect(mocks.ingestURL).not.toHaveBeenCalled();
   });
 
+  it('keeps previous job progress visible when API key save fails on subsequent submit', async () => {
+    mocks.ingestURL.mockResolvedValue({ job_id: 'job-previous-123', status: 'queued' });
+    mocks.getIngestionJob.mockResolvedValue({ status: 'queued' });
+    render(<IngestPage />);
+
+    await userEvent.click(screen.getByRole('tab', { name: /url ingestion/i }));
+    fireEvent.change(screen.getByPlaceholderText('https://example.com/regulatory-document.pdf'), {
+      target: { value: 'https://example.com/regulatory-document.pdf' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+    expect(await screen.findByText('Ingestion Progress')).toBeInTheDocument();
+    expect(screen.getByText('Job job-previous-123')).toBeInTheDocument();
+
+    mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+    fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+    await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+    expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+    expect(screen.getByText('Ingestion Progress')).toBeInTheDocument();
+    expect(screen.getByText('Job job-previous-123')).toBeInTheDocument();
+  });
+
   it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {
     const rejected = Object.assign(new Error('No valid rows found: Row 2: No CTE type'), {
       response: {
