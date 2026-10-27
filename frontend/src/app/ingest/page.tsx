@@ -430,7 +430,7 @@ export default function IngestPage() {
     : 'neutral';
 
   return (
-    <PageContainer className={statusError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
+    <PageContainer className={statusError || urlError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
       <div className="mb-6">
         <WorkflowStepper currentStep="ingest" completedSteps={isAuthenticated || storedApiKey ? ['setup'] : []} />
       </div>

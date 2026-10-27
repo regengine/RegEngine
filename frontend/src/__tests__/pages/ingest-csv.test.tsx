@@ -172,6 +172,7 @@ describe('CSV import results on /ingest', () => {
 
     expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
     expect(screen.getByText('Ingestion Failed')).toBeInTheDocument();
+    expect(document.querySelector('.workspace-load-error')).not.toBeNull();
     expect(mocks.ingestURL).not.toHaveBeenCalled();
   });
 
