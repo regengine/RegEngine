@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { FSMA_ENFORCEMENT_DATE, FSMA_ENFORCEMENT_FRAMING } from '@/lib/fsma-enforcement';
 import { trackReadinessAssessmentSubmit, trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 // Food Traceability List categories - synced with the final FDA FTL as implemented
 // in src/app/tools/ftl-checker/components/FTLCheckerClient.tsx (source of truth)
@@ -122,6 +123,7 @@ const selectableClasses = (selected: boolean, padding: string) =>
     );
 
 export function FSMA204Assessment() {
+    const posthog = usePostHog();
     const [currentStep, setCurrentStep] = useState(0);
     const resultTracked = useRef(false);
     const toolRunStarted = useRef(false);
@@ -137,6 +139,7 @@ export function FSMA204Assessment() {
         if (window.location.pathname === '/tools/self-reported-checklist' && !toolRunStarted.current) {
             toolRunStarted.current = true;
             trackToolRunStarted('self-reported-checklist');
+            posthog?.capture('tool_started', { tool_id: 'self-reported-checklist' });
         }
         setSelectedProducts(prev =>
             prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]

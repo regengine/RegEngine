@@ -1,5 +1,6 @@
 import { type ClassValue, clsx } from "clsx"
 import { extendTailwindMerge } from "tailwind-merge"
+import { NOT_SET } from "./empty-values"
 
 /**
  * The design system's type scale (tailwind.config.ts -> theme.extend.fontSize).
@@ -36,7 +37,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDate(dateString: string | undefined): string {
-    if (!dateString) return '—';
+    if (!dateString) return NOT_SET;
     return new Date(dateString).toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',

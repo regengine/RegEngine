@@ -7,10 +7,10 @@ import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
-    description: 'FSMA 204 traceability readiness with transparent Founding rate pricing. Onboarding terms are controlled by your agreement.',
+    description: 'FSMA 204 traceability workspace pricing with transparent Founding rate figures. Onboarding terms are controlled by your agreement.',
     openGraph: {
         title: 'FSMA 204 Pricing | RegEngine',
-        description: 'FSMA 204 traceability readiness with transparent Founding rate pricing. Onboarding terms are controlled by your agreement.',
+        description: 'FSMA 204 traceability workspace pricing with transparent Founding rate figures. Onboarding terms are controlled by your agreement.',
         url: 'https://regengine.co/pricing',
         type: 'website',
     },
@@ -78,7 +78,7 @@ const PRICING_TIERS = [
             'FSMA 204 traceability workspace',
             'Supplier onboarding + FTL scoping',
             'CSV upload + API ingestion',
-            'Self-check scoring + FDA-oriented sortable export workflow',
+            'Coverage and completeness checklist + FDA-oriented sortable export workflow',
             'EPCIS 2.0 export (Preview)',
             'Recall drill workflows',
             'Email support',
@@ -87,6 +87,7 @@ const PRICING_TIERS = [
     {
         id: 'standard',
         name: 'Standard',
+        beta: true,
         icon: 'rocket' as const,
         description: '2 to 3 facilities, scaling up',
         highlighted: true,
@@ -96,7 +97,7 @@ const PRICING_TIERS = [
             'No per-CTE caps (fair use)',
             'Everything in Base',
             'Multi-facility operations',
-            'Retailer-specific readiness benchmarks',
+            'Retailer-specific coverage checklist benchmarks',
             'EPCIS 2.0 export (Preview)',
             'Priority email support',
         ],
@@ -104,6 +105,7 @@ const PRICING_TIERS = [
     {
         id: 'premium',
         name: 'Premium',
+        beta: true,
         icon: 'crown' as const,
         description: '4+ facilities, full coverage',
         highlighted: false,
@@ -130,13 +132,23 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
     { feature: 'Pricing Model', regengine: 'Indicative design-partner ranges; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
 ];
 
+/** Keep Preview on any live billing feature string that names EPCIS without a status label. */
+function ensureEpcisPreviewLabel(features: string[]): string[] {
+    return features.map((feature) => {
+        if (!/epcis/i.test(feature)) return feature;
+        if (/\bpreview\b/i.test(feature)) return feature;
+        return `${feature.trimEnd()} (Preview)`;
+    });
+}
+
 const FAQ: PricingFaqItem[] = [
-    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard handles 2 to 3 facilities with unlimited CTEs. Premium is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
+    { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard (Beta) handles 2 to 3 facilities with unlimited CTEs. Premium (Beta) is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
     { q: 'What does the Founding rate include?', a: 'Founding rate discounts are documented in the executed order form or design-partner agreement, including term, scope, renewal, taxes, add-ons, plan-change treatment, onboarding, and integration support.' },
     { q: 'Can I switch plans anytime?', a: 'Plan changes are handled under your executed order form or design-partner agreement. We scope upgrades, downgrades, facility count, and billing changes before applying them.' },
     { q: 'Do you offer annual billing?', a: 'Annual and monthly billing can be scoped during procurement. Pricing shown is indicative; the executed agreement controls final plan, billing period, and checkout availability.' },
     { q: 'Does my Founding rate ever change?', a: 'Your Founding rate is controlled by the executed order form or design-partner agreement, including renewal, scope, add-ons, taxes, and plan changes.' },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: CSV upload, the JSON events API, or custom-scoped implementation. EPCIS 2.0 is in Preview.' },
+    { q: 'What am I paying for if I must archive externally?', a: 'FSMA 204 requires at least two-year retention of traceability records under 21 CFR 1.1455. RegEngine is a compliance evidence layer with contract-defined retention, not a long-term archive. Your subscription pays for workspace access, ingestion, validation, and export workflows. You keep off-platform archives for long-term retention. See the Trust Center retention guidance for export and archive posture.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Major retailers are already requiring traceability data from suppliers regardless of the FDA timeline. RegEngine gives you the tooling and records to support either trigger: the FDA rule or a retailer mandate.' },
     { q: 'Do I need this if I\'m a small farm?', a: 'FSMA 204 applies to entities on the Food Traceability List handling specific foods. Use our free FTL Checker to see if your products are covered.' },
     { q: 'Can I integrate with my existing ERP?', a: 'RegEngine accepts data via API, CSV upload, or scoped ERP integration. Guided onboarding is available for approved design-partner workspaces. Timeline, support, and commercial terms are confirmed during scoping.' },
@@ -196,7 +208,9 @@ export default async function PricingPage() {
             partnerMonthly: partner_monthly,
             partnerAnnual: partner_annual,
             description: live.description ?? tier.description,
-            features: Array.isArray(live.features) && live.features.length > 0 ? live.features : tier.features,
+            features: ensureEpcisPreviewLabel(
+                Array.isArray(live.features) && live.features.length > 0 ? live.features : tier.features,
+            ),
         }];
     });
 

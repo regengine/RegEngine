@@ -46,7 +46,7 @@ def _reject_zpl_unsafe(value: str | None, *, field: str) -> str | None:
 # ✅ KEEP: Versioning & Logging
 router = APIRouter(tags=["Traceability Labels"])
 logger = structlog.get_logger("label-inception")
-TRACEABILITY_DOMAIN = os.getenv("TRACEABILITY_DOMAIN", "https://trace.regengine.ai")
+TRACEABILITY_DOMAIN = os.getenv("TRACEABILITY_DOMAIN", "https://regengine.co")
 
 # ============================================================================
 # MODELS (Preserved + Enhanced)
@@ -91,6 +91,29 @@ class TraceabilityInfo(BaseModel):
     lot_number: str
     pack_date: str  # YYYY-MM-DD
     grower_gln: Optional[str] = None
+
+    @validator("lot_number")
+    def validate_lot_number_scannable(cls, v):
+        # The lot is printed in the label QR as a GS1 Digital Link segment
+        # (generate_qr_payload quotes it). A literal "%" followed by two hex
+        # digits survives quoting but is decoded twice on Vercel (its router
+        # decodes once, then Next's decode-query-path-parameter decodes again),
+        # so "100%2F" would scan as "100/". Reject it here rather than print a
+        # label that traces the wrong lot. An empty or whitespace-only lot
+        # would print /10//21/ or /10/%20/21/.
+        if not v or not v.strip():
+            raise ValueError("lot_number must not be empty")
+        if "%" in v:
+            raise ValueError("lot_number must not contain '%'")
+        # RE-SEC-004: the quoted lot lands in the ZPL stream inside ^FDMM,…^FS
+        # and quote() leaves "~" (the ZPL control-command prefix) unescaped.
+        _reject_zpl_unsafe(v, field="lot_number")
+        # quote() leaves "." unescaped, so these print as /10/./21/ or
+        # /10/../21/ and the browser normalizes the segment away before the
+        # request is sent; the label could never reach the landing page.
+        if v in (".", ".."):
+            raise ValueError("lot_number must not be '.' or '..'")
+        return v
 
 
 class LabelBatchInitRequest(BaseModel):
@@ -188,8 +211,8 @@ def health_check():
 @router.post("/batch/init", response_model=LabelBatchInitResponse)
 async def initialize_label_batch(
     request: LabelBatchInitRequest,
-    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
     api_key: str = Depends(require_api_key),
+    tenant_id: uuid.UUID = Depends(get_current_tenant_id),
 ):
     # Reject a malformed packer GLN before touching Neo4j: generate_sscc
     # raises ValueError on non-numeric input, which would otherwise surface

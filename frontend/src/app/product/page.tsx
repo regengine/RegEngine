@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     "RegEngine preflights supplier traceability feeds, creates fix queues, gates production evidence, and helps assemble FSMA 204 export packages from checked tenant data.",
   openGraph: {
     title: "Product | RegEngine",
-    description: "Supplier data readiness plus an FSMA 204 evidence engine with explicit commit gates.",
+    description: "Supplier feed preflight plus an FSMA 204 evidence engine with explicit commit gates.",
     url: "https://regengine.co/product",
     type: "website",
   },
@@ -39,8 +39,8 @@ const inflowEffects = [
     icon: Workflow,
   },
   {
-    title: "Score",
-    detail: "Readiness exposes whether the feed can support traceability, recall, and export workflows.",
+    title: "Check",
+    detail: "A coverage and completeness checklist flags whether the feed can support traceability, recall, and export workflows. It is not a readiness score.",
     icon: ScanLine,
   },
   {
@@ -50,7 +50,7 @@ const inflowEffects = [
   },
   {
     title: "Gate",
-    detail: "The commit decision separates sandbox/preflight work from production evidence.",
+    detail: "The commit decision separates preflight work from production evidence.",
     icon: GitCommitHorizontal,
   },
 ];
@@ -68,7 +68,7 @@ const engineResults = [
   },
   {
     title: "Export-ready package",
-    detail: "Compliance score, recall posture, and FDA/retailer exports use checked records only.",
+    detail: "Coverage and completeness checklist results, recall posture, and FDA/retailer exports use checked records only.",
     icon: FileOutput,
   },
 ];
@@ -76,12 +76,12 @@ const engineResults = [
 const controls = [
   ["Tenant isolation", "Records are scoped to the authenticated tenant via row-level policies; cross-tenant hardening is in active rollout."],
   ["Provenance", "Evidence commits require traceable source and run context."],
-  ["Mode separation", "Sandbox work cannot silently become production evidence."],
+  ["Mode separation", "Preflight work cannot silently become production evidence."],
   ["Hash verification", "Committed evidence carries content hashes so downstream consumers can re-check it independently. Strict downstream verification is rolling out."],
 ];
 
 const outcomes = [
-  { icon: ShieldCheck, title: "Readiness is explicit", body: "Scores, fix counts, sources, and export eligibility stay visible." },
+  { icon: ShieldCheck, title: "Gaps stay visible", body: "Coverage and completeness checklist results, fix counts, sources, and export eligibility stay visible." },
   { icon: Lock, title: "Evidence is gated", body: "Production evidence is designed to require identity, provenance, persistence, and clean mode state. Rule enforcement is currently advisory in production and being promoted to blocking." },
   { icon: FileOutput, title: "Exports are explainable", body: "Export packages come from checked records, not a black-box promise. Regulatory acceptance and retention obligations remain with the operator." },
 ];
@@ -111,7 +111,7 @@ function InflowImpactDiagram() {
           </div>
 
           <ul className="mt-5 grid gap-2">
-            {["unmapped columns", "missing KDEs", "broken handoffs", "sandbox source mode"].map((label) => (
+            {["unmapped columns", "missing KDEs", "broken handoffs", "preflight source mode"].map((label) => (
               <li key={label} className="flex items-center justify-between gap-3 rounded-md border border-re-border-subtle bg-re-surface-inset px-3 py-2">
                 <span className="text-ui text-re-text-secondary">{label}</span>
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-text-tertiary" aria-hidden="true" />
@@ -125,7 +125,7 @@ function InflowImpactDiagram() {
               Inflow Workbench output
             </div>
             <p className="mt-3 text-ui text-re-text-secondary">
-              One preflight run containing normalized event candidates, readiness score, fix queue, and commit gate state.
+              One preflight run containing normalized event candidates, a coverage and completeness checklist, fix queue, and commit gate state.
             </p>
           </Card>
         </div>

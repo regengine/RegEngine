@@ -21,6 +21,7 @@ import {
 } from '../lib/record-validator';
 import { cn } from '@/lib/utils';
 import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 type Phase = 'scenario' | 'upload' | 'analyzing' | 'results' | 'report';
 
@@ -41,6 +42,7 @@ const analysisStages = [
 ];
 
 export function DrillSimulatorClient() {
+    const posthog = usePostHog();
     const [state, setState] = useState<DrillState>({
         uploadedFile: null,
         validationResult: null,
@@ -151,6 +153,7 @@ export function DrillSimulatorClient() {
         if (!state.uploadedFile || analysisInFlightRef.current) return;
         analysisInFlightRef.current = true;
         trackToolRunStarted('drill-simulator');
+        posthog?.capture('tool_started', { tool_id: 'drill-simulator' });
 
         setState({ ...state, phase: 'analyzing' });
         setCurrentStage(0);
@@ -835,7 +838,7 @@ STATUS: ${
 
     return (
         <FreeToolPageShell
-            title="24 Hour Drill Simulator"
+            title="Recall drill (Preview)"
             subtitle="Self-paced rehearsal for your §1.1455(c) records-on-request workflow"
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >

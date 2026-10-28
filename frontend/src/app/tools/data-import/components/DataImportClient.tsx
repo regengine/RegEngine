@@ -36,6 +36,7 @@ import {
 } from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -79,6 +80,7 @@ type UploadState = 'idle' | 'uploading' | 'success' | 'partial' | 'error';
 
 export function DataImportClient() {
     const { apiKey } = useAuth();
+    const posthog = usePostHog();
     const [activeTab, setActiveTab] = useState<TabId>('csv');
     const [copied, setCopied] = useState(false);
 
@@ -141,6 +143,7 @@ export function DataImportClient() {
         if (!selectedFile || uploadInFlightRef.current) return;
         uploadInFlightRef.current = true;
         trackToolRunStarted('data-import');
+        posthog?.capture('tool_started', { tool_id: 'data-import' });
         setUploadState('uploading');
         setUploadResult(null);
         try {
@@ -161,7 +164,7 @@ export function DataImportClient() {
         } finally {
             uploadInFlightRef.current = false;
         }
-    }, [selectedFile, apiKey]);
+    }, [selectedFile, apiKey, posthog]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();

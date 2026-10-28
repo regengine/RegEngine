@@ -33,6 +33,7 @@ agent-sweep.yml
 api-surface-issue.yml
 backend-ci.yml
 bundle-analysis.yml
+cache-cleanup-on-pr-close.yml
 copy-gate.yml
 copy-lint.yml
 dependabot-lock-sync.yml
@@ -44,6 +45,7 @@ infra-k8s-ci.yml
 legacy-code-scan.yml
 openapi-public-spec.yml
 pr-gate.yml
+pr-gate-frontend-rerun.yml
 pr-guards.yml
 pr-secrets-non-main.yml
 production-uptime.yml

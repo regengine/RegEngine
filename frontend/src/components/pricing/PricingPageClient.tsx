@@ -32,6 +32,7 @@ interface PricingTier {
     highlighted: boolean;
     cta: string;
     features: string[];
+    beta?: boolean;
 }
 
 export interface PricingComparisonRow {
@@ -99,6 +100,9 @@ export function PricingPageClient({
                                     <div className="mb-2 flex items-center gap-2.5">
                                         <Icon className="h-[18px] w-[18px] shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                         <span className="text-subheading text-re-text-primary">{tier.name}</span>
+                                        {tier.beta && (
+                                            <Badge size="sm">Beta</Badge>
+                                        )}
                                     </div>
                                     <p className="mb-3 text-small text-re-text-tertiary">{tier.description}</p>
                                     <Badge tone="brand" size="sm" className="mb-4 self-start">
