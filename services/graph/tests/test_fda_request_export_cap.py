@@ -130,3 +130,70 @@ def test_epcis_export_over_the_cap_is_413():
     assert resp.status_code == 413, resp.text
     assert query.await_args.kwargs["export_cap"] is True
     assert b"EPCISDocument" not in resp.content
+
+
+def _call_with_cap(url: str, events: list, cap: int, params: dict | None = None):
+    """Exercise the export routes against a monkeypatched hard cap.
+
+    Prefer a small ``cap`` over building tens of thousands of fixture rows:
+    the refusal is ``len(events) > EXPORT_EVENT_CAP``, so the exact and
+    exact-plus-one boundaries are the same at any positive ceiling.
+    """
+    query = AsyncMock(return_value=events)
+    tenant = uuid.uuid4()
+    app = _build_app()
+    app.dependency_overrides[require_api_key] = lambda: APIKey(
+        key_id="preshared-master",
+        key_hash="",
+        name="test",
+        tenant_id=str(tenant),
+        created_at=datetime.now(timezone.utc),
+    )
+    app.dependency_overrides[get_current_tenant_id] = lambda: tenant
+    client = TestClient(app, raise_server_exceptions=False)
+    with (
+        patch("services.graph.app.routers.fsma.compliance.EXPORT_EVENT_CAP", cap),
+        patch("services.graph.app.routers.fsma.compliance.Neo4jClient", _neo4j_stub()),
+        patch("services.graph.app.routers.fsma.compliance.query_events_by_range", new=query),
+    ):
+        resp = client.get(url, params=params or DATES)
+    return resp, query
+
+
+def test_fda_export_at_exact_cap_succeeds():
+    """Exactly EXPORT_EVENT_CAP rows must download (strict > refuses only past the cap)."""
+    cap = 3
+    resp, query = _call_with_cap(FDA_URL, [{}] * cap, cap)
+    assert resp.status_code == 200, resp.text
+    assert b"Traceability Lot Code" in resp.content
+    assert query.await_args.kwargs["limit"] == cap + 1
+    assert query.await_args.kwargs["export_cap"] is True
+
+
+def test_fda_export_one_past_exact_cap_is_413():
+    cap = 3
+    resp, query = _call_with_cap(FDA_URL, [{}] * (cap + 1), cap)
+    assert resp.status_code == 413, resp.text
+    assert "hard cap" in resp.json()["detail"]
+    assert b"Traceability Lot Code" not in resp.content
+    assert query.await_args.kwargs["limit"] == cap + 1
+
+
+def test_epcis_export_at_exact_cap_succeeds():
+    """Exactly EXPORT_EVENT_CAP rows must download for EPCIS too."""
+    cap = 3
+    resp, query = _call_with_cap(EPCIS_URL, [{}] * cap, cap)
+    assert resp.status_code == 200, resp.text
+    assert b"EPCISDocument" in resp.content
+    assert b"epcisBody" in resp.content
+    assert query.await_args.kwargs["limit"] == cap + 1
+    assert query.await_args.kwargs["export_cap"] is True
+
+
+def test_epcis_export_one_past_exact_cap_is_413():
+    cap = 3
+    resp, query = _call_with_cap(EPCIS_URL, [{}] * (cap + 1), cap)
+    assert resp.status_code == 413, resp.text
+    assert "hard cap" in resp.json()["detail"]
+    assert b"epcisBody" not in resp.content
+    assert query.await_args.kwargs["limit"] == cap + 1
