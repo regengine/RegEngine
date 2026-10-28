@@ -18,7 +18,16 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/21 CFR 1\.1455\(c\)\(3\)\(ii\)/)).toBeInTheDocument();
-    expect(screen.getByText(/does not imply FDA endorsement or certification/i)).toBeInTheDocument();
+    const disclaimer = screen.getByText(/does not imply FDA endorsement or certification/i).textContent ?? "";
+    for (const clause of [
+      "not a readiness score",
+      "does not claim that any workspace meets the 24-hour request",
+      "not a recall clock product",
+      "shows no live customer metrics",
+      "not legal advice",
+    ]) {
+      expect(disclaimer).toContain(clause);
+    }
   });
 
   it("sends the primary call to action to a free tool that works without an API key", () => {
