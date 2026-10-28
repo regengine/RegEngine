@@ -86,20 +86,36 @@ def _stub_emit_funnel_event(monkeypatch: pytest.MonkeyPatch) -> None:
 class TestListPlans:
     @pytest.mark.asyncio
     async def test_returns_all_plans_with_expected_shape(self) -> None:
-        """Every plan dict contains id/name/price/features/limits — the
-        front-end relies on this contract."""
+        """Every plan dict contains the core contract plus product_status;
+        the list/base compatibility entries also carry ga/partner amounts."""
         result = await routes_mod.list_plans()
         assert "plans" in result
-        assert len(result["plans"]) == len(plans_mod.PLANS)
+        by_id = {plan["id"]: plan for plan in result["plans"]}
+        assert {"list", "founding", "enterprise", "base"} <= set(by_id)
         for plan in result["plans"]:
-            assert set(plan.keys()) == {
+            assert {
                 "id",
                 "name",
                 "price_monthly",
                 "price_annual",
                 "features",
                 "limits",
-            }
+                "product_status",
+            } <= set(plan.keys())
+            assert plan["product_status"] == "Beta"
+            assert any("epcis" in f.lower() and "preview" in f.lower() for f in plan["features"])
+
+        list_plan = by_id["list"]
+        assert list_plan["ga_monthly"] == 999
+        assert list_plan["partner_monthly"] == 499
+        assert list_plan["ga_annual"] is None
+        assert list_plan["partner_annual"] is None
+
+        base = by_id["base"]
+        assert base["price_monthly"] == 999
+        assert base["price_annual"] is None
+        assert base["ga_monthly"] == 999
+        assert base["partner_monthly"] == 499
 
 
 # ── create_checkout — error branches not touched by the happy-path test ────
@@ -153,7 +169,7 @@ class TestCreateCheckoutErrorBranches:
         )
         # Still returns a session — checkout is not blocked by Redis outage.
         assert response.session_id == "cs_test_123"
-        assert response.plan == "growth"
+        assert response.plan == "list"
 
     @pytest.mark.asyncio
     async def test_existing_customer_id_sets_customer_kwarg(
@@ -338,16 +354,15 @@ class TestCheckoutBillingPeriodMatchesPriceId:
         monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
 
     @pytest.mark.asyncio
-    async def test_annual_checkout_uses_the_annual_price_and_amount(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Both price envs configured: annual must win end to end."""
-        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
-        monkeypatch.setenv("STRIPE_PRICE_GROWTH_ANNUAL", "price_growth_annual")
+    async def test_monthly_checkout_uses_list_price_and_amount(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The list monthly Price and the reported amount must agree."""
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
 
         captured: dict[str, Any] = {}
 
         class _Session:
-            id = "cs_annual"
-            url = "https://checkout.stripe.com/c/pay/cs_annual"
+            id = "cs_monthly"
+            url = "https://checkout.stripe.com/c/pay/cs_monthly"
 
         def _create(**kwargs: Any) -> _Session:
             captured.update(kwargs)
@@ -356,26 +371,26 @@ class TestCheckoutBillingPeriodMatchesPriceId:
         monkeypatch.setattr(stripe.checkout.Session, "create", _create)
 
         response = await routes_mod.create_checkout(
-            CheckoutRequest(plan_id="growth", billing_period="annual"),
+            CheckoutRequest(plan_id="list", billing_period="monthly"),
             x_tenant_id=None,
-            principal=_principal(tenant_id="tenant-annual"),
+            principal=_principal(tenant_id="tenant-monthly"),
         )
 
-        assert captured["line_items"] == [{"price": "price_growth_annual", "quantity": 1}]
+        assert captured["line_items"] == [{"price": "price_list_monthly", "quantity": 1}]
         # Metadata travels to the webhook, which persists billing_period.
-        assert captured["metadata"]["billing_period"] == "annual"
-        assert captured["subscription_data"]["metadata"]["billing_period"] == "annual"
-        assert response.billing_period == "annual"
-        assert response.amount == plans_mod.PLANS["growth"]["price_annual"]
+        assert captured["metadata"]["billing_period"] == "monthly"
+        assert captured["subscription_data"]["metadata"]["billing_period"] == "monthly"
+        assert response.plan == "list"
+        assert response.billing_period == "monthly"
+        assert response.amount == plans_mod.PLANS["list"]["price_monthly"]
+        assert response.amount == 999
 
     @pytest.mark.asyncio
-    async def test_unconfigured_annual_price_500s_without_creating_a_session(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """The regression itself: with only the monthly env set, an annual
-        checkout used to succeed against the monthly Price. It must now
-        fail before Stripe is ever called."""
-        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+    async def test_annual_checkout_400s_without_creating_a_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Annual is OPEN: even with monthly configured, an annual request
+        must fail before Stripe is ever called rather than billing the
+        monthly Price under an "annual" label."""
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
         monkeypatch.delenv("STRIPE_PRICE_GROWTH_ANNUAL", raising=False)
 
         def _must_not_run(**_kwargs: Any) -> Any:
@@ -385,13 +400,14 @@ class TestCheckoutBillingPeriodMatchesPriceId:
 
         with pytest.raises(Exception) as excinfo:
             await routes_mod.create_checkout(
-                CheckoutRequest(plan_id="growth", billing_period="annual"),
+                CheckoutRequest(plan_id="list", billing_period="annual"),
                 x_tenant_id=None,
                 principal=_principal(tenant_id="tenant-annual"),
             )
         exc = excinfo.value
-        assert getattr(exc, "status_code", None) == 500
-        assert "STRIPE_PRICE_GROWTH_ANNUAL" in getattr(exc, "detail", "")
+        assert getattr(exc, "status_code", None) == 400
+        assert "annual" in getattr(exc, "detail", "").lower()
+        assert "not configured" in getattr(exc, "detail", "").lower()
 
 
 # ── get_subscription ───────────────────────────────────────────────────────
@@ -451,7 +467,7 @@ class TestGetSubscription:
             },
         )
         result = await routes_mod.get_subscription("tenant-mid-flow", _=None)
-        assert result.plan == "growth"
+        assert result.plan == "list"
         assert result.status == "checkout_pending"
         assert result.billing_period is None
         assert result.current_period_end == "2030-01-01T00:00:00+00:00"
@@ -520,7 +536,7 @@ class TestGetSubscription:
         )
 
         result = await routes_mod.get_subscription("tenant-no-stripe", _=None)
-        assert result.plan == "growth"
+        assert result.plan == "list"
         assert result.status == "active"
         assert result.billing_period == "annual"
         assert result.current_period_end == "2030-01-01T00:00:00+00:00"
