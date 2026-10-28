@@ -22,7 +22,7 @@ Data shape in both: supplier CSV, ERP export, spreadsheet or email-derived file,
 ## 3. Goals
 
 1. One design partner runs one real supplier feed through preflight, closes at least one fix item, and verifies one export package.
-2. One paid pilot agreement signed (first dollar of revenue) within the window set in question Q1.
+2. One paid pilot agreement signed (first dollar of revenue) by 2027-01-31 (Q1, decided 2026-10-27).
 3. Every public and signed-in claim matches the capabilities registry, so a prospect never finds a dead end during a session.
 4. The signed-in app works end to end for an owner account on real data with no invented sample data.
 
@@ -128,7 +128,7 @@ GS1 roadmap items parked under SEL-443 (labels, GDSN, Digital Link, PTI); email 
 
 Leading, measured per session from the Workbench and the outreach tracker (`docs/product/DESIGN_PARTNER_PROOF_CHECKLIST.md` metric table):
 
-| Metric | Target by 30 days after Q1 is answered |
+| Metric | Target by 2026-11-26, 30 days after the Q1 decision |
 | --- | --- |
 | Guided sessions completed | 3, one per design partner |
 | Real or production-like feeds through Workbench | 1 per partner |
@@ -141,16 +141,16 @@ Lagging, the initiative's done condition:
 
 | Metric | Target |
 | --- | --- |
-| Signed paid pilot | 1, by the date in Q1 (default 2027-01-31) |
+| Signed paid pilot | 1, by 2027-01-31 |
 | First dollar of revenue | a paid Stripe checkout or a paid invoice from that pilot |
 | Second session rate | 2 of 3 partners return within 30 days |
 | Permission to use anonymized findings | 1 partner in writing |
 
-## 9. Open questions carried from the May remediation PRD
+## 9. Decisions on the six questions carried from the May remediation PRD
 
-Each has a recommended default so one reply can close all six. Jev (TypeSafe, jev-1.14.0, 2026-10-27) was asked the same questions; its answer is shown with confidence.
+Christopher accepted all six recommended defaults on 2026-10-27, so each row below is the decision of record. Jev (TypeSafe, jev-1.14.0, 2026-10-27) was asked the same questions; its answer is shown with confidence.
 
-| # | Question | Recommended default | Jev |
+| # | Question | Decision (2026-10-27) | Jev |
 | --- | --- | --- | --- |
 | Q1 | Pilot date and minimum acceptance bar | Bar: one real supplier feed preflighted, one fix item closed, one export package verified, inside one 60-minute session. Dates: first guided session by 2026-11-30, paid pilot signed by 2027-01-31 | one_feed_loop, confidence 1.00 |
 | Q2 | Is `fsma.traceability_events` the committed canonical contract for all new FSMA evidence? | Yes. The canonical API already reads it and v125 added event-level verdict columns to it. Freeze `fsma.cte_events` and `fsma.critical_tracking_events` for reads and say so in `docs/engineering/SCHEMA_CHANGE_POLICY.md` | yes, p 0.75 |
@@ -159,11 +159,19 @@ Each has a recommended default so one reply can close all six. Jev (TypeSafe, je
 | Q5 | Who owns compliance signoff for the 7 CTE/KDE maps? | Founder signs now against the rule text using `docs/specs/FSMA_204_MVP_SPEC.md` CTE and KDE sections; the first design partner's QA lead co-signs during the pilot. No consultant spend before revenue. Location of the seven map files: not verified in this pass | partner_qa 0.42, founder 0.20 |
 | Q6 | Which public claims stay hidden until verified? | Everything the registry does not mark live: EPCIS stays "preview", EDI and SFTP hidden, recall drill hidden (endpoint returns no data), alerts and heartbeat hidden, supplier correction links hidden until R4 resolves, "pre-revenue" out of the hero and metadata (plan note D1). Remove `edi` from the production allowlist in a follow-up PR | remove EDI router: yes, p 0.85 |
 
+Follow-on actions these decisions create (not yet filed as Linear stories):
+
+- Q1: initiative I-1 target date set to 2027-01-31; first guided session due 2026-11-30.
+- Q2: add the read-freeze on `fsma.cte_events` and `fsma.critical_tracking_events` to `docs/engineering/SCHEMA_CHANGE_POLICY.md` (E3).
+- Q4: flip `RULES_ENGINE_ENFORCE` to `cte_only` before the pilot's first export, after runbook gate 1.2 passes (E1, F4).
+- Q5: locate the seven CTE/KDE map files and record the founder signoff against them (E3).
+- Q6: PR removing `edi` from `PRODUCTION_ENABLED_ROUTERS` with the manifest and tests updated (E1, F1). Q3 needs no code change.
+
 ## Appendix A. Proposed Linear structure
 
-Approved by Christopher and applied in Linear in one pass on 2026-10-27 (evening PT). Created: initiative I-1 First paying customer; projects P-SEL-5 Ingest and preflight, P-SEL-6 Supplier remediation, P-SEL-7 Evidence and export, P-SEL-8 Public site and lead capture, P-SEL-9 Production stability; feature parents SEL-570 to SEL-584 (F1 to F15 in order). All 62 issues in Appendix B were re-parented; SEL-472 and SEL-459 moved to project Other; SEL-361 moved into P-SEL-9 and left open; SEL-421 closed as Done, SEL-452 set to In Review, SEL-458 reworded. The initiative target date stays unset until Q1 is answered.
+Approved by Christopher and applied in Linear in one pass on 2026-10-27 (evening PT). Created: initiative I-1 First paying customer; projects P-SEL-5 Ingest and preflight, P-SEL-6 Supplier remediation, P-SEL-7 Evidence and export, P-SEL-8 Public site and lead capture, P-SEL-9 Production stability; feature parents SEL-570 to SEL-584 (F1 to F15 in order). All 62 issues in Appendix B were re-parented; SEL-472 and SEL-459 moved to project Other; SEL-361 moved into P-SEL-9 and left open; SEL-421 closed as Done, SEL-452 set to In Review, SEL-458 reworded. The initiative target date was set to 2027-01-31 when Q1 was decided later the same evening.
 
-- Initiative: **First paying customer**. Target date: the Q1 pilot date. Done when the lagging metrics in section 8 are met.
+- Initiative: **First paying customer**. Target date: 2027-01-31 (Q1). Done when the lagging metrics in section 8 are met.
 - Projects as epics (five), features as parent issues, stories as sub-issues. Existing SEL-361 becomes the Production stability project; its goal text moves to the project description.
 
 | Epic (project) | Scope | Features (new parent issues) |
