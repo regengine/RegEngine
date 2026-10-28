@@ -76,6 +76,7 @@ def store(monkeypatch):
         return result
 
     def insert(event):
+        assert all(row[0] != str(event.event_id) for row in rows.values()), "Duplicate event_id primary key"
         row = (str(event.event_id), event.sha256_hash, event.chain_hash)
         rows[(str(event.tenant_id), event.idempotency_key)] = row
         return row
@@ -120,7 +121,9 @@ def test_second_batch_reports_duplicate_and_preserves_event_count(store):
 def test_raw_lot_whitespace_is_not_normalized_into_a_duplicate(store):
     writer, rows = store
     event = _event()
-    variant = event.model_copy(update={"traceability_lot_code": f" {event.traceability_lot_code} "})
+    variant = event.model_copy(
+        update={"event_id": uuid4(), "traceability_lot_code": f" {event.traceability_lot_code} ", "sha256_hash": None}
+    )
     assert event.traceability_lot_code.strip() == variant.traceability_lot_code.strip()
     assert event.compute_idempotency_key() != variant.compute_idempotency_key()
     results = writer.persist_events_batch([event, variant])
@@ -133,7 +136,7 @@ def test_replay_lookup_is_scoped_to_tenant(store):
     event = _event()
     first = writer.persist_event(event)
     before = rows.copy()
-    other = event.model_copy(update={"tenant_id": uuid4(), "sha256_hash": None})
+    other = event.model_copy(update={"event_id": uuid4(), "tenant_id": uuid4(), "sha256_hash": None})
     second = writer.persist_event(other)
     assert event.compute_idempotency_key() == other.compute_idempotency_key()
     assert first.success and second.success
