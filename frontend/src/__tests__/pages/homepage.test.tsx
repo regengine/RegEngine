@@ -18,10 +18,11 @@ describe("HomePage", () => {
     ).toBeInTheDocument();
   });
 
-  it("sends the primary call to action to the free file check", () => {
+  it("sends the primary call to action to a free tool that works without an API key", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("link", { name: /^check a supplier file$/i })).toHaveAttribute("href", "/tools/data-import");
+    expect(screen.getByRole("link", { name: /^see the fields your records need$/i })).toHaveAttribute("href", "/tools/kde-checker");
+    expect(screen.queryByRole("link", { name: /check a supplier file/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /open the verifier/i })).toHaveAttribute("href", "/verify");
   });
 

@@ -157,8 +157,8 @@ export default function HomePage() {
           </Callout>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
-              <Link href="/tools/data-import">
-                Check a supplier file
+              <Link href="/tools/kde-checker">
+                See the fields your records need
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -167,7 +167,7 @@ export default function HomePage() {
             </Button>
           </div>
           <p className="mt-3 text-small text-re-text-tertiary">
-            The file check is free and asks for an email. Nothing is stored as evidence until you commit it.
+            The checklist is free and asks for an email. No account, no API key.
           </p>
         </div>
 
@@ -231,14 +231,14 @@ export default function HomePage() {
         <h2 className="font-display text-heading-lg text-re-text-primary">Next steps</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-3">
           <Card padding="compact" className="flex flex-col">
-            <ScanLine className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
-            <h3 className="mt-4 text-heading text-re-text-primary">Check a supplier file</h3>
+            <ClipboardCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <h3 className="mt-4 text-heading text-re-text-primary">See the fields your records need</h3>
             <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Upload one CSV or XLSX. Get the field mapping report and the schema checks. Free, with email verification.
+              Pick a food on the Food Traceability List and an event. Get the starting list of Key Data Elements the record needs. Free, with email verification.
             </p>
             <Button asChild className="mt-5 self-start">
-              <Link href="/tools/data-import">
-                Open the file check
+              <Link href="/tools/kde-checker">
+                Open the checklist
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -257,10 +257,10 @@ export default function HomePage() {
             </Button>
           </Card>
           <Card padding="compact" className="flex flex-col">
-            <ClipboardCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <ScanLine className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             <h3 className="mt-4 text-heading text-re-text-primary">Talk it through</h3>
             <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Thirty minutes with the founder on your supplier data and the records you need to hold.
+              Thirty minutes with the founder on your supplier data and the records you need to hold. Bring one supplier file if you have it.
             </p>
             <Button asChild variant="secondary" className="mt-5 self-start">
               <BookCallLink href="/contact" placement="home_next_steps">
