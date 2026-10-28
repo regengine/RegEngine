@@ -12,10 +12,16 @@ import { isValidGTINCheckDigit } from './gs1-parser';
  * once; shared/lib/router/utils/get-dynamic-param.js:58 then re-encodes it
  * with encodeURIComponent for the page's `params`, while
  * lib/metadata/resolve-metadata.js:173 passes the decoded value straight
- * to generateMetadata. None of it is NODE_ENV-gated and `next start` was
- * measured to match. So the page decodes exactly once and generateMetadata
- * must not decode at all (`alreadyDecoded`), and a lot that itself contains
- * an escape sequence (100%2F) comes out right on both paths.
+ * to generateMetadata. So the page decodes exactly once and
+ * generateMetadata must not decode at all (`alreadyDecoded`).
+ *
+ * On Vercel the router decodes the path once more before Next sees it
+ * (measured on the preview: /10/100%252F/ renders "100/" and /10/A%2525B/
+ * renders "A%B" on both the page and the title; locally the same URLs
+ * decode once). A lot without a literal "%" is unaffected, and %2F itself
+ * routes as one segment. A lot that does contain a literal escape loses it
+ * before this code runs, so the guard belongs at issuance in labels.py,
+ * not here.
  */
 
 function decodeSegment(value: string): string {
