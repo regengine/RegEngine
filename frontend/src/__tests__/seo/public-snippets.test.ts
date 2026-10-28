@@ -28,12 +28,12 @@ const DASH = /[\u2014\u2013]/;
 
 const HOME_TITLE = 'FSMA 204 Recordkeeping Software | RegEngine';
 const HOME_DESCRIPTION =
-    'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. The FDA compliance date is July 20, 2028. Not legal advice.';
+    'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.';
 const HOME_H1 = 'FSMA 204 recordkeeping for the Food Traceability Rule.';
 
 const TOOLS_TITLE = 'Free FSMA 204 Tools | RegEngine';
 const TOOLS_DESCRIPTION =
-    'Free FTL, Critical Tracking Event (CTE), Key Data Element (KDE), and TLC tools. Self reported checklists do not score readiness. FDA date: July 20, 2028.';
+    'Free FTL, CTE, KDE, and TLC tools. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.';
 const TOOLS_H1 = 'Free tools for FSMA 204 list checks and field checks.';
 
 const TOOLS: { slug: string; name: string; title: string; description: string }[] = [
@@ -121,9 +121,10 @@ describe('public snippet lengths', () => {
 
         expect(title).toBe(HOME_TITLE);
         expect(description).toBe(HOME_DESCRIPTION);
+        expect(ogDescription).toBe(HOME_DESCRIPTION);
         expect(title.length).toBeLessThanOrEqual(TITLE_LIMIT);
-        expect(description.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
         expect(ogTitle.length).toBeLessThanOrEqual(TITLE_LIMIT);
+        expect(description.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
         expect(ogDescription.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
         expect(`${title} ${description} ${ogTitle} ${ogDescription}`).not.toMatch(DASH);
         expect(read('src/app/page.tsx')).toContain(HOME_H1);

@@ -71,7 +71,7 @@ We reserve the right to throttle or suspend API access if usage patterns suggest
     {
         id: 'accuracy-disclaimers',
         title: '7. Accuracy & Disclaimers',
-        content: `We work to keep our regulatory data accurate. Our FTL Coverage Checker covers FDA Food Traceability List categories per 21 CFR 1.1300 with citations to specific CFR sections. Where enabled, exports include content hashes you can check with our open verification script. Hashing is a RegEngine feature, not an FDA requirement.
+        content: `We work to keep our regulatory data accurate. Our FTL Checker is an informational tool based on the Food Traceability List FDA publishes on its website (see 21 CFR 1.1300). It is not a coverage determination. Where enabled, exports include content hashes you can check with our open verification script. Hashing is a RegEngine feature, not an FDA requirement.
 
 That said: regulations change. We monitor federal sources and update our data, but there may be delays. We strongly recommend verifying critical compliance decisions against official FDA sources (fda.gov, eCFR.gov).
 
