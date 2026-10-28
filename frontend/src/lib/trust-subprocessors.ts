@@ -174,7 +174,7 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
   {
     name: 'LlamaCloud',
     purpose:
-      'Optional second pass document extraction for supplier PDFs on the bulk upload path when RegEngine table parsing finds no structured rows. Only runs if a LlamaCloud API key is configured.',
+      'Planned document extraction for admin bulk PDF uploads. Not enabled in production; enablement pending legal review and customer notice.',
     dataProcessed:
       'Complete uploaded document file content sent for an extraction job, plus extraction outputs returned to RegEngine. RegEngine attempts to delete the vendor side file when the job ends and disables vendor result caching by default.',
     location:
@@ -186,6 +186,6 @@ export const TRUST_SUBPROCESSORS: TrustSubprocessor[] = [
     link: 'https://www.llamaindex.ai/legal/terms-of-service',
     availability: 'not_in_production',
     availabilityLabel:
-      'available where configured; not enabled in production as of Oct 28, 2026',
+      'Planned: document extraction for admin bulk PDF uploads; not enabled in production as of Oct 28, 2026; enablement pending legal review and customer notice',
   },
 ];

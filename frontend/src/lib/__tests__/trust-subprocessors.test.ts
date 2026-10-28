@@ -47,7 +47,7 @@ describe('TRUST_SUBPROCESSORS', () => {
   it('uses the exact LlamaCloud availabilityLabel from diligence steering', () => {
     const llama = TRUST_SUBPROCESSORS.find((sp) => sp.name === 'LlamaCloud');
     expect(llama?.availabilityLabel).toBe(
-      'available where configured; not enabled in production as of Oct 28, 2026',
+      'Planned: document extraction for admin bulk PDF uploads; not enabled in production as of Oct 28, 2026; enablement pending legal review and customer notice',
     );
   });
 
