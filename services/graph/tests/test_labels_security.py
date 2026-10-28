@@ -62,6 +62,34 @@ class TestLotNumberIssuanceGuard:
     def test_accepts_lots_that_scan_back_unchanged(self, lot):
         assert self._info(lot).lot_number == lot
 
+    @pytest.mark.parametrize("lot", ["100%2F", "", ".."])
+    def test_batch_init_returns_422_naming_lot_number(self, lot):
+        """At the API boundary the guard is a 422 that names lot_number, never a 500."""
+        from fastapi import FastAPI
+
+        from services.graph.app.routers import labels as labels_module
+
+        app = FastAPI()
+        app.include_router(labels_module.router)
+        app.dependency_overrides[labels_module.get_current_tenant_id] = lambda: uuid.uuid4()
+        app.dependency_overrides[labels_module.require_api_key] = lambda: "test-key"
+        client = TestClient(app, raise_server_exceptions=False)
+
+        body = {
+            "packer_gln": "0614141000012",
+            "product": {"gtin": "00000012345678", "description": "Test Product", "expected_units": 1},
+            "traceability": {"lot_number": lot, "pack_date": "2026-01-15"},
+            "quantity": 10,
+            "unit_of_measure": "EA",
+            "packaging_level": "item",
+        }
+        with patch("services.graph.app.routers.labels.Neo4jClient") as neo4j:
+            response = client.post("/batch/init", json=body)
+
+        assert response.status_code == 422
+        assert any("lot_number" in err["loc"] for err in response.json()["detail"])
+        neo4j.assert_not_called()
+
 
 @pytest.mark.security
 class TestURLEncoding:

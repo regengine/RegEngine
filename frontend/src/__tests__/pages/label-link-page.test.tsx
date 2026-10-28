@@ -37,10 +37,12 @@ describe('label QR landing page (/01/{gtin}/10/{lot}/21/{serial})', () => {
         expect(notFoundMock).not.toHaveBeenCalled();
     });
 
-    it('returns 404 for segments no RegEngine label could carry', async () => {
-        await expect(
-            LabelLinkPage({ params: Promise.resolve({ ...RAW, gtin: 'not-a-gtin' }) }),
-        ).rejects.toThrow('NEXT_NOT_FOUND');
+    it.each([
+        ['a GTIN that is not 14 digits', { ...RAW, gtin: 'not-a-gtin' }],
+        ['an empty lot', { ...RAW, lot: '' }],
+        ['an empty serial', { ...RAW, serial: '' }],
+    ])('returns 404 for %s', async (_label, params) => {
+        await expect(LabelLinkPage({ params: Promise.resolve(params) })).rejects.toThrow('NEXT_NOT_FOUND');
         expect(notFoundMock).toHaveBeenCalledTimes(1);
     });
 

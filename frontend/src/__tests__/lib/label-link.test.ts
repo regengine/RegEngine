@@ -56,7 +56,8 @@ describe('parseLabelLink', () => {
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: '', serial: SERIAL })).toBeNull();
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: '' })).toBeNull();
         // labels.py caps neither field; a printed label must never 404 here.
-        const long = 'x'.repeat(200);
+        // Far beyond any cap a reviewer might reintroduce.
+        const long = 'x'.repeat(5000);
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: long, serial: SERIAL })?.lot).toBe(long);
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: long })?.serial).toBe(long);
     });

@@ -129,7 +129,7 @@ describe('TracePage', () => {
         expect(screen.getByRole('button', { name: 'Trace' })).toBeEnabled();
     });
 
-    it('follows a changed ?tlc= on client navigation without clearing a typed lot', () => {
+    it('follows a changed ?tlc= on client navigation without clearing a typed lot', async () => {
         mockUseAuth.mockReturnValue({ hasTenantSession: true });
         mockSearchParams.query = 'tlc=LOT-A';
         const { rerender } = render(<TracePage />);
@@ -139,9 +139,13 @@ describe('TracePage', () => {
         rerender(<TracePage />);
         expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
 
+        const user = userEvent.setup();
+        await user.clear(screen.getByPlaceholderText(/enter tlc/i));
+        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TYPED');
+
         mockSearchParams.query = '';
         rerender(<TracePage />);
-        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('TYPED');
     });
 
     it('prefills again when ?tlc= returns after being removed, even over a typed lot', async () => {
