@@ -88,7 +88,7 @@ describe('SEL-585 F1 tool_started and tool_completed in PostHog', () => {
         render(<FTLCheckerClient />);
 
         await user.click(screen.getByText('Shell Eggs').closest('button') as HTMLElement);
-        await user.click(screen.getByRole('button', { name: /Check Listed Groupings/i }));
+        await user.click(screen.getByRole('button', { name: 'Continue to exemptions' }));
         expect(eventsNamed('tool_started')).toEqual([['tool_started', { tool_id: 'ftl-checker' }]]);
         expect(trackToolRunStarted).toHaveBeenCalledWith('ftl-checker');
 
