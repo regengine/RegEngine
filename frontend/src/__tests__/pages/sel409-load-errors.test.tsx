@@ -36,10 +36,15 @@ vi.mock('@/hooks/use-control-plane', () => ({
 }));
 
 describe('SEL-409 failed workspace loads', () => {
-  it('hides the records count', () => {
+  it('hides the records count behind the records error state', () => {
+    failed.refetch.mockClear();
     render(<RecordsPage />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Load failed');
+    expect(screen.getByRole('alert')).toHaveTextContent('We could not load your records.');
     expect(screen.queryByText(/total records/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contact support' })).toHaveAttribute('href', '/settings/support');
+    expect(screen.queryByText(/Request ID:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(failed.refetch).toHaveBeenCalledOnce();
   });
 
   it('hides the rules count', () => {

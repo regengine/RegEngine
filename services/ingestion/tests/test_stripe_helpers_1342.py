@@ -109,8 +109,8 @@ class TestAllowedRedirectHosts:
         exact, _ = _allowed_redirect_hosts()
         # Lowercased and trimmed; empty entries from double-commas
         # skipped (covers the ``if host:`` guard).
-        assert "staging.example.com" in exact
-        assert "other.example.com" in exact
+        assert any(host == "staging.example.com" for host in exact)
+        assert any(host == "other.example.com" for host in exact)
 
     def test_undotted_suffixes_are_rejected(self, monkeypatch, caplog):
         # ``regengine.co`` as a suffix (no leading dot) would match
@@ -123,8 +123,8 @@ class TestAllowedRedirectHosts:
             ".ok.example.com,undotted.bad,  ,.also-ok.example.com",
         )
         _, suffixes = _allowed_redirect_hosts()
-        assert ".ok.example.com" in suffixes
-        assert ".also-ok.example.com" in suffixes
+        assert any(suffix == ".ok.example.com" for suffix in suffixes)
+        assert any(suffix == ".also-ok.example.com" for suffix in suffixes)
         # Un-dotted and empty entries skipped.
         assert "undotted.bad" not in suffixes
         assert "" not in suffixes

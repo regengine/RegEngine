@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
-import { apiError, isAuthError } from '@/lib/api-error';
+import { apiError, isAuthError, requestIdFromResponse } from '@/lib/api-error';
 import type { IngestURLRequest } from '@/types/api';
 import type { LabelBatchInitRequest } from '@/types/labels';
 import type { SystemStatusResponse, SystemMetricsResponse } from '@/lib/api-client';
@@ -60,7 +60,7 @@ async function fetchAggregatedStatus(): Promise<SystemStatusResponse> {
         // down. Tag the status so the caller can surface it instead of
         // reporting healthy-looking "unhealthy" demo services.
         if (res.status === 401 || res.status === 403) {
-          throw apiError(res.status, res.statusText);
+          throw apiError(res.status, res.statusText, requestIdFromResponse(res));
         }
         throw new Error(`HTTP ${res.status}`);
       }

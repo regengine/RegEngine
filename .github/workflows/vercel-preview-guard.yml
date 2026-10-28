@@ -15,15 +15,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 26
     permissions:
+      contents: read
       deployments: read
       statuses: read
       checks: read
     outputs:
       preview_url: ${{ steps.wait.outputs.preview_url }}
+      frontend: ${{ steps.scope.outputs.frontend }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check frontend scope
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          MERGE_BASE=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          DIFF=$(git diff --name-only "$MERGE_BASE" "$HEAD_SHA" -- frontend/)
+          if [ -n "$DIFF" ]; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Wait for the regengine preview
         id: wait
-        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') && steps.scope.outputs.frontend == 'true' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -183,9 +203,14 @@ jobs:
             }
             throw new Error(`No ready regengine Vercel preview for ${sha} after 25 minutes`);
 
+      - name: Preview skipped
+        if: ${{ steps.scope.outputs.frontend == 'false' }}
+        run: echo "No frontend changes; Vercel preview intentionally skipped by ignore step."
+
   access-link:
     name: Preview Access Link
     needs: preview
+    if: needs.preview.outputs.frontend == 'true' && needs.preview.outputs.preview_url != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -196,22 +221,16 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           PREVIEW_URL: ${{ needs.preview.outputs.preview_url }}
-          BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }} # pragma: allowlist secret
         with:
           github-token: ${{ github.token }}
-          script: | # pragma: allowlist secret
+          script: |
             const marker = '<!-- vercel-preview-access -->';
-            const bypassValue = process.env.BYPASS_SECRET;
-            if (bypassValue) core.setSecret(bypassValue); // Emits ::add-mask:: before using it.
             const preview = process.env.PREVIEW_URL;
             if (!preview) throw new Error('The preview job did not return an access URL');
-            const url = new URL(preview);
-            if (bypassValue) {
-              url.searchParams.set('x-vercel-protection-bypass', bypassValue);
-              url.searchParams.set('x-vercel-set-bypass-cookie', 'true');
-            }
-            const body = `${marker}\nVercel preview: ${url.toString()}` +
-              (bypassValue ? '' : '\n\nThe bypass secret is not configured.');
+            // SEL-569: never append protection-bypass query params to public PR comments.
+            // Preview access is via Vercel login / Deployment Protection; CI may still
+            // send the bypass as an HTTP header in private workflows (e.g. visual-preview).
+            const body = `${marker}\nVercel preview: ${preview}\n\nAccess is via Vercel login (Deployment Protection).`;
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
             const comments = await github.paginate(github.rest.issues.listComments, {

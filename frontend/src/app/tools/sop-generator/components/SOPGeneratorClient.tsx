@@ -18,10 +18,12 @@ import {
     Printer,
 } from 'lucide-react';
 import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 type Phase = 'form' | 'generating' | 'preview';
 
 export function SOPGeneratorClient() {
+    const posthog = usePostHog();
     const [phase, setPhase] = useState<Phase>('form');
     const [formData, setFormData] = useState({
         company_name: '',
@@ -47,6 +49,7 @@ export function SOPGeneratorClient() {
         if (generatingRef.current) return;
         generatingRef.current = true;
         trackToolRunStarted('sop-generator');
+        posthog?.capture('tool_started', { tool_id: 'sop-generator' });
         setPhase('generating');
         // Simulate generation delay
         setTimeout(() => {

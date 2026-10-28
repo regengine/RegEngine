@@ -3,8 +3,8 @@
 Locks:
 - _get_real_tlc: happy path, no-rows, exception path, explicit-null column
 - StartDrillRequest / DrillStatus / DrillResponse / DrillGrade pydantic models
-- POST /drill/start: random pick, explicit index, index wrap-around,
-  real_tlc substitution (demo_mode False), no-real-tlc fallback (demo_mode True)
+- POST /drill/start: deterministic default, explicit index, index wrap-around,
+  real TLC/product used, no real data -> 409 (SEL-513)
 - GET /drill/{drill_id}: 404, active, expired (time elapsed > deadline),
   completed (grade/score surfaced)
 - POST /drill/{drill_id}/submit: 404, every score branch (A/B/C/D/F),
@@ -184,23 +184,24 @@ class TestPydanticModels:
 
 
 class TestStartDrill:
-    def test_random_scenario_pick(self, client, monkeypatch):
-        """When scenario_index is None, random.randint chooses."""
-        monkeypatch.setattr(ma.random, "randint", lambda a, b: 0)
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
+    @pytest.fixture(autouse=True)
+    def _real_lot(self, monkeypatch):
+        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "REAL-TLC-42")
+        monkeypatch.setattr(ma, "_get_product_for_tlc", lambda tid, tlc: "Recorded Product")
 
+    def test_default_scenario_is_deterministic(self, client):
+        """SEL-513: no random pick; scenario_index None means scenario 0."""
+        assert not hasattr(ma, "random")
         r = client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"})
         assert r.status_code == 200
         body = r.json()
         assert body["scenario"] == FDA_SCENARIOS[0]["scenario"]
-        assert body["demo_mode"] is True  # no real TLC
+        assert body["demo_mode"] is False
         assert body["status"] == "active"
         assert body["time_remaining_seconds"] > 0
         assert "h " in body["time_remaining_display"]
 
-    def test_explicit_scenario_index(self, client, monkeypatch):
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
-
+    def test_explicit_scenario_index(self, client):
         r = client.post(
             "/api/v1/audit/drill/start",
             json={"tenant_id": "t1", "scenario_index": 2},
@@ -208,10 +209,8 @@ class TestStartDrill:
         assert r.status_code == 200
         assert r.json()["scenario"] == FDA_SCENARIOS[2]["scenario"]
 
-    def test_scenario_index_wraps_around(self, client, monkeypatch):
+    def test_scenario_index_wraps_around(self, client):
         """Out-of-range index wraps via modulo."""
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
-
         r = client.post(
             "/api/v1/audit/drill/start",
             json={"tenant_id": "t1", "scenario_index": 99},
@@ -220,10 +219,7 @@ class TestStartDrill:
         # 99 % 3 = 0
         assert r.json()["scenario"] == FDA_SCENARIOS[0]["scenario"]
 
-    def test_real_tlc_substituted(self, client, monkeypatch):
-        """When tenant has CTE events, use real TLC and set demo_mode=False."""
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "REAL-TLC-42")
-
+    def test_real_tlc_and_product_used(self, client):
         r = client.post(
             "/api/v1/audit/drill/start",
             json={"tenant_id": "t1", "scenario_index": 0},
@@ -231,32 +227,31 @@ class TestStartDrill:
         assert r.status_code == 200
         body = r.json()
         assert body["target_tlc"] == "REAL-TLC-42"
+        assert body["target_product"] == "Recorded Product"
         assert body["demo_mode"] is False
 
-    def test_drill_persisted_in_store(self, client, monkeypatch):
+    def test_no_real_data_is_409_not_demo(self, client, monkeypatch):
         monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
+        r = client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"})
+        assert r.status_code == 409
+        assert not _active_drills
+
+    def test_drill_persisted_in_store(self, client):
         r = client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"})
         drill_id = r.json()["drill_id"]
         assert drill_id in _active_drills
         assert _active_drills[drill_id]["tenant_id"] == "t1"
         assert _active_drills[drill_id]["status"] == "active"
 
-    def test_source_scenarios_not_mutated(self, client, monkeypatch):
-        """Each drill should .copy() the scenario so subsequent drills
-        see the original demo TLC (regression for accidental mutation)."""
-        original_tlc = FDA_SCENARIOS[0]["target_tlc"]
-        original_demo = FDA_SCENARIOS[0]["demo_mode"]
-
-        monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "REAL-42")
+    def test_source_scenarios_not_mutated(self, client):
+        """Each drill .copy()s the template; templates never gain a lot."""
         r1 = client.post(
             "/api/v1/audit/drill/start",
             json={"tenant_id": "t1", "scenario_index": 0},
         )
-        assert r1.json()["target_tlc"] == "REAL-42"
-
-        # Source should be untouched
-        assert FDA_SCENARIOS[0]["target_tlc"] == original_tlc
-        assert FDA_SCENARIOS[0]["demo_mode"] == original_demo
+        assert r1.json()["target_tlc"] == "REAL-TLC-42"
+        assert "target_tlc" not in FDA_SCENARIOS[0]
+        assert "target_product" not in FDA_SCENARIOS[0]
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +267,7 @@ class TestGetDrillStatus:
         drill_id = "drill-abc"
         _active_drills[drill_id] = {
             "tenant_id": "t1",
-            "scenario": FDA_SCENARIOS[0].copy(),
+            "scenario": {**FDA_SCENARIOS[0], "target_tlc": "TLC-STATUS-1", "target_product": "Recorded Product"},
             "started_at": started.isoformat(),
             "deadline": deadline.isoformat(),
             "status": status,
@@ -332,7 +327,7 @@ def _seed_drill(hours_ago: float, drill_id: str = "drill-sub") -> str:
     deadline = started + timedelta(hours=24)
     _active_drills[drill_id] = {
         "tenant_id": "t1",
-        "scenario": FDA_SCENARIOS[0].copy(),
+        "scenario": {**FDA_SCENARIOS[0], "target_tlc": "TLC-STATUS-1", "target_product": "Recorded Product"},
         "started_at": started.isoformat(),
         "deadline": deadline.isoformat(),
         "status": "active",
@@ -593,6 +588,7 @@ def test_failed_start_does_not_cache_a_drill(client, monkeypatch):
         raise HTTPException(status_code=503, detail="Drill could not be saved")
 
     monkeypatch.setattr(ma, "_persist_drill", fail)
-    monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: None)
+    monkeypatch.setattr(ma, "_get_real_tlc", lambda tid: "TLC-STATUS-1")
+    monkeypatch.setattr(ma, "_get_product_for_tlc", lambda tid, tlc: None)
     assert client.post("/api/v1/audit/drill/start", json={"tenant_id": "t1"}).status_code == 503
     assert not _active_drills

@@ -59,7 +59,7 @@ jobs:
       actions: read
     name: "PR Gate: Backend"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -116,13 +116,15 @@ jobs:
           github-token: ${{ github.token }}
           # "Backend CI Status Gate" is the final aggregate job of
           # backend-ci.yml. It is not created until every other backend job
-          # finishes (~8 min on a green run), so we poll up to 40 minutes for it
-          # to appear and complete. The job's timeout-minutes: 45 remains the hard bound.
+          # finishes (up to 80 min under runner contention), so we poll up to
+          # 140 minutes for it to appear and complete. The job's 150-minute
+          # timeout remains the hard bound.
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
             const CHECK_NAME = process.env.CHECK_NAME;
-            const deadline = Date.now() + 40 * 60 * 1000;
+            const started = Date.now();
+            const deadline = started + 140 * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             const callWithRetry = async (fn) => {
@@ -190,6 +192,7 @@ jobs:
             };
 
             let delay = 30000;
+            let completedWithoutGate = false;
             while (Date.now() < deadline) {
               const res = await callWithRetry(() =>
                 github.rest.checks.listForRef({
@@ -216,6 +219,36 @@ jobs:
                 return;
               }
 
+              const workflowRes = await callWithRetry(() =>
+                github.rest.actions.listWorkflowRuns({
+                  owner,
+                  repo,
+                  workflow_id: 'backend-ci.yml',
+                  head_sha: sha,
+                  event: 'pull_request',
+                  per_page: 20,
+                })
+              );
+              if (!workflowRes) {
+                break;
+              }
+              const workflowRuns = workflowRes.data?.workflow_runs || [];
+              if (workflowRuns.length === 0 && Date.now() - started >= 10 * 60 * 1000) {
+                core.setFailed('Backend paths changed but Backend CI was not triggered within 10 minutes; path lists in pr-gate.yml and backend-ci.yml may have drifted.');
+                return;
+              }
+              if (runs.length === 0 && workflowRuns.length > 0 && workflowRuns.every(r => r.status === 'completed')) {
+                if (completedWithoutGate) {
+                  core.setFailed(`Backend CI completed without ${CHECK_NAME} check run. Run conclusion: ${workflowRuns.map(r => r.conclusion || 'unknown').join(', ')}`);
+                  return;
+                }
+                completedWithoutGate = true;
+                core.info(`Backend CI completed (${workflowRuns.map(r => r.conclusion || 'unknown').join(', ')}); rechecking for ${CHECK_NAME}.`);
+              } else {
+                completedWithoutGate = false;
+                core.info(`Backend CI run status: ${workflowRuns.length ? workflowRuns.map(r => r.status).join(', ') : 'not triggered yet'}.`);
+              }
+
               const remaining = Math.max(0, deadline - Date.now());
               if (remaining === 0) {
                 break;
@@ -238,7 +271,13 @@ jobs:
       actions: read
     name: "PR Gate: Frontend"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Short bound: when the runner queue is backed up the Status Gate may not
+    # exist yet. pr-gate-frontend-rerun.yml re-runs this job when Frontend
+    # CI/CD completes, so a timeout here is recovered automatically.
+    timeout-minutes: 15
+    concurrency:
+      group: pr-gate-frontend-${{ github.event.pull_request.number }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -299,14 +338,16 @@ jobs:
           CHECK_NAME: "Frontend CI Status Gate"
         with:
           github-token: ${{ github.token }}
-          # See the backend job above: "Frontend CI Status Gate" is created
-          # only after earlier frontend jobs finish, so we poll up to 40 minutes
-          # for it to appear and complete.
+          # "Frontend CI Status Gate" is created only after earlier frontend
+          # jobs finish. A gate that is missing or still queued is pending, not
+          # failed: we poll up to 12 minutes, then fail with an explicit
+          # "still pending" message. pr-gate-frontend-rerun.yml re-runs this job
+          # once Frontend CI/CD completes, which then mirrors the real result.
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
             const CHECK_NAME = process.env.CHECK_NAME;
-            const deadline = Date.now() + 40 * 60 * 1000;
+            const deadline = Date.now() + 12 * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             const callWithRetry = async (fn) => {
@@ -410,7 +451,25 @@ jobs:
               delay = Math.min(Math.round(delay * 1.5), 120000);
             }
 
-            core.setFailed(`Timed out waiting for ${CHECK_NAME}`);
+            // Final poll: Frontend CI may have finished during the last sleep.
+            const finalRes = await github.rest.checks.listForRef({
+              owner, repo, ref: sha, check_name: CHECK_NAME, filter: 'latest', per_page: 20,
+            }).catch(() => null);
+            const finalRun = (finalRes?.data?.check_runs || []).find(r => r.status === 'completed');
+            if (finalRun) {
+              if (finalRun.conclusion === 'success') {
+                core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                return;
+              }
+              core.setFailed(finalRun.conclusion);
+              return;
+            }
+
+            core.setFailed(
+              `${CHECK_NAME} is still pending (not created yet or queued) after 12 minutes; ` +
+              `this is a CI queue delay, not a frontend failure. This job is re-run ` +
+              `automatically when Frontend CI/CD completes (pr-gate-frontend-rerun.yml).`
+            );
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
@@ -480,14 +539,7 @@ jobs:
       - name: Install detect-secrets
         run: pip install detect-secrets==1.5.0
       - name: Scan for new secrets against baseline
-        run: |
-          # shellcheck disable=SC2046
-          detect-secrets-hook \
-            --baseline .secrets.baseline \
-            --exclude-files '.*\.lock$' \
-            --exclude-files '.*package-lock\.json$' \
-            --exclude-files '\.secrets\.baseline$' \
-            $(git ls-files)
+        run: bash scripts/ci/check_secrets_baseline.sh
 
   # The aggregate required context. It combines the per-area, workflow
   # contract, and secret-scan jobs on every PR. `needs` plus explicit result
@@ -527,7 +579,7 @@ jobs:
       tools: ${{ steps.filter.outputs.tools }}
       review: ${{ steps.filter.outputs.review }}
     steps:
-      - uses: dorny/paths-filter@0e4a8c6effa4802afeda77dc8d303f8176d7dfad  # v3.0.4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |

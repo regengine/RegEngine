@@ -4,7 +4,7 @@
 # ISO 27001: 12.7.1
 #
 # Usage:
-#   AUDIT_API_BASE=https://api.regengine.com \
+#   AUDIT_API_BASE=https://api.regengine.co \
 #   AUDIT_TOKEN=<bearer_token> \
 #   bash scripts/security/verify_audit_chain.sh
 #

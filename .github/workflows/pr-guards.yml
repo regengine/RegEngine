@@ -1,0 +1,1401 @@
+name: PR Guards
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  pull_request_review:
+    types: [submitted, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+  issue_comment:
+    types: [created, edited, deleted]
+  check_suite:
+    types: [completed]
+  workflow_run:
+    workflows: ["PR Gate"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  pr-blocker-checklist:
+    name: "PR Blocker Checklist"
+    if: (github.event_name == 'pull_request' || github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'issue_comment' && github.event.issue.pull_request))
+    concurrency:
+      group: ${{ github.workflow }}-pr-blocker-checklist-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: PR Blocker Checklist
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const pr = context.payload.pull_request;
+              const prNumber = pr?.number || context.issue?.number || context.payload.issue?.number;
+              if (!prNumber) {
+                console.log('No pull request number in event payload. Skipping.');
+                return;
+              }
+
+              const isFork = Boolean(
+                pr?.head?.repo?.fork ||
+                (pr?.head?.repo?.full_name && pr?.base?.repo?.full_name && pr.head.repo.full_name !== pr.base.repo.full_name) ||
+                context.payload.repository?.fork
+              );
+
+              const initialQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!) {
+                  viewer {
+                    login
+                  }
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      id
+                      headRefOid
+                      isCrossRepository
+                      reviewThreads(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          isResolved
+                          path
+                          comments(first: 100) {
+                            pageInfo {
+                              hasNextPage
+                              endCursor
+                            }
+                            nodes {
+                              id
+                              databaseId
+                              url
+                              body
+                              createdAt
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                      reviews(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          author {
+                            login
+                          }
+                          state
+                          submittedAt
+                          url
+                          body
+                        }
+                      }
+                      comments(first: 100) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              let prData;
+              let botLogin = null;
+              try {
+                const response = await github.graphql(initialQuery, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  prNumber: prNumber,
+                });
+                botLogin = response?.viewer?.login || null;
+                prData = response?.repository?.pullRequest;
+              } catch (gqlErr) {
+                console.log('GraphQL query failed or insufficient permissions: ' + gqlErr.message);
+                if (typeof core !== 'undefined' && core.summary) {
+                  try {
+                    await core.summary.addRaw('### PR Blocker Checklist\n\nUnable to fetch PR details via GraphQL: ' + gqlErr.message).write();
+                  } catch (_) {}
+                }
+                return;
+              }
+
+              if (!prData) {
+                console.log(`Could not load PR #${prNumber} data via GraphQL.`);
+                return;
+              }
+
+              // Paginate reviewThreads if needed
+              const allReviewThreads = [...(prData.reviewThreads?.nodes || [])];
+              let threadPageInfo = prData.reviewThreads?.pageInfo;
+              const threadPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviewThreads(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          isResolved
+                          path
+                          comments(first: 100) {
+                            pageInfo {
+                              hasNextPage
+                              endCursor
+                            }
+                            nodes {
+                              id
+                              databaseId
+                              url
+                              body
+                              createdAt
+                              author {
+                                login
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (threadPageInfo?.hasNextPage && threadPageInfo.endCursor) {
+                  const pageRes = await github.graphql(threadPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: threadPageInfo.endCursor,
+                  });
+                  const moreThreads = pageRes?.repository?.pullRequest?.reviewThreads;
+                  if (moreThreads?.nodes?.length) {
+                    allReviewThreads.push(...moreThreads.nodes);
+                  }
+                  threadPageInfo = moreThreads?.pageInfo;
+                }
+              } catch (pageErr) {
+                console.log('Note: pagination for reviewThreads stopped early: ' + pageErr.message);
+              }
+
+              // Paginate comments within reviewThreads if any thread has more than 100 comments
+              const threadCommentsQuery = `
+                query($threadId: ID!, $cursor: String!) {
+                  node(id: $threadId) {
+                    ... on ReviewThread {
+                      comments(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              for (const thread of allReviewThreads) {
+                const threadComments = [...(thread.comments?.nodes || [])];
+                let commentPageInfo = thread.comments?.pageInfo;
+                try {
+                  while (commentPageInfo?.hasNextPage && commentPageInfo.endCursor) {
+                    const pageRes = await github.graphql(threadCommentsQuery, {
+                      threadId: thread.id,
+                      cursor: commentPageInfo.endCursor,
+                    });
+                    const moreComments = pageRes?.node?.comments;
+                    if (moreComments?.nodes?.length) {
+                      threadComments.push(...moreComments.nodes);
+                    }
+                    commentPageInfo = moreComments?.pageInfo;
+                  }
+                } catch (threadCommentErr) {
+                  console.log('Note: pagination for thread comments stopped early: ' + threadCommentErr.message);
+                }
+                thread.allComments = threadComments;
+              }
+
+              // Paginate reviews if needed
+              const allReviews = [...(prData.reviews?.nodes || [])];
+              let reviewPageInfo = prData.reviews?.pageInfo;
+              const reviewPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      reviews(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          author {
+                            login
+                          }
+                          state
+                          submittedAt
+                          url
+                          body
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (reviewPageInfo?.hasNextPage && reviewPageInfo.endCursor) {
+                  const pageRes = await github.graphql(reviewPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: reviewPageInfo.endCursor,
+                  });
+                  const moreReviews = pageRes?.repository?.pullRequest?.reviews;
+                  if (moreReviews?.nodes?.length) {
+                    allReviews.push(...moreReviews.nodes);
+                  }
+                  reviewPageInfo = moreReviews?.pageInfo;
+                }
+              } catch (reviewPageErr) {
+                console.log('Note: pagination for reviews stopped early: ' + reviewPageErr.message);
+              }
+
+              // Paginate issue comments if needed
+              const allPrComments = [...(prData.comments?.nodes || [])];
+              let prCommentPageInfo = prData.comments?.pageInfo;
+              const prCommentPageQuery = `
+                query($owner: String!, $repo: String!, $prNumber: Int!, $cursor: String!) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequest(number: $prNumber) {
+                      comments(first: 100, after: $cursor) {
+                        pageInfo {
+                          hasNextPage
+                          endCursor
+                        }
+                        nodes {
+                          id
+                          databaseId
+                          url
+                          body
+                          createdAt
+                          author {
+                            login
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              `;
+
+              try {
+                while (prCommentPageInfo?.hasNextPage && prCommentPageInfo.endCursor) {
+                  const pageRes = await github.graphql(prCommentPageQuery, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    prNumber: prNumber,
+                    cursor: prCommentPageInfo.endCursor,
+                  });
+                  const moreComments = pageRes?.repository?.pullRequest?.comments;
+                  if (moreComments?.nodes?.length) {
+                    allPrComments.push(...moreComments.nodes);
+                  }
+                  prCommentPageInfo = moreComments?.pageInfo;
+                }
+              } catch (commentPageErr) {
+                console.log('Note: pagination for PR comments stopped early: ' + commentPageErr.message);
+              }
+
+              const headSha = pr?.head?.sha || prData.headRefOid || 'unknown';
+              const isCrossRepo = Boolean(isFork || prData.isCrossRepository);
+              const MARKER = '<!-- pr-blocker-checklist -->';
+
+              function cleanText(text, maxLen = 80) {
+                if (!text) return '';
+                let clean = text.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+                clean = clean.replace(/[\u2013\u2014]/g, '-');
+                if (maxLen && clean.length > maxLen) {
+                  clean = clean.slice(0, maxLen) + '...';
+                }
+                return clean;
+              }
+
+              function sanitizeCodeSpan(text) {
+                if (!text) return '';
+                return String(text).replace(/`/g, "'").replace(/[\u2013\u2014]/g, '-');
+              }
+
+              function escapeProse(text) {
+                if (!text) return '';
+                return text
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/[\u2013\u2014]/g, '-');
+              }
+
+              function isShaMatch(a, b) {
+                if (!a || !b) return false;
+                const la = a.toLowerCase();
+                const lb = b.toLowerCase();
+                return la === lb || la.startsWith(lb) || lb.startsWith(la);
+              }
+
+              function parseVerdictLine(line) {
+                if (!line) return null;
+                const trimmed = line.trim();
+                const stripped = trimmed
+                  .replace(/^#+\s*/, '')
+                  .replace(/^[*_~-]+\s*/, '')
+                  .replace(/^\*\*([^*]+)\*\*/, '$1')
+                  .trim();
+
+                const markerMatch = trimmed.match(/^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m) ||
+                                    stripped.match(/^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9a-f]{7,40})\s*$/m);
+                if (markerMatch) {
+                  return {
+                    type: 'MARKER',
+                    verdict: markerMatch[1] === 'FAIL' ? 'BLOCKED' : markerMatch[1],
+                    rawVerdict: markerMatch[1],
+                    engine: markerMatch[2],
+                    sha: markerMatch[3].toLowerCase(),
+                    text: trimmed,
+                  };
+                }
+
+                const legacyMatch = stripped.match(/^(?:Verdict:\s*)?(FAIL|PASS)\b/) ||
+                                    trimmed.match(/^(?:Verdict:\s*)?(FAIL|PASS)\b/);
+                if (legacyMatch) {
+                  return {
+                    type: 'LEGACY',
+                    verdict: legacyMatch[1] === 'FAIL' ? 'BLOCKED' : 'PASS',
+                    legacyVerdict: legacyMatch[1],
+                    engine: null,
+                    sha: null,
+                    text: stripped,
+                  };
+                }
+
+                return null;
+              }
+
+              function hasFailLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const parsed = parseVerdictLine(line);
+                  return parsed && (parsed.verdict === 'BLOCKED' || parsed.rawVerdict === 'FAIL' || parsed.legacyVerdict === 'FAIL');
+                });
+              }
+
+              function extractFailLine(body, maxLen = 100) {
+                if (!body) return '';
+                const lines = body.split(/\r?\n/);
+                for (const line of lines) {
+                  const parsed = parseVerdictLine(line);
+                  if (parsed && (parsed.verdict === 'BLOCKED' || parsed.rawVerdict === 'FAIL' || parsed.legacyVerdict === 'FAIL')) {
+                    return cleanText(parsed.text, maxLen);
+                  }
+                }
+                return '';
+              }
+
+              function hasPassLine(body) {
+                if (!body) return false;
+                const lines = body.split(/\r?\n/);
+                return lines.some(line => {
+                  const parsed = parseVerdictLine(line);
+                  return parsed && parsed.verdict === 'PASS';
+                });
+              }
+
+              // 1. Unresolved Review Threads
+              const unresolvedThreads = [];
+              for (const thread of allReviewThreads) {
+                if (thread.isResolved) continue;
+                const firstComment = thread.allComments?.[0] || thread.comments?.nodes?.[0];
+                const author = firstComment?.author?.login || 'unknown';
+                const url = firstComment?.url || `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${prNumber}`;
+                const snippet = cleanText(firstComment?.body, 80);
+                unresolvedThreads.push({
+                  id: thread.id,
+                  path: thread.path,
+                  author,
+                  url,
+                  snippet,
+                });
+              }
+
+              // 2. Reviews requesting changes (latest opinionated review is CHANGES_REQUESTED)
+              const reviewsByAuthor = new Map();
+              for (const review of allReviews) {
+                const login = review.author?.login;
+                if (!login || review.state === 'PENDING') continue;
+                if (!reviewsByAuthor.has(login)) {
+                  reviewsByAuthor.set(login, []);
+                }
+                reviewsByAuthor.get(login).push(review);
+              }
+
+              const changesRequestedReviews = [];
+              for (const [login, authorReviews] of reviewsByAuthor.entries()) {
+                authorReviews.sort((a, b) => new Date(a.submittedAt) - new Date(b.submittedAt));
+                const opinionated = authorReviews.filter(r =>
+                  ['CHANGES_REQUESTED', 'APPROVED', 'DISMISSED'].includes(r.state)
+                );
+                const latestOpinionated = opinionated[opinionated.length - 1];
+                if (latestOpinionated && latestOpinionated.state === 'CHANGES_REQUESTED') {
+                  changesRequestedReviews.push({
+                    author: login,
+                    url: latestOpinionated.url,
+                    submittedAt: latestOpinionated.submittedAt,
+                  });
+                }
+              }
+
+              // 3. Engine verdicts (marker lines and legacy FAIL/PASS comments)
+              const allComments = [];
+              const seenCommentIds = new Set();
+
+              for (const c of allPrComments) {
+                if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                if (c.body.includes(MARKER)) continue;
+                seenCommentIds.add(c.id);
+                allComments.push({
+                  id: c.id,
+                  databaseId: c.databaseId,
+                  url: c.url,
+                  body: c.body,
+                  author: c.author?.login || 'unknown',
+                  createdAt: new Date(c.createdAt),
+                  type: 'issue_comment',
+                });
+              }
+
+              for (const thread of allReviewThreads) {
+                for (const c of thread.allComments || thread.comments?.nodes || []) {
+                  if (!c || !c.body || seenCommentIds.has(c.id)) continue;
+                  if (c.body.includes(MARKER)) continue;
+                  seenCommentIds.add(c.id);
+                  allComments.push({
+                    id: c.id,
+                    databaseId: c.databaseId,
+                    url: c.url,
+                    body: c.body,
+                    author: c.author?.login || 'unknown',
+                    createdAt: new Date(c.createdAt),
+                    type: 'review_comment',
+                    path: thread.path,
+                  });
+                }
+              }
+
+              for (const r of allReviews) {
+                if (!r || !r.body || r.state === 'PENDING' || seenCommentIds.has(r.id)) continue;
+                if (r.body.includes(MARKER)) continue;
+                seenCommentIds.add(r.id);
+                allComments.push({
+                  id: r.id,
+                  url: r.url,
+                  body: r.body,
+                  author: r.author?.login || 'unknown',
+                  createdAt: new Date(r.submittedAt),
+                  type: 'review_body',
+                });
+              }
+
+              allComments.sort((a, b) => a.createdAt - b.createdAt);
+
+              const allVerdicts = [];
+              for (const c of allComments) {
+                const lines = c.body.split(/\r?\n/);
+                const parsedInComment = [];
+                for (const rawLine of lines) {
+                  const parsed = parseVerdictLine(rawLine);
+                  if (parsed) {
+                    parsedInComment.push(parsed);
+                  }
+                }
+                if (parsedInComment.length === 0) continue;
+
+                const markerVerdicts = parsedInComment.filter(p => p.type === 'MARKER');
+                if (markerVerdicts.length > 0) {
+                  for (const mv of markerVerdicts) {
+                    allVerdicts.push({
+                      engine: mv.engine,
+                      sha: mv.sha,
+                      status: mv.verdict,
+                      createdAt: c.createdAt,
+                      url: c.url,
+                      line: cleanText(mv.text, 100),
+                      path: c.path,
+                    });
+                  }
+                } else {
+                  for (const lv of parsedInComment) {
+                    allVerdicts.push({
+                      engine: c.author,
+                      sha: headSha.toLowerCase(),
+                      status: lv.verdict,
+                      createdAt: c.createdAt,
+                      url: c.url,
+                      line: cleanText(lv.text, 100),
+                      path: c.path,
+                    });
+                  }
+                }
+              }
+
+              // Track verdicts per (engine, sha) and latest blocking verdict per engine.
+              // A BLOCKED or FAIL verdict from an engine is cleared only by a later PASS from
+              // the same engine whose sha matches the current head (isShaMatch(v.sha, headSha)).
+              // A PASS whose sha does not match head must never clear a block.
+              // An engine's latest BLOCKED/FAIL on any head still counts as blocking unless
+              // a later head-matching PASS from that engine exists.
+              const verdictsByEngineSha = new Map();
+              const latestBlockedVerdictByEngine = new Map();
+
+              for (const v of allVerdicts) {
+                verdictsByEngineSha.set(`${v.engine}:${v.sha}`, v);
+                if (v.status === 'BLOCKED' || v.status === 'FAIL') {
+                  latestBlockedVerdictByEngine.set(v.engine, v);
+                } else if (v.status === 'PASS' && isShaMatch(v.sha, headSha)) {
+                  latestBlockedVerdictByEngine.delete(v.engine);
+                }
+              }
+
+              const blockedEngines = [];
+              for (const [engine, verdict] of latestBlockedVerdictByEngine.entries()) {
+                if (verdict.status === 'BLOCKED' || verdict.status === 'FAIL') {
+                  blockedEngines.push(verdict);
+                }
+              }
+
+              const totalBlockers = unresolvedThreads.length + changesRequestedReviews.length + blockedEngines.length;
+
+              const lines = [];
+              lines.push(MARKER);
+              lines.push('## PR Blocker Checklist');
+              lines.push('');
+              lines.push(`**Head SHA:** \`${sanitizeCodeSpan(headSha)}\``);
+              lines.push('');
+
+              if (totalBlockers === 0) {
+                lines.push('### Status: Ready');
+                lines.push('');
+                lines.push('- [x] All review threads resolved');
+                lines.push('- [x] No reviews requesting changes');
+                lines.push('- [x] No blocked review engines');
+              } else {
+                const blockerWord = totalBlockers === 1 ? 'blocker' : 'blockers';
+                lines.push(`### Status: Blocked (${totalBlockers} open ${blockerWord})`);
+                lines.push('');
+
+                lines.push(`#### Review Threads (${unresolvedThreads.length} unresolved)`);
+                if (unresolvedThreads.length === 0) {
+                  lines.push('- [x] All review threads resolved');
+                } else {
+                  for (const t of unresolvedThreads) {
+                    const snippetPart = t.snippet ? `: "${escapeProse(t.snippet)}"` : '';
+                    lines.push(`- [ ] [\`${sanitizeCodeSpan(t.path)}\`](${t.url}) by @${t.author}${snippetPart}`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Changes Requested (${changesRequestedReviews.length})`);
+                if (changesRequestedReviews.length === 0) {
+                  lines.push('- [x] No reviews requesting changes');
+                } else {
+                  for (const r of changesRequestedReviews) {
+                    lines.push(`- [ ] Review by @${r.author}: [View changes requested](${r.url})`);
+                  }
+                }
+                lines.push('');
+
+                lines.push(`#### Blocked Engines (${blockedEngines.length})`);
+                if (blockedEngines.length === 0) {
+                  lines.push('- [x] No blocked review engines');
+                } else {
+                  for (const b of blockedEngines) {
+                    const isHead = isShaMatch(b.sha, headSha);
+                    const shortSha = b.sha.slice(0, 7);
+                    const headNotice = isHead
+                      ? `at current head (\`${shortSha}\`)`
+                      : `at \`${shortSha}\` (current head: \`${headSha.slice(0, 7)}\`)`;
+                    const detail = b.line ? `: \`${sanitizeCodeSpan(b.line)}\`` : '';
+                    const pathInfo = b.path ? ` on \`${sanitizeCodeSpan(b.path)}\`` : '';
+                    lines.push(`- [ ] Engine \`${sanitizeCodeSpan(b.engine)}\` blocked ${headNotice}${pathInfo}: [View verdict](${b.url})${detail}`);
+                  }
+                }
+              }
+
+              const markdownBody = lines.join('\n');
+
+              if (typeof core !== 'undefined' && core.summary) {
+                try {
+                  await core.summary.addRaw(markdownBody).write();
+                } catch (summaryErr) {
+                  console.log('Note: core.summary.write error:', summaryErr.message);
+                }
+              }
+
+              if (isCrossRepo || isFork) {
+                console.log('Pull request is from a fork or cross-repository. Step summary written, skipping PR comment write.');
+                return;
+              }
+
+              let existingCommentId = null;
+              for (const c of allPrComments) {
+                if (c.body && c.body.includes(MARKER)) {
+                  if (!botLogin || c.author?.login === botLogin) {
+                    existingCommentId = c.databaseId;
+                    break;
+                  }
+                }
+              }
+
+              if (!existingCommentId) {
+                try {
+                  const restComments = await github.paginate(github.rest.issues.listComments, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    per_page: 100,
+                  });
+                  const found = restComments.find(c =>
+                    c.body &&
+                    c.body.includes(MARKER) &&
+                    (!botLogin || c.user?.login === botLogin)
+                  );
+                  if (found) {
+                    existingCommentId = found.id;
+                  }
+                } catch (err) {
+                  console.log('Note: listComments error:', err.message);
+                }
+              }
+
+              try {
+                if (existingCommentId) {
+                  console.log(`Updating existing blocker checklist comment #${existingCommentId}`);
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: existingCommentId,
+                    body: markdownBody,
+                  });
+                } else {
+                  console.log(`Creating new blocker checklist comment on PR #${prNumber}`);
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    body: markdownBody,
+                  });
+                }
+              } catch (commentWriteErr) {
+                console.log('Unable to post or update PR comment (permission or API restriction): ' + commentWriteErr.message);
+              }
+            } catch (err) {
+              console.error('Non-fatal error in PR Blocker Checklist:', err);
+              if (typeof core !== 'undefined' && core.warning) {
+                core.warning(`PR Blocker Checklist encountered a non-fatal error: ${err.message}`);
+              }
+            }
+
+  head-sha-check-guard:
+    name: "Head SHA Check Guard"
+    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'check_suite' || github.event_name == 'workflow_run'
+    concurrency:
+      group: ${{ github.workflow }}-head-sha-check-guard-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.check_suite.pull_requests[0].number || github.sha }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      checks: read
+      statuses: write
+      pull-requests: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify Head SHA Checks
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const REQUIRED_CHECKS = [
+              'CI Status Gate',
+              'PR Gate: Backend',
+              'PR Gate: Frontend',
+              'PR Gate: Workflow Contract',
+            ];
+
+            const targetUrl = `${process.env.GITHUB_SERVER_URL || 'https://github.com'}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            // check_suite and workflow_run events run in the default-branch context, so a
+            // failed job there is attributed to main even though it evaluated a PR head.
+            // For those events the PR verdict is carried by the commit status posted on the
+            // PR head SHA; only fail the job itself for pull_request events.
+            const failGuard = (msg) => {
+              if (context.eventName === 'pull_request') {
+                core.setFailed(msg);
+              } else {
+                core.warning(`${msg} (reported via commit status; not failing ${context.eventName} run on default branch)`);
+              }
+            };
+
+            // Prevent self-trigger loops
+            if (context.eventName === 'workflow_run' && context.payload.workflow_run?.name === 'Head SHA Check Guard') {
+              core.info('Skipping run triggered by own workflow_run completion.');
+              return;
+            }
+
+            // Resolve evaluated SHA from event payload
+            const evaluatedSha =
+              context.payload.pull_request?.head?.sha ||
+              context.payload.workflow_run?.head_sha ||
+              context.payload.check_suite?.head_sha ||
+              context.sha;
+
+            if (!evaluatedSha) {
+              core.setFailed('Could not determine head SHA to evaluate.');
+              return;
+            }
+
+            core.info(`Evaluating checks for head SHA: ${evaluatedSha} (event: ${context.eventName})`);
+
+            // Resolve the PR(s) from the event's head_sha
+            let targetPrs = [];
+            if (context.eventName === 'pull_request' && context.payload.pull_request) {
+              targetPrs = [{
+                number: context.payload.pull_request.number,
+                headSha: context.payload.pull_request.head?.sha,
+              }];
+            } else {
+              try {
+                const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  commit_sha: evaluatedSha,
+                });
+                const openPrs = prs.filter((p) => p.state === 'open');
+                for (const p of openPrs) {
+                  targetPrs.push({
+                    number: p.number,
+                    headSha: p.head?.sha,
+                  });
+                }
+              } catch (err) {
+                core.warning(`Error finding PR associated with commit ${evaluatedSha}: ${err.message}`);
+              }
+
+              if (targetPrs.length === 0) {
+                const payloadPrs = context.payload.workflow_run?.pull_requests ||
+                                   context.payload.check_suite?.pull_requests || [];
+                for (const p of payloadPrs) {
+                  targetPrs.push({
+                    number: p.number,
+                    headSha: p.head?.sha,
+                  });
+                }
+              }
+            }
+
+            if (targetPrs.length === 0) {
+              core.info(`No open pull request associated with commit ${evaluatedSha}. Guard skipped.`);
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                const skipSummary = [
+                  '### Head SHA Check Guard Summary',
+                  '',
+                  `No open pull request associated with commit \`${evaluatedSha}\`. Guard skipped.`,
+                  '',
+                ].join('\n');
+                fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, skipSummary, 'utf8');
+              }
+              return;
+            }
+
+            // Fetch latest PR state to check if head moved
+            let matchedPr = null;
+            for (const p of targetPrs) {
+              try {
+                const { data: prData } = await github.rest.pulls.get({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: p.number,
+                });
+                if (prData.state === 'open') {
+                  if (prData.head?.sha === evaluatedSha) {
+                    matchedPr = prData;
+                    break;
+                  } else if (!matchedPr) {
+                    matchedPr = prData;
+                  }
+                }
+              } catch (err) {
+                core.warning(`Failed to fetch PR #${p.number}: ${err.message}`);
+              }
+            }
+
+            if (!matchedPr) {
+              core.info(`No open pull request found for commit ${evaluatedSha}. Guard skipped.`);
+              return;
+            }
+
+            const prNumber = matchedPr.number;
+            const prHeadSha = matchedPr.head?.sha;
+
+            if (!prHeadSha) {
+              failGuard(`PR #${prNumber} has no head SHA.`);
+              return;
+            }
+
+            // (c) If the PR head SHA differs from the SHA being evaluated,
+            // set failure on the evaluated SHA ('head moved') and do not switch to the new commit.
+            if (prHeadSha !== evaluatedSha) {
+              core.info(`PR #${prNumber} head SHA (${prHeadSha}) differs from evaluated SHA (${evaluatedSha}).`);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'failure',
+                context: 'Head SHA Check Guard / status',
+                description: 'Head moved',
+                target_url: targetUrl,
+              });
+              failGuard(`Head moved: PR #${prNumber} head is ${prHeadSha}, evaluated commit was ${evaluatedSha}`);
+              return;
+            }
+
+            core.info(`Guarding PR #${prNumber} at head SHA: ${evaluatedSha}`);
+
+            async function evaluateChecks(sha) {
+              const checkRuns = await github.paginate(
+                github.rest.checks.listForRef,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                  per_page: 100,
+                }
+              );
+
+              let commitStatuses = [];
+              try {
+                const statusRes = await github.rest.repos.getCombinedStatusForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: sha,
+                  per_page: 100,
+                });
+                commitStatuses = statusRes.data.statuses || [];
+              } catch (statusErr) {
+                core.warning(`Error fetching commit statuses for ${sha}: ${statusErr.message}`);
+              }
+
+              const results = {};
+              for (const name of REQUIRED_CHECKS) {
+                const matchingRuns = checkRuns.filter(
+                  (cr) => cr.name === name && cr.head_sha === sha
+                );
+                matchingRuns.sort((a, b) => {
+                  const timeA = new Date(a.completed_at || a.started_at || 0).getTime();
+                  const timeB = new Date(b.completed_at || b.started_at || 0).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                  return b.id - a.id;
+                });
+                const latestRun = matchingRuns[0];
+
+                const matchingStatuses = commitStatuses.filter(
+                  (cs) => cs.context === name
+                );
+                matchingStatuses.sort((a, b) => {
+                  const timeA = new Date(a.updated_at || a.created_at || 0).getTime();
+                  const timeB = new Date(b.updated_at || b.created_at || 0).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                  return b.id - a.id;
+                });
+                const latestStatus = matchingStatuses[0];
+
+                if (latestRun) {
+                  if (latestRun.status === 'completed') {
+                    const isSuccess = latestRun.conclusion === 'success';
+                    results[name] = {
+                      name,
+                      type: 'Check Run',
+                      headSha: latestRun.head_sha,
+                      status: latestRun.status,
+                      conclusion: latestRun.conclusion,
+                      passed: isSuccess,
+                      pending: false,
+                    };
+                  } else {
+                    results[name] = {
+                      name,
+                      type: 'Check Run',
+                      headSha: latestRun.head_sha,
+                      status: latestRun.status,
+                      conclusion: latestRun.conclusion || 'pending',
+                      passed: false,
+                      pending: true,
+                    };
+                  }
+                } else if (latestStatus) {
+                  if (latestStatus.state === 'success') {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'completed',
+                      conclusion: 'success',
+                      passed: true,
+                      pending: false,
+                    };
+                  } else if (latestStatus.state === 'pending') {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'pending',
+                      conclusion: 'pending',
+                      passed: false,
+                      pending: true,
+                    };
+                  } else {
+                    results[name] = {
+                      name,
+                      type: 'Commit Status',
+                      headSha: sha,
+                      status: 'completed',
+                      conclusion: latestStatus.state,
+                      passed: false,
+                      pending: false,
+                    };
+                  }
+                } else {
+                  results[name] = {
+                    name,
+                    type: 'Not Found',
+                    headSha: 'none',
+                    status: 'pending',
+                    conclusion: 'not reported',
+                    passed: false,
+                    pending: true,
+                  };
+                }
+              }
+
+              const allPassed = REQUIRED_CHECKS.every((name) => results[name]?.passed);
+              const anyFailed = REQUIRED_CHECKS.some((name) => !results[name]?.passed && !results[name]?.pending);
+              const hasPending = REQUIRED_CHECKS.some((name) => results[name]?.pending);
+
+              return { results, allPassed, anyFailed, hasPending };
+            }
+
+            const startTime = Date.now();
+            let evalResult = await evaluateChecks(evaluatedSha);
+
+            // Single evaluation per run with no long polling (at most one short re-read)
+            if (evalResult.hasPending && !evalResult.anyFailed) {
+              core.info('Required checks are pending on initial evaluation. Waiting 10s for a short re-read...');
+              await new Promise((resolve) => setTimeout(resolve, 10000));
+
+              // Re-verify that PR head did not move during the wait
+              const { data: latestPrAfterWait } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+              if (latestPrAfterWait.head?.sha !== evaluatedSha) {
+                core.info(`PR head moved during wait. Evaluated: ${evaluatedSha}, Current: ${latestPrAfterWait.head?.sha}`);
+                await github.rest.repos.createCommitStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  sha: evaluatedSha,
+                  state: 'failure',
+                  context: 'Head SHA Check Guard / status',
+                  description: 'Head moved',
+                  target_url: targetUrl,
+                });
+                failGuard(`Head moved: PR #${prNumber} head is ${latestPrAfterWait.head?.sha}, evaluated commit was ${evaluatedSha}`);
+                return;
+              }
+
+              evalResult = await evaluateChecks(evaluatedSha);
+            }
+
+            function writeStepSummary({ headSha, results, allPassed, hasPending, anyFailed, durationSeconds }) {
+              if (!process.env.GITHUB_STEP_SUMMARY) return;
+
+              const rows = [];
+              rows.push('### Head SHA Check Guard Summary');
+              rows.push('');
+              rows.push(`- Pull Request: #${prNumber}`);
+              rows.push(`- Current PR Head SHA: \`${headSha}\``);
+              rows.push(`- Elapsed Time: ${durationSeconds}s`);
+              const overallResult = allPassed ? 'PASSED' : (hasPending ? 'PENDING' : 'FAILED');
+              rows.push(`- Overall Result: **${overallResult}**`);
+              rows.push('');
+              rows.push('| Required Check | Type | Head SHA | Status | Conclusion | Result |');
+              rows.push('| :--- | :--- | :--- | :--- | :--- | :--- |');
+
+              for (const name of REQUIRED_CHECKS) {
+                const r = results[name] || {
+                  type: 'Missing',
+                  headSha: 'none',
+                  status: 'missing',
+                  conclusion: 'not reported',
+                  passed: false,
+                  pending: true,
+                };
+                const shortSha = r.headSha && r.headSha !== 'none' ? `\`${r.headSha.substring(0, 7)}\`` : 'none';
+                const resultText = r.passed ? 'PASSED' : (r.pending ? 'PENDING' : 'FAILED');
+                rows.push(`| ${name} | ${r.type} | ${shortSha} | ${r.status} | ${r.conclusion} | ${resultText} |`);
+              }
+
+              rows.push('');
+              fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, rows.join('\n'), 'utf8');
+            }
+
+            const durationSeconds = Math.round((Date.now() - startTime) / 1000);
+            writeStepSummary({
+              headSha: evaluatedSha,
+              results: evalResult.results,
+              allPassed: evalResult.allPassed,
+              hasPending: evalResult.hasPending,
+              anyFailed: evalResult.anyFailed,
+              durationSeconds,
+            });
+
+            if (evalResult.allPassed) {
+              core.info(`All required checks have passed on head SHA ${evaluatedSha}.`);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'success',
+                context: 'Head SHA Check Guard / status',
+                description: 'All required checks passed on head SHA',
+                target_url: targetUrl,
+              });
+              return;
+            }
+
+            if (evalResult.anyFailed) {
+              const failedList = REQUIRED_CHECKS.filter(
+                (name) => !evalResult.results[name]?.passed && !evalResult.results[name]?.pending
+              ).map((name) => `${name} (${evalResult.results[name]?.conclusion})`).join(', ');
+
+              core.info(`One or more required checks failed on head SHA ${evaluatedSha}: ${failedList}`);
+              const statusDesc = `Checks failed: ${failedList}`.substring(0, 140);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'failure',
+                context: 'Head SHA Check Guard / status',
+                description: statusDesc,
+                target_url: targetUrl,
+              });
+              failGuard(`Head SHA Check Guard failed on head SHA ${evaluatedSha}. Failed checks: ${failedList}`);
+              return;
+            }
+
+            if (evalResult.hasPending) {
+              const pendingNames = REQUIRED_CHECKS.filter(
+                (name) => evalResult.results[name]?.pending
+              ).join(', ');
+
+              core.info(`Required checks still pending on head SHA ${evaluatedSha}: ${pendingNames}. Reporting pending and exiting 0.`);
+              const statusDesc = `Checks pending: ${pendingNames}`.substring(0, 140);
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: evaluatedSha,
+                state: 'pending',
+                context: 'Head SHA Check Guard / status',
+                description: statusDesc,
+                target_url: targetUrl,
+              });
+              return;
+            }
+
+  # All engines post through one shared GitHub account, so this is an audit trail and not a cryptographic gate.
+  engine-review-pass:
+    name: "Engine Review Pass"
+    if: (github.event_name == 'pull_request' && github.event.action != 'ready_for_review') || github.event_name == 'pull_request_review' || github.event_name == 'issue_comment'
+    # Review bursts must not cancel in-progress runs.
+    concurrency:
+      group: ${{ github.workflow }}-engine-review-pass-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      statuses: write
+      pull-requests: read
+      issues: read
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify engine review pass
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            let pr = context.payload.pull_request;
+
+            if (!pr) {
+              if (!context.payload.issue?.pull_request) {
+                core.info('Issue comment is not on a pull request. Skipping.');
+                return;
+              }
+              const prResponse = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: context.payload.issue.number,
+              });
+              pr = prResponse.data;
+            }
+
+            if (!pr) {
+              core.setFailed('Could not determine pull request from event payload.');
+              return;
+            }
+
+            const headSha = pr.head?.sha;
+            if (!headSha) {
+              core.setFailed('Could not determine head SHA from pull request.');
+              return;
+            }
+
+            const ALLOWED_ENGINES = new Set([
+              'claude',
+              'codex',
+              'gemini',
+              'grok',
+              'muse',
+              'kimi',
+              'pi',
+              'deepseek',
+              'hermes',
+              'antigravity',
+              'visual-designer',
+              'product-designer',
+            ]);
+
+            const ALLOWED_ASSOCIATIONS = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+
+            let statusPosted = false;
+            async function setCommitStatus(state, description) {
+              if (statusPosted) {
+                core.info(`Commit status already posted. Skipping duplicate (${state}: ${description})`);
+                return;
+              }
+              statusPosted = true;
+              try {
+                await github.rest.repos.createCommitStatus({
+                  owner,
+                  repo,
+                  sha: headSha,
+                  state,
+                  context: 'Engine Review Pass',
+                  description: description.slice(0, 140),
+                  target_url: `https://github.com/${owner}/${repo}/actions/runs/${context.runId}`,
+                });
+                core.info(`Created commit status '${state}' on ${headSha}: ${description}`);
+              } catch (err) {
+                core.warning(`Failed to create commit status on ${headSha}: ${err.message}`);
+              }
+            }
+
+            try {
+              const headRef = pr.head?.ref || '';
+              const slashIndex = headRef.indexOf('/');
+              const rawPrefix = slashIndex > 0 ? headRef.slice(0, slashIndex).trim() : '';
+              const authorEngine = rawPrefix.toLowerCase();
+
+              if (!ALLOWED_ENGINES.has(authorEngine)) {
+                const msg = 'Invalid author engine. Please use an engine branch prefix such as gemini/ or claude/.';
+                await setCommitStatus('failure', msg);
+                core.setFailed(msg);
+                return;
+              }
+
+              core.info(`Author engine: ${authorEngine} (from branch ${headRef})`);
+              core.info(`Head SHA: ${headSha}`);
+
+              const prNumber = pr.number;
+              core.info(`Fetching reviews for pull request #${prNumber}...`);
+
+              const reviews = await github.paginate(github.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+              });
+
+              core.info(`Total reviews retrieved: ${reviews.length}`);
+
+              core.info(`Fetching comments for pull request #${prNumber}...`);
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner,
+                repo,
+                issue_number: prNumber,
+                per_page: 100,
+              });
+
+              core.info(`Total issue comments retrieved: ${comments.length}`);
+
+              const normalizedComments = comments.map((c) => ({
+                id: c.id,
+                body: c.body,
+                // Edits take effect at their edit time, so use updated_at.
+                submitted_at: c.updated_at || c.created_at,
+                author_association: c.author_association,
+                user: c.user,
+                state: 'COMMENTED',
+              }));
+
+              const allReviews = reviews.concat(normalizedComments);
+
+              const eligibleReviews = allReviews.filter((r) => {
+                if (r.state === 'DISMISSED' || !r.submitted_at || !r.body) {
+                  return false;
+                }
+                const assoc = (r.author_association || '').toUpperCase();
+                if (!ALLOWED_ASSOCIATIONS.has(assoc)) {
+                  core.info(
+                    `Ignoring review #${r.id} from user '${r.user?.login || 'unknown'}' with author_association '${r.author_association}'`
+                  );
+                  return false;
+                }
+                return true;
+              });
+
+              eligibleReviews.sort((a, b) => {
+                const timeA = new Date(a.submitted_at).getTime();
+                const timeB = new Date(b.submitted_at).getTime();
+                if (timeA !== timeB) {
+                  return timeA - timeB;
+                }
+                return a.id - b.id;
+              });
+
+              // The marker must be alone on its own line.
+              const markerRegex = /^REVIEW: (PASS|BLOCKED|FAIL) ([A-Za-z0-9._-]+) ([0-9A-Fa-f]{40})\s*$/;
+              const headShaLower = headSha.toLowerCase();
+              const authorEngineLower = authorEngine.toLowerCase();
+
+              const latestMarkers = new Map();
+
+              for (const r of eligibleReviews) {
+                const lines = r.body.replace(/\r\n/g, '\n').split('\n');
+                for (const line of lines) {
+                  const match = line.match(markerRegex);
+                  if (!match) {
+                    continue;
+                  }
+
+                  const action = match[1];
+                  const reviewerEngine = match[2];
+                  const markerSha = match[3];
+
+                  if (!ALLOWED_ENGINES.has(reviewerEngine.toLowerCase())) {
+                    core.info(`Ignoring marker with unapproved reviewer engine '${reviewerEngine}'`);
+                    continue;
+                  }
+
+                  if (markerSha.toLowerCase() !== headShaLower) {
+                    core.info(`Ignoring marker for non-matching SHA ${markerSha} on head ${headSha}`);
+                    continue;
+                  }
+
+                  const isAuthorEngine = reviewerEngine.toLowerCase() === authorEngineLower;
+                  if (action === 'PASS' && isAuthorEngine) {
+                    core.info(`Ignoring PASS from author engine '${reviewerEngine}'`);
+                    continue;
+                  }
+
+                  const engineKey = reviewerEngine.toLowerCase();
+                  latestMarkers.set(engineKey, {
+                    action,
+                    engine: reviewerEngine,
+                    sha: markerSha,
+                    submittedAt: r.submitted_at,
+                  });
+                  core.info(`Recorded marker: ${action} by ${reviewerEngine} (SHA: ${markerSha}, submitted: ${r.submitted_at})`);
+                }
+              }
+
+              const markers = Array.from(latestMarkers.values());
+              const blockedMarkers = markers.filter((m) => m.action === 'BLOCKED' || m.action === 'FAIL');
+              const nonAuthorPassMarkers = markers.filter((m) => {
+                return m.action === 'PASS' && m.engine.toLowerCase() !== authorEngineLower;
+              });
+
+              if (blockedMarkers.length > 0) {
+                const blockedEngines = blockedMarkers.map((m) => m.engine).join(', ');
+                const msg = `Blocked by ${blockedEngines}`;
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass blocked: ${msg}`);
+                return;
+              }
+
+              if (nonAuthorPassMarkers.length === 0) {
+                const msg = 'No passing review from a non-author engine for current head SHA';
+                await setCommitStatus('failure', msg);
+                core.setFailed(`Engine Review Pass failed: ${msg}`);
+                return;
+              }
+
+              const passEngines = nonAuthorPassMarkers.map((m) => m.engine).join(', ');
+              const successMsg = `Passed by ${passEngines}`;
+              await setCommitStatus('success', successMsg);
+              core.info(`Engine Review Pass succeeded: ${successMsg}`);
+            } catch (err) {
+              core.error(`Unexpected error: ${err.message}`);
+              await setCommitStatus('failure', `Error: ${err.message}`.slice(0, 140));
+              core.setFailed(err.message);
+            }

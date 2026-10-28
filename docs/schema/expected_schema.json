@@ -1474,6 +1474,35 @@
       }
     ]
   },
+  "fsma.epcis_document_receipts": {
+    "columns": {
+      "document_sha256": {
+        "nullable": false,
+        "type": "text"
+      },
+      "error_summary": {
+        "nullable": true,
+        "type": "text"
+      },
+      "id": {
+        "nullable": false,
+        "type": "uuid"
+      },
+      "received_at": {
+        "nullable": false,
+        "type": "timestamp"
+      },
+      "status": {
+        "nullable": false,
+        "type": "text"
+      },
+      "tenant_id": {
+        "nullable": false,
+        "type": "uuid"
+      }
+    },
+    "foreign_keys": []
+  },
   "fsma.evidence_attachments": {
     "columns": {
       "created_at": {
@@ -6807,6 +6836,10 @@
   },
   "public.supplier_facilities": {
     "columns": {
+      "agreed_sending_hours": {
+        "nullable": true,
+        "type": "integer"
+      },
       "city": {
         "nullable": false,
         "type": "text"

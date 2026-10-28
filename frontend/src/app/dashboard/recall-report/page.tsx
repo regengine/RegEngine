@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchRecallReport } from '@/lib/api-hooks';
+import { getErrorRequestId } from '@/lib/api-error';
 import { ErrorState } from '@/components/ui/error-state';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 import {
@@ -120,7 +121,7 @@ export default function RecallReportPage() {
             <PageContainer>
                 <div>
                     <PageHeader title="Recall report unavailable" />
-                    <ErrorState message="We could not load this page." onRetry={() => refetch()} />
+                    <ErrorState message="We could not load this page." onRetry={() => refetch()} requestId={getErrorRequestId(error)} />
                 </div>
             </PageContainer>
         );

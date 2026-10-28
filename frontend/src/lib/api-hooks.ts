@@ -10,7 +10,7 @@
 import { getServiceURL } from './api-config';
 import { CSRF_PROTECTED_METHODS } from './csrf';
 import { fetchWithCsrf } from './fetch-with-csrf';
-import { apiError } from './api-error';
+import { apiError, requestIdFromResponse } from './api-error';
 
 const BASE = () => getServiceURL('ingestion');
 const API_FETCH_TIMEOUT_MS = 8000;
@@ -103,14 +103,14 @@ async function apiFetch<T>(path: string, _apiKey?: string | null, options: Reque
         // sit outside the try/catch above so they are never mistaken for a
         // retryable transport failure.
         if (res.status === 429 || (res.status >= 500 && res.status <= 599)) {
-            lastError = apiError(res.status, res.statusText);
+            lastError = apiError(res.status, res.statusText, requestIdFromResponse(res));
             if (attempt < MAX_RETRIES) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
             }
             continue;
         }
 
-        throw apiError(res.status, res.statusText);
+        throw apiError(res.status, res.statusText, requestIdFromResponse(res));
     }
 
     throw lastError!;
