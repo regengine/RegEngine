@@ -144,6 +144,23 @@ describe('TracePage', () => {
         expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-B');
     });
 
+    it('prefills again when ?tlc= returns after being removed, even over a typed lot', async () => {
+        mockUseAuth.mockReturnValue({ hasTenantSession: true });
+        mockSearchParams.query = 'tlc=LOT-A';
+        const { rerender } = render(<TracePage />);
+
+        mockSearchParams.query = '';
+        rerender(<TracePage />);
+        const user = userEvent.setup();
+        await user.clear(screen.getByPlaceholderText(/enter tlc/i));
+        await user.type(screen.getByPlaceholderText(/enter tlc/i), 'TYPED');
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('TYPED');
+
+        mockSearchParams.query = 'tlc=LOT-A';
+        rerender(<TracePage />);
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-A');
+    });
+
     it('keeps trace actions disabled when no tenant session is available', async () => {
         mockUseAuth.mockReturnValue({
             hasTenantSession: false,

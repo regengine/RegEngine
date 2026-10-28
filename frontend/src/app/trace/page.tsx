@@ -61,9 +61,12 @@ export default function TracePage() {
   // (react.dev "storing information from previous renders"), not in an
   // effect, so there is no extra commit.
   const [seenTlcParam, setSeenTlcParam] = useState(tlcParam);
-  if (tlcParam && tlcParam !== seenTlcParam) {
+  if (tlcParam !== seenTlcParam) {
+    // Record every change, including to no parameter, so coming back to
+    // ?tlc=A after it was removed prefills A again; only a non-empty
+    // value replaces what is in the box.
     setSeenTlcParam(tlcParam);
-    setTlcInput(tlcParam);
+    if (tlcParam) setTlcInput(tlcParam);
   }
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
