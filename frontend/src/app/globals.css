@@ -391,9 +391,9 @@ body[data-inflow-lab="true"] {
         --re-shadow-glow: 0 0 0 3px var(--re-brand-muted);
         --re-shadow-glow-strong: 0 0 0 3px var(--re-brand-muted);
 
-        /* ── Type families. Marketing wears Outfit; the product wears Inter. ── */
+        /* Type families. Marketing and product both wear Inter. */
         --re-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-        --re-font-display: "Outfit", "Inter", system-ui, -apple-system, sans-serif;
+        --re-font-display: "Inter", system-ui, -apple-system, sans-serif;
         --re-font-serif: Georgia, "Times New Roman", serif;
         --re-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 

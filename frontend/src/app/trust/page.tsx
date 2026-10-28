@@ -49,6 +49,10 @@ const STATUS_SUMMARY = [
         detail: 'Capability is available where the relevant workspace, plan, or workflow has been enabled.',
     },
     {
+        label: 'Preview',
+        detail: 'Capability is usable for evaluation in supported workspaces, but is not GA. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',
+    },
+    {
         label: 'Pilot',
         detail: 'Capability exists but should be treated as guided rollout or customer-specific onboarding work.',
     },
@@ -189,7 +193,7 @@ const REGULATORY_BASIS = [
         title: 'Current regulatory basis',
         items: [
             'FDA Final Rule: Requirements for Additional Traceability Records (21 CFR Part 1, Subpart S)',
-            'Original compliance date: January 20, 2026; FDA has proposed a 30-month extension and Congress directed FDA not to enforce before July 20, 2028',
+            'Compliance date under the rule: January 20, 2026 (87 FR 70910). The 30-month extension is only proposed (90 FR 38084). FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
             'Food Traceability List (FTL): reviewed against FDA publications current as of April 1, 2026',
             'FDA Q&A draft guidance: February 2026; FAQ updates reviewed June 2026',
         ],

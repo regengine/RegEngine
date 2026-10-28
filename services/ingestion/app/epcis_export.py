@@ -13,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
@@ -32,10 +32,26 @@ FDA_CSV_HEADER = (
 )
 
 
+# Hard cap on events buffered into one synchronous export. Exceeding it
+# returns HTTP 413 rather than silently dropping the oldest events (SEL-506),
+# matching the compliance FDA spreadsheet export (services/compliance
+# routes.py ``_MAX_EXPORT_EVENTS``).
+_MAX_EXPORT_EVENTS = 50_000
+
+
+class ExportStorageUnavailable(RuntimeError):
+    """The event store could not be read; never report this as "no data"."""
+
+
 def _query_tenant_events(
     tenant_id: str, lot_code: str | None, date_from: str | None, date_to: str | None
 ) -> list[dict]:
-    """Query real CTE events from fsma.cte_events for export."""
+    """Query real CTE events from fsma.cte_events for export.
+
+    Returns at most ``_MAX_EXPORT_EVENTS + 1`` rows so callers can detect
+    an over-cap export. Raises :class:`ExportStorageUnavailable` on any
+    database error instead of returning an empty list (SEL-508).
+    """
     db = get_db_safe()
     try:
         where = ["e.tenant_id = :tenant_id"]
@@ -80,16 +96,38 @@ def _query_tenant_events(
                 LEFT JOIN fsma.cte_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
                 WHERE {" AND ".join(where)}
                 ORDER BY e.event_timestamp DESC
-                LIMIT 5000
+                LIMIT :row_limit
             """),
-            params,
+            {**params, "row_limit": _MAX_EXPORT_EVENTS + 1},
         ).fetchall()
         return [dict(row._mapping) for row in rows]
     except Exception as exc:
-        logger.warning("db_query_failed_for_export", extra={"error": str(exc)})
-        return []
+        logger.error("db_query_failed_for_export", extra={"error": str(exc)})
+        raise ExportStorageUnavailable(str(exc)) from exc
     finally:
         db.close()
+
+
+def _load_export_rows(tenant_id: str, request: "ExportRequest") -> list[dict]:
+    """Load rows for an export, failing loudly instead of returning partial data.
+
+    503 when storage is unavailable (never "No data yet"), 413 when the
+    result would exceed ``_MAX_EXPORT_EVENTS`` (never a silent truncation).
+    """
+    try:
+        rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
+    except ExportStorageUnavailable as exc:
+        raise HTTPException(status_code=503, detail="Event storage unavailable; export not generated") from exc
+    if len(rows) > _MAX_EXPORT_EVENTS:
+        logger.warning(
+            "export_exceeded_hard_cap",
+            extra={"tenant_id": tenant_id, "cap": _MAX_EXPORT_EVENTS},
+        )
+        raise HTTPException(
+            status_code=413,
+            detail=(f"Export exceeds the {_MAX_EXPORT_EVENTS:,}-event hard cap; narrow your date range or lot code"),
+        )
+    return rows
 
 
 _CTE_TO_BIZSTEP = {
@@ -186,7 +224,7 @@ async def export_epcis(
     now = datetime.now(timezone.utc)
     tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
+    rows = _load_export_rows(tenant_id, request)
     data_source = "tenant" if rows else "empty"
 
     event_list = []
@@ -284,7 +322,7 @@ async def export_fda(
     now = datetime.now(timezone.utc)
     tenant_id = ctx.tenant_id
 
-    rows = _query_tenant_events(tenant_id, request.lot_code, request.date_from, request.date_to)
+    rows = _load_export_rows(tenant_id, request)
     data_source = "tenant" if rows else "empty"
 
     if rows:

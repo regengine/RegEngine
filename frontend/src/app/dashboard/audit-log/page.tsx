@@ -37,6 +37,7 @@ import {
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { getErrorRequestId, withRequestId } from '@/lib/api-error';
 import { useTenant } from '@/lib/tenant-context';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
@@ -116,7 +117,7 @@ async function fetchAuditLog(tenantId: string, page = 1, pageSize = 50): Promise
     });
     if (!res.ok) {
         console.error(`Audit log fetch failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't load the audit log.");
+        throw withRequestId(new Error("Couldn't load the audit log."), res);
     }
     return res.json();
 }
@@ -244,7 +245,7 @@ export default function AuditLogPage() {
                 )}
 
                 {/* Error */}
-                {error && <ErrorState message="We could not load this page." onRetry={() => loadLog()} />}
+                {error && <ErrorState message="We could not load this page." onRetry={() => loadLog()} requestId={getErrorRequestId(error)} />}
 
                 {/* Event list shell — toolbar, rows, pagination */}
                 {isLoggedIn && !error && entries.length > 0 && (

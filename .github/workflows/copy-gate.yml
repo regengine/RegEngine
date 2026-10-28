@@ -2,6 +2,7 @@ name: Copy gate
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'scripts/copy-lint/**'
@@ -14,6 +15,10 @@ on:
       - 'scripts/copy-lint/**'
       - '.github/workflows/copy-gate.yml'
       - 'scripts/copy-lint/baseline.json'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

@@ -220,7 +220,7 @@ export function genericProxyErrorMessage(status: number): string {
 export function proxyError(
   message: string,
   status: number,
-  opts?: { code?: string; details?: string[] },
+  opts?: { code?: string; details?: string[]; requestId?: string },
 ): NextResponse<ProxyErrorBody> {
   const serverError = isServerErrorStatus(status);
   const body: ProxyErrorBody = {
@@ -228,6 +228,9 @@ export function proxyError(
   };
   if (!serverError && opts?.code) body.code = opts.code;
   if (!serverError && opts?.details) body.details = opts.details;
+  if (opts?.requestId) {
+    return NextResponse.json(body, { status, headers: { 'x-request-id': opts.requestId } });
+  }
   return NextResponse.json(body, { status });
 }
 

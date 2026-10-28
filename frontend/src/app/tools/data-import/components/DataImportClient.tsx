@@ -36,6 +36,7 @@ import {
 } from '@/lib/column-suggestions';
 import { cteSuggestionFromUploadError, type ActionableCteSuggestion } from '@/lib/cte-suggestion';
 import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 const CTE_TYPES = [
     { id: 'harvesting', label: 'Harvesting', description: 'Farm harvest events' },
@@ -79,6 +80,7 @@ type UploadState = 'idle' | 'uploading' | 'success' | 'partial' | 'error';
 
 export function DataImportClient() {
     const { apiKey } = useAuth();
+    const posthog = usePostHog();
     const [activeTab, setActiveTab] = useState<TabId>('csv');
     const [copied, setCopied] = useState(false);
 
@@ -141,6 +143,7 @@ export function DataImportClient() {
         if (!selectedFile || uploadInFlightRef.current) return;
         uploadInFlightRef.current = true;
         trackToolRunStarted('data-import');
+        posthog?.capture('tool_started', { tool_id: 'data-import' });
         setUploadState('uploading');
         setUploadResult(null);
         try {
@@ -161,7 +164,7 @@ export function DataImportClient() {
         } finally {
             uploadInFlightRef.current = false;
         }
-    }, [selectedFile, apiKey]);
+    }, [selectedFile, apiKey, posthog]);
 
     const handleDrop = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -298,7 +301,10 @@ export function DataImportClient() {
                                         <>
                                             <Upload className="mx-auto mb-4 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                             <div className="mb-1 text-ui font-medium text-re-text-primary">
-                                                Drag &amp; drop your CSV here, or click to browse
+                                                Upload a CSV to get started
+                                            </div>
+                                            <div className="mb-1 text-small text-re-text-secondary">
+                                                Drag and drop your CSV here, or click to browse
                                             </div>
                                             <div className="text-small text-re-text-tertiary">
                                                 Supports .csv files up to 5MB

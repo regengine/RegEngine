@@ -2,6 +2,7 @@ name: factory-local CI
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'packages/factory-local/**'
       - '.github/workflows/factory-local-ci.yml'

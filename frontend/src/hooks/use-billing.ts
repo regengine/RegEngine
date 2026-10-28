@@ -7,6 +7,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { getServiceURL } from '@/lib/api-config';
+import { withRequestId } from '@/lib/api-error';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
 
 // Legacy billing helpers still route through the admin proxy when those
@@ -28,7 +29,7 @@ async function billingFetch<T>(path: string, options?: RequestInit): Promise<T> 
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ detail: 'Request failed' }));
-        throw new Error(error.detail || `Billing API error: ${res.status}`);
+        throw withRequestId(new Error(error.detail || `Billing API error: ${res.status}`), res);
     }
 
     return res.json();
@@ -191,7 +192,7 @@ async function fetchCurrentSubscription(tenantId: string): Promise<SubscriptionD
 
     if (!res.ok) {
         const error = await res.json().catch(() => ({ detail: 'Request failed' }));
-        throw new Error(error.detail || `Billing API error: ${res.status}`);
+        throw withRequestId(new Error(error.detail || `Billing API error: ${res.status}`), res);
     }
 
     return res.json();
