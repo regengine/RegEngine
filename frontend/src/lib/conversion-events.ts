@@ -2,6 +2,7 @@
 
 import { track } from '@vercel/analytics';
 import { getStoredConsent } from '@/lib/cookie-consent';
+import { captureEvent } from '@/lib/posthog-provider';
 
 type Outcome = 'success' | 'error';
 type ErrorCode = 'validation' | 'rate_limited' | 'unavailable' | 'server';
@@ -192,7 +193,7 @@ function cleanExtra(key: string, value: unknown): EventValue | undefined {
 /** The only path to track(): caller-supplied keys cannot add PII or override attribution. */
 export function trackConversionEvent(event: ConversionEvent, props: Record<string, unknown> = {}): void {
   if (!EVENT_NAMES.has(event) || typeof window === 'undefined') return;
-  if (!analyticsMounted || getStoredConsent() !== 'accepted' || isInternalAnalyticsSession()) return;
+  if (getStoredConsent() !== 'accepted' || isInternalAnalyticsSession()) return;
   if (isAppRoute(window.location.pathname)) return;
 
   const properties: Record<string, EventValue> = {};
@@ -210,6 +211,13 @@ export function trackConversionEvent(event: ConversionEvent, props: Record<strin
   }
   if (properties.outcome !== 'error') delete properties.error_code;
   if (event === 'email_capture_submit' && properties.error_code === 'unavailable') delete properties.error_code;
+  try {
+    // PostHog has its own consent, host and property allowlist gates.
+    captureEvent(event, properties);
+  } catch {
+    // Telemetry must not change the outcome of the user's tool or form action.
+  }
+  if (!analyticsMounted) return;
   try {
     track(event, properties);
   } catch {

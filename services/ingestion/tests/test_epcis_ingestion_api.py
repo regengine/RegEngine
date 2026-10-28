@@ -5,6 +5,7 @@ Data-free: no EPCIS documents, events, GS1 identifiers, or lot codes.
 
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -21,7 +22,7 @@ from app.webhook_compat import _verify_api_key
 
 from services.ingestion.tests.tenant_context_overrides import install_tenant_context_override
 
-TEST_TENANT_ID = "00000000-0000-0000-0000-000000000123"
+TEST_TENANT_ID = str(uuid4())
 
 
 def _assert_no_traceback(response) -> None:
@@ -71,7 +72,7 @@ def test_batch_ingest_rejects_empty_body(client: TestClient) -> None:
 
 def test_unknown_event_id_returns_404(client: TestClient) -> None:
     response = client.get(
-        "/api/v1/epcis/events/missing-event",
+        f"/api/v1/epcis/events/{uuid4()}",
         headers={"X-Tenant-ID": TEST_TENANT_ID},
     )
     assert response.status_code == 404
@@ -94,7 +95,7 @@ def test_events_reject_non_json_content_type(client: TestClient) -> None:
 def test_tenant_query_override_rejected(claims_client: TestClient) -> None:
     response = claims_client.get(
         "/api/v1/epcis/export",
-        params={"tenant_id": "other-tenant"},
+        params={"tenant_id": str(uuid4())},
         headers={"X-Tenant-ID": TEST_TENANT_ID},
     )
     assert response.status_code == 409
@@ -102,3 +103,17 @@ def test_tenant_query_override_rejected(claims_client: TestClient) -> None:
     assert isinstance(detail, dict)
     assert detail.get("code") == "E_TENANT_MISMATCH"
     _assert_no_traceback(response)
+
+
+def test_empty_export_and_filter_keep_metadata_field(client: TestClient) -> None:
+    product_id = f"urn:uuid:{uuid4()}"
+    response = client.get(
+        "/api/v1/epcis/export",
+        params={"product_id": product_id},
+        headers={"X-Tenant-ID": TEST_TENANT_ID},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["epcisBody"]["eventList"] == []
+    assert body["regengine:metadata"]["regengine:event_count"] == 0
+    assert body["regengine:metadata"]["regengine:filters"]["regengine:product_id"] == product_id

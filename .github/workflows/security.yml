@@ -821,6 +821,206 @@ jobs:
           retention-days: 90
 
   # ──────────────────────────────────────────────
+  # 7b. Image provenance (E13) — SPDX from image + keyless cosign attest
+  # ──────────────────────────────────────────────
+  # Diligence E13: buyer needs image digest ↔ git SHA ↔ SBOM ↔ attestation.
+  # Source-path SBOM + sign-blob (job `sbom`) is NOT image provenance.
+  # This job builds the monolith image, SBOMs the image layers, attests the
+  # SPDX predicate to the image digest via keyless Sigstore (GitHub OIDC),
+  # pushes the attested image to GHCR so the digest is independently
+  # pullable, and publishes image-provenance-map.json. No Railway redeploy.
+  # Same cost posture as container-scan: skip on pull_request.
+  image-provenance:
+    name: Image provenance (SBOM + cosign)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [secrets, sast, deps]
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      id-token: write   # cosign keyless / Fulcio
+      packages: write   # push attested image to GHCR for independent verify
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
+
+      - name: Resolve base image digest
+        run: |
+          set -euo pipefail
+          docker pull python:3.11-slim
+          BASE_REF="python:3.11-slim"
+          BASE_DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "$BASE_REF" | cut -d@ -f2)"
+          if [[ ! "$BASE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::base image digest missing or not sha256:… (got: ${BASE_DIGEST:-empty})"
+            exit 1
+          fi
+          echo "BASE_IMAGE_REF=$BASE_REF" >> "$GITHUB_ENV"
+          echo "BASE_IMAGE_DIGEST=$BASE_DIGEST" >> "$GITHUB_ENV"
+          echo "Resolved base $BASE_REF @$BASE_DIGEST"
+
+      - name: Build monolith image
+        run: |
+          set -euo pipefail
+          docker build -t regengine:ci -f Dockerfile .
+          docker image inspect regengine:ci --format='{{.Id}}' | tee /tmp/regengine-ci-image-id.txt
+
+      - name: Generate image SBOM
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c  # v0.24.3
+        with:
+          image: regengine:ci
+          artifact-name: sbom-image.spdx.json
+          output-file: sbom-image.spdx.json
+          format: spdx-json
+
+      - name: Log in to GHCR
+        run: |
+          set -euo pipefail
+          # GITHUB_TOKEN only; never print the token.
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to GHCR and capture digest
+        id: push
+        run: |
+          set -euo pipefail
+          OWNER_REPO="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          IMAGE_NAME="ghcr.io/${OWNER_REPO}"
+          TAG_SHA="sha-${GITHUB_SHA}"
+          TAG_SHORT="$(echo "${GITHUB_SHA}" | cut -c1-12)"
+          docker tag regengine:ci "${IMAGE_NAME}:${TAG_SHA}"
+          docker tag regengine:ci "${IMAGE_NAME}:${TAG_SHORT}"
+          docker push "${IMAGE_NAME}:${TAG_SHA}"
+          docker push "${IMAGE_NAME}:${TAG_SHORT}"
+          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_NAME}:${TAG_SHA}" | cut -d@ -f2)"
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            # Fallback: crane-less parse from push output via buildx imagetools
+            DIGEST="$(docker buildx imagetools inspect "${IMAGE_NAME}:${TAG_SHA}" --format '{{.Manifest.Digest}}')"
+          fi
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::failed to resolve registry content digest for ${IMAGE_NAME}:${TAG_SHA}"
+            exit 1
+          fi
+          {
+            echo "IMAGE_NAME=$IMAGE_NAME"
+            echo "IMAGE_REF=${IMAGE_NAME}:${TAG_SHA}"
+            echo "IMAGE_DIGEST=$DIGEST"
+            echo "IMAGE_REF_DIGEST=${IMAGE_NAME}@${DIGEST}"
+          } >> "$GITHUB_ENV"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE_NAME}:${TAG_SHA} @ ${DIGEST}"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+
+      - name: Attest SBOM to image digest (keyless OIDC)
+        run: |
+          set -euo pipefail
+          test -f sbom-image.spdx.json
+          test -n "${IMAGE_REF_DIGEST}"
+          # Fail closed: any attest failure fails the job.
+          cosign attest --yes \
+            --predicate sbom-image.spdx.json \
+            --type spdx \
+            "${IMAGE_REF_DIGEST}"
+          cosign download attestation \
+            "${IMAGE_REF_DIGEST}" > cosign-sbom-attestation.json
+          # Bundle-style artifact for offline review (attestation payload from registry).
+          test -s cosign-sbom-attestation.json
+          echo "Attestation bound to ${IMAGE_REF_DIGEST}"
+
+      - name: Resolve schema tip (build-time Alembic head)
+        id: schema
+        run: |
+          set -euo pipefail
+          # Label as build-time tip only — not production applied.
+          HEAD="$(python3 scripts/check_alembic_revisions.py 2>/dev/null | sed -n 's/^Head(s): //p' | head -1 | tr -d '[:space:]')"
+          if [ -z "$HEAD" ]; then
+            echo "::error::could not resolve Alembic head for schema_revision"
+            exit 1
+          fi
+          echo "SCHEMA_REVISION=${HEAD}" >> "$GITHUB_ENV"
+          echo "head=${HEAD}" >> "$GITHUB_OUTPUT"
+          echo "schema_revision (build-time tip)=${HEAD}"
+
+      - name: Emit image provenance map
+        run: |
+          set -euo pipefail
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export BUILT_AT
+          WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          export WORKFLOW_RUN_URL
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          m = {
+            "git_sha": os.environ["GITHUB_SHA"],
+            "git_sha_full": os.environ["GITHUB_SHA"],
+            "workflow": "security.yml",
+            "workflow_run_url": os.environ["WORKFLOW_RUN_URL"],
+            "workflow_run_id": os.environ["GITHUB_RUN_ID"],
+            "job_name": "Image provenance (SBOM + cosign)",
+            "image_ref": os.environ["IMAGE_REF"],
+            "image_digest": os.environ["IMAGE_DIGEST"],
+            "base_image_ref": os.environ["BASE_IMAGE_REF"],
+            "base_image_digest": os.environ["BASE_IMAGE_DIGEST"],
+            "dockerfile_path": "Dockerfile",
+            "sbom_artifact": "sbom-image.spdx.json",
+            "sbom_format": "spdx-json",
+            "attestation_type": "spdx",
+            "attestation_reference": os.environ["IMAGE_REF_DIGEST"],
+            "cosign_bundle_artifact": "cosign-sbom-attestation.json",
+            "schema_revision": os.environ["SCHEMA_REVISION"],
+            "schema_revision_label": "build-time tip (not production applied)",
+            "built_at": os.environ["BUILT_AT"],
+            "registry": "ghcr.io",
+            "notes": [
+              "Source-path SBOM job remains separate and is not image provenance.",
+              "schema_revision is the Alembic head in the tree that built this image.",
+              "Sold Railway deploy digest (e.g. 1a6d30d0) is attested only after an approved future deploy of an image from this pipeline.",
+            ],
+          }
+          Path("image-provenance-map.json").write_text(json.dumps(m, indent=2) + "\n")
+          md = [
+            "# Image provenance map",
+            "",
+            f"- git_sha: `{m['git_sha_full']}`",
+            f"- image_digest: `{m['image_digest']}`",
+            f"- image_ref: `{m['image_ref']}`",
+            f"- base_image_digest: `{m['base_image_digest']}`",
+            f"- workflow_run: {m['workflow_run_url']}",
+            f"- sbom_artifact: `{m['sbom_artifact']}`",
+            f"- attestation_reference: `{m['attestation_reference']}`",
+            f"- schema_revision (build-time tip): `{m['schema_revision']}`",
+            f"- built_at: `{m['built_at']}`",
+            "",
+          ]
+          Path("image-provenance-map.md").write_text("\n".join(md))
+          print(json.dumps(m, indent=2))
+          PY
+        env:
+          WORKFLOW_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Upload image provenance artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: image-provenance
+          path: |
+            sbom-image.spdx.json
+            cosign-sbom-attestation.json
+            image-provenance-map.json
+            image-provenance-map.md
+          retention-days: 90
+          if-no-files-found: warn
+
+  # ──────────────────────────────────────────────
   # 8. Audit Chain Integrity (ISO 27001 12.7.1)
   # ──────────────────────────────────────────────
   # Issue #2814: the in-job "validate secrets" step reported success when the

@@ -102,3 +102,11 @@ def test_masking_is_display_only_full_hash_still_stored(monkeypatch):
     all_params = [v for _, p in conn.cursor_obj.statements if p for v in p]
     assert expected_hash in all_params
     assert conn.committed
+
+
+def test_seed_output_never_contains_full_key_hash(monkeypatch):
+    """The unpeppered SHA-256 of the key allows offline guessing; show a prefix only."""
+    output, _ = _run_seed(monkeypatch)
+    full_hash = hashlib.sha256(RAW_KEY.encode()).hexdigest()
+    assert full_hash not in output
+    assert full_hash[:8] in output

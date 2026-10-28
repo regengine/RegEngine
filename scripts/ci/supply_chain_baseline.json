@@ -4,6 +4,13 @@
   "entries": [
     {
       "rule": "image-digest",
+      "file": ".github/workflows/security.yml",
+      "match": "image: regengine:ci",
+      "reason": "Locally built CI image from the same job, not pulled from a registry, so it cannot be digest-pinned.",
+      "exact": true
+    },
+    {
+      "rule": "image-digest",
       "file": "Dockerfile",
       "match": "FROM python:3.11-slim AS builder",
       "reason": "Base image tag is fixed at python 3.11 slim. No digest recorded yet because digest resolution needs registry access. Record the digest the next time the base image is refreshed.",
