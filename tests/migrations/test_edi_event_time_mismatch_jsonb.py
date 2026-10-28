@@ -33,6 +33,8 @@ def test_mismatch_sql_extracts_jsonb_scalar_text() -> None:
     assert "#>> '{}'" in sql
     assert "CAST(k.kde_value" not in sql
     assert "k.kde_value ~" not in sql
+    assert "e.source LIKE 'edi%'" in sql
+    assert "to_date" in sql
 
 
 def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
@@ -51,7 +53,7 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                 conn.execute(
                     text(
                         "CREATE TABLE fsma.cte_events (id uuid PRIMARY KEY, tenant_id uuid NOT NULL,"
-                        " event_timestamp timestamptz NOT NULL)"
+                        " event_timestamp timestamptz NOT NULL, source text NOT NULL)"
                     )
                 )
                 conn.execute(
@@ -61,11 +63,11 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                     )
                 )
 
-                def add(ts: datetime, kdes: dict) -> None:
+                def add(ts: datetime, kdes: dict, source: str = "edi_inbound") -> None:
                     eid = uuid.uuid4()
                     conn.execute(
-                        text("INSERT INTO fsma.cte_events VALUES (:i, :t, :ts)"),
-                        {"i": eid, "t": tenant, "ts": ts},
+                        text("INSERT INTO fsma.cte_events VALUES (:i, :t, :ts, :s)"),
+                        {"i": eid, "t": tenant, "ts": ts, "s": source},
                     )
                     for k, v in kdes.items():
                         conn.execute(
@@ -80,6 +82,10 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                 add(now, {"ship_date": iso, "event_date": iso})
                 # Disagrees, event_date only.
                 add(day_start - timedelta(days=3), {"event_date": iso})
+                # Non-EDI source with a mismatch must not inflate the EDI count.
+                add(now, {"ship_date": iso}, source="webhook")
+                # Calendar-invalid ISO-looking date must be skipped, not abort.
+                add(now, {"ship_date": "2026-02-30"})
                 # Non-date JSONB values are ignored, not cast errors.
                 add(now, {"ship_date": "not-a-date"})
                 add(now, {"event_date": {"nested": iso}})
@@ -87,11 +93,17 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
 
                 count = conn.execute(text(check.MISMATCH_SQL)).scalar()
                 assert count == 2
+                invalid = conn.execute(text(check.INVALID_DATE_SQL)).scalar()
+                assert invalid == 1
                 rows = conn.execute(
                     text(
-                        "SELECT e.event_timestamp, (k.kde_value #>> '{}')::date FROM fsma.cte_events e"
+                        "SELECT e.event_timestamp, to_date((k.kde_value #>> '{}'), 'YYYY-MM-DD') "
+                        "FROM fsma.cte_events e"
                         " JOIN fsma.cte_kdes k ON k.cte_event_id = e.id AND k.kde_key = 'ship_date'"
-                        " WHERE (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'"
+                        " WHERE e.source LIKE 'edi%'"
+                        " AND (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'"
+                        " AND to_char(to_date((k.kde_value #>> '{}'), 'YYYY-MM-DD'), 'YYYY-MM-DD')"
+                        "     = (k.kde_value #>> '{}')"
                     )
                 ).all()
                 assert check.count_mismatches(rows) == 1

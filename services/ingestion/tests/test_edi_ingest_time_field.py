@@ -126,16 +126,21 @@ def test_sql_is_read_only_count():
 
 
 @pytest.mark.parametrize(
-    "url, env, refused",
+    "url, env, allowed_hosts, refused",
     [
-        ("postgresql://u@localhost:5432/regengine_test", {}, False),
-        ("postgresql://u@db.prod.example/regengine", {}, True),
-        ("postgresql://u@localhost/regengine", {"REGENGINE_ENV": "production"}, True),
-        ("postgresql://u@localhost/regengine", {"ENVIRONMENT": "Prod"}, True),
+        ("postgresql://u@localhost:5432/regengine_test", {}, None, False),
+        ("postgresql://u@127.0.0.1/regengine", {}, None, False),
+        ("postgresql://u@postgres:5432/regengine", {}, None, False),
+        # Fail-closed: remote host without --allow-host, even without "prod" in URL.
+        ("postgresql://u@db.internal/regengine", {}, None, True),
+        ("postgresql://u@db.prod.example/regengine", {}, None, True),
+        ("postgresql://u@db.internal/regengine", {}, ["db.internal"], False),
+        ("postgresql://u@localhost/regengine", {"REGENGINE_ENV": "production"}, None, True),
+        ("postgresql://u@localhost/regengine", {"ENVIRONMENT": "Prod"}, None, True),
     ],
 )
-def test_refuses_production(url, env, refused):
-    assert (check.refuse_production(url, env) is not None) is refused
+def test_refuses_production(url, env, allowed_hosts, refused):
+    assert (check.refuse_production(url, env, allowed_hosts=allowed_hosts) is not None) is refused
 
 
 def test_main_requires_url(monkeypatch, capsys):
@@ -143,9 +148,87 @@ def test_main_requires_url(monkeypatch, capsys):
     assert check.main([]) == 2
 
 
+def test_main_requires_tenant_scope(monkeypatch, capsys):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    assert check.main(["--database-url", "postgresql://u@localhost/x"]) == 2
+    err = capsys.readouterr().err
+    assert "--tenant-id" in err and "--all-tenants" in err
+
+
 def test_main_refuses_production_without_connecting(monkeypatch):
     monkeypatch.setenv("REGENGINE_ENV", "production")
-    assert check.main(["--database-url", "postgresql://u@localhost/x"]) == 3
+    assert check.main(["--database-url", "postgresql://u@localhost/x", "--all-tenants"]) == 3
+
+
+def test_main_refuses_remote_host_without_allow_host(monkeypatch, capsys):
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+    assert check.main(["--database-url", "postgresql://u@db.internal/x", "--all-tenants"]) == 3
+    assert "allow-list" in capsys.readouterr().err
+
+
+def test_sync_postgres_url_pins_psycopg3():
+    assert check.sync_postgres_url("postgresql://u@localhost/x").startswith("postgresql+psycopg://")
+    assert check.sync_postgres_url("postgres://u@localhost/x").startswith("postgresql+psycopg://")
+
+
+def test_main_passes_psycopg_url_to_create_engine(monkeypatch):
+    """Bare postgresql:// must not reach create_engine (psycopg2 is absent)."""
+    seen = {}
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def begin(self):
+            return self
+
+        def execute(self, *a, **k):
+            class _R:
+                def scalar_one(self_inner):
+                    return 0
+
+            return _R()
+
+        def rollback(self):
+            return None
+
+    class _Engine:
+        def connect(self):
+            return _Conn()
+
+    def fake_create_engine(url, *a, **k):
+        seen["url"] = url
+        return _Engine()
+
+    import sqlalchemy
+
+    monkeypatch.setattr(sqlalchemy, "create_engine", fake_create_engine)
+    # Also patch the late import site inside main via sqlalchemy module.
+    monkeypatch.delenv("REGENGINE_ENV", raising=False)
+    rc = check.main(
+        [
+            "--database-url",
+            "postgresql://u@localhost:5432/regengine_test",
+            "--all-tenants",
+        ]
+    )
+    assert rc == 0
+    assert seen["url"].startswith("postgresql+psycopg://")
+    assert "psycopg2" not in seen["url"]
+
+
+def test_sql_filters_edi_source_and_rejects_invalid_dates():
+    sql = check.MISMATCH_SQL
+    assert "e.source LIKE 'edi%'" in sql
+    assert "to_date" in sql
+    assert "to_char" in sql
+    assert "edi%" in check.INVALID_DATE_SQL
 
 
 def test_r1_time_to_fix_reads_ingest_clocks_not_event_time():
