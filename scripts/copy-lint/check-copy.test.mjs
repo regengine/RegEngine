@@ -53,6 +53,36 @@ test('an omitted off registry is treated as empty', () => {
   assert.deepEqual(parsed.planned, capabilities.planned);
 });
 
+test('an empty live registry is rejected', () => {
+  const invalid = registrySource({ ...capabilities, live: [] });
+  assert.throws(() => parseCapabilities(invalid), /Empty live capability registry/);
+});
+
+test('a missing live registry is rejected', () => {
+  const withoutLive = registrySource({
+    preview: capabilities.preview,
+    planned: capabilities.planned,
+    off: capabilities.off,
+  });
+  assert.equal(/\blive\s*:/.test(withoutLive), false);
+  assert.throws(() => parseCapabilities(withoutLive), /Missing live capability registry/);
+});
+
+test('an empty preview registry is rejected', () => {
+  const invalid = registrySource({ ...capabilities, preview: [] });
+  assert.throws(() => parseCapabilities(invalid), /Empty preview capability registry/);
+});
+
+test('a missing preview registry is rejected', () => {
+  const withoutPreview = registrySource({
+    live: capabilities.live,
+    planned: capabilities.planned,
+    off: capabilities.off,
+  });
+  assert.equal(/\bpreview\s*:/.test(withoutPreview), false);
+  assert.throws(() => parseCapabilities(withoutPreview), /Missing preview capability registry/);
+});
+
 test('VD dash and preview rules remain, with stricter empty values', () => {
   assert.deepEqual(rules(`<p>${liveName} — ${liveName}</p>`), ['em-dash']);
   assert.deepEqual(rules(`<p>${liveName} – ${liveName}</p>`), ['en-dash']);
