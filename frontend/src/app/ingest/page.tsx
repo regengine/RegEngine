@@ -565,6 +565,9 @@ export default function IngestPage() {
       ? 'success'
       : 'warning'
     : 'neutral';
+  // No fallback id: without a real document_id the completed panel shows an
+  // empty state instead of the viewer.
+  const completedDocumentId = ingestMutation.data?.document_id;
   const activeSaveError = activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : urlError;
 
   return (
@@ -1071,9 +1074,13 @@ export default function IngestPage() {
                     </Callout>
                   )}
 
-                  <NormalizedDocumentViewer
-                    documentId={ingestMutation.data?.document_id || ingestMutation.data?.doc_id || ingestMutation.data?.job_id || 'DEMO-DOC-ID'}
-                  />
+                  {typeof completedDocumentId === 'string' && completedDocumentId.length > 0 ? (
+                    <NormalizedDocumentViewer documentId={completedDocumentId} />
+                  ) : (
+                    <p className="text-small text-re-text-tertiary">
+                      No normalized document is available for this ingest.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )}

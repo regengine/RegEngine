@@ -146,7 +146,9 @@ async def test_get_usage_returns_current_period_row(monkeypatch):
     # No prior report yet against this row, so it's also fully unbilled.
     assert response.unbilled_unit_count == 42
     assert response.metered_billing_enabled is True
-    assert response.plan == "growth"
+    # Stored mapping may still say growth (alias period); get_usage
+    # normalizes via PLAN_ALIASES to the canonical list plan id.
+    assert response.plan == "list"
     # billing_period_start is the first of the current UTC month.
     assert response.billing_period_start.endswith("-01")
 
