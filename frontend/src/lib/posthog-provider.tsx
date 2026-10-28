@@ -42,6 +42,8 @@ let clientMode: TrackingMode | null = null;
  * Cookieless until consent (C.Lee, A-2138, Oct 27 2026): before Accept the SDK keeps its
  * anonymous ID in memory only, so it writes no cookie or storage and nothing outlives the tab.
  * After Accept it switches to normal persistence. No identify call is made in either mode.
+ * Decline stops all capture, cookieless included (C.Lee, A-2139). The choice lives in the
+ * re_cookie_consent cookie, so it holds on later page loads.
  */
 type TrackingMode = 'full' | 'cookieless';
 const FULL_PERSISTENCE = 'localStorage+cookie' as const;
@@ -49,6 +51,10 @@ const COOKIELESS_PERSISTENCE = 'memory' as const;
 
 function hasConsent(): boolean {
   return getStoredConsent() === 'accepted';
+}
+
+function hasDeclined(): boolean {
+  return getStoredConsent() === 'declined';
 }
 
 function trackingMode(): TrackingMode {
@@ -82,10 +88,11 @@ function apiHost(): string {
 }
 
 function canTrack(): boolean {
-  return configuredKey() !== null && isAllowedAnalyticsHost() && !isInternalAnalyticsSession();
+  return configuredKey() !== null && !hasDeclined()
+    && isAllowedAnalyticsHost() && !isInternalAnalyticsSession();
 }
 
-/** Remove what full tracking stored, for a visitor who withdraws consent. */
+/** Remove what full tracking stored, for a visitor who declines after accepting. */
 function clearStoredIdentity(): void {
   const key = configuredKey();
   if (!key || typeof document === 'undefined') return;
@@ -108,8 +115,7 @@ function applyTrackingMode(): void {
   const mode = trackingMode();
   if (mode === clientMode) return;
   client.set_config({ persistence: mode === 'full' ? FULL_PERSISTENCE : COOKIELESS_PERSISTENCE });
-  if (mode === 'cookieless') clearStoredIdentity();
-  else if (client.has_opted_out_capturing()) client.opt_in_capturing();
+  if (mode === 'full' && client.has_opted_out_capturing()) client.opt_in_capturing();
   clientMode = mode;
 }
 
@@ -149,7 +155,7 @@ function safeProperties(properties: Record<string, unknown> = {}): Record<string
 
 /** PostHog adds URL, referrer, title, and campaign data; only approved fields leave this callback. */
 function beforeSend(capture: CaptureResult | null): CaptureResult | null {
-  if (!capture || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return null;
+  if (!capture || hasDeclined() || !isAllowedAnalyticsHost() || isInternalAnalyticsSession()) return null;
   if (capture.event.startsWith('$') && capture.event !== '$pageview') return null;
   const token = capture.properties.token;
   const distinctId = capture.properties.distinct_id;
@@ -303,6 +309,11 @@ export function CSPostHogProvider({ children }: { children: ReactNode }) {
       } else {
         pendingCaptures.length = 0;
         if (client && !client.has_opted_out_capturing()) client.opt_out_capturing();
+        if (hasDeclined()) {
+          clearStoredIdentity();
+          // Re-accepting later goes through applyTrackingMode, which opts back in.
+          clientMode = null;
+        }
       }
     };
     refresh();

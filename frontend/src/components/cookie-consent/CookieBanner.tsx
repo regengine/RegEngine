@@ -40,7 +40,10 @@ function ConversionURLObserver() {
  * GDPR-compliant cookie consent banner.
  *
  * - Shows on first visit (no stored consent).
- * - Accept / Decline — no pre-checked boxes, no tracking before Accept.
+ * - Accept / Decline, no pre-checked boxes.
+ * - Before a choice, PostHog counts cookieless only (memory persistence, no cookies,
+ *   no storage, no identify). Accept enables full PostHog tracking. Decline stops all
+ *   PostHog capture, cookieless included. See lib/posthog-provider.tsx.
  * - Consent stored in `re_cookie_consent` cookie (not localStorage).
  * - Re-openable via the `re:show-cookie-prefs` DOM event (fired from footer link).
  * - Conditionally mounts Vercel Analytics only after "accepted".
