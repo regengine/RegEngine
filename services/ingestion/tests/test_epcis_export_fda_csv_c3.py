@@ -131,3 +131,57 @@ def test_fda_empty_export_header_only(
     response = client.post("/api/v1/export/fda", json={"tenant_id": str(uuid4())})
     assert response.status_code == 200
     assert [ln for ln in response.text.splitlines() if ln] == [FDA_CSV_HEADER]
+
+def test_fda_additional_kdes_json_csv_round_trip(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Additional_KDEs_JSON with 2+ keys must stay valid JSON through CSV quoting."""
+    lot = "LOT-ROM-2026-0312A"
+    expected_kdes = {
+        "field_id": "FIELD-SVF-7",
+        "harvester_business_name": "Salinas Valley Farms LLC",
+        "harvester_business_phone": "+1-831-555-0100",
+        "harvester_name": "Salinas Valley Farms LLC",
+    }
+
+    def _rows(*_a, **_k):
+        return [
+            {
+                "event_type": "harvesting",
+                "traceability_lot_code": lot,
+                "product_description": "Organic Romaine Hearts",
+                "quantity": 5000,
+                "unit_of_measure": "lbs",
+                "event_timestamp": datetime(2026, 3, 12, 8, 0, tzinfo=timezone.utc),
+                "location_gln": "0061414100014",
+                "location_name": "Salinas Valley Farms",
+                "ship_from": "Salinas Valley Farms",
+                "ship_from_gln": "0061414100014",
+                "ship_to": "",
+                "ship_to_gln": "",
+                "carrier": "",
+                "temperature_c": None,
+                "reference_document": "HARV-SVF-2026-0312-001",
+                "tlc_source_reference": "",
+                "immediate_previous_source": "",
+                "field_id": expected_kdes["field_id"],
+                "harvester_name": expected_kdes["harvester_name"],
+                "harvester_business_name": expected_kdes["harvester_business_name"],
+                "harvester_business_phone": expected_kdes["harvester_business_phone"],
+                "sha256_hash": "abc",
+            }
+        ]
+
+    monkeypatch.setattr(epcis_export, "_load_export_rows", _rows)
+    response = client.post("/api/v1/export/fda", json={"tenant_id": str(uuid4())})
+    assert response.status_code == 200
+
+    # Write CSV body, read back with the csv module (not naive split).
+    reader = csv.DictReader(response.text.splitlines())
+    row = next(reader)
+    cell = row["Additional_KDEs_JSON"]
+    assert cell.count(",") >= 1  # multi-key JSON keeps commas
+    parsed = json.loads(cell)
+    assert len(parsed) >= 2
+    assert parsed == expected_kdes
+
