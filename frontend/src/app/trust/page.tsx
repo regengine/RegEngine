@@ -49,6 +49,10 @@ const STATUS_SUMMARY = [
         detail: 'Capability is available where the relevant workspace, plan, or workflow has been enabled.',
     },
     {
+        label: 'Preview',
+        detail: 'Capability is usable for evaluation in supported workspaces, but is not GA. GS1 EPCIS 2.0 export and ingest stay Preview until separately promoted.',
+    },
+    {
         label: 'Pilot',
         detail: 'Capability exists but should be treated as guided rollout or customer-specific onboarding work.',
     },
