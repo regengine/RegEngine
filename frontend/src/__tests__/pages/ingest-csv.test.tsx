@@ -15,11 +15,27 @@ const mocks = vi.hoisted(() => ({
   storeApiKey: vi.fn(),
 }));
 
+let ingestURLData: any = undefined;
+
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({ apiKey: 'cookie-managed', setApiKey: mocks.storeApiKey }), // pragma: allowlist secret
 }));
 vi.mock('@/hooks/use-api', () => ({
-  useIngestURL: () => ({ mutateAsync: mocks.ingestURL, reset: vi.fn(), isPending: false, isError: false }),
+  useIngestURL: () => ({
+    mutateAsync: async (args: any) => {
+      const data = await mocks.ingestURL(args);
+      ingestURLData = data;
+      return data;
+    },
+    reset: vi.fn(() => {
+      ingestURLData = undefined;
+    }),
+    get data() {
+      return ingestURLData;
+    },
+    isPending: false,
+    isError: false,
+  }),
   useIngestFile: () => ({ mutateAsync: mocks.ingestFile, reset: vi.fn(), isPending: false, isError: false }),
   useIngestEpcisEvent: () => ({ mutateAsync: mocks.ingestEpcisEvent, reset: vi.fn(), isPending: false }),
   useIngestEpcisBatch: () => ({ mutateAsync: mocks.ingestEpcisBatch, reset: vi.fn(), isPending: false }),
@@ -33,7 +49,12 @@ vi.mock('@/hooks/use-dashboard-refresh', () => ({
   notifyDashboardRefresh: mocks.refresh,
 }));
 vi.mock('@/app/ingest/NormalizedDocumentViewer', () => ({
-  NormalizedDocumentViewer: () => <div>Normalized document viewer</div>,
+  NormalizedDocumentViewer: ({ documentId }: { documentId?: string }) => (
+    <div>
+      <div>Normalized document viewer</div>
+      {documentId && <div>Receipt: {documentId}</div>}
+    </div>
+  ),
 }));
 
 async function uploadCsv() {
@@ -71,6 +92,7 @@ function csvResult(accepted: number, rejected: number) {
 describe('CSV import results on /ingest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    ingestURLData = undefined;
     mocks.storeApiKey.mockResolvedValue(undefined);
   });
 
@@ -204,7 +226,8 @@ describe('CSV import results on /ingest', () => {
   });
 
   it('keeps previous job progress visible when API key save fails on subsequent submit', async () => {
-    mocks.ingestURL.mockResolvedValue({ job_id: 'job-previous-123', status: 'queued' });
+    const jobId = crypto.randomUUID();
+    mocks.ingestURL.mockResolvedValue({ job_id: jobId, status: 'queued' });
     mocks.getIngestionJob.mockResolvedValue({ status: 'queued' });
     render(<IngestPage />);
 
@@ -215,7 +238,7 @@ describe('CSV import results on /ingest', () => {
     await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
 
     expect(await screen.findByText('Ingestion Progress')).toBeInTheDocument();
-    expect(screen.getByText('Job job-previous-123')).toBeInTheDocument();
+    expect(screen.getByText(`Job ${jobId}`)).toBeInTheDocument();
 
     mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
     fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
@@ -223,7 +246,42 @@ describe('CSV import results on /ingest', () => {
 
     expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
     expect(screen.getByText('Ingestion Progress')).toBeInTheDocument();
-    expect(screen.getByText('Job job-previous-123')).toBeInTheDocument();
+    expect(screen.getByText(`Job ${jobId}`)).toBeInTheDocument();
+  });
+
+  it('shows save error in completed view while retaining previous job receipt data on failed resubmit', async () => {
+    const jobId = crypto.randomUUID();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    try {
+      mocks.ingestURL.mockResolvedValue({ job_id: jobId, status: 'queued' });
+      mocks.getIngestionJob.mockResolvedValue({ status: 'queued' });
+      render(<IngestPage />);
+
+      await userEvent.click(screen.getByRole('tab', { name: /url ingestion/i }));
+      fireEvent.change(screen.getByPlaceholderText('https://example.com/regulatory-document.pdf'), {
+        target: { value: 'https://example.com/regulatory-document.pdf' },
+      });
+      await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+      expect(await screen.findByText('Ingestion Progress')).toBeInTheDocument();
+      expect(screen.getByText(`Job ${jobId}`)).toBeInTheDocument();
+
+      mocks.storeApiKey.mockRejectedValue(new Error('API key could not be saved. Please try again.'));
+      fireEvent.change(screen.getByPlaceholderText('rge_...'), { target: { value: 'rge_replacement_key' } }); // pragma: allowlist secret
+      await userEvent.click(screen.getByRole('button', { name: /ingest|upload & process/i }));
+
+      expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+
+      mocks.getIngestionJob.mockResolvedValue({ status: 'completed' });
+      await vi.advanceTimersByTimeAsync(2000);
+
+      expect(await screen.findByText('API key could not be saved. Please try again.')).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent('API key could not be saved. Please try again.');
+      expect(screen.getByText('Normalized document viewer')).toBeInTheDocument();
+      expect(screen.getByText(`Receipt: ${jobId}`)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('offers the CTE Jev suggested and re-uploads with it only on confirmation', async () => {

@@ -223,24 +223,12 @@ export default function IngestPage() {
   // browser proxy reads it from the cookie, then clear prior result state.
   // Returns false when the caller should stop without sending any request.
   const prepareSubmit = async (): Promise<boolean> => {
-    // Clear the previous upload's results and errors first, so a failed
-    // API-key save below never leaves stale error lines on screen.
-    setStatusError(null);
-    setCsvResult(null);
+    // Clear previous save-error states first so stale save errors do not stack.
+    setUrlError(null);
     setCsvError(null);
-    setCteSuggestion(null);
-    setErrorColumnSuggestions([]);
-    setEpcisResult(null);
     setEpcisError(null);
     setEpcisErrorEvents([]);
-    setEpcisValidation(null);
-    setUrlError(null);
-    ingestMutation.reset();
-    ingestFileMutation.reset();
-    ingestEpcisEventMutation.reset();
-    ingestEpcisBatchMutation.reset();
-    ingestEpcisXmlMutation.reset();
-    validateEpcisMutation.reset();
+
     // Store the API key for future use
     if (!isAuthenticated && apiKey !== storedApiKey) {
       // The browser proxy reads the cookie written by setApiKey and ignores
@@ -256,7 +244,23 @@ export default function IngestPage() {
         return false;
       }
     }
-    // A failed API-key save must keep the previous job tracked and visible.
+
+    // Once the API key is successfully saved, clear prior results, errors,
+    // and mutation states, and reset job tracking for the new upload.
+    // A failed API-key save keeps the previous job and receipt data intact.
+    setStatusError(null);
+    setCsvResult(null);
+    setCteSuggestion(null);
+    setErrorColumnSuggestions([]);
+    setEpcisResult(null);
+    setEpcisErrorEvents([]);
+    setEpcisValidation(null);
+    ingestMutation.reset();
+    ingestFileMutation.reset();
+    ingestEpcisEventMutation.reset();
+    ingestEpcisBatchMutation.reset();
+    ingestEpcisXmlMutation.reset();
+    validateEpcisMutation.reset();
     setJobId(null);
     setJobStatus('queued');
     return true;
@@ -436,6 +440,7 @@ export default function IngestPage() {
       ? 'success'
       : 'warning'
     : 'neutral';
+  const activeSaveError = activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : urlError;
 
   return (
     <PageContainer className={statusError || urlError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
@@ -923,8 +928,14 @@ export default function IngestPage() {
                     </Button>
                   </div>
 
+                  {activeSaveError && (
+                    <Callout tone="danger" role="alert">
+                      {activeSaveError}
+                    </Callout>
+                  )}
+
                   <NormalizedDocumentViewer
-                    documentId={ingestMutation.data?.document_id || 'DEMO-DOC-ID'}
+                    documentId={ingestMutation.data?.document_id || ingestMutation.data?.doc_id || ingestMutation.data?.job_id || 'DEMO-DOC-ID'}
                   />
                 </CardContent>
               </Card>
