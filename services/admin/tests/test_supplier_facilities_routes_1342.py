@@ -646,3 +646,100 @@ class TestDeleteSupplierFacility:
         with TestClient(app) as member_client:
             resp = member_client.delete(f"/v1/supplier/facilities/{uuid4()}")
             assert resp.status_code == 403
+
+    def test_delete_empty_facility(self, client: TestClient, db_session: Session, ids: TestIds):
+        facility = _make_facility(db_session, ids)
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "deleted"
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is None
+
+    def test_linked_lot_returns_409(self, client: TestClient, db_session: Session, ids: TestIds):
+        facility = _make_facility(db_session, ids)
+        db_session.add(
+            SupplierTraceabilityLotModel(
+                tenant_id=ids.tenant_id,
+                supplier_user_id=ids.user_id,
+                facility_id=facility.id,
+                tlc_code=f"tlc-{uuid4().hex}",
+                product_description=f"desc-{uuid4().hex}",
+                status="active",
+            )
+        )
+        db_session.commit()
+
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is not None
+
+    def test_stale_empty_count_does_not_cascade_lot(
+        self, client: TestClient, db_session: Session, ids: TestIds, monkeypatch: pytest.MonkeyPatch
+    ):
+        """A lot committed after the pre-check must not be deleted with the facility.
+
+        Lots use ON DELETE CASCADE. The pre-check and the DELETE used to be
+        separate statements, so a lot that landed in between was cascaded away.
+        """
+        import app.supplier_facilities_routes as fac_routes
+
+        facility = _make_facility(db_session, ids)
+        lot = SupplierTraceabilityLotModel(
+            tenant_id=ids.tenant_id,
+            supplier_user_id=ids.user_id,
+            facility_id=facility.id,
+            tlc_code=f"tlc-{uuid4().hex}",
+            product_description=f"desc-{uuid4().hex}",
+            status="active",
+        )
+        db_session.add(lot)
+        db_session.commit()
+        monkeypatch.setattr(fac_routes, "_linked_record_counts", lambda *_args, **_kwargs: (0, 0, 0))
+
+        resp = client.delete(f"/v1/supplier/facilities/{facility.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, facility.id) is not None
+        assert db_session.get(SupplierTraceabilityLotModel, lot.id) is not None
+
+    def test_stale_empty_count_does_not_cascade_cte_event(
+        self, client: TestClient, db_session: Session, ids: TestIds, monkeypatch: pytest.MonkeyPatch
+    ):
+        """An event filed on this facility must survive even when its lot lives elsewhere."""
+        import app.supplier_facilities_routes as fac_routes
+
+        target = _make_facility(db_session, ids, name=f"name-{uuid4().hex}")
+        other = _make_facility(db_session, ids, name=f"name-{uuid4().hex}")
+        lot = SupplierTraceabilityLotModel(
+            tenant_id=ids.tenant_id,
+            supplier_user_id=ids.user_id,
+            facility_id=other.id,
+            tlc_code=f"tlc-{uuid4().hex}",
+            product_description=f"desc-{uuid4().hex}",
+            status="active",
+        )
+        db_session.add(lot)
+        db_session.commit()
+        event = SupplierCTEEventModel(
+            tenant_id=ids.tenant_id,
+            supplier_user_id=ids.user_id,
+            facility_id=target.id,
+            lot_id=lot.id,
+            cte_type="shipping",
+            event_time=datetime.now(timezone.utc),
+            kde_data={},
+            payload_sha256="",
+            merkle_hash="",
+            sequence_number=1,
+            obligation_ids=[],
+        )
+        db_session.add(event)
+        db_session.commit()
+        monkeypatch.setattr(fac_routes, "_linked_record_counts", lambda *_args, **_kwargs: (0, 0, 0))
+
+        resp = client.delete(f"/v1/supplier/facilities/{target.id}")
+        assert resp.status_code == 409
+        db_session.expire_all()
+        assert db_session.get(SupplierFacilityModel, target.id) is not None
+        assert db_session.get(SupplierCTEEventModel, event.id) is not None

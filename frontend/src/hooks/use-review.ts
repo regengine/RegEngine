@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { apiError } from '@/lib/api-error';
+import { apiError, requestIdFromResponse } from '@/lib/api-error';
 import type { ReviewItem } from '@/types/review';
 
 async function reviewFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -23,7 +23,7 @@ async function reviewFetch<T>(path: string, options: RequestInit = {}): Promise<
                 : null;
         // Keep the status machine-readable alongside the server message so a
         // 401 on the review queue can trigger re-login instead of a dead list.
-        const error = apiError(response.status, response.statusText);
+        const error = apiError(response.status, response.statusText, requestIdFromResponse(response));
         if (serverMessage) error.message = serverMessage;
         throw error;
     }

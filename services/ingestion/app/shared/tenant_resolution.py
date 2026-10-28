@@ -87,10 +87,13 @@ def resolve_tenant_id(
 
     if api_key_tenant_id:
         if requested_tenant_id and requested_tenant_id != api_key_tenant_id:
+            # Log only the request-supplied tenant (non-sensitive). The
+            # api-key-derived tenant is omitted so the API key material does
+            # not reach the logs (py/clear-text-logging-sensitive-data).
             logger.warning(
-                "tenant_override_rejected requested=%s api_key_tenant=%s",
+                "tenant_override_rejected requested=%s "
+                "(api key is bound to a different tenant)",
                 requested_tenant_id,
-                api_key_tenant_id,
             )
             raise HTTPException(
                 status_code=403,

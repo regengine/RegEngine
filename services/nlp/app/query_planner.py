@@ -14,6 +14,15 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
+# Character classes for date-prefix trimming. Kept disjoint (the separator set
+# never contains a token character) so trimming can be done with a single
+# linear scan from the end -- no regex backtracking, no polynomial ReDoS, and
+# no length cap that would change parsing semantics for long trailing words.
+_DATE_TOKEN_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./"
+)
+_DATE_SEPARATOR_CHARS = frozenset(" \t\n\r\f\v,;:()[]")
+
 IntentName = Literal[
     "trace_forward",
     "trace_backward",
@@ -209,8 +218,13 @@ def _extract_date_window(lowered_query: str, today: date) -> tuple[Optional[str]
         if parsed:
             return parsed.isoformat(), today.isoformat()
 
+    # Linear, non-backtracking form: tokens (no whitespace) separated by
+    # single whitespace runs, so the capture classes never overlap the
+    # ``\s+`` delimiters. This avoids polynomial ReDoS while matching the
+    # same spans as ``[A-Za-z0-9,\-\s]+`` for normal date-range input.
     between = re.search(
-        r"\bbetween\s+([A-Za-z0-9,\-\s]+)\s+and\s+([A-Za-z0-9,\-\s]+)",
+        r"\bbetween\s+([A-Za-z0-9,\-]+(?:\s+[A-Za-z0-9,\-]+)*?)"
+        r"\s+and\s+([A-Za-z0-9,\-]+(?:\s+[A-Za-z0-9,\-]+)*)",
         lowered_query,
     )
     if between:
@@ -241,11 +255,38 @@ def _parse_human_date_prefix(raw_value: str, today: date) -> Optional[date]:
         parsed = _parse_human_date(value, today)
         if parsed:
             return parsed
-        trimmed = re.sub(r"[\s,;:.()\[\]]+[A-Za-z0-9\-./]+$", "", value).strip()
+        trimmed = _trim_trailing_token(value)
         if not trimmed or trimmed == value:
             return None
         value = trimmed
     return None
+
+
+def _trim_trailing_token(value: str) -> str:
+    """Drop the trailing ``<separators><token>`` run from *value*.
+
+    Mirrors the old ``re.sub(r"[\\s,;:.()\\[\\]]+[A-Za-z0-9\\-./]+$", ...)``
+    behaviour (strip one trailing word plus its leading separators) but with a
+    single right-to-left scan over disjoint character sets. This is linear in
+    ``len(value)`` with no quantifier backtracking, so it is immune to the
+    polynomial ReDoS that overlapping classes caused, and -- unlike a capped
+    regex -- it still strips trailing words of any length (e.g. a 130-char
+    filler word), preserving the explicit date the user gave.
+    """
+    end = len(value)
+    idx = end
+    # Trailing run of token characters (the final "word").
+    while idx > 0 and value[idx - 1] in _DATE_TOKEN_CHARS:
+        idx -= 1
+    if idx == end:
+        return value  # no trailing token run -> nothing to trim
+    token_start = idx
+    # The separator run that precedes the trailing token.
+    while idx > 0 and value[idx - 1] in _DATE_SEPARATOR_CHARS:
+        idx -= 1
+    if idx == token_start:
+        return value  # token not preceded by a separator -> no match
+    return value[:idx]
 
 
 def _parse_human_date(raw_value: str, today: date) -> Optional[date]:

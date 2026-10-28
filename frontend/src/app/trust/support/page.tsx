@@ -11,6 +11,7 @@ import {
     Zap,
 } from 'lucide-react';
 import { SUPPORT_CHANNELS } from '@/lib/customer-readiness';
+import { NOT_SET } from '@/lib/empty-values';
 import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Section } from '@/components/layout/section';
@@ -143,13 +144,13 @@ export default function SupportPage() {
                     {SUPPORT_CHANNELS.map((channel) => (
                         <div key={channel.tier} className="border-b border-re-border-subtle p-5 last:border-0">
                             <div className="mb-2 flex items-center justify-between gap-3">
-                                <div className="text-subheading text-re-text-primary">{channel.tier}</div>
+                                <div className="text-subheading text-re-text-primary">{channel.tier || NOT_SET}</div>
                                 <div className="font-mono text-[0.8125rem] text-re-text-tertiary">
-                                    {channel.responseWindow}
+                                    {channel.responseWindow || NOT_SET}
                                 </div>
                             </div>
-                            <p className="text-ui text-re-text-secondary">{channel.escalation}</p>
-                            <p className="mt-2 text-small text-re-text-tertiary">{channel.notes}</p>
+                            <p className="text-ui text-re-text-secondary">{channel.escalation || NOT_SET}</p>
+                            <p className="mt-2 text-small text-re-text-tertiary">{channel.notes || NOT_SET}</p>
                         </div>
                     ))}
                 </Card>

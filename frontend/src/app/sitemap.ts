@@ -94,7 +94,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     const contentPages = [
         { url: `${baseUrl}/fsma-204`, changeFrequency: 'monthly' as const, priority: 0.9 },
         { url: `${baseUrl}/walkthrough`, changeFrequency: 'monthly' as const, priority: 0.9 },
-        { url: `${baseUrl}/case-studies`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/developers`, changeFrequency: 'monthly' as const, priority: 0.8 },
         { url: `${baseUrl}/blog`, changeFrequency: 'weekly' as const, priority: 0.8 },
         // Every published post, from the same list the blog index renders —
@@ -127,8 +126,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${baseUrl}/trust/architecture`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/retention`, changeFrequency: 'monthly' as const, priority: 0.5 },
         { url: `${baseUrl}/trust/support`, changeFrequency: 'monthly' as const, priority: 0.5 },
-        { url: `${baseUrl}/proof`, changeFrequency: 'monthly' as const, priority: 0.5 },
-        { url: `${baseUrl}/proof/transformation`, changeFrequency: 'monthly' as const, priority: 0.5 },
     ];
 
     // No blanket lastModified: stamping every URL "now" on every request

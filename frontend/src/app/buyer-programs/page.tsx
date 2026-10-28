@@ -37,9 +37,9 @@ export default function BuyerProgramsPage() {
           Some buyers have published their own traceability programs. Those programs are the buyer's. They are not federal enforcement and they are not a RegEngine badge. We help you structure CTE/KDE records and export a sortable package. You confirm format, scope, and dates with your buyer.
         </p>
 
-        <Callout tone="warning" title="FDA date" className="mt-6">
+        <Callout tone="warning" title="FDA enforcement" className="mt-6">
           <p className="leading-relaxed">
-            The FDA Food Traceability Rule compliance date is <strong className="font-medium text-re-text-primary">July 20, 2028</strong>. We will not imply that clock is now.
+            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
           </p>
         </Callout>
 
@@ -100,7 +100,7 @@ export default function BuyerProgramsPage() {
               <ul className={factList}>
                 <li>• All food and non-alcoholic beverages</li>
                 <li>• Albertsons deadline January 1, 2027</li>
-                <li>• Federal date remains July 20, 2028</li>
+                <li>• FDA enforcement not before July 20, 2028</li>
               </ul>
             </Card>
 
@@ -113,7 +113,7 @@ export default function BuyerProgramsPage() {
               </p>
               <Callout tone="warning">
                 <p className="font-medium leading-relaxed text-re-text-primary">
-                  A December 2023 first-party Kroger letter stated a June 30, 2025 supplier transition. We have not found a later first-party update. The letter's FDA date of January 20, 2026 is stale. The federal compliance date is July 20, 2028. This is not a claim that anyone is Kroger-ready.
+                  A December 2023 first-party Kroger letter stated a June 30, 2025 supplier transition. We have not found a later first-party update. The compliance date under the rule remains January 20, 2026 (87 FR 70910); the extension is only proposed (90 FR 38084). FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. This is not a claim that anyone is Kroger-ready.
                 </p>
               </Callout>
             </Card>
@@ -215,7 +215,7 @@ export default function BuyerProgramsPage() {
             Pasadena, CA
           </p>
           <p className="mt-2 text-small text-re-text-tertiary">
-            July 20, 2028 · §1.1455 we do not claim to meet · No seals, competitor table, revenue-at-risk calculator
+            FDA enforcement not before July 20, 2028 · §1.1455 we do not claim to meet · No seals, competitor table, revenue-at-risk calculator
           </p>
         </Container>
       </footer>
