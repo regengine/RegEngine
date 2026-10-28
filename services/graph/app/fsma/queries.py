@@ -210,11 +210,21 @@ async def query_events_by_range(
     OPTIONAL MATCH (e)<-[:UNDERWENT]-(l:Lot)
       WHERE l.tenant_id = $tenant_id
 
+    // Transformation inputs hang off CONSUMED (tenant-scoped)
+    OPTIONAL MATCH (e)-[:CONSUMED]->(input_lot:Lot)
+      WHERE input_lot.tenant_id = $tenant_id
+
     // Join with Facility (Location) — tenant-scoped (#1261)
     OPTIONAL MATCH (e)-[:OCCURRED_AT]->(f:Facility)
       WHERE f.tenant_id = $tenant_id
 
-    WITH e, l, f
+    // Shipping source / destination facilities when present
+    OPTIONAL MATCH (ship_from_f:Facility)-[:SHIPPED]->(e)
+      WHERE ship_from_f.tenant_id = $tenant_id
+    OPTIONAL MATCH (e)-[:SHIPPED_TO]->(ship_to_f:Facility)
+      WHERE ship_to_f.tenant_id = $tenant_id
+
+    WITH e, l, f, input_lot, ship_from_f, ship_to_f
     WHERE ($tlc IS NULL OR l.tlc = $tlc)
     AND (
         $product_contains IS NULL
@@ -234,10 +244,15 @@ async def query_events_by_range(
         e.event_time as event_time,
         e.risk_flag as risk_flag,
         l.tlc as tlc,
+        l.gtin as gtin,
         l.product_description as product_description,
         l.quantity as quantity,
         l.unit_of_measure as uom,
         l.tenant_id as lot_tenant,
+        input_lot.tlc as input_tlc,
+        input_lot.gtin as input_gtin,
+        ship_from_f.gln as ship_from_gln,
+        ship_to_f.gln as ship_to_gln,
         f.name as facility_name,
         f.gln as facility_gln,
         f.address as facility_address,
@@ -300,11 +315,17 @@ async def query_events_by_range(
                     "event_time": record["event_time"],
                     "risk_flag": record["risk_flag"],
                     "tlc": record["tlc"] or "N/A",
+                    "gtin": record["gtin"] or "",
                     "product_description": record["product_description"] or "",
                     "quantity": record["quantity"],
                     "unit_of_measure": record["uom"],
+                    "input_tlc": record["input_tlc"] or "",
+                    "input_gtin": record["input_gtin"] or "",
+                    "ship_from_gln": record["ship_from_gln"] or "",
+                    "ship_to_gln": record["ship_to_gln"] or "",
                     "location_description": record["facility_name"] or record["facility_address"] or "Unknown",
                     "location_gln": record["facility_gln"] or "",
+                    "facility_gln": record["facility_gln"] or "",
                     "reference_doc_type": "Invoice",  # Placeholder for now
                     "reference_doc_num": record["event_id"],  # Using Event ID as proxy for Ref Doc
                 }
