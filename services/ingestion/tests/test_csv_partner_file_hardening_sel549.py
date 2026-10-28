@@ -820,3 +820,33 @@ def test_misspelled_header_suggests_closest_match():
     blob = " ".join(errors)
     assert "did you mean" in blob
     assert "quantty" in blob
+
+def test_completely_blank_physical_line_is_skipped_not_silently_dropped():
+    """DictReader omits `\\n`-only lines; disposition log must still count them.
+
+    First-file dry run (2026-10-28): physical blank lines between data rows were
+    a silent drop. Insert a blank line into the scoped fixture and require a
+    skipped/blank_physical_line entry at that physical line number.
+    """
+    header, rows = _fixture_rows()
+    # Two fixture rows with a completely blank physical line between them.
+    first = _to_csv(header, rows[:1]).rstrip("\n")
+    second_body = _to_csv(header, rows[1:2]).splitlines()[1]  # data line only
+    csv_text = first + "\n\n" + second_body + "\n"
+    # Physical lines: 1=header, 2=data, 3=blank, 4=data
+    assert csv_text.splitlines()[2] == ""
+
+    events, _errors, _w, log = _parse(csv_text)
+    assert len(events) == 2
+    blanks = [e for e in log if e.reason == "blank_physical_line"]
+    assert len(blanks) == 1
+    assert blanks[0].row_number == 3
+    assert blanks[0].disposition == "skipped"
+    # Exclusive outcomes cover every physical data line (2,3,4) — no silent drop.
+    exclusive = sorted(
+        e.row_number
+        for e in log
+        if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}
+    )
+    assert exclusive == [2, 3, 4]
+    assert {e.row_number for e in log if e.disposition == "accepted"} == {2, 4}

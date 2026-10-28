@@ -327,11 +327,14 @@ _DATE_FIELDS = [
 _CTE_TYPE_COLUMNS = ["cte_type", "event_type", "type", "cte"]
 
 # Data rows parse_csv_rows reads: the first MAX_CSV_ROWS rows csv.DictReader
-# yields after the header. DictReader skips completely blank lines, so they
-# do not count; comment rows and all-empty rows do. The next row is an error
-# and parsing stops; rows past it are counted (not stored) and reported as
-# skipped so the caller knows exactly what was dropped.
-# _file_cte_type_for_jev scans exactly these rows.
+# yields after the header. ``csv.DictReader`` omits completely blank physical
+# lines; parse_csv_rows recovers them via ``_physical_data_line_layout`` and
+# logs each as skipped/``blank_physical_line`` so partners never see a silent
+# drop (SEL-549 / first-file dry run). Comment rows and all-empty comma rows
+# are still yielded by DictReader and logged as ``comment_row`` / ``blank_row``.
+# The next row past the cap is an error and parsing stops; rows past it are
+# counted (not stored) and reported as skipped so the caller knows exactly
+# what was dropped. ``_file_cte_type_for_jev`` scans exactly these rows.
 MAX_CSV_ROWS = 500
 
 # Fallback chains: when several columns can supply the same field, the first
@@ -901,6 +904,63 @@ def _unknown_row_cte_value(row: Mapping[str, Optional[str]]) -> tuple[Optional[s
     return None, None
 
 
+class _PhysicalDataLineLayout(NamedTuple):
+    """Physical 1-based line numbers for DictReader records vs omitted blanks.
+
+    ``csv.DictReader`` silently drops completely blank lines. ``record_lines[i]``
+    is the physical file line of the i-th yielded data record; ``blank_lines``
+    are the omitted blanks (leading or between data rows) that must still be
+    accounted for as skipped dispositions (SEL-549).
+    """
+
+    header_line: int  # 0 when the file has no non-blank header line
+    record_lines: tuple[int, ...]
+    blank_lines: tuple[int, ...]
+
+
+def _physical_data_line_layout(text: str) -> _PhysicalDataLineLayout:
+    """Map DictReader data records to physical lines; list blank lines it omits."""
+    lines = text.splitlines()
+    if not lines:
+        return _PhysicalDataLineLayout(0, (), ())
+    header_line = 0
+    record_lines: list[int] = []
+    blank_lines: list[int] = []
+    for index, line in enumerate(lines):
+        physical = index + 1
+        if not line.strip():
+            # Leading blanks before the header are also omitted by DictReader,
+            # but partner files put the header on line 1; only blanks after the
+            # header are recovered here so disposition row numbers stay aligned
+            # with physical data lines (SEL-549 first-file dry run).
+            if header_line != 0:
+                blank_lines.append(physical)
+            continue
+        if header_line == 0:
+            header_line = physical
+            continue
+        record_lines.append(physical)
+    return _PhysicalDataLineLayout(header_line, tuple(record_lines), tuple(blank_lines))
+
+
+def _log_blank_physical_lines(
+    row_log: Optional[list[CsvRowDispositionEntry]],
+    blank_lines: Sequence[int],
+) -> None:
+    """Emit skipped/blank_physical_line for each DictReader-omitted blank line."""
+    for physical in blank_lines:
+        _append_row_log(
+            row_log,
+            row_number=physical,
+            disposition="skipped",
+            reason="blank_physical_line",
+            detail=(
+                f"Row {physical}: completely blank physical line was omitted by "
+                "the CSV reader and was not ingested"
+            ),
+        )
+
+
 def _is_data_record(record: Mapping[Optional[str], object]) -> bool:
     """True for a record the row loop would read as data (not blank, not a comment)."""
     values = [str(v or "").strip() for k, v in record.items() if k is not None]
@@ -1074,6 +1134,7 @@ def parse_csv_rows(
         return ([], [detail], [])
 
     reader = csv.DictReader(io.StringIO(text))
+    line_layout = _physical_data_line_layout(text)
 
     # Read the header and every record the loop below can reach before
     # touching any row: a file the csv module cannot read (CR-only line
@@ -1152,6 +1213,11 @@ def parse_csv_rows(
         )
         return ([], [detail], [])
 
+    # SEL-549 / first-file dry run: DictReader-omitted blank physical lines
+    # must still appear in the disposition log (skipped), or partners who pad
+    # CSVs with empty lines see under-counted row totals relative to what they sent.
+    _log_blank_physical_lines(row_log, line_layout.blank_lines)
+
     # SEL-549: fail fast with a clear error naming each missing required column
     # (and the aliases we accept) rather than emitting one opaque per-row error.
     # Only a file with data rows is checked; empty and header-only files keep
@@ -1180,7 +1246,12 @@ def parse_csv_rows(
             )
         # Every physical data row still needs an exclusive outcome so
         # accepted + rejected + skipped equals rows sent (SEL-549).
-        for row_num, record in enumerate(records, start=2):
+        for idx, record in enumerate(records):
+            row_num = (
+                line_layout.record_lines[idx]
+                if idx < len(line_layout.record_lines)
+                else idx + 2
+            )
             if not _is_data_record(record):
                 values = [str(v or "").strip() for k, v in record.items() if k is not None]
                 if values and values[0].startswith("#"):
@@ -1207,15 +1278,24 @@ def parse_csv_rows(
                 reason="missing_required_columns",
                 detail=detail,
             )
-        # Unread rows past the buffer still exist physically; every one must
-        # land in an exclusive bucket so accepted+rejected+skipped equals the
-        # file's data-row count (SEL-549 / Codex review). Overflow rows here
+        # Unread content lines past the buffer still exist physically; every one
+        # must land in an exclusive bucket so accepted+rejected+skipped equals
+        # the file's data-row count (SEL-549 / Codex review). Overflow rows here
         # are rejected with missing_required_columns (not skipped): the whole
-        # file failed the header check.
+        # file failed the header check. Use physical line numbers from the layout.
         if skipped_overflow:
-            base = 1 + len(records)
-            for offset in range(1, skipped_overflow + 1):
-                overflow_row = base + offset
+            overflow_lines = line_layout.record_lines[len(records) : len(records) + skipped_overflow]
+            for overflow_row in overflow_lines:
+                _append_row_log(
+                    row_log,
+                    row_number=overflow_row,
+                    disposition="rejected",
+                    reason="missing_required_columns",
+                    detail=detail,
+                )
+            # If layout was short (malformed / CR-only edge), fall back to synthetic numbers.
+            for offset in range(len(overflow_lines) + 1, skipped_overflow + 1):
+                overflow_row = (line_layout.record_lines[-1] if line_layout.record_lines else 1) + offset
                 _append_row_log(
                     row_log,
                     row_number=overflow_row,
@@ -1224,8 +1304,12 @@ def parse_csv_rows(
                     detail=detail,
                 )
         if overflow_tail_unreadable:
-            base = 1 + len(records) + skipped_overflow
-            tail_row = base + 1
+            tail_pos = len(records) + skipped_overflow
+            tail_row = (
+                line_layout.record_lines[tail_pos]
+                if tail_pos < len(line_layout.record_lines)
+                else 1 + len(records) + skipped_overflow + 1
+            )
             tail_detail = (
                 f"Row {tail_row}: unread CSV overflow tail could not be fully "
                 f"counted (malformed after {skipped_overflow} row(s) past the limit)"
@@ -1256,12 +1340,17 @@ def parse_csv_rows(
             ),
         )
 
-    for row_num, row in enumerate(records, start=2):
+    for idx, row in enumerate(records):
+        row_num = (
+            line_layout.record_lines[idx]
+            if idx < len(line_layout.record_lines)
+            else idx + 2
+        )
         # _file_cte_type_for_jev reads exactly the rows before this cut-off.
-        if row_num - 1 > MAX_CSV_ROWS:
+        if idx >= MAX_CSV_ROWS:
             # First over-limit row is rejected once. Further unread rows are
-            # each skipped under their own row numbers so counts balance and
-            # this row is never both skipped and rejected (SEL-549).
+            # each skipped under their own physical row numbers so counts
+            # balance and this row is never both skipped and rejected (SEL-549).
             if skipped_overflow:
                 overflow_detail = (
                     f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
@@ -1272,7 +1361,12 @@ def parse_csv_rows(
                     # by membership here, not by scanning error substrings.
                     overflow_aggregates.append(overflow_detail)
                 for offset in range(1, skipped_overflow + 1):
-                    overflow_row = row_num + offset
+                    pos = idx + offset
+                    overflow_row = (
+                        line_layout.record_lines[pos]
+                        if pos < len(line_layout.record_lines)
+                        else row_num + offset
+                    )
                     _append_row_log(
                         row_log,
                         row_number=overflow_row,
@@ -1283,15 +1377,21 @@ def parse_csv_rows(
             if overflow_tail_unreadable:
                 # Partial count kept above; name the remainder explicitly so it
                 # is not silently dropped when csv.Error fires mid-tail.
+                tail_pos = idx + skipped_overflow + 1
+                tail_row = (
+                    line_layout.record_lines[tail_pos]
+                    if tail_pos < len(line_layout.record_lines)
+                    else row_num + skipped_overflow + 1
+                )
                 tail_detail = (
-                    f"Row {row_num + skipped_overflow + 1}: unread CSV overflow tail "
+                    f"Row {tail_row}: unread CSV overflow tail "
                     f"could not be fully counted (malformed after {skipped_overflow} "
                     f"row(s) past the limit)"
                 )
                 parse_errors.append(tail_detail)
                 _append_row_log(
                     row_log,
-                    row_number=row_num + skipped_overflow + 1,
+                    row_number=tail_row,
                     disposition="rejected",
                     reason="unreadable_overflow_tail",
                     detail=tail_detail,
