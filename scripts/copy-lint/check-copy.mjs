@@ -94,12 +94,22 @@ export function parseCapabilities(src) {
   const seen = new Set();
   for (const name of ['live', 'preview', 'planned', 'off']) {
     const match = src.match(new RegExp(`\\b${name}\\s*:\\s*\\[([^\\]]*)\\]`));
-    if (!match) throw new Error(`Missing ${name} capability registry`);
+    // Empty or omitted `off` means nothing is disabled — do not throw.
+    if (!match) {
+      if (name === 'off') {
+        groups[name] = [];
+        continue;
+      }
+      throw new Error(`Missing ${name} capability registry`);
+    }
     if (match[1].replace(/'[^']+'/g, '').replace(/,/g, '').trim()) {
       throw new Error(`Unparseable ${name} capability registry`);
     }
     groups[name] = [...match[1].matchAll(/'([^']+)'/g)].map(m => m[1]);
-    if (name !== 'planned' && !groups[name].length) throw new Error(`Empty ${name} capability registry`);
+    // `planned` and `off` may be empty; live/preview must list at least one feature.
+    if (name !== 'planned' && name !== 'off' && !groups[name].length) {
+      throw new Error(`Empty ${name} capability registry`);
+    }
     for (const feature of groups[name]) {
       if (seen.has(feature)) throw new Error(`Duplicate capability status for ${feature}`);
       seen.add(feature);

@@ -34,9 +34,23 @@ test('a double-quoted planned capability is rejected', () => {
   assert.throws(() => parseCapabilities(invalid), /Unparseable planned capability registry/);
 });
 
-test('an empty off registry is rejected', () => {
-  const invalid = registrySource({ ...capabilities, off: [] });
-  assert.throws(() => parseCapabilities(invalid), /Empty off capability registry/);
+test('an empty off registry means nothing is disabled', () => {
+  const emptyOff = registrySource({ ...capabilities, off: [] });
+  assert.deepEqual(parseCapabilities(emptyOff).off, []);
+});
+
+test('an omitted off registry is treated as empty', () => {
+  const withoutOff = registrySource({
+    live: capabilities.live,
+    preview: capabilities.preview,
+    planned: capabilities.planned,
+  });
+  assert.equal(/\boff\s*:/.test(withoutOff), false);
+  const parsed = parseCapabilities(withoutOff);
+  assert.deepEqual(parsed.off, []);
+  assert.deepEqual(parsed.live, capabilities.live);
+  assert.deepEqual(parsed.preview, capabilities.preview);
+  assert.deepEqual(parsed.planned, capabilities.planned);
 });
 
 test('VD dash and preview rules remain, with stricter empty values', () => {
