@@ -6,6 +6,7 @@ import hmac
 import html
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -42,6 +43,9 @@ AUTH_CHALLENGE_DETAIL = "If this address is eligible, a sign-in code is on its w
 AUTH_CHALLENGE_PURPOSE = "sign_in"
 AUTH_CHALLENGE_TTL_SECONDS = 10 * 60
 AUTH_BROWSER_NONCE_COOKIE = "regengine_auth_browser_nonce"
+# Exact shape of AuthCryptoService.generate_opaque_session_token()
+# (secrets.token_urlsafe(32)); anything else is replaced, never reflected.
+_BROWSER_NONCE_RE = re.compile(r"[A-Za-z0-9_-]{43}")
 AUTH_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 AUTH_CHALLENGE_INVALID_DETAIL = "Invalid or expired sign-in challenge."
 
@@ -68,7 +72,7 @@ def _client_ip(request: Request) -> str:
 
 def _browser_nonce_for_request(request: Request, crypto_service: AuthCryptoService) -> str:
     existing_nonce = request.cookies.get(AUTH_BROWSER_NONCE_COOKIE)
-    if existing_nonce and len(existing_nonce) <= 256:
+    if existing_nonce and _BROWSER_NONCE_RE.fullmatch(existing_nonce):
         return existing_nonce
     return crypto_service.generate_opaque_session_token()
 
