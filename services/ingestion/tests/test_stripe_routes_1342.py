@@ -129,7 +129,7 @@ class TestCreateCheckoutErrorBranches:
         """``_resolve_price_id`` reads STRIPE_PRICE_{PLAN}_{PERIOD} from env
         and raises a 500 if unset. Pin one so the test reaches the
         error-branch code we actually want to exercise."""
-        monkeypatch.setenv("STRIPE_PRICE_GROWTH_MONTHLY", "price_growth_monthly")
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
 
     @pytest.fixture
     def base_request(self) -> CheckoutRequest:
@@ -339,6 +339,147 @@ class TestCreateCheckoutErrorBranches:
         assert response.session_id == "cs_hint_failed"
 
 
+# ── create_checkout — per-facility quantity for list/founding ──────────────
+
+
+class TestCheckoutFacilityQuantity:
+    """A-2155 PR2: list/founding checkout quantity = facility_count.
+
+    The quantity is sent to Stripe as ``line_items[0].quantity`` and echoed
+    into both checkout-session and subscription metadata as a string so the
+    webhook (and the follow-up pilot-credit PR) can reconcile it.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _stub_customer_lookups(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("STRIPE_PRICE_LIST_MONTHLY", "price_list_monthly")
+        monkeypatch.setenv("STRIPE_PRICE_FOUNDING_MONTHLY", "price_founding_monthly")
+        monkeypatch.setattr(customers_mod, "_get_existing_customer_id", lambda _: None)
+        monkeypatch.setattr(customers_mod, "_record_checkout_session_hint", lambda **_: None)
+
+    @staticmethod
+    def _capture_session(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        captured: dict[str, Any] = {}
+
+        class _Session:
+            id = "cs_facility"
+            url = "https://checkout.stripe.com/c/pay/cs_facility"
+
+        def _create(**kwargs: Any) -> _Session:
+            captured.update(kwargs)
+            return _Session()
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _create)
+        return captured
+
+    @pytest.mark.parametrize(
+        ("plan_id", "price_id", "unit_amount"),
+        [
+            ("list", "price_list_monthly", 999),
+            ("founding", "price_founding_monthly", 499),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_facility_count_sets_stripe_quantity_and_metadata(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        plan_id: str,
+        price_id: str,
+        unit_amount: int,
+    ) -> None:
+        captured = self._capture_session(monkeypatch)
+
+        response = await routes_mod.create_checkout(
+            CheckoutRequest(plan_id=plan_id, billing_period="monthly", facility_count=7),
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-facility"),
+        )
+
+        assert captured["line_items"] == [{"price": price_id, "quantity": 7}]
+        assert captured["metadata"]["facility_quantity"] == "7"
+        assert captured["subscription_data"]["metadata"]["facility_quantity"] == "7"
+        assert response.plan == plan_id
+        assert response.facility_quantity == 7
+        # ``amount`` stays the unit price, not the unit * quantity total.
+        assert response.amount == unit_amount
+
+    @pytest.mark.asyncio
+    async def test_omitted_facility_count_defaults_to_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured = self._capture_session(monkeypatch)
+
+        response = await routes_mod.create_checkout(
+            CheckoutRequest(plan_id="list", billing_period="monthly"),
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-default"),
+        )
+
+        assert captured["line_items"] == [{"price": "price_list_monthly", "quantity": 1}]
+        assert captured["metadata"]["facility_quantity"] == "1"
+        assert captured["subscription_data"]["metadata"]["facility_quantity"] == "1"
+        assert response.facility_quantity == 1
+
+    @pytest.mark.parametrize("facility_count", [0, -1, -100])
+    @pytest.mark.asyncio
+    async def test_facility_count_below_one_is_rejected_before_stripe(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        facility_count: int,
+    ) -> None:
+        def _must_not_run(**_kwargs: Any) -> Any:
+            raise AssertionError("Stripe must not be called for an invalid facility_count")
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _must_not_run)
+
+        with pytest.raises(Exception) as excinfo:
+            await routes_mod.create_checkout(
+                CheckoutRequest(plan_id="list", billing_period="monthly", facility_count=facility_count),
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-invalid"),
+            )
+        exc = excinfo.value
+        assert getattr(exc, "status_code", None) == 400
+        assert "at least 1" in getattr(exc, "detail", "")
+
+    @pytest.mark.asyncio
+    async def test_facility_count_above_max_is_rejected_before_stripe(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def _must_not_run(**_kwargs: Any) -> Any:
+            raise AssertionError("Stripe must not be called for facility_count above the cap")
+
+        monkeypatch.setattr(stripe.checkout.Session, "create", _must_not_run)
+
+        with pytest.raises(Exception) as excinfo:
+            await routes_mod.create_checkout(
+                CheckoutRequest(
+                    plan_id="list",
+                    billing_period="monthly",
+                    facility_count=routes_mod.MAX_CHECKOUT_FACILITY_QUANTITY + 1,
+                ),
+                x_tenant_id=None,
+                principal=_principal(tenant_id="tenant-too-many"),
+            )
+        exc = excinfo.value
+        assert getattr(exc, "status_code", None) == 400
+        assert str(routes_mod.MAX_CHECKOUT_FACILITY_QUANTITY) in getattr(exc, "detail", "")
+
+    @pytest.mark.asyncio
+    async def test_growth_alias_with_facility_count_uses_list_price(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Legacy ``growth`` callers keep working during the alias period and
+        still get per-facility quantity against the LIST price env."""
+        captured = self._capture_session(monkeypatch)
+
+        response = await routes_mod.create_checkout(
+            CheckoutRequest(plan_id="growth", billing_period="monthly", facility_count=3),
+            x_tenant_id=None,
+            principal=_principal(tenant_id="tenant-alias"),
+        )
+
+        assert captured["line_items"] == [{"price": "price_list_monthly", "quantity": 3}]
+        assert captured["metadata"]["plan_id"] == "list"
+        assert captured["metadata"]["facility_quantity"] == "3"
+        assert response.plan == "list"
+        assert response.facility_quantity == 3
+
+
 # ── create_checkout — billing period must match the price ID used ──────────
 
 
@@ -540,6 +681,37 @@ class TestGetSubscription:
         assert result.status == "active"
         assert result.billing_period == "annual"
         assert result.current_period_end == "2030-01-01T00:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_facility_quantity_from_mapping_sets_facilities_limit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Per-facility plans carry the billed quantity in the mapping; it
+        replaces the plan's static ``-1`` (quantity-driven) limit."""
+        monkeypatch.setattr(
+            state_mod,
+            "_get_subscription_mapping",
+            lambda _t: {
+                "plan_id": "list",
+                "status": "active",
+                "facility_quantity": "4",
+            },
+        )
+
+        result = await routes_mod.get_subscription("tenant-facilities", _=None)
+        assert result.facilities_limit == 4
+
+    @pytest.mark.parametrize("stored", [None, "", "0", "-2", "not-a-number"])
+    @pytest.mark.asyncio
+    async def test_missing_or_invalid_facility_quantity_falls_back_to_plan_limit(
+        self, monkeypatch: pytest.MonkeyPatch, stored: Optional[str]
+    ) -> None:
+        mapping: dict[str, Any] = {"plan_id": "list", "status": "active"}
+        if stored is not None:
+            mapping["facility_quantity"] = stored
+        monkeypatch.setattr(state_mod, "_get_subscription_mapping", lambda _t: mapping)
+
+        result = await routes_mod.get_subscription("tenant-fallback", _=None)
+        # list limits are -1 ("quantity-driven") until a quantity is known.
+        assert result.facilities_limit == plans_mod.PLANS["list"]["limits"]["facilities"]
 
 
 # ── stripe_webhooks / stripe_webhook_legacy thin wrappers ──────────────────
