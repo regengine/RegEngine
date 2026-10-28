@@ -189,7 +189,7 @@ const REGULATORY_BASIS = [
         title: 'Current regulatory basis',
         items: [
             'FDA Final Rule: Requirements for Additional Traceability Records (21 CFR Part 1, Subpart S)',
-            'Original compliance date: January 20, 2026; FDA has proposed a 30-month extension and Congress directed FDA not to enforce before July 20, 2028',
+            'Compliance date under the rule: January 20, 2026 (87 FR 70910). The 30-month extension is only proposed (90 FR 38084). FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
             'Food Traceability List (FTL): reviewed against FDA publications current as of April 1, 2026',
             'FDA Q&A draft guidance: February 2026; FAQ updates reviewed June 2026',
         ],

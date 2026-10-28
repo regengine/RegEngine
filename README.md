@@ -6,7 +6,7 @@ RegEngine is an API-first traceability evidence platform for food supply chains.
 
 Inflow Workbench prepares data with preflight checks, readiness scores, a fix queue, and a commit gate. Optional Jev assistance suggests CSV column mappings and missing event types; deterministic validation and authenticated tenant boundaries remain authoritative.
 
-[Website](https://regengine.co) · [Public proof](https://regengine.co/proof) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
+[Website](https://regengine.co) · [Verify a bundle](https://regengine.co/verify) · [Product description](docs/PRODUCT_DESCRIPTION.md) · [Python SDK](regengine/README.md)
 
 This is a pre-production application with deployed public proof surfaces. The capability inventory below describes checked-in implementation and release policy, not proof of customer adoption or live configuration.
 
@@ -384,7 +384,7 @@ RegEngine is proprietary, source-visible software — all rights reserved by Reg
 
 > **Before changing this repository's visibility**, work through [docs/security/PRE_PUBLIC_CHECKLIST.md](docs/security/PRE_PUBLIC_CHECKLIST.md). Confidential business material is currently tracked in-tree, and `git rm` removes it from `HEAD` only — every prior revision stays readable.
 
-Permissive exceptions — the public verifier tools are **Apache 2.0** (declared in [LICENSE](LICENSE)) so anyone can use, copy, and embed them: the `/proof` Merkle bundle verifier ([frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py)) and the `regengine-verify` per-record CLI ([regengine/verify_records.py](regengine/verify_records.py)). [Inflow Lab](https://github.com/regengine/inflow-lab), the integration simulator, is Apache 2.0 in its own repository for the same reason.
+Permissive exceptions — the public verifier tools are **Apache 2.0** (declared in [LICENSE](LICENSE)) so anyone can use, copy, and embed them: the Merkle bundle verifier ([frontend/public/sdk/verify_chain.py](frontend/public/sdk/verify_chain.py)) and the `regengine-verify` per-record CLI ([regengine/verify_records.py](regengine/verify_records.py)). [Inflow Lab](https://github.com/regengine/inflow-lab), the integration simulator, is Apache 2.0 in its own repository for the same reason.
 
 ## Contributing
 

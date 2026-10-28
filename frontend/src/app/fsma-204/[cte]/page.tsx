@@ -425,17 +425,9 @@ export default async function CTELandingPage({
         title="How RegEngine Helps"
         description={
           <>
-            {cta.enabled ? (
-              <>
-                Upload your {data.name.toLowerCase()} data to the sandbox and
-                RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
-              </>
-            ) : (
-              <>
-                RegEngine surfaces these issues in your {data.name.toLowerCase()}{" "}
-                data before they become audit findings during a §1.1455 records request.
-              </>
-            )}
+            Upload your {data.name.toLowerCase()} data to{" "}
+            <Link href="/ingest?tab=file" className="text-re-brand underline underline-offset-[3px]">RegEngine</Link> and
+            RegEngine surfaces these issues before they become audit findings during a §1.1455 records request.
           </>
         }
       >
