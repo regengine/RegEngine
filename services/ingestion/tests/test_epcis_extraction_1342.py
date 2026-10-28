@@ -97,3 +97,21 @@ class TestEmptyEventHelpers:
         assert _lot_level_identifiers({}) == []
         assert _ilmd_dict({}) is None
         assert _extract_event_lot({}) == ("", "")
+
+
+class TestLosslessLotIdentitySel598:
+    """Legacy path keeps the full class URI as TLC (SEL-598)."""
+
+    def test_lgtin_tlc_is_full_uri_not_segment(self):
+        lgtin = "urn:epc:class:lgtin:0614141.107346.LotA"
+        lot_code, tlc = _extract_event_lot(
+            {"type": "ObjectEvent", "quantityList": [{"epcClass": lgtin, "quantity": 1}]}
+        )
+        assert lot_code == "LotA"
+        assert tlc == lgtin
+
+    def test_digital_link_tlc_is_full_uri(self):
+        dl = "https://id.gs1.org/01/00012345678905/10/LotRebuild"
+        lot_code, tlc = _lot_from_identifier(dl)
+        assert lot_code == "LotRebuild"
+        assert tlc == dl
