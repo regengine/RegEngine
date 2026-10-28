@@ -50,7 +50,7 @@ def _raw_key() -> str:
 
 def test_key_file_is_owner_only_and_holds_raw_key(keygen, tmp_path):
     raw = _raw_key()
-    path = tmp_path / "nested" / "key"
+    path = keygen._prepare_key_file_path(tmp_path / "nested" / "key")
     keygen._write_key_file(raw, path)
     assert path.read_text().strip() == raw
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -58,7 +58,7 @@ def test_key_file_is_owner_only_and_holds_raw_key(keygen, tmp_path):
 
 
 def test_key_file_permissions_tightened_on_overwrite(keygen, tmp_path):
-    target = tmp_path / "key"
+    target = keygen._prepare_key_file_path(tmp_path / "key")
     target.write_text("")
     target.chmod(0o644)
     keygen._write_key_file(_raw_key(), target)
@@ -71,17 +71,19 @@ def test_key_file_rejects_symlink_target(keygen, tmp_path):
     link = tmp_path / "key-link"
     link.symlink_to(real)
     with pytest.raises(SystemExit, match="symlink"):
-        keygen._write_key_file(_raw_key(), link)
+        keygen._prepare_key_file_path(link)
     # Symlink target must not have been overwritten with the raw key.
     assert real.read_text() == "placeholder"
 
 
-def test_key_file_rejects_group_writable_parent(keygen, tmp_path):
+def test_key_file_chmods_group_accessible_owned_parent(keygen, tmp_path):
     parent = tmp_path / "shared"
     parent.mkdir(mode=0o755)
     parent.chmod(0o755)
-    with pytest.raises(SystemExit, match="group/world"):
-        keygen._write_key_file(_raw_key(), parent / "key")
+    path = keygen._prepare_key_file_path(parent / "key")
+    keygen._write_key_file(_raw_key(), path)
+    assert stat.S_IMODE(parent.stat().st_mode) == 0o700
+    assert path.exists()
 
 
 def test_summary_never_contains_raw_key(keygen, tmp_path):

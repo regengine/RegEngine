@@ -97,45 +97,95 @@ TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
 
 
-def _write_key_file(raw_key: str, path: Path) -> None:
-    """Write the raw key to ``path`` with owner-only (0600) permissions.
+def _prepare_key_file_path(path: Path) -> Path:
+    """Resolve and validate the key-file destination before minting a key.
 
-    Rejects a symlink as the final path component (``O_NOFOLLOW``). An
-    existing parent must already be private (no group/other bits); a
-    missing parent is created as ``0700``. Returns nothing so the raw key
-    never taints the console summary path.
+    Expands ``~``, resolves to an absolute path, creates a missing parent as
+    ``0700``, and if an existing parent is group/world accessible but owned by
+    this user, tightens it to ``0700``. Refuses a symlink at the final path so
+    a later write failure cannot leave an orphaned database row. Call this
+    before ``create_key``.
     """
     path = path.expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    # Check before resolve(): resolve follows an existing symlink.
+    if path.is_symlink():
+        raise SystemExit(f"Refusing to write key file: {path} is a symlink")
+    path = path.resolve(strict=False)
+
     parent = path.parent
     if parent.exists():
-        parent_mode = stat.S_IMODE(parent.stat().st_mode)
+        st = parent.stat()
+        parent_mode = stat.S_IMODE(st.st_mode)
         if parent_mode & 0o077:
-            raise SystemExit(
-                f"Refusing to write key file: parent {parent} is group/world "
-                f"accessible (mode {oct(parent_mode)}). Use a private directory."
-            )
+            if st.st_uid != os.getuid():
+                raise SystemExit(
+                    f"Refusing to write key file: parent {parent} is group/world "
+                    f"accessible (mode {oct(parent_mode)}) and not owned by you."
+                )
+            os.chmod(parent, 0o700)
     else:
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(parent, 0o700)
+    return path
 
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+
+def _write_key_file(raw_key: str, path: Path) -> None:
+    """Write the raw key to ``path`` with owner-only (0600) permissions.
+
+    ``path`` must already be prepared via ``_prepare_key_file_path``. Writes
+    through a same-directory temp file and ``os.replace`` so a failure cannot
+    truncate an existing good key (no ``O_TRUNC`` on the final path). Rejects
+    a symlink final path via ``O_NOFOLLOW`` / ``O_EXCL``. Returns nothing so
+    the raw key never taints the console summary path.
+    """
+    path = path.expanduser()
+    parent = path.parent
+    tmp_name = f".{path.name}.tmp.{os.getpid()}"
+    tmp_path = parent / tmp_name
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        fd = os.open(path, flags, 0o600)
+        fd = os.open(tmp_path, flags, 0o600)
     except OSError as exc:
-        # ELOOP: final component is a symlink.
         if getattr(exc, "errno", None) == errno.ELOOP:
             raise SystemExit(
-                f"Refusing to write key file: {path} is a symlink"
+                f"Refusing to write key file: {tmp_path} is a symlink"
             ) from exc
         raise
     try:
-        # Tighten permissions even if the file already existed.
         os.fchmod(fd, 0o600)
         os.write(fd, (raw_key + "\n").encode("utf-8"))
-    finally:
+    except Exception:
         os.close(fd)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    else:
+        os.close(fd)
+
+    # If the destination is a symlink, refuse rather than replacing through it.
+    if path.exists() and path.is_symlink():
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise SystemExit(f"Refusing to write key file: {path} is a symlink")
+
+    try:
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+    os.chmod(path, 0o600)
 
 
 @dataclass(frozen=True)
@@ -363,6 +413,11 @@ async def _main() -> None:
 
     from shared.api_key_store import DatabaseAPIKeyStore
 
+    # Destination is prepared before create_key so a refused path cannot
+    # leave an orphaned DB row. Absolute path is fixed before the raw key
+    # exists so the console summary is never CodeQL-tainted (alert 81).
+    key_path = _prepare_key_file_path(args.key_file)
+
     store = DatabaseAPIKeyStore(database_url=database_url)
     try:
         key = await store.create_key(
@@ -390,9 +445,6 @@ async def _main() -> None:
     else:
         billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
-    # Resolve the path before touching the raw key so the console summary
-    # never receives a value tainted by the secret (CodeQL alert 81).
-    key_path = args.key_file.expanduser()
     _write_key_file(key.raw_key, key_path)
     summary = _KeySummary(
         key_id=key.key_id,
