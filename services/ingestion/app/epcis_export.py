@@ -1,9 +1,9 @@
 """
 EPCIS Export Router.
 
-Generates GS1 EPCIS 2.0 JSON-LD exports for retailer compliance
-(Walmart, Kroger, Costco). Also provides FDA 21 CFR 1.1455 sortable
-spreadsheet export format.
+Generates GS1 EPCIS 2.0 JSON-LD exports (Preview) and FDA 21 CFR 1.1455
+sortable spreadsheet export. EPCIS output is labeled Preview; validate with
+your trading partner before relying on it for compliance.
 """
 
 from __future__ import annotations
@@ -483,8 +483,9 @@ class ExportRequest(BaseModel):
     "/epcis",
     summary="Export in GS1 EPCIS 2.0 JSON-LD format",
     description=(
-        "Generates a GS1 EPCIS 2.0 compliant JSON-LD document containing all "
-        "traceability events. Compatible with Walmart, Kroger, and Costco portals."
+        "Generates a GS1 EPCIS 2.0 JSON-LD document containing traceability "
+        "events (Preview). Validate with your trading partner before relying "
+        "on it for compliance."
     ),
 )
 async def export_epcis(
@@ -625,6 +626,8 @@ async def export_epcis(
                         "valid",
                         "errors",
                         "checkedAt",
+                        "preview",
+                        "previewNotice",
                     )
                 },
             },
@@ -646,6 +649,11 @@ async def export_epcis(
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
+            "preview": True,
+            "previewNotice": (
+                "EPCIS export is in Preview. Validate with your trading partner "
+                "before relying on it for compliance."
+            ),
             **({"regengine:message": "No data yet"} if not rows else {}),
         },
     }
@@ -681,6 +689,7 @@ async def export_epcis(
         "X-RegEngine-Skipped-Events-Count": str(skipped),
         "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
         "X-RegEngine-Data-Source": data_source,
+        "X-RegEngine-Preview": "true",
     }
     if validate:
         response_headers["X-RegEngine-Schema-Valid"] = "true" if not validation_errors else "false"
@@ -757,6 +766,7 @@ async def export_fda(
         "X-RegEngine-Events-Count": str(event_count),
         "X-RegEngine-Format": "FDA_21CFR1.1455",
         "X-RegEngine-Data-Source": data_source,
+        "X-RegEngine-Preview": "true",
     }
     if data_source == "empty":
         fda_headers["X-RegEngine-Message"] = "No data yet"
@@ -780,9 +790,10 @@ async def list_export_formats():
             {
                 "id": "epcis",
                 "name": "GS1 EPCIS 2.0 JSON-LD",
-                "description": "Industry standard for supply chain event data. Compatible with Walmart, Kroger, Costco.",
+                "description": "EPCIS 2.0 JSON-LD export (Preview).",
                 "content_type": "application/ld+json",
-                "retailers": ["Walmart", "Kroger", "Costco", "Target"],
+                "status": "preview",
+                "retailers": [],
             },
             {
                 "id": "fda",
