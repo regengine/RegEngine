@@ -207,9 +207,9 @@ export default function AboutPage() {
                 Faster iteration
               </p>
               <p className="mt-1 text-ui text-re-text-secondary">
-                No committee approvals. Early tester feedback is scoped to
-                ship within days, not quarters. Regulatory updates deploy
-                without waiting for quarterly release trains.
+                No committee approvals. Early tester feedback is scoped by
+                the founder and ships when the change is ready to verify,
+                without waiting on a large release committee.
               </p>
             </Card>
             <Card variant="inset" padding="compact">
