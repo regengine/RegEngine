@@ -167,7 +167,7 @@ export default function HomePage() {
             </Button>
           </div>
           <p className="mt-3 text-small text-re-text-tertiary">
-            The checklist is free and asks for an email. No account, no API key.
+            The checklist is free. No account, no API key. An email is only needed to save your result.
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export default function HomePage() {
             <ClipboardCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
             <h3 className="mt-4 text-heading text-re-text-primary">See the fields your records need</h3>
             <p className="mt-2 flex-1 text-ui text-re-text-secondary">
-              Pick a food on the Food Traceability List and an event. Get the starting list of Key Data Elements the record needs. Free, with email verification.
+              Pick a food on the Food Traceability List and an event. Get the starting list of Key Data Elements the record needs. Free. No account; an email only saves your result.
             </p>
             <Button asChild className="mt-5 self-start">
               <Link href="/tools/kde-checker">
