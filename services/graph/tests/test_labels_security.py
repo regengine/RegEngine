@@ -53,7 +53,12 @@ class TestLotNumberIssuanceGuard:
         with pytest.raises(ValidationError, match="must not be empty"):
             self._info("")
 
-    @pytest.mark.parametrize("lot", ["LOT-2026-SAL-0001", "LOT-2024/001", "LOT 2024", "lot_01.A"])
+    @pytest.mark.parametrize("lot", [".", ".."])
+    def test_rejects_dot_segments_the_browser_would_normalize_away(self, lot):
+        with pytest.raises(ValidationError, match="must not be '.' or '..'"):
+            self._info(lot)
+
+    @pytest.mark.parametrize("lot", ["LOT-2026-SAL-0001", "LOT-2024/001", "LOT 2024", "lot_01.A", "...", ".A"])
     def test_accepts_lots_that_scan_back_unchanged(self, lot):
         assert self._info(lot).lot_number == lot
 

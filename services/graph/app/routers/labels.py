@@ -104,6 +104,11 @@ class TraceabilityInfo(BaseModel):
             raise ValueError("lot_number must not be empty")
         if "%" in v:
             raise ValueError("lot_number must not contain '%'")
+        # quote() leaves "." unescaped, so these print as /10/./21/ or
+        # /10/../21/ and the browser normalizes the segment away before the
+        # request is sent; the label could never reach the landing page.
+        if v in (".", ".."):
+            raise ValueError("lot_number must not be '.' or '..'")
         return v
 
 
