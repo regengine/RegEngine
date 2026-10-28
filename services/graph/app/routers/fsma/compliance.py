@@ -45,7 +45,14 @@ from ...exporters import (
     header_filename,
     xml_escape,
 )
-from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
+from ...fsma.queries import EXPORT_EVENT_CAP
+from ...fsma_utils import (
+    find_gaps,
+    find_orphaned_lots,
+    query_events_by_range,
+    trace_backward,
+    trace_forward,
+)
 from ...neo4j_utils import Neo4jClient
 
 # Validate the API key before any endpoint parameter. The handlers below declare
@@ -56,6 +63,40 @@ from ...neo4j_utils import Neo4jClient
 # the per-request dependency cache means the key is still validated exactly once.
 router = APIRouter(tags=["Compliance"], dependencies=[Depends(require_api_key)])
 logger = structlog.get_logger("fsma-compliance")
+
+
+async def _load_range_export_events(
+    client: Neo4jClient,
+    start_date: str,
+    end_date: str,
+    tenant_id: str,
+    *,
+    tlc: Optional[str] = None,
+) -> List[dict]:
+    """Load the date-range export, or refuse it when the file would be partial.
+
+    ``query_events_by_range`` defaults to 500 rows (1,000 ceiling) because
+    search pages through it. These handlers used that default and returned
+    HTTP 200, so a window with 501 events shipped a spreadsheet that omitted
+    the rest. Ask for one row past the hard cap; over the cap, fail the
+    download instead of truncating it.
+    """
+    events = await query_events_by_range(
+        client,
+        start_date,
+        end_date,
+        tenant_id,
+        tlc=tlc,
+        limit=EXPORT_EVENT_CAP + 1,
+        export_cap=True,
+    )
+    if len(events) > EXPORT_EVENT_CAP:
+        logger.warning("range_export_exceeded_hard_cap", cap=EXPORT_EVENT_CAP)
+        raise HTTPException(
+            status_code=413,
+            detail=(f"Export exceeds the {EXPORT_EVENT_CAP:,}-event hard cap; narrow your date range or lot code"),
+        )
+    return events
 
 
 # ============================================================================
@@ -131,15 +172,13 @@ async def export_fda_request_sheet(
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
-        from ...fsma_utils import query_events_by_range
-
         # #2833: `async with` closes the driver — and its connection
         # pool — on every exit path. The explicit close that used to
         # sit inside the try was skipped whenever the query or the
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id, tlc=tlc)
+            events = await _load_range_export_events(client, start_date, end_date, scoped_tenant_id, tlc=tlc)
 
         csv_buffer = io.StringIO()
         writer = csv.writer(csv_buffer)
@@ -193,6 +232,8 @@ async def export_fda_request_sheet(
             headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("fda_request_export_error", error=str(e))
         logger.exception("endpoint_error", error=str(e))
@@ -240,15 +281,13 @@ async def export_epcis(
     db_name = Neo4jClient.get_tenant_database_name(uuid.UUID(scoped_tenant_id))
 
     try:
-        from ...fsma_utils import query_events_by_range
-
         # #2833: `async with` closes the driver — and its connection
         # pool — on every exit path. The explicit close that used to
         # sit inside the try was skipped whenever the query or the
         # serialization below it raised, leaking a driver (and pool)
         # per failed request behind the generic 500 handler.
         async with Neo4jClient(database=db_name) as client:
-            events = await query_events_by_range(client, start_date, end_date, scoped_tenant_id)
+            events = await _load_range_export_events(client, start_date, end_date, scoped_tenant_id)
 
         # Map CTE types to EPCIS bizStep
         BIZ_STEP_MAP = {
@@ -379,6 +418,8 @@ async def export_epcis(
                 headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("epcis_export_error", error=str(e))
         logger.exception("endpoint_error", error=str(e))
