@@ -136,15 +136,22 @@ async function clearSessionCookies(): Promise<void> {
 
 const SESSION_CHECK_TIMEOUT_MS = 10_000;
 
-/** Check current session via /api/session GET — never returns raw tokens. */
-async function getSessionInfo(): Promise<{
-  authenticated: boolean;
+type SessionInfo = {
+  authenticated: boolean | null;
+  status?: 'authenticated' | 'unauthenticated' | 'unknown';
   has_api_key: boolean;
-  has_credentials: boolean;
+  has_credentials: boolean | null;
   tenant_id: string | null;
   user: User | null;
   auth_method?: SessionAuthMethod | null;
-} | null> {
+};
+
+function isSessionUnknown(session: SessionInfo): boolean {
+  return session.authenticated === null || session.status === 'unknown';
+}
+
+/** Check current session via /api/session GET — never returns raw tokens. */
+async function getSessionInfo(): Promise<SessionInfo | null> {
   if (typeof window === 'undefined') return null;
   try {
     // Bounded: the route calls the admin backend's /auth/me with no timeout,
@@ -156,8 +163,31 @@ async function getSessionInfo(): Promise<{
       credentials: 'include',
       signal: AbortSignal.timeout(SESSION_CHECK_TIMEOUT_MS),
     });
-    if (!res.ok) return null;
-    return await res.json();
+    if (!res.ok) {
+      // 503 + { authenticated: null, status: 'unknown' } means the BFF could
+      // not reach /auth/me. Surface it as an unknown session (not null) so
+      // hydrate can explicitly keep stored state instead of clearing.
+      if (res.status === 503) {
+        try {
+          const body = (await res.json()) as Partial<SessionInfo>;
+          if (body && (body.authenticated === null || body.status === 'unknown')) {
+            return {
+              authenticated: null,
+              status: 'unknown',
+              has_api_key: body.has_api_key === true,
+              has_credentials: null,
+              tenant_id: typeof body.tenant_id === 'string' ? body.tenant_id : null,
+              user: (body.user as User | null) ?? null,
+              auth_method: null,
+            };
+          }
+        } catch {
+          // Fall through to indeterminate null.
+        }
+      }
+      return null;
+    }
+    return (await res.json()) as SessionInfo;
   } catch {
     return null;
   }
@@ -243,6 +273,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [demoMode, setDemoModeState] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  // Last session check was indeterminate (the BFF could not reach /auth/me).
+  // While true with a stored profile, the user keeps their last-known
+  // authenticated state instead of being bounced to login.
+  const [sessionUnknown, setSessionUnknownState] = useState(false);
   const logoutInProgressRef = useRef(false);
   // Set once login() has established a cookie session. Guards the hydrate
   // effect's stale-state cleanup: if the /api/session GET was in flight while
@@ -297,37 +331,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Step 3: Check cookie-based session for credentials
       const session = await getSessionInfo();
       if (session) {
-        const sessionAuthMethod = normalizeAuthMethod(session.auth_method);
-        setAuthMethodState(sessionAuthMethod);
-        if (session.tenant_id && session.tenant_id !== storedTenantId) {
-          setTenantIdState(session.tenant_id);
-          localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
-        } else if (!session.tenant_id && session.auth_method && storedTenantId) {
-          setTenantIdState(null);
-          localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
-        }
-        if (session.authenticated) {
-          if (session.user) {
-            const normalizedSessionUser = normalizeUserProfile(session.user);
-            setUserState(normalizedSessionUser);
-            apiClient.setUser(normalizedSessionUser);
-            localStorage.setItem(STORAGE_KEYS.USER, serializeClientSessionUser(normalizedSessionUser));
+        if (isSessionUnknown(session)) {
+          // Indeterminate: the BFF could not reach /auth/me (timeout, network,
+          // 5xx). Keep the localStorage-hydrated profile/session; only a real
+          // unauthenticated (authenticated === false) result may clear it.
+          setSessionUnknownState(true);
+          if (session.has_api_key) {
+            setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
           }
-          setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
-          apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
-        } else if (!loginCompletedRef.current) {
-          // Definitive unauthenticated answer - the cookie session expired or
-          // was cleared server-side. Drop the localStorage-hydrated user (and
-          // ignore any session.user echoed back from a stale re_user cookie)
-          // so pages can't render an authenticated shell from stale state.
-          // Tenant API-key-only sessions never store a
-          // user profile, so this doesn't affect them.
-          setUserState(null);
-          apiClient.setUser(null);
-          localStorage.removeItem(STORAGE_KEYS.USER);
-        }
-        if (session.has_api_key) {
-          setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
+        } else {
+          setSessionUnknownState(false);
+          const sessionAuthMethod = normalizeAuthMethod(session.auth_method);
+          setAuthMethodState(sessionAuthMethod);
+          if (session.tenant_id && session.tenant_id !== storedTenantId) {
+            setTenantIdState(session.tenant_id);
+            localStorage.setItem(STORAGE_KEYS.TENANT_ID, session.tenant_id);
+          } else if (!session.tenant_id && session.auth_method && storedTenantId) {
+            setTenantIdState(null);
+            localStorage.removeItem(STORAGE_KEYS.TENANT_ID);
+          }
+          if (session.authenticated === true) {
+            if (session.user) {
+              const normalizedSessionUser = normalizeUserProfile(session.user);
+              setUserState(normalizedSessionUser);
+              apiClient.setUser(normalizedSessionUser);
+              localStorage.setItem(STORAGE_KEYS.USER, serializeClientSessionUser(normalizedSessionUser));
+            }
+            setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
+            apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
+          } else if (session.authenticated === false && !loginCompletedRef.current) {
+            // Definitive unauthenticated answer - the cookie session expired or
+            // was cleared server-side. Drop the localStorage-hydrated user (and
+            // ignore any session.user echoed back from a stale re_user cookie)
+            // so pages can't render an authenticated shell from stale state.
+            // Tenant API-key-only sessions never store a
+            // user profile, so this doesn't affect them.
+            setUserState(null);
+            apiClient.setUser(null);
+            localStorage.removeItem(STORAGE_KEYS.USER);
+          }
+          if (session.has_api_key) {
+            setApiKeyState(COOKIE_MANAGED_PLACEHOLDER);
+          }
         }
       } else {
         // The session check itself failed (network error or non-2xx -
@@ -338,6 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // NEXT_PUBLIC_API_KEY fallback was removed because baking secrets into
         // the JS bundle is unsafe. BFF routes forward caller-owned credentials;
         // they do not substitute an ambient tenant key.
+        setSessionUnknownState(true);
         setAuthMethodState(null);
       }
 
@@ -454,6 +500,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Cookie should be stored in the browser at this point.
     setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
     setAuthMethodState(null);
+    setSessionUnknownState(false);
     setUserState(normalizedLoginUser);
     if (loginTenantId) setTenantIdState(loginTenantId);
   }, []);
@@ -463,6 +510,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTenantIdState(null);
     setAccessTokenState(null);
     setAuthMethodState(null);
+    setSessionUnknownState(false);
     setUserState(null);
     setIsOnboarded(false);
     setDemoModeState(false);
@@ -483,7 +531,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logoutInProgressRef.current = false;
   }, [clearCredentials]);
 
-  const isAuthenticated = !!(user && accessToken);
+  // An unknown session is indeterminate, not logged-out: with a stored
+  // profile the user stays authenticated so dashboard layouts never bounce
+  // to login over a transient /auth/me failure.
+  const isAuthenticated = !!user && (!!accessToken || sessionUnknown);
   const normalizedRoleName = user?.role_name?.toLowerCase() ?? null;
   const hasTenantSession = isAuthenticated && !!tenantId;
   const hasAdminSession = Boolean(

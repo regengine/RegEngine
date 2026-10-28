@@ -127,4 +127,19 @@ describe('Dashboard QA agreement', () => {
     expect(within(attentionPanel()).getByText('Nothing needs attention')).toBeInTheDocument();
     expect(screen.getByText('Release gate passing')).toBeInTheDocument();
   });
+
+  it('an aborted QA fetch shows the timeout copy in both the card and the attention panel', () => {
+    vi.mocked(useQAHealth).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new DOMException('The operation was aborted.', 'AbortError'),
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useQAHealth>);
+
+    renderPage();
+
+    const panel = attentionPanel();
+    expect(within(panel).getByText('The QA signal did not respond.')).toBeInTheDocument();
+    expect(screen.getAllByText('The QA signal did not respond.').length).toBeGreaterThanOrEqual(2);
+  });
 });

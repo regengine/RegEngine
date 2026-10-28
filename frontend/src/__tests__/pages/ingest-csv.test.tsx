@@ -113,6 +113,7 @@ describe('CSV import results on /ingest', () => {
 
   it('keeps URL ingestion on the existing document job path', async () => {
     mocks.ingestURL.mockResolvedValue({ job_id: 'document-job-1' });
+    mocks.getIngestionJob.mockResolvedValue({ status: 'queued' });
     render(<IngestPage />);
     fireEvent.change(screen.getByPlaceholderText(/https:\/\//i), { target: { value: 'https://example.org/document.pdf' } });
     await userEvent.click(screen.getByRole('button', { name: /^ingest document$/i }));
