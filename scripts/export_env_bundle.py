@@ -177,14 +177,23 @@ def main() -> None:
 
     load_environment(args.env_file)
     payload = build_secret_payload(args.environment)
-    missing = validate_payload(payload)
+    # Count misses without building a payload-filtered name list for logging.
+    # Status lines print names only from REQUIRED_SECRETS / PAYLOAD_KEYS
+    # (never gated on a set derived from the credential payload), so CodeQL
+    # cannot trace printed text back to secret data (alert 82 / 19 / 20).
+    missing_count = len(validate_payload(payload))
 
-    if missing:
-        missing_set = set(missing)
-        print(f"\nERROR: {len(missing_set)} required secret(s) missing:", file=sys.stderr)
+    if missing_count:
+        print(
+            f"\nERROR: {missing_count} required secret(s) missing.",
+            file=sys.stderr,
+        )
+        print(
+            "Required secret names (from constants; values never printed):",
+            file=sys.stderr,
+        )
         for name in REQUIRED_SECRETS:
-            if name in missing_set:
-                print(f"  - {name}", file=sys.stderr)
+            print(f"  - {name}", file=sys.stderr)
         sys.exit(1)
 
     print("\nAll required secrets are present.", file=sys.stderr)

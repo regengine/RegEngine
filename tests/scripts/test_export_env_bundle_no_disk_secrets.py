@@ -131,7 +131,12 @@ def test_missing_required_secret_fails_without_emitting(tmp_path):
     )
     assert proc.returncode == 1
     assert proc.stdout.strip() == "", "emitted a bundle despite failing validation"
+    # Error path lists REQUIRED_SECRETS from the constant (unfiltered), not a
+    # payload-derived missing set, so CodeQL cannot taint the printed names.
     assert "POSTGRES_PASSWORD" in proc.stderr
+    assert "required secret(s) missing" in proc.stderr
+    for value in FAKE_ENV.values():
+        assert value not in proc.stderr, "a credential value was printed on the error path"
 
 
 @pytest.mark.parametrize("candidate", ["secrets.json", "prod.secrets.json"])
