@@ -37,7 +37,7 @@ below is tracked there yet.
 | 11 | Frontend API access split three ways; 8 hand-rolled proxy routes | Code | 3 | 2 | 3 | **15** |
 | 12 | Legacy `cte_events` dual-write still live, with 12 non-legacy readers | Architecture | 3 | 4 | 4 | **14** |
 | 13 | Blocked major upgrades and Node version drift across CI | Dependency | 2 | 2 | 3 | **12** |
-| 14 | 24 source modules over 1,000 lines | Code | 3 | 2 | 4 | **10** |
+| 14 | 25 source modules over 1,000 lines (20 under `services/` and `server/`) | Code | 3 | 2 | 4 | **10** |
 | 15 | `graph_update` task type declared, never enqueued, never handled | Code | 1 | 1 | 1 | **10** |
 | 16 | Frontend type looseness: 192 `any`, 14 eslint suppressions | Code | 1 | 1 | 2 | **8** |
 
@@ -119,9 +119,11 @@ scale (critical, confidence 0.73). I agree with both.
   `services/ingestion/regengine_ingestion/utils/fetch_utils.py`); one is
   `services/admin/app/logging_config.py`.
 - `Dockerfile` sets `PYTHONPATH=/app:/app/services:/app/services/ingestion:/app/services/admin:...`.
-  In the container `app` always resolves to `services/ingestion/app`, so
-  `services/admin/app/logging_config.py` would import ingestion's modules if its
-  bare import path is ever exercised.
+  In the container `app` always resolves to `services/ingestion/app`, so a
+  bare import from another service either raises `ImportError` (no module
+  of that name under ingestion) or, when the name collides, loads
+  ingestion's module. The admin case is a compatibility shim reached only
+  from the legacy `services/admin/main.py`.
 - `pyproject.toml` comments explain the hazard rather than remove it
   ("Listing multiple `services/<svc>` here would cause `app` to permanently
   resolve against whichever service sorted first").
@@ -166,8 +168,8 @@ test-side cost is paid on every PR.
 
 **Why it matters**
 
-Three of the last five merged commits are security fixes found by external
-code scanning (ReDoS, header sanitisation, shell exec, URL host checks).
+Two of the five commits before this audit are security fixes found by
+external code scanning (ReDoS, header sanitisation, shell exec, URL host checks).
 `ruff`'s `B`, `S` and `PL` families catch several of those classes before
 review. With one engineer, static gates are the cheapest reviewer available.
 
@@ -190,8 +192,8 @@ review. With one engineer, static gates are the cheapest reviewer available.
   `pr-gate.yml` 1,123, `security.yml` 875.
 - `pr-gate-frontend-rerun.yml` exists to re-run the frontend gate after a
   flaky failure. 29 lines across the three main workflows mention flake,
-  retry or re-run. The e2e script in `frontend/package.json` hard-codes
-  `--retries=2`.
+  retry or re-run. The `test:e2e:authenticated-core` script in `frontend/package.json`
+  hard-codes `--retries=2`.
 - `infra-k8s-ci.yml` runs on PRs for manifests `docs/CODEBASE_MAP.md`
   calls retired.
 - `docs/CODEBASE_MAP.md` §2 says 23 workflows.
@@ -275,10 +277,11 @@ imports.
 - `docs/CODEBASE_MAP.md` claims every line was checked against the tree,
   and says: 23 workflows (there are 33), 81 `include_router` calls in
   `server/main.py` (there are 2; registration moved to
-  `server/router_policy.py`), and 7 experimental routers (the frozenset
-  has 15).
+  `server/router_policy.py`), and 14 experimental routers (the frozenset
+  has 15; `agent_org` is missing from the doc).
 - `ARCHITECTURE.md` large-module table is dated 2026-07-31 and lists 13
-  files; there are now 24 non-test modules over 1,000 lines.
+  files; there are now 25 non-test modules over 1,000 lines, 20 of them under
+  `services/` and `server/`.
 - `docs/MIGRATION_CONSOLIDATION.md`: see item 1.
 - 369 Markdown files under `docs/`; 34 carry an obsolete, superseded or
   historical banner; 53 sit in `docs/archive/` plus 2 in `docs/_archive/`.
@@ -444,7 +447,7 @@ image bump in Q1 2027.
 
 ### 14. Modules over 1,000 lines — Priority 10
 
-24 non-test modules, up from 13 in the July table in `ARCHITECTURE.md`.
+25 non-test modules (20 under `services/` and `server/`), up from 13 in the July table in `ARCHITECTURE.md`.
 Top: `services/scheduler/service.py` 1,544, `services/shared/api_key_store.py`
 1,488, `services/shared/canonical_event.py` 1,466, `services/ingestion/app/edi_ingestion/routes.py`
 1,464, `services/shared/canonical_persistence/writer.py` 1,340,
@@ -468,7 +471,7 @@ moves to the queue. One hour.
 
 ### 16. Frontend type looseness — Priority 8
 
-192 `any` usages, almost all in `frontend/src/__tests__/` (top file
+192 `any` usages, all in test files (top file
 `frontend/src/__tests__/pages/dashboard.test.tsx` with 18). 8 `react-hooks/set-state-in-effect` and 4
 `exhaustive-deps` suppressions in product code. `tsconfig.json` has
 `strict: true`. Leave the tests; fix the 12 hook suppressions when the
