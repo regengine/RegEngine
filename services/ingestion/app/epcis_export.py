@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
 from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
+from shared.epcis_lot_identity import derive_lot_token, parse_class_uri
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
@@ -332,15 +333,18 @@ def _valid_class_uri(value: object) -> bool:
 def _epc_class(row: dict) -> str | None:
     """Use an existing class URI, product_id, or a GTIN Digital Link.
 
-    GTIN/GLN digits do not reveal the company-prefix split required by EPC
-    URNs. A lot code alone cannot identify an EPC class — callers must
-    persist ``epc_class``, ``product_id`` (class URI), ``gtin``, or an
-    embedded ``epcis_document_json`` quantity class.
+    Prefer a stored full LGTIN / Digital Link unchanged (SEL-598). Never pass
+    a full URI as the ``{lot}`` argument when rebuilding a Digital Link —
+    derive the bare lot token first. GTIN/GLN digits do not reveal the
+    company-prefix split required by EPC URNs.
     """
-    for key in ("epc_class", "product_id"):
+    for key in ("epc_class", "product_id", "canonical_epc_class", "traceability_lot_code"):
         value = _kde_scalar(row.get(key))
         if _valid_class_uri(value):
             return value
+        parsed = parse_class_uri(value)
+        if parsed:
+            return parsed.canonical_id
     raw = row.get("epcis_document_json")
     if raw:
         try:
@@ -351,11 +355,18 @@ def _epc_class(row: dict) -> str | None:
                         candidate = item.get("epcClass") if isinstance(item, dict) else None
                         if _valid_class_uri(candidate):
                             return candidate
+                        parsed = parse_class_uri(candidate)
+                        if parsed:
+                            return parsed.canonical_id
         except (TypeError, ValueError):
             pass
     gtin_raw = _kde_scalar(row.get("gtin")) or _kde_scalar(row.get("product_id"))
-    lot = _kde_scalar(row.get("traceability_lot_code"))
-    digits = re.sub(r"\D", "", gtin_raw)
+    lot_raw = _kde_scalar(row.get("traceability_lot_code"))
+    lot = derive_lot_token(lot_raw) if lot_raw else None
+    if lot and parse_class_uri(lot):
+        # derive_lot_token returned something still URI-shaped; emit unchanged.
+        return parse_class_uri(lot).canonical_id  # type: ignore[union-attr]
+    digits = re.sub(r"\D", "", gtin_raw or "")
     if digits and lot:
         try:
             gtin14 = normalize_gtin(digits)

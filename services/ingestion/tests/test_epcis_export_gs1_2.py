@@ -231,3 +231,19 @@ def test_harvesting_maps_to_collecting_bizstep():
         )
     document = json.loads(response.body)
     assert document["epcisBody"]["eventList"][0]["bizStep"] == "collecting"
+
+
+def test_export_epc_class_equals_stored_canonical_full_id():
+    """SEL-598: when TLC is already a class URI, emit it unchanged."""
+    full = "https://id.gs1.org/01/00012345678905/10/LotRebuild"
+    assert exporter._epc_class({"traceability_lot_code": full}) == full
+    # Bare lot + valid GTIN rebuilds using the derived token only.
+    assert (
+        exporter._epc_class({"traceability_lot_code": "LotRebuild", "gtin": "00012345678905"})
+        == full
+    )
+    # A full URI must never be nested as the /10/ segment.
+    nested = exporter._epc_class({"traceability_lot_code": full, "gtin": "00012345678905"})
+    assert nested == full
+    assert "/10/https" not in nested
+

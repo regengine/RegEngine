@@ -33,6 +33,13 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from shared.epcis_lot_identity import (
+    derive_lot_token,
+    lossless_enabled,
+    normalize_from_epcis_event,
+    parse_class_uri,
+)
+
 logger = logging.getLogger("canonical-event")
 
 # ---------------------------------------------------------------------------
@@ -1100,52 +1107,13 @@ def _epcis_list(epcis_data: Dict[str, Any], key: str) -> List[Any]:
 def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     """Resolve ``(traceability_lot_code, gtin)`` for an EPCIS event.
 
-    Precedence: ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` (the
-    same order as ``epcis/extraction._extract_lot_data``), then the lot of an
-    LGTIN among the event's own EPCs or class-level quantities (output side for
-    a transformation), then an SGTIN serial, then the flattened top-level keys.
-    Raises ``ValueError`` when nothing identifies the lot: the previous
-    ``"UNKNOWN"`` placeholder fabricated a lot code.
+    When ``LOT_IDENTITY_LOSSLESS`` is on (default), the first element is the
+    full LGTIN / Digital Link when present (SEL-598). The bare lot token is
+    available via ``shared.epcis_lot_identity.derive_lot_token``. Set the flag
+    to ``0`` to restore segment-only writes.
     """
-    ilmd = epcis_data.get("ilmd")
-    if not isinstance(ilmd, dict):
-        ilmd = {}
-    epcs = _epcis_list(epcis_data, "epcList") + _epcis_list(epcis_data, "outputEPCList")
-    extension = epcis_data.get("extension")
-    extension = extension if isinstance(extension, dict) else {}
-    classes = [
-        q.get("epcClass")
-        for q in (
-            _epcis_list(epcis_data, "outputQuantityList")
-            + _epcis_list(epcis_data, "quantityList")
-            + (list(extension.get("quantityList") or []) if isinstance(extension.get("quantityList"), list) else [])
-        )
-        if isinstance(q, dict) and q.get("epcClass")
-    ]
-    gtin = next((g for g in (_epc_gtin(e) for e in epcs + classes) if g), None)
-
-    for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
-        value = ilmd.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip(), gtin
-    for epc in epcs + classes:
-        if "lgtin" in str(epc).lower():
-            segment = _epc_last_segment(epc)
-            if segment:
-                return segment, gtin
-    for epc in epcs:
-        if "sgtin" in str(epc).lower():
-            segment = _epc_last_segment(epc)
-            if segment:
-                return segment, gtin
-    for key in ("traceability_lot_code", "lotNumber"):
-        value = epcis_data.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip(), gtin
-    raise ValueError(
-        "EPCIS event carries no lot identifier (ILMD traceabilityLotCode or lotNumber, an LGTIN or SGTIN "
-        "EPC, or traceability_lot_code); refusing to fabricate one"
-    )
+    identity = normalize_from_epcis_event(epcis_data)
+    return identity.canonical_id, identity.gtin
 
 
 def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -1155,34 +1123,56 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
     quantity; a quantityElement without ``uom`` is a count of instances in
     EPCIS, recorded as ``each``. ``inputEPCList`` carries instance EPCs, each
     of which is exactly one item. Lots are not merged or summed.
+
+    When lossless lot identity is on, ``traceability_lot_code`` keeps the full
+    class URI / Digital Link (SEL-598); ``lot_token`` is the derived segment.
     """
     inputs: List[Dict[str, Any]] = []
     seen: set = set()
     for element in _epcis_list(epcis_data, "inputQuantityList"):
         if not isinstance(element, dict):
             continue
-        lot = _epc_last_segment(element.get("epcClass"))
-        if not lot or lot in seen:
+        epc_class = element.get("epcClass")
+        parsed = parse_class_uri(epc_class)
+        if parsed:
+            lot_key = parsed.canonical_id if lossless_enabled() else parsed.lot_token
+            token = parsed.lot_token
+            canonical = parsed.canonical_id
+        else:
+            token = _epc_last_segment(epc_class) or derive_lot_token(epc_class)
+            if not token:
+                continue
+            lot_key = token
+            canonical = None
+        if lot_key in seen:
             continue
         raw_quantity = element.get("quantity")
         try:
             quantity = float(raw_quantity) if raw_quantity is not None else None
         except (TypeError, ValueError):
             quantity = None
-        inputs.append(
-            {
-                "traceability_lot_code": lot,
-                "quantity": quantity,
-                "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
-                "epc_class": element.get("epcClass"),
-            }
-        )
-        seen.add(lot)
+        entry: Dict[str, Any] = {
+            "traceability_lot_code": lot_key,
+            "lot_token": token,
+            "quantity": quantity,
+            "unit_of_measure": (element.get("uom") or "each") if quantity is not None else None,
+            "epc_class": epc_class if isinstance(epc_class, str) else canonical,
+        }
+        inputs.append(entry)
+        seen.add(lot_key)
     for epc in _epcis_list(epcis_data, "inputEPCList"):
         segment = _epc_last_segment(epc)
         if not segment or segment in seen:
             continue
-        inputs.append({"traceability_lot_code": segment, "quantity": 1.0, "unit_of_measure": "each", "epc": str(epc)})
+        inputs.append(
+            {
+                "traceability_lot_code": segment,
+                "lot_token": segment,
+                "quantity": 1.0,
+                "unit_of_measure": "each",
+                "epc": str(epc),
+            }
+        )
         seen.add(segment)
     return inputs
 

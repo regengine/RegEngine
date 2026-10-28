@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from urllib.parse import unquote
 
+from shared.epcis_lot_identity import parse_class_uri
+
 # EPCIS 1.x class-level lot id. The lot is everything after the second dot;
 # GS1 percent-encodes reserved characters inside it.
 _LGTIN_RE = re.compile(r"^urn:epc:class:lgtin:\d+\.\d+\.(.+)$", re.IGNORECASE)
@@ -68,18 +70,20 @@ def _lot_from_identifier(value: object) -> tuple[str, str] | None:
     full Digital Link URI). ``lot_code`` is only the lot component.
     Serialized SGTINs and EPC patterns are not lot-level ids: a serial
     does not identify the lot FSMA 204 traces.
+
+    Parsing delegates to ``shared.epcis_lot_identity`` so legacy and
+    canonical paths share one SEL-598 normalizer.
     """
     if not isinstance(value, str):
         return None
     text = value.strip()
     if not text:
         return None
-    lgtin = _LGTIN_RE.match(text)
-    if lgtin:
-        lot = unquote(lgtin.group(1))
-        if lot:
-            return lot, text
-        return None
+    parsed = parse_class_uri(text)
+    if parsed:
+        return parsed.lot_token, parsed.canonical_id
+    # Keep the more permissive Digital Link path for non-id.gs1.org hosts
+    # that the shared parser does not accept.
     return _lot_from_digital_link(text)
 
 
