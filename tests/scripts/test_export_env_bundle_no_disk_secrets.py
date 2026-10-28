@@ -131,12 +131,10 @@ def test_missing_required_secret_fails_without_emitting(tmp_path):
     )
     assert proc.returncode == 1
     assert proc.stdout.strip() == "", "emitted a bundle despite failing validation"
-    # Error path embeds required names as literals (not from payload /
-    # REQUIRED_SECRETS iteration), so CodeQL cannot taint the printed text.
+    # Error path prints only the absent name(s) as literals (not from
+    # payload / REQUIRED_SECRETS iteration), so CodeQL cannot taint them.
     assert "POSTGRES_PASSWORD" in proc.stderr
-    assert "NEO4J_PASSWORD" in proc.stderr
-    assert "OBJECT_STORAGE_ACCESS_KEY_ID" in proc.stderr
-    assert "OBJECT_STORAGE_SECRET_ACCESS_KEY" in proc.stderr
+    assert "NEO4J_PASSWORD" not in proc.stderr  # still present in FAKE_ENV
     assert "required secret(s) missing" in proc.stderr
     for value in FAKE_ENV.values():
         assert value not in proc.stderr, "a credential value was printed on the error path"

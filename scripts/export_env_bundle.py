@@ -177,24 +177,27 @@ def main() -> None:
 
     load_environment(args.env_file)
     payload = build_secret_payload(args.environment)
-    # Count misses without building a name list for logging. Status lines
-    # embed env-var *names* as string literals in the message (same pattern
-    # as auth_crypto / fingerprint_repair) so CodeQL cannot trace printed
-    # text from REQUIRED_SECRETS, PAYLOAD_KEYS, or the credential payload
-    # (alerts 19 / 20 / 82, py/clear-text-logging-sensitive-data).
-    missing_count = len(validate_payload(payload))
+    # Count misses without building a name list for logging. Print only the
+    # names that are absent, each as a string literal (auth_crypto pattern),
+    # so CodeQL cannot trace printed text from REQUIRED_SECRETS, PAYLOAD_KEYS,
+    # or the credential payload (alerts 19 / 20 / 82).
+    missing_count = sum(1 for name in REQUIRED_SECRETS if not payload.get(name))
 
     if missing_count:
-        # Names are literals in this message; do not interpolate REQUIRED_SECRETS.
         print(
-            f"\nERROR: {missing_count} required secret(s) missing.\n"
-            "Required secret names (values never printed):\n"
-            "  - POSTGRES_PASSWORD\n"
-            "  - NEO4J_PASSWORD\n"
-            "  - OBJECT_STORAGE_ACCESS_KEY_ID\n"
-            "  - OBJECT_STORAGE_SECRET_ACCESS_KEY",
+            f"\nERROR: {missing_count} required secret(s) missing.",
             file=sys.stderr,
         )
+        # Literal names only; never print payload values or iterate
+        # REQUIRED_SECRETS into the logging sink.
+        if not payload.get("POSTGRES_PASSWORD"):
+            print("  - POSTGRES_PASSWORD", file=sys.stderr)
+        if not payload.get("NEO4J_PASSWORD"):
+            print("  - NEO4J_PASSWORD", file=sys.stderr)
+        if not payload.get("OBJECT_STORAGE_ACCESS_KEY_ID"):
+            print("  - OBJECT_STORAGE_ACCESS_KEY_ID", file=sys.stderr)
+        if not payload.get("OBJECT_STORAGE_SECRET_ACCESS_KEY"):
+            print("  - OBJECT_STORAGE_SECRET_ACCESS_KEY", file=sys.stderr)
         sys.exit(1)
 
     # Names are literals in this message; do not interpolate PAYLOAD_KEYS.
