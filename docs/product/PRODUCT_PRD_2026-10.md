@@ -159,13 +159,13 @@ Christopher accepted all six recommended defaults on 2026-10-27, so each row bel
 | Q5 | Who owns compliance signoff for the 7 CTE/KDE maps? | Founder signs now against the rule text using `docs/specs/FSMA_204_MVP_SPEC.md` CTE and KDE sections; the first design partner's QA lead co-signs during the pilot. No consultant spend before revenue. Location of the seven map files: not verified in this pass | partner_qa 0.42, founder 0.20 |
 | Q6 | Which public claims stay hidden until verified? | Everything the registry does not mark live: EPCIS stays "preview", EDI and SFTP hidden, recall drill hidden (endpoint returns no data), alerts and heartbeat hidden, supplier correction links hidden until R4 resolves, "pre-revenue" out of the hero and metadata (plan note D1). Remove `edi` from the production allowlist in a follow-up PR | remove EDI router: yes, p 0.85 |
 
-Follow-on actions these decisions create (not yet filed as Linear stories):
+Follow-on actions these decisions create, filed as Linear stories on 2026-10-27:
 
 - Q1: initiative I-1 target date set to 2027-01-31; first guided session due 2026-11-30.
-- Q2: add the read-freeze on `fsma.cte_events` and `fsma.critical_tracking_events` to `docs/engineering/SCHEMA_CHANGE_POLICY.md` (E3).
-- Q4: flip `RULES_ENGINE_ENFORCE` to `cte_only` before the pilot's first export, after runbook gate 1.2 passes (E1, F4).
-- Q5: locate the seven CTE/KDE map files and record the founder signoff against them (E3).
-- Q6: PR removing `edi` from `PRODUCTION_ENABLED_ROUTERS` with the manifest and tests updated (E1, F1). Q3 needs no code change.
+- Q2: SEL-589, add the read-freeze on `fsma.cte_events` and `fsma.critical_tracking_events` to `docs/engineering/SCHEMA_CHANGE_POLICY.md` (E3, no feature parent).
+- Q4: SEL-590, flip `RULES_ENGINE_ENFORCE` to `cte_only` before the pilot's first export, after runbook gate 1.2 passes (E1, under F4).
+- Q5: SEL-591, locate the seven CTE/KDE map files and record the founder signoff against them (E3, no feature parent).
+- Q6: SEL-592, PR removing `edi` from `PRODUCTION_ENABLED_ROUTERS` with the manifest, tests and the Railway `ENABLED_ROUTERS` variable changed in the same release (E1, under F1). Q3 needs no code change.
 
 ## Appendix A. Proposed Linear structure
 
