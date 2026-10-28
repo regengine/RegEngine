@@ -77,7 +77,7 @@ $$;
 
 DROP TRIGGER IF EXISTS partner_files_set_delete_after ON public.partner_files;
 CREATE TRIGGER partner_files_set_delete_after
-    BEFORE INSERT OR UPDATE OF report_delivered_at
+    BEFORE INSERT OR UPDATE
     ON public.partner_files
     FOR EACH ROW
     EXECUTE FUNCTION public.partner_files_set_delete_after();

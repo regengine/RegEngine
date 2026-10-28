@@ -1,18 +1,20 @@
-"""Partner file storage metadata + 30-day retention (v138).
+"""Partner file storage metadata + 30-day retention (v138 / SEL-549 first-file).
 
 Mirrors supabase/migrations/20261028100000_partner_files_storage_retention.sql
-exactly for partner_files / partner_file_derived / partner_file_deletion_log
-(tables, indexes, CASE RLS, grants). Bucket creation lives only in
-supabase/migrations/20261028100010_partner_uploads_bucket.sql (storage schema
-is Supabase-only).
+(metadata + RLS + delete_after trigger) and the manifest_blobs payload-pointer
+changes from that same design. Bucket DDL stays in the Supabase-only sibling
+20261028100010_partner_uploads_bucket.sql (storage.buckets is not on Railway).
 
-Also prepares Railway fsma.manifest_blobs for hash/pointer cutover: raw_bytes
-becomes nullable with a check that at least one of raw_bytes or storage_url is
-present (storage_url already exists from v095). Does not move bytes; does not
-apply envelope encryption.
+Statements are an explicit tuple (same shape as v137) — no runtime semicolon
+splitter. Comments may contain `;`; dollar-quoted function / DO bodies stay
+inside a single statement string.
 
-Additive and idempotent. Downgrade drops only what this revision created and
-restores raw_bytes NOT NULL when safe.
+delete_after is maintained by a BEFORE INSERT OR UPDATE trigger that always
+recomputes from report_delivered_at (+ 30 days, or NULL), so a direct UPDATE of
+delete_after cannot desync the retention clock.
+
+Additive and idempotent. Do not apply to prod without C.Lee yes.
+Synthetic fixtures only until SEL-590 clears.
 
 Revision ID: b8c1e4f2a901
 Revises: a3f7ce361b0e
@@ -22,15 +24,14 @@ Create Date: 2026-10-28
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
 
 revision: str = "b8c1e4f2a901"  # pragma: allowlist secret
 down_revision: Union[str, Sequence[str], None] = "a3f7ce361b0e"  # pragma: allowlist secret
 branch_labels = None
 depends_on = None
 
-# Mirrored from the supabase SQL migration (minus the hand-only downgrade notes).
-_PARTNER_FILES_SQL = """
+_UPGRADE_STATEMENTS: tuple[str, ...] = (
+    """
 -- Partner file storage metadata + 30-day retention clock (SEL-549 / first-file).
 --
 -- Metadata only. Partner file bytes live in the private Supabase Storage bucket
@@ -84,15 +85,18 @@ CREATE TABLE IF NOT EXISTS public.partner_files (
         check (storage_bucket = 'partner-uploads'),
     constraint partner_files_storage_path_unique
         unique (storage_bucket, storage_path)
-);
-
+)
+""",
+    """
 CREATE INDEX IF NOT EXISTS partner_files_due_delete_idx
     ON public.partner_files (delete_after)
-    WHERE deleted_at IS NULL AND report_delivered_at IS NOT NULL;
-
+    WHERE deleted_at IS NULL AND report_delivered_at IS NOT NULL
+""",
+    """
 CREATE INDEX IF NOT EXISTS partner_files_tenant_uploaded_idx
-    ON public.partner_files (tenant_id, uploaded_at desc);
-
+    ON public.partner_files (tenant_id, uploaded_at desc)
+""",
+    """
 -- delete_after = report_delivered_at + 30 days (trigger; generated col not allowed)
 CREATE OR REPLACE FUNCTION public.partner_files_set_delete_after()
 RETURNS trigger
@@ -106,15 +110,19 @@ BEGIN
     END IF;
     RETURN NEW;
 END;
-$$;
-
-DROP TRIGGER IF EXISTS partner_files_set_delete_after ON public.partner_files;
+$$
+""",
+    """
+DROP TRIGGER IF EXISTS partner_files_set_delete_after ON public.partner_files
+""",
+    """
 CREATE TRIGGER partner_files_set_delete_after
-    BEFORE INSERT OR UPDATE OF report_delivered_at
+    BEFORE INSERT OR UPDATE
     ON public.partner_files
     FOR EACH ROW
-    EXECUTE FUNCTION public.partner_files_set_delete_after();
-
+    EXECUTE FUNCTION public.partner_files_set_delete_after()
+""",
+    """
 CREATE TABLE IF NOT EXISTS public.partner_file_derived (
     id              uuid primary key default gen_random_uuid(),
     partner_file_id uuid not null references public.partner_files(id) on delete cascade,
@@ -127,12 +135,14 @@ CREATE TABLE IF NOT EXISTS public.partner_file_derived (
     deleted_at      timestamptz,
     constraint partner_file_derived_kind_check
         check (char_length(kind) between 1 and 64)
-);
-
+)
+""",
+    """
 CREATE INDEX IF NOT EXISTS partner_file_derived_file_idx
     ON public.partner_file_derived (partner_file_id)
-    WHERE deleted_at IS NULL;
-
+    WHERE deleted_at IS NULL
+""",
+    """
 CREATE TABLE IF NOT EXISTS public.partner_file_deletion_log (
     id                  uuid primary key default gen_random_uuid(),
     partner_file_id     uuid not null,
@@ -165,22 +175,37 @@ CREATE TABLE IF NOT EXISTS public.partner_file_deletion_log (
         ),
     constraint partner_file_deletion_log_reason_check
         check (reason in ('retention_30d', 'partner_request_15d', 'terms_end'))
-);
-
+)
+""",
+    """
 CREATE INDEX IF NOT EXISTS partner_file_deletion_log_tenant_deleted_idx
-    ON public.partner_file_deletion_log (tenant_id, deleted_at desc);
-
-ALTER TABLE public.partner_files ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.partner_files FORCE ROW LEVEL SECURITY;
-ALTER TABLE public.partner_file_derived ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.partner_file_derived FORCE ROW LEVEL SECURITY;
-ALTER TABLE public.partner_file_deletion_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.partner_file_deletion_log FORCE ROW LEVEL SECURITY;
-
+    ON public.partner_file_deletion_log (tenant_id, deleted_at desc)
+""",
+    """
+ALTER TABLE public.partner_files ENABLE ROW LEVEL SECURITY
+""",
+    """
+ALTER TABLE public.partner_files FORCE ROW LEVEL SECURITY
+""",
+    """
+ALTER TABLE public.partner_file_derived ENABLE ROW LEVEL SECURITY
+""",
+    """
+ALTER TABLE public.partner_file_derived FORCE ROW LEVEL SECURITY
+""",
+    """
+ALTER TABLE public.partner_file_deletion_log ENABLE ROW LEVEL SECURITY
+""",
+    """
+ALTER TABLE public.partner_file_deletion_log FORCE ROW LEVEL SECURITY
+""",
+    """
 -- CASE form, not OR: public.get_tenant_context() raises when app.tenant_id is
 -- unset and Postgres does not order OR operands, so the sysadmin arm is tested
 -- first (same predicate shape as alembic v096 / v134 / v135 / v137).
-DROP POLICY IF EXISTS tenant_isolation_partner_files ON public.partner_files;
+DROP POLICY IF EXISTS tenant_isolation_partner_files ON public.partner_files
+""",
+    """
 CREATE POLICY tenant_isolation_partner_files ON public.partner_files
     FOR ALL
     USING (
@@ -196,9 +221,12 @@ CREATE POLICY tenant_isolation_partner_files ON public.partner_files
                  AND current_user = 'regengine_sysadmin' THEN true
             ELSE tenant_id = (select public.get_tenant_context())
         END
-    );
-
-DROP POLICY IF EXISTS tenant_isolation_partner_file_derived ON public.partner_file_derived;
+    )
+""",
+    """
+DROP POLICY IF EXISTS tenant_isolation_partner_file_derived ON public.partner_file_derived
+""",
+    """
 CREATE POLICY tenant_isolation_partner_file_derived ON public.partner_file_derived
     FOR ALL
     USING (
@@ -214,9 +242,12 @@ CREATE POLICY tenant_isolation_partner_file_derived ON public.partner_file_deriv
                  AND current_user = 'regengine_sysadmin' THEN true
             ELSE tenant_id = (select public.get_tenant_context())
         END
-    );
-
-DROP POLICY IF EXISTS tenant_isolation_partner_file_deletion_log ON public.partner_file_deletion_log;
+    )
+""",
+    """
+DROP POLICY IF EXISTS tenant_isolation_partner_file_deletion_log ON public.partner_file_deletion_log
+""",
+    """
 CREATE POLICY tenant_isolation_partner_file_deletion_log ON public.partner_file_deletion_log
     FOR SELECT
     USING (
@@ -225,11 +256,14 @@ CREATE POLICY tenant_isolation_partner_file_deletion_log ON public.partner_file_
                  AND current_user = 'regengine_sysadmin' THEN true
             ELSE tenant_id = (select public.get_tenant_context())
         END
-    );
-
+    )
+""",
+    """
 -- Inserts into the deletion log go through the retention worker (regengine /
 -- SECURITY DEFINER RPC). No authenticated UPDATE/DELETE on the log.
-DROP POLICY IF EXISTS partner_file_deletion_log_insert_worker ON public.partner_file_deletion_log;
+DROP POLICY IF EXISTS partner_file_deletion_log_insert_worker ON public.partner_file_deletion_log
+""",
+    """
 CREATE POLICY partner_file_deletion_log_insert_worker ON public.partner_file_deletion_log
     FOR INSERT
     WITH CHECK (
@@ -238,8 +272,9 @@ CREATE POLICY partner_file_deletion_log_insert_worker ON public.partner_file_del
                  AND current_user = 'regengine_sysadmin' THEN true
             ELSE tenant_id = (select public.get_tenant_context())
         END
-    );
-
+    )
+""",
+    """
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
@@ -270,11 +305,9 @@ BEGIN
         -- Prefer SECURITY DEFINER RPCs; keep service_role from mutating the log.
         REVOKE UPDATE, DELETE ON public.partner_file_deletion_log FROM service_role;
     END IF;
-END $$;
-
-"""
-
-_MANIFEST_BLOBS_SQL = """
+END $$
+""",
+    """
 -- Railway cutover helper: allow hash/pointer-only manifest_blobs rows.
 DO $$
 BEGIN
@@ -286,57 +319,31 @@ BEGIN
     ) THEN
         ALTER TABLE fsma.manifest_blobs ALTER COLUMN raw_bytes DROP NOT NULL;
     END IF;
-END $$;
-
-ALTER TABLE fsma.manifest_blobs DROP CONSTRAINT IF EXISTS manifest_blobs_payload_present_check;
+END $$
+""",
+    """
+ALTER TABLE fsma.manifest_blobs DROP CONSTRAINT IF EXISTS manifest_blobs_payload_present_check
+""",
+    """
 ALTER TABLE fsma.manifest_blobs
     ADD CONSTRAINT manifest_blobs_payload_present_check
     CHECK (
         raw_bytes IS NOT NULL
         OR (storage_url IS NOT NULL AND length(btrim(storage_url)) > 0)
-    );
-"""
+    )
+""",
+)
 
 
 def upgrade() -> None:
-    # Split on semicolons outside dollar-quoted blocks so DO $$ ... $$; stays intact.
-    def _statements(sql: str) -> list[str]:
-        out: list[str] = []
-        buf: list[str] = []
-        in_dollar = False
-        i = 0
-        while i < len(sql):
-            if sql.startswith("$$", i):
-                in_dollar = not in_dollar
-                buf.append("$$")
-                i += 2
-                continue
-            ch = sql[i]
-            if ch == ";" and not in_dollar:
-                stmt = "".join(buf).strip()
-                if stmt and not all(
-                    line.strip().startswith("--") or not line.strip()
-                    for line in stmt.splitlines()
-                ):
-                    out.append(stmt)
-                buf = []
-                i += 1
-                continue
-            buf.append(ch)
-            i += 1
-        tail = "".join(buf).strip()
-        if tail:
-            out.append(tail)
-        return out
-
-    for statement in _statements(_PARTNER_FILES_SQL) + _statements(_MANIFEST_BLOBS_SQL):
-        op.execute(sa.text(statement))
+    for statement in _UPGRADE_STATEMENTS:
+        op.execute(statement)
 
 
 def downgrade() -> None:
+
     op.execute(
-        sa.text(
-            """
+        """
 DO $$
 BEGIN
     IF EXISTS (
@@ -352,18 +359,17 @@ BEGIN
     END IF;
 END $$;
 """
-        )
     )
-    op.execute(sa.text("DROP POLICY IF EXISTS partner_file_deletion_log_insert_worker ON public.partner_file_deletion_log"))
-    op.execute(sa.text("DROP POLICY IF EXISTS tenant_isolation_partner_file_deletion_log ON public.partner_file_deletion_log"))
-    op.execute(sa.text("DROP POLICY IF EXISTS tenant_isolation_partner_file_derived ON public.partner_file_derived"))
-    op.execute(sa.text("DROP POLICY IF EXISTS tenant_isolation_partner_files ON public.partner_files"))
-    op.execute(sa.text("DROP TRIGGER IF EXISTS partner_files_set_delete_after ON public.partner_files"))
-    op.execute(sa.text("DROP FUNCTION IF EXISTS public.partner_files_set_delete_after()"))
-    op.execute(sa.text("DROP INDEX IF EXISTS public.partner_file_deletion_log_tenant_deleted_idx"))
-    op.execute(sa.text("DROP INDEX IF EXISTS public.partner_file_derived_file_idx"))
-    op.execute(sa.text("DROP INDEX IF EXISTS public.partner_files_tenant_uploaded_idx"))
-    op.execute(sa.text("DROP INDEX IF EXISTS public.partner_files_due_delete_idx"))
-    op.execute(sa.text("DROP TABLE IF EXISTS public.partner_file_deletion_log"))
-    op.execute(sa.text("DROP TABLE IF EXISTS public.partner_file_derived"))
-    op.execute(sa.text("DROP TABLE IF EXISTS public.partner_files"))
+    op.execute("DROP POLICY IF EXISTS partner_file_deletion_log_insert_worker ON public.partner_file_deletion_log")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_partner_file_deletion_log ON public.partner_file_deletion_log")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_partner_file_derived ON public.partner_file_derived")
+    op.execute("DROP POLICY IF EXISTS tenant_isolation_partner_files ON public.partner_files")
+    op.execute("DROP TRIGGER IF EXISTS partner_files_set_delete_after ON public.partner_files")
+    op.execute("DROP FUNCTION IF EXISTS public.partner_files_set_delete_after()")
+    op.execute("DROP INDEX IF EXISTS public.partner_file_deletion_log_tenant_deleted_idx")
+    op.execute("DROP INDEX IF EXISTS public.partner_file_derived_file_idx")
+    op.execute("DROP INDEX IF EXISTS public.partner_files_tenant_uploaded_idx")
+    op.execute("DROP INDEX IF EXISTS public.partner_files_due_delete_idx")
+    op.execute("DROP TABLE IF EXISTS public.partner_file_deletion_log")
+    op.execute("DROP TABLE IF EXISTS public.partner_file_derived")
+    op.execute("DROP TABLE IF EXISTS public.partner_files")
