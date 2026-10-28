@@ -3,10 +3,13 @@ import { BookCallLink } from "@/components/conversion/BookCallLink";
 import type { Metadata } from "next";
 import {
   ArrowRight,
+  Boxes,
+  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Database,
   FileCheck2,
+  FileSpreadsheet,
   Gauge,
   GitBranch,
   PackageCheck,
@@ -19,20 +22,42 @@ import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Card } from "@/components/ui/card";
+import { capabilities } from "@/lib/capabilities";
 
 export const metadata: Metadata = {
   title: "FSMA 204 Recordkeeping Software | RegEngine",
   description:
-    "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.",
+    "FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.",
   openGraph: {
     title: "FSMA 204 Recordkeeping Software | RegEngine",
     description:
-      "Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.",
+      "FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.",
     url: "https://regengine.co",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "RegEngine FSMA 204 recordkeeping software" }],
   },
 };
+
+const problem = [
+  {
+    title: "The request",
+    detail:
+      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask for an electronic sortable spreadsheet of traceability records during an outbreak or recall. It is due within 24 hours unless FDA agrees to more time.",
+    icon: FileSpreadsheet,
+  },
+  {
+    title: "The records",
+    detail:
+      "Lot codes, dates, quantities, and locations for every shipping, receiving, and transformation event. Most of it comes from suppliers, in whatever shape they keep it.",
+    icon: Boxes,
+  },
+  {
+    title: "The date",
+    detail:
+      "FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The requirements did not change. Buyer programs run on their own calendars.",
+    icon: CalendarClock,
+  },
+];
 
 const evidenceCards = [
   {
@@ -73,19 +98,57 @@ const destinations = [
   { label: "Trust", href: "/trust", icon: CheckCircle2, note: "Verification posture" },
 ];
 
+function IngestPathsCard() {
+  return (
+    <Card padding="spacious" className="flex flex-col gap-5">
+      <p className="font-mono text-label uppercase text-re-text-muted">Ingest paths today</p>
+      <div>
+        <h2 className="text-heading text-re-text-primary">Live</h2>
+        <ul className="mt-3 grid gap-2">
+          {capabilities.live.map((name) => (
+            <li key={name} className="flex items-center gap-2 text-ui text-re-text-secondary">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <span>{name}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h2 className="text-heading text-re-text-primary">Preview</h2>
+        <ul className="mt-3 grid gap-2">
+          {capabilities.preview.map((name) => (
+            <li key={name} className="flex items-center justify-between gap-3 text-ui text-re-text-secondary">
+              <span>{name}</span>
+              <span className="font-mono text-label uppercase text-re-text-muted">Preview</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-small text-re-text-tertiary">Preview paths are in active development.</p>
+      </div>
+      <Link href="/verify" className="group inline-flex items-center gap-2 text-ui text-re-text-primary no-underline">
+        Verify an evidence bundle
+        <ArrowRight className="h-4 w-4 transition-transform duration-120 group-hover:translate-x-1 motion-reduce:transition-none" strokeWidth={1.75} aria-hidden="true" />
+      </Link>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   return (
     <div className="re-compliance-os min-h-screen">
-      <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[0.9fr_1.1fr] lg:py-16">
+      <Container as="section" width="marketing" className="grid items-start gap-10 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:py-16">
         <div>
           <p className="mb-4 font-mono text-label uppercase text-re-text-muted">
-            FSMA 204 evidence layer · design-partner · pre-revenue
+            FSMA 204 · 21 CFR Part 1 Subpart S
           </p>
-          <h1 className="max-w-[720px] font-display text-display text-re-text-primary">
-            FSMA 204 recordkeeping for the Food Traceability Rule.
+          <h1 className="max-w-[760px] font-display text-display text-re-text-primary">
+            The Food Traceability Rule lets the FDA ask for a sortable spreadsheet within 24 hours. Supplier data does not arrive that way.
           </h1>
           <p className="mt-6 max-w-[68ch] text-body text-re-text-secondary">
-            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview. Check CTE/KDE coverage and completeness in the Inflow Workbench. Persist append-only after checks you configure. Export FDA-oriented and buyer-oriented spreadsheets.
+            RegEngine checks supplier records for CTE and KDE gaps before they become evidence, routes each gap to an owner, and keeps accepted records in an append-only ledger you can export when a request comes in.
+          </p>
+          <p className="mt-3 max-w-[68ch] text-body text-re-text-secondary">
+            Send records by CSV upload or the JSON events API. EPCIS 2.0 is in Preview.
           </p>
           <Callout tone="neutral" className="mt-6 max-w-[68ch]">
             <p>
@@ -94,8 +157,8 @@ export default function HomePage() {
           </Callout>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
-              <Link href="/verify">
-                Verify an evidence bundle
+              <Link href="/tools/data-import">
+                Check a supplier file
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -103,26 +166,32 @@ export default function HomePage() {
               <BookCallLink href="/contact" placement="home_page">Book a 30-min call</BookCallLink>
             </Button>
           </div>
+          <p className="mt-3 text-small text-re-text-tertiary">
+            The file check is free and asks for an email. Nothing is stored as evidence until you commit it.
+          </p>
         </div>
 
-        <Card padding="spacious" className="flex flex-col items-start gap-3">
-          <p className="font-mono text-label uppercase text-re-text-muted">Workspace preview</p>
-          <h2 className="text-heading text-re-text-primary">No data yet</h2>
-          <p className="text-ui text-re-text-secondary">
-            There is no public workspace to show. Connect your own supplier data and the
-            ingest, checklist, and export views populate from your records.
-          </p>
-          <Button asChild variant="secondary" size="lg" className="mt-2">
-            <Link href="/ingest">
-              Start setup
-              <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
-            </Link>
-          </Button>
-        </Card>
+        <IngestPathsCard />
       </Container>
+
+      <Section width="marketing" tone="inset">
+        <h2 className="max-w-[24ch] font-display text-heading-lg text-re-text-primary">
+          What the rule asks for, and what you actually have.
+        </h2>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {problem.map((item) => (
+            <Card key={item.title} padding="compact">
+              <item.icon className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+              <h3 className="mt-4 text-heading text-re-text-primary">{item.title}</h3>
+              <p className="mt-2 text-ui text-re-text-secondary">{item.detail}</p>
+            </Card>
+          ))}
+        </div>
+      </Section>
 
       <section className="border-y border-re-border-subtle">
         <Container width="marketing">
+          <h2 className="pt-10 font-display text-heading-lg text-re-text-primary">How RegEngine works</h2>
           <ol className="grid md:grid-cols-5">
             {workflow.map((step, index) => (
               <li key={step.label} className="border-b border-re-border-subtle py-5 md:border-b-0 md:border-r md:px-5 md:first:pl-0 md:last:border-r-0 md:last:pr-0">
@@ -130,7 +199,7 @@ export default function HomePage() {
                   <step.icon className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                   <span className="font-mono text-label tabular-nums text-re-text-muted">{String(index + 1).padStart(2, "0")}</span>
                 </div>
-                <h2 className="mt-5 text-heading text-re-text-primary">{step.label}</h2>
+                <h3 className="mt-5 text-heading text-re-text-primary">{step.label}</h3>
                 <p className="mt-2 text-ui text-re-text-secondary">{step.detail}</p>
               </li>
             ))}
@@ -158,21 +227,54 @@ export default function HomePage() {
         </div>
       </Section>
 
-      <Section width="marketing" tone="inset">
-        <Card padding="compact" className="max-w-[68ch]">
-          <p className="mb-3 font-mono text-label uppercase text-re-text-muted">
-            What this is not
+      <Section id="next-steps" width="marketing" tone="inset">
+        <h2 className="font-display text-heading-lg text-re-text-primary">Next steps</h2>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          <Card padding="compact" className="flex flex-col">
+            <ScanLine className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <h3 className="mt-4 text-heading text-re-text-primary">Check a supplier file</h3>
+            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
+              Upload one CSV or XLSX. Get the field mapping report and the schema checks. Free, with email verification.
+            </p>
+            <Button asChild className="mt-5 self-start">
+              <Link href="/tools/data-import">
+                Open the file check
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+          </Card>
+          <Card padding="compact" className="flex flex-col">
+            <ShieldCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <h3 className="mt-4 text-heading text-re-text-primary">Verify an evidence bundle</h3>
+            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
+              Download the verification script and check the file hashes of a bundle yourself, on your own machine.
+            </p>
+            <Button asChild variant="secondary" className="mt-5 self-start">
+              <Link href="/verify">
+                Open the verifier
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </Link>
+            </Button>
+          </Card>
+          <Card padding="compact" className="flex flex-col">
+            <ClipboardCheck className="h-5 w-5 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
+            <h3 className="mt-4 text-heading text-re-text-primary">Talk it through</h3>
+            <p className="mt-2 flex-1 text-ui text-re-text-secondary">
+              Thirty minutes with the founder on your supplier data and the records you need to hold.
+            </p>
+            <Button asChild variant="secondary" className="mt-5 self-start">
+              <BookCallLink href="/contact" placement="home_next_steps">
+                Book a 30-min call
+                <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+              </BookCallLink>
+            </Button>
+          </Card>
+        </div>
+        <Callout tone="neutral" className="mt-8 max-w-[80ch]">
+          <p>
+            RegEngine is not FDA endorsement, not a certification, not a readiness score, not a claim that any workspace meets the 24-hour request, not a recall clock product, not live customer metrics, and not legal advice.
           </p>
-          <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
-            <li>Not FDA endorsement</li>
-            <li>Not a claim we meet §1.1455 24-hour request</li>
-            <li>Not retailer-readiness score</li>
-            <li>Not a commit-gate that certifies</li>
-            <li>Not a 24-hour Recall Clock product</li>
-            <li>Not live customer metrics</li>
-            <li>Not legal advice</li>
-          </ul>
-        </Card>
+        </Callout>
       </Section>
 
       <Section width="marketing" className="pb-20 sm:pb-24">
@@ -193,7 +295,7 @@ export default function HomePage() {
       <footer className="border-t border-re-border-subtle py-8">
         <Container width="marketing">
           <p className="text-ui text-re-text-secondary">
-            RegEngine · Pasadena, CA · early-stage · design-partner · pre-revenue
+            RegEngine · Pasadena, CA · early-stage
           </p>
           <p className="mt-2 text-small text-re-text-muted">
             FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. Buyer programs are not FDA. No seals, certifications, or FDA logo.

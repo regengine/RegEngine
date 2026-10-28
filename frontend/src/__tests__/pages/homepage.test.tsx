@@ -1,14 +1,15 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import HomePage from "@/app/page";
+import { capabilities } from "@/lib/capabilities";
 
-describe("HomePage Compliance OS foundation", () => {
-  it("leads with compliance operating system positioning", () => {
+describe("HomePage", () => {
+  it("leads with the records request hook and the live ingest paths", () => {
     render(<HomePage />);
 
     expect(
       screen.getByRole("heading", {
-        name: "FSMA 204 recordkeeping for the Food Traceability Rule.",
+        name: "The Food Traceability Rule lets the FDA ask for a sortable spreadsheet within 24 hours. Supplier data does not arrive that way.",
         level: 1,
       }),
     ).toBeInTheDocument();
@@ -17,17 +18,30 @@ describe("HomePage Compliance OS foundation", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows a No data yet empty state instead of a synthetic workspace", () => {
+  it("sends the primary call to action to the free file check", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("No data yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /start setup/i })).toHaveAttribute("href", "/ingest");
+    expect(screen.getByRole("link", { name: /^check a supplier file$/i })).toHaveAttribute("href", "/tools/data-import");
+    expect(screen.getByRole("link", { name: /open the verifier/i })).toHaveAttribute("href", "/verify");
   });
 
-  it("contains no synthetic demo data", () => {
+  it("lists ingest paths from the capabilities registry instead of a workspace mock", () => {
+    render(<HomePage />);
+
+    for (const name of capabilities.live) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    for (const name of capabilities.preview) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
+    expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
+  });
+
+  it("does not say pre-revenue and contains no invented data", () => {
     const { container } = render(<HomePage />);
     const text = container.textContent ?? "";
 
+    expect(text).not.toMatch(/pre-revenue/i);
     expect(text).not.toMatch(/synthetic/i);
     expect(text).not.toMatch(/demo workspace/i);
     expect(text).not.toContain("RE-DEMO-PKG");
