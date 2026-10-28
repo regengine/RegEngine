@@ -55,8 +55,7 @@ def test_script_is_named_for_what_it_does():
     """The misleading `rotate_secrets_to_aws.py` name is gone."""
     assert SCRIPT.exists(), "expected scripts/export_env_bundle.py"
     assert not (REPO_ROOT / "scripts" / "rotate_secrets_to_aws.py").exists(), (
-        "a script named rotate_secrets_to_aws.py must not exist: it neither "
-        "rotates nor contacts AWS"
+        "a script named rotate_secrets_to_aws.py must not exist: it neither rotates nor contacts AWS"
     )
 
 
@@ -76,8 +75,7 @@ def test_output_flag_is_refused_and_writes_nothing(tmp_path):
     """
     target = tmp_path / "secrets.json"
     proc = _run(
-        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"),
-         "--output", str(target)],
+        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"), "--output", str(target)],
         cwd=tmp_path,
     )
 
@@ -108,8 +106,7 @@ def test_validation_run_writes_no_file_and_prints_no_values(tmp_path):
 def test_emit_bundle_goes_to_stdout_only(tmp_path):
     """`--emit-bundle` yields pipeable JSON on stdout and still writes no file."""
     proc = _run(
-        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"),
-         "--emit-bundle"],
+        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"), "--emit-bundle"],
         cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr
@@ -128,14 +125,19 @@ def test_emit_bundle_goes_to_stdout_only(tmp_path):
 def test_missing_required_secret_fails_without_emitting(tmp_path):
     """A missing credential fails the run and emits nothing."""
     proc = _run(
-        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"),
-         "--emit-bundle"],
+        ["--environment", "production", "--env-file", str(tmp_path / "absent.env"), "--emit-bundle"],
         cwd=tmp_path,
         extra_env={"POSTGRES_PASSWORD": ""},
     )
     assert proc.returncode == 1
     assert proc.stdout.strip() == "", "emitted a bundle despite failing validation"
+    # Error path prints only the absent name(s) as literals (not from
+    # payload / REQUIRED_SECRETS iteration), so CodeQL cannot taint them.
     assert "POSTGRES_PASSWORD" in proc.stderr
+    assert "NEO4J_PASSWORD" not in proc.stderr  # still present in FAKE_ENV
+    assert "required secret(s) missing" in proc.stderr
+    for value in FAKE_ENV.values():
+        assert value not in proc.stderr, "a credential value was printed on the error path"
 
 
 @pytest.mark.parametrize("candidate", ["secrets.json", "prod.secrets.json"])
@@ -143,6 +145,25 @@ def test_plaintext_bundle_filenames_are_gitignored(candidate):
     """Belt-and-braces: a hand-made bundle cannot be committed by accident."""
     proc = subprocess.run(
         ["git", "check-ignore", "-q", candidate],
-        cwd=REPO_ROOT, capture_output=True, timeout=60,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        timeout=60,
     )
     assert proc.returncode == 0, f"{candidate} is not covered by .gitignore"
+
+
+def test_status_names_come_from_constants_not_payload():
+    """Code scanning alerts 19 / 20 / 82: status names stay in sync.
+
+    Status lines embed env-var names as literals (not by iterating the
+    credential payload or REQUIRED_SECRETS/PAYLOAD_KEYS into print). Keep
+    PAYLOAD_KEYS identical to build_secret_payload keys and REQUIRED_SECRETS
+    a subset, so the literal lists and validation stay aligned.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("export_env_bundle", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert tuple(module.build_secret_payload("dev").keys()) == module.PAYLOAD_KEYS
+    assert set(module.REQUIRED_SECRETS) <= set(module.PAYLOAD_KEYS)
