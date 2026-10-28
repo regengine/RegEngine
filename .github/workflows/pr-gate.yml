@@ -271,7 +271,13 @@ jobs:
       actions: read
     name: "PR Gate: Frontend"
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Short bound: when the runner queue is backed up the Status Gate may not
+    # exist yet. pr-gate-frontend-rerun.yml re-runs this job when Frontend
+    # CI/CD completes, so a timeout here is recovered automatically.
+    timeout-minutes: 15
+    concurrency:
+      group: pr-gate-frontend-${{ github.event.pull_request.number }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
         with:
@@ -332,14 +338,16 @@ jobs:
           CHECK_NAME: "Frontend CI Status Gate"
         with:
           github-token: ${{ github.token }}
-          # See the backend job above: "Frontend CI Status Gate" is created
-          # only after earlier frontend jobs finish, so we poll up to 40 minutes
-          # for it to appear and complete.
+          # "Frontend CI Status Gate" is created only after earlier frontend
+          # jobs finish. A gate that is missing or still queued is pending, not
+          # failed: we poll up to 12 minutes, then fail with an explicit
+          # "still pending" message. pr-gate-frontend-rerun.yml re-runs this job
+          # once Frontend CI/CD completes, which then mirrors the real result.
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
             const CHECK_NAME = process.env.CHECK_NAME;
-            const deadline = Date.now() + 40 * 60 * 1000;
+            const deadline = Date.now() + 12 * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             const callWithRetry = async (fn) => {
@@ -443,7 +451,25 @@ jobs:
               delay = Math.min(Math.round(delay * 1.5), 120000);
             }
 
-            core.setFailed(`Timed out waiting for ${CHECK_NAME}`);
+            // Final poll: Frontend CI may have finished during the last sleep.
+            const finalRes = await github.rest.checks.listForRef({
+              owner, repo, ref: sha, check_name: CHECK_NAME, filter: 'latest', per_page: 20,
+            }).catch(() => null);
+            const finalRun = (finalRes?.data?.check_runs || []).find(r => r.status === 'completed');
+            if (finalRun) {
+              if (finalRun.conclusion === 'success') {
+                core.info(`Check ${CHECK_NAME} succeeded with conclusion: success`);
+                return;
+              }
+              core.setFailed(finalRun.conclusion);
+              return;
+            }
+
+            core.setFailed(
+              `${CHECK_NAME} is still pending (not created yet or queued) after 12 minutes; ` +
+              `this is a CI queue delay, not a frontend failure. This job is re-run ` +
+              `automatically when Frontend CI/CD completes (pr-gate-frontend-rerun.yml).`
+            );
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
         run: echo "No frontend-relevant paths changed; Frontend CI legitimately did not run. Gate vacuously green."
