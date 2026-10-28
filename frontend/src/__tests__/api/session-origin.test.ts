@@ -182,6 +182,7 @@ describe('POST /api/session Origin enforcement (RE-SEC-003)', () => {
             },
             cache: 'no-store',
             redirect: 'manual',
+            signal: expect.any(AbortSignal),
         });
         await expect(response.json()).resolves.toEqual({
             authenticated: true,

@@ -24,6 +24,7 @@ import { StatusBadge, type ComplianceState } from "@/components/ui/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQAHealth } from "@/hooks/use-api";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorRequestId } from "@/lib/api-error";
 import { isRequiresStepUpPayload, requestStepUp } from "@/lib/step-up-events";
 import type {
   QAHealthArtifactRef,
@@ -295,7 +296,7 @@ export default function QAHealthPage() {
     return (
       <PageContainer>
         <PageHeader title="QA health request failed" />
-        <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isRefetching} />
+        <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isRefetching} requestId={getErrorRequestId(error)} />
       </PageContainer>
     );
   }
