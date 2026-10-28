@@ -201,3 +201,20 @@ def test_tty_without_flag_is_refused(bundle, monkeypatch, tmp_path):
         bundle.main()
     assert exc.value.code == 2
     assert out.getvalue() == ""
+
+def test_non_pipe_stdout_full_bundle_is_refused(bundle, monkeypatch, tmp_path):
+    """Full credentials must not go to a regular-file redirect."""
+    for name in bundle.REQUIRED_SECRETS:
+        monkeypatch.setenv(name, uuid.uuid4().hex)
+
+    out_path = tmp_path / "bundle.json"
+    with out_path.open("w", encoding="utf-8") as fh:
+        monkeypatch.setattr(sys, "stdout", fh)
+        monkeypatch.setattr(sys, "argv", [
+            "export_env_bundle.py", "--environment", "dev",
+            "--env-file", str(tmp_path / "absent.env"), "--emit-bundle",
+        ])
+        with pytest.raises(SystemExit) as exc:
+            bundle.main()
+        assert exc.value.code == 2
+    assert out_path.read_text() == ""

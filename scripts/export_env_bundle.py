@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -205,7 +206,14 @@ def main() -> None:
         print(f"  - {key}", file=sys.stderr)
 
     if args.emit_bundle:
-        if sys.stdout.isatty():
+        stdout_is_tty = sys.stdout.isatty()
+        try:
+            stdout_mode = os.fstat(sys.stdout.fileno()).st_mode
+            stdout_is_pipe = stat.S_ISFIFO(stdout_mode)
+        except (OSError, AttributeError, ValueError):
+            stdout_is_pipe = False
+
+        if stdout_is_tty:
             if not args.allow_tty:
                 print(
                     "\nERROR: refusing to print secrets to a terminal.\n"
@@ -220,6 +228,18 @@ def main() -> None:
                 file=sys.stderr,
             )
             return
+
+        # Regular-file redirects (> bundle.json) are not pipes. Refuse to
+        # write full credentials there; documentation says stdout is for piping.
+        if not stdout_is_pipe:
+            print(
+                "\nERROR: refusing to write full secret values to a non-pipe stdout.\n"
+                "Pipe into a secret manager, or pass --allow-tty for a masked preview "
+                "on a terminal.",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
         print("\nBundle written to stdout. It was not saved to disk.", file=sys.stderr)

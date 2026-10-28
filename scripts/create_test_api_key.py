@@ -158,7 +158,13 @@ def _write_key_file(raw_key: str, path: Path) -> None:
         raise
     try:
         os.fchmod(fd, 0o600)
-        os.write(fd, (raw_key + "\n").encode("utf-8"))
+        data = (raw_key + "\n").encode("utf-8")
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise OSError("short write while storing API key")
+            view = view[written:]
     except Exception:
         os.close(fd)
         try:
@@ -434,6 +440,18 @@ async def _main() -> None:
             created_by="scripts/create_test_api_key.py",
             metadata={"purpose": "local-testing"},
         )
+        try:
+            _write_key_file(key.raw_key, key_path)
+        except Exception as write_exc:
+            await store.revoke_key(
+                key.key_id,
+                revoked_by="scripts/create_test_api_key.py",
+                reason="key-file write failed after mint",
+            )
+            raise SystemExit(
+                f"Key-file write failed after minting {key.key_id}; "
+                f"the key was revoked. Cause: {write_exc}"
+            ) from write_exc
     finally:
         await store.close()
 
@@ -445,7 +463,6 @@ async def _main() -> None:
     else:
         billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
-    _write_key_file(key.raw_key, key_path)
     summary = _KeySummary(
         key_id=key.key_id,
         tenant_id=key.tenant_id,
