@@ -809,6 +809,18 @@ def _format_missing_columns_error(
     return "Missing required columns for partner CSV ingest: " + "; ".join(parts) + f". Present columns: {present}"
 
 
+def _unknown_row_cte_value(row: Mapping[str, Optional[str]]) -> tuple[Optional[str], Optional[str]]:
+    """``(value, column)`` when the row's first CTE value is not a known alias, else ``(None, None)``."""
+    for col in _CTE_TYPE_COLUMNS:
+        raw = (row.get(col) or "").strip()
+        if not raw:
+            continue
+        if raw.lower().replace(" ", "_") in _CTE_TYPE_ALIASES:
+            return None, None
+        return raw, col
+    return None, None
+
+
 def _is_data_record(record: Mapping[Optional[str], object]) -> bool:
     """True for a record the row loop would read as data (not blank, not a comment)."""
     values = [str(v or "").strip() for k, v in record.items() if k is not None]
@@ -978,7 +990,11 @@ def parse_csv_rows(
             )
         return ([], [detail], [])
 
-    for bad in _unrecognized_partner_columns(header, header_mapping):
+    unrecognized = _unrecognized_partner_columns(header, header_mapping)
+    if unrecognized:
+        # Surface in the warning output too, not only the disposition log.
+        kde_warnings.append("Unrecognised column(s) kept as KDEs, not mapped to a field: " + ", ".join(unrecognized))
+    for bad in unrecognized:
         _append_row_log(
             row_log,
             row_number=0,
@@ -1020,11 +1036,13 @@ def parse_csv_rows(
         # dropped; blank ones (a trailing comma) carry nothing and are ignored.
         extra_values = row.pop(None, None) or []
         row = {normalize_csv_header(k): (v or "").strip() for k, v in row.items()}
+        mapped_fields: set[str] = set()
         if header_mapping:
             for source_key, canonical_field in header_mapping.items():
                 value = row.get(source_key)
                 if value and not _row_provides(row, canonical_field):
                     row[canonical_field] = value
+                    mapped_fields.add(canonical_field)
                     _append_row_log(
                         row_log,
                         row_number=row_num,
@@ -1082,6 +1100,30 @@ def parse_csv_rows(
             )
 
         try:
+            unknown_cte, unknown_cte_col = _unknown_row_cte_value(row)
+            if unknown_cte is not None and unknown_cte_col in mapped_fields:
+                # A guessed (mapped) column whose value is not a CTE: keep the
+                # declared fallback, but flag it rather than accept quietly.
+                _append_row_log(
+                    row_log,
+                    row_number=row_num,
+                    disposition="flagged",
+                    reason="mapped_cte_not_recognized",
+                    field=unknown_cte_col,
+                    detail="Mapped column value is not a known CTE type; used the upload's cte_type",
+                )
+                kde_warnings.append(
+                    f"Row {row_num}: mapped {unknown_cte_col} value is not a known CTE type; used the upload's cte_type"
+                )
+            elif unknown_cte is not None:
+                # SEL-549: an event type we don't recognise is never replaced
+                # by the upload's cte_type; the row is rejected and named.
+                _reject(
+                    "unknown_cte_type",
+                    f"Row {row_num}: unrecognised CTE type {unknown_cte!r}; "
+                    f"use one of: {', '.join(sorted(set(_CTE_TYPE_ALIASES.values())))}",
+                )
+                continue
             row_cte = _detect_row_cte_type(row, fallback_cte)
             if row_cte and _detect_row_cte_type(row, None) is None:
                 _append_row_log(
