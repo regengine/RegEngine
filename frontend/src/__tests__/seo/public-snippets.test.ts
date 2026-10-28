@@ -29,7 +29,7 @@ const DASH = /[\u2014\u2013]/;
 const HOME_TITLE = 'FSMA 204 Recordkeeping Software | RegEngine';
 const HOME_DESCRIPTION =
     'Pre-revenue FSMA 204 recordkeeping software. Free FTL, CTE, KDE, and TLC checkers. FDA says it will not enforce before July 20, 2028. Not legal advice.';
-const HOME_H1 = 'FSMA 204 recordkeeping for the Food Traceability Rule.';
+const HOME_H1 = "Find the gaps in your suppliers' traceability data before a buyer or the FDA does.";
 
 const TOOLS_TITLE = 'Free FSMA 204 Tools | RegEngine';
 const TOOLS_DESCRIPTION =

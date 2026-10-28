@@ -8,20 +8,29 @@ describe("HomePage Compliance OS foundation", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "FSMA 204 recordkeeping for the Food Traceability Rule.",
+        name: "Find the gaps in your suppliers' traceability data before a buyer or the FDA does.",
         level: 1,
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/send records by csv upload or the json events api\. epcis 2\.0 is in preview\./i),
+      screen.getByText(/csv uploads and a json events api\. epcis 2\.0 is in preview\./i),
     ).toBeInTheDocument();
   });
 
-  it("shows a No data yet empty state instead of a synthetic workspace", () => {
+  it("offers one clear next step and labels the example report as example data", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("No data yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /start setup/i })).toHaveAttribute("href", "/ingest");
+    expect(screen.getAllByRole("link", { name: /send us one supplier file/i })[0]).toHaveAttribute("href", "/contact");
+    expect(screen.getByText("Example data")).toBeInTheDocument();
+  });
+
+  it("keeps the enforcement date and the limits of the claims on the page", () => {
+    const { container } = render(<HomePage />);
+    const text = container.textContent ?? "";
+
+    expect(text).toContain("July 20, 2028");
+    expect(text).toContain("What this is not");
+    expect(text).toContain("Not FDA endorsement");
   });
 
   it("contains no synthetic demo data", () => {
