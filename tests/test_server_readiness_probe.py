@@ -5,6 +5,11 @@ and restarts:
 
 * Postgres down or unconfigured -> 503 (fatal; instance cannot serve traffic).
 * Redis down or unconfigured in strict deployed runtimes -> 503.
+* Diligence E07: ingestion worker error (startup failure or dead thread) ->
+  503. Embedded scheduler error -> 503 only when SCHEDULER_EMBEDDED enables
+  it; ``disabled`` / ``not_configured`` stay non-blocking.
+* Neo4j and rate-limiter errors stay non-blocking (reported; never alone
+  flip the status code). /health remains a separate liveness probe.
 * A stalled dependency probe returns 503 within its overall deadline while
   the event loop remains available for liveness requests.
 * Neo4j down (graph subsystem active) -> 200 with overall status ``degraded``
@@ -237,10 +242,8 @@ def test_runners_ok_when_started_and_alive(monkeypatch, _postgres_ok, _redis_uns
     assert body["checks"]["scheduler"]["status"] == "ok"
 
 
-def test_worker_start_failure_degrades_but_stays_200(monkeypatch, _postgres_ok, _redis_unset):
-    """A swallowed ingestion-worker start failure surfaces as worker=error and
-    degrades the payload — but /readiness stays 200 (not 503), so a background
-    failure does not block deploys the way postgres-down does (#2518)."""
+def test_worker_start_failure_returns_503(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: swallowed ingestion-worker start failure fails readiness (503)."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
     client = _client_with_state(
         ingestion_worker_started=False,
@@ -251,16 +254,15 @@ def test_worker_start_failure_degrades_but_stays_200(monkeypatch, _postgres_ok, 
 
     resp = client.get("/readiness")
 
-    assert resp.status_code == 200
+    assert resp.status_code == 503
     body = resp.json()
-    assert body["status"] == "degraded"
+    assert body["status"] == "not_ready"
     assert body["checks"]["worker"]["status"] == "error"
-    # postgres-down is the only 503 path; confirm worker-down is NOT one.
     assert body["checks"]["postgres"]["status"] == "ok"
 
 
-def test_worker_dead_thread_is_error(monkeypatch, _postgres_ok, _redis_unset):
-    """Started but the loop thread died -> worker=error/degraded."""
+def test_worker_dead_thread_returns_503(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: started but the loop thread died -> worker=error and 503."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
     client = _client_with_state(
         ingestion_worker_started=True,
@@ -271,16 +273,18 @@ def test_worker_dead_thread_is_error(monkeypatch, _postgres_ok, _redis_unset):
 
     resp = client.get("/readiness")
 
-    assert resp.status_code == 200
-    assert resp.json()["status"] == "degraded"
-    assert resp.json()["checks"]["worker"]["status"] == "error"
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["worker"]["status"] == "error"
 
 
 def test_scheduler_disabled_is_healthy(monkeypatch, _postgres_ok, _redis_unset):
     """A None scheduler runner after a successful start is the *intended*
     disabled state (SCHEDULER_EMBEDDED=0), not a failure -> scheduler=disabled,
-    overall stays ready."""
+    overall stays ready (scheduler is not essential when disabled)."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "0")
     client = _client_with_state(
         ingestion_worker_started=True,
         ingestion_worker_thread=_LiveThread(),
@@ -296,9 +300,29 @@ def test_scheduler_disabled_is_healthy(monkeypatch, _postgres_ok, _redis_unset):
     assert body["checks"]["scheduler"]["status"] == "disabled"
 
 
-def test_scheduler_start_failure_degrades(monkeypatch, _postgres_ok, _redis_unset):
-    """A raised embedded-scheduler start -> scheduler=error/degraded (200)."""
+def test_scheduler_start_failure_returns_503_when_embedded(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: raised embedded-scheduler start -> 503 when SCHEDULER_EMBEDDED=1."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "1")
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=False,
+        embedded_scheduler=None,
+    )
+
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["status"] == "not_ready"
+    assert body["checks"]["scheduler"]["status"] == "error"
+
+
+def test_scheduler_start_failure_degrades_when_not_embedded(monkeypatch, _postgres_ok, _redis_unset):
+    """Scheduler error is non-essential when SCHEDULER_EMBEDDED=0 -> 200/degraded."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "0")
     client = _client_with_state(
         ingestion_worker_started=True,
         ingestion_worker_thread=_LiveThread(),
@@ -314,9 +338,8 @@ def test_scheduler_start_failure_degrades(monkeypatch, _postgres_ok, _redis_unse
     assert body["checks"]["scheduler"]["status"] == "error"
 
 
-def test_worker_down_distinguished_from_postgres_down(monkeypatch, _redis_unset):
-    """The required-vs-optional contract: postgres-down is 503, worker-down is
-    200/degraded. Same probe, different severity (#2518)."""
+def test_worker_and_postgres_down_both_reported_as_503(monkeypatch, _redis_unset):
+    """Postgres-down and worker-down both fail readiness; both appear in checks."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
     # Configured-but-unreachable (env_defaults deliberately sets no URL).
     url = "postgresql://probe:probe@localhost:5432/readiness_probe"  # pragma: allowlist secret
@@ -335,7 +358,6 @@ def test_worker_down_distinguished_from_postgres_down(monkeypatch, _redis_unset)
 
     resp = client.get("/readiness")
 
-    # postgres-down dominates -> 503 regardless of the worker signal.
     assert resp.status_code == 503
     assert resp.json()["checks"]["postgres"]["status"] == "error"
     assert resp.json()["checks"]["worker"]["status"] == "error"
@@ -356,10 +378,10 @@ def test_minimal_app_without_state_reports_not_configured(monkeypatch, _postgres
     assert body["checks"]["scheduler"]["status"] == "not_configured"
 
 
-def test_scheduler_dead_thread_is_error(monkeypatch, _postgres_ok, _redis_unset):
-    """#2697: a scheduler runner whose daemon thread died after a successful
-    start must degrade the payload instead of reporting ok forever."""
+def test_scheduler_dead_thread_returns_503_when_embedded(monkeypatch, _postgres_ok, _redis_unset):
+    """#2697 / E07: dead scheduler thread fails readiness when embedded is on."""
     monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "1")
 
     class _DeadRunner:
         thread_alive = False
@@ -373,10 +395,33 @@ def test_scheduler_dead_thread_is_error(monkeypatch, _postgres_ok, _redis_unset)
 
     resp = client.get("/readiness")
 
-    assert resp.status_code == 200  # degraded, never 503 (documented contract)
+    assert resp.status_code == 503
     body = resp.json()
     assert body["checks"]["scheduler"]["status"] == "error"
     assert "not alive" in body["checks"]["scheduler"]["error"]
+    assert body["status"] == "not_ready"
+
+
+def test_scheduler_dead_thread_degrades_when_not_embedded(monkeypatch, _postgres_ok, _redis_unset):
+    """Dead scheduler thread only degrades when SCHEDULER_EMBEDDED=0."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "0")
+
+    class _DeadRunner:
+        thread_alive = False
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=_DeadRunner(),
+    )
+
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["checks"]["scheduler"]["status"] == "error"
     assert body["status"] == "degraded"
 
 
@@ -621,3 +666,110 @@ def test_timed_out_or_cancelled_probes_retain_bounded_capacity(monkeypatch, canc
     with ThreadPoolExecutor(max_workers=2) as executor:
         monkeypatch.setattr(main, "_READINESS_EXECUTOR", executor)
         asyncio.run(exercise())
+
+
+def test_e07_neo4j_error_stays_non_blocking(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: Neo4j stays non-blocking even when essential units are healthy."""
+    monkeypatch.setenv("NEO4J_URI", "bolt://neo4j.invalid:7687")
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "1")
+    monkeypatch.setattr(
+        neo4j.GraphDatabase,
+        "driver",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("connection refused")),
+    )
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=object(),
+    )
+
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert body["checks"]["neo4j"]["status"] == "error"
+    assert body["checks"]["worker"]["status"] == "ok"
+
+
+def test_e07_rate_limiter_error_alone_stays_non_blocking(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: rate_limiter error alone never flips readiness to 503."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    import shared.env as env_mod
+    import shared.rate_limit as rl_mod
+
+    monkeypatch.setattr(rl_mod, "slowapi_storage_backend", lambda: "memory")
+    # Force the rate-limiter error path without making Redis required.
+    monkeypatch.setattr(env_mod, "is_production", lambda: True)
+    monkeypatch.setattr(env_mod, "requires_strict_auth_runtime", lambda: False)
+
+    client = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=object(),
+    )
+    resp = client.get("/readiness")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["checks"]["rate_limiter"]["status"] == "error"
+    assert body["status"] == "degraded"
+
+
+def test_e07_readiness_recovers_to_200_after_restart(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: after a failed essential unit, a healthy restart returns 200."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.setenv("SCHEDULER_EMBEDDED", "1")
+
+    failed = _client_with_state(
+        ingestion_worker_started=False,
+        ingestion_worker_thread=None,
+        embedded_scheduler_started=False,
+        embedded_scheduler=None,
+    )
+    failed_resp = failed.get("/readiness")
+    assert failed_resp.status_code == 503
+    assert failed_resp.json()["status"] == "not_ready"
+
+    class _LiveRunner:
+        thread_alive = True
+
+    recovered = _client_with_state(
+        ingestion_worker_started=True,
+        ingestion_worker_thread=_LiveThread(),
+        embedded_scheduler_started=True,
+        embedded_scheduler=_LiveRunner(),
+    )
+    recovered_resp = recovered.get("/readiness")
+    assert recovered_resp.status_code == 200
+    body = recovered_resp.json()
+    assert body["status"] == "ready"
+    assert body["checks"]["worker"]["status"] == "ok"
+    assert body["checks"]["scheduler"]["status"] == "ok"
+
+
+def test_e07_liveness_unaffected_when_essential_unit_fails(monkeypatch, _postgres_ok, _redis_unset):
+    """E07: /health stays 200 while /readiness is 503 for an essential failure.
+
+    Keeps Railway from coupling liveness to background-unit death (no restart
+    loop driven by a combined probe).
+    """
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    app = FastAPI()
+    app.state.ingestion_worker_started = False
+    app.state.ingestion_worker_thread = None
+    app.state.embedded_scheduler_started = True
+    app.state.embedded_scheduler = object()
+    app.add_api_route("/readiness", main.readiness, methods=["GET"])
+
+    @app.get("/health")
+    async def health():
+        return {"status": "alive"}
+
+    client = TestClient(app)
+    assert client.get("/readiness").status_code == 503
+    live = client.get("/health")
+    assert live.status_code == 200
+    assert live.json()["status"] == "alive"
