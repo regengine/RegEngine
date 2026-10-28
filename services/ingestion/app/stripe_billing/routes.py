@@ -161,28 +161,65 @@ async def create_checkout(
     """
     _helpers_mod._configure_stripe()
 
-    billing_period = _plans_mod._normalize_billing_period(request.billing_period)
-    plan, price_id, amount = _plans_mod._resolve_price_id(request.plan_id, billing_period)
+    normalized_plan_id = _plans_mod._normalize_plan_id(request.plan_id)
 
-    # List/founding are billed per facility: the facility count is the
-    # subscription quantity. There is no server-side facility-inventory helper
-    # in this package yet, so the only supported sources are an explicit
-    # ``facility_count`` on the request (validated below) or the default of 1.
-    # Never trust a client-supplied tenant inventory for billing quantity.
-    facility_quantity = 1
-    if plan["id"] in {"list", "founding"}:
-        if request.facility_count is not None:
-            facility_quantity = request.facility_count
-        if facility_quantity < 1:
-            raise HTTPException(status_code=400, detail="facility_count must be at least 1")
-        if facility_quantity > MAX_CHECKOUT_FACILITY_QUANTITY:
+    # Pilot is a one-time payment product, deliberately absent from the
+    # recurring ``PLANS`` catalog. It must be handled BEFORE
+    # ``_resolve_price_id`` (which only knows recurring plans), and its
+    # checkout is always quantity 1 regardless of facility_count.
+    is_pilot = normalized_plan_id == "pilot"
+    pilot_variant: Optional[str] = None
+    if is_pilot:
+        pilot_variant = str(request.pilot_variant or "standard").strip().lower()
+        if pilot_variant not in {"standard", "convert_30"}:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    f"facility_count must be at most {MAX_CHECKOUT_FACILITY_QUANTITY}. "
-                    "Contact sales@regengine.co for more facilities."
-                ),
+                detail="pilot_variant must be 'standard' or 'convert_30'",
             )
+        plan_id = "pilot"
+        billing_period = "one_time"
+        price_id = _plans_mod._resolve_pilot_price_id(pilot_variant)
+        fee_cents = (
+            _plans_mod.PILOT_FEE_STANDARD_CENTS
+            if pilot_variant == "standard"
+            else _plans_mod.PILOT_FEE_CONVERT_30_CENTS
+        )
+        amount = fee_cents // 100
+        facility_quantity = 1
+        if request.facility_count is not None and request.facility_count != 1:
+            # Prefer ignore-with-log over 400: pilot pricing is not
+            # per-facility, and a stale frontend may still send its
+            # default facility count.
+            logger.info(
+                "checkout_pilot_ignored_facility_count",
+                facility_count=request.facility_count,
+                pilot_variant=pilot_variant,
+            )
+    else:
+        billing_period = _plans_mod._normalize_billing_period(request.billing_period)
+        plan, price_id, amount = _plans_mod._resolve_price_id(normalized_plan_id, billing_period)
+        plan_id = plan["id"]
+
+        # List/founding are billed per facility: the facility count is the
+        # subscription quantity. There is no server-side facility-inventory
+        # helper in this package yet, so the only supported sources are an
+        # explicit ``facility_count`` on the request (validated below) or the
+        # default of 1. Never trust a client-supplied tenant inventory for
+        # billing quantity.
+        facility_quantity = 1
+        if plan_id in {"list", "founding"}:
+            if request.facility_count is not None:
+                facility_quantity = request.facility_count
+            if facility_quantity < 1:
+                raise HTTPException(status_code=400, detail="facility_count must be at least 1")
+            if facility_quantity > MAX_CHECKOUT_FACILITY_QUANTITY:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"facility_count must be at most {MAX_CHECKOUT_FACILITY_QUANTITY}. "
+                        "Contact sales@regengine.co for more facilities."
+                    ),
+                )
 
     existing_customer_id: Optional[str] = None
 
@@ -211,12 +248,18 @@ async def create_checkout(
         )
 
     metadata = {
-        "plan_id": plan["id"],
+        "plan_id": plan_id,
         "billing_period": billing_period,
         # Stripe metadata values must be strings. The webhook/PR3 credit path
         # reads this to reconcile the subscription quantity with facilities.
         "facility_quantity": str(facility_quantity),
     }
+    if is_pilot:
+        # A-2155/A-2159: the webhook needs the purchased pilot flavor to
+        # pick the credit amount and (for convert_30) the conversion window.
+        metadata["pilot_variant"] = str(pilot_variant)
+        if pilot_variant == "convert_30":
+            metadata["pilot_convert_window_days"] = str(_plans_mod.PILOT_CONVERT_WINDOW_DAYS)
     if authenticated_tenant_id:
         # Outbound assignment: stamp the authenticated principal's tenant_id
         # onto the Stripe checkout-session metadata for webhook cross-check
@@ -249,14 +292,17 @@ async def create_checkout(
     safe_cancel_url = _helpers_mod._validate_redirect_url(request.cancel_url, field="cancel_url")
 
     checkout_kwargs: dict[str, Any] = {
-        "mode": "subscription",
+        "mode": "payment" if is_pilot else "subscription",
         "line_items": [{"price": price_id, "quantity": facility_quantity}],
         "success_url": safe_success_url,
         "cancel_url": safe_cancel_url,
         "allow_promotion_codes": True,
         "metadata": metadata,
-        "subscription_data": {"metadata": metadata},
     }
+    if not is_pilot:
+        # Pilot is a one-time payment; there is no subscription to attach
+        # metadata to. Do NOT set subscription_data for pilot.
+        checkout_kwargs["subscription_data"] = {"metadata": metadata}
     if existing_customer_id:
         checkout_kwargs["customer"] = existing_customer_id
     elif request.customer_email:
@@ -265,7 +311,7 @@ async def create_checkout(
     try:
         session = stripe.checkout.Session.create(**checkout_kwargs)
     except stripe.error.StripeError as exc:
-        logger.error("checkout_create_failed", error=str(exc), plan=plan["id"])
+        logger.error("checkout_create_failed", error=str(exc), plan=plan_id)
         raise HTTPException(
             status_code=502, detail=f"Stripe checkout creation failed: {exc.user_message or str(exc)}"
         ) from exc
@@ -275,7 +321,7 @@ async def create_checkout(
             _customers_mod._record_checkout_session_hint(
                 tenant_id=authenticated_tenant_id,
                 session_id=str(session.id),
-                plan_id=plan["id"],
+                plan_id=plan_id,
                 billing_period=billing_period,
                 customer_email=request.customer_email,
                 customer_id=existing_customer_id,
@@ -292,7 +338,7 @@ async def create_checkout(
         tenant_id=authenticated_tenant_id,
         event_name="checkout_started",
         metadata={
-            "plan_id": plan["id"],
+            "plan_id": plan_id,
             "billing_period": billing_period,
             "session_id": str(session.id),
         },
@@ -301,17 +347,18 @@ async def create_checkout(
     logger.info(
         "checkout_created",
         tenant_id=authenticated_tenant_id,
-        plan=plan["id"],
+        plan=plan_id,
         amount=amount,
         facility_quantity=facility_quantity,
         billing_period=billing_period,
+        pilot_variant=pilot_variant,
         session_id=session.id,
     )
 
     return CheckoutResponse(
         checkout_url=session.url,
         session_id=session.id,
-        plan=plan["id"],
+        plan=plan_id,
         billing_period=billing_period,
         amount=amount,
         facility_quantity=facility_quantity,

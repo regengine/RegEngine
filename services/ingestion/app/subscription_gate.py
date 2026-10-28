@@ -5,7 +5,7 @@ Checks Redis for the tenant's subscription status and rejects requests
 with HTTP 402 Payment Required if no active subscription exists.
 
 Redis key pattern: billing:tenant:{tenant_id} (hash with "status" field)
-Allowed statuses: "active", "trialing"
+Allowed statuses: "active", "trialing", "pilot_active" (90-day one-time pilot)
 
 Fail-closed semantics (#1182):
 - Missing Redis key  -> 402 (no silent paid-access grant to unbilled tenants).
@@ -23,9 +23,8 @@ import threading
 from typing import Any, Optional
 
 from fastapi import HTTPException, Request
-from starlette.concurrency import run_in_threadpool
-
 from shared.circuit_breaker import CircuitOpenError, redis_circuit
+from starlette.concurrency import run_in_threadpool
 
 logger = logging.getLogger("subscription-gate")
 
@@ -263,7 +262,11 @@ async def require_active_subscription(request: Request) -> None:
             ),
         )
 
-    allowed_statuses = {"active", "trialing"}
+    # A-2155/A-2159: ``pilot_active`` is written only after a settled
+    # one-time pilot payment and covers the 90-day pilot term. The gate
+    # does not evaluate ``current_period_end``; expiry is handled by the
+    # billing state (a later event moves the tenant off pilot_active).
+    allowed_statuses = {"active", "trialing", "pilot_active"}
     if status.lower() in allowed_statuses:
         return
 

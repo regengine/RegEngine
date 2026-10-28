@@ -25,7 +25,9 @@ logger = structlog.get_logger("stripe-billing")
 # ``subscription_gate.py`` ``allowed_statuses``). Anything the checkout
 # handler writes from this set unlocks every paid surface, so it must be
 # reached only from a verified Stripe read of a settled payment.
-_ENTITLING_STATUSES = {"active", "trialing"}
+# A-2155/A-2159: ``pilot_active`` is written only for a SETTLED one-time
+# pilot payment and entitles the tenant to Beta for the 90-day pilot term.
+_ENTITLING_STATUSES = {"active", "trialing", "pilot_active"}
 
 # Checkout ``payment_status`` values that mean the money actually moved
 # (or none was owed). Delayed payment methods — ACH/SEPA/Bacs, common in
@@ -33,6 +35,259 @@ _ENTITLING_STATUSES = {"active", "trialing"}
 # ``checkout.session.completed`` and only settle later via
 # ``checkout.session.async_payment_succeeded``.
 _SETTLED_PAYMENT_STATUSES = {"paid", "no_payment_required"}
+
+
+# ── #3726/A-2155: facility quantity + pilot helpers ────────────────────────
+
+
+def _extract_session_price_ids(session: dict[str, Any]) -> list[str]:
+    """Price IDs from an *expanded* checkout session's line items.
+
+    Webhook payloads only carry line items when the session was expanded;
+    an unexpanded payload yields ``[]`` and callers fall back to metadata.
+    """
+    line_items = _helpers_mod._stripe_get(session, "line_items", None)
+    data = _helpers_mod._stripe_get(line_items, "data", None) if line_items is not None else None
+    price_ids: list[str] = []
+    if isinstance(data, (list, tuple)):
+        for line_item in data:
+            price = _helpers_mod._stripe_get(line_item, "price", None)
+            price_id = _helpers_mod._stripe_get(price, "id", None) if price is not None else None
+            if isinstance(price_id, str) and price_id:
+                price_ids.append(price_id)
+    return price_ids
+
+
+def _session_price_ids_are_pilot(session: dict[str, Any]) -> bool:
+    return any(
+        _plans_mod._plan_for_stripe_price(price_id) == ("pilot", "one_time")
+        for price_id in _extract_session_price_ids(session)
+    )
+
+
+def _extract_subscription_item_quantity(subscription: Any) -> Optional[str]:
+    """Subscription quantity from the first item on a *known catalog* price.
+
+    Stripe puts the per-facility quantity on each subscription item. Only
+    items whose Price reverse-maps to a catalog (or pilot) entry count, so
+    an unrelated metered/one-off item can never become the facility count.
+    Returns ``None`` when no item carries a resolvable quantity.
+    """
+    if not subscription:
+        return None
+
+    items = _helpers_mod._stripe_get(subscription, "items", None)
+    data = _helpers_mod._stripe_get(items, "data", None) if items is not None else None
+    if not isinstance(data, (list, tuple)):
+        return None
+
+    for item in data:
+        price = _helpers_mod._stripe_get(item, "price", None)
+        price_id = _helpers_mod._stripe_get(price, "id", None) if price is not None else None
+        if not price_id:
+            # Legacy shape: items referenced a ``plan`` directly.
+            plan = _helpers_mod._stripe_get(item, "plan", None)
+            price_id = _helpers_mod._stripe_get(plan, "id", plan) if plan is not None else None
+        if not isinstance(price_id, str) or not price_id:
+            continue
+        if _plans_mod._plan_for_stripe_price(price_id) is None:
+            continue
+        quantity = _helpers_mod._coerce_optional_int(_helpers_mod._stripe_get(item, "quantity"))
+        if quantity:
+            return str(quantity)
+    return None
+
+
+def _extract_facility_quantity(subscription: Any, metadata: dict[str, Any]) -> str:
+    """Resolve the facility quantity persisted on the subscription mapping.
+
+    Preference order (A-2155): the first known-catalog subscription item's
+    Stripe quantity, then checkout-session metadata ``facility_quantity``,
+    then ``"1"``. Always returns a string (Redis hash values are strings).
+    """
+    item_quantity = _extract_subscription_item_quantity(subscription)
+    if item_quantity:
+        return item_quantity
+
+    metadata_quantity = _helpers_mod._coerce_optional_int((metadata or {}).get("facility_quantity"))
+    if metadata_quantity:
+        return str(metadata_quantity)
+    return "1"
+
+
+def _apply_pilot_credit_if_eligible(tenant_id: str, customer_id: str, mapping: dict) -> bool:
+    """Credit a prior pilot fee toward the customer's next subscription (A-2159).
+
+    Stripe ``Customer.create_balance_transaction`` with a NEGATIVE amount
+    adds a customer credit balance; Stripe automatically applies that
+    balance to the next invoice. Idempotent via ``pilot_credit_applied`` on
+    the tenant mapping.
+
+    Operational fallback: until this automation ships in production with
+    real pilot Price IDs configured, sales can still issue the same credit
+    manually from the Stripe Dashboard (out of scope here).
+
+    Returns ``True`` only when Stripe accepted the credit AND the flag was
+    persisted. On ``StripeError`` we log and leave the flag unset so a
+    later subscription checkout can retry; we never raise out of the
+    webhook for a credit failure.
+    """
+    # Only a real persisted value counts. Redis returns strings; accepting
+    # arbitrary objects here (``int(MagicMock) == 1``) would fabricate a fee
+    # from a partially mocked mapping and double-write state in tests.
+    fee_raw = (mapping or {}).get("pilot_fee_cents")
+    if isinstance(fee_raw, bool):
+        return False
+    if isinstance(fee_raw, int):
+        fee_cents = fee_raw
+    elif isinstance(fee_raw, str) and fee_raw.strip().isdigit():
+        fee_cents = int(fee_raw.strip())
+    else:
+        return False
+    if fee_cents <= 0:
+        return False
+
+    if str((mapping or {}).get("pilot_credit_applied", "")).strip().lower() == "true":
+        return False
+
+    if not customer_id:
+        logger.warning(
+            "stripe_pilot_credit_skipped_no_customer",
+            tenant_id=tenant_id,
+            pilot_fee_cents=fee_cents,
+        )
+        return False
+
+    try:
+        stripe.Customer.create_balance_transaction(
+            customer_id,
+            amount=-fee_cents,
+            currency="usd",
+            description="RegEngine pilot fee credit (A-2159)",
+        )
+    except stripe.error.StripeError as exc:
+        # Leave pilot_credit_applied unset: a retried subscription checkout
+        # (or a later event) can attempt the credit again.
+        logger.error(
+            "stripe_pilot_credit_failed",
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            pilot_fee_cents=fee_cents,
+            error=str(exc),
+        )
+        return False
+
+    mapping["pilot_credit_applied"] = "true"
+    try:
+        _state_mod._store_subscription_mapping(tenant_id, mapping)
+    except Exception as exc:  # pragma: no cover - Redis outage path
+        # The Stripe credit already moved. Do not claim success: the next
+        # retry will try again and could double-credit, so this is a loud
+        # operator alert rather than a silent success.
+        logger.error(
+            "stripe_pilot_credit_state_persist_failed",
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            pilot_fee_cents=fee_cents,
+            error=str(exc),
+        )
+        return False
+
+    logger.info(
+        "stripe_pilot_credit_applied",
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        pilot_fee_cents=fee_cents,
+    )
+    return True
+
+
+def _handle_pilot_checkout_completed(
+    session: dict[str, Any],
+    *,
+    tenant_id: str,
+    metadata: dict[str, Any],
+    event_created: Optional[int],
+) -> None:
+    """Persist a one-time pilot payment onto the tenant mapping (A-2155).
+
+    Pilot is not a recurring subscription: no ``subscription_id`` is
+    expected, the mapping is marked ``billing_period=one_time`` and, once
+    the payment settles, ``status=pilot_active`` for the 90-day pilot term.
+    """
+    variant = str(metadata.get("pilot_variant") or "standard").strip().lower()
+    if variant not in {"standard", "convert_30"}:
+        logger.warning(
+            "stripe_pilot_unknown_variant",
+            tenant_id=tenant_id,
+            session_id=session.get("id"),
+            pilot_variant=str(metadata.get("pilot_variant")),
+        )
+        variant = "standard"
+
+    settled = str(session.get("payment_status") or "") in _SETTLED_PAYMENT_STATUSES
+    status = "pilot_active" if settled else "incomplete"
+
+    # Prefer the amount Stripe actually charged (promo codes, taxes); fall
+    # back to the catalog constant for the purchased variant.
+    amount_total = _helpers_mod._coerce_int(session.get("amount_total"), default=0)
+    constant_cents = (
+        _plans_mod.PILOT_FEE_STANDARD_CENTS
+        if variant == "standard"
+        else _plans_mod.PILOT_FEE_CONVERT_30_CENTS
+    )
+    fee_cents = amount_total if amount_total > 0 else constant_cents
+
+    # "now" anchored to the session creation time when available so the
+    # 90-day term and convert window do not drift on webhook retries.
+    session_created = _helpers_mod._coerce_int(session.get("created"), default=0)
+    if session_created <= 0:
+        session_created = int(datetime.now(timezone.utc).timestamp())
+
+    mapping: dict[str, str] = {
+        "tenant_id": tenant_id,
+        "session_id": str(session.get("id") or ""),
+        "customer_id": str(session.get("customer") or ""),
+        # Payment mode never creates a subscription; keep the field empty so
+        # downstream lookups cannot bind this tenant to a stale subscription.
+        "subscription_id": "",
+        "plan_id": "pilot",
+        "billing_period": "one_time",
+        "status": status,
+        "customer_email": (
+            (session.get("customer_details") or {}).get("email")
+            or session.get("customer_email")
+            or str(metadata.get("customer_email", ""))
+        ),
+        "facility_quantity": "1",
+        "pilot_fee_cents": str(fee_cents),
+        "pilot_variant": variant,
+        "pilot_credit_applied": "false",
+    }
+    if settled:
+        mapping["current_period_end"] = (
+            _helpers_mod._format_period_end(session_created + _plans_mod.PILOT_DURATION_DAYS * 86400) or ""
+        )
+    else:
+        mapping["current_period_end"] = ""
+
+    if variant == "convert_30":
+        mapping["pilot_convert_window_end"] = (
+            _helpers_mod._format_period_end(session_created + _plans_mod.PILOT_CONVERT_WINDOW_DAYS * 86400) or ""
+        )
+
+    if event_created is not None:
+        mapping["last_event_created"] = str(int(event_created))
+
+    _state_mod._store_subscription_mapping(tenant_id, mapping)
+    logger.info(
+        "stripe_pilot_checkout_processed",
+        tenant_id=tenant_id,
+        session_id=session.get("id"),
+        status=status,
+        pilot_variant=variant,
+        pilot_fee_cents=fee_cents,
+    )
 
 
 async def _handle_checkout_completed(
@@ -134,6 +389,26 @@ async def _handle_checkout_completed(
     subscription_id = session.get("subscription")
 
     plan_id = _plans_mod._normalize_plan_id(str(metadata.get("plan_id", "growth")))
+
+    # A-2155/A-2159: pilot is a one-time PAYMENT, not a recurring
+    # subscription. Route it before the subscription-period normalization
+    # (pilot metadata uses ``billing_period=one_time``, which the recurring
+    # normalizer rightly rejects). Detection also honors the reverse-mapped
+    # Price when the session payload includes expanded line items.
+    is_pilot_checkout = (
+        str(session.get("mode") or "") == "payment"
+        or plan_id == "pilot"
+        or _session_price_ids_are_pilot(session)
+    )
+    if is_pilot_checkout:
+        _handle_pilot_checkout_completed(
+            session,
+            tenant_id=tenant_id,
+            metadata=metadata,
+            event_created=event_created,
+        )
+        return
+
     billing_period = _plans_mod._normalize_billing_period(str(metadata.get("billing_period", "monthly")))
 
     # #2930: never pre-set an entitling status. This value is persisted to
@@ -142,6 +417,7 @@ async def _handle_checkout_completed(
     # (or one we could not verify) entitles nothing.
     subscription_status = "incomplete"
     current_period_end = None
+    subscription: Any = None
     payment_status = str(session.get("payment_status") or "")
     if subscription_id:
         try:
@@ -175,6 +451,19 @@ async def _handle_checkout_completed(
         # and retries stay consistent, but the status written is one the
         # entitlement gate denies, and the operator gets a loud alert.
         price_ids = _helpers_mod._extract_subscription_price_ids(subscription)
+
+        # Reverse-mapped pilot Price on an (invalid, but possible) recurring
+        # checkout: treat it as the one-time pilot purchase rather than
+        # persisting a subscription for a non-recurring Price.
+        if any(_plans_mod._plan_for_stripe_price(price_id) == ("pilot", "one_time") for price_id in price_ids):
+            _handle_pilot_checkout_completed(
+                session,
+                tenant_id=tenant_id,
+                metadata=metadata,
+                event_created=event_created,
+            )
+            return
+
         stripe_plan: Optional[str] = None
         stripe_period: Optional[str] = None
         plan_ambiguous = False
@@ -225,6 +514,12 @@ async def _handle_checkout_completed(
         )
         subscription_status = "incomplete"
 
+    # A-2155: persist the per-facility billing quantity so the dashboard and
+    # future proration/credit logic can reconcile subscription quantity with
+    # the tenant's facility inventory. Item quantity wins over the claimed
+    # checkout metadata; both fall back to 1.
+    facility_quantity = _extract_facility_quantity(subscription, metadata)
+
     # #1196: the checkout event itself is the first write that establishes
     # a tenant ↔ subscription mapping. Stamp its ``event_created`` as the
     # watermark so subsequent reordered updates with older timestamps are
@@ -243,6 +538,7 @@ async def _handle_checkout_completed(
             or str(metadata.get("customer_email", ""))
         ),
         "current_period_end": current_period_end or "",
+        "facility_quantity": facility_quantity,
     }
     if event_created is not None:
         initial_mapping["last_event_created"] = str(int(event_created))
@@ -292,6 +588,14 @@ async def _handle_checkout_completed(
                     pending_event_created=pending_event_created,
                     checkout_event_created=checkout_event_created,
                 )
+
+        # A-2159: if this tenant previously paid a pilot fee that has not yet
+        # been credited, apply it to the customer's Stripe balance now that a
+        # real subscription checkout exists. Safe no-op when there is no
+        # uncredited pilot fee or it was already applied.
+        credit_mapping = _state_mod._get_subscription_mapping(tenant_id)
+        credit_customer_id = str(credit_mapping.get("customer_id") or customer_id or "")
+        _apply_pilot_credit_if_eligible(tenant_id, credit_customer_id, credit_mapping)
 
 
 def _update_subscription_status(
@@ -686,6 +990,8 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
             except (ValueError, TypeError):
                 last_seen = 0
             if event_created is None or int(event_created) >= last_seen:
+                mapping_changed = False
+
                 # #2951: same relocated field on the event's subscription
                 # payload. Persist only a value we actually resolved — a
                 # missing period end means "unknown", not "cleared", and
@@ -694,6 +1000,19 @@ async def _handle_stripe_event(event: dict[str, Any]) -> None:
                 event_period_end = _helpers_mod._extract_subscription_period_end(data_object)
                 if event_period_end:
                     existing["current_period_end"] = event_period_end
+                    mapping_changed = True
+
+                # A-2155: refresh the per-facility quantity when the event
+                # carries a known-catalog item quantity (e.g. a facility
+                # count change made through the Stripe customer portal).
+                # Missing quantity means "unknown", so keep the stored value.
+                if event_type == "customer.subscription.updated":
+                    item_quantity = _extract_subscription_item_quantity(data_object)
+                    if item_quantity:
+                        existing["facility_quantity"] = item_quantity
+                        mapping_changed = True
+
+                if mapping_changed:
                     _state_mod._store_subscription_mapping(tenant_id, existing)
         return
 
