@@ -252,6 +252,8 @@ def _persist_dual(session, event):
 
 def _orphan_the_canonical_row(session, tenant_id, event_id):
     """Simulate the #1277 failure: legacy row survives, canonical row is lost."""
+    # v138 append-only trigger: the simulated loss needs the break-glass GUC.
+    session.execute(text("SET LOCAL fsma.allow_mutation = 'true'"))
     session.execute(
         text(
             "DELETE FROM fsma.traceability_events "

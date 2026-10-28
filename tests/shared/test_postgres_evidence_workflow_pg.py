@@ -237,7 +237,10 @@ def test_canonical_content_tampering_is_rejected(workflow, tmp_path, column):
     _assert_package(w, tmp_path, verified=True)
     # Simulate corruption by a cluster administrator; runtime ACLs stay intact.
     expression = "quantity + 0.25" if column == "quantity" else "event_timestamp + interval '1 minute'"
-    with w.admin.cursor() as cur:
+    # v138 makes the canonical table append-only; the simulated administrator
+    # uses the break-glass GUC inside one transaction, as a real one would.
+    with w.admin.transaction(), w.admin.cursor() as cur:
+        cur.execute("SET LOCAL fsma.allow_mutation = 'true'")
         cur.execute(f"UPDATE fsma.traceability_events SET {column}={expression} WHERE tenant_id=%s", (w.tenant,))
     _assert_package(w, tmp_path, verified=False)
 
