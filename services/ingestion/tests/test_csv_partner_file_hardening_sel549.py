@@ -41,11 +41,17 @@ def _parse(text: str, cte: str | None = "harvesting", mapping=None):
     """
     log: list = []
     source_rows: list[int] = []
+    row_notes: dict = {}
     events, errors, warnings = ct.parse_csv_rows(
-        text, cte, header_mapping=mapping, row_log=log, event_source_rows=source_rows
+        text,
+        cte,
+        header_mapping=mapping,
+        row_log=log,
+        event_source_rows=source_rows,
+        row_notes=row_notes,
     )
     fake_results = [SimpleNamespace(status="accepted", errors=[]) for _ in source_rows]
-    ct.finalize_row_dispositions_from_ingest(log, source_rows, fake_results)
+    ct.finalize_row_dispositions_from_ingest(log, source_rows, fake_results, row_notes=row_notes)
     return events, errors, warnings, log
 
 
@@ -355,3 +361,194 @@ def test_acceptance_garbled_and_empty_rows_flagged(garbled_and_empty_rows_csv):
     assert any(e.startswith("Row 3:") for e in errors)
     assert outcome[4].reason == "blank_row"  # empty
     _assert_counts_balance(garbled_and_empty_rows_csv, events, log)
+
+
+# ---------------------------------------------------------------------------
+# Codex FAIL bf0265123 follow-ups: one final disposition; missing-column
+# overflow; 400 surfaces row_disposition_log; overflow aggregates do not
+# inflate rejected EventResults.
+# ---------------------------------------------------------------------------
+
+
+def test_missing_kdes_flag_is_not_a_second_disposition_when_ingest_rejects():
+    """Parse must not leave a flagged 'Accepted with missing KDEs' beside a later reject."""
+    header, rows = _fixture_rows()
+    # Drop reference_document so harvesting KDE completeness warns.
+    kept = [h for h in header if h != "reference_document"]
+    row = {k: v for k, v in rows[0].items() if k != "reference_document"}
+    text = _to_csv(kept, [row])
+    log: list = []
+    source_rows: list[int] = []
+    row_notes: dict = {}
+    events, errors, warnings = ct.parse_csv_rows(
+        text,
+        "harvesting",
+        row_log=log,
+        event_source_rows=source_rows,
+        row_notes=row_notes,
+    )
+    assert errors == [] and len(events) == 1 and source_rows == [2]
+    assert any("Missing KDEs" in w for w in warnings)
+    # No exclusive or flagged disposition claiming acceptance before ingest.
+    assert not any(e.disposition == "accepted" for e in log)
+    assert not any(e.reason == "missing_kdes" for e in log)
+    assert not any("Accepted with missing KDEs" in (e.detail or "") for e in log)
+    ct.finalize_row_dispositions_from_ingest(
+        log,
+        source_rows,
+        [SimpleNamespace(status="rejected", errors=["Duplicate event in batch"])],
+        row_notes=row_notes,
+    )
+    exclusive = [e for e in log if e.row_number == 2 and e.disposition in {"accepted", "rejected", "skipped"}]
+    assert len(exclusive) == 1
+    assert exclusive[0].disposition == "rejected"
+    assert exclusive[0].reason == "duplicate"
+    assert "Accepted with missing KDEs" not in (exclusive[0].detail or "")
+    # Missing KDEs may appear as a note on the final entry only.
+    assert "missing KDEs" in (exclusive[0].detail or "").lower() or exclusive[0].reason == "duplicate"
+
+
+def test_missing_kdes_note_on_final_accepted_entry_only():
+    header, rows = _fixture_rows()
+    kept = [h for h in header if h != "reference_document"]
+    row = {k: v for k, v in rows[0].items() if k != "reference_document"}
+    text = _to_csv(kept, [row])
+    log: list = []
+    source_rows: list[int] = []
+    row_notes: dict = {}
+    events, errors, warnings = ct.parse_csv_rows(
+        text,
+        "harvesting",
+        row_log=log,
+        event_source_rows=source_rows,
+        row_notes=row_notes,
+    )
+    assert len(events) == 1
+    ct.finalize_row_dispositions_from_ingest(
+        log,
+        source_rows,
+        [SimpleNamespace(status="accepted", errors=[])],
+        row_notes=row_notes,
+    )
+    row_entries = [e for e in log if e.row_number == 2]
+    exclusive = [e for e in row_entries if e.disposition in {"accepted", "rejected", "skipped"}]
+    flagged = [e for e in row_entries if e.disposition == "flagged" and e.reason == "missing_kdes"]
+    assert len(exclusive) == 1 and exclusive[0].disposition == "accepted"
+    assert flagged == []
+    assert "missing KDEs" in (exclusive[0].detail or "")
+    assert "Accepted with missing KDEs" not in (exclusive[0].detail or "")
+
+
+def test_missing_columns_with_overflow_accounts_for_every_physical_row(monkeypatch):
+    """Missing-column early return must still bucket unread overflow rows."""
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    kept = [h for h in header if h not in {"quantity", "unit_of_measure"}]
+    # 5 physical data rows from fixture only (repeat real rows).
+    five = [dict(rows[i % len(rows)]) for i in range(5)]
+    for row in five:
+        row.pop("quantity", None)
+        row.pop("unit_of_measure", None)
+    text = _to_csv(kept, five)
+    events, errors, _w, log = _parse(text)
+    assert events == []
+    assert errors and "Missing required columns" in errors[0]
+    physical = len(text.splitlines()) - 1
+    exclusive = [e for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}]
+    assert len(exclusive) == physical
+    _assert_counts_balance(text, events, log)
+
+
+def test_missing_columns_400_includes_row_disposition_log(monkeypatch):
+    """The no-valid-rows 400 must surface the per-row disposition log."""
+    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from app.webhook_compat import _verify_api_key
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    header, rows = _fixture_rows()
+    kept = [h for h in header if h not in {"quantity", "unit_of_measure"}]
+    body_rows = [{k: v for k, v in rows[0].items() if k in kept}]
+    text = _to_csv(kept, body_rows)
+
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], tenant_id="t1"
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/ingest/csv",
+        files={"file": ("partner.csv", text.encode(), "text/csv")},
+        data={"cte_type": "harvesting"},
+    )
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert isinstance(detail, dict)
+    assert "missing_columns" in detail
+    assert "row_disposition_log" in detail
+    log = detail["row_disposition_log"]
+    exclusive = [
+        e for e in log if e.get("row_number", 0) >= 2 and e.get("disposition") in {"accepted", "rejected", "skipped"}
+    ]
+    assert len(exclusive) == 1
+    assert exclusive[0]["disposition"] == "rejected"
+
+
+def test_overflow_aggregate_parse_errors_do_not_inflate_rejected_totals(monkeypatch):
+    """Aggregate overflow parse_errors must not become extra rejected EventResults."""
+    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from app.webhook_compat import _verify_api_key
+    from app.webhook_models import EventResult, IngestResponse
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    four = [dict(rows[i % len(rows)]) for i in range(4)]
+    text = _to_csv(header, four)
+
+    async def _fake_ingest(payload, **kwargs):
+        results = [
+            EventResult(
+                traceability_lot_code=ev.traceability_lot_code,
+                cte_type=ev.cte_type.value if hasattr(ev.cte_type, "value") else ev.cte_type,
+                status="accepted",
+                event_id=f"evt-{i}",
+            )
+            for i, ev in enumerate(payload.events)
+        ]
+        return IngestResponse(accepted=len(results), rejected=0, total=len(results), events=results)
+
+    monkeypatch.setattr(ct, "ingest_events", _fake_ingest)
+
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], tenant_id="t1"
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/ingest/csv",
+        files={"file": ("big.csv", text.encode(), "text/csv")},
+        data={"cte_type": "harvesting"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    log = body["row_disposition_log"]
+    exclusive = [e for e in log if e["row_number"] >= 2 and e["disposition"] in {"accepted", "rejected", "skipped"}]
+    physical = 4
+    assert len(exclusive) == physical
+    bucket_rejected = sum(1 for e in exclusive if e["disposition"] == "rejected")
+    bucket_skipped = sum(1 for e in exclusive if e["disposition"] == "skipped")
+    bucket_accepted = sum(1 for e in exclusive if e["disposition"] == "accepted")
+    assert bucket_accepted + bucket_rejected + bucket_skipped == physical
+    assert body["accepted"] == bucket_accepted
+    # The "N more row(s)" aggregate must never appear as its own rejected EventResult.
+    assert not any(any("more row(s)" in err for err in e.get("errors", [])) for e in body.get("events", []))
+    # First over-limit row may still surface as one rejected EventResult; totals
+    # must match exclusive rejected, not rejected + aggregate count.
+    assert body["rejected"] == bucket_rejected
+    assert body["total"] == body["accepted"] + body["rejected"]

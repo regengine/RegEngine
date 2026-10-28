@@ -876,6 +876,7 @@ def finalize_row_dispositions_from_ingest(
     row_log: Optional[list[CsvRowDispositionEntry]],
     event_source_rows: Sequence[int],
     event_results: Sequence[object],
+    row_notes: Optional[Mapping[int, Sequence[str]]] = None,
 ) -> None:
     """Append the final per-row disposition after ``ingest_events`` returns.
 
@@ -883,25 +884,33 @@ def finalize_row_dispositions_from_ingest(
     Each source row listed in ``event_source_rows`` (parallel to the parsed
     events / the first ``len(event_source_rows)`` ingest results) gets exactly
     one exclusive outcome here: accepted, or rejected (including duplicates).
+
+    ``row_notes`` carries parse-time observations (e.g. missing KDEs) that must
+    ride on that final exclusive entry — never as a second disposition that
+    could claim the row was already accepted.
     """
     if row_log is None:
         return
+    notes = row_notes or {}
     # ingest_csv may append synthetic EventResults for parse_errors after
     # ingest_events; only the results that correspond to parsed events finalize.
     for row_number, result in zip(event_source_rows, event_results):
         status = getattr(result, "status", None)
         errors = list(getattr(result, "errors", None) or [])
+        extra = list(notes.get(row_number) or [])
+        note_suffix = f"; {'; '.join(extra)}" if extra else ""
         if status == "accepted":
+            detail = "Row ingested" + note_suffix
             _append_row_log(
                 row_log,
                 row_number=row_number,
                 disposition="accepted",
                 reason="ingested",
-                detail="Row ingested",
+                detail=detail,
             )
             continue
         reason = _ingest_reject_reason(errors)
-        detail = errors[0] if errors else "Row rejected during ingest"
+        detail = (errors[0] if errors else "Row rejected during ingest") + note_suffix
         # Never echo partner cell values; EventResult errors are codes/messages.
         _append_row_log(
             row_log,
@@ -918,6 +927,7 @@ def parse_csv_rows(
     header_mapping: Optional[Mapping[str, str]] = None,
     row_log: Optional[list[CsvRowDispositionEntry]] = None,
     event_source_rows: Optional[list[int]] = None,
+    row_notes: Optional[dict[int, list[str]]] = None,
 ) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
@@ -945,6 +955,12 @@ def parse_csv_rows(
     ``event_source_rows``, when provided, is filled with the CSV line number
     of each returned event (same order as ``events``), so the ingest path can
     finalize dispositions without inventing row associations.
+
+    ``row_notes``, when provided, collects non-exclusive parse observations
+    (currently missing KDEs) keyed by row number. Callers fold these into the
+    final exclusive disposition via ``finalize_row_dispositions_from_ingest``
+    so a row never carries both a pre-ingest "Accepted with missing KDEs"
+    flag and a later reject.
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
@@ -1077,6 +1093,20 @@ def parse_csv_rows(
                 reason="missing_required_columns",
                 detail=detail,
             )
+        # Unread rows past the buffer still exist physically; every one must
+        # land in an exclusive bucket so accepted+rejected+skipped equals the
+        # file's data-row count (SEL-549 / Codex review).
+        if skipped_overflow:
+            base = 1 + len(records)
+            for offset in range(1, skipped_overflow + 1):
+                overflow_row = base + offset
+                _append_row_log(
+                    row_log,
+                    row_number=overflow_row,
+                    disposition="rejected",
+                    reason="missing_required_columns",
+                    detail=detail,
+                )
         return ([], [detail], [])
 
     unrecognized = _unrecognized_partner_columns(header, header_mapping)
@@ -1383,13 +1413,12 @@ def parse_csv_rows(
             missing_kdes = _validate_kde_completeness(row_cte, event, kdes)
             if missing_kdes:
                 kde_warnings.append(f"Row {row_num}: Missing KDEs for {row_cte}: {', '.join(missing_kdes)}")
-                _append_row_log(
-                    row_log,
-                    row_number=row_num,
-                    disposition="flagged",
-                    reason="missing_kdes",
-                    detail=f"Accepted with missing KDEs: {', '.join(missing_kdes)}",
-                )
+                # Do not log a flagged "Accepted with missing KDEs" here: ingest
+                # may still reject the row, and a row must have exactly one
+                # final exclusive disposition. Carry the observation as a note
+                # for finalize_row_dispositions_from_ingest to attach.
+                if row_notes is not None:
+                    row_notes.setdefault(row_num, []).append(f"missing KDEs: {', '.join(missing_kdes)}")
             # Do not log accepted/ingested here. Dedup, KDE checks and
             # persistence decide the final disposition in ingest_events;
             # finalize_row_dispositions_from_ingest records it once.
@@ -1912,12 +1941,14 @@ async def ingest_csv(
         )
     row_log: list[CsvRowDispositionEntry] = []
     event_source_rows: list[int] = []
+    row_notes: dict[int, list[str]] = {}
     events, parse_errors, kde_warnings = parse_csv_rows(
         text,
         fallback_cte,
         header_mapping=header_mapping.applied_mapping,
         row_log=row_log,
         event_source_rows=event_source_rows,
+        row_notes=row_notes,
     )
     kde_warnings.extend(xlsx_warnings)
     missing_columns = [e.field for e in row_log if e.reason == "missing_column" and e.field]
@@ -1928,6 +1959,10 @@ async def ingest_csv(
         if missing_columns:
             # SEL-549: name the absent columns so the uploader can fix the header.
             detail["missing_columns"] = missing_columns
+        # Every physical row's exclusive outcome, including unread overflow on
+        # the missing-column path — clients need this to reconcile counts.
+        if row_log:
+            detail["row_disposition_log"] = [entry.model_dump() for entry in row_log]
         if xlsx_warnings:
             detail["kde_warnings"] = kde_warnings
             detail["kde_warning_count"] = len(kde_warnings)
@@ -1974,7 +2009,7 @@ async def ingest_csv(
         source_file=receipt,
     )
     # Final dispositions only: parse never claimed these rows were ingested.
-    finalize_row_dispositions_from_ingest(row_log, event_source_rows, response.events)
+    finalize_row_dispositions_from_ingest(row_log, event_source_rows, response.events, row_notes=row_notes)
 
     artifacts_recorded = 0
     if header_mapping.ok and header_mapping.suggestions:
@@ -1999,6 +2034,12 @@ async def ingest_csv(
         from .webhook_models import EventResult
 
         for err in parse_errors:
+            # Aggregate overflow ("N more row(s) ... skipped") is already
+            # represented per physical row in row_disposition_log. Emitting it
+            # again as a rejected EventResult inflates rejected/total past the
+            # exclusive bucket sum (SEL-549 / Codex review).
+            if "more row(s)" in err and "were skipped" in err:
+                continue
             response.events.append(
                 EventResult(
                     traceability_lot_code="", cte_type=fallback_cte or "unknown", status="rejected", errors=[err]
