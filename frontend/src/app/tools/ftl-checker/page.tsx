@@ -3,7 +3,6 @@ import { FTLCheckerClient } from "./components/FTLCheckerClient";
 import { Suspense } from "react";
 import { Container } from "@/components/layout/container";
 import { JSONLD } from "@/components/seo/json-ld";
-import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,9 +70,7 @@ export default function FTLCheckerPage() {
         <>
             <Suspense fallback={<FTLCheckerSkeleton />}>
                 <JSONLD data={jsonLd} />
-                <EmailGate toolName="ftl-checker">
-                    <FTLCheckerClient />
-                </EmailGate>
+                <FTLCheckerClient />
             </Suspense>
             <RelatedTools tools={[
                 { href: "/tools/cte-mapper", title: "CTE Mapper", description: "Map the 7 Critical Tracking Event (CTE) types your supply chain often records under FSMA 204." },
