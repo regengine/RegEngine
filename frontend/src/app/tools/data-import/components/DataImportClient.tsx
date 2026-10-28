@@ -182,19 +182,19 @@ export function DataImportClient() {
     return (
         <FreeToolPageShell
             title="Data Import Hub"
-            subtitle="Get your traceability data into RegEngine. Upload CSV or XLSX files (including Sensitech TempTale logs), or connect via the JSON events API."
+            subtitle="Get your traceability data into RegEngine. Upload CSV files for Critical Tracking Events, or connect via the JSON events API. Live today: CSV upload and the JSON events API. Other connectors are Beta or Preview."
             relatedToolIds={['ftl-checker', 'cte-mapper', 'kde-checker']}
         >
             <LeadGate
                 source="data-import"
                 headline="Unlock the Data Import Hub"
-                subheadline="Upload CSV or XLSX files (including IoT temperature logs), or connect via the JSON events API to start building your traceability records."
+                subheadline="Upload CSV files for Critical Tracking Events, or connect via the JSON events API to start building your traceability records. Live today: CSV upload and the JSON events API. Other connectors are Beta or Preview."
                 ctaText="Access Import Tools"
                 teaser={
                     <Card padding="spacious" className="text-center">
                         <Upload className="mx-auto mb-3 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                         <p className="text-subheading text-re-text-primary">Three Ways to Import</p>
-                        <p className="mt-2 text-ui text-re-text-secondary">CSV and XLSX upload with templates for every Critical Tracking Event (CTE) type, Sensitech TempTale CSV import, and the JSON events API.</p>
+                        <p className="mt-2 text-ui text-re-text-secondary">CSV upload with templates for every Critical Tracking Event (CTE) type, and the JSON events API. Live today: CSV upload and the JSON events API. Other connectors are Beta or Preview.</p>
                     </Card>
                 }
             >
@@ -392,9 +392,9 @@ export function DataImportClient() {
                                 <div className="flex items-center gap-3">
                                     <Thermometer className="h-5 w-5 shrink-0 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                     <div>
-                                        <CardTitle>Sensitech TempTale Import</CardTitle>
+                                        <CardTitle>Sensitech TempTale (Beta)</CardTitle>
                                         <CardDescription>
-                                            Upload Sensitech TempTale CSV exports to create temperature-linked CTE events.
+                                            Sensitech CSV import exists in experimental routers and is not on the production allowlist. Do not market it as Live.
                                         </CardDescription>
                                     </div>
                                 </div>
@@ -436,11 +436,11 @@ export function DataImportClient() {
                                         Upload Sensitech TempTale CSV
                                     </div>
                                     <div className="break-words font-mono text-[0.8125rem] text-re-text-tertiary">
-                                        POST /api/v1/ingest/iot/sensitech. Available now via API
+                                        POST /api/v1/ingest/iot/sensitech exists on experimental routers; not on the production allowlist.
                                     </div>
                                     <div className="mt-4">
                                         <Badge tone="neutral" size="sm" mono>
-                                            API Available Now
+                                            Beta / not in production allowlist
                                         </Badge>
                                     </div>
                                 </div>

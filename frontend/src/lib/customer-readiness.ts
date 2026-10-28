@@ -38,7 +38,7 @@ export const INTEGRATION_TYPE_LABELS: Record<IntegrationType, string> = {
 export const INTEGRATION_TYPE_DESCRIPTIONS: Record<IntegrationType, string> = {
     standards_based: 'Standards-oriented ingest and export support without a claim of managed two-way sync or source-system write-back.',
     api_based_custom: 'Customer-managed integration via RegEngine API and implementation guidance. The customer builds and maintains the workflow unless otherwise scoped.',
-    file_based_import: 'Manual CSV/XLSX upload with field mapping and exception handling. Scheduled file delivery is on the roadmap.',
+    file_based_import: 'Manual CSV upload with field mapping and exception handling. XLSX is not accepted in the current Data Import Hub.',
     one_way_export: 'RegEngine prepares outbound packages. No write-back to source system.',
 };
 
@@ -184,10 +184,10 @@ export const CAPABILITY_REGISTRY: CapabilityRegistryEntry[] = [
         id: 'sensitech',
         name: 'Sensitech TempTale',
         category: 'food_safety_iot',
-        status: 'implemented',
+        status: 'preparation',
         delivery_mode: 'csv_sftp_import',
         integration_type: 'file_based_import',
-        customer_copy: 'Sensitech CSV exports are supported in the data-import flow for temperature-linked events.',
+        customer_copy: 'Sensitech TempTale CSV import is experimental and excluded from the production router allowlist.',
         evidence_url: '/tools/data-import',
     },
     {
