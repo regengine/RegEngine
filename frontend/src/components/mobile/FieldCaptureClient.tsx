@@ -241,7 +241,7 @@ export function FieldCaptureClient() {
         } catch {
             await saveScan(rawScan, eventPayload, parsedState.cteType, idempotencyKey);
             toast({
-                title: 'Upload Failed - Saved Offline',
+                title: 'Upload Failed: Saved Offline',
                 description: 'Connection error. Scan saved locally.',
                 variant: 'destructive',
             });
@@ -343,7 +343,7 @@ export function FieldCaptureClient() {
         } catch {
             await savePhoto(blob);
             toast({
-                title: 'Upload Failed - Saved Offline',
+                title: 'Upload Failed: Saved Offline',
                 description: 'Saved locally for later sync.',
                 variant: 'destructive',
             });

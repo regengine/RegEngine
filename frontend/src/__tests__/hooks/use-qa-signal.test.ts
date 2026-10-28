@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveQASignal } from '@/hooks/use-qa-signal';
+import { QA_TIMEOUT_MESSAGE, deriveQASignal, isQATimeoutError } from '@/hooks/use-qa-signal';
 import type { QAHealthResponse, QAHealthStatus } from '@/types/api';
 
 function response(status: QAHealthStatus): QAHealthResponse {
@@ -83,5 +83,17 @@ describe('deriveQASignal', () => {
     for (const [status, label] of Object.entries(labels) as [QAHealthStatus, string][]) {
       expect(deriveQASignal({ enabled: true, isLoading: false, error: null, data: response(status) }).label).toBe(label);
     }
+  });
+
+  it('an aborted fetch reads as the timeout message, not a generic failure', () => {
+    const timeout = new DOMException('The operation was aborted.', 'AbortError');
+    expect(isQATimeoutError(timeout)).toBe(true);
+    expect(isQATimeoutError(new Error('timeout'))).toBe(false);
+    const qa = deriveQASignal({ enabled: true, isLoading: false, error: timeout, data: undefined });
+    expect(qa.status).toBe('failed');
+    expect(qa.label).toBe(QA_TIMEOUT_MESSAGE);
+    expect(qa.label).toBe('The QA signal did not respond.');
+    expect(qa.passing).toBe(false);
+    expect(qa.readyPercent).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import pytest
 from app import alerts as alerts_mod
@@ -294,7 +295,9 @@ class TestFetchFdaRecallAlerts:
         assert a.severity == "critical"
         assert a.metadata["recall_number"] == "F-123-2026"
         assert a.metadata["match_tier"] == "lot_code"
-        assert a.metadata["fda_url"].startswith("https://www.accessdata.fda.gov")
+        fda = urlparse(a.metadata["fda_url"])
+        assert fda.scheme == "https"
+        assert fda.hostname == "www.accessdata.fda.gov"
         assert a.acknowledged is False
 
     def test_supplier_match_tier(self):

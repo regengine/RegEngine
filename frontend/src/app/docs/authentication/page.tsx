@@ -134,7 +134,7 @@ export default function AuthenticationDocsPage() {
                             <p className="text-ui text-re-text-secondary">
                                 Scopes limit which of the endpoints above a key can call. They are not a read-only guarantee: some other
                                 operations on the RegEngine backend, for example compliance snapshots, SLA request updates, onboarding steps
-                                and the EPCIS intake endpoint (in Preview), accept any valid tenant key without checking a named scope. Treat every key as
+                                and the EPCIS intake endpoint (Preview), accept any valid tenant key without checking a named scope. Treat every key as
                                 read-write for its workspace. Keep it on your server, never in client-side code, and ask RegEngine to
                                 revoke it if it leaks.
                             </p>

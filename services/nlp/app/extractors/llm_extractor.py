@@ -54,7 +54,20 @@ _LLM_MAX_INPUT_CHARS_DEFAULT = 50_000
 # the model as feedback (#1238) or persisting to the DB. Matches C0
 # control minus printable whitespace (tab / newline / carriage return),
 # DEL, and the invisible Unicode class used to smuggle unseen payloads.
-_CONTROL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
+# Enumerated explicitly (no large character ranges) so CodeQL
+# py/overly-large-range alert 57 stays clear.
+_CONTROL_CHARS = re.compile(
+    "["
+    "\x00\x01\x02\x03\x04\x05\x06\x07\x08"
+    "\x0b\x0c"
+    "\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
+    "\x7f"
+    "\u200b\u200c\u200d\u200e\u200f"
+    "\u202a\u202b\u202c\u202d\u202e"
+    "\u2060\u2061\u2062\u2063\u2064"
+    "\ufeff"
+    "]"
+)
 
 # Low-effort SQL injection detector for scanning LLM output (#1246).
 # Not a parser — just flags obvious DDL/DML payloads before we

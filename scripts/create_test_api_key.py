@@ -28,6 +28,7 @@ passed. Test keys do not belong in production. There, an authenticated
 high-assurance sysadmin (WebAuthn or SSO session) creates keys through
 POST /v1/admin/keys, or the "Create New API Key" card on the /admin page.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -83,6 +84,7 @@ def _is_local_url(database_url: str) -> bool:
     """True only when every effective host of the URL is local."""
     hosts = _effective_db_hosts(database_url)
     return bool(hosts) and all(h in LOCAL_HOSTS for h in hosts)
+
 
 # Matches the AUTH_TEST_BYPASS default tenant and the legacy phase-2b seed
 # tenant, so a key minted here composes with existing local fixtures.
@@ -227,10 +229,7 @@ def _seed_billing_status(tenant_id: str, allow_production: bool = False) -> str:
     """
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     if not _is_local_url(redis_url) and not allow_production:
-        return (
-            "SKIPPED (REDIS_URL is not a localhost URL; not writing billing "
-            "state without --allow-production)."
-        )
+        return "SKIPPED (REDIS_URL is not a localhost URL; not writing billing state without --allow-production)."
     try:
         import redis as redis_lib
 

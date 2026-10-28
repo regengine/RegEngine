@@ -162,11 +162,11 @@ describe('EPCIS 2.0 import on /ingest', () => {
     expect(mocks.ingestEpcisEvent).not.toHaveBeenCalled();
     expect(mocks.ingestEpcisXml).not.toHaveBeenCalled();
     expect(mocks.validateEpcis).not.toHaveBeenCalled();
-    // Atomic (default) rejection: the page shows detail.message only. The
-    // per-event errors carry no msg/message key, so detailToMessage drops them.
+    // Atomic (default) rejection: detail.message heads one line per event.
     expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
     expect(screen.getByText(ATOMIC_BATCH_MESSAGE)).toBeInTheDocument();
-    expect(screen.queryByText(/^Event \d+:/)).not.toBeInTheDocument();
+    expectEveryEventRejected(eventList.length);
+    expect(screen.getAllByText(/^Event \d+:/)).toHaveLength(eventList.length);
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
@@ -184,11 +184,12 @@ describe('EPCIS 2.0 import on /ingest', () => {
       apiKey: 'cookie-managed', // pragma: allowlist secret
       events,
     });
-    // Partial rejection: the body has no detail key, so the page falls back
-    // to the error message and shows no per-event errors.
+    // Partial rejection: the body has no detail key, so the error message is
+    // the heading and the body's errors give one line per event.
     expect(await screen.findByText('Ingestion Failed')).toBeInTheDocument();
     expect(screen.getByText(rejection.message)).toBeInTheDocument();
-    expect(screen.queryByText(/^Event \d+:/)).not.toBeInTheDocument();
+    expectEveryEventRejected(events.length);
+    expect(screen.getAllByText(/^Event \d+:/)).toHaveLength(events.length);
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 

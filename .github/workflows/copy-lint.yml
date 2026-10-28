@@ -2,6 +2,7 @@ name: Copy rules report
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'scripts/copy-lint/**'

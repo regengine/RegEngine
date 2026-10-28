@@ -484,7 +484,7 @@ class LaunchOrchestrator:
 2. Try our sandbox environment
 3. Review case studies from similar companies
 
-Contact: sales@regengine.ai
+Contact: sales@regengine.co
 """
 
     def _initialize_outbound_sequence(self, phase: OrchestrationPhase, campaign: Dict[str, Any]):

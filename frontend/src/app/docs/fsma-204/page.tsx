@@ -38,7 +38,7 @@ const PROSE_LINK =
 const FACTS = [
     { icon: Clock, label: '24-hour sortable-spreadsheet obligation' },
     { icon: Shield, label: 'Aligned to 21 CFR § 1.1455(c)' },
-    { icon: CheckCircle, label: 'Earliest enforcement date: July 20, 2028' },
+    { icon: CheckCircle, label: 'FDA enforcement not before July 20, 2028' },
 ];
 
 const CTE_ROWS = [
@@ -124,7 +124,8 @@ export default function FSMA204GuidePage() {
 
                     <Callout tone="warning" title="Enforcement Delayed">
                         <p className="text-ui text-re-text-secondary">
-                            FDA has proposed a 30-month extension and Congress directed FDA not to enforce before <strong className="font-medium text-re-text-primary">July 20, 2028</strong>.
+                            The compliance date under the rule remains January 20, 2026 (87 FR 70910). The 30-month extension is only proposed (90 FR 38084).
+                            FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
                             RegEngine tracks FDA timing changes so your team isn&apos;t relying on stale dates.
                         </p>
                     </Callout>

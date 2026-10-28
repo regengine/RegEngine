@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, Shield, FileCheck, Upload, Download, CheckCircle2, Loader2 } from 'lucide-react';
 import { FreeToolPageShell } from '@/components/layout/FreeToolPageShell';
@@ -46,12 +47,12 @@ const PACKAGE_PARTS = [
   {
     icon: Shield,
     title: 'Chain Verification',
-    body: 'SHA-256 hash chain proving record integrity. Each event cryptographically linked to its predecessor.',
+    body: 'SHA-256 hash chains support tamper detection where enabled. Hashing is a RegEngine feature, not an FDA requirement.',
   },
   {
     icon: FileCheck,
     title: 'Package Manifest',
-    body: 'Cryptographic manifest with file checksums. Independent verification without RegEngine.',
+    body: 'Manifest with file checksums for checking content hashes where enabled.',
   },
 ];
 
@@ -225,6 +226,7 @@ async function generatePackage(records: CteRecord[]): Promise<GeneratedPackage> 
 }
 
 export default function ExportPage() {
+  const posthog = usePostHog();
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [generationStep, setGenerationStep] = useState<string | null>(null);
   const [generatedPackage, setGeneratedPackage] = useState<GeneratedPackage | null>(null);
@@ -236,6 +238,7 @@ export default function ExportPage() {
       if (!file) return;
 
       trackToolRunStarted('export');
+      posthog?.capture('tool_started', { tool_id: 'export' });
       setIsGenerating(true);
       setGenerationStep(null);
 
@@ -282,7 +285,7 @@ export default function ExportPage() {
 
       setIsGenerating(false);
     },
-    []
+    [posthog]
   );
 
   const downloadPackage = useCallback((): void => {

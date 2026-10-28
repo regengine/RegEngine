@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import Iterable, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 import structlog
@@ -15,6 +15,30 @@ from ...config import get_settings
 from .base import FetchedItem, Source, StateRegistryScraper
 
 logger = structlog.get_logger("ingestion.scrapers.google_discovery")
+
+# Map of US state government parent domains to jurisdiction codes. Matching is
+# done against the parsed URL hostname (exact host or subdomain) rather than a
+# substring of the full URL, so a crafted path/query such as
+# "https://evil.example.com/?x=.ny.gov" cannot forge a jurisdiction.
+_STATE_GOV_DOMAINS: tuple[tuple[str, str], ...] = (
+    ("ny.gov", "US-NY"),
+    ("ca.gov", "US-CA"),
+    ("tx.gov", "US-TX"),
+)
+
+
+def _jurisdiction_from_url(url: str) -> str:
+    """Return the jurisdiction code for *url* based on its parsed hostname."""
+    host = (urlsplit(url).hostname or "").lower()
+    # A fully-qualified host may carry a terminal DNS root dot
+    # (``health.ny.gov.``). Strip it so rooted hosts still match the
+    # jurisdiction suffixes below instead of falling back to "US".
+    if host.endswith("."):
+        host = host[:-1]
+    for domain, code in _STATE_GOV_DOMAINS:
+        if host == domain or host.endswith("." + domain):
+            return code
+    return "US"
 
 
 class GoogleDiscoveryScraper(StateRegistryScraper):
@@ -79,14 +103,10 @@ class GoogleDiscoveryScraper(StateRegistryScraper):
                 logger.debug("ssrf_validation_failed_google_discovery", url=item.get("link"), error=str(e))
                 continue
 
-            # Determine jurisdiction from domain (simple heuristic)
-            jurisdiction = "US"
-            if ".ny.gov" in url:
-                jurisdiction = "US-NY"
-            elif ".ca.gov" in url:
-                jurisdiction = "US-CA"
-            elif ".tx.gov" in url:
-                jurisdiction = "US-TX"
+            # Determine jurisdiction from the parsed hostname (simple
+            # heuristic). See _jurisdiction_from_url for why substring checks
+            # on the raw URL are unsafe.
+            jurisdiction = _jurisdiction_from_url(url)
 
             sources.append(
                 Source(
