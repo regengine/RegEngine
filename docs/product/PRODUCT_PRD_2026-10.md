@@ -34,13 +34,13 @@ Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/ro
 
 | Stage | Router (line) | What it does | Evidence |
 | --- | --- | --- | --- |
-| Ingest | `webhook` (557, always mounted) | JSON events API, `POST /api/v1/webhooks/ingest` | `services/ingestion/app/webhook_router_v2.py`; registry: live |
+| Ingest | `webhook` (557, always mounted) | JSON events API, `POST /api/v1/webhooks/ingest` | `services/ingestion/app/webhook_router_v2/`; registry: live |
 | Ingest | `csv` (596) | Per-CTE CSV templates and `POST /api/v1/ingest/csv` | `services/ingestion/app/csv_templates.py`; registry: live |
 | Ingest | `epcis_ingestion` (636) | EPCIS 2.0 events, batch, XML, validate, export under `/api/v1/epcis` | `services/ingestion/app/epcis/router.py`; registry: preview |
 | Ingest | `edi` (606) | EDI import under `/api/v1/ingest/edi` | `services/ingestion/app/edi_ingestion/routes.py`; registry: off. Mounted but not claimed; see Q6 |
 | Ingest | `core_ingest` (545), `status` (553) | Document, URL and regulation ingest; ingestion status | `services/ingestion/app/routes_ingest.py`, `routes_status.py`; status: Beta |
 | Preflight | `inflow_workbench` (579) | Runs, readiness preview and summary, fix queue, commit gate, scenarios under `/api/v1/inflow-workbench` | `services/ingestion/app/inflow_workbench.py`; tables `fsma.inflow_workbench_*`; status: Beta |
-| Validate | `rules` (743), `exceptions` (748), `score` (611), `readiness` (782), `compliance_metrics` (777), `fsma_compliance` (980) | Versioned rules engine (27 critical, 9 warning rules seeded as of 2026-07-28), exception queue, compliance score, readiness wizard, metrics, advisory `POST /validate` and snapshots | `services/shared/rules/`, `docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md`, `services/compliance/app/`; status: Beta |
+| Validate | `rules` (743), `exceptions` (748), `score` (611), `readiness` (782), `compliance_metrics` (777), `fsma_compliance` (980) | Versioned rules engine (26 critical, 11 warning rules in services/shared/rules/seeds.py), exception queue, compliance score, readiness wizard, metrics, advisory `POST /validate` and snapshots | `services/shared/rules/`, `docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md`, `services/compliance/app/`; status: Beta |
 | Validate | enforcement switch | `RULES_ENGINE_ENFORCE` is `off` by default; `cte_only` and `all` exist; no-verdict events are accepted in every mode | `services/shared/rules/enforcement.py`; status: Beta |
 | Persist | `canonical_records` (738) | Tenant-scoped reads over `fsma.traceability_events` | `services/ingestion/app/canonical_router.py:120`; status: Beta |
 | Persist | `chain_verification` (799), `audit_export_log` (804), `sla_tracking` (809), `export_monitoring` (814) | Hash-chain verification job, export log, FDA SLA requests, export monitoring | `services/ingestion/app/` modules of the same names; status: Beta |
@@ -59,7 +59,7 @@ Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/ro
 
 ### 4.3 Frontend surfaces (`frontend/src/app/`)
 
-- Public: home, trust, pricing, integrations, docs, blog, compare, case-studies, verify (public bundle verifier), 25 free tools under `/tools` behind an email code lead gate (`services/admin/app/tool_verification_routes.py`).
+- Public: home, trust, pricing, integrations, docs, blog, compare, case-studies, verify (public bundle verifier), free tools under `/tools` behind an email code lead gate (`services/admin/app/tool_verification_routes.py`): `FREE_TOOLS` has 13 entries (`frontend/src/lib/fsma-tools-data.ts`), the landing `TOOLS` list has 6 (`frontend/src/app/tools/components/ToolsLandingClient.tsx`), and there are 24 tool pages not counting the landing page (`frontend/src/app/tools/*/page.tsx`).
 - Signed in: dashboard (suppliers with data quality and gap time to fix views, export jobs, recall report, receiving, scan, team, settings), records, rules, exceptions, requests, trace, api-keys, developer portal, remediation, supplier-compliance. SEL-409 (session auth on records, rules, exceptions, requests) was fixed in PR 3476 with a regression test in PR 3620.
 - Copy controls: `scripts/check_trust_safety_copy.py` in frontend CI; copy gate workflow `.github/workflows/copy-gate.yml` with `frontend/src/lib/capabilities.ts` (PR 3549, on main). Registry today: live = CSV upload, JSON events API; preview = EPCIS intake, EPCIS export; off = EDI, SFTP.
 - Trust page states no SOC 2, no third-party pentest, no FDA endorsement, no availability commitment (`frontend/src/app/trust/page.tsx:100`).
