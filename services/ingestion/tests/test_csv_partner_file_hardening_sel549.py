@@ -734,3 +734,89 @@ def test_missing_column_overflow_rows_are_rejected_not_skipped(monkeypatch):
     assert overflow
     assert all(e.disposition == "rejected" for e in overflow)
     assert all(e.reason == "missing_required_columns" for e in overflow)
+
+
+# ---------------------------------------------------------------------------
+# SEL-549 clearer reject reasons (delimiter / bad_tlc / ambiguous_date / typo)
+# Structural mutations of tests/fixtures/01_harvesting.csv only — no new
+# invented partner records (real-data-only; scoped fixture exception).
+# ---------------------------------------------------------------------------
+
+
+def test_wrong_delimiter_semicolon_rejected():
+    """Semicolon-delimited export must reject with wrong_delimiter, not missing columns."""
+    header, rows = _fixture_rows()
+    comma_csv = _to_csv(header, rows[:1])
+    semi_csv = comma_csv.replace(",", ";")
+    events, errors, _w, log = _parse(semi_csv)
+    assert events == []
+    assert any("semicolon" in e.lower() or "delimiter" in e.lower() for e in errors)
+    file_rejects = [e for e in log if e.reason == "wrong_delimiter"]
+    assert file_rejects, f"expected wrong_delimiter; got {[e.reason for e in log]}"
+    assert file_rejects[0].disposition == "rejected"
+
+
+def test_wrong_delimiter_tab_and_pipe_rejected():
+    header, rows = _fixture_rows()
+    comma_csv = _to_csv(header, rows[:1])
+    for sep, label in (("	", "tab"), ("|", "pipe")):
+        alt = comma_csv.replace(",", sep)
+        _events, errors, _w, log = _parse(alt)
+        assert any(e.reason == "wrong_delimiter" for e in log), (label, [e.reason for e in log])
+        assert any(label in e.lower() for e in errors), (label, errors)
+
+
+def test_short_or_empty_tlc_rejects_as_bad_tlc_not_parse_exception():
+    header, rows = _fixture_rows()
+    short_row = dict(rows[0])
+    short_row["traceability_lot_code"] = rows[0]["traceability_lot_code"][:2]
+    empty_row = dict(rows[0])
+    empty_row["traceability_lot_code"] = ""
+    csv_text = _to_csv(header, [short_row, empty_row])
+    events, _errors, _w, log = _parse(csv_text)
+    assert events == []
+    rejects = [e for e in log if e.row_number >= 2 and e.disposition == "rejected"]
+    assert [e.reason for e in rejects] == ["bad_tlc", "bad_tlc"]
+    assert not any(e.reason == "parse_exception" for e in log)
+
+
+def test_ambiguous_numeric_date_rejects_as_ambiguous_date():
+    """MDY/DMY-ambiguous values like 12-03-2026 must not fall through to parse_exception."""
+    header, rows = _fixture_rows()
+    amb = dict(rows[0])
+    # Keep the fixture year; only rearrange into an ambiguous numeric form.
+    amb["harvest_date"] = "12-03-2026"
+    csv_text = _to_csv(header, [amb])
+    events, _errors, _w, log = _parse(csv_text)
+    assert events == []
+    rejects = [e for e in log if e.row_number >= 2 and e.disposition == "rejected"]
+    assert len(rejects) == 1
+    assert rejects[0].reason == "ambiguous_date"
+    assert "AMBIGUOUS_DATE" in (rejects[0].detail or "")
+    assert not any(e.reason == "parse_exception" for e in log)
+
+
+def test_iso_date_still_accepted_after_ambiguous_guard():
+    header, rows = _fixture_rows()
+    csv_text = _to_csv(header, rows[:1])
+    events, _errors, _w, log = _parse(csv_text)
+    assert len(events) == 1
+    assert any(e.disposition == "accepted" for e in log if e.row_number == 2)
+
+
+def test_misspelled_header_suggests_closest_match():
+    header, rows = _fixture_rows()
+    # Typo only: rearrange letters of an existing required header (quantity).
+    typo_header = [("quantty" if h == "quantity" else h) for h in header]
+    typo_rows = []
+    for row in rows[:1]:
+        mutated = dict(row)
+        mutated["quantty"] = mutated.pop("quantity")
+        typo_rows.append(mutated)
+    csv_text = _to_csv(typo_header, typo_rows)
+    events, errors, _w, log = _parse(csv_text)
+    assert events == []
+    assert any(e.reason == "missing_required_columns" for e in log)
+    blob = " ".join(errors)
+    assert "did you mean" in blob
+    assert "quantty" in blob

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import dataclasses
+import difflib
 import io
 import itertools
 import logging
@@ -586,6 +587,58 @@ def _normalize_location(raw: str) -> str:
 # ── Flexible date parsing ────────────────────────────────────────────────────
 
 
+
+# ── SEL-549 clearer reject reasons (delimiter / TLC / ambiguous date) ────────
+
+_AMBIGUOUS_NUMERIC_DATE = re.compile(
+    r"^\s*(\d{1,2})([/-])(\d{1,2})\2(\d{2}|\d{4})\s*$"
+)
+
+
+def _is_ambiguous_numeric_date(raw: str) -> bool:
+    """True when a numeric date could be MDY or DMY (both parts ≤ 12).
+
+    ISO ``YYYY-MM-DD`` and dates with a day > 12 are unambiguous. Equal
+    month/day values (``05-05-2026``) resolve the same either way, so they
+    are not flagged.
+    """
+    match = _AMBIGUOUS_NUMERIC_DATE.match(raw or "")
+    if not match:
+        return False
+    first, _sep, second, _year = match.groups()
+    a, b = int(first), int(second)
+    if a < 1 or b < 1 or a > 31 or b > 31:
+        return False
+    return a <= 12 and b <= 12 and a != b
+
+
+def _sniff_non_comma_delimiter(text: str) -> Optional[str]:
+    """Return ``';``, ``\\t``, or ``|`` when that separator clearly dominates the header line.
+
+    Partner CSV ingest is comma-only (``csv.DictReader`` default). Spreadsheet
+    exports that use semicolon, tab, or pipe otherwise collapse into one
+    column and surface as opaque ``missing_required_columns``.
+    """
+    first: Optional[str] = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        first = line
+        break
+    if first is None:
+        return None
+    commas = first.count(",")
+    for sep, label in ((";", ";"), ("\t", "\\t"), ("|", "|")):
+        count = first.count(sep)
+        if count > commas and count >= 1:
+            return sep
+    return None
+
+
+def _delimiter_display(sep: str) -> str:
+    return {";": "semicolon (;)", "\t": "tab", "|": "pipe (|)"}.get(sep, repr(sep))
+
 def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, str | None]:
     """Parse a date string in *any* common format into an ISO 8601 UTC timestamp.
 
@@ -602,6 +655,14 @@ def _parse_date_flexible(raw: str, event_time: str = "") -> tuple[str | None, st
         return None, "date field was empty"
 
     raw = raw.strip()
+
+    # SEL-549: numeric dates where both parts are ≤ 12 are MDY/DMY-ambiguous.
+    # Refuse them rather than guessing with dateutil (dayfirst=False).
+    if _is_ambiguous_numeric_date(raw):
+        return (
+            None,
+            f"AMBIGUOUS_DATE: '{raw}' could be month-day or day-month; use YYYY-MM-DD",
+        )
 
     # Fast-path: already an ISO timestamp
     try:
@@ -797,15 +858,34 @@ def _format_missing_columns_error(
     missing: Sequence[str],
     header: Optional[Sequence[Optional[str]]],
 ) -> str:
-    """Clear, actionable error naming each missing required column and aliases."""
+    """Clear, actionable error naming each missing required column and aliases.
+
+    When a present header is a near miss for a required field (difflib), append
+    a closest-match suggestion so misspellings are actionable.
+    """
     alias_by_canonical = {canonical: aliases for canonical, aliases in _REQUIRED_PARTNER_FIELD_GROUPS}
     alias_by_canonical["cte_type"] = tuple(_CTE_TYPE_COLUMNS)
+    present_names = list(_normalized_header_names(header))
     parts: list[str] = []
     for name in missing:
         aliases = alias_by_canonical.get(name, (name,))
         alias_list = ", ".join(aliases)
-        parts.append(f"{name} (accepted column names: {alias_list})")
-    present = ", ".join(_normalized_header_names(header)) or "(none)"
+        suggestion = ""
+        if present_names:
+            # Score present headers against every accepted alias; keep best.
+            best: tuple[float, str, str] | None = None
+            for present in present_names:
+                for alias in aliases:
+                    ratio = difflib.SequenceMatcher(None, present, alias).ratio()
+                    if ratio < 0.6:
+                        continue
+                    if best is None or ratio > best[0]:
+                        best = (ratio, present, alias)
+            if best is not None:
+                _ratio, present_hit, alias_hit = best
+                suggestion = f"; did you mean {present_hit!r} → {alias_hit!r}?"
+        parts.append(f"{name} (accepted column names: {alias_list}){suggestion}")
+    present = ", ".join(present_names) or "(none)"
     return "Missing required columns for partner CSV ingest: " + "; ".join(parts) + f". Present columns: {present}"
 
 
@@ -971,11 +1051,29 @@ def parse_csv_rows(
 
     Returns ``(events, parse_errors, kde_warnings)``.
     """
-    reader = csv.DictReader(io.StringIO(text))
-
     events: list[IngestEvent] = []
     parse_errors: list[str] = []
     kde_warnings: list[str] = []
+
+    # SEL-549: reject non-comma delimiters with a specific reason before
+    # DictReader collapses the header into a single opaque column.
+    non_comma = _sniff_non_comma_delimiter(text)
+    if non_comma is not None:
+        detail = (
+            f"CSV uses {_delimiter_display(non_comma)} as the field delimiter; "
+            "partner ingest requires comma-separated values. Re-export as CSV (comma) "
+            "or replace the delimiter with commas."
+        )
+        _append_row_log(
+            row_log,
+            row_number=1,
+            disposition="rejected",
+            reason="wrong_delimiter",
+            detail=detail,
+        )
+        return ([], [detail], [])
+
+    reader = csv.DictReader(io.StringIO(text))
 
     # Read the header and every record the loop below can reach before
     # touching any row: a file the csv module cannot read (CR-only line
@@ -1327,7 +1425,12 @@ def parse_csv_rows(
             event_time_raw = (row.get("event_time") or "").strip()
             ts, date_warning = _parse_date_flexible(raw_date, event_time_raw)
             if ts is None:
-                _reject("bad_date", f"Row {row_num}: {date_warning}")
+                date_reason = (
+                    "ambiguous_date"
+                    if date_warning and date_warning.startswith("AMBIGUOUS_DATE:")
+                    else "bad_date"
+                )
+                _reject(date_reason, f"Row {row_num}: {date_warning}")
                 continue
             if date_warning:
                 _append_row_log(
@@ -1398,8 +1501,16 @@ def parse_csv_rows(
                 )
                 continue
 
-            # Lot code: extract and run integrity checks
+            # Lot code: extract, reject short/empty TLC with bad_tlc (not parse_exception),
+            # then run advisory integrity checks.
             lot_code = _first_present(row, _LOT_CODE_COLUMNS)
+            if len((lot_code or "").strip()) < 3:
+                _reject(
+                    "bad_tlc",
+                    f"Row {row_num}: traceability_lot_code must be at least 3 characters "
+                    f"(got {lot_code!r})",
+                )
+                continue
             for integrity_warn in _check_lot_code_integrity(lot_code):
                 kde_warnings.append(f"Row {row_num}: {integrity_warn}")
 
