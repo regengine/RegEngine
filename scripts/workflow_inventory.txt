@@ -44,6 +44,7 @@ infra-k8s-ci.yml
 legacy-code-scan.yml
 openapi-public-spec.yml
 pr-gate.yml
+pr-gate-frontend-rerun.yml
 pr-guards.yml
 pr-secrets-non-main.yml
 production-uptime.yml

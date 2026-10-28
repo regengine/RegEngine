@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_agent_inboxes_tenant_agent
 ```
 
 `email_address UNIQUE` is global (not per-tenant) because addresses are
-derived from the tenant's own slug (`{agent-slug}@agents.{tenant-slug}.regengine.dev`)
+derived from the tenant's own slug (`{agent-slug}@agents.{tenant-slug}.regengine.co`)
 and are meant to be globally addressable mail endpoints — two tenants must
 never be able to collide on the same address. `provider` is the provider key
 (`"dev"` for v1's only implementation); `provider_ref` is an opaque
@@ -393,7 +393,7 @@ class DevInboxProvider:
     mailbox. It does not talk to any external email service. No inbound
     mail sent to the address it returns will ever be received anywhere —
     there is no MX record, no mailbox, no webhook target behind
-    "agents.<tenant-slug>.regengine.dev". It exists so agent_org has a
+    "agents.<tenant-slug>.regengine.co". It exists so agent_org has a
     working, testable provisioning path in an environment with no live
     email-provider credentials. A real provider (e.g. PostmarkInboxProvider
     using Postmark's server + inbound-message-stream API to create a real
@@ -404,7 +404,7 @@ class DevInboxProvider:
     provider_name = "dev"
 
     def provision(self, *, tenant_slug, agent_slug, tenant_id, agent_id) -> ProvisionedInbox:
-        address = f"{agent_slug}@agents.{tenant_slug}.regengine.dev"
+        address = f"{agent_slug}@agents.{tenant_slug}.regengine.co"
         return ProvisionedInbox(email_address=address, provider=self.provider_name, provider_ref=None)
 ```
 

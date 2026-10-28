@@ -13,33 +13,33 @@ A production-grade regulatory document ingestion system with cryptographic verif
   - XML parser (lxml)
   - PDF parser (pdfminer.six)
   - Plain text with encoding detection
-  
+
 - **Federal Register Adapter**: Complete API integration
   - Rate limiting and robots.txt compliance
   - Bulk document fetching
   - Metadata extraction
-  
+
 - **Storage System**:
   - Filesystem storage with hierarchical structure
   - Content-hash based deduplication (SHA-256)
   - Document retrieval by storage key
-  
+
 - **PostgreSQL Integration**:
   - Complete database schema (documents, jobs, audit_log)
   - Database manager with CRUD operations
   - Search with filters (vertical, source type)
   - Migration scripts
-  
+
 - **Cryptographic Verification**:
   - Dual-hash system (SHA-256 + SHA-512)
   - Content integrity verification
   - Text content hashing
-  
+
 - **Audit System**:
   - JSONL file-based audit trail
   - PostgreSQL audit logging
   - Complete provenance tracking
-  
+
 - **CLI Interface**:
   - `ingest`: Document ingestion with progress
   - `init-db`: Database schema initialization
@@ -53,10 +53,10 @@ A production-grade regulatory document ingestion system with cryptographic verif
   - ⏳ eCFR (Code of Federal Regulations)
   - ⏳ FDA/openFDA  
   - ⏳ Generic web crawler
-  
+
 - **Cloud Storage**:
   - ⏳ S3 backend for production deployments
-  
+
 - **Advanced Features**:
   - ⏳ Connection pooling
   - ⏳ Parallel workers
@@ -222,5 +222,5 @@ Proprietary - RegEngine LLC
 
 ## Support
 
-- Documentation: https://docs.regengine.io
-- Email: support@regengine.io
+- Documentation: https://regengine.co/docs
+- Email: support@regengine.co

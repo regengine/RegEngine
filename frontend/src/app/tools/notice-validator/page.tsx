@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 interface Requirement {
     id: string;
@@ -72,6 +73,7 @@ const REQUIREMENTS: Requirement[] = [
 ];
 
 export default function NoticeValidatorPage() {
+    const posthog = usePostHog();
     const [noticeText, setNoticeText] = useState('');
     const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
@@ -110,6 +112,7 @@ export default function NoticeValidatorPage() {
     const runCheck = () => {
         if (!noticeText.trim()) return;
         trackToolRunStarted('notice-validator');
+        posthog?.capture('tool_started', { tool_id: 'notice-validator' });
         setHasAnalyzed(true);
         trackToolRunCompleted('notice-validator', 'success');
     };

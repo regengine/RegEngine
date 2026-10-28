@@ -170,6 +170,7 @@ type RequestConfig = {
   params?: RequestParams;
   timeout?: number;
   responseType?: 'blob';
+  signal?: AbortSignal;
   /**
    * Opens the passkey step-up dialog with this sentence if the backend
    * answers requires_step_up. GETs without it fail quietly so page loads
@@ -289,9 +290,24 @@ class APIClient {
 
       const controller = new AbortController();
       const timeoutMs = config.timeout ?? 30000;
+      // Abort with a TimeoutError (not a bare abort) so callers can tell an
+      // internal timeout from a caller cancel, which forwards the caller's
+      // own abort reason below.
       const timeoutId = timeoutMs > 0
-        ? globalThis.setTimeout(() => controller.abort(), timeoutMs)
+        ? globalThis.setTimeout(
+            () => controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, 'TimeoutError')),
+            timeoutMs,
+          )
         : undefined;
+      const externalSignal = config.signal;
+      const onExternalAbort = () => controller.abort(externalSignal?.reason);
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          controller.abort(externalSignal.reason);
+        } else {
+          externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+        }
+      }
 
       try {
         const response = await fetch(url, {
@@ -336,6 +352,9 @@ class APIClient {
       } finally {
         if (timeoutId !== undefined) {
           globalThis.clearTimeout(timeoutId);
+        }
+        if (externalSignal) {
+          externalSignal.removeEventListener('abort', onExternalAbort);
         }
       }
     };
@@ -576,8 +595,16 @@ class APIClient {
     return response.data;
   }
 
-  async getIngestionJob(jobId: string): Promise<{ status: string; step?: string }> {
-    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`);
+  async getIngestionJob(
+    jobId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<{ status: string; step?: string }> {
+    // Polled every 2s from /ingest: bound each tick so a slow backend cannot
+    // pile up overlapping requests. The page skips a tick while one is in flight.
+    const { data } = await this.ingestionClient.get(`/v1/ingest/status/${encodeURIComponent(jobId)}`, {
+      timeout: 8000,
+      signal: options?.signal,
+    });
     return data;
   }
 
@@ -1049,8 +1076,11 @@ class APIClient {
   async listIntegrationProfiles(): Promise<IntegrationProfilesResponse> {
     const tenantId = this.currentTenantId;
     if (!tenantId) throw new Error('No tenant selected');
+    // Bound the integrations-page load: the default 30s left the page on
+    // "Loading saved profiles..." until the BFF gave up.
     const { data } = await this.ingestionClient.get<IntegrationProfilesResponse>(
       `/api/v1/integrations/profiles/${encodeURIComponent(tenantId)}`,
+      { timeout: 8000 },
     );
     return data;
   }

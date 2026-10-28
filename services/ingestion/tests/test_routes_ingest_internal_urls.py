@@ -17,6 +17,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import pytest
 from fastapi import HTTPException
@@ -68,17 +69,13 @@ def _event_kwargs(**overrides):
 
 class TestStoredSourceMarkers:
     @pytest.mark.parametrize("marker", [MANUAL_MARKER, UPLOAD_MARKER])
-    def test_document_accepts_markers_without_dns(
-        self, monkeypatch: pytest.MonkeyPatch, marker: str
-    ) -> None:
+    def test_document_accepts_markers_without_dns(self, monkeypatch: pytest.MonkeyPatch, marker: str) -> None:
         monkeypatch.setattr("app.models.socket.getaddrinfo", _boom_resolver)
         doc = NormalizedDocument(**_doc_kwargs(source_url=marker))
         assert doc.source_url == marker
 
     @pytest.mark.parametrize("marker", [MANUAL_MARKER, UPLOAD_MARKER])
-    def test_event_accepts_markers_without_dns(
-        self, monkeypatch: pytest.MonkeyPatch, marker: str
-    ) -> None:
+    def test_event_accepts_markers_without_dns(self, monkeypatch: pytest.MonkeyPatch, marker: str) -> None:
         monkeypatch.setattr("app.models.socket.getaddrinfo", _boom_resolver)
         event = NormalizedEvent(**_event_kwargs(source_url=marker))
         assert event.source_url == marker
@@ -113,7 +110,9 @@ class TestStoredSourceMarkers:
 
         monkeypatch.setattr("app.models.socket.getaddrinfo", _fake)
         doc = NormalizedDocument(**_doc_kwargs(source_url="https://example.com/reg/1"))
-        assert doc.source_url.startswith("https://example.com")
+        parsed = urlparse(doc.source_url)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "example.com"
 
 
 class TestFetchBoundaryStillStrict:
@@ -149,9 +148,7 @@ class TestFetchBoundaryStillStrict:
 
 class TestProcessAndEmitWithMarkers:
     @pytest.mark.parametrize("marker", [MANUAL_MARKER, UPLOAD_MARKER])
-    def test_emit_succeeds_for_internal_markers(
-        self, monkeypatch: pytest.MonkeyPatch, marker: str
-    ) -> None:
+    def test_emit_succeeds_for_internal_markers(self, monkeypatch: pytest.MonkeyPatch, marker: str) -> None:
         import app.routes_ingest as routes_ingest
 
         monkeypatch.setattr(routes_ingest, "put_bytes", lambda *a, **k: "s3://raw/x")
@@ -190,9 +187,7 @@ class TestIngestDirectErrorPassthrough:
             )
         assert exc.value.status_code == 422
 
-    async def test_direct_ingest_succeeds_with_default_marker(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_direct_ingest_succeeds_with_default_marker(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import app.routes_ingest as routes_ingest
         from app.models import DirectIngestRequest
 
