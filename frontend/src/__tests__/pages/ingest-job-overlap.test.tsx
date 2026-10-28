@@ -185,7 +185,7 @@ describe('ingestion status terminal abort and no-regression', () => {
     const jobId = crypto.randomUUID();
     mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
 
-    let rejectHeldRetry: ((reason: unknown) => void) | null = null;
+    const heldRetry = { reject: null as ((reason: unknown) => void) | null };
     let callCount = 0;
     mocks.getIngestionJob.mockImplementation(() => {
       callCount += 1;
@@ -196,7 +196,7 @@ describe('ingestion status terminal abort and no-regression', () => {
         // The retry's status call is held pending while the interval tick runs.
         return new Promise<{ status: string }>((resolve, reject) => {
           void resolve;
-          rejectHeldRetry = reject;
+          heldRetry.reject = reject;
         });
       }
       return Promise.resolve({ status: 'completed' });
@@ -222,7 +222,7 @@ describe('ingestion status terminal abort and no-regression', () => {
     // not surface, and the terminal view must remain. The completed view
     // unmounts the form card (including the error Callout), so a stray
     // setStatusError would only surface as the container's error class.
-    rejectHeldRetry?.(new Error('late retry fetch failed'));
+    heldRetry.reject?.(new Error('late retry fetch failed'));
     await new Promise((r) => setTimeout(r, 100));
     expect(screen.queryByText('Unable to fetch ingestion status.')).not.toBeInTheDocument();
     expect(document.querySelector('.workspace-load-error')).not.toBeInTheDocument();
@@ -233,7 +233,7 @@ describe('ingestion status terminal abort and no-regression', () => {
     const jobId = crypto.randomUUID();
     mocks.ingestURL.mockResolvedValueOnce({ job_id: jobId });
 
-    let resolveHangingPoll: ((value: { status: string }) => void) | null = null;
+    const hangingPoll = { resolve: null as ((value: { status: string }) => void) | null };
     let hangingSignal: AbortSignal | undefined;
     let callCount = 0;
     mocks.getIngestionJob.mockImplementation((_id: string, options?: { signal?: AbortSignal }) => {
@@ -244,7 +244,7 @@ describe('ingestion status terminal abort and no-regression', () => {
       if (callCount === 2) {
         hangingSignal = options?.signal;
         return new Promise<{ status: string }>((resolve) => {
-          resolveHangingPoll = resolve;
+          hangingPoll.resolve = resolve;
         });
       }
       if (callCount === 3) {
@@ -278,7 +278,7 @@ describe('ingestion status terminal abort and no-regression', () => {
       expect(hangingSignal?.aborted).toBe(true);
 
       // Its late non-terminal result must not regress the terminal status.
-      resolveHangingPoll?.({ status: 'queued' });
+      hangingPoll.resolve?.({ status: 'queued' });
       await new Promise((r) => setTimeout(r, 100));
       expect(await screen.findByText('Ingestion request completed')).toBeInTheDocument();
     } finally {
