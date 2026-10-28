@@ -72,7 +72,7 @@ describe('AuthProvider hydrate on unknown vs unauthenticated session', () => {
 
         expect(result.current.user).toMatchObject({ id: user.id, email: user.email });
         expect(result.current.tenantId).toBe(user.tenant_id);
-        expect(localStorage.getItem('regengine_user')).toBe(JSON.stringify(user));
+        expect(localStorage.getItem('regengine_user')).toBe(JSON.stringify({ ...user, email: '' }));
         expect(localStorage.getItem('regengine_tenant_id')).toBe(user.tenant_id);
     });
 
@@ -178,6 +178,6 @@ describe('AuthProvider hydrate on unknown vs unauthenticated session', () => {
         expect(result.current.user).toMatchObject({ id: user.id, email: user.email });
         expect(result.current.tenantId).toBe(user.tenant_id);
         expect(result.current.isAuthenticated).toBe(true);
-        expect(localStorage.getItem('regengine_user')).toBe(JSON.stringify(user));
+        expect(localStorage.getItem('regengine_user')).toBe(JSON.stringify({ ...user, email: '' }));
     });
 });

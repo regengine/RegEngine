@@ -5,6 +5,7 @@ import type { User, SessionAuthMethod } from '@/types/api';
 import { apiClient } from './api-client';
 import { fetchWithCsrf } from './fetch-with-csrf';
 import { sanitizePermissions } from './permissions';
+import { serializeClientSessionUser } from './client-session-profile';
 
 interface AuthContextType {
   user: User | null;
@@ -42,7 +43,7 @@ type LoginOptions = {
  * ONLY in HTTP-only cookies via /api/session. They are never readable
  * by client-side JavaScript, eliminating XSS credential theft.
  *
- * Non-sensitive data (tenant_id, onboarded, demo_mode, user profile)
+ * Non-sensitive data (tenant_id, onboarded, demo_mode, profile without email)
  * remains in localStorage for fast hydration.
  *
  * The deprecated apiKey field in the context is still set to a placeholder
@@ -319,8 +320,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedUser) {
         try {
           const parsedUser = normalizeUserProfile(JSON.parse(storedUser) as User);
-          setUserState(parsedUser);
-          apiClient.setUser(parsedUser);
+          localStorage.setItem(STORAGE_KEYS.USER, serializeClientSessionUser(parsedUser));
+          if (!loginCompletedRef.current) {
+            setUserState(parsedUser);
+            apiClient.setUser(parsedUser);
+          }
         } catch { /* ignore corrupt data */ }
       }
 
@@ -351,7 +355,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const normalizedSessionUser = normalizeUserProfile(session.user);
               setUserState(normalizedSessionUser);
               apiClient.setUser(normalizedSessionUser);
-              localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedSessionUser));
+              localStorage.setItem(STORAGE_KEYS.USER, serializeClientSessionUser(normalizedSessionUser));
             }
             setAccessTokenState(COOKIE_MANAGED_PLACEHOLDER);
             apiClient.setAccessToken(COOKIE_MANAGED_PLACEHOLDER);
@@ -457,7 +461,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loginTenantId) apiClient.setCurrentTenant(loginTenantId);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(normalizedLoginUser));
+      localStorage.setItem(STORAGE_KEYS.USER, serializeClientSessionUser(normalizedLoginUser));
       if (loginTenantId) localStorage.setItem(STORAGE_KEYS.TENANT_ID, loginTenantId);
     }
 
@@ -489,6 +493,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     loginCompletedRef.current = true;
+    // Hydration may have read the redacted cache while the cookie write awaited.
+    apiClient.setUser(normalizedLoginUser);
 
     // React state updates - triggers re-renders and the navigation useEffect.
     // Cookie should be stored in the browser at this point.
