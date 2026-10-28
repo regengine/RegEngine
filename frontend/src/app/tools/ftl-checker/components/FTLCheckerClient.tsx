@@ -489,8 +489,9 @@ export function FTLCheckerClient() {
         if (currentStep === 'results' && runStarted.current && !runCompleted.current) {
             runCompleted.current = true;
             trackToolRunCompleted('ftl-checker', 'success');
+            posthog?.capture('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
         }
-    }, [currentStep]);
+    }, [currentStep, posthog]);
 
     // Generate shareable URL
     const getShareableUrl = () => {
@@ -555,6 +556,7 @@ export function FTLCheckerClient() {
             if (!runStarted.current) {
                 runStarted.current = true;
                 trackToolRunStarted('ftl-checker');
+                posthog?.capture('tool_started', { tool_id: 'ftl-checker' });
             }
             const hasCoveredCategories = FTL_CATEGORIES.filter(c => selectedCategories.includes(c.id)).some(c => c.covered);
             if (hasCoveredCategories) {
