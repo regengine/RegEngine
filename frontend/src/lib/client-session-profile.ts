@@ -60,12 +60,39 @@ export function writeClientSessionUser(user: User | null | undefined): void {
   storage.setItem(CLIENT_SESSION_USER_KEY, JSON.stringify(toClientSessionProfile(user)));
 }
 
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
+function isOptionalStringOrNull(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === 'string';
+}
+
+function isValidCachedUser(parsed: unknown): parsed is Partial<User> {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const value = parsed as Record<string, unknown>;
+  if (typeof value.id !== 'string' || typeof value.email !== 'string') return false;
+  if (value.is_sysadmin !== undefined && typeof value.is_sysadmin !== 'boolean') return false;
+  if (value.status !== undefined && typeof value.status !== 'string') return false;
+  if (!isOptionalString(value.role_id)) return false;
+  if (!isOptionalString(value.role_name)) return false;
+  if (!isOptionalStringOrNull(value.organization_id)) return false;
+  if (!isOptionalStringOrNull(value.auth_method)) return false;
+  if (
+    value.permissions !== undefined &&
+    !(Array.isArray(value.permissions) && value.permissions.every((p) => typeof p === 'string'))
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function readClientSessionUser(): User | null {
   const raw = getSessionStorage()?.getItem(CLIENT_SESSION_USER_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<User> | null;
-    if (!parsed || typeof parsed.id !== 'string' || typeof parsed.email !== 'string') {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isValidCachedUser(parsed)) {
       return null;
     }
     return toClientSessionProfile(parsed as User);

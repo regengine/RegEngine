@@ -85,4 +85,18 @@ describe('client-session-profile', () => {
         window.sessionStorage.setItem(CLIENT_SESSION_USER_KEY, '{"email":"x@regengine.co"}');
         expect(readClientSessionUser()).toBeNull();
     });
+
+    it('rejects cached profiles with non-string optional fields', () => {
+        window.sessionStorage.setItem(
+            CLIENT_SESSION_USER_KEY,
+            JSON.stringify({ id: 'x', email: 'x@regengine.co', role_name: 5 }),
+        );
+        expect(readClientSessionUser()).toBeNull();
+
+        window.sessionStorage.setItem(
+            CLIENT_SESSION_USER_KEY,
+            JSON.stringify({ id: 'x', email: 'x@regengine.co', permissions: [1, 'ok'] }),
+        );
+        expect(readClientSessionUser()).toBeNull();
+    });
 });
