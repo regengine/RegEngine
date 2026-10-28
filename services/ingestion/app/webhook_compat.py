@@ -173,27 +173,18 @@ def _open_ingestion_run(db_session, tenant_id: str, source: str, receipt: Source
         initiated_by=receipt.initiated_by,
     )
     run_id = store.create_ingestion_run(run)
-    db_session.execute(
-        # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
-        text(
-            """
-            INSERT INTO fsma.manifest_blobs
-                (ingestion_run_id, tenant_id, raw_bytes, sha256,
-                 original_filename, content_type, uploaded_by)
-            VALUES
-                (CAST(:run_id AS uuid), CAST(:tenant_id AS uuid), :raw_bytes,
-                 :sha256, :filename, :content_type, :uploaded_by)
-            """
-        ),
-        {
-            "run_id": run_id,
-            "tenant_id": tenant_id,
-            "raw_bytes": receipt.raw_bytes,
-            "sha256": receipt.sha256,
-            "filename": receipt.filename,
-            "content_type": receipt.content_type,
-            "uploaded_by": receipt.initiated_by,
-        },
+    # First-file cutover: partner-uploads + pointer when object storage is on.
+    from .partner_file_storage import persist_partner_upload
+
+    persist_partner_upload(
+        db_session,
+        tenant_id=tenant_id,
+        engagement_id=run_id,
+        content=receipt.raw_bytes,
+        filename=receipt.filename,
+        content_type=receipt.content_type,
+        uploaded_by=receipt.initiated_by,
+        ingestion_run_id=run_id,
     )
     return run_id
 
