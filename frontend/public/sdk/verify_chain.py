@@ -17,7 +17,7 @@ The Merkle algorithm matches services/shared/merkle_tree.py in production:
     odd-node padding: duplicate the last node
 
 Usage:
-    python verify_chain.py audit-bundle.zip
+    python verify_chain.py your-bundle.zip
 
 Copyright (c) 2024-2026 RegEngine LLC
 License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0) —
@@ -260,7 +260,7 @@ def verify_bundle(zip_path: str) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify a RegEngine audit bundle (zip with manifest.json).")
-    parser.add_argument("bundle", help="Path to audit-bundle.zip")
+    parser.add_argument("bundle", help="Path to an exported audit bundle ZIP")
     args = parser.parse_args()
     return verify_bundle(args.bundle)
 

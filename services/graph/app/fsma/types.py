@@ -40,6 +40,11 @@ class TraceResult:
     # associations", which consumers must treat as unknown — never as a
     # licence to guess.
     trace_rows: Optional[List[Dict[str, Any]]] = None
+    # SEL-515: the traversal and association queries are capped (LIMIT
+    # ``TRACE_ROW_LIMIT``). When a query returns the full cap the result may be
+    # incomplete, so it says so instead of looking complete during a recall.
+    truncated: bool = False
+    truncation_limit: Optional[int] = None
 
 
 @dataclass

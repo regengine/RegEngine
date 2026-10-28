@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
+import { ArrowRight, Database, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NO_DATA_YET } from "@/lib/empty-values";
 
 export const metadata: Metadata = {
   title: "Security | RegEngine",
@@ -37,7 +39,6 @@ const controls = [
 
 const links = [
   { icon: Terminal, label: "Open verifier", href: "/verify" },
-  { icon: Download, label: "Download proof artifacts", href: "/proof" },
   { icon: FileCode2, label: "Security details", href: "/trust/architecture" },
   { icon: KeyRound, label: "Contact security", href: "/contact" },
 ];
@@ -70,17 +71,17 @@ export default function SecurityPage() {
           </div>
         </div>
         <Card className="overflow-hidden">
-          <CardHeader className="items-center py-3">
-            <p className="font-mono text-label uppercase text-re-text-muted">Verifier output</p>
-            <p className="font-mono text-label uppercase text-re-text-muted">Sample · illustrative</p>
-          </CardHeader>
-          <div className="overflow-x-auto bg-re-surface-inset px-5 py-4 font-mono text-[0.8125rem] leading-6 text-re-text-secondary">
-            <p>$ python verify_chain.py --export fsma_package.json</p>
-            <p className="mt-3 text-re-success">verified: 430 records</p>
-            <p className="text-re-success">failed: 0 records</p>
-            <p className="text-re-success">manifest: hash matched</p>
-            <p className="mt-3 text-re-text-primary">result: evidence package intact</p>
-          </div>
+          <EmptyState
+            bare
+            size="sm"
+            title={NO_DATA_YET}
+            description="Verifier output appears here once you export a package from your own records."
+            action={
+              <Button asChild size="sm">
+                <Link href="/ingest">Upload a CSV</Link>
+              </Button>
+            }
+          />
           <div className="grid gap-5 border-t border-re-border-subtle p-5 sm:grid-cols-3">
             <div>
               <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Bundle</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { experimentalFeaturesEnabled } from '@/lib/experimental-features';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -111,6 +111,14 @@ function stepNumeral(index: number) {
   return String(index + 1).padStart(2, '0');
 }
 
+/**
+ * Terminal ingestion states stop the status poll, whether the regular poll
+ * or a manual retry observes them first.
+ */
+function isTerminalIngestStatus(status: string): boolean {
+  return status === 'completed' || status === 'failed';
+}
+
 export default function IngestPage() {
   const searchParams = useSearchParams();
   const fromSandboxHandoff = searchParams.get('from') === 'sandbox-handoff';
@@ -152,6 +160,24 @@ export default function IngestPage() {
   const [errorColumnSuggestions, setErrorColumnSuggestions] = useState<ColumnSuggestion[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitInFlightRef = useRef(false);
+  const retryInFlightRef = useRef(false);
+  const jobIdRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const retryControllerRef = useRef<AbortController | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+  const pollControllerRef = useRef<AbortController | null>(null);
+  const jobStatusRef = useRef<string>('queued');
+
+  // Shared terminal-stop for the status poll: both the interval tick and a
+  // manual retry clear the same interval and abort the in-flight poll fetch
+  // when they see a terminal status.
+  const stopStatusPolling = useCallback(() => {
+    if (pollIntervalRef.current !== null) {
+      window.clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    pollControllerRef.current?.abort();
+  }, []);
 
   const ingestMutation = useIngestURL();
   const ingestFileMutation = useIngestFile();
@@ -197,27 +223,126 @@ export default function IngestPage() {
   }, [storedApiKey, apiKey]);
 
   useEffect(() => {
-    if (!jobId) return;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      retryControllerRef.current?.abort();
+    };
+  }, []);
 
-    const intervalId = window.setInterval(async () => {
+  useEffect(() => {
+    jobIdRef.current = jobId;
+    // New job resets the terminal guard so the previous job's terminal
+    // status cannot suppress the new job's first poll.
+    jobStatusRef.current = 'queued';
+    // A retry for the previous job must not overwrite the new job's status.
+    retryControllerRef.current?.abort();
+    retryControllerRef.current = null;
+  }, [jobId]);
+
+  useEffect(() => {
+    jobStatusRef.current = jobStatus;
+  }, [jobStatus]);
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    // Per-effect guard: the previous shared ref let an old job's in-flight
+    // request skip the new job's first poll. A local flag plus abort on
+    // cleanup keeps each job's polling independent.
+    let pollInFlight = false;
+    const controller = new AbortController();
+    pollControllerRef.current = controller;
+
+    const poll = async () => {
+      // A slow status call must not pile up overlapping ticks: skip while one
+      // is in flight. Each call is bounded by the api-client timeout (8s).
+      if (pollInFlight) return;
+      pollInFlight = true;
       try {
-        const statusResponse = await apiClient.getIngestionJob(jobId);
+        const statusResponse = await apiClient.getIngestionJob(jobId, { signal: controller.signal });
+        if (cancelled || controller.signal.aborted) return;
+        // Once terminal, late or out-of-order results are ignored so the
+        // status cannot regress to a non-terminal state.
+        if (isTerminalIngestStatus(jobStatusRef.current)) return;
         setStatusError(null);
         const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
         if (normalizedStatus) {
-          setJobStatus(normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued');
-          if (['completed', 'failed'].includes(normalizedStatus)) {
-            window.clearInterval(intervalId);
+          const nextStatus = normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued';
+          jobStatusRef.current = nextStatus;
+          setJobStatus(nextStatus);
+          if (isTerminalIngestStatus(nextStatus)) {
+            stopStatusPolling();
           }
         }
       } catch (error) {
+        // Only our own abort (unmount / job switch) is silent. A timeout
+        // aborts api-client's internal controller with a TimeoutError while
+        // this controller stays live, so it must surface below.
+        if (cancelled || controller.signal.aborted) return;
         console.error('Failed to fetch ingestion status:', error);
         setStatusError('Unable to fetch ingestion status.');
+      } finally {
+        pollInFlight = false;
       }
-    }, 2000);
+    };
 
-    return () => window.clearInterval(intervalId);
-  }, [jobId]);
+    const intervalId = window.setInterval(() => void poll(), 2000);
+    pollIntervalRef.current = intervalId;
+    void poll();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearInterval(intervalId);
+      if (pollIntervalRef.current === intervalId) {
+        pollIntervalRef.current = null;
+      }
+      if (pollControllerRef.current === controller) {
+        pollControllerRef.current = null;
+      }
+    };
+  }, [jobId, stopStatusPolling]);
+
+  const handleRetryStatus = async () => {
+    const requestedJobId = jobId;
+    if (!requestedJobId || retryInFlightRef.current) return;
+    retryControllerRef.current?.abort();
+    const controller = new AbortController();
+    retryControllerRef.current = controller;
+    retryInFlightRef.current = true;
+    try {
+      const statusResponse = await apiClient.getIngestionJob(requestedJobId, { signal: controller.signal });
+      if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
+      // Same terminal guard as the poll: a late retry must not regress a
+      // terminal status observed by the interval tick.
+      if (isTerminalIngestStatus(jobStatusRef.current)) return;
+      setStatusError(null);
+      const normalizedStatus = (statusResponse.status || statusResponse.step || '').toLowerCase();
+      if (normalizedStatus) {
+        const nextStatus = normalizedStatus === 'failed' || STATUS_STEPS.some(step => step.id === normalizedStatus) ? normalizedStatus : 'queued';
+        jobStatusRef.current = nextStatus;
+        setJobStatus(nextStatus);
+        if (isTerminalIngestStatus(nextStatus)) {
+          stopStatusPolling();
+        }
+      }
+    } catch (error) {
+      // Same rule as the poll above: only our own abort is silent; a
+      // timeout must surface as a status error.
+      if (!mountedRef.current || jobIdRef.current !== requestedJobId || controller.signal.aborted) return;
+      // Same terminal guard as the success path: a retry that rejects after
+      // the poll observed a terminal status must not set a status error.
+      if (isTerminalIngestStatus(jobStatusRef.current)) return;
+      console.error('Failed to fetch ingestion status:', error);
+      setStatusError('Unable to fetch ingestion status.');
+    } finally {
+      if (retryControllerRef.current === controller) {
+        retryControllerRef.current = null;
+      }
+      retryInFlightRef.current = false;
+    }
+  };
 
   // Shared preamble for every submit path: persist a changed API key so the
   // browser proxy reads it from the cookie, then clear prior result state.
@@ -694,7 +819,7 @@ export default function IngestPage() {
                             htmlFor="epcis-file-upload"
                             className="inline-flex w-fit items-center gap-1 text-ui font-medium text-re-text-primary"
                           >
-                            <span>Select EPCIS file</span>
+                            <span>Select EPCIS file (Preview)</span>
                             <Badge size="sm">Preview</Badge>
                             <HelpTooltip content="Upload GS1 EPCIS 2.0 events as JSON or XML. JSON documents go through the same validation and persistence path as every other input." />
                           </label>
@@ -843,7 +968,19 @@ export default function IngestPage() {
                   )}
 
                   {jobId && (statusError || jobStatus === 'failed') && (
-                    <Callout tone="danger" role="alert" className="mt-4" title="Unable to load ingestion status">
+                    <Callout
+                      tone="danger"
+                      role="alert"
+                      className="mt-4"
+                      title="Unable to load ingestion status"
+                      action={
+                        statusError ? (
+                          <Button size="sm" variant="secondary" onClick={() => void handleRetryStatus()}>
+                            Retry
+                          </Button>
+                        ) : undefined
+                      }
+                    >
                       {statusError || 'The ingestion job failed.'}
                     </Callout>
                   )}

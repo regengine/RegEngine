@@ -52,11 +52,11 @@ describe('step-up interceptor', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('detail')));
     render(<StepUpModal />);
 
-    await expect(apiClient.revokeAPIKey('key-id')).rejects.toThrow(/forbidden/i);
+    await expect(apiClient.revokeAPIKey(crypto.randomUUID())).rejects.toThrow(/forbidden/i);
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe(DEFAULT_STEP_UP_REASON);
-    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(DEFAULT_STEP_UP_REASON));
+    expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe("Confirm it's you to revoke this API key.");
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(/revoke this API key/i));
   });
 
   it('names the admin policy action when the SSO policy write is blocked', async () => {
@@ -65,7 +65,7 @@ describe('step-up interceptor', () => {
 
     await expect(
       apiClient.updateOrganizationSsoPolicy(
-        'org-id',
+        crypto.randomUUID(),
         { domain_name: 'example.test', domain_verified: false, enforced_auth_policy: 'standard' },
         { stepUpReason: reason },
       ),
@@ -75,10 +75,20 @@ describe('step-up interceptor', () => {
     expect((listener.mock.calls[0][0] as CustomEvent).detail.reason).toBe(reason);
   });
 
+  it('keeps step-up available for a blocked write without a specific action label', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('detail')));
+    render(<StepUpModal />);
+
+    await expect(apiClient.approveReviewItem(crypto.randomUUID())).rejects.toThrow(/forbidden/i);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent(DEFAULT_STEP_UP_REASON));
+  });
+
   it('recognizes the backend structured error envelope on writes', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(stepUpResponse('error')));
 
-    await expect(apiClient.revokeAPIKey('key-id')).rejects.toThrow(/forbidden/i);
+    await expect(apiClient.revokeAPIKey(crypto.randomUUID())).rejects.toThrow(/forbidden/i);
 
     expect(listener).toHaveBeenCalledTimes(1);
   });

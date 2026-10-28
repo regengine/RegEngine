@@ -183,7 +183,7 @@ export default function AdminPage() {
                   Your session needs a fresh passkey confirmation before API keys can load.
                 </PasskeyRequiredNotice>
                 <Button
-                  onClick={() => requestStepUp({ reason: API_KEYS_STEP_UP_REASON, onSuccess: () => void refetch() })}
+                  onClick={() => requestStepUp({ reason: API_KEYS_STEP_UP_REASON, returnTo: '/dashboard', onSuccess: () => void refetch() })}
                   leadingIcon={<Fingerprint strokeWidth={1.75} aria-hidden="true" />}
                 >
                   Confirm with passkey
@@ -311,7 +311,7 @@ export default function AdminPage() {
                       title="API Key Created Successfully"
                       className="mt-4"
                     >
-                      <p>Save this key now - it won&apos;t be shown again!</p>
+                      <p>Save this key now. It won&apos;t be shown again!</p>
                       <div className="mt-2 flex items-center gap-2">
                         <code className="min-w-0 flex-1 break-all rounded-md border border-re-border-subtle bg-re-surface-inset p-2 font-mono text-[0.8125rem] text-re-text-primary">
                           {copiedKey}

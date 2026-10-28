@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from threading import BoundedSemaphore
 
-os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.com)")
+os.environ.setdefault("USER_AGENT", "RegEngine/1.0 (+https://regengine.co)")
 
 # ── Path bootstrap ───────────────────────────────────────────────
 # Ensure services/ and services/shared are importable
