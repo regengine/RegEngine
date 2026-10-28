@@ -234,6 +234,18 @@ def test_sql_filters_edi_source_and_rejects_invalid_dates():
     assert "NOT (" in check.INVALID_DATE_SQL
 
 
+def test_date_validity_sql_guards_and_year_range():
+    """Verify CASE WHEN guards around regex, SUBSTRING::int, and ::date casts, and year >= 1."""
+    assert ">= 1" in check._CALENDAR_VALID_ISO_DATE
+    assert ">= 1" in check._SAFE_DATE
+    assert check._CALENDAR_VALID_ISO_DATE.strip().startswith(
+        "(CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'"
+    )
+    assert check._SAFE_DATE.strip().startswith("(CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'")
+    assert not check._CALENDAR_VALID_ISO_DATE.startswith("(k.kde_value #>> '{}') ~")
+    assert "CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'" in check.INVALID_DATE_SQL
+
+
 def test_r1_time_to_fix_reads_ingest_clocks_not_event_time():
     src = (repo_root / "services" / "shared" / "data_gap_tracking.py").read_text()
     sql_blocks = [b for b in src.split('text(\n    """')[1:]]

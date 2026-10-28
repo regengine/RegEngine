@@ -59,22 +59,73 @@ _KDE_TEXT = "(k.kde_value #>> '{}')"
 # PostgreSQL's to_date raises on out-of-range fields (e.g. 2026-02-30), so a
 # round-trip filter cannot count those rows. CASE short-circuits; only a
 # predicate-validated string is cast. Leap years: divisible by 4, except
-# centuries not divisible by 400.
-_CALENDAR_VALID_ISO_DATE = "(k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END)"
+# centuries not divisible by 400. Year must be >= 1 (year 0000 is out of range).
+_CALENDAR_VALID_ISO_DATE = (
+    "(CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN ("
+    "CASE WHEN SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int >= 1 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND ("
+    "CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) "
+    "WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 "
+    "WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 "
+    "WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 "
+    "ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) "
+    "OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0) "
+    "THEN 29 ELSE 28 END END) "
+    "THEN true ELSE false END) ELSE false END)"
+)
 
 # Safe cast: evaluated only when the calendar predicate holds (CASE).
-_SAFE_DATE = "(CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END) THEN ((k.kde_value #>> '{}')::date) ELSE NULL END)"
+_SAFE_DATE = (
+    "(CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN ("
+    "CASE WHEN SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int >= 1 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND ("
+    "CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) "
+    "WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 "
+    "WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 "
+    "WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 "
+    "ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 "
+    "AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) "
+    "OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0) "
+    "THEN 29 ELSE 28 END END) "
+    "THEN ((k.kde_value #>> '{}')::date) ELSE NULL END) ELSE NULL END)"
+)
 
-MISMATCH_SQL = "\nSELECT COUNT(DISTINCT e.id)\n  FROM fsma.cte_events e\n  JOIN fsma.cte_kdes k\n    ON k.cte_event_id = e.id\n   AND k.tenant_id = e.tenant_id\n   AND k.kde_key IN ('ship_date', 'event_date')\n WHERE e.source LIKE 'edi%'\n   AND (CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END) THEN ((k.kde_value #>> '{}')::date) ELSE NULL END) IS NOT NULL\n   AND (e.event_timestamp < ((CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END) THEN ((k.kde_value #>> '{}')::date) ELSE NULL END)::timestamp AT TIME ZONE 'UTC') - INTERVAL '1 day'\n        OR e.event_timestamp > ((CASE WHEN (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END) THEN ((k.kde_value #>> '{}')::date) ELSE NULL END)::timestamp AT TIME ZONE 'UTC') + INTERVAL '2 days')\n"
-# ``#>> '{{}}'`` extracts the JSONB scalar as text before matching, as
+MISMATCH_SQL = f"""
+SELECT COUNT(DISTINCT e.id)
+  FROM fsma.cte_events e
+  JOIN fsma.cte_kdes k
+    ON k.cte_event_id = e.id
+   AND k.tenant_id = e.tenant_id
+   AND k.kde_key IN ('ship_date', 'event_date')
+ WHERE e.source LIKE 'edi%'
+   AND {_SAFE_DATE} IS NOT NULL
+   AND (e.event_timestamp < ({_SAFE_DATE}::timestamp AT TIME ZONE 'UTC') - INTERVAL '1 day'
+        OR e.event_timestamp > ({_SAFE_DATE}::timestamp AT TIME ZONE 'UTC') + INTERVAL '2 days')
+"""
+# #>> '{}' extracts the JSONB scalar as text before matching, as
 # compliance_score.py does. Calendar-invalid ISO-looking strings (e.g.
 # 2026-02-30) are excluded via the non-throwing predicate above and counted
 # separately by INVALID_DATE_SQL — neither query raises on them.
-# ``e.source LIKE 'edi%'`` keeps this EDI-only (edi_inbound, edi_856_inbound, …).
+# e.source LIKE 'edi%' keeps this EDI-only (edi_inbound, edi_856_inbound, …).
 # COUNT(DISTINCT e.id) counts each event once even when it carries both a
 # ship_date and an event_date KDE.
 
-INVALID_DATE_SQL = "\nSELECT COUNT(*)\n  FROM fsma.cte_kdes k\n  JOIN fsma.cte_events e\n    ON e.id = k.cte_event_id\n   AND e.tenant_id = k.tenant_id\n WHERE e.source LIKE 'edi%'\n   AND k.kde_key IN ('ship_date', 'event_date')\n   AND (k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$'\n   AND NOT ((k.kde_value #>> '{}') ~ '^\\d{4}-\\d{2}-\\d{2}$' AND SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2)::int BETWEEN 1 AND 12 AND SUBSTRING((k.kde_value #>> '{}') FROM 9 FOR 2)::int BETWEEN 1 AND (CASE SUBSTRING((k.kde_value #>> '{}') FROM 6 FOR 2) WHEN '01' THEN 31 WHEN '03' THEN 31 WHEN '05' THEN 31 WHEN '07' THEN 31 WHEN '08' THEN 31 WHEN '10' THEN 31 WHEN '12' THEN 31 WHEN '04' THEN 30 WHEN '06' THEN 30 WHEN '09' THEN 30 WHEN '11' THEN 30 ELSE CASE WHEN ((SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 4 = 0 AND SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 100 <> 0) OR SUBSTRING((k.kde_value #>> '{}') FROM 1 FOR 4)::int % 400 = 0 ) THEN 29 ELSE 28 END END))\n"
+INVALID_DATE_SQL = f"""
+SELECT COUNT(*)
+  FROM fsma.cte_kdes k
+  JOIN fsma.cte_events e
+    ON e.id = k.cte_event_id
+   AND e.tenant_id = k.tenant_id
+ WHERE e.source LIKE 'edi%'
+   AND k.kde_key IN ('ship_date', 'event_date')
+   AND (CASE WHEN (k.kde_value #>> '{{}}') ~ '^\d{{4}}-\d{{2}}-\d{{2}}$'
+             THEN NOT ({_CALENDAR_VALID_ISO_DATE})
+             ELSE false
+        END)
+"""
 
 
 def is_mismatch(event_timestamp: datetime, event_date: date, tolerance: timedelta = TOLERANCE) -> bool:

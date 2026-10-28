@@ -101,15 +101,18 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                 add(now, {"ship_date": "2026-02-30"})
                 add(now, {"event_date": "2024-02-30"})  # also invalid
                 add(now, {"ship_date": "1900-02-29"})  # century non-leap
+                add(now, {"ship_date": "0000-01-01"})  # year 0000 invalid
                 # Non-date JSONB values are ignored, not cast errors.
                 add(now, {"ship_date": "not-a-date"})
+                add(now, {"ship_date": ""})
+                add(now, {"ship_date": "20-02-2026x"})
                 add(now, {"event_date": {"nested": iso}})
                 add(now, {"ship_date": None})
 
                 count = conn.execute(text(mismatch_sql)).scalar()
                 assert count == 2
                 invalid = conn.execute(text(invalid_sql)).scalar()
-                assert invalid == 3
+                assert invalid == 4
                 # Valid leap day must not be counted as invalid, and must not abort.
                 leap = uuid.uuid4()
                 conn.execute(
@@ -120,13 +123,12 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                     text(f"INSERT INTO {schema}.cte_kdes VALUES (:i, :t, :k, CAST(:v AS jsonb))"),
                     {"i": leap, "t": tenant, "k": "ship_date", "v": json.dumps("2024-02-29")},
                 )
-                assert conn.execute(text(invalid_sql)).scalar() == 3
+                assert conn.execute(text(invalid_sql)).scalar() == 4
                 # Python-side helper still agrees for a single valid ship_date row.
                 rows = conn.execute(
                     text(
                         f"SELECT e.event_timestamp, "
-                        f"(CASE WHEN {check._CALENDAR_VALID_ISO_DATE} "
-                        f"THEN ((k.kde_value #>> '{{}}')::date) ELSE NULL END) "
+                        f"{check._SAFE_DATE} "
                         f"FROM {schema}.cte_events e"
                         f" JOIN {schema}.cte_kdes k ON k.cte_event_id = e.id AND k.kde_key = 'ship_date'"
                         f" WHERE e.source LIKE 'edi%'"
@@ -137,3 +139,45 @@ def test_mismatch_sql_counts_against_real_jsonb_column() -> None:
                 assert check.count_mismatches(rows) >= 1
             finally:
                 trans.rollback()
+                try:
+                    with engine.connect() as cleanup_conn:
+                        cleanup_conn.execute(text(f"DROP SCHEMA IF EXISTS {schema} CASCADE"))
+                        cleanup_conn.commit()
+                except Exception:
+                    pass
+
+
+@pytest.mark.parametrize(
+    "val, expected_valid, expected_safe_date, expected_invalid_date",
+    [
+        ("not-a-date", False, None, False),
+        ("", False, None, False),
+        ("20-02-2026x", False, None, False),
+        ("0000-01-01", False, None, True),
+        ("2026-02-30", False, None, True),
+        ("2024-02-29", True, "2024-02-29", False),
+    ],
+)
+def test_date_validity_sql_handles_all_date_shapes(
+    val: str, expected_valid: bool, expected_safe_date: str | None, expected_invalid_date: bool
+) -> None:
+    """Verifies non-date strings, year 0000, invalid dates, and valid leap days."""
+    with rls_postgres_or_skip() as (_url, engine):
+        with engine.connect() as conn:
+            res = conn.execute(
+                text(
+                    f"SELECT "
+                    f"({check._CALENDAR_VALID_ISO_DATE}) AS is_valid, "
+                    f"({check._SAFE_DATE}) AS safe_d, "
+                    f"(CASE WHEN (k.kde_value #>> '{{}}') ~ '^\\d{{4}}-\\d{{2}}-\\d{{2}}$' "
+                    f"THEN NOT ({check._CALENDAR_VALID_ISO_DATE}) ELSE false END) AS is_invalid "
+                    f"FROM (VALUES (CAST(:v AS jsonb))) AS k(kde_value)"
+                ),
+                {"v": json.dumps(val)},
+            ).one()
+            assert res.is_valid is expected_valid
+            if expected_safe_date is None:
+                assert res.safe_d is None
+            else:
+                assert res.safe_d.isoformat() == expected_safe_date
+            assert res.is_invalid is expected_invalid_date
