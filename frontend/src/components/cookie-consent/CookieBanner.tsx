@@ -155,7 +155,7 @@ export function CookieBanner({ enableAnalytics }: CookieBannerProps) {
                 </div>
 
                 <p className="text-[11px] leading-snug text-[var(--re-text-muted)] sm:text-xs sm:leading-relaxed">
-                  Essential sessions. Analytics only if accepted.{' '}
+                  We count visits without cookies. Accept to allow analytics cookies, or Decline to turn all analytics off.{' '}
                   <Link
                     href="/privacy"
                     className="text-[var(--re-brand)] underline hover:opacity-90"
