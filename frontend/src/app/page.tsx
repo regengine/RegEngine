@@ -48,7 +48,7 @@ const problem = [
   {
     title: "The records",
     detail:
-      "Lot codes, dates, quantities, and locations for every Critical Tracking Event: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. Most of it comes from suppliers, in whatever shape they keep it.",
+      "Dates, quantities, locations, and the traceability lot code once one is assigned, for every Critical Tracking Event: harvesting, cooling, initial packing, first land-based receiving, shipping, receiving, and transformation. Which fields apply varies by event. Most of it comes from suppliers, in whatever shape they keep it.",
     icon: Boxes,
   },
   {

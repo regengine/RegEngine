@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import HomePage from "@/app/page";
 import { capabilities } from "@/lib/capabilities";
@@ -35,19 +35,28 @@ describe("HomePage", () => {
     expect(screen.queryByRole("link", { name: /check a supplier file/i })).not.toBeInTheDocument();
   });
 
-  it("lists ingest paths from the capabilities registry instead of a workspace mock", () => {
-    render(<HomePage />);
+  it("lists ingest paths from the capabilities registry, each under its own status", () => {
+    const { container } = render(<HomePage />);
 
     expect(capabilities.live.length).toBeGreaterThan(0);
     expect(capabilities.preview.length).toBeGreaterThan(0);
+
+    const liveList = screen.getByRole("heading", { name: "Live", level: 3 }).nextElementSibling as HTMLElement;
+    const previewList = screen.getByRole("heading", { name: "Preview", level: 3 }).nextElementSibling as HTMLElement;
     for (const name of capabilities.live) {
-      expect(screen.getByText(name)).toBeInTheDocument();
+      expect(within(liveList).getByText(name)).toBeInTheDocument();
+      expect(within(previewList).queryByText(name)).not.toBeInTheDocument();
     }
     for (const name of capabilities.preview) {
-      expect(screen.getByText(name)).toBeInTheDocument();
+      expect(within(previewList).getByText(name)).toBeInTheDocument();
+      expect(within(liveList).queryByText(name)).not.toBeInTheDocument();
     }
-    // one "Preview" badge per preview capability, plus the Preview heading
-    expect(screen.getAllByText("Preview")).toHaveLength(capabilities.preview.length + 1);
+    // every preview row carries a Preview badge; live rows carry none
+    expect(within(previewList).getAllByText("Preview")).toHaveLength(capabilities.preview.length);
+    expect(within(liveList).queryByText("Preview")).not.toBeInTheDocument();
+
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/\bEDI\b|\bSFTP\b/);
     expect(screen.queryByText("No data yet")).not.toBeInTheDocument();
   });
 
