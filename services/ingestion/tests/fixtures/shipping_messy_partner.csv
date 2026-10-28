@@ -1,0 +1,8 @@
+cte_type,traceability_lot_code,product_description,quantity,unit_of_measure,ship_date,ship_from_location,ship_to_location,reference_document,tlc_source_reference,partner_bin,mystery_code,extra_pallet_tag
+shipping,LOT-ROM-2026-0312A,Organic Romaine Hearts,200,cases,2026-03-10,Valley Fresh Farms,Metro Distribution Center,BOL-9001,PACK-2026-0310-001,BIN-A,XYZ-1,TAG-9
+shipping,,Romaine Hearts,50,cases,2026-03-11,Valley Fresh Farms,Metro Distribution Center,BOL-9002,PACK-2026-0311-001,,,
+shipping,LOT-ROM-2026-0312B,Chopped Romaine Mix,not-a-number,cases,2026-03-12,Valley Fresh Farms,Metro Distribution Center,BOL-9003,PACK-2026-0312-001,,,
+shipping,LOT-ROM-2026-0311C,Romaine Hearts 3-Pack,100,blargs,2026-03-11,Valley Fresh Farms,Metro Distribution Center,BOL-9004,PACK-2026-0311-002,,,
+unknown_cte,LOT-X-1,Something,10,cases,2026-03-10,Valley Fresh Farms,Metro Distribution Center,BOL-9005,PACK-X,,,
+shipping,LOT-ROM-2026-0310D,Romaine Mix,75,cases,2026-03-99,Valley Fresh Farms,Metro Distribution Center,BOL-9006,PACK-2026-0310-002,,,
+shipping,LOT-ROM-OK,Romaine Carton,40,cases,2026-03-15,Valley Fresh Farms,Metro Distribution Center,BOL-9007,PACK-2026-0315-001,BIN-B,,
