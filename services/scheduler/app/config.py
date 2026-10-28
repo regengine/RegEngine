@@ -112,6 +112,10 @@ class SchedulerSettings(BaseServiceSettings):
         default=30,
         description="Interval (seconds) between remediation notification-outbox drain passes",
     )
+    partner_file_retention_interval_seconds: int = Field(
+        default=3600,
+        description="Interval (seconds) between partner-file 30-day retention passes",
+    )
     # WS-8 (#2709) — dead-lettered rule evaluations are replayed on this
     # cadence. 15 min: the rows are already durable, so latency only
     # affects how quickly the audit trail self-heals.

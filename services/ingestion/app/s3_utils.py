@@ -401,3 +401,22 @@ def list_raw_documents(
             status_code=500,
             detail="Failed to list raw documents from S3",
         ) from exc
+
+
+def delete_object(bucket: str, key: str) -> None:
+    """Delete one object from the bucket. Missing keys are treated as success."""
+    s3 = _client()
+    _validate_s3_key(key)
+    try:
+        s3.delete_object(Bucket=bucket, Key=key)
+        logger.info("s3_object_deleted", bucket=bucket, key=key)
+    except ClientError as exc:
+        error_code = exc.response["Error"]["Code"]
+        if error_code in ("NoSuchKey", "404", "NotFound"):
+            logger.info("s3_object_already_absent", bucket=bucket, key=key)
+            return
+        logger.error("s3_delete_failed", bucket=bucket, key=key, error=str(exc))
+        raise HTTPException(status_code=500, detail="Failed to delete object from S3") from exc
+    except BotoCoreError as exc:
+        logger.error("s3_delete_failed", bucket=bucket, key=key, error=str(exc))
+        raise HTTPException(status_code=500, detail="Failed to delete object from S3") from exc
