@@ -21,11 +21,11 @@ export function parseEpcisJson(text: string): ParsedEpcisJson {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error('Could not parse the file as JSON. Upload a GS1 EPCIS 2.0 JSON document, a JSON array of events, or a single event object.');
+    throw new Error('Could not parse the file as JSON. Upload a GS1 EPCIS 2.0 (Preview) JSON document, a JSON array of events, or a single event object.');
   }
   if (Array.isArray(parsed)) {
     if (parsed.length === 0 || !parsed.every(isRecord)) {
-      throw new Error('No EPCIS events found in the file. Upload a GS1 EPCIS 2.0 JSON document, a JSON array of events, or a single event object.');
+      throw new Error('No EPCIS events found in the file. Upload a GS1 EPCIS 2.0 (Preview) JSON document, a JSON array of events, or a single event object.');
     }
     return { kind: 'batch', events: parsed };
   }
@@ -33,13 +33,13 @@ export function parseEpcisJson(text: string): ParsedEpcisJson {
     const body = parsed.epcisBody;
     if (isRecord(body) && Array.isArray(body.eventList)) {
       if (body.eventList.length === 0 || !body.eventList.every(isRecord)) {
-        throw new Error('No EPCIS events found in the file. The document epcisBody.eventList is empty.');
+        throw new Error('No EPCIS events found in the file. The EPCIS (Preview) document epcisBody.eventList is empty.');
       }
       return { kind: 'batch', events: body.eventList as Record<string, unknown>[] };
     }
     return { kind: 'single', event: parsed };
   }
-  throw new Error('No EPCIS events found in the file. Upload a GS1 EPCIS 2.0 JSON document, a JSON array of events, or a single event object.');
+  throw new Error('No EPCIS events found in the file. Upload a GS1 EPCIS 2.0 (Preview) JSON document, a JSON array of events, or a single event object.');
 }
 
 function detailToMessage(detail: unknown): string | null {

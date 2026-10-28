@@ -69,7 +69,7 @@ export default function FoodTraceabilitySoftwarePage() {
             <p className="text-body text-re-text-secondary mb-6">
               The first evaluation criterion is straightforward: can the platform capture the data you actually need?
             </p>
-            
+
             <Card variant="inset" padding="spacious" className="mb-6">
               <h3 className="text-subheading text-re-text-primary mb-4 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
@@ -111,7 +111,7 @@ export default function FoodTraceabilitySoftwarePage() {
               <ul className="list-disc space-y-2 pl-5 text-ui text-re-text-secondary marker:text-re-text-tertiary">
                 <li>Automated traceback report generation</li>
                 <li>Chain-of-custody documentation</li>
-                <li>Data export in EPCIS 2.0 or FDA-oriented sortable formats</li>
+                <li>Data export in EPCIS 2.0 (Preview) or FDA-oriented sortable formats</li>
               </ul>
             </Card>
           </div>
@@ -122,7 +122,7 @@ export default function FoodTraceabilitySoftwarePage() {
             <p className="text-body text-re-text-secondary mb-6">
               A food traceability platform doesn't live in isolation. It needs to pull data from your ERP, WMS, inventory system, or supplier networks, and push compliance data to FDA systems, retailers, or auditors.
             </p>
-            
+
             <Card variant="inset" padding="spacious" className="mb-6">
               <h3 className="text-subheading text-re-text-primary mb-4">Integration Complexity Tiers</h3>
               <div className="space-y-4">
@@ -260,7 +260,7 @@ export default function FoodTraceabilitySoftwarePage() {
             <p className="text-body text-re-text-secondary mb-6">
               Here's a step-by-step process to evaluate vendors:
             </p>
-            
+
             <ol className="space-y-4 text-re-text-secondary mb-8">
               <li className="flex gap-4">
                 <span className="shrink-0 font-mono text-ui tabular-nums text-re-text-muted">1.</span>
