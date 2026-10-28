@@ -28,8 +28,10 @@ in the `deploy.yml` header. Live traffic stayed on the last good deploy.
 `railway.toml` kept the previous image: `/readiness`, `healthcheckTimeout`
 300 seconds, then up to 3 `ON_FAILURE` restarts. Holding was luck.
 
-`railway up --ci` returns when the upload is accepted, so a Railway build
-can keep running after the GitHub job ends. The companion CI PR (branch
+`railway up --ci` streams the build logs and exits when the build
+completes, not when the upload is accepted. It does not prove the new
+image is serving, which is why `deploy.yml`'s deployed-commit verification
+is still needed. The companion CI PR (branch
 codex/ci-merge-queue-reliability) changes the `deploy-main` concurrency
 group to cancel-in-progress false, so one deploy runs at a time and only
 the newest pending deploy is kept; that caps parallel deploys but not the
@@ -59,15 +61,26 @@ weekday schedule (at most two or three times):
 2. Fast-forward `release` to that commit. No merge commit. Refuse the run
    when `release` is not an ancestor of the commit. Rollback is not an
    exception (section 6).
-3. The push to `release` is the production deploy. `deploy.yml`'s push
-   trigger is `release` only. It stops triggering on `push` to `main`.
-   Any `workflow_dispatch`, including Deploy previous SHA, refuses unless
-   the SHA is an ancestor of `release` or equal to it, and runs in the
-   protected `production` GitHub Environment with required reviewer C.Lee
-   (section 8(c)). Same wait for **Backend CI Status Gate**, same backend
-   path filter, same `railway up --ci`.
+3. Promote ends by dispatching `deploy.yml`. A push to `release` made with
+   the workflow's default `GITHUB_TOKEN` does not start other workflows.
+   GitHub does not create a workflow run from `GITHUB_TOKEN` events, except
+   `workflow_dispatch` and `repository_dispatch`, so the fast-forward does
+   not start `deploy.yml`. The dispatch is `gh workflow run` or
+   `createWorkflowDispatch`, which `GITHUB_TOKEN` is allowed to call, and
+   it passes the promoted SHA as an input. `deploy.yml` checks out that
+   exact SHA, verifies its **Backend CI Status Gate**, stamps the build,
+   and deploys it. The run still refuses unless the SHA is an ancestor of
+   `release` or equal to it, and it still runs in the protected
+   `production` GitHub Environment with required reviewer C.Lee
+   (section 8(c)). The same rules cover Deploy previous SHA. `deploy.yml`
+   stops triggering on `push` to `main`. There is no push path filter on
+   this dispatch; a missing gate fails the deploy (`fail-on-no-checks`).
    `backend-ci.yml` does not run on `release`, so the gate has to already
-   exist on that commit. A missing gate fails the deploy (`fail-on-no-checks`).
+   exist on that commit.
+   Alternative: push `release` with a GitHub App token. That push does
+   trigger workflows, so a `release` push trigger on `deploy.yml` can be
+   the deploy instead of this dispatch. Same ancestor check and the same
+   `production` environment. One mechanism only.
 
 Protect `release`: no direct pushes except the promote workflow's GitHub
 identity, no force-push, no deletion. No protection bypass for rollback
@@ -140,19 +153,26 @@ ruleset (promote identity only, no force-push, no deletion).
 
 (b) Add Promote to production: fast-forward only, require the green backend
 gate and the green staging smoke. Refuse when `release` is not an ancestor.
-No input rewinds the branch. Add Deploy previous SHA: `workflow_dispatch`
-on `deploy.yml` runs `railway up --ci` only when the SHA is an ancestor of
-`release` or equal to it (section 8(c)), records it in the job summary,
-and does not move the branch.
+No input rewinds the branch. The workflow's `GITHUB_TOKEN` push does not
+start `deploy.yml`. End Promote by dispatching `deploy.yml`
+(`gh workflow run` / `createWorkflowDispatch`, which `GITHUB_TOKEN` may
+call; the job needs `actions: write`) with the promoted SHA as input.
+Add Deploy previous SHA on that same `workflow_dispatch`: check out the
+given SHA and run `railway up --ci` only when the SHA is an ancestor of
+`release` or equal to it (section 8(c)), record it in the job summary,
+and do not move the branch.
 
-(c) Switch the `deploy.yml` production push trigger from `main` to
-`release` only. Exactly one production deploy owner: `deploy.yml` owns
-production deploys, and Railway GitHub auto-deploy for the production
-service is off (section 7). Keep `workflow_dispatch`, and refuse the run
-unless the SHA is an ancestor of `release` or equal to it. That includes
+(c) Stop `deploy.yml` on `push` to `main`. `workflow_dispatch` takes the
+SHA input, checks out that exact SHA, verifies its **Backend CI Status
+Gate**, stamps the build with that SHA, and deploys it. Refuse unless the
+SHA is an ancestor of `release` or equal to it. That includes Promote and
 Deploy previous SHA. The job runs in a protected `production` GitHub
 Environment with required reviewer C.Lee. Leave staging on `main`. Rename
-concurrency group `deploy-main` in that same change.
+concurrency group `deploy-main` in that same change. Exactly one production
+deploy owner: `deploy.yml` owns production deploys, and Railway GitHub
+auto-deploy for the production service is off (section 7). Alternative to
+the dispatch in (b): a GitHub App token pushes `release`, and `deploy.yml`
+keeps a `release` push trigger instead. Do not ship both.
 
 (d) Update the runbooks (including `DISASTER_RECOVERY.md`, where
 `railway redeploy --from-source` means latest `main`) and run the
@@ -178,7 +198,9 @@ run the audit-chain integrity check (section 6).
 ## 9. Risks and open questions
 
 - Who can promote. A founder-only dispatch is slower and safer. A bot
-  identity that can push `release` can ship production.
+  identity that can dispatch `deploy.yml`, or that pushes `release` with
+  a GitHub App token, can ship production. A `GITHUB_TOKEN` push to
+  `release` by itself cannot.
 - Cadence. On demand, or a cap of two or three promotions per weekday.
   A hotfix uses the same path and skips the cap.
 - Vercel. The frontend keeps its own production branch until someone sets
