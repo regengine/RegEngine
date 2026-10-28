@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { NOT_SET, NO_DATA_YET } from '@/lib/empty-values';
 import { Field } from '@/components/ui/field';
 import { StatTile } from '@/components/ui/stat-tile';
 import { Button } from '@/components/ui/button';
@@ -140,7 +141,7 @@ export default function ExportJobsPage() {
                 )}
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                    <StatTile label="Active jobs" value={activeJobs} />
+                    <StatTile label="Active jobs" value={jobs.length === 0 ? NO_DATA_YET : activeJobs} />
                     <StatTile label="Archive posture" value={<span className="text-heading">External archive required</span>}>
                         <p className="text-small text-re-text-tertiary">
                             Use scheduled exports to maintain long-term retention outside the app.
@@ -215,20 +216,20 @@ export default function ExportJobsPage() {
                                         <Badge tone="neutral" size="sm">{job.status.replaceAll('_', ' ')}</Badge>
                                     </div>
                                     <p className="mt-1 text-ui text-re-text-secondary">
-                                        {job.format} · {job.cadence} · {job.destination}
+                                        {job.format || NOT_SET} · {job.cadence || NOT_SET} · {job.destination || NOT_SET}
                                     </p>
                                     <div className="mt-3 grid gap-2 text-ui text-re-text-tertiary sm:grid-cols-2">
                                         <div className="flex items-center gap-2">
                                             <Clock className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            Last run: {job.lastRun}
+                                            Last run: {job.lastRun || NOT_SET}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <Download className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            Next run: {job.nextRun}
+                                            Next run: {job.nextRun || NOT_SET}
                                         </div>
                                         <div className="flex items-center gap-2 break-all sm:col-span-2">
                                             <ShieldCheck className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
-                                            Manifest: <span className="truncate font-mono text-[0.8125rem]">{job.manifestHash}</span>
+                                            Manifest: <span className="truncate font-mono text-[0.8125rem]">{job.manifestHash || NOT_SET}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -249,8 +250,18 @@ export default function ExportJobsPage() {
                         <div className="space-y-4">
                             <EmptyState
                                 icon={Archive}
-                                title="No export jobs yet"
-                                description="Export jobs package accepted traceability records into FDA, EPCIS (Preview), or audit bundles on a cadence. After the first successful job, run timing and manifest details will appear here."
+                                title={NO_DATA_YET}
+                                description="Export jobs package accepted traceability records into FDA, EPCIS (Preview), or audit bundles on a cadence. Start by sending records: upload a CSV or post to the JSON events API."
+                                action={
+                                    <Button asChild size="sm">
+                                        <Link href="/ingest">Upload a CSV</Link>
+                                    </Button>
+                                }
+                                secondaryAction={
+                                    <Button asChild variant="secondary" size="sm">
+                                        <Link href="/docs/api">JSON events API docs</Link>
+                                    </Button>
+                                }
                             />
                             <div className="grid gap-4 md:grid-cols-3">
                                 {exportPrereqs.map((step) => (

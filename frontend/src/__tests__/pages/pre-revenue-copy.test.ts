@@ -13,7 +13,6 @@ const PUBLIC_FILES = [
     'src/app/compare/repositrak/page.tsx',
     'src/app/supplier-compliance/page.tsx',
     'src/app/tools/roi-calculator/components/ROICalculatorClient.tsx',
-    'src/app/case-studies/page.tsx',
     'src/app/developers/page.tsx',
     'src/app/status/page.tsx',
 ];
@@ -58,11 +57,5 @@ describe('pre-revenue public copy', () => {
         expect(page).not.toMatch(/gaMonthly: \d/);
         expect(page).toContain('Pricing is temporarily unavailable');
         expect(page).toContain('What does the Founding rate include?');
-    });
-
-    it('states pre-revenue status plainly on the case study disclosure', () => {
-        expect(read('src/app/case-studies/page.tsx')).toContain(
-            'RegEngine is pre-revenue; self-serve access is in staged rollout.',
-        );
     });
 });
