@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowRight, CheckCircle2, FileWarning, Info, RotateCcw, XCircle } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Info, RotateCcw, XCircle } from 'lucide-react';
 import { LeadGate } from '@/components/lead-gate/LeadGate';
 import { EmailGate } from '@/components/tools/EmailGate';
 import { Container } from '@/components/layout/container';
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { fieldControlClasses } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { trackToolRunCompleted, trackToolRunStarted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 interface Requirement {
     id: string;
@@ -71,15 +72,8 @@ const REQUIREMENTS: Requirement[] = [
     },
 ];
 
-const SAMPLE_NOTICES = {
-    bad: `Lot response attached.
-
-Product moved through the system last week.
-
-Please review the records.`,
-};
-
 export default function NoticeValidatorPage() {
+    const posthog = usePostHog();
     const [noticeText, setNoticeText] = useState('');
     const [hasAnalyzed, setHasAnalyzed] = useState(false);
 
@@ -118,6 +112,7 @@ export default function NoticeValidatorPage() {
     const runCheck = () => {
         if (!noticeText.trim()) return;
         trackToolRunStarted('notice-validator');
+        posthog?.capture('tool_started', { tool_id: 'notice-validator' });
         setHasAnalyzed(true);
         trackToolRunCompleted('notice-validator', 'success');
     };
@@ -137,14 +132,6 @@ export default function NoticeValidatorPage() {
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-2">
-                    <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => { setNoticeText(SAMPLE_NOTICES.bad); setHasAnalyzed(false); }}
-                        leadingIcon={<FileWarning aria-hidden="true" strokeWidth={1.75} />}
-                    >
-                        Load weak sample
-                    </Button>
                     <Button
                         type="button"
                         variant="ghost"

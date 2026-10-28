@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Database, Download, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
+import { ArrowRight, Database, FileCode2, Hash, KeyRound, Lock, ShieldCheck, Terminal } from "lucide-react";
 import { Container } from "@/components/layout/container";
 import { PageHeader } from "@/components/layout/page-header";
 import { Section } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { NO_DATA_YET } from "@/lib/empty-values";
 
 export const metadata: Metadata = {
   title: "Security | RegEngine",
@@ -37,7 +39,6 @@ const controls = [
 
 const links = [
   { icon: Terminal, label: "Open verifier", href: "/verify" },
-  { icon: Download, label: "Download proof artifacts", href: "/proof" },
   { icon: FileCode2, label: "Security details", href: "/trust/architecture" },
   { icon: KeyRound, label: "Contact security", href: "/contact" },
 ];
@@ -70,10 +71,18 @@ export default function SecurityPage() {
           </div>
         </div>
         <Card className="overflow-hidden">
-          <CardHeader className="items-center py-3">
-            <p className="font-mono text-label uppercase text-re-text-muted">Verification path</p>
-          </CardHeader>
-          <div className="grid gap-5 p-5 sm:grid-cols-3">
+          <EmptyState
+            bare
+            size="sm"
+            title={NO_DATA_YET}
+            description="Verifier output appears here once you export a package from your own records."
+            action={
+              <Button asChild size="sm">
+                <Link href="/ingest">Upload a CSV</Link>
+              </Button>
+            }
+          />
+          <div className="grid gap-5 border-t border-re-border-subtle p-5 sm:grid-cols-3">
             <div>
               <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Bundle</p>
               <p className="font-mono text-[0.8125rem] text-re-text-primary">fsma_package.json</p>

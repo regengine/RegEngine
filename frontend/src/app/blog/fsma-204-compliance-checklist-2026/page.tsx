@@ -4,18 +4,19 @@ import { ArrowRight, CheckCircle2, AlertCircle, ClipboardList, BarChart3, Shield
 import { Container } from '@/components/layout/container';
 import { PageHeader } from '@/components/layout/page-header';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { JSONLD } from '@/components/seo/json-ld';
 import { blogPostingJsonLd } from '@/lib/blog-jsonld';
 
 export const metadata: Metadata = {
   title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
-  description: 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.',
+  description: 'A complete FSMA 204 compliance checklist for food businesses. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
   openGraph: {
     url: 'https://regengine.co/blog/fsma-204-compliance-checklist-2026',
     siteName: 'RegEngine',
     title: 'FSMA 204 Compliance Checklist for 2026: Actionable Steps for July 2028',
-    description: 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.',
+    description: 'A complete FSMA 204 compliance checklist for food businesses. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.',
     type: 'article',
   },
 };
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
 export default function FSMA204ComplianceChecklist() {
   return (
     <div className="bg-re-surface-base">
-      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-checklist-2026', 'A complete FSMA 204 compliance checklist for food businesses. What to do now to meet the July 2028 deadline and avoid FDA enforcement.')} />
+      <JSONLD data={blogPostingJsonLd('fsma-204-compliance-checklist-2026', 'A complete FSMA 204 compliance checklist for food businesses. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.')} />
       <Container as="article" width="prose" className="py-12 sm:py-16">
         <Link
           href="/blog"
@@ -34,7 +35,7 @@ export default function FSMA204ComplianceChecklist() {
         <PageHeader
           eyebrow="Action Steps"
           title="FSMA 204 Compliance Checklist for 2026: What to Do Now"
-          description="A step-by-step checklist to prepare your food business for the July 2028 FSMA 204 deadline."
+          description="A step-by-step checklist to prepare your food business for FSMA 204. FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive."
           meta={
             <>
               <span>April 2026</span>
@@ -43,6 +44,9 @@ export default function FSMA204ComplianceChecklist() {
           }
         />
         <div>
+          <Callout tone="info" className="mb-8">
+            <p><strong>Correction (Oct 26, 2026):</strong> FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive. The compliance date in the rule remains January 20, 2026 (87 FR 70910); the proposed extension (90 FR 38084) has not been finalized.</p>
+          </Callout>
           {/* Introduction */}
           <div className="mb-10">
             <p className="text-body text-re-text-secondary mb-6">

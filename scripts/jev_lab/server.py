@@ -284,9 +284,18 @@ def create_app(lab: Lab) -> FastAPI:
 
     @app.get("/static/{name}")
     def static(name: str) -> FileResponse:
+        # Allowlist + resolve + relative_to: name never reaches FileResponse unchecked (CodeQL path-injection).
         if name not in STATIC_FILES:
             raise HTTPException(404)
-        return FileResponse(STATIC / name, media_type=STATIC_FILES[name])
+        root = STATIC.resolve()
+        path = (STATIC / name).resolve()
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise HTTPException(404) from exc
+        if path.name != name or not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, media_type=STATIC_FILES[name])
 
     @app.get("/api/status")
     def status() -> dict[str, Any]:
@@ -423,8 +432,9 @@ def create_app(lab: Lab) -> FastAPI:
             lab.start_loop(LoopConfig(generations=generations, margin=margin), backend)
         except LabStateError:
             raise  # a lab file no longer says what it recorded: the app's handler names it
-        except RuntimeError as exc:
-            return JSONResponse(status_code=409, content={"error": str(exc)})
+        except RuntimeError:
+            # Generic body only — never echo exc text (CodeQL stack-trace-exposure).
+            return JSONResponse(status_code=409, content={"error": "a run is already in progress"})
         return {"started": True, "proposer": backend, "generations": generations, "margin": margin}
 
     @app.post("/api/loop/stop")

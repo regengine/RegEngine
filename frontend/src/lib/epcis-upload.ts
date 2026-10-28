@@ -111,6 +111,27 @@ export function normalizeEpcisIngestResult(data: EpcisIngestResponse | null | un
   return { total, accepted, rejected, errorMessages };
 }
 
+/**
+ * Per-event lines for a rejected batch, in both backend shapes:
+ * atomic (400, detail {error, mode, message, errors:[{index, status_code, detail}]})
+ * and partial (400 body with no detail wrapper: {errors:[{index, detail}], ...}).
+ * Returns [] for any other failure.
+ */
+export function epcisErrorEventMessages(error: unknown): string[] {
+  if (!(error instanceof Error)) return [];
+  const data = (error as Error & { response?: { data?: unknown } }).response?.data;
+  if (!isRecord(data)) return [];
+  const source = isRecord(data.detail) ? data.detail : data;
+  if (!Array.isArray(source.errors)) return [];
+  const messages: string[] = [];
+  for (const entry of source.errors) {
+    if (!isRecord(entry) || typeof entry.index !== 'number') continue;
+    const message = resultItemMessage(entry as { index?: number; detail?: unknown });
+    if (message && !messages.includes(message)) messages.push(message);
+  }
+  return messages;
+}
+
 /** Render a backend or network failure the same terse way the CSV tab does. */
 export function epcisErrorMessage(error: unknown): string {
   if (error instanceof Error) {

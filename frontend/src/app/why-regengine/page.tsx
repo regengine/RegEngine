@@ -579,7 +579,7 @@ HTTP 201
                     </div>
 
                     {/* EPCIS */}
-                    <div className="grid items-center gap-8 md:grid-cols-2">
+                    <div>
                         <div>
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
                                 EPCIS 2.0 export (Preview)
@@ -588,7 +588,7 @@ HTTP 201
                                 EPCIS 2.0 (Preview) can support trading-partner interoperability. RegEngine treats EPCIS 2.0 as a preview schema where the enabled workflow and source data allow it.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                Verify EPCIS coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
+                                Verify EPCIS (Preview) coverage with each vendor; some platforms layer EPCIS over legacy schemas, which can introduce conversion edges.
                             </p>
                             <ul className="space-y-2">
                                 {[
@@ -604,27 +604,6 @@ HTTP 201
                                 ))}
                             </ul>
                         </div>
-                        <Card padding="spacious" className="hidden md:block">
-                            <code className="block overflow-auto font-mono text-small leading-relaxed text-re-text-secondary">
-                                {`<events>
-  <EPCISEvent>
-    <eventTime><event timestamp></eventTime>
-    <eventType>
-      ObjectEvent
-    </eventType>
-    <epcList>
-      <epc>
-        urn:epc:id:sgtin:...
-      </epc>
-    </epcList>
-    <action>OBSERVE</action>
-    <bizStep>
-      urn:epcglobal:cbv:bizstep:...
-    </bizStep>
-  </EPCISEvent>
-</events>`}
-                            </code>
-                        </Card>
                     </div>
 
                     {/* SMB Focus */}

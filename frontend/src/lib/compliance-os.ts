@@ -213,7 +213,7 @@ export const complianceRouteFamilies: Record<RouteFamily, RouteFamilyConfig> = {
   },
   complianceEducation: {
     label: "Compliance education",
-    routes: ["/fsma-204", "/blog", "/case-studies"],
+    routes: ["/fsma-204", "/blog"],
     density: "medium",
     shell: "Evidence Chain editorial",
     rule: "Use readable regulatory narratives, citations, and chain-of-custody visuals.",

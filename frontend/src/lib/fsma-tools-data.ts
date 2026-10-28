@@ -1,16 +1,16 @@
 /**
  * FSMA 204 Key Dates
- * Based on FDA Final Rule and Congressional enforcement directives
- * Original compliance date was January 20, 2026. Congress directed
- * FDA not to enforce before July 20, 2028.
+ * The compliance date under the final rule remains January 20, 2026 (87 FR 70910).
+ * The extension in 90 FR 38084 is proposed only.
+ * FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
  */
 export const FSMA_204_ORIGINAL_DATE = 'January 20, 2026';
-export const FSMA_204_COMPLIANCE_DATE = 'July 20, 2028';
+export const FSMA_204_COMPLIANCE_DATE = 'January 20, 2026';
 export const FSMA_204_ENFORCEMENT_FLOOR = 'July 20, 2028';
 export const FSMA_204_DEADLINE_ISO = '2028-07-20';
 export const FSMA_204_CITATION = '21 CFR Part 1, Subpart S';
 
-/** Days remaining until the compliance deadline */
+/** Days remaining until the date before which FDA has said it will not enforce. */
 export function daysUntilFSMA204(): number {
     const now = new Date();
     const deadline = new Date(FSMA_204_DEADLINE_ISO);
