@@ -10,13 +10,16 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
+from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
 
@@ -54,7 +57,7 @@ def _query_tenant_events(
     """
     db = get_db_safe()
     try:
-        where = ["e.tenant_id = :tenant_id"]
+        where = []
         params: dict = {"tenant_id": tenant_id}
         if lot_code:
             where.append("e.traceability_lot_code = :lot_code")
@@ -68,7 +71,12 @@ def _query_tenant_events(
 
         rows = db.execute(
             text(f"""
+                WITH tenant_kdes AS (
+                    SELECT k.* FROM fsma.cte_kdes k
+                    WHERE k.tenant_id = :tenant_id
+                )
                 SELECT
+                    e.id AS event_id,
                     e.event_type,
                     e.traceability_lot_code,
                     e.product_description,
@@ -81,6 +89,10 @@ def _query_tenant_events(
                     e.epcis_event_type,
                     e.epcis_action,
                     e.epcis_biz_step,
+                    k_epcis.kde_value AS epcis_document_json,
+                    COALESCE(k_gtin.kde_value, k_product.kde_value) AS gtin,
+                    k_product.kde_value AS product_id,
+                    k_epc_class.kde_value AS epc_class,
                     k_from.kde_value AS ship_from,
                     k_from_gln.kde_value AS ship_from_gln,
                     k_to.kde_value AS ship_to,
@@ -88,13 +100,18 @@ def _query_tenant_events(
                     k_carrier.kde_value AS carrier,
                     k_temp.kde_value AS temperature_c
                 FROM fsma.cte_events e
-                LEFT JOIN fsma.cte_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
-                LEFT JOIN fsma.cte_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
-                LEFT JOIN fsma.cte_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
-                LEFT JOIN fsma.cte_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
-                LEFT JOIN fsma.cte_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
-                LEFT JOIN fsma.cte_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
-                WHERE {" AND ".join(where)}
+                LEFT JOIN tenant_kdes k_from ON k_from.cte_event_id = e.id AND k_from.kde_key = 'ship_from_location'
+                LEFT JOIN tenant_kdes k_epcis ON k_epcis.cte_event_id = e.id AND k_epcis.tenant_id = e.tenant_id AND k_epcis.kde_key = 'epcis_document_json'
+                LEFT JOIN tenant_kdes k_gtin ON k_gtin.cte_event_id = e.id AND k_gtin.tenant_id = e.tenant_id AND k_gtin.kde_key = 'gtin'
+                LEFT JOIN tenant_kdes k_product ON k_product.cte_event_id = e.id AND k_product.tenant_id = e.tenant_id AND k_product.kde_key = 'product_id'
+                LEFT JOIN tenant_kdes k_epc_class ON k_epc_class.cte_event_id = e.id AND k_epc_class.tenant_id = e.tenant_id AND k_epc_class.kde_key = 'epc_class'
+                LEFT JOIN tenant_kdes k_from_gln ON k_from_gln.cte_event_id = e.id AND k_from_gln.kde_key = 'ship_from_gln'
+                LEFT JOIN tenant_kdes k_to ON k_to.cte_event_id = e.id AND k_to.kde_key = 'ship_to_location'
+                LEFT JOIN tenant_kdes k_to_gln ON k_to_gln.cte_event_id = e.id AND k_to_gln.kde_key = 'ship_to_gln'
+                LEFT JOIN tenant_kdes k_carrier ON k_carrier.cte_event_id = e.id AND k_carrier.kde_key = 'carrier_name'
+                LEFT JOIN tenant_kdes k_temp ON k_temp.cte_event_id = e.id AND k_temp.kde_key = 'temperature_celsius'
+                WHERE e.tenant_id = :tenant_id
+                {"AND " + " AND ".join(where) if where else ""}
                 ORDER BY e.event_timestamp DESC
                 LIMIT :row_limit
             """),
@@ -133,12 +150,266 @@ def _load_export_rows(tenant_id: str, request: "ExportRequest") -> list[dict]:
 _CTE_TO_BIZSTEP = {
     "receiving": "urn:epcglobal:cbv:bizstep:receiving",
     "shipping": "urn:epcglobal:cbv:bizstep:shipping",
-    "transformation": "urn:epcglobal:cbv:bizstep:transforming",
+    "transformation": "urn:epcglobal:cbv:bizstep:commissioning",
     "initial_packing": "urn:epcglobal:cbv:bizstep:packing",
-    "harvesting": "urn:epcglobal:cbv:bizstep:harvesting",
+    "harvesting": "urn:epcglobal:cbv:bizstep:collecting",
     "cooling": "urn:epcglobal:cbv:bizstep:storing",
-    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:landing",
+    "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:receiving",
 }
+
+_CBV_BIZSTEPS = {
+    "accepting",
+    "arriving",
+    "assembling",
+    "collecting",
+    "commissioning",
+    "consigning",
+    "creating_class_instance",
+    "cycle_counting",
+    "decommissioning",
+    "departing",
+    "destroying",
+    "disassembling",
+    "dispensing",
+    "encoding",
+    "entering_exiting",
+    "holding",
+    "inspecting",
+    "installing",
+    "killing",
+    "loading",
+    "other",
+    "packing",
+    "picking",
+    "receiving",
+    "removing",
+    "repackaging",
+    "repairing",
+    "replacing",
+    "reserving",
+    "retail_selling",
+    "sampling",
+    "sensor_reporting",
+    "shipping",
+    "staging_outbound",
+    "stock_taking",
+    "stocking",
+    "storing",
+    "transporting",
+    "unloading",
+    "unpacking",
+    "void_shipping",
+}
+_CBV_DISPOSITIONS = {
+    "active",
+    "available",
+    "container_closed",
+    "damaged",
+    "destroyed",
+    "dispensed",
+    "disposed",
+    "encoded",
+    "expired",
+    "in_progress",
+    "in_transit",
+    "inactive",
+    "no_pedigree_match",
+    "non_sellable_other",
+    "partially_dispensed",
+    "recalled",
+    "reserved",
+    "retail_sold",
+    "returned",
+    "sellable_accessible",
+    "sellable_not_accessible",
+    "stolen",
+    "unknown",
+}
+
+
+def _gs1_check_digit_valid(digits: str) -> bool:
+    """Validate a GS1 mod-10 check digit (GTIN/GLN/SSCC).
+
+    Delegates to ``shared.fsma_validation.verify_gs1_check_digit`` so the
+    rightmost data digit is weighted 3 (GS1 General Specifications).
+    """
+    return verify_gs1_check_digit(digits)
+
+
+_UOM_TO_UNCEFACT = {
+    "kg": "KGM",
+    "kgs": "KGM",
+    "kilogram": "KGM",
+    "kilograms": "KGM",
+    "kgm": "KGM",
+    "lb": "LBR",
+    "lbs": "LBR",
+    "pound": "LBR",
+    "pounds": "LBR",
+    "lbr": "LBR",
+    "cases": "CS",
+    "case": "CS",
+    "cs": "CS",
+    "cas": "CS",
+    "each": "EA",
+    "ea": "EA",
+    "units": "EA",
+    "unit": "EA",
+    "cartons": "CT",
+    "carton": "CT",
+    "ct": "CT",
+    "ctn": "CT",
+    "boxes": "BX",
+    "box": "BX",
+    "bags": "BG",
+    "bag": "BG",
+    "pallets": "PF",
+    "pallet": "PF",
+    "pieces": "H87",
+    "piece": "H87",
+}
+
+
+def _kde_scalar(value: object) -> str:
+    """Normalize a JSONB/text KDE cell to a bare string."""
+    if value is None:
+        return ""
+    if isinstance(value, (dict, list, bool)):
+        return ""
+    if isinstance(value, (int, float)):
+        return str(value)
+    if not isinstance(value, str):
+        return str(value).strip()
+    text_value = value.strip()
+    if len(text_value) >= 2 and text_value[0] == text_value[-1] == '"':
+        try:
+            parsed = json.loads(text_value)
+        except (TypeError, ValueError):
+            return text_value
+        if isinstance(parsed, str):
+            return parsed.strip()
+    return text_value
+
+
+def _quantity_uom(raw: object) -> tuple[str | None, str | None]:
+    """Map free-text units to UN/CEFACT; return (uom, raw_if_unmapped_or_alias)."""
+    if raw is None:
+        return None, None
+    value = _kde_scalar(raw)
+    if not value:
+        return None, None
+    if re.fullmatch(r"[A-Z0-9]{2,3}", value):
+        return value, None
+    mapped = _UOM_TO_UNCEFACT.get(value.lower())
+    if mapped:
+        return mapped, None if value.upper() == mapped else value
+    return None, value
+
+
+def _cbv_term(value: str | None, kind: str) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    value = value.removeprefix(f"urn:epcglobal:cbv:{kind}:")
+    web_prefix = f"https://ref.gs1.org/cbv/{'BizStep' if kind == 'bizstep' else 'Disp'}-"
+    value = value.removeprefix(web_prefix)
+    allowed = _CBV_BIZSTEPS if kind == "bizstep" else _CBV_DISPOSITIONS
+    return value if value in allowed else None
+
+
+def _valid_class_uri(value: object) -> bool:
+    if not isinstance(value, str) or "0000000.000000" in value:
+        return False
+    match = re.fullmatch(
+        r"urn:epc:class:lgtin:(\d{6,12})\.(\d+)\.([A-Za-z0-9_~!$&'()*+,;=:@%\-]+)",
+        value,
+    )
+    if match:
+        return len(match[1]) + len(match[2]) == 13
+    match = re.fullmatch(r"https://id\.gs1\.org/01/(\d{14})/10/[^/?#]+", value)
+    return bool(match and _gs1_check_digit_valid(match[1]))
+
+
+def _epc_class(row: dict) -> str | None:
+    """Use an existing class URI, product_id, or a GTIN Digital Link.
+
+    GTIN/GLN digits do not reveal the company-prefix split required by EPC
+    URNs. A lot code alone cannot identify an EPC class — callers must
+    persist ``epc_class``, ``product_id`` (class URI), ``gtin``, or an
+    embedded ``epcis_document_json`` quantity class.
+    """
+    for key in ("epc_class", "product_id"):
+        value = _kde_scalar(row.get(key))
+        if _valid_class_uri(value):
+            return value
+    raw = row.get("epcis_document_json")
+    if raw:
+        try:
+            original = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(original, dict):
+                for field in ("quantityList", "outputQuantityList", "inputQuantityList"):
+                    for item in original.get(field) or []:
+                        candidate = item.get("epcClass") if isinstance(item, dict) else None
+                        if _valid_class_uri(candidate):
+                            return candidate
+        except (TypeError, ValueError):
+            pass
+    gtin_raw = _kde_scalar(row.get("gtin")) or _kde_scalar(row.get("product_id"))
+    lot = _kde_scalar(row.get("traceability_lot_code"))
+    digits = re.sub(r"\D", "", gtin_raw)
+    if digits and lot:
+        try:
+            gtin14 = normalize_gtin(digits)
+        except ValueError:
+            gtin14 = ""
+        if gtin14 and _gs1_check_digit_valid(gtin14):
+            return f"https://id.gs1.org/01/{gtin14}/10/{quote(lot, safe='-._~')}"
+    return None
+
+
+def _input_epc_class(row: dict) -> str | None:
+    """Best-effort input class for TransformationEvent rows."""
+    raw = row.get("epcis_document_json")
+    if raw:
+        try:
+            original = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(original, dict):
+                for item in original.get("inputQuantityList") or []:
+                    candidate = item.get("epcClass") if isinstance(item, dict) else None
+                    if _valid_class_uri(candidate):
+                        return candidate
+                for item in original.get("inputEPCList") or []:
+                    if isinstance(item, str) and _valid_class_uri(item):
+                        return item
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _instance_epc(row: dict) -> str | None:
+    """Return a valid SGTIN instance URN from product_id when present."""
+    value = _kde_scalar(row.get("product_id"))
+    match = re.fullmatch(
+        r"urn:epc:id:sgtin:(\d{6,12})\.(\d+)\.([A-Za-z0-9_~!$&'()*+,;=:@%\-]+)",
+        value,
+    )
+    if match and match[1] != "0000000" and len(match[1]) + len(match[2]) == 13:
+        return value
+    return None
+
+
+def _location_uri(value: object) -> str | None:
+    value = _kde_scalar(value) if not isinstance(value, str) else value
+    if not isinstance(value, str) or not value:
+        return None
+    if "0000000000000" in value or "0000000.00000" in value:
+        return None
+    if re.fullmatch(r"urn:epc:id:sgln:\d{6,12}\.\d+\.[A-Za-z0-9_-]+", value):
+        return value
+    if re.fullmatch(r"\d{6,12}\.\d+\.[A-Za-z0-9_-]+", value):
+        return f"urn:epc:id:sgln:{value}"
+    if re.fullmatch(r"\d{13}", value) and _gs1_check_digit_valid(value):
+        return f"https://id.gs1.org/414/{value}"
+    return None
 
 
 def _validate_epcis_document(doc: dict) -> list[str]:
@@ -175,8 +446,6 @@ def _validate_epcis_document(doc: dict) -> list[str]:
         "AssociationEvent",
     }
     valid_actions = {"ADD", "OBSERVE", "DELETE"}
-    bizstep_prefix = "urn:epcglobal:cbv:bizstep:"
-
     for i, event in enumerate(event_list):
         prefix = f"event[{i}]"
         etype = event.get("type")
@@ -187,9 +456,12 @@ def _validate_epcis_document(doc: dict) -> list[str]:
         action = event.get("action")
         if action and action not in valid_actions:
             errors.append(f"{prefix}: invalid action '{action}'")
-        biz_step = event.get("bizStep", "")
-        if biz_step and not biz_step.startswith(bizstep_prefix):
-            errors.append(f"{prefix}: bizStep '{biz_step}' is not a valid GS1 CBV URI")
+        if "extension" in event:
+            errors.append(f"{prefix}: EPCIS 1.x extension wrapper")
+        for field, kind in (("bizStep", "bizstep"), ("disposition", "disp")):
+            value = event.get(field)
+            if value and _cbv_term(value, kind) is None:
+                errors.append(f"{prefix}: {field} '{value}' is not a valid GS1 CBV URI")
 
     return errors
 
@@ -228,35 +500,135 @@ async def export_epcis(
     data_source = "tenant" if rows else "empty"
 
     event_list = []
+    skipped = 0
+    skipped_by_reason: dict[str, int] = {}
+    skipped_evidence: list[dict] = []
+
+    def _skip(row: dict, reason: str) -> None:
+        nonlocal skipped
+        skipped += 1
+        skipped_by_reason[reason] = skipped_by_reason.get(reason, 0) + 1
+        if len(skipped_evidence) < 50:
+            skipped_evidence.append(
+                {
+                    "reason": reason,
+                    "eventType": row.get("event_type"),
+                    "eventId": str(row.get("event_id") or "") or None,
+                    "tlc": _kde_scalar(row.get("traceability_lot_code")) or None,
+                }
+            )
+
     if rows:
         for r in rows:
-            ts = r["event_timestamp"]
-            event = {
-                "type": r["epcis_event_type"] or "ObjectEvent",
-                "eventTime": ts.isoformat() if ts else now.isoformat(),
-                "eventTimeZoneOffset": "-08:00",
-                "action": r["epcis_action"] or "OBSERVE",
-                "bizStep": r["epcis_biz_step"]
-                or _CTE_TO_BIZSTEP.get(r["event_type"] or "", "urn:epcglobal:cbv:bizstep:observing"),
-                "readPoint": {"id": f"urn:epc:id:sgln:{r['location_gln'] or '0000000000000'}.0"},
-                "extension": {
-                    "quantityList": [
-                        {
-                            "epcClass": f"urn:epc:class:lgtin:0000000.000000.{r['traceability_lot_code'] or 'UNKNOWN'}",
-                            "quantity": r["quantity"] or 0,
-                            "uom": r["unit_of_measure"] or "EA",
-                        }
-                    ],
-                },
-                "regengine:sha256": r["sha256_hash"] or "",
+            ts = r.get("event_timestamp")
+            if not ts:
+                _skip(r, "missing_timestamp")
+                continue
+            event_kind = r.get("epcis_event_type")
+            is_transformation = (
+                r.get("event_type") == "transformation"
+                or event_kind == "TransformationEvent"
+            )
+            if event_kind not in (None, "ObjectEvent", "TransformationEvent"):
+                _skip(r, "unsupported_epcis_event_type")
+                continue
+            if r.get("epcis_action") not in (None, "ADD", "OBSERVE", "DELETE"):
+                _skip(r, "unsupported_action")
+                continue
+
+            epc_class = _epc_class(r)
+            instance_epc = _instance_epc(r)
+            if not epc_class and not instance_epc:
+                _skip(r, "missing_epc_class")
+                continue
+
+            if isinstance(ts, str):
+                # tolerate ISO strings from some fixtures/drivers
+                try:
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                except ValueError:
+                    _skip(r, "invalid_timestamp")
+                    continue
+
+            tz = ts.strftime("%z")
+            offset = (tz[:3] + ":" + tz[3:]) if tz else "+00:00"
+            common = {
+                "eventTime": ts.isoformat(),
+                "eventTimeZoneOffset": offset,
             }
+            biz_step = _cbv_term(r.get("epcis_biz_step") or _CTE_TO_BIZSTEP.get(r.get("event_type") or ""), "bizstep")
+            location = _location_uri(r.get("location_gln"))
+            uom, raw_uom = _quantity_uom(r.get("unit_of_measure"))
+            quantity = r.get("quantity")
+
+            if is_transformation:
+                event = {"type": "TransformationEvent", **common, "bizStep": biz_step or "commissioning"}
+                if epc_class:
+                    out_qty: dict = {"epcClass": epc_class}
+                    if quantity is not None:
+                        out_qty["quantity"] = quantity
+                        if uom:
+                            out_qty["uom"] = uom
+                    event["outputQuantityList"] = [out_qty]
+                elif instance_epc:
+                    event["outputEPCList"] = [instance_epc]
+                input_class = _input_epc_class(r)
+                if input_class:
+                    event["inputQuantityList"] = [{"epcClass": input_class}]
+                transform_id = _kde_scalar(r.get("sha256_hash"))
+                if transform_id:
+                    event["transformationID"] = f"urn:sha256:{transform_id}"
+            else:
+                event = {
+                    "type": "ObjectEvent",
+                    **common,
+                    "action": r.get("epcis_action") or "OBSERVE",
+                }
+                if instance_epc and not epc_class:
+                    event["epcList"] = [instance_epc]
+                else:
+                    qty_item: dict = {"epcClass": epc_class}
+                    if quantity is not None:
+                        qty_item["quantity"] = quantity
+                        if uom:
+                            qty_item["uom"] = uom
+                    event["quantityList"] = [qty_item]
+                if biz_step:
+                    event["bizStep"] = biz_step
+            if location:
+                event["readPoint"] = {"id": location}
+            if r.get("sha256_hash"):
+                event["regengine:sha256"] = r["sha256_hash"]
+            if raw_uom:
+                event["regengine:unitOfMeasure"] = raw_uom
             event_list.append(event)
+
     epcis_document = {
         "@context": [
             "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
-            {"regengine": "https://regengine.co/ns/"},
+            {
+                "regengine": "https://regengine.co/ns/",
+                **{
+                    key: f"regengine:{key}"
+                    for key in (
+                        "tenantId",
+                        "exportFormat",
+                        "generatedAt",
+                        "eventsCount",
+                        "skippedEventsCount",
+                        "skippedEventsByReason",
+                        "skippedEvents",
+                        "unitOfMeasure",
+                        "dataSource",
+                        "integrityVerified",
+                        "chainHashVerified",
+                        "valid",
+                        "errors",
+                        "checkedAt",
+                    )
+                },
+            },
         ],
-        "id": f"urn:uuid:regengine-export-{tenant_id}-{now.strftime('%Y%m%d')}",
         "type": "EPCISDocument",
         "schemaVersion": "2.0",
         "creationDate": now.isoformat(),
@@ -268,12 +640,21 @@ async def export_epcis(
             "exportFormat": "EPCIS_2.0_JSON-LD",
             "generatedAt": now.isoformat(),
             "eventsCount": len(event_list),
+            "skippedEventsCount": skipped,
+            "skippedEventsByReason": skipped_by_reason,
+            "skippedEvents": skipped_evidence,
             "dataSource": data_source,
             "integrityVerified": data_source == "tenant",
             "chainHashVerified": data_source == "tenant",
-            **({"regengine:message": "No data yet"} if data_source == "empty" else {}),
+            **({"regengine:message": "No data yet"} if not rows else {}),
         },
     }
+
+    if skipped:
+        logger.info(
+            "epcis_export_skipped_events",
+            extra={"skipped": skipped, "by_reason": skipped_by_reason, "exported": len(event_list)},
+        )
 
     if validate:
         validation_errors = _validate_epcis_document(epcis_document)
@@ -297,6 +678,7 @@ async def export_epcis(
             + '"'
         ),
         "X-RegEngine-Events-Count": str(len(event_list)),
+        "X-RegEngine-Skipped-Events-Count": str(skipped),
         "X-RegEngine-Integrity-Verified": "true" if data_source == "tenant" else "false",
         "X-RegEngine-Data-Source": data_source,
     }
