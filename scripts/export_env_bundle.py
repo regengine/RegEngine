@@ -51,6 +51,30 @@ REQUIRED_SECRETS = (
 )
 
 
+# Names of every key build_secret_payload returns. Status output prints names
+# from these constants only, never anything derived from the payload, so no
+# credential value can reach a log line.
+PAYLOAD_KEYS = (
+    "ENVIRONMENT",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_HOST",
+    "POSTGRES_PORT",
+    "POSTGRES_DB",
+    "NEO4J_URI",
+    "NEO4J_USER",
+    "NEO4J_PASSWORD",
+    "KAFKA_BOOTSTRAP_SERVERS",
+    "KAFKA_USERNAME",
+    "KAFKA_PASSWORD",
+    "KAFKA_SECURITY_PROTOCOL",
+    "OBJECT_STORAGE_ACCESS_KEY_ID",
+    "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+    "OBJECT_STORAGE_REGION",
+    "OBJECT_STORAGE_ENDPOINT_URL",
+)
+
+
 def load_environment(env_file: str) -> None:
     """Load environment variables from a .env file when available."""
     if load_dotenv is None:
@@ -103,10 +127,7 @@ def validate_payload(payload: dict[str, str]) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description=(
-            "Validate the local RegEngine secret set. Does NOT rotate "
-            "credentials and does NOT contact AWS."
-        )
+        description=("Validate the local RegEngine secret set. Does NOT rotate credentials and does NOT contact AWS.")
     )
     parser.add_argument("--environment", required=True, choices=["production", "staging", "dev"])
     parser.add_argument("--env-file", default=".env")
@@ -159,15 +180,17 @@ def main() -> None:
     missing = validate_payload(payload)
 
     if missing:
-        print("\nERROR: Missing required secret values:", file=sys.stderr)
-        for key in missing:
-            print(f"  - {key}", file=sys.stderr)
+        missing_set = set(missing)
+        print(f"\nERROR: {len(missing_set)} required secret(s) missing:", file=sys.stderr)
+        for name in REQUIRED_SECRETS:
+            if name in missing_set:
+                print(f"  - {name}", file=sys.stderr)
         sys.exit(1)
 
     print("\nAll required secrets are present.", file=sys.stderr)
     print("Keys validated (names only; values are never printed here):", file=sys.stderr)
-    for key in sorted(payload.keys()):
-        print(f"  - {key}", file=sys.stderr)
+    for name in sorted(PAYLOAD_KEYS):
+        print(f"  - {name}", file=sys.stderr)
 
     if args.emit_bundle:
         if sys.stdout.isatty() and not args.allow_tty:
