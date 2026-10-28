@@ -33,11 +33,24 @@ def class_uri():
     return f"urn:epc:class:lgtin:{digits[:7]}.{digits[7:]}.{uuid4().hex}"
 
 
-def _gs1_with_check(data_digits: str) -> str:
-    """Append GS1 mod-10 check digit (weight 3 from the right)."""
-    from shared.fsma_validation import calculate_gs1_check_digit
+def _independent_gs1_mod10_check_digit(data_digits: str) -> int:
+    """GS1 General Specifications mod-10, written out for the test.
 
-    return data_digits + str(calculate_gs1_check_digit(data_digits))
+    From the rightmost data digit: weights alternate 3, 1, 3, 1, ...
+    Check digit is (10 - (sum % 10)) % 10. Independent of
+    shared.fsma_validation / exporter._gs1_check_digit_valid.
+    """
+    if not data_digits.isdigit():
+        raise ValueError("data digits must be numeric")
+    total = 0
+    for i, ch in enumerate(reversed(data_digits)):
+        total += (3 if i % 2 == 0 else 1) * int(ch)
+    return (10 - (total % 10)) % 10
+
+
+def _gs1_with_check(data_digits: str) -> str:
+    """Append check digit from the independent mod-10 above."""
+    return data_digits + str(_independent_gs1_mod10_check_digit(data_digits))
 
 
 def generated_gtin14() -> str:
@@ -109,6 +122,7 @@ def test_empty_export_has_no_fabricated_events():
 
 
 def test_stored_event_export_preserves_metadata_namespace():
+    """Namespace + @context terms without pyld (pyld is not in requirements.lock)."""
     event = {
         "type": "ObjectEvent",
         "eventTime": datetime.now(timezone.utc).isoformat(),
@@ -125,32 +139,50 @@ def test_stored_event_export_preserves_metadata_namespace():
     assert_conformant(document)
     assert "regengine:metadata" in document
     assert "metadata" not in document
-    jsonld = pytest.importorskip("pyld").jsonld
-    context = fixture("epcis-context.jsonld")
-    dropped = []
-
-    def loader(url, options=None):
-        if url != CONTEXT_URL:
-            raise ValueError(f"Unexpected context URL: {url}")
-        return {"contextUrl": None, "documentUrl": url, "document": context}
-
-    expanded = jsonld.expand(document, options={"documentLoader": loader}, on_property_dropped=dropped.append)
-    assert not dropped
-    assert "https://regengine.co/ns/metadata" in expanded[0]
+    assert document["@context"][0] == CONTEXT_URL
+    assert isinstance(document["@context"][1], dict)
+    assert document["@context"][1].get("regengine") == "https://regengine.co/ns/"
+    assert "regengine:source" in document["regengine:metadata"]
+    assert "regengine:event_count" in document["regengine:metadata"]
 
 
-def test_gs1_check_digit_round_trip_for_generated_ids():
-    """Generated GTIN/GLN/SSCC pass structure + check-digit round-trip."""
+def test_gs1_check_digit_independent_mod10_and_published_examples():
+    """Independent mod-10 + known published vectors; production must agree.
+
+    Published examples are the independent guard (not minted via production).
+    Generated IDs are minted with the test-local mod-10, then checked by the
+    exporter so a reversed weight in production would fail.
+    """
+    # Published GS1 textbook examples (data + expected check digit).
+    published = (
+        ("0950600013435", "2", 14),   # GTIN-14
+        ("061414100000", "5", 13),    # GLN-13
+        ("400638133393", "1", 13),    # EAN-13
+        ("10614141123456789", "7", 18),  # SSCC-18
+    )
+    for data, expected_cd, length in published:
+        assert _independent_gs1_mod10_check_digit(data) == int(expected_cd)
+        full = data + expected_cd
+        assert len(full) == length
+        assert exporter._gs1_check_digit_valid(full)
+        wrong_cd = "0" if expected_cd != "0" else "1"
+        bad = data + wrong_cd
+        assert _independent_gs1_mod10_check_digit(data) != int(wrong_cd)
+        assert not exporter._gs1_check_digit_valid(bad)
+
+    # Generated structure + production agreement with independent mint.
     gtin = generated_gtin14()
     gln = generated_gln13()
     sscc = generated_sscc18()
     assert len(gtin) == 14 and gtin.isdigit()
     assert len(gln) == 13 and gln.isdigit()
     assert len(sscc) == 18 and sscc.isdigit()
+    assert _independent_gs1_mod10_check_digit(gtin[:-1]) == int(gtin[-1])
+    assert _independent_gs1_mod10_check_digit(gln[:-1]) == int(gln[-1])
+    assert _independent_gs1_mod10_check_digit(sscc[:-1]) == int(sscc[-1])
     assert exporter._gs1_check_digit_valid(gtin)
     assert exporter._gs1_check_digit_valid(gln)
     assert exporter._gs1_check_digit_valid(sscc)
-    # Flipping the check digit must fail
     bad_gtin = gtin[:-1] + ("0" if gtin[-1] != "0" else "1")
     assert not exporter._gs1_check_digit_valid(bad_gtin)
 

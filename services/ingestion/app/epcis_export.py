@@ -798,8 +798,9 @@ async def list_export_formats():
             {
                 "id": "fda",
                 "name": "FDA Sortable Spreadsheet (CSV)",
-                "description": "Sortable electronic format required by 21 CFR 1.1455 for FDA records requests.",
+                "description": "Sortable electronic format for FDA records requests (Preview). Align with 21 CFR 1.1455 after partner validation.",
                 "content_type": "text/csv",
+                "status": "preview",
                 "retailers": ["FDA"],
             },
         ]

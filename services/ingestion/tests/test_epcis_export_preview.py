@@ -38,6 +38,19 @@ PREVIEW_NOTICE = (
 NAMED_RETAILERS = ("Walmart", "Kroger", "Costco", "Target")
 
 
+def _independent_gs1_mod10_check_digit(data_digits: str) -> int:
+    total = 0
+    for i, ch in enumerate(reversed(data_digits)):
+        total += (3 if i % 2 == 0 else 1) * int(ch)
+    return (10 - (total % 10)) % 10
+
+
+def generated_gtin14() -> str:
+    base = str(uuid4().int % (10**13)).zfill(13)
+    return base + str(_independent_gs1_mod10_check_digit(base))
+
+
+
 @pytest.fixture()
 def client() -> TestClient:
     app = FastAPI()
@@ -93,16 +106,18 @@ class TestPreviewHeaderAndMetadata:
         lot = HARVEST_CSV.read_text().splitlines()[1].split(",")[0]
         assert lot.startswith("LOT-")
 
+        gtin = generated_gtin14()
+
         def _one_row(*_a: object, **_k: object) -> list[dict]:
             return [
                 {
                     "event_type": "harvesting",
-                    "epc_class": "https://id.gs1.org/01/00614141999996/10/" + lot,
+                    "epc_class": f"https://id.gs1.org/01/{gtin}/10/" + lot,
                     "traceability_lot_code": lot,
                     "quantity": 5000,
                     "unit_of_measure": "lbs",
                     "event_timestamp": "2026-03-12T12:00:00+00:00",
-                    "location_gln": "0061414100014",
+                    "location_gln": "0061414100014",  # from fixtures/01_harvesting.csv
                     "sha256_hash": None,
                     "epcis_event_type": "ObjectEvent",
                     "epcis_action": "ADD",
@@ -149,6 +164,14 @@ class TestFormatsPreviewStatus:
         assert epcis["status"] == "preview"
         assert "Preview" in epcis["description"]
         assert epcis["retailers"] == []
+
+    def test_formats_fda_status_preview(self, client: TestClient) -> None:
+        response = client.get("/api/v1/export/formats")
+        assert response.status_code == 200
+        formats = {f["id"]: f for f in response.json()["formats"]}
+        fda = formats["fda"]
+        assert fda["status"] == "preview"
+        assert "Preview" in fda["description"]
 
     def test_formats_has_no_named_retailers(self, client: TestClient) -> None:
         response = client.get("/api/v1/export/formats")
