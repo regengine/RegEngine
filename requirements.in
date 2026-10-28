@@ -71,7 +71,7 @@ xlrd>=2.0.2
 PyJWT>=2.15.1
 pyotp>=2.10.0
 argon2-cffi>=25.1.0
-authlib>=1.8.0
+authlib>=1.9.1
 # Transitive of Authlib. Floored for CVE-2026-48990
 # (RFC7797 b64=false JWS payload-size bypass).
 joserfc>=1.7.5
