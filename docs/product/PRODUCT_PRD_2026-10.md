@@ -2,7 +2,7 @@
 
 Date: 2026-10-27. Status: draft v1 for founder review. Product status: Beta, pre-revenue. Owner: founder / product.
 Supersedes for product scope: `PRODUCT_OVERVIEW.md` and `PRODUCT_ROADMAP.md` (2026-04-30). Does not replace `PRODUCTION_REMEDIATION_PRD_2026-05-01.md`, which is a fix program; its six open questions are carried into section 9.
-Verification basis: `server/main.py`, `server/router_policy.py`, `PRODUCTION_SURFACE.md`, `frontend/src/lib/capabilities.ts`, Linear project P-SEL-2 as of 2026-10-27. Anything not checked against one of these is marked "not verified".
+Verification basis. Code and surface claims were checked against `server/main.py`, `server/router_policy.py`, `PRODUCTION_SURFACE.md`, `frontend/src/lib/capabilities.ts` and Linear project P-SEL-2 as of 2026-10-27. Market, customer, pilot and compliance-scope claims come from the repository documents cited inline (`POSITIONING.md`, the May 2026 go-to-market research, the proof checklist, `docs/specs/FSMA_204_MVP_SPEC.md`, the 2026-10-27 plan note) and are those documents' claims, not verified facts about customers. Jev answers and the Q1 dates are planning inputs. Any other claim is marked "not verified".
 
 ## 1. Problem statement
 
@@ -28,7 +28,7 @@ Data shape in both: supplier CSV, ERP export, spreadsheet or email-derived file,
 
 ## 4. What is built today
 
-Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py` (25 routers); a missing, extra or unknown name aborts startup. Routers not on the list return 404 in production. Line numbers below are the `_router_enabled` guards in `server/main.py`. Mounted in production does not mean live: only CSV upload and the JSON events API are live. Every other customer-facing surface below is Beta or Preview, and EPCIS export stays Preview.
+Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py` (25 routers); a missing, extra or unknown name aborts startup. Feature-gated routers omitted from the allowlist return 404 in production; the always-mounted base (core ingest, webhook, status, health, readiness, metrics, scheduler status) is not gated by the allowlist. Line numbers below are the `_router_enabled` guards in `server/main.py`. Mounted in production does not mean live: only CSV upload and the JSON events API are live. Every other customer-facing surface below is Beta or Preview, and EPCIS export stays Preview.
 
 ### 4.1 Production routers, grouped by product stage
 
@@ -66,7 +66,7 @@ Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/ro
 
 ### 4.4 Guarantees the product rests on
 
-Tenant isolation through authenticated principal state and Postgres RLS (least-privilege roles since 2026-07, `README.md` "Security And Tenant Boundaries"); schema validation before persistence; hash-chained audit and export evidence; FDA export derived only from stored tenant evidence (`PRODUCTION_SURFACE.md` "Required Guarantees").
+Tenant isolation through authenticated principal state and Postgres RLS (least-privilege roles since 2026-07, `README.md` "Security And Tenant Boundaries"); schema validation before persistence; hash-chained audit and export evidence; FDA export derived only from stored tenant evidence (`PRODUCTION_SURFACE.md` "Required Guarantees"). Verified beyond that list: audit logs, the hash chain, CTE events, ingestion run receipts and correction patches carry append-only triggers (migrations v066, v078, v079, v095); rule failures on accepted events are recorded durably in the exception queue (`services/ingestion/app/webhook_router_v2/rules_eval.py`); the traceability lot code travels from the event into every export query and the `/trace/{tlc}` route (`services/ingestion/app/fda_export/queries.py`). Source and reference-document linkage in the export columns: not verified.
 
 ## 5. What is in flight
 
@@ -98,19 +98,19 @@ Linear issues under SEL-361 in a started state on 2026-10-27 (In Review = code e
 
 | Requirement | Acceptance criteria | Owner |
 | --- | --- | --- |
-| R1. One real feed through the loop (SEL-474) | Given a design partner CSV or JSON feed, when it is run through Inflow Workbench, then a readiness score, at least one fix item and a commit-gate decision are recorded with run ID, and a verified export package is produced from the committed records | founder session, product |
+| R1. One real feed through the loop (SEL-474) | Given a design partner CSV or JSON feed, when it is run through Inflow Workbench, then a readiness score, at least one fix item and a commit-gate decision are recorded with run ID; at least one fix item is closed and the re-run shows the readiness or commit outcome change; a no-verdict outcome is reported distinctly from a rule failure, with its reason; and a sortable FDA spreadsheet (the 24-hour records-request format in `docs/specs/FSMA_204_MVP_SPEC.md`) is produced from the committed records through `/api/v1/fda/export` within 24 hours of the request, preserves each traceability lot code, and verifies with `/export/verify` or the public verifier | founder session, product |
 | R2. Signed-in app truthful and working | SEL-409 verified on staging by the owner account; SEL-412 trace view and on-demand export reachable from navigation; SEL-450 EDI, SFTP and unlabeled EPCIS no longer shown as live; SEL-447 no invented data on any surface the partner sees | product, frontend |
 | R3. Home page states the problem and offers a free check | Per the 2026-10-27 plan note: hook, two-sentence problem, free-check CTA first, both copy lints green, SEL-447 and SEL-406 fixed on the page; decisions D1 to D3 answered | founder, separate session |
 | R4. Promote supplier remediation to production (decided 2026-10-27, SEL-593) | `remediation` enters `PRODUCTION_ENABLED_ROUTERS` with the route-security manifest, tenant and token failure-mode tests, and the Railway `ENABLED_ROUTERS` variable changed in one release, staging first; correction links stay hidden until the production deploy is verified. Blocked by SEL-446 test restoration | backend |
 | R5. Pilot paper | Pilot agreement and DPA (`docs/DATA_PROCESSING_AGREEMENT.md` template) ready to send; price or free-pilot terms chosen; Stripe prices set in production or invoicing done by hand (price env state: not verified) | founder |
-| R6. Production deploy (SEL-487) | The current main is deployed to production, and the health and readiness checks pass on the production domain | DevOps, backend |
+| R6. Production deploy (SEL-487) | The current main is deployed to production; `/health` returns 200 and `GET /readiness` returns HTTP 200 with `status: "ready"` on the production domain. `degraded` fails R6: it means a check reported `error` (worker, scheduler thread, rate limiter on memory storage, Redis, or Neo4j when graph is enabled). The `not_probed` and `disabled` statuses never degrade and are acceptable | DevOps, backend |
+| R7. Remove EDI from the production allowlist before the first pilot ingest (SEL-592) | `/api/v1/ingest/edi` is authenticated but persists FSMA shipping CTE events through the shared ingest path while the registry marks EDI off (`services/ingestion/app/edi_ingestion/routes.py`); drop `edi` from `PRODUCTION_ENABLED_ROUTERS` and the Railway `ENABLED_ROUTERS` variable in one release so no unadvertised input path can write evidence during the pilot | backend |
 
 ### P1, fast follows during the pilot
 
 - EPCIS from preview to live: conformance checklist SEL-439, identifier validation SEL-429, then move the registry entry.
 - Per-supplier gap time to fix in the evidence packet (data exists since PR 3572; packet template in `sales/`).
 - "Check without saving" dry run on write flows (SEL-455); signed review audit trail (SEL-463).
-- Remove `edi` from the production allowlist while the registry says off (Q6).
 
 ### P2, design for, do not build
 
@@ -153,11 +153,11 @@ Christopher accepted all six recommended defaults on 2026-10-27, so each row bel
 | # | Question | Decision (2026-10-27) | Jev |
 | --- | --- | --- | --- |
 | Q1 | Pilot date and minimum acceptance bar | Bar: one real supplier feed preflighted, one fix item closed, one export package verified, inside one 60-minute session. Planning target dates (not verified): first guided session by 2026-11-30, paid pilot signed by 2027-01-31 | one_feed_loop, confidence 1.00 (planning input) |
-| Q2 | Is `fsma.traceability_events` the committed canonical contract for all new FSMA evidence? | Yes. The canonical API already reads it and v125 added event-level verdict columns to it. Freeze `fsma.cte_events` and `fsma.critical_tracking_events` for reads and say so in `docs/engineering/SCHEMA_CHANGE_POLICY.md` | yes, p 0.75 |
+| Q2 | Is `fsma.traceability_events` the committed canonical contract for all new FSMA evidence? | Yes for writes: new FSMA evidence goes only to `fsma.traceability_events`; the canonical API already reads it and v125 added event-level verdict columns. `fsma.cte_events` and `fsma.critical_tracking_events` become read-only retention (no new writers, columns or indexes), not frozen reads: the v1 FDA export and recall readers still default to `fsma.cte_events` behind `FDA_EXPORT_V1_READ_CANONICAL` (default off, `services/ingestion/app/fda_export/queries.py`), so each export, recall, trace and verification reader is cut over only after its historical-row and canonical coverage is documented. Record this in `docs/engineering/SCHEMA_CHANGE_POLICY.md` (SEL-589) | yes, p 0.75 |
 | Q3 | Which dependencies gate `/readiness` per deploy mode? | Keep the code as it is: Postgres fails readiness everywhere; Redis fails it in strict deployed runtimes because authenticated ingest already fails closed without Redis; Neo4j is probed only when graph is enabled; object storage and Stripe never gate readiness | postgres_only 0.67, postgres_redis 0.31. I disagree with Jev: a Redis-less instance would pass readiness and then 503 every ingest |
 | Q4 | Rule enforcement default for pilot tenants | `off` during the first session does not protect production ingest: `should_reject()` in `services/shared/rules/enforcement.py` accepts everything when the mode is OFF, and the Workbench commit gate (`services/ingestion/app/inflow_workbench.py` POST `/commit-gate`) only returns a decision and is not checked by direct ingest. Keep the first session preflight-only (Workbench runs, no production JSON/CSV ingest), then switch to `cte_only` before the pilot's first export, after the runbook gate 1.2 passes. The switch is process-wide, so with one tenant this is the tenant's setting | cte_only 0.41, off 0.40 (confidence 0.11, a coin flip; planning input) |
 | Q5 | Who owns compliance signoff for the 7 CTE/KDE maps? | Founder signs now against the rule text using `docs/specs/FSMA_204_MVP_SPEC.md` CTE and KDE sections; the first design partner's QA lead co-signs during the pilot. No consultant spend before revenue. Location of the seven map files: not verified in this pass | partner_qa 0.42, founder 0.20 |
-| Q6 | Which public claims stay hidden until verified? | Everything the registry does not mark live: EPCIS stays "preview", EDI and SFTP hidden, recall drill hidden (endpoint returns no data), alerts and heartbeat hidden, supplier correction links hidden until R4 resolves, "pre-revenue" out of the hero and metadata (plan note D1). Remove `edi` from the production allowlist in a follow-up PR | remove EDI router: yes, p 0.85 |
+| Q6 | Which public claims stay hidden until verified? | Everything the registry does not mark live: EPCIS stays "preview", EDI and SFTP hidden, recall drill hidden (endpoint returns no data), alerts and heartbeat hidden, supplier correction links hidden until R4 resolves, "pre-revenue" out of the hero and metadata (plan note D1). Remove `edi` from the production allowlist before the first pilot ingest (R7, SEL-592) | remove EDI router: yes, p 0.85 |
 
 Follow-on actions these decisions create, filed as Linear stories on 2026-10-27:
 
