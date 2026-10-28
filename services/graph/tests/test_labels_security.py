@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 # Add parent paths for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
@@ -30,6 +31,31 @@ from services.graph.app.routers.labels import (
     generate_qr_payload,
     initialize_label_batch,
 )
+
+
+@pytest.mark.security
+class TestLotNumberIssuanceGuard:
+    """A lot that cannot scan back to itself must be rejected before a label is printed.
+
+    "%XX" in a lot is decoded twice on Vercel (router, then Next's
+    decode-query-path-parameter), so "100%2F" would scan as "100/".
+    """
+
+    def _info(self, lot: str) -> TraceabilityInfo:
+        return TraceabilityInfo(lot_number=lot, pack_date="2026-01-15")
+
+    @pytest.mark.parametrize("lot", ["100%2F", "A%25B", "%", "LOT%"])
+    def test_rejects_literal_percent(self, lot):
+        with pytest.raises(ValidationError, match="must not contain '%'"):
+            self._info(lot)
+
+    def test_rejects_empty_lot(self):
+        with pytest.raises(ValidationError, match="must not be empty"):
+            self._info("")
+
+    @pytest.mark.parametrize("lot", ["LOT-2026-SAL-0001", "LOT-2024/001", "LOT 2024", "lot_01.A"])
+    def test_accepts_lots_that_scan_back_unchanged(self, lot):
+        assert self._info(lot).lot_number == lot
 
 
 @pytest.mark.security

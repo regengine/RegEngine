@@ -92,6 +92,20 @@ class TraceabilityInfo(BaseModel):
     pack_date: str  # YYYY-MM-DD
     grower_gln: Optional[str] = None
 
+    @validator("lot_number")
+    def validate_lot_number_scannable(cls, v):
+        # The lot is printed in the label QR as a GS1 Digital Link segment
+        # (generate_qr_payload quotes it). A literal "%" followed by two hex
+        # digits survives quoting but is decoded twice on Vercel (its router
+        # decodes once, then Next's decode-query-path-parameter decodes again),
+        # so "100%2F" would scan as "100/". Reject it here rather than print a
+        # label that traces the wrong lot. An empty lot would print /10//21/.
+        if not v:
+            raise ValueError("lot_number must not be empty")
+        if "%" in v:
+            raise ValueError("lot_number must not contain '%'")
+        return v
+
 
 class LabelBatchInitRequest(BaseModel):
     packer_gln: str

@@ -20,8 +20,8 @@ import { isValidGTINCheckDigit } from './gs1-parser';
  * renders "A%B" on both the page and the title; locally the same URLs
  * decode once). A lot without a literal "%" is unaffected, and %2F itself
  * routes as one segment. A lot that does contain a literal escape loses it
- * before this code runs, so the guard belongs at issuance in labels.py,
- * not here.
+ * before this code runs, so labels.py rejects a "%" in lot_number at
+ * issuance (TraceabilityInfo.validate_lot_number_scannable) instead.
  */
 
 function decodeSegment(value: string): string {
