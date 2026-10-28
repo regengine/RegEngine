@@ -144,7 +144,7 @@ import QRCode from 'qrcode'; // Generate QR Data URL from payload
 **Backend (`.env`):**
 
 ```bash
-TRACEABILITY_DOMAIN="https://trace.regengine.ai"
+TRACEABILITY_DOMAIN="https://regengine.co"
 # Neo4j Credentials must be active
 ```
 
