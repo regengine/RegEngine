@@ -227,7 +227,7 @@ jobs:
                   repo,
                   workflow_id: 'backend-ci.yml',
                   head_sha: sha,
-                  event: 'pull_request',
+                  event: context.eventName,
                   per_page: 20,
                 })
               );
