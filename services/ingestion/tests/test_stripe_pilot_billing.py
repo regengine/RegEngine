@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 import pytest
 import stripe
+import structlog
 
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
@@ -522,6 +523,110 @@ class TestPilotWebhook:
         assert mapping["pilot_fee_cents"] == "150000"
         assert mapping["pilot_amount_paid_cents"] == "0"
         assert "pilot_convert_window_end" in mapping
+
+    @pytest.mark.asyncio
+    async def test_price_wins_over_standard_metadata_mismatch(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        """convert_30 Price must win when metadata claims standard (window inventable)."""
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_convert")
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_standard")
+        fake_redis.values["billing:session:cs_price_wins_convert"] = "tenant-price-wins-convert"
+
+        with structlog.testing.capture_logs() as cap_logs:
+            await webhooks_mod._handle_checkout_completed(
+                {
+                    "id": "cs_price_wins_convert",
+                    "customer": "cus_price_wins_convert",
+                    "subscription": None,
+                    "mode": "payment",
+                    "payment_status": "paid",
+                    "amount_total": 150_000,
+                    "created": 1_700_000_000,
+                    "line_items": {"data": [{"price": {"id": "price_pilot_convert"}}]},
+                    "metadata": {"plan_id": "pilot", "pilot_variant": "standard"},
+                },
+                event_created=710,
+            )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-price-wins-convert"]
+        assert mapping["pilot_variant"] == "convert_30"
+        assert mapping["pilot_convert_window_end"]
+        assert any(
+            e.get("event") == "stripe_pilot_variant_metadata_mismatch"
+            and e.get("metadata_variant") == "standard"
+            and e.get("price_variant") == "convert_30"
+            for e in cap_logs
+        )
+
+    @pytest.mark.asyncio
+    async def test_price_wins_over_convert_metadata_mismatch(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        """standard Price must win when metadata claims convert_30 (window inventable)."""
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_convert")
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_standard")
+        fake_redis.values["billing:session:cs_price_wins_standard"] = "tenant-price-wins-standard"
+
+        with structlog.testing.capture_logs() as cap_logs:
+            await webhooks_mod._handle_checkout_completed(
+                {
+                    "id": "cs_price_wins_standard",
+                    "customer": "cus_price_wins_standard",
+                    "subscription": None,
+                    "mode": "payment",
+                    "payment_status": "paid",
+                    "amount_total": 200_000,
+                    "created": 1_700_000_000,
+                    "line_items": {"data": [{"price": {"id": "price_pilot_standard"}}]},
+                    "metadata": {"plan_id": "pilot", "pilot_variant": "convert_30"},
+                },
+                event_created=711,
+            )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-price-wins-standard"]
+        assert mapping["pilot_variant"] == "standard"
+        assert mapping.get("pilot_convert_window_end", "") == ""
+        assert any(
+            e.get("event") == "stripe_pilot_variant_metadata_mismatch"
+            and e.get("metadata_variant") == "convert_30"
+            and e.get("price_variant") == "standard"
+            for e in cap_logs
+        )
+
+    @pytest.mark.asyncio
+    async def test_unmapped_price_falls_back_to_metadata_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        """When no configured pilot Price matches, metadata is used and a warning is logged."""
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_CONVERT_30", "price_pilot_convert")
+        monkeypatch.setenv("STRIPE_PRICE_PILOT_STANDARD", "price_pilot_standard")
+        fake_redis.values["billing:session:cs_unmapped_pilot"] = "tenant-unmapped-pilot"
+
+        with structlog.testing.capture_logs() as cap_logs:
+            await webhooks_mod._handle_checkout_completed(
+                {
+                    "id": "cs_unmapped_pilot",
+                    "customer": "cus_unmapped_pilot",
+                    "subscription": None,
+                    "mode": "payment",
+                    "payment_status": "paid",
+                    "amount_total": 150_000,
+                    "created": 1_700_000_000,
+                    "line_items": {"data": [{"price": {"id": "price_unknown_pilot"}}]},
+                    "metadata": {"plan_id": "pilot", "pilot_variant": "convert_30"},
+                },
+                event_created=712,
+            )
+
+        mapping = fake_redis.hashes["billing:tenant:tenant-unmapped-pilot"]
+        assert mapping["pilot_variant"] == "convert_30"
+        assert mapping["pilot_convert_window_end"]
+        assert any(
+            e.get("event") == "stripe_pilot_variant_unmapped_price_fallback"
+            and e.get("metadata_variant") == "convert_30"
+            for e in cap_logs
+        )
 
 
 # ── 4. A-2159 credit ───────────────────────────────────────────────────────

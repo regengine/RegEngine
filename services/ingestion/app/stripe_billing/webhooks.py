@@ -65,12 +65,12 @@ def _session_price_ids_are_pilot(session: dict[str, Any]) -> bool:
     )
 
 
-def _pilot_variant_for_price_ids(price_ids: list[str]) -> str:
+def _pilot_variant_for_price_ids(price_ids: list[str]) -> Optional[str]:
     """Derive ``standard``/``convert_30`` from a reverse-mapped pilot Price.
 
-    The price is Stripe-side truth; metadata can be absent (e.g. a pilot
-    detected from expanded line items) or stale. Returns ``standard`` when
-    no configured pilot Price matches.
+    Returns the variant when a configured pilot Price matches; ``None`` when
+    no Price ID reverse-maps. Callers must treat Price as Stripe-side truth
+    and only fall back to checkout metadata when this returns ``None``.
     """
     convert_price = os.getenv(_plans_mod.PILOT_PRICE_ENV_CONVERT_30)
     standard_price = os.getenv(_plans_mod.PILOT_PRICE_ENV_STANDARD)
@@ -81,7 +81,7 @@ def _pilot_variant_for_price_ids(price_ids: list[str]) -> str:
             return "convert_30"
         if standard_price and price_id == standard_price:
             return "standard"
-    return "standard"
+    return None
 
 
 def _iso_timestamp_is_past(value: str, *, now: Optional[datetime] = None) -> bool:
@@ -299,9 +299,36 @@ def _handle_pilot_checkout_completed(
     expected, the mapping is marked ``billing_period=one_time`` and, once
     the payment settles, ``status=pilot_active`` for the 90-day pilot term.
     """
+    # Stripe Price is truth whenever a configured pilot Price reverse-maps.
+    # Metadata may invent or skip the 30-day convert window, so it is only a
+    # fallback when no pilot Price can be resolved from the session/items.
+    resolved_price_ids = list(price_ids) if price_ids is not None else _extract_session_price_ids(session)
+    price_variant = _pilot_variant_for_price_ids(resolved_price_ids)
     declared_variant = str(metadata.get("pilot_variant") or "").strip().lower()
-    if declared_variant in {"standard", "convert_30"}:
-        variant = declared_variant
+    metadata_variant = (
+        declared_variant if declared_variant in {"standard", "convert_30"} else None
+    )
+
+    if price_variant is not None:
+        variant = price_variant
+        if metadata_variant is not None and metadata_variant != price_variant:
+            logger.warning(
+                "stripe_pilot_variant_metadata_mismatch",
+                tenant_id=tenant_id,
+                session_id=session.get("id"),
+                metadata_variant=metadata_variant,
+                price_variant=price_variant,
+                price_ids=resolved_price_ids,
+            )
+    elif metadata_variant is not None:
+        variant = metadata_variant
+        logger.warning(
+            "stripe_pilot_variant_unmapped_price_fallback",
+            tenant_id=tenant_id,
+            session_id=session.get("id"),
+            metadata_variant=metadata_variant,
+            price_ids=resolved_price_ids,
+        )
     else:
         if declared_variant:
             logger.warning(
@@ -310,9 +337,9 @@ def _handle_pilot_checkout_completed(
                 session_id=session.get("id"),
                 pilot_variant=str(metadata.get("pilot_variant")),
             )
-        # Metadata was absent/invalid: fall back to the reverse-mapped Price
-        # (Stripe-side truth) so convert_30 still gets its window and fee.
-        variant = _pilot_variant_for_price_ids(price_ids or _extract_session_price_ids(session))
+        # No mapped Price and no usable metadata: fail closed to standard
+        # (no 30-day window invented).
+        variant = "standard"
 
     settled = str(session.get("payment_status") or "") in _SETTLED_PAYMENT_STATUSES
     status = "pilot_active" if settled else "incomplete"

@@ -298,9 +298,10 @@ async def require_active_subscription(request: Request) -> None:
         )
 
     # A-2155/A-2159: ``pilot_active`` is written only after a settled
-    # one-time pilot payment and covers the 90-day pilot term. The gate
-    # does not evaluate ``current_period_end``; expiry is handled by the
-    # billing state (a later event moves the tenant off pilot_active).
+    # one-time pilot payment and covers the 90-day pilot term.
+    # ``_check_subscription_and_redis_health`` already evaluates
+    # ``current_period_end`` and downgrades an expired pilot to
+    # ``pilot_expired`` before this allowlist runs.
     allowed_statuses = {"active", "trialing", "pilot_active"}
     if status.lower() in allowed_statuses:
         return
