@@ -69,11 +69,17 @@ class _FailClosedRlsSession:
         self.statements: list[str] = []
         self.added = []
         self.committed = False
+        self.sysadmin_armed = False
+        self.flushed_users = []
 
     # -- the RLS behaviour under test -----------------------------------
     def execute(self, statement, params=None):
         sql = str(statement)
         self.statements.append(sql)
+
+        if "set_config('regengine.is_sysadmin'" in sql:
+            self.sysadmin_armed = "'true'" in sql
+            return _Result(None)
 
         if "get_invite_tenant_by_token_hash" in sql:
             # The SECURITY DEFINER token lookup: readable with no tenant GUC.
@@ -103,7 +109,13 @@ class _FailClosedRlsSession:
         self.added.append(obj)
 
     def flush(self):
+        from app.sqlalchemy_models import UserModel
+
         for obj in self.added:
+            if isinstance(obj, UserModel) and obj not in self.flushed_users:
+                if not self.sysadmin_armed:
+                    raise RuntimeError("users INSERT requires regengine.is_sysadmin=true")
+                self.flushed_users.append(obj)
             if getattr(obj, "id", None) is None:
                 obj.id = uuid.uuid4()
 
@@ -245,3 +257,23 @@ async def test_sqlite_fixture_path_still_works_without_the_definer_function():
     assert not any("get_invite_tenant_by_token_hash" in s for s in db.statements), (
         "the Postgres-only definer function must not be called on SQLite"
     )
+
+
+@pytest.mark.asyncio
+async def test_new_invitee_user_insert_requires_global_admin_context():
+    """SEL-612: tenant binding alone cannot authorize a new global user."""
+    tenant_id = uuid.uuid4()
+    db = _FailClosedRlsSession(
+        invite=_make_invite(tenant_id, hashlib.sha256(b"raw-token").hexdigest()),
+        user=None,
+        lookup_tenant=tenant_id,
+    )
+
+    result = await _call(db)
+
+    assert result["status"] == "success"
+    assert len(db.flushed_users) == 1
+    assert result["user_id"] == str(db.flushed_users[0].id)
+    assert db.flushed_users[0].is_sysadmin is False
+    assert db.committed
+    assert not db.sysadmin_armed
