@@ -298,7 +298,10 @@ export function DataImportClient() {
                                         <>
                                             <Upload className="mx-auto mb-4 h-6 w-6 text-re-text-tertiary" strokeWidth={1.75} aria-hidden="true" />
                                             <div className="mb-1 text-ui font-medium text-re-text-primary">
-                                                Drag &amp; drop your CSV here, or click to browse
+                                                Upload a CSV to get started
+                                            </div>
+                                            <div className="mb-1 text-small text-re-text-secondary">
+                                                Drag and drop your CSV here, or click to browse
                                             </div>
                                             <div className="text-small text-re-text-tertiary">
                                                 Supports .csv files up to 5MB

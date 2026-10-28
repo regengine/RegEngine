@@ -214,7 +214,7 @@ export function RecordsRequestChecklistClient() {
                                 Summary of your self reported answers. Not a readiness score, not a regulatory determination.
                             </p>
                             <div className="mx-auto mt-4 max-w-[70ch] text-ui text-re-text-tertiary">
-                                <p>The federal Food Traceability Rule compliance date is <strong className="font-medium text-re-text-secondary">July 20, 2028</strong>.</p>
+                                <p>FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.</p>
                             </div>
                         </div>
 

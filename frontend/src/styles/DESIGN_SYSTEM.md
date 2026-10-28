@@ -76,7 +76,7 @@ All colors use CSS custom properties defined in `globals.css` and mapped to Tail
 
 | Class          | Font        | Use For                                    |
 |----------------|-------------|--------------------------------------------|
-| `font-display` | Outfit      | All headings (h1-h4), hero text            |
+| `font-display` | Inter       | All headings (h1-h4), hero text            |
 | `font-sans`    | Inter       | Body text, UI labels, descriptions (default) |
 | `font-serif`   | Fraunces    | Accent quotes, testimonials                |
 | `font-mono`    | JetBrains Mono | Code, technical values, API references  |

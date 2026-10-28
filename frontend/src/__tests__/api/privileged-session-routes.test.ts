@@ -112,10 +112,70 @@ describe('privileged frontend session forwarding', () => {
         assertOpaqueSessionOnly(fetchMock.mock.calls[0][1]);
     });
 
+    it('copies the upstream x-request-id onto review queue error responses', async () => {
+        const requestId = crypto.randomUUID();
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'boom' }), {
+            status: 500,
+            headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        }));
+
+        const response = await getReviewItems(
+            browserRequest('https://app.regengine.test/api/review/items'),
+        );
+
+        expect(response.status).toBe(500);
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+        expect(await response.json()).toEqual({ error: 'boom' });
+    });
+
+    it('copies the upstream x-request-id onto transformed review queue success responses', async () => {
+        const requestId = crypto.randomUUID();
+        const reviewId = crypto.randomUUID();
+        const docHash = crypto.randomUUID().replace(/-/g, '');
+        const confidenceScore = Math.random();
+        const createdAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const updatedAt = new Date(Date.now()).toISOString();
+        fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+            items: [{
+                review_id: reviewId,
+                doc_hash: docHash,
+                confidence_score: confidenceScore,
+                created_at: createdAt,
+                updated_at: updatedAt,
+                status: 'PENDING',
+                tenant_id: 'tenant-123',
+                text_preview: 'preview text',
+                extraction: { lot: 'L1' },
+            }],
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json', 'x-request-id': requestId },
+        }));
+
+        const response = await getReviewItems(
+            browserRequest('https://app.regengine.test/api/review/items'),
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.headers.get('x-request-id')).toBe(requestId);
+        expect(await response.json()).toEqual([{
+            id: reviewId,
+            doc_hash: docHash,
+            confidence_score: confidenceScore,
+            created_at: createdAt,
+            updated_at: updatedAt,
+            status: 'PENDING',
+            tenant_id: 'tenant-123',
+            source_text: 'preview text',
+            extracted_data: { lot: 'L1' },
+        }]);
+    });
+
     it('sends no reviewer identity or retired credential on a decision', async () => {
+        const reviewId = crypto.randomUUID();
         fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
             status: 'approved',
-            review_id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8',
+            review_id: reviewId,
             updated: true,
         }), {
             status: 200,
@@ -123,8 +183,8 @@ describe('privileged frontend session forwarding', () => {
         }));
 
         const response = await approveReviewItem(
-            browserRequest('https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/approve', 'POST'),
-            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
+            browserRequest(`https://app.regengine.test/api/review/${reviewId}/approve`, 'POST'),
+            { params: Promise.resolve({ id: reviewId }) },
         );
 
         expect(response.status).toBe(200);
@@ -199,23 +259,26 @@ describe('privileged frontend session forwarding', () => {
             ),
             { params: Promise.resolve({ path: ['flagged-extractions'] }) },
         )],
-        ['review reject', async () => rejectReviewItem(
-            browserRequest(
-                'https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/reject',
-                'POST',
-                {
-                    extraHeaders: {
-                        'x-vercel-forwarded-for': '2001:0db8:0:0:0:0:0:1',
-                        'x-forwarded-for': '192.0.2.10',
-                        'x-real-ip': '192.0.2.11',
-                        'x-regengine-proxy-client-ip': '192.0.2.12',
-                        'x-regengine-proxy-timestamp': '1',
-                        'x-regengine-proxy-signature': 'v1=attacker',
+        ['review reject', (() => {
+            const reviewId = crypto.randomUUID();
+            return async () => rejectReviewItem(
+                browserRequest(
+                    `https://app.regengine.test/api/review/${reviewId}/reject`,
+                    'POST',
+                    {
+                        extraHeaders: {
+                            'x-vercel-forwarded-for': '2001:0db8:0:0:0:0:0:1',
+                            'x-forwarded-for': '192.0.2.10',
+                            'x-real-ip': '192.0.2.11',
+                            'x-regengine-proxy-client-ip': '192.0.2.12',
+                            'x-regengine-proxy-timestamp': '1',
+                            'x-regengine-proxy-signature': 'v1=attacker',
+                        },
                     },
-                },
-            ),
-            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
-        )],
+                ),
+                { params: Promise.resolve({ id: reviewId }) },
+            );
+        })()],
     ])('attests the platform client IP on the %s privileged proxy', async (_label, invoke) => {
         vi.stubEnv('VERCEL', '1');
         vi.stubEnv('VERCEL_ENV', 'production');
@@ -252,10 +315,13 @@ describe('privileged frontend session forwarding', () => {
             browserRequest('https://app.regengine.test/api/review/flagged-extractions'),
             { params: Promise.resolve({ path: ['flagged-extractions'] }) },
         )],
-        ['review reject', async () => rejectReviewItem(
-            browserRequest('https://app.regengine.test/api/review/6ba7b810-9dad-41d1-a0b4-00c04fd430c8/reject', 'POST'),
-            { params: Promise.resolve({ id: '6ba7b810-9dad-41d1-a0b4-00c04fd430c8' }) },
-        )],
+        ['review reject', (() => {
+            const reviewId = crypto.randomUUID();
+            return async () => rejectReviewItem(
+                browserRequest(`https://app.regengine.test/api/review/${reviewId}/reject`, 'POST'),
+                { params: Promise.resolve({ id: reviewId }) },
+            );
+        })()],
     ])('fails the %s privileged proxy closed when Vercel omits the platform IP', async (_label, invoke) => {
         vi.stubEnv('VERCEL', '1');
         vi.stubEnv('VERCEL_ENV', 'production');

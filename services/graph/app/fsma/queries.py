@@ -138,6 +138,7 @@ async def query_events_by_range(
     product_contains: Optional[str] = None,
     facility_contains: Optional[str] = None,
     cte_type: Optional[str] = None,
+    tlc: Optional[str] = None,
     limit: int = 500,
     starting_after: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
@@ -152,6 +153,9 @@ async def query_events_by_range(
         start_date: Start date (ISO format YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
         end_date: End date
         tenant_id: Tenant UUID (required, non-empty)
+        tlc: Optional Traceability Lot Code. When set, only events whose
+            joined Lot has exactly this ``tlc`` are returned (no trimming
+            or case folding).
 
     Returns:
         List of event objects with lot and facility details
@@ -194,7 +198,8 @@ async def query_events_by_range(
       WHERE f.tenant_id = $tenant_id
 
     WITH e, l, f
-    WHERE (
+    WHERE ($tlc IS NULL OR l.tlc = $tlc)
+    AND (
         $product_contains IS NULL
         OR toLower(coalesce(l.product_description, '')) CONTAINS toLower($product_contains)
     )
@@ -234,6 +239,7 @@ async def query_events_by_range(
             product_contains=product_contains,
             facility_contains=facility_contains,
             cte_type=cte_type,
+            tlc=tlc,
             limit=max(1, min(1000, int(limit))),
             starting_after=starting_after,
         )
@@ -295,6 +301,7 @@ async def query_events_by_range(
         cte_type=cte_type,
         has_product_filter=bool(product_contains),
         has_facility_filter=bool(facility_contains),
+        has_tlc_filter=tlc is not None,
     )
     return events
 
