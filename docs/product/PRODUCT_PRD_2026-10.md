@@ -181,7 +181,7 @@ Status drift to fix during the move: SEL-421 is Backlog but shipped in PRs 3492 
 
 Project P-SEL-2 also holds six closed issues with no parent (SEL-269, 270, 271, 317, 322, 350); they stay where they are. Closed items move with their feature so the project history stays whole.
 
-Found during the apply pass: 23 further children of SEL-361 sit outside project P-SEL-2, were not part of this mapping, and were left untouched. 19 are approval-queue items in project Waiting on C.Lee (for example SEL-474, SEL-249, SEL-251); they should stay there, with SEL-361 removed as their parent on Christopher's word. Four are engineering items with no project and a natural home: SEL-236 supplier portal to tenant_suppliers link (E2, F5); SEL-323 Vercel contact webhook and Sentry DSN missing (E5, F14); SEL-315 Vercel env drift and stale previews (E5, F13); SEL-15 FSMA 204 compliance sweep of 2026-04-21 (E3, or close as superseded by this PRD).
+Found during the apply pass and resolved on Christopher's second approval the same evening: 23 further children of SEL-361 sat outside project P-SEL-2. The 19 approval-queue items in project Waiting on C.Lee (for example SEL-474, SEL-249, SEL-251) stay in that project with SEL-361 removed as parent. Four engineering items moved: SEL-236 supplier portal to tenant_suppliers link (E2, F5); SEL-323 Vercel contact webhook and Sentry DSN missing (E5, F14); SEL-315 Vercel env drift and stale previews (E5, F13); SEL-15 FSMA 204 compliance sweep of 2026-04-21 (E3, no feature parent; candidate to close as superseded by this PRD). SEL-361 now has no children.
 
 | Issue | State | Epic | Feature |
 | --- | --- | --- | --- |
