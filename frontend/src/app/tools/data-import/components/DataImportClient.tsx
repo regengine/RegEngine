@@ -394,7 +394,7 @@ export function DataImportClient() {
                                     <div>
                                         <CardTitle>Sensitech TempTale (Beta)</CardTitle>
                                         <CardDescription>
-                                            Sensitech CSV import exists in experimental routers and is not on the production allowlist. Do not market it as Live.
+                                            Sensitech TempTale CSV import is experimental and is not enabled on the production router allowlist.
                                         </CardDescription>
                                     </div>
                                 </div>

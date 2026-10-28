@@ -58,7 +58,7 @@ const inflowEffects = [
 const engineResults = [
   {
     title: "Flagged for fix",
-    detail: "Incomplete or inconsistent supplier rows are surfaced in the fix queue so operators can correct them before treating them as production evidence. Rule blocking is advisory in production today; rejection is not guaranteed.",
+    detail: "Incomplete or inconsistent supplier rows are surfaced in the fix queue so operators can correct them before treating them as production evidence. Rule blocking is advisory in production today; rejection is not assured.",
     icon: PackageX,
   },
   {
@@ -68,7 +68,7 @@ const engineResults = [
   },
   {
     title: "Export package from stored records",
-    detail: "Coverage and completeness checklist results, recall posture, and FDA/retailer export packages are built from records stored for the tenant. RegEngine helps with recordkeeping; it does not certify FDA acceptance or guaranteed compliance.",
+    detail: "Coverage and completeness checklist results, recall posture, and export packages are built from records stored for the tenant. RegEngine helps with recordkeeping. How those packages are used stays with the operator.",
     icon: FileOutput,
   },
 ];
