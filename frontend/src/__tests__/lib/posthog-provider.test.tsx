@@ -10,6 +10,8 @@ const sdk = vi.hoisted(() => ({
     has_opted_out_capturing: vi.fn(() => false),
     opt_in_capturing: vi.fn(),
     opt_out_capturing: vi.fn(),
+    set_config: vi.fn(),
+    identify: vi.fn(),
   },
 }));
 
@@ -102,13 +104,81 @@ describe('PostHog client initialization', () => {
     expect(sdk.client.capture).not.toHaveBeenCalled();
   });
 
-  it('does not load the SDK or capture before consent', async () => {
+  it('runs cookieless before consent: memory persistence, no opt-in record, no identify', async () => {
     const { captureEvent, CSPostHogProvider } = await providerModule();
     render(<CSPostHogProvider>content</CSPostHogProvider>);
     captureEvent('tool_started', { tool_id: 'ftl-checker' });
-    await waitFor(() => expect(sdk.client.init).not.toHaveBeenCalled());
+    const options = await initializedOptions();
+    expect(options.persistence).toBe('memory');
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('tool_started', { tool_id: 'ftl-checker' }));
+    expect(sdk.client.opt_in_capturing).not.toHaveBeenCalled();
+    expect(sdk.client.opt_out_capturing).not.toHaveBeenCalled();
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+    expect(sdk.client.set_config).not.toHaveBeenCalled();
+    expect(options.before_send({
+      event: 'tool_completed',
+      properties: { token: 'phc_test', distinct_id: 'anon-1', tool_id: 'ftl-checker', status: 'success' },
+    })?.properties).toMatchObject({ tool_id: 'ftl-checker', status: 'success', $process_person_profile: false });
+  });
+
+  it('switches to full persistence when the visitor accepts', async () => {
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('tool_started', { tool_id: 'kde-checker' });
+    expect((await initializedOptions()).persistence).toBe('memory');
+
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    captureEvent('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.set_config).toHaveBeenLastCalledWith({ persistence: 'localStorage+cookie' });
+    expect(sdk.client.capture).toHaveBeenLastCalledWith('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.identify).not.toHaveBeenCalled();
+  });
+
+  it('Decline stops all capture, cookieless included, and stays off on a later page load', async () => {
+    document.cookie = 're_cookie_consent=declined; path=/';
+    const first = await providerModule();
+    render(<first.CSPostHogProvider>content</first.CSPostHogProvider>);
+    first.captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    first.captureEvent('$pageview', { $pathname: '/tools/ftl-checker' });
+
+    // A later page load: fresh module state, same stored choice.
+    vi.resetModules();
+    const reload = await providerModule();
+    render(<reload.CSPostHogProvider>content</reload.CSPostHogProvider>);
+    reload.captureEvent('tool_completed', { tool_id: 'ftl-checker', status: 'success' });
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(sdk.imported).not.toHaveBeenCalled();
+    expect(sdk.client.init).not.toHaveBeenCalled();
     expect(sdk.client.capture).not.toHaveBeenCalled();
+  });
+
+  it('Decline after Accept opts the SDK out, drops captures and clears stored identity', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    window.localStorage.setItem('ph_phc_test_posthog', '{}');
+    const { captureEvent, CSPostHogProvider } = await providerModule();
+    render(<CSPostHogProvider>content</CSPostHogProvider>);
+    captureEvent('tool_started', { tool_id: 'kde-checker' });
+    const options = await initializedOptions();
+    await waitFor(() => expect(sdk.client.capture).toHaveBeenCalledWith('tool_started', { tool_id: 'kde-checker' }));
+
+    document.cookie = 're_cookie_consent=declined; path=/';
+    await waitFor(() => expect(sdk.client.opt_out_capturing).toHaveBeenCalled(), { timeout: 2000 });
+    sdk.client.capture.mockClear();
+    captureEvent('tool_completed', { tool_id: 'kde-checker', status: 'success' });
+    expect(sdk.client.capture).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('ph_phc_test_posthog')).toBeNull();
+    expect(options.before_send({
+      event: 'tool_completed',
+      properties: { token: 'phc_test', distinct_id: 'anon-1', tool_id: 'kde-checker' },
+    })).toBeNull();
+  });
+
+  it('starts in full persistence when consent was already given', async () => {
+    document.cookie = 're_cookie_consent=accepted; path=/';
+    const { captureEvent } = await providerModule();
+    captureEvent('tool_started', { tool_id: 'ftl-checker' });
+    expect((await initializedOptions()).persistence).toBe('localStorage+cookie');
   });
 
   it.each([
