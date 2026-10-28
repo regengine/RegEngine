@@ -12,6 +12,7 @@ payloads; callers pass bytes they already hold.
 from __future__ import annotations
 
 import hashlib
+import os
 import logging
 import re
 from typing import Any, Dict, Optional
@@ -23,6 +24,22 @@ from sqlalchemy import text
 logger = logging.getLogger("partner_file_storage")
 
 PARTNER_UPLOADS_BUCKET = "partner-uploads"
+
+def allow_manifest_bytea_fallback() -> bool:
+    """Permit raw_bytes fallback only in non-production with an explicit flag.
+
+    Production always fail-closes when object storage is not configured so
+    partner CSV payloads cannot silently land in Postgres. Local/test must set
+    ``REGENGINE_ALLOW_MANIFEST_BYTEA_FALLBACK=1`` to opt into the legacy path.
+    """
+    from shared.env import is_production
+
+    if is_production():
+        return False
+    flag = os.getenv("REGENGINE_ALLOW_MANIFEST_BYTEA_FALLBACK", "").strip().lower()
+    return flag in {"1", "true", "yes", "on"}
+
+
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -58,7 +75,11 @@ def persist_partner_upload(
     uploaded_by: Optional[str],
     ingestion_run_id: str,
 ) -> Dict[str, Any]:
-    """Store bytes in partner-uploads (when configured) and write metadata + blob pointer.
+    """Store bytes in partner-uploads and write metadata + blob pointer.
+
+    Production fail-closes with HTTP 503 when object storage is not configured.
+    Local/test may set ``REGENGINE_ALLOW_MANIFEST_BYTEA_FALLBACK=1`` to keep the
+    legacy ``manifest_blobs.raw_bytes`` path.
 
     Returns a dict with ``partner_file_id``, ``storage_url``, ``storage_path``,
     ``sha256``, and ``used_object_storage``.
@@ -80,7 +101,7 @@ def persist_partner_upload(
     )
     used_object_storage = False
     storage_url: Optional[str] = None
-    raw_bytes_param: Optional[bytes] = content
+    raw_bytes_param: Optional[bytes] = None
 
     if is_object_storage_configured():
         storage_url = put_bytes(
@@ -125,6 +146,23 @@ def persist_partner_upload(
                 "filename": filename,
             },
         )
+    else:
+        if not allow_manifest_bytea_fallback():
+            logger.error(
+                "partner_upload_storage_unconfigured tenant=%s run=%s",
+                tenant_id,
+                ingestion_run_id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Partner object storage is not configured. "
+                    "Refusing to store upload bytes in the database."
+                ),
+            )
+        # Explicit local/test fallback only.
+        raw_bytes_param = content
+        storage_url = None
 
     db.execute(
         # nosemgrep: avoid-sqlalchemy-text — parameterized with :param
