@@ -246,7 +246,7 @@ async def export_fda_request_sheet(
 
 
 # ============================================================================
-# GS1 EPCIS 2.0 EXPORT (Walmart/Kroger Automation)
+# GS1 EPCIS 2.0 EXPORT (Preview)
 # ============================================================================
 
 
@@ -264,8 +264,9 @@ async def export_epcis(
     """
     Export traceability data in GS1 EPCIS 2.0 format.
 
-    This enables automated data exchange with major retailers (Walmart, Kroger)
-    who mandate GS1 standards for supply chain visibility.
+    This endpoint is in Preview; validate exports with your trading partner
+    before relying on them for compliance. This endpoint states no dates or
+    deadlines, including retailer program dates or enforcement deadlines.
 
     Formats:
     - json-ld: EPCIS 2.0 JSON-LD (recommended)
@@ -273,6 +274,7 @@ async def export_epcis(
 
     Event Types Mapped:
     - CREATION → epcis:ObjectEvent (bizStep: commissioning)
+    - HARVESTING → epcis:ObjectEvent (bizStep: creating_class_instance)
     - RECEIVING → epcis:ObjectEvent (bizStep: receiving)
     - SHIPPING → epcis:ObjectEvent (bizStep: shipping)
     - TRANSFORMATION → epcis:TransformationEvent
@@ -465,7 +467,22 @@ async def export_epcis(
 
         # Build full EPCIS document
         epcis_document = {
-            "@context": ["https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld"],
+            "@context": [
+                "https://ref.gs1.org/standards/epcis/2.0.0/epcis-context.jsonld",
+                {
+                    "regengine": "https://regengine.co/ns/",
+                    **{
+                        key: f"regengine:{key}"
+                        for key in (
+                            "eventsCount",
+                            "skippedEventsCount",
+                            "skippedEventsByReason",
+                            "preview",
+                            "previewNotice",
+                        )
+                    },
+                },
+            ],
             "type": "EPCISDocument",
             "schemaVersion": "2.0",
             "creationDate": datetime.now(timezone.utc).isoformat(),

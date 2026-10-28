@@ -22,6 +22,14 @@ FIXTURES = Path(__file__).resolve().parents[2] / "ingestion" / "tests" / "fixtur
 TENANT = uuid.uuid4()
 
 
+def _independent_gs1_mod10_check_digit(data_digits: str) -> int:
+    """GS1 mod-10, weight 3 from the rightmost data digit. Test-local oracle."""
+    total = 0
+    for i, ch in enumerate(reversed(data_digits)):
+        total += (3 if i % 2 == 0 else 1) * int(ch)
+    return (10 - (total % 10)) % 10
+
+
 def gs1_number(length):
     digits = str(uuid.uuid4().int).zfill(length - 1)[:length - 1]
     value = f"{digits}{calculate_gs1_check_digit(digits)}"
@@ -104,7 +112,15 @@ async def export(format, rows):
         assert response.headers["X-RegEngine-Preview"] == "true"
         payload = await body(response)
         if format == "json-ld":
-            metadata = json.loads(payload)["regengine:exportMetadata"]
+            document = json.loads(payload)
+            context = document["@context"]
+            assert isinstance(context, list)
+            assert context[1]["regengine"] == "https://regengine.co/ns/"
+            assert context[1]["preview"] == "regengine:preview"
+            assert context[1]["previewNotice"] == "regengine:previewNotice"
+            metadata = document["regengine:exportMetadata"]
+            for key in metadata:
+                assert context[1][key] == f"regengine:{key}"
             assert metadata["preview"] is True
             assert metadata["previewNotice"] == (
                 "EPCIS export is in Preview. Validate with your trading partner before relying on it for compliance."
@@ -166,13 +182,23 @@ def test_missing_event_time_is_skipped():
 def test_gs1_location_check_digit_accepts_generated_valid_gln():
     """Graph location helper must use GS1 weight-3-from-right."""
     row = graph_row("RECEIVING")
-    row["location_gln"] = gs1_number(13)
+    digits = str(uuid.uuid4().int).zfill(12)[:12]
+    check_digit = _independent_gs1_mod10_check_digit(digits)
+    row["location_gln"] = f"{digits}{check_digit}"
+    assert verify_gs1_check_digit(row["location_gln"])
     row["tlc"] = epc_identifier()
     document = json.loads(asyncio.run(export("json-ld", [row])))
     assert document["epcisBody"]["eventList"]
     read_point = document["epcisBody"]["eventList"][0]["readPoint"]["id"]
     assert read_point.startswith("https://id.gs1.org/414/")
     assert read_point.endswith(row["location_gln"])
+
+    bad_gln = f"{digits}{(check_digit + 1) % 10}"
+    assert not verify_gs1_check_digit(bad_gln)
+    row["location_gln"] = bad_gln
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    for event in document["epcisBody"]["eventList"]:
+        assert "readPoint" not in event
 
 
 def test_graph_exports_raw_tlc_with_lot_gtin_as_digital_link():
@@ -249,3 +275,14 @@ def test_missing_event_time_records_skip_reason():
     assert document["epcisBody"]["eventList"] == []
     assert document["regengine:exportMetadata"]["skippedEventsCount"] == 1
     assert document["regengine:exportMetadata"]["skippedEventsByReason"]["missing_time"] == 1
+
+
+def test_graph_harvesting_exports_lot_gtin_quantity_class():
+    row = graph_row("HARVESTING")
+    row.update(tlc=lot_code(), gtin=gs1_number(14), quantity=12, unit_of_measure="KGM")
+    document = json.loads(asyncio.run(export("json-ld", [row])))
+    event = document["epcisBody"]["eventList"][0]
+    assert event["bizStep"] == "creating_class_instance"
+    assert event["quantityList"][0]["epcClass"] == (
+        f"https://id.gs1.org/01/{row['gtin']}/10/{row['tlc']}"
+    )
