@@ -113,10 +113,10 @@ export default function ChangelogPage() {
                     <div>
                         <h4 className={GROUP}>Ingest and Exports</h4>
                         <ul className={LIST}>
-                            <li>EPCIS document receipts and live EPCIS failure metric</li>
-                            <li>FDA spreadsheet and EPCIS export fail loudly instead of silent empty or truncated output</li>
+                            <li>EPCIS (Preview) document receipts and live EPCIS (Preview) failure metric</li>
+                            <li>FDA spreadsheet and EPCIS (Preview) export fail loudly instead of silent empty or truncated output</li>
                             <li>Supplier data quality views, agreed sending hours, and late CTE metrics for owners</li>
-                            <li>Excel .xlsx on CSV ingest, EPCIS 2.0 upload tab, and X12 944/945 warehouse advice intake</li>
+                            <li>Excel .xlsx on CSV ingest, EPCIS 2.0 (Preview) upload tab, and X12 944/945 warehouse advice intake</li>
                         </ul>
                     </div>
 
@@ -240,7 +240,6 @@ export default function ChangelogPage() {
                         <ul className={LIST}>
                             <li>Offline verifier now validates the current audit bundle structure, including EPCIS (Preview) package contents</li>
                             <li>Tampered proof-bundle sample added so evaluators can see failure detection instead of only the happy path</li>
-                            <li>Root Docker deploy context and admin proxy routing aligned with the consolidated production surface</li>
                         </ul>
                     </div>
                 </Release>
