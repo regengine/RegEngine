@@ -948,8 +948,10 @@ jobs:
       - name: Emit image provenance map
         run: |
           set -euo pipefail
-          export BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          export WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export BUILT_AT
+          WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          export WORKFLOW_RUN_URL
           python3 - <<'PY'
           import json, os
           from pathlib import Path
