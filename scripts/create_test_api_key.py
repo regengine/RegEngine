@@ -208,11 +208,10 @@ class _KeySummary:
     key_id: str
     tenant_id: str
     scopes: list
-    billing_tier: str
     expires_at: object
 
 
-def _format_summary(summary: _KeySummary, key_path: Path, billing_note: str) -> str:
+def _format_summary(summary: _KeySummary, key_path: Path, subscription_note: str) -> str:
     """Console summary. Never includes the raw key."""
     quoted_path = shlex.quote(str(key_path))
     return f"""
@@ -223,10 +222,9 @@ API key created. The raw key is NOT shown; it was written once to:
   key_id:      {summary.key_id}
   tenant_id:   {summary.tenant_id}
   scopes:      {summary.scopes}
-  tier:        {summary.billing_tier}
   expires_at:  {summary.expires_at or "never"}
 
-Billing status for tenant: {billing_note}
+Billing status for tenant: {subscription_note}
 
 Use it:
 
@@ -380,7 +378,7 @@ async def _seed_tenant(database_url: str, tenant_id: str, tenant_name: str) -> b
         await engine.dispose()
 
 
-def _seed_billing_status(tenant_id: str, allow_production: bool = False) -> str:
+def _seed_subscription_status(tenant_id: str, allow_production: bool = False) -> str:
     """Mark the tenant's subscription 'trialing' so the subscription gate passes.
 
     Returns a human-readable outcome string; never raises (billing seed is
@@ -475,21 +473,20 @@ async def _main() -> None:
         await store.close()
 
     if args.no_seed_billing:
-        billing_note = (
+        subscription_note = (
             "skipped (--no-seed-billing). Subscription-gated routes will return 402 "
             f"until you run: redis-cli HSET billing:tenant:{args.tenant_id} status trialing"
         )
     else:
-        billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
+        subscription_note = _seed_subscription_status(args.tenant_id, args.allow_production)
 
     summary = _KeySummary(
         key_id=key.key_id,
         tenant_id=key.tenant_id,
         scopes=key.scopes,
-        billing_tier=key.billing_tier,
         expires_at=key.expires_at,
     )
-    print(_format_summary(summary, key_path, billing_note))
+    print(_format_summary(summary, key_path, subscription_note))
 
 if __name__ == "__main__":
     asyncio.run(_main())

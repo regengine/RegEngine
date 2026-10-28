@@ -110,7 +110,6 @@ def test_summary_never_contains_raw_key(keygen, tmp_path):
         key_id=key_id,
         tenant_id=str(uuid.uuid4()),
         scopes=["webhooks.ingest"],
-        billing_tier="ENTERPRISE",
         expires_at=None,
     )
     path = tmp_path / "key"
@@ -127,7 +126,6 @@ def test_summary_shell_quotes_key_path_with_spaces(keygen, tmp_path):
         key_id="rge_demo",
         tenant_id=str(uuid.uuid4()),
         scopes=["webhooks.ingest"],
-        billing_tier="ENTERPRISE",
         expires_at=None,
     )
     path = tmp_path / "my key file"
