@@ -14,6 +14,8 @@ from contextlib import suppress
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 _service_dir = str(Path(__file__).resolve().parents[1])  # services/ingestion
 if _service_dir not in sys.path:
     sys.path.insert(0, _service_dir)
@@ -129,3 +131,13 @@ _purge_stale_modules()
 
 def pytest_runtest_setup(item):  # type: ignore[no-untyped-def]
     _purge_stale_modules()
+
+
+@pytest.fixture
+def location_complete_for_pipeline(monkeypatch):
+    """Isolate pipeline tests from location completeness without inventing data.
+
+    Opt in only for parsing/flow tests. Location rejection tests must use the
+    real 21 CFR 1.1310 validator.
+    """
+    monkeypatch.setattr("app.webhook_models.is_location_description_complete", lambda **kwargs: True)

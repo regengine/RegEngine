@@ -358,3 +358,8 @@ class TestCteTypeValidation:
         assert event.cte_type.value == "receiving"
         # receiving_date KDE populated, not cooling_date.
         assert event.kdes["receiving_date"] == "2026-02-26"
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

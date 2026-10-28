@@ -976,3 +976,8 @@ def test_upload_ui_labels_every_field_jev_can_name_with_a_header_the_parser_read
     for field, label in labels.items():
         assert normalize_csv_header(label) == field
         assert field in ct._RECOGNIZED_COLUMNS
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")

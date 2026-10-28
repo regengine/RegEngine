@@ -130,7 +130,7 @@ class TestValidateKdeCompleteness:
 
         now = datetime.now(timezone.utc)
 
-        # Pick a location field that satisfies the model validator
+        # Pick the existing location label for this CTE; completeness is patched.
         loc_kwargs = {}
         if cte_type_str in ("shipping",):
             loc_kwargs["kdes"] = {"ship_from_location": "Origin", "ship_to_location": "Dest"}
@@ -182,3 +182,8 @@ class TestValidateKdeCompleteness:
         event = self._make_event("harvesting")
         missing = _validate_kde_completeness("nonexistent_type", event, {})
         assert missing == []
+
+
+# These tests cover parsing and pipeline flow; location validity is covered by
+# test_location_description_complete.py and test_webhook_models.py.
+pytestmark = pytest.mark.usefixtures("location_complete_for_pipeline")
