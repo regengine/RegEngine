@@ -13,6 +13,14 @@ FastAPI resolves before any endpoint parameter. ``test_key_only_caller_reaches_h
 pins the surface behaviour through the real ``require_api_key`` (env bypass, no
 dependency overrides); ``test_every_compliance_route_checks_key_before_tenant``
 pins the resolution order so a future route cannot regress it.
+
+The eight sibling graph routers shared the ordering. ``recall``, ``science``,
+``traceability`` and ``lineage_traversal`` now carry the same router-level
+dependency; ``metrics`` and ``labels`` each expose an open ``/health`` route, so
+their key+tenant handlers were reordered instead. ``regulations`` and the
+``provisions`` route in ``routes.py`` already declared the key first.
+``test_every_graph_route_checks_key_before_tenant`` walks every route served
+under ``services.graph.app.routes.router`` so none of them can regress.
 """
 
 from __future__ import annotations
@@ -143,3 +151,49 @@ def test_every_compliance_route_checks_key_before_tenant():
             assert order.index(require_api_key) < order.index(get_current_tenant_id), (
                 f"{route.path}: tenant resolution runs before API-key validation"
             )
+
+
+def _effective_api_routes(router) -> list:
+    """Every ``APIRoute`` served under ``router`` the way the monolith mounts it.
+
+    FastAPI (>= 0.141) includes routers lazily: ``router.routes`` holds wrapper objects,
+    and the effective routes (prefix applied, router-level dependencies merged) are
+    materialised by ``iter_route_contexts``, the same walk the OpenAPI generator uses.
+    Each returned item exposes ``path``, ``methods`` and ``dependant`` for the effective
+    route. Older FastAPI flattened routes at include time, so ``app.routes`` is already flat.
+    """
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    try:
+        from fastapi.routing import iter_route_contexts
+    except ImportError:  # pragma: no cover - FastAPI < 0.141
+        return [r for r in app.routes if isinstance(r, APIRoute)]
+    return [ctx for ctx in iter_route_contexts(app.routes) if isinstance(ctx.route, APIRoute)]
+
+
+def test_every_graph_route_checks_key_before_tenant():
+    from services.graph.app import routes as graph_routes
+
+    routes = _effective_api_routes(graph_routes.router)
+    assert routes, "graph router has no routes"
+
+    checked: list[str] = []
+    offenders: list[str] = []
+    for route in routes:
+        order = _resolution_order(route)
+        if require_api_key not in order or get_current_tenant_id not in order:
+            continue  # open route (health), metrics-key route, or key-only route
+        checked.append(route.path)
+        if order.index(require_api_key) > order.index(get_current_tenant_id):
+            offenders.append(f"{sorted(route.methods)} {route.path}")
+
+    # The walk must reach the sub-routers, not just the operational routes in routes.py.
+    for expected in (
+        "/api/v1/fsma/compliance/export/fda-request",
+        "/api/v1/fsma/recall/history",
+        "/api/v1/labels/batch/init",
+        "/api/v1/provisions/by-request",
+    ):
+        assert expected in checked, f"{expected} not reached from routes.router"
+
+    assert not offenders, "tenant resolution runs before API-key validation on:\n  " + "\n  ".join(offenders)
