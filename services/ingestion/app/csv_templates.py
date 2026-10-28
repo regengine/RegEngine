@@ -928,6 +928,7 @@ def parse_csv_rows(
     row_log: Optional[list[CsvRowDispositionEntry]] = None,
     event_source_rows: Optional[list[int]] = None,
     row_notes: Optional[dict[int, list[str]]] = None,
+    overflow_aggregates: Optional[list[str]] = None,
 ) -> tuple[list[IngestEvent], list[str], list[str]]:
     """Parse CSV text into ``IngestEvent`` objects.
 
@@ -962,6 +963,12 @@ def parse_csv_rows(
     so a row never carries both a pre-ingest "Accepted with missing KDEs"
     flag and a later reject.
 
+    ``overflow_aggregates``, when provided, receives the aggregate overflow
+    summary string(s) (e.g. "N more row(s) … skipped"). Those messages are
+    still appended to ``parse_errors`` for visibility, but callers that
+    synthesize rejected EventResults must skip only membership in this list —
+    never substring-match error text, which can embed partner cell values.
+
     Returns ``(events, parse_errors, kde_warnings)``.
     """
     reader = csv.DictReader(io.StringIO(text))
@@ -976,6 +983,7 @@ def parse_csv_rows(
     # quote) is rejected whole with its line named, never partially ingested.
     records: list[dict] = []
     skipped_overflow = 0
+    overflow_tail_unreadable = False
     header = None
     try:
         header = reader.fieldnames
@@ -1007,11 +1015,19 @@ def parse_csv_rows(
             # file may hold many more rows the reader never reached. Count
             # them (without storing them) so the caller learns exactly what
             # was dropped instead of silently losing data.
+            # Keep any partial count if the unread tail raises csv.Error —
+            # zeroing would drop rows we already saw (SEL-549 / Codex).
+            overflow_tail_unreadable = False
             try:
-                skipped_overflow = sum(1 for _ in reader)
-            except csv.Error:
-                # A malformed tail must not break the rows already read.
-                skipped_overflow = 0
+                for _ in reader:
+                    skipped_overflow += 1
+            except csv.Error as overflow_exc:
+                overflow_tail_unreadable = True
+                logger.warning(
+                    "csv_overflow_tail_unreadable after=%s error=%s",
+                    skipped_overflow,
+                    overflow_exc,
+                )
     except csv.Error as exc:
         line = reader.reader.line_num
         logger.warning("csv_unreadable line=%s error=%s", line, exc)
@@ -1095,7 +1111,9 @@ def parse_csv_rows(
             )
         # Unread rows past the buffer still exist physically; every one must
         # land in an exclusive bucket so accepted+rejected+skipped equals the
-        # file's data-row count (SEL-549 / Codex review).
+        # file's data-row count (SEL-549 / Codex review). Overflow rows here
+        # are rejected with missing_required_columns (not skipped): the whole
+        # file failed the header check.
         if skipped_overflow:
             base = 1 + len(records)
             for offset in range(1, skipped_overflow + 1):
@@ -1107,6 +1125,21 @@ def parse_csv_rows(
                     reason="missing_required_columns",
                     detail=detail,
                 )
+        if overflow_tail_unreadable:
+            base = 1 + len(records) + skipped_overflow
+            tail_row = base + 1
+            tail_detail = (
+                f"Row {tail_row}: unread CSV overflow tail could not be fully "
+                f"counted (malformed after {skipped_overflow} row(s) past the limit)"
+            )
+            _append_row_log(
+                row_log,
+                row_number=tail_row,
+                disposition="rejected",
+                reason="unreadable_overflow_tail",
+                detail=tail_detail,
+            )
+            return ([], [detail, tail_detail], [])
         return ([], [detail], [])
 
     unrecognized = _unrecognized_partner_columns(header, header_mapping)
@@ -1136,6 +1169,10 @@ def parse_csv_rows(
                     f"Row {row_num}: {skipped_overflow} more row(s) after this one were skipped and not ingested"
                 )
                 parse_errors.append(overflow_detail)
+                if overflow_aggregates is not None:
+                    # Structural marker: ingest_csv skips EventResult synthesis
+                    # by membership here, not by scanning error substrings.
+                    overflow_aggregates.append(overflow_detail)
                 for offset in range(1, skipped_overflow + 1):
                     overflow_row = row_num + offset
                     _append_row_log(
@@ -1145,6 +1182,22 @@ def parse_csv_rows(
                         reason="row_limit_overflow",
                         detail=(f"Row {overflow_row}: skipped after CSV row limit of {MAX_CSV_ROWS}"),
                     )
+            if overflow_tail_unreadable:
+                # Partial count kept above; name the remainder explicitly so it
+                # is not silently dropped when csv.Error fires mid-tail.
+                tail_detail = (
+                    f"Row {row_num + skipped_overflow + 1}: unread CSV overflow tail "
+                    f"could not be fully counted (malformed after {skipped_overflow} "
+                    f"row(s) past the limit)"
+                )
+                parse_errors.append(tail_detail)
+                _append_row_log(
+                    row_log,
+                    row_number=row_num + skipped_overflow + 1,
+                    disposition="rejected",
+                    reason="unreadable_overflow_tail",
+                    detail=tail_detail,
+                )
             limit_detail = f"Row {row_num}: CSV exceeds maximum row limit of {MAX_CSV_ROWS}"
             parse_errors.append(limit_detail)
             _append_row_log(
@@ -1942,6 +1995,7 @@ async def ingest_csv(
     row_log: list[CsvRowDispositionEntry] = []
     event_source_rows: list[int] = []
     row_notes: dict[int, list[str]] = {}
+    overflow_aggregates: list[str] = []
     events, parse_errors, kde_warnings = parse_csv_rows(
         text,
         fallback_cte,
@@ -1949,6 +2003,7 @@ async def ingest_csv(
         row_log=row_log,
         event_source_rows=event_source_rows,
         row_notes=row_notes,
+        overflow_aggregates=overflow_aggregates,
     )
     kde_warnings.extend(xlsx_warnings)
     missing_columns = [e.field for e in row_log if e.reason == "missing_column" and e.field]
@@ -2033,12 +2088,14 @@ async def ingest_csv(
     if parse_errors:
         from .webhook_models import EventResult
 
+        # Structural skip set: only messages parse_csv_rows recorded as
+        # overflow aggregates. Never substring-match error text — quantity
+        # (and similar) embed raw cell values that an adversary can craft.
+        # Match by object identity, not string equality, so even a rejection
+        # message that happens to equal the summary text is still counted.
+        overflow_aggregate_ids = {id(a) for a in overflow_aggregates}
         for err in parse_errors:
-            # Aggregate overflow ("N more row(s) ... skipped") is already
-            # represented per physical row in row_disposition_log. Emitting it
-            # again as a rejected EventResult inflates rejected/total past the
-            # exclusive bucket sum (SEL-549 / Codex review).
-            if "more row(s)" in err and "were skipped" in err:
+            if id(err) in overflow_aggregate_ids:
                 continue
             response.events.append(
                 EventResult(

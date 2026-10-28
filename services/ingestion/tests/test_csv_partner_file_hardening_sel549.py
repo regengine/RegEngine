@@ -552,3 +552,185 @@ def test_overflow_aggregate_parse_errors_do_not_inflate_rejected_totals(monkeypa
     # must match exclusive rejected, not rejected + aggregate count.
     assert body["rejected"] == bucket_rejected
     assert body["total"] == body["accepted"] + body["rejected"]
+
+
+# ---------------------------------------------------------------------------
+# Codex FAIL 2cfcc314 follow-ups: structural overflow marker (not substring);
+# preserve partial skipped_overflow on csv.Error while counting the tail.
+# ---------------------------------------------------------------------------
+
+
+def test_adversarial_quantity_with_overflow_wording_still_counts_rejected(monkeypatch):
+    """Adversarial input: a fixture quantity cell embeds overflow summary wording.
+
+    The EventResult filter must not use substring matching on "more row(s)" /
+    "were skipped", or a crafted cell can hide a real bad_quantity rejection
+    from response.rejected / events. Built from a real 01_harvesting.csv row.
+    """
+    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from app.webhook_compat import _verify_api_key
+    from app.webhook_models import IngestResponse
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    header, rows = _fixture_rows()
+    # ADVERSARIAL INPUT (derived from fixture row 0): quantity cell text that
+    # contains both substrings the old filter looked for. Pair with a second
+    # real fixture row so the request stays on the 200 path where parse_errors
+    # are synthesized into EventResults (the substring filter's blast radius).
+    adversarial_qty = "7 more row(s) after this one were skipped and not ingested"
+    crafted = dict(rows[0])
+    crafted["quantity"] = adversarial_qty
+    good = dict(rows[1 % len(rows)])
+    csv_text = _to_csv(header, [crafted, good])
+
+    async def _fake_ingest(payload, **kwargs):
+        from app.webhook_models import EventResult
+
+        results = [
+            EventResult(
+                traceability_lot_code=ev.traceability_lot_code,
+                cte_type=ev.cte_type.value if hasattr(ev.cte_type, "value") else ev.cte_type,
+                status="accepted",
+                event_id=f"evt-{i}",
+            )
+            for i, ev in enumerate(payload.events)
+        ]
+        return IngestResponse(accepted=len(results), rejected=0, total=len(results), events=results)
+
+    monkeypatch.setattr(ct, "ingest_events", _fake_ingest)
+
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], tenant_id="t1"
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/ingest/csv",
+        files={"file": ("adversarial.csv", csv_text.encode(), "text/csv")},
+        data={"cte_type": "harvesting"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["accepted"] == 1
+    assert body["rejected"] >= 1, (
+        f"adversarial bad_quantity must still count as rejected EventResult; events={body.get('events')}"
+    )
+    assert any(any("is not a number" in err for err in e.get("errors", [])) for e in body.get("events", []))
+    log_rejected = sum(
+        1
+        for e in body.get("row_disposition_log", [])
+        if e.get("row_number", 0) >= 2 and e.get("disposition") == "rejected"
+    )
+    assert body["rejected"] == log_rejected
+
+
+def test_overflow_aggregate_skipped_by_structural_marker_not_substring(monkeypatch):
+    """Only messages recorded as overflow aggregates skip EventResult synthesis."""
+    from app.authz import IngestionPrincipal, get_ingestion_principal
+    from app.webhook_compat import _verify_api_key
+    from app.webhook_models import EventResult, IngestResponse
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    four = [dict(rows[i % len(rows)]) for i in range(4)]
+    csv_text = _to_csv(header, four)
+
+    async def _fake_ingest(payload, **kwargs):
+        results = [
+            EventResult(
+                traceability_lot_code=ev.traceability_lot_code,
+                cte_type=ev.cte_type.value if hasattr(ev.cte_type, "value") else ev.cte_type,
+                status="accepted",
+                event_id=f"evt-{i}",
+            )
+            for i, ev in enumerate(payload.events)
+        ]
+        return IngestResponse(accepted=len(results), rejected=0, total=len(results), events=results)
+
+    monkeypatch.setattr(ct, "ingest_events", _fake_ingest)
+
+    app = FastAPI()
+    app.include_router(ct.router)
+    app.dependency_overrides[_verify_api_key] = lambda: None
+    app.dependency_overrides[get_ingestion_principal] = lambda: IngestionPrincipal(
+        key_id="test-key", scopes=["*"], tenant_id="t1"
+    )
+    client = TestClient(app)
+    resp = client.post(
+        "/api/v1/ingest/csv",
+        files={"file": ("big.csv", csv_text.encode(), "text/csv")},
+        data={"cte_type": "harvesting"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert not any(any("more row(s)" in err for err in e.get("errors", [])) for e in body.get("events", []))
+    exclusive = [
+        e
+        for e in body["row_disposition_log"]
+        if e["row_number"] >= 2 and e["disposition"] in {"accepted", "rejected", "skipped"}
+    ]
+    assert body["accepted"] + body["rejected"] == sum(
+        1 for e in exclusive if e["disposition"] in {"accepted", "rejected"}
+    )
+
+
+def test_csv_error_while_counting_overflow_keeps_partial_count(monkeypatch):
+    """A csv.Error mid-tail must not zero skipped_overflow; keep what was counted."""
+    import csv as csvmod
+
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    # Buffer MAX+1 fixture rows, then one more readable overflow row (real
+    # fixture line), then a field that exceeds a lowered field_size_limit so
+    # counting the unread tail raises csv.Error after a partial count.
+    three = [dict(rows[i % len(rows)]) for i in range(3)]
+    base = _to_csv(header, three)
+    extra = base.splitlines()[1]  # real fixture data line — invent nothing
+    # Oversized field: reuse the fixture lot code as a prefix so we invent no
+    # product/lot identity; pad with digits only.
+    lot = rows[0]["traceability_lot_code"]
+    huge = lot + ("0" * 200)
+    n_cols = len(header)
+    oversized_line = ",".join([huge] + [""] * (n_cols - 1))
+    csv_text = base.rstrip("\n") + "\n" + extra + "\n" + oversized_line + "\n"
+
+    old_limit = csvmod.field_size_limit()
+    csvmod.field_size_limit(64)
+    try:
+        events, errors, _w, log = _parse(csv_text)
+    finally:
+        csvmod.field_size_limit(old_limit)
+
+    # With MAX=2: rows 2–3 capacity, row 4 first over-limit rejected, row 5 the
+    # one readable overflow counted before csv.Error. The unreadable remainder
+    # must be reported explicitly rather than wiping the partial count to zero.
+    exclusive = {
+        e.row_number: e for e in log if e.row_number >= 2 and e.disposition in {"accepted", "rejected", "skipped"}
+    }
+    assert 5 in exclusive, f"partial overflow row 5 missing; got {sorted(exclusive)}"
+    assert exclusive[5].disposition in {"skipped", "rejected"}
+    assert exclusive[4].disposition == "rejected"
+    assert exclusive[4].reason == "row_limit_exceeded"
+    assert any(e.reason == "unreadable_overflow_tail" for e in log)
+
+
+def test_missing_column_overflow_rows_are_rejected_not_skipped(monkeypatch):
+    """Confirm missing-column unread overflow uses rejected/missing_required_columns."""
+    monkeypatch.setattr(ct, "MAX_CSV_ROWS", 2)
+    header, rows = _fixture_rows()
+    kept = [h for h in header if h not in {"quantity", "unit_of_measure"}]
+    five = [dict(rows[i % len(rows)]) for i in range(5)]
+    for row in five:
+        row.pop("quantity", None)
+        row.pop("unit_of_measure", None)
+    csv_text = _to_csv(kept, five)
+    _events, _errors, _w, log = _parse(csv_text)
+    overflow = [e for e in log if e.row_number >= 5 and e.disposition in {"accepted", "rejected", "skipped"}]
+    assert overflow
+    assert all(e.disposition == "rejected" for e in overflow)
+    assert all(e.reason == "missing_required_columns" for e in overflow)
