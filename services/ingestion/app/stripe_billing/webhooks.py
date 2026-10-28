@@ -65,6 +65,21 @@ def _session_price_ids_are_pilot(session: dict[str, Any]) -> bool:
     )
 
 
+def _iso_timestamp_is_past(value: str, *, now: Optional[datetime] = None) -> bool:
+    """True when an ISO-8601 timestamp is at/before ``now`` (UTC).
+
+    Unparseable values return True so a corrupt conversion-window marker
+    fails closed rather than granting a discounted credit indefinitely.
+    """
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed <= (now or datetime.now(timezone.utc))
+
+
 def _extract_subscription_item_quantity(subscription: Any) -> Optional[str]:
     """Subscription quantity from the first item on a *known catalog* price.
 
@@ -132,6 +147,18 @@ def _apply_pilot_credit_if_eligible(tenant_id: str, customer_id: str, mapping: d
     later subscription checkout can retry; we never raise out of the
     webhook for a credit failure.
     """
+    # An unsettled pilot (ACH/SEPA still in flight) is not creditable yet.
+    # ``pilot_payment_settled`` is written by the pilot handler; mappings
+    # created before that field existed (or by tests) fall through and use
+    # ``pilot_fee_cents`` as before.
+    if str((mapping or {}).get("pilot_payment_settled", "")).strip().lower() == "false":
+        logger.info(
+            "stripe_pilot_credit_skipped_unsettled",
+            tenant_id=tenant_id,
+            pilot_fee_cents=str((mapping or {}).get("pilot_fee_cents")),
+        )
+        return False
+
     # Only a real persisted value counts. Redis returns strings; accepting
     # arbitrary objects here (``int(MagicMock) == 1``) would fabricate a fee
     # from a partially mocked mapping and double-write state in tests.
@@ -144,10 +171,33 @@ def _apply_pilot_credit_if_eligible(tenant_id: str, customer_id: str, mapping: d
         fee_cents = int(fee_raw.strip())
     else:
         return False
+
+    # Credit only what Stripe actually collected. A 100%-promo pilot has
+    # ``amount_total=0``; the mapping still records the catalog fee, but the
+    # creditable amount must be the real paid amount (0).
+    paid_raw = (mapping or {}).get("pilot_amount_paid_cents")
+    if isinstance(paid_raw, bool):
+        return False
+    if isinstance(paid_raw, int):
+        fee_cents = paid_raw
+    elif isinstance(paid_raw, str) and paid_raw.strip().isdigit():
+        fee_cents = int(paid_raw.strip())
+
     if fee_cents <= 0:
         return False
 
     if str((mapping or {}).get("pilot_credit_applied", "")).strip().lower() == "true":
+        return False
+
+    # ``convert_30`` is a discounted pilot that must convert within its
+    # recorded 30-day window. Missing window (legacy/standard) does not block.
+    convert_window_end = (mapping or {}).get("pilot_convert_window_end")
+    if convert_window_end and _iso_timestamp_is_past(str(convert_window_end)):
+        logger.info(
+            "stripe_pilot_credit_skipped_convert_window_expired",
+            tenant_id=tenant_id,
+            pilot_convert_window_end=str(convert_window_end),
+        )
         return False
 
     if not customer_id:
@@ -237,6 +287,16 @@ def _handle_pilot_checkout_completed(
         else _plans_mod.PILOT_FEE_CONVERT_30_CENTS
     )
     fee_cents = amount_total if amount_total > 0 else constant_cents
+    pilot_session_id = str(session.get("id") or "")
+
+    # A duplicate/retried event for the SAME pilot purchase must not reset a
+    # credit that already landed. A genuinely new pilot session starts with
+    # a fresh (unapplied) credit flag.
+    existing_mapping = _state_mod._get_subscription_mapping(tenant_id)
+    same_pilot_session = bool(pilot_session_id) and existing_mapping.get("pilot_session_id") == pilot_session_id
+    pilot_credit_applied = (
+        str(existing_mapping.get("pilot_credit_applied") or "false") if same_pilot_session else "false"
+    )
 
     # "now" anchored to the session creation time when available so the
     # 90-day term and convert window do not drift on webhook retries.
@@ -246,7 +306,8 @@ def _handle_pilot_checkout_completed(
 
     mapping: dict[str, str] = {
         "tenant_id": tenant_id,
-        "session_id": str(session.get("id") or ""),
+        "session_id": pilot_session_id,
+        "pilot_session_id": pilot_session_id,
         "customer_id": str(session.get("customer") or ""),
         # Payment mode never creates a subscription; keep the field empty so
         # downstream lookups cannot bind this tenant to a stale subscription.
@@ -261,8 +322,12 @@ def _handle_pilot_checkout_completed(
         ),
         "facility_quantity": "1",
         "pilot_fee_cents": str(fee_cents),
+        # Credit only what Stripe actually collected; a 100%-promo pilot
+        # records the catalog fee but zero paid cents.
+        "pilot_amount_paid_cents": str(max(amount_total, 0)),
+        "pilot_payment_settled": "true" if settled else "false",
         "pilot_variant": variant,
-        "pilot_credit_applied": "false",
+        "pilot_credit_applied": pilot_credit_applied,
     }
     if settled:
         mapping["current_period_end"] = (

@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException, Request
@@ -139,6 +140,26 @@ def _get_tenant_id_from_request(request: Request) -> Optional[str]:
     return None
 
 
+def _pilot_entitlement_expired(period_end: Optional[str], *, now: Optional[datetime] = None) -> bool:
+    """Return True when a one-time pilot's 90-day term has ended.
+
+    A pilot has no recurring Stripe subscription, so no subscription event
+    will ever move the tenant off ``pilot_active``. The gate is the last
+    line of defense: deny once the persisted ``current_period_end`` is in
+    the past. A missing/unparseable end is treated as expired (fail closed)
+    because entitlement without a trustworthy end is unbounded.
+    """
+    if not period_end:
+        return True
+    try:
+        parsed = datetime.fromisoformat(str(period_end).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return True
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed <= (now or datetime.now(timezone.utc))
+
+
 def _check_subscription_and_redis_health(tenant_id: str) -> tuple[Optional[str], bool]:
     """Return ``(status, redis_available)``.
 
@@ -162,7 +183,20 @@ def _check_subscription_and_redis_health(tenant_id: str) -> tuple[Optional[str],
         # breaker still short-circuits without touching Redis at all.
         redis_circuit._check_state()
         client = _get_redis_client(redis_url)
-        status = client.hget(f"billing:tenant:{tenant_id}", "status")
+        mapping_key = f"billing:tenant:{tenant_id}"
+        status = client.hget(mapping_key, "status")
+        # A-2155: one-time pilots have no recurring event to expire them.
+        # Downgrade an expired ``pilot_active`` to a denied status here so
+        # both the API gate and the supplier portal enforce the 90-day term.
+        if status and str(status).strip().lower() == "pilot_active":
+            period_end = client.hget(mapping_key, "current_period_end")
+            if _pilot_entitlement_expired(period_end):
+                logger.info(
+                    "subscription_gate_pilot_expired tenant_id=%s period_end=%s",
+                    tenant_id,
+                    period_end,
+                )
+                status = "pilot_expired"
         redis_circuit._record_success()
         return status, True
     except CircuitOpenError:
@@ -183,7 +217,8 @@ async def require_active_subscription(request: Request) -> None:
     Fail-closed semantics (#1182):
     1. Extract tenant_id from the request context.
     2. Query Redis for ``billing:tenant:{tenant_id}`` -> ``status``.
-    3. Allow if status is ``active`` or ``trialing``.
+    3. Allow if status is ``active``, ``trialing``, or an unexpired
+       ``pilot_active`` (90-day one-time pilot).
     4. HTTP 402 if the subscription is missing, cancelled, or unpaid.
     5. HTTP 503 if Redis is down / the circuit breaker is open — we cannot
        confirm subscription state, so access is denied.

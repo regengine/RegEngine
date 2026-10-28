@@ -18,6 +18,7 @@ Covers:
 from __future__ import annotations
 
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -27,6 +28,10 @@ import stripe
 service_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(service_dir))
 
+from app import (
+    subscription_gate as gate_mod,  # noqa: E402
+    supplier_portal,  # noqa: E402
+)
 from app.authz import IngestionPrincipal  # noqa: E402
 from app.stripe_billing import (  # noqa: E402
     customers as customers_mod,
@@ -37,6 +42,7 @@ from app.stripe_billing import (  # noqa: E402
     webhooks as webhooks_mod,
 )
 from app.stripe_billing.models import CheckoutRequest  # noqa: E402
+from shared.circuit_breaker import redis_circuit  # noqa: E402
 
 # ── Shared fakes/fixtures ──────────────────────────────────────────────────
 
@@ -314,6 +320,9 @@ class TestPilotWebhook:
         assert mapping["billing_period"] == "one_time"
         assert mapping["status"] == "pilot_active"
         assert mapping["pilot_fee_cents"] == "150000"
+        assert mapping["pilot_amount_paid_cents"] == "150000"
+        assert mapping["pilot_payment_settled"] == "true"
+        assert mapping["pilot_session_id"] == "cs_pilot_paid"
         assert mapping["pilot_variant"] == "convert_30"
         assert mapping["pilot_credit_applied"] == "false"
         assert mapping["facility_quantity"] == "1"
@@ -349,6 +358,8 @@ class TestPilotWebhook:
         assert mapping["status"] not in webhooks_mod._ENTITLING_STATUSES
         assert mapping["current_period_end"] == ""
         assert mapping["pilot_fee_cents"] == "200000"
+        assert mapping["pilot_payment_settled"] == "false"
+        assert mapping["pilot_amount_paid_cents"] == "200000"
 
     @pytest.mark.asyncio
     async def test_async_payment_succeeded_promotes_pilot(
@@ -379,6 +390,36 @@ class TestPilotWebhook:
             }
         )
         assert fake_redis.hashes["billing:tenant:tenant-pilot-async"]["status"] == "pilot_active"
+
+    @pytest.mark.asyncio
+    async def test_duplicate_pilot_event_does_not_reset_applied_credit(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis
+    ) -> None:
+        fake_redis.values["billing:session:cs_pilot_retry"] = "tenant-pilot-retry"
+        fake_redis.hashes["billing:tenant:tenant-pilot-retry"] = {
+            "tenant_id": "tenant-pilot-retry",
+            "pilot_session_id": "cs_pilot_retry",
+            "pilot_fee_cents": "150000",
+            "pilot_payment_settled": "true",
+            "pilot_amount_paid_cents": "150000",
+            "pilot_credit_applied": "true",
+            "status": "pilot_active",
+        }
+
+        await webhooks_mod._handle_checkout_completed(
+            {
+                "id": "cs_pilot_retry",
+                "customer": "cus_pilot_retry",
+                "subscription": None,
+                "mode": "payment",
+                "payment_status": "paid",
+                "amount_total": 150_000,
+                "metadata": {"plan_id": "pilot", "pilot_variant": "convert_30"},
+            },
+            event_created=600,
+        )
+
+        assert fake_redis.hashes["billing:tenant:tenant-pilot-retry"]["pilot_credit_applied"] == "true"
 
 
 # ── 4. A-2159 credit ───────────────────────────────────────────────────────
@@ -445,6 +486,40 @@ class TestPilotCredit:
         assert len(calls) == 1
         assert mapping.get("pilot_credit_applied") != "true"
         assert "billing:tenant:tenant-credit-fail" not in fake_redis.hashes
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "mapping",
+        [
+            # Delayed payment never settled.
+            {"pilot_fee_cents": "150000", "pilot_payment_settled": "false"},
+            # 100%-promo pilot: catalog fee recorded, but nothing collected.
+            {
+                "pilot_fee_cents": "150000",
+                "pilot_payment_settled": "true",
+                "pilot_amount_paid_cents": "0",
+            },
+            # convert_30's 30-day conversion window already elapsed.
+            {
+                "pilot_fee_cents": "150000",
+                "pilot_payment_settled": "true",
+                "pilot_amount_paid_cents": "150000",
+                "pilot_convert_window_end": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+            },
+        ],
+    )
+    async def test_credit_skips_unsettled_zero_or_expired_window(
+        self, monkeypatch: pytest.MonkeyPatch, fake_redis: _FakeRedis, mapping: dict[str, str]
+    ) -> None:
+        calls: list[Any] = []
+        monkeypatch.setattr(
+            stripe.Customer,
+            "create_balance_transaction",
+            lambda *args, **kwargs: calls.append((args, kwargs)),
+        )
+
+        assert webhooks_mod._apply_pilot_credit_if_eligible("tenant-skip", "cus_skip", dict(mapping)) is False
+        assert calls == []
 
     @pytest.mark.asyncio
     async def test_subscription_checkout_applies_prior_pilot_credit_once(
@@ -518,6 +593,63 @@ class TestPilotCredit:
             event_created=301,
         )
         assert len(calls) == 1
+
+
+# ── 4b. Pilot entitlement expiry ───────────────────────────────────────────
+
+
+class _GateRedis:
+    def __init__(self, mapping: dict[str, str]) -> None:
+        self.mapping = mapping
+
+    def hget(self, _key: str, field: str) -> Optional[str]:
+        return self.mapping.get(field)
+
+
+class TestPilotEntitlementExpiry:
+    def _check(self, monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]) -> tuple[Optional[str], bool]:
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        monkeypatch.setattr(gate_mod, "_get_redis_client", lambda _url: _GateRedis(mapping))
+        redis_circuit.reset()
+        try:
+            return gate_mod._check_subscription_and_redis_health("tenant-pilot-gate")
+        finally:
+            redis_circuit.reset()
+
+    def test_current_pilot_is_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mapping = {
+            "status": "pilot_active",
+            "current_period_end": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+        }
+        assert self._check(monkeypatch, mapping) == ("pilot_active", True)
+
+    def test_expired_pilot_is_downgraded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        mapping = {
+            "status": "pilot_active",
+            "current_period_end": (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat(),
+        }
+        assert self._check(monkeypatch, mapping) == ("pilot_expired", True)
+
+    def test_missing_period_end_fails_closed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert self._check(monkeypatch, {"status": "pilot_active"}) == ("pilot_expired", True)
+
+    def test_supplier_portal_accepts_live_pilot_and_rejects_expired(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+        monkeypatch.setattr(
+            gate_mod,
+            "_check_subscription_and_redis_health",
+            lambda _tenant_id: ("pilot_active", True),
+        )
+        assert supplier_portal._portal_subscription_active("tenant-pilot") is True
+
+        monkeypatch.setattr(
+            gate_mod,
+            "_check_subscription_and_redis_health",
+            lambda _tenant_id: ("pilot_expired", True),
+        )
+        assert supplier_portal._portal_subscription_active("tenant-pilot") is False
 
 
 # ── 5. Fail-closed plan verification + catalog regression ─────────────────
