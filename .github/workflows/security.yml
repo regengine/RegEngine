@@ -903,10 +903,12 @@ jobs:
             echo "::error::failed to resolve registry content digest for ${IMAGE_NAME}:${TAG_SHA}"
             exit 1
           fi
-          echo "IMAGE_NAME=$IMAGE_NAME" >> "$GITHUB_ENV"
-          echo "IMAGE_REF=${IMAGE_NAME}:${TAG_SHA}" >> "$GITHUB_ENV"
-          echo "IMAGE_DIGEST=$DIGEST" >> "$GITHUB_ENV"
-          echo "IMAGE_REF_DIGEST=${IMAGE_NAME}@${DIGEST}" >> "$GITHUB_ENV"
+          {
+            echo "IMAGE_NAME=$IMAGE_NAME"
+            echo "IMAGE_REF=${IMAGE_NAME}:${TAG_SHA}"
+            echo "IMAGE_DIGEST=$DIGEST"
+            echo "IMAGE_REF_DIGEST=${IMAGE_NAME}@${DIGEST}"
+          } >> "$GITHUB_ENV"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "Published ${IMAGE_NAME}:${TAG_SHA} @ ${DIGEST}"
 
@@ -946,8 +948,8 @@ jobs:
       - name: Emit image provenance map
         run: |
           set -euo pipefail
-          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          export BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          export WORKFLOW_RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
