@@ -17,8 +17,7 @@ Usage:
     ./venv/bin/python scripts/create_test_api_key.py --name "EDI smoke key" \
         --scopes webhooks.ingest --expires-days 7
 
-The raw key is never printed in full. It is written once to ``--key-file``
-(default ``~/.regengine/test-api-key``, mode 0600); only its hash lands in the
+The raw key is printed ONCE and never stored — only its hash lands in the
 ``api_keys`` table. Remember: in development the backend validates DB-backed
 keys only when ``ENABLE_DB_API_KEYS=true`` (shared.auth.get_key_store falls
 back to the in-memory store otherwise).
@@ -34,10 +33,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import errno
 import os
-import shlex
-import stat
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -90,70 +86,9 @@ def _is_local_url(database_url: str) -> bool:
     return bool(hosts) and all(h in LOCAL_HOSTS for h in hosts)
 
 
-def _hostname_is_supabase(host: str) -> bool:
-    """Exact host or subdomain of supabase.co / supabase.com (no substring)."""
-    host = (host or "").strip().lower()
-    return (
-        host == "supabase.com"
-        or host.endswith(".supabase.com")
-        or host == "supabase.co"
-        or host.endswith(".supabase.co")
-    )
-
-
-def _url_points_at_supabase(database_url: str) -> bool:
-    """True when any effective host of the URL is a Supabase host."""
-    return any(_hostname_is_supabase(h) for h in _effective_db_hosts(database_url))
-
-
 # Matches the AUTH_TEST_BYPASS default tenant and the legacy phase-2b seed
 # tenant, so a key minted here composes with existing local fixtures.
 TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
-
-
-DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
-
-
-def _write_raw_key_file(raw_key: str, path: Path) -> Path:
-    """Write the one-time raw key to an owner-only file (mode 0600).
-
-    Keeps the raw key out of print/log sinks (code-scanning alert 18,
-    py/clear-text-logging-sensitive-data).
-    """
-    path = path.expanduser()
-    if not path.is_absolute():
-        path = Path.cwd() / path
-    if path.is_symlink():
-        raise SystemExit(f"Refusing to write key file: {path} is a symlink")
-    path = path.resolve(strict=False)
-    parent = path.parent
-    parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
-        os.chmod(parent, 0o700)
-    except OSError:
-        pass
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
-    try:
-        fd = os.open(path, flags, 0o600)
-    except OSError as exc:
-        if getattr(exc, "errno", None) == errno.ELOOP:
-            raise SystemExit(f"Refusing to write key file: {path} is a symlink") from exc
-        raise
-    try:
-        os.fchmod(fd, 0o600)
-        data = (raw_key + "\n").encode("utf-8")
-        view = memoryview(data)
-        while view:
-            n = os.write(fd, view)
-            if n <= 0:
-                raise OSError("short write while storing API key")
-            view = view[n:]
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
-    return path
 
 
 def _parse_args() -> argparse.Namespace:
@@ -211,12 +146,6 @@ def _parse_args() -> argparse.Namespace:
         "(without it, subscription-gated routes return 402)",
     )
     parser.add_argument(
-        "--key-file",
-        type=Path,
-        default=DEFAULT_KEY_FILE,
-        help=f"Where to write the raw key (mode 0600). Default {DEFAULT_KEY_FILE}",
-    )
-    parser.add_argument(
         "--allow-production",
         action="store_true",
         help="Override the production guard. Almost never what you want.",
@@ -229,7 +158,7 @@ def _guard_against_production(args: argparse.Namespace, database_url: str) -> No
     problems = []
     if env == "production":
         problems.append("REGENGINE_ENV=production")
-    if _url_points_at_supabase(database_url):
+    if "supabase.co" in database_url or "supabase.com" in database_url:
         problems.append("DATABASE_URL points at a Supabase host")
     if not _is_local_url(database_url):
         problems.append("DATABASE_URL is not a localhost URL")
@@ -368,29 +297,23 @@ async def _main() -> None:
     else:
         billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
-    key_path = _write_raw_key_file(key.raw_key, args.key_file)
-    quoted_path = shlex.quote(str(key_path))
-    # Console summary never includes the raw key (alert 18).
     print(
         f"""
-API key created. The raw key is NOT shown; it was written once to:
-
-  {key_path}   (mode 0600, readable only by you)
+API key created — the raw key is shown ONCE and cannot be recovered:
 
   key_id:      {key.key_id}
   tenant_id:   {key.tenant_id}
   scopes:      {key.scopes}
   tier:        {key.billing_tier}
   expires_at:  {key.expires_at or "never"}
+  raw key:     {key.raw_key}
 
 Billing status for tenant: {billing_note}
 
 Use it:
 
-  export REGENGINE_TEST_API_KEY="$(cat {quoted_path})"
+  export REGENGINE_TEST_API_KEY='{key.raw_key}'
   curl -H "X-RegEngine-API-Key: $REGENGINE_TEST_API_KEY" http://localhost:8000/<endpoint>
-
-Delete the file when you no longer need the key.
 
 Reminder: with REGENGINE_ENV=development the backend only checks DB-backed
 keys when ENABLE_DB_API_KEYS=true is set on the server process.

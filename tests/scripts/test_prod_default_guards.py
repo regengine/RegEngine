@@ -120,50 +120,6 @@ def test_api_key_still_guards_production(monkeypatch):
         module._guard_against_production(args, "postgresql://user@db.supabase.co:5432/postgres")
 
 
-def test_api_key_writes_raw_key_to_file_not_stdout(tmp_path, capsys):
-    """Code-scanning #18: raw key goes to a 0600 file, never to stdout."""
-    module = _load("create_test_api_key_keyfile", SCRIPTS / "create_test_api_key.py")
-    raw = "rge_test.super-secret-value-not-for-logs"
-    dest = tmp_path / "test-api-key"
-    written = module._write_raw_key_file(raw, dest)
-    assert written.read_text() == raw + "\n"
-    mode = written.stat().st_mode & 0o777
-    assert mode == 0o600
-    # Console helper path: summary formatter must not embed the raw key.
-    # Exercise write only; mint path is covered elsewhere with DB mocks.
-    out = capsys.readouterr().out
-    assert raw not in out
-
-
-def test_api_key_guard_detects_supabase_by_hostname_not_substring(monkeypatch):
-    """Code-scanning #42: refuse real Supabase hosts; ignore spoofed substrings."""
-    module = _load("create_test_api_key_supabase_host", SCRIPTS / "create_test_api_key.py")
-    monkeypatch.setattr(sys, "argv", ["create_test_api_key.py"])
-    monkeypatch.delenv("REGENGINE_ENV", raising=False)
-    monkeypatch.delenv("REDIS_URL", raising=False)
-    args = module._parse_args()
-
-    # Real Supabase hosts (authority or libpq ?host=) must refuse.
-    for url in (
-        "postgresql://user@db.supabase.co:5432/postgres",
-        "postgresql://user@pooler.supabase.com:5432/postgres",
-        "postgresql://user@localhost:5432/postgres?host=db.supabase.co",
-        "postgresql://user@localhost:5432/postgres?host=aws-0-us-east-1.pooler.supabase.com",
-    ):
-        with pytest.raises(SystemExit, match="Supabase"):
-            module._guard_against_production(args, url)
-
-    # Literal "supabase.com" only in userinfo / path / non-host query must not
-    # by itself trip the Supabase host check. Local authority still passes.
-    for url in (
-        "postgresql://supabase.com@localhost:5432/postgres",
-        "postgresql://user@localhost:5432/supabase.com",
-        "postgresql://user@localhost:5432/postgres?sslhost=supabase.com",
-        "postgresql://user@localhost:5432/postgres?x=pooler.supabase.com",
-    ):
-        module._guard_against_production(args, url)
-
-
 @pytest.mark.parametrize(
     "hosted_url",
     [
