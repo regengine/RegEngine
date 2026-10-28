@@ -42,7 +42,7 @@ const problem = [
   {
     title: "The request",
     detail:
-      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask for an electronic sortable spreadsheet of traceability records during an outbreak, a recall, or another threat to public health. It is due within 24 hours unless FDA agrees to more time.",
+      "Under 21 CFR 1.1455(c)(3)(ii), FDA can ask a covered firm for an electronic sortable spreadsheet of traceability records during an outbreak, a recall, or another threat to public health. It is due within 24 hours unless FDA agrees to more time.",
     icon: FileSpreadsheet,
   },
   {
@@ -238,7 +238,7 @@ export default function HomePage() {
             </p>
             <Button asChild className="mt-5 self-start">
               <Link href="/tools/kde-checker">
-                Open the checklist
+                See the fields your records need
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>
@@ -251,7 +251,7 @@ export default function HomePage() {
             </p>
             <Button asChild variant="secondary" className="mt-5 self-start">
               <Link href="/verify">
-                Open the verifier
+                Verify an evidence bundle
                 <ArrowRight className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
               </Link>
             </Button>

@@ -16,16 +16,23 @@ describe("HomePage", () => {
     expect(
       screen.getByText(/send records by csv upload or the json events api\. epcis 2\.0 is in preview\./i),
     ).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByText(/21 CFR 1\.1455\(c\)\(3\)\(ii\)/)).toBeInTheDocument();
+    expect(screen.getByText(/does not imply FDA endorsement or certification/i)).toBeInTheDocument();
   });
 
   it("sends the primary call to action to a free tool that works without an API key", () => {
     render(<HomePage />);
 
-    expect(screen.getByRole("link", { name: /^see the fields your records need$/i })).toHaveAttribute("href", "/tools/kde-checker");
-    expect(screen.getByRole("link", { name: /open the checklist/i })).toHaveAttribute("href", "/tools/kde-checker");
+    // identical destinations carry identical accessible names (hero and next steps)
+    const checklistLinks = screen.getAllByRole("link", { name: /^see the fields your records need$/i });
+    expect(checklistLinks).toHaveLength(2);
+    for (const link of checklistLinks) expect(link).toHaveAttribute("href", "/tools/kde-checker");
+    const verifyLinks = screen.getAllByRole("link", { name: /^verify an evidence bundle$/i });
+    expect(verifyLinks).toHaveLength(2);
+    for (const link of verifyLinks) expect(link).toHaveAttribute("href", "/verify");
     expect(screen.getByText(/no account, no api key/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /check a supplier file/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /open the verifier/i })).toHaveAttribute("href", "/verify");
   });
 
   it("lists ingest paths from the capabilities registry instead of a workspace mock", () => {
