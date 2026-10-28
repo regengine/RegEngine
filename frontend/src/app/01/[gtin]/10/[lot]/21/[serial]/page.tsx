@@ -22,7 +22,9 @@ import { parseLabelLink, traceHrefForLot } from '@/lib/label-link';
 type Params = Promise<{ gtin: string; lot: string; serial: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-    const label = parseLabelLink(await params);
+    // generateMetadata gets the decoded segments; the page gets them
+    // re-encoded. See label-link.ts.
+    const label = parseLabelLink(await params, { alreadyDecoded: true });
     return {
         title: label ? `Lot ${label.lot} | RegEngine label` : 'Label not found | RegEngine',
         // One page per printed serial. Nothing here should rank.
@@ -36,7 +38,7 @@ export default async function LabelLinkPage({ params }: { params: Params }) {
 
     const rows: Array<[string, string]> = [
         ['GTIN (AI 01)', label.gtin],
-        ['Traceability Lot Code (AI 10)', label.lot],
+        ['Lot (AI 10)', label.lot],
         ['Serial (AI 21)', label.serial],
         ['GTIN check digit', label.gtinCheckDigitValid ? 'Valid' : 'Does not match'],
     ];
@@ -46,7 +48,7 @@ export default async function LabelLinkPage({ params }: { params: Params }) {
             <PageHeader
                 eyebrow="Traceability label"
                 title={`Lot ${label.lot}`}
-                description="This QR code uses the GS1 Digital Link format that RegEngine prints on labels. The values below are read from the code itself."
+                description="This QR code uses the GS1 Digital Link format that RegEngine prints on labels. The GTIN, lot and serial are read from the code itself; the check-digit result is computed here."
             />
 
             <Card>

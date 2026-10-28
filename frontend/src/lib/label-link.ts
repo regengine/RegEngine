@@ -7,12 +7,15 @@ import { isValidGTINCheckDigit } from './gs1-parser';
  * every label it issues (generate_qr_payload), with the lot quoted as
  * urllib.parse.quote(lot, safe="") so a slash travels as %2F.
  *
- * Measured on Next 16.4.2: the page component receives the segments raw
- * (LOT-2024%2F001) while generateMetadata receives them decoded
- * (LOT-2024/001). decodeSegment decodes once and is a no-op on an already
- * decoded value, so both callers get the same answer. The one gap: a lot
- * that itself contains a literal escape sequence (100%2F) decodes twice on
- * the metadata path and shows as 100/ in the tab title only.
+ * How Next 16.4.2 hands the segments over (node_modules/next/dist):
+ * shared/lib/router/utils/route-matcher.js:19 decodes each matched segment
+ * once; shared/lib/router/utils/get-dynamic-param.js:58 then re-encodes it
+ * with encodeURIComponent for the page's `params`, while
+ * lib/metadata/resolve-metadata.js:173 passes the decoded value straight
+ * to generateMetadata. None of it is NODE_ENV-gated and `next start` was
+ * measured to match. So the page decodes exactly once and generateMetadata
+ * must not decode at all (`alreadyDecoded`), and a lot that itself contains
+ * an escape sequence (100%2F) comes out right on both paths.
  */
 
 function decodeSegment(value: string): string {
@@ -37,10 +40,14 @@ export interface LabelLink {
 }
 
 /** Null when the segments cannot have come from a RegEngine label. */
-export function parseLabelLink(segments: { gtin?: string; lot?: string; serial?: string }): LabelLink | null {
-    const gtin = decodeSegment(segments.gtin ?? '');
-    const lot = decodeSegment(segments.lot ?? '');
-    const serial = decodeSegment(segments.serial ?? '');
+export function parseLabelLink(
+    segments: { gtin?: string; lot?: string; serial?: string },
+    { alreadyDecoded = false }: { alreadyDecoded?: boolean } = {},
+): LabelLink | null {
+    const decode = alreadyDecoded ? (v: string) => v : decodeSegment;
+    const gtin = decode(segments.gtin ?? '');
+    const lot = decode(segments.lot ?? '');
+    const serial = decode(segments.serial ?? '');
 
     // labels.py validates the GTIN as exactly 14 digits but not its check
     // digit, so a bad check digit is reported, not rejected.

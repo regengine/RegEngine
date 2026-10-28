@@ -22,8 +22,16 @@ describe('parseLabelLink', () => {
         expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%20B', serial: SERIAL })?.lot).toBe('A B');
     });
 
-    it('leaves an already-decoded segment alone, as generateMetadata receives it', () => {
-        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2024/001', serial: SERIAL })?.lot).toBe('LOT-2024/001');
+    it('decodes exactly once: a lot that itself contains an escape keeps it', () => {
+        // Lot "100%2F" prints as /10/100%252F/ and reaches page.tsx re-encoded.
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: '100%252F', serial: SERIAL })?.lot).toBe('100%2F');
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%252FB', serial: SERIAL })?.lot).toBe('A%2FB');
+    });
+
+    it('does not decode when told the segments are already decoded, as generateMetadata gets them', () => {
+        const opts = { alreadyDecoded: true };
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2024/001', serial: SERIAL }, opts)?.lot).toBe('LOT-2024/001');
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%2FB', serial: SERIAL }, opts)?.lot).toBe('A%2FB');
     });
 
     it('keeps a segment with a broken escape instead of throwing', () => {

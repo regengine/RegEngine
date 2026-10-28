@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // The global setup mock of next/navigation has no notFound; the page needs one
@@ -12,13 +12,17 @@ vi.mock('next/navigation', () => ({ notFound: notFoundMock }));
 
 import LabelLinkPage, { generateMetadata } from '@/app/01/[gtin]/10/[lot]/21/[serial]/page';
 
-// Next 16.4.2 hands page.tsx the raw segments and generateMetadata the
-// decoded ones (measured in the dev server), so each test uses the form its
-// caller really receives.
+// Next hands page.tsx the segments re-encoded and generateMetadata the
+// decoded ones (see label-link.ts), so each test uses the form its caller
+// really receives.
 const RAW = { gtin: '00012345678905', lot: 'LOT-2024%2F001', serial: '000123456789012345' };
 const DECODED = { ...RAW, lot: 'LOT-2024/001' };
 
 describe('label QR landing page (/01/{gtin}/10/{lot}/21/{serial})', () => {
+    beforeEach(() => {
+        notFoundMock.mockClear();
+    });
+
     it('shows what the code encodes and links to /trace with the lot prefilled', async () => {
         render(await LabelLinkPage({ params: Promise.resolve(RAW) }));
 
@@ -44,5 +48,11 @@ describe('label QR landing page (/01/{gtin}/10/{lot}/21/{serial})', () => {
         const meta = await generateMetadata({ params: Promise.resolve(DECODED) });
         expect(meta.robots).toEqual({ index: false, follow: false });
         expect(meta.title).toBe('Lot LOT-2024/001 | RegEngine label');
+    });
+
+    it('does not decode the already-decoded lot a second time in the title', async () => {
+        // Lot "A%2FB" reaches generateMetadata as exactly that.
+        const meta = await generateMetadata({ params: Promise.resolve({ ...DECODED, lot: 'A%2FB' }) });
+        expect(meta.title).toBe('Lot A%2FB | RegEngine label');
     });
 });
