@@ -31,7 +31,8 @@ logger = logging.getLogger("epcis-export")
 FDA_CSV_HEADER = (
     "CTE_Type,Traceability_Lot_Code,Product_Description,Quantity,Unit_of_Measure,"
     "Event_Date,Event_Time,Ship_From_Location,Ship_From_GLN,Ship_To_Location,"
-    "Ship_To_GLN,Carrier,Temperature_C,SHA256_Hash"
+    "Ship_To_GLN,Carrier,Temperature_C,Reference_Document,TLC_Source_Reference,"
+    "Immediate_Previous_Source,SHA256_Hash,Additional_KDEs_JSON"
 )
 
 
@@ -714,23 +715,38 @@ async def export_fda(
             ts = r["event_timestamp"]
             date_str = ts.strftime("%Y-%m-%d") if ts else ""
             time_str = ts.strftime("%H:%M:%SZ") if ts else ""
+            additional = {
+                key: r.get(key)
+                for key in (
+                    "field_id",
+                    "harvester_name",
+                    "harvester_business_name",
+                    "harvester_business_phone",
+                )
+                if r.get(key)
+            }
+            additional_json = json.dumps(additional, sort_keys=True) if additional else ""
             lines.append(
                 ",".join(
                     [
-                        str(r["event_type"] or "").upper(),
-                        str(r["traceability_lot_code"] or ""),
-                        sanitize_cell(str(r["product_description"] or "")).replace(",", ";"),
-                        str(r["quantity"] or ""),
-                        str(r["unit_of_measure"] or ""),
+                        str(r.get("event_type") or "").upper(),
+                        str(r.get("traceability_lot_code") or ""),
+                        sanitize_cell(str(r.get("product_description") or "")).replace(",", ";"),
+                        str(r.get("quantity") or ""),
+                        str(r.get("unit_of_measure") or ""),
                         date_str,
                         time_str,
-                        sanitize_cell(str(r["ship_from"] or r["location_name"] or "")).replace(",", ";"),
-                        str(r["ship_from_gln"] or r["location_gln"] or ""),
-                        sanitize_cell(str(r["ship_to"] or "")).replace(",", ";"),
-                        str(r["ship_to_gln"] or ""),
-                        sanitize_cell(str(r["carrier"] or "")).replace(",", ";"),
-                        str(r["temperature_c"] or ""),
-                        str(r["sha256_hash"] or ""),
+                        sanitize_cell(str(r.get("ship_from") or r.get("location_name") or "")).replace(",", ";"),
+                        str(r.get("ship_from_gln") or r.get("location_gln") or ""),
+                        sanitize_cell(str(r.get("ship_to") or "")).replace(",", ";"),
+                        str(r.get("ship_to_gln") or ""),
+                        sanitize_cell(str(r.get("carrier") or "")).replace(",", ";"),
+                        str(r.get("temperature_c") or ""),
+                        sanitize_cell(str(r.get("reference_document") or "")).replace(",", ";"),
+                        sanitize_cell(str(r.get("tlc_source_reference") or "")).replace(",", ";"),
+                        sanitize_cell(str(r.get("immediate_previous_source") or "")).replace(",", ";"),
+                        str(r.get("sha256_hash") or ""),
+                        sanitize_cell(additional_json).replace(",", ";"),
                     ]
                 )
             )
