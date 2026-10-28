@@ -1110,10 +1110,14 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
     class URI when present. The bare lot token remains available via
     ``lot_token_only`` / ``normalize_epcis_lot(...).lot_token``.
 
-    Precedence: a full class URI among EPCs / quantity classes, then ILMD
-    ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` (same order as
-    ``epcis/extraction._extract_lot_data``), then SGTIN serial, then flat
-    top-level keys. Raises ``ValueError`` when nothing identifies the lot.
+    Precedence (H2 / SEL-598, intentional vs legacy extraction): a full class
+    URI among quantity classes / EPCs first (canonical stored identity), then
+    ILMD ``fsma:traceabilityLotCode`` / ``cbvmda:lotNumber`` as the bare partner
+    TLC when no class URI is present (preserve bare TLC — do not rebuild a
+    Digital Link from an SGTIN-derived GTIN at this boundary), then SGTIN
+    serial, then flat top-level keys. Legacy ``epcis/extraction`` prefers ILMD
+    first; canonical + export agree on class-URI-first after H2. Raises
+    ``ValueError`` when nothing identifies the lot.
     """
     ilmd = epcis_data.get("ilmd")
     if not isinstance(ilmd, dict):
@@ -1130,7 +1134,17 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
         )
         if isinstance(q, dict) and q.get("epcClass")
     ]
-    gtin = next((g for g in (_epc_gtin(e) for e in epcs + classes) if g), None)
+    # Real GTIN-14 only (never the EPC company.item fragment from _epc_gtin).
+    gtin = None
+    for e in list(classes) + list(epcs):
+        parsed = parse_class_uri(e)
+        if parsed and parsed.gtin:
+            gtin = parsed.gtin
+            break
+        identity = normalize_epcis_lot(e, prefer_full=False)
+        if identity and identity.gtin:
+            gtin = identity.gtin
+            break
 
     # Prefer full class URI from EPC / quantity class (SEL-598 canonical).
     for epc in list(classes) + list(epcs):
@@ -1143,14 +1157,15 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
     for key in ("fsma:traceabilityLotCode", "traceabilityLotCode", "cbvmda:lotNumber", "lotNumber"):
         value = ilmd.get(key)
         if value is not None and str(value).strip():
-            identity = normalize_epcis_lot(value, gtin=gtin)
+            # Preserve bare partner TLC; do not rebuild Digital Link here.
+            identity = normalize_epcis_lot(value)
             if identity:
                 return identity.canonical_id, identity.gtin or gtin
             return str(value).strip(), gtin
 
     for epc in epcs:
         if "sgtin" in str(epc).lower():
-            identity = normalize_epcis_lot(epc, gtin=gtin)
+            identity = normalize_epcis_lot(epc)
             if identity:
                 return identity.canonical_id, identity.gtin or gtin
             segment = _epc_last_segment(epc)
@@ -1160,7 +1175,8 @@ def _epcis_traceability_lot_code(epcis_data: Dict[str, Any]) -> Tuple[str, Optio
     for key in ("traceability_lot_code", "lotNumber"):
         value = epcis_data.get(key)
         if value is not None and str(value).strip():
-            identity = normalize_epcis_lot(value, gtin=gtin)
+            # Preserve bare flat TLC (same boundary rule as ILMD).
+            identity = normalize_epcis_lot(value)
             if identity:
                 return identity.canonical_id, identity.gtin or gtin
             return str(value).strip(), gtin
@@ -1192,7 +1208,8 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
         else:
             lot_token = _epc_last_segment(epc_class)
             lot_key = lot_token
-        if not lot_token or lot_token in seen:
+        dedup_key = ("class", lot_key)
+        if not lot_token or dedup_key in seen:
             continue
         raw_quantity = element.get("quantity")
         try:
@@ -1208,11 +1225,12 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
                 "epc_class": epc_class,
             }
         )
-        seen.add(lot_token)
+        seen.add(dedup_key)
     for epc in _epcis_list(epcis_data, "inputEPCList"):
         identity = normalize_epcis_lot(epc)
         segment = identity.lot_token if identity else _epc_last_segment(epc)
-        if not segment or segment in seen:
+        dedup_key = ("epc", segment)
+        if not segment or dedup_key in seen:
             continue
         lot_key = identity.canonical_id if (identity and lossless_enabled()) else segment
         inputs.append(
@@ -1224,7 +1242,7 @@ def _epcis_transformation_inputs(epcis_data: Dict[str, Any]) -> List[Dict[str, A
                 "epc": str(epc),
             }
         )
-        seen.add(segment)
+        seen.add(dedup_key)
     return inputs
 
 

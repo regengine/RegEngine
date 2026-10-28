@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from shared.database import get_db_safe
-from shared.epcis_lot_identity import is_full_class_uri, lot_token_only, parse_class_uri
+from shared.epcis_lot_identity import is_full_class_uri, lot_token_only
 from shared.fsma_validation import normalize_gtin, verify_gs1_check_digit
 from shared.tenant_context import TenantContext
 from sqlalchemy import text
@@ -345,14 +345,10 @@ def _epc_class(row: dict) -> str | None:
     """
     for key in ("epc_class", "product_id", "traceability_lot_code", "canonical_epc_class"):
         value = _kde_scalar(row.get(key))
-        if _valid_class_uri(value) or is_full_class_uri(value):
-            # Prefer the validated export shape when available; otherwise the
-            # parsed canonical URI from the shared normalizer.
-            if _valid_class_uri(value):
-                return value
-            parsed = parse_class_uri(value)
-            if parsed:
-                return parsed.canonical_id
+        # Strict export gate only — do not emit URIs the lenient parser accepts
+        # but `_valid_class_uri` rejects (Codex P2 / CodeRabbit).
+        if _valid_class_uri(value):
+            return value
     raw = row.get("epcis_document_json")
     if raw:
         try:

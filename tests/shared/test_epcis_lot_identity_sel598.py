@@ -23,6 +23,8 @@ from shared.epcis_lot_identity import (
 # Synthetic GS1-shaped IDs (not partner data). GTIN 00614141123452 check digit
 # is illustrative; normalize_epcis_lot rebuilds Digital Links from digits.
 SYN_GTIN14 = "00614141123452"
+# EPC Pure Identity 0614141.123452 → indicator 1 + check digit
+SYN_GTIN_FROM_LGTIN = "10614141234520"
 SYN_LOT = "LOT-ROM-2026-0312A"
 SYN_LGTIN = f"urn:epc:class:lgtin:0614141.123452.{SYN_LOT}"
 SYN_DL = f"https://id.gs1.org/01/{SYN_GTIN14}/10/{SYN_LOT}"
@@ -75,7 +77,7 @@ def test_both_pass_fixture_round_trip_full_id():
     assert rebuilt is not None
     assert rebuilt.is_full_class_uri is True
     # Exact equality on full Digital Link form
-    assert rebuilt.canonical_id == SYN_DL or rebuilt.lot_token == SYN_LOT and rebuilt.gtin == first.gtin
+    assert rebuilt.canonical_id == SYN_DL
 
 
 def test_lenient_only_fixture_preserves_raw_tlc_and_gtin():
@@ -155,3 +157,53 @@ def test_export_epc_class_does_not_embed_full_uri_as_lot():
     assert out is not None
     assert "%3A" not in out
     assert out.count("https://") == 1
+
+
+def test_lgtin_company_item_rebuilds_indicator_and_check_digit():
+    parsed = parse_class_uri(SYN_LGTIN)
+    assert parsed is not None
+    assert parsed.gtin == SYN_GTIN_FROM_LGTIN
+    # Must not use the naive 0+company+item concatenation
+    assert parsed.gtin != "00614141123452"
+
+
+def test_bare_ilmd_tlc_preserved_with_sgtin_epc(monkeypatch):
+    """SGTIN + bare ILMD lot must not fabricate a Digital Link TLC."""
+    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    sgtin = "urn:epc:id:sgtin:0614141.123452.SERIAL9"
+    event = {
+        "epcList": [sgtin],
+        "ilmd": {"cbvmda:lotNumber": SYN_LOT},
+    }
+    tlc, gtin = _epcis_traceability_lot_code(event)
+    assert tlc == SYN_LOT
+    assert "://" not in tlc
+    assert gtin == SYN_GTIN_FROM_LGTIN
+
+
+def test_transformation_inputs_same_lot_different_gtin_kept(monkeypatch):
+    monkeypatch.delenv("LOT_IDENTITY_LOSSLESS", raising=False)
+    event = {
+        "inputQuantityList": [
+            {"epcClass": SYN_LGTIN, "quantity": 1, "uom": "EA"},
+            {"epcClass": SYN_LGTIN_OTHER_GTIN, "quantity": 2, "uom": "EA"},
+        ],
+    }
+    inputs = _epcis_transformation_inputs(event)
+    assert len(inputs) == 2
+    codes = {i["traceability_lot_code"] for i in inputs}
+    assert codes == {SYN_LGTIN, SYN_LGTIN_OTHER_GTIN}
+
+
+def test_export_rejects_invalid_class_uri_from_lenient_parse():
+    from ingestion.app.epcis_export import _epc_class
+
+    # Bad company+item length — lenient parser may accept; export must not emit.
+    bad = "urn:epc:class:lgtin:1.2.LOT1"
+    row = {"traceability_lot_code": bad, "gtin": None, "epc_class": None, "product_id": None}
+    assert _epc_class(row) is None
+
+    # Digital Link with invalid check digit
+    bad_dl = "https://id.gs1.org/01/09506000134351/10/LOT1"
+    row2 = {"traceability_lot_code": bad_dl, "gtin": None, "epc_class": None, "product_id": None}
+    assert _epc_class(row2) is None

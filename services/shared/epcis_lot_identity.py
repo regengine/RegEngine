@@ -40,17 +40,23 @@ class LotIdentity:
 
 
 def _company_item_to_gtin14(company: str, item: str) -> Optional[str]:
-    """Rebuild a 14-digit GTIN body from EPC company.item when lengths sum to 13."""
-    if not company.isdigit() or not item.isdigit():
+    """Rebuild GTIN-14 from EPC Pure Identity company.item (SGTIN/LGTIN).
+
+    Company prefix + item reference must sum to 13 digits. The first digit of
+    the item reference is the Indicator; the remaining item digits follow the
+    company prefix; then append the GS1 check digit.
+    Example: ``0614141.123452`` → ``10614141234520`` (not ``00614141123452``).
+    """
+    if not company.isdigit() or not item.isdigit() or not item:
         return None
     if len(company) + len(item) != 13:
         return None
-    body = company + item
-    # Check digit for GTIN-14 with leading zero indicator already in body length 13
-    digits = "0" + body if len(body) == 13 else body
-    if len(digits) != 14 or not digits.isdigit():
+    indicator = item[0]
+    item_without_indicator = item[1:]
+    digits13 = indicator + company + item_without_indicator
+    if len(digits13) != 13:
         return None
-    return digits
+    return digits13 + _gs1_check_digit(digits13)
 
 
 def _gs1_check_digit(digits13: str) -> str:
