@@ -345,13 +345,13 @@ async def export_epcis(
                 return f"https://id.gs1.org/414/{value}"
             return epc_id(value, "sgln")
 
-        # Phase A: harvesting maps to CBV collecting (kept intentionally).
+        # GS1 US R2.0 Harvest KDE Mapping: creating a new class instance.
         BIZ_STEP_MAP = {
             "CREATION": "commissioning",
             "RECEIVING": "receiving",
             "SHIPPING": "shipping",
             "TRANSFORMATION": "commissioning",
-            "HARVESTING": "collecting",
+            "HARVESTING": "creating_class_instance",
             "COOLING": "storing",
             "INITIAL_PACKING": "packing",
             "FIRST_LAND_BASED_RECEIVING": "receiving",
@@ -471,6 +471,11 @@ async def export_epcis(
             "creationDate": datetime.now(timezone.utc).isoformat(),
             "epcisBody": {"eventList": epcis_events},
             "regengine:exportMetadata": {
+                "preview": True,
+                "previewNotice": (
+                    "EPCIS export is in Preview. "
+                    "Validate with your trading partner before relying on it for compliance."
+                ),
                 "eventsCount": len(epcis_events),
                 "skippedEventsCount": skipped_total,
                 "skippedEventsByReason": skipped_by_reason,
@@ -493,6 +498,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
         else:
@@ -508,6 +514,7 @@ async def export_epcis(
                     "Content-Disposition": f"attachment; filename={filename}",
                     "X-RegEngine-Events-Count": str(len(epcis_events)),
                     "X-RegEngine-Skipped-Events-Count": skip_header,
+                    "X-RegEngine-Preview": "true",
                 },
             )
 
@@ -569,7 +576,7 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
                 continue
             add(node, f"{{{key[: separator + 1]}}}{key[separator + 1 :]}", value)
 
-    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "storing", "packing"}
+    _CBV_BIZSTEPS = {"shipping", "receiving", "commissioning", "collecting", "creating_class_instance", "storing", "packing"}
     _CBV_DISPOSITIONS = {"in_transit", "in_progress"}
 
     def cbv_value(field, value):
