@@ -297,13 +297,10 @@ async def export_epcis(
                 # TransformationEvent for TRANSFORMATION CTEs
                 input_epc = epc_id(event.get("input_tlc"), "sgtin")
                 transformation_id = event.get("event_id")
-                valid_transformation_id = (
-                    isinstance(transformation_id, str)
-                    and transformation_id.startswith(("urn:", "https://"))
+                valid_transformation_id = isinstance(transformation_id, str) and transformation_id.startswith(
+                    ("urn:", "https://")
                 )
-                if not (input_epc and epc_urn) and not (
-                    valid_transformation_id and (input_epc or epc_urn)
-                ):
+                if not (input_epc and epc_urn) and not (valid_transformation_id and (input_epc or epc_urn)):
                     continue
                 epcis_event = {"type": "TransformationEvent", **common, "bizStep": BIZ_STEP_MAP[event_type]}
                 if input_epc:
@@ -317,7 +314,9 @@ async def export_epcis(
                 if not epc_urn or event_type not in BIZ_STEP_MAP:
                     continue
                 epcis_event = {
-                    "type": "ObjectEvent", **common, "epcList": [epc_urn],
+                    "type": "ObjectEvent",
+                    **common,
+                    "epcList": [epc_urn],
                     "action": "ADD" if event_type in ("CREATION", "RECEIVING") else "OBSERVE",
                     "bizStep": BIZ_STEP_MAP[event_type],
                     "disposition": "in_transit" if event_type == "SHIPPING" else "in_progress",
@@ -380,45 +379,53 @@ async def export_epcis(
 
 def _epcis_to_xml(epcis_doc: dict) -> str:
     """Serialize EPCIS 2.0 fields in the order required by the GS1 XSD."""
-    from xml.etree import ElementTree as ET
+    import defusedxml.ElementTree as ET
 
-    ET.register_namespace("epcis", "urn:epcglobal:epcis:xsd:2")
-    root = ET.Element(
-        "{urn:epcglobal:epcis:xsd:2}EPCISDocument",
-        {"schemaVersion": str(epcis_doc.get("schemaVersion", "2.0")),
-         "creationDate": str(epcis_doc.get("creationDate", ""))},
+    root = ET.fromstring('<epcis:EPCISDocument xmlns:epcis="urn:epcglobal:epcis:xsd:2"/>')
+    root.attrib.update(
+        {
+            "schemaVersion": str(epcis_doc.get("schemaVersion", "2.0")),
+            "creationDate": str(epcis_doc.get("creationDate", "")),
+        },
     )
-    event_list = ET.SubElement(ET.SubElement(root, "EPCISBody"), "EventList")
+
+    # defusedxml exposes parsing/serialization, not element constructors.
+    def sub_element(parent, name, attrib=None):
+        node = parent.makeelement(name, attrib or {})
+        parent.append(node)
+        return node
+
+    event_list = sub_element(sub_element(root, "EPCISBody"), "EventList")
 
     def add(parent, name, value):
         if value is not None:
-            ET.SubElement(parent, name).text = str(value)
+            sub_element(parent, name).text = str(value)
 
     def add_epcs(parent, event, key):
         if event.get(key):
-            node = ET.SubElement(parent, key)
+            node = sub_element(parent, key)
             for epc in event[key]:
                 add(node, "epc", epc)
 
     def add_quantities(parent, event, key):
         if event.get(key):
-            node = ET.SubElement(parent, key)
+            node = sub_element(parent, key)
             for item in event[key]:
-                quantity = ET.SubElement(node, "quantityElement")
+                quantity = sub_element(node, "quantityElement")
                 for field in ("epcClass", "quantity", "uom"):
                     add(quantity, field, item.get(field))
 
     def add_ilmd(parent, event):
         if not event.get("ilmd"):
             return
-        node = ET.SubElement(parent, "ilmd")
+        node = sub_element(parent, "ilmd")
         for key, value in event["ilmd"].items():
             if not isinstance(key, str) or not key.startswith(("https://", "http://", "urn:")):
                 continue
             separator = max(key.rfind("/"), key.rfind("#"), key.rfind(":"))
-            if separator < 0 or not key[separator + 1:]:
+            if separator < 0 or not key[separator + 1 :]:
                 continue
-            add(node, f"{{{key[:separator + 1]}}}{key[separator + 1:]}", value)
+            add(node, f"{{{key[: separator + 1]}}}{key[separator + 1 :]}", value)
 
     def add_common_tail(parent, event):
         for field in ("transformationID", "action", "bizStep", "disposition"):
@@ -431,22 +438,22 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
         for field in ("readPoint", "bizLocation"):
             identifier = (event.get(field) or {}).get("id")
             if identifier:
-                add(ET.SubElement(parent, field), "id", identifier)
+                add(sub_element(parent, field), "id", identifier)
         for field, member in (("sourceList", "source"), ("destinationList", "destination")):
             if event.get(field):
-                node = ET.SubElement(parent, field)
+                node = sub_element(parent, field)
                 for item in event[field]:
                     kind = item.get("type", "")
                     if kind in {"location", "possessing_party", "owning_party"}:
                         kind = f"https://ref.gs1.org/cbv/SDT-{kind}"
-                    ET.SubElement(node, member, {"type": kind}).text = str(item[member])
+                    sub_element(node, member, {"type": kind}).text = str(item[member])
         add_ilmd(parent, event)
 
     for event in epcis_doc.get("epcisBody", {}).get("eventList", []):
         kind = event.get("type")
         if kind not in {"ObjectEvent", "TransformationEvent"}:
             continue
-        node = ET.SubElement(event_list, kind)
+        node = sub_element(event_list, kind)
         for field in ("eventTime", "recordTime", "eventTimeZoneOffset", "eventID"):
             add(node, field, event.get(field))
         if kind == "ObjectEvent":
@@ -461,16 +468,16 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
             for field in ("readPoint", "bizLocation"):
                 identifier = (event.get(field) or {}).get("id")
                 if identifier:
-                    add(ET.SubElement(node, field), "id", identifier)
+                    add(sub_element(node, field), "id", identifier)
             add_quantities(node, event, "quantityList")
             for field, member in (("sourceList", "source"), ("destinationList", "destination")):
                 if event.get(field):
-                    container = ET.SubElement(node, field)
+                    container = sub_element(node, field)
                     for item in event[field]:
                         kind_uri = item.get("type", "")
                         if kind_uri in {"location", "possessing_party", "owning_party"}:
                             kind_uri = f"https://ref.gs1.org/cbv/SDT-{kind_uri}"
-                        ET.SubElement(container, member, {"type": kind_uri}).text = str(item[member])
+                        sub_element(container, member, {"type": kind_uri}).text = str(item[member])
             add_ilmd(node, event)
         else:
             add_epcs(node, event, "inputEPCList")
@@ -479,7 +486,7 @@ def _epcis_to_xml(epcis_doc: dict) -> str:
             add_quantities(node, event, "outputQuantityList")
             add_common_tail(node, event)
 
-    return ET.tostring(root, encoding="unicode", xml_declaration=True)
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
 
 @router.get("/export/trace/{tlc}")
