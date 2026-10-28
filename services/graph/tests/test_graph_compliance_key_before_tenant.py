@@ -198,19 +198,24 @@ def test_every_graph_route_checks_key_before_tenant():
     offenders: list[str] = []
     for route in routes:
         order = _resolution_order(route)
-        if require_api_key not in order or get_current_tenant_id not in order:
+        if get_current_tenant_id not in order:
             continue  # open route (health), metrics-key route, or key-only route
         checked.append(route.path)
-        if order.index(require_api_key) > order.index(get_current_tenant_id):
+        if require_api_key not in order:
+            # Graph routes are API-key only: a tenant-bound route with no key
+            # dependency has no principal to resolve the tenant from.
+            offenders.append(f"{sorted(route.methods)} {route.path}: no API-key dependency")
+        elif order.index(require_api_key) > order.index(get_current_tenant_id):
             offenders.append(f"{sorted(route.methods)} {route.path}")
 
     # The walk must reach the sub-routers, not just the operational routes in routes.py.
     for expected in (
         "/api/v1/fsma/compliance/export/fda-request",
         "/api/v1/fsma/recall/history",
+        "/api/v1/fsma/traceability/search/events",
         "/api/v1/labels/batch/init",
         "/api/v1/provisions/by-request",
     ):
         assert expected in checked, f"{expected} not reached from routes.router"
 
-    assert not offenders, "tenant resolution runs before API-key validation on:\n  " + "\n  ".join(offenders)
+    assert not offenders, "tenant-bound routes without a leading API-key check:\n  " + "\n  ".join(offenders)
