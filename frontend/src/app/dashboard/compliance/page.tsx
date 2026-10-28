@@ -321,6 +321,7 @@ export default function ComplianceDashboardPage() {
 
     const {
         data: workbenchSummary = null,
+        isError: readinessFailed,
         refetch: fetchWorkbenchSummary,
     } = useQuery({
         queryKey: ['inflow-workbench-readiness', tenantId],
@@ -330,7 +331,8 @@ export default function ComplianceDashboardPage() {
         retry: false,
     });
 
-    const error = scoreError;
+    // Score and workbench failures stay sectional so one outage cannot blank the page
+    // (SEL-616: readiness/summary 503 must not look like a full Compliance crash).
     const lastFetched = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
     // Ordered breakdown keys by weight (highest first)
@@ -381,12 +383,12 @@ export default function ComplianceDashboardPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {lastFetched && !error && (
+                        {lastFetched && !scoreError && (
                             <span className="text-label text-muted-foreground">
                                 Updated {lastFetched.toLocaleTimeString()}
                             </span>
                         )}
-                        {score && !error && (
+                        {score && !scoreError && (
                             <Button
                                 variant="ghost" size="sm"
                                 onClick={() => {
@@ -456,13 +458,74 @@ export default function ComplianceDashboardPage() {
                     </Card>
                 )}
 
-                {/* Error */}
-                {error && (
-                    <ErrorState message="We could not load this page." onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }} requestId={getErrorRequestId(error)} />
+                {/* Score error — sectional, not a full-page blank */}
+                {scoreError && (
+                    <ErrorState
+                        message="We could not load the compliance score."
+                        onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }}
+                        requestId={getErrorRequestId(scoreError)}
+                    />
+                )}
+
+                {/* Workbench-only strip when the score path is down so Import readiness still surfaces */}
+                {isLoggedIn && scoreError && !score && (
+                    <Card className="border-[var(--re-border-default)]">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">Import readiness</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {readinessFailed ? (
+                                <>
+                                    <p className="text-sm text-muted-foreground">
+                                        Import readiness is unavailable right now. Other dashboard sections may still work.
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-xs"
+                                        onClick={() => { void fetchWorkbenchSummary(); }}
+                                    >
+                                        Retry import readiness
+                                    </Button>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex items-end justify-between gap-3">
+                                        <div>
+                                            <div
+                                                className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
+                                            >
+                                                {workbenchSummary?.score ?? NO_DATA_YET}
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground mt-1">
+                                                {workbenchSummary?.label ?? 'No saved preflight run yet'}
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            variant="secondary"
+                                            className={`text-label ${
+                                                (workbenchSummary?.unresolved_fix_count ?? 0) > 0
+                                                    ? 'bg-re-warning-muted0/10 text-re-warning'
+                                                    : 'bg-re-brand-muted text-re-brand'
+                                            }`}
+                                        >
+                                            {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
+                                        </Badge>
+                                    </div>
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        <div className="flex items-center justify-between">
+                                            <span>Export eligible</span>
+                                            <span className="font-medium text-foreground">{workbenchSummary?.export_eligible ? 'Yes' : 'Not yet'}</span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
                 )}
 
                 {/* Score Content */}
-                {score && !loading && !error && (
+                {score && !loading && !scoreError && (
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
 
                         {/* Status Banner */}
@@ -512,40 +575,59 @@ export default function ComplianceDashboardPage() {
                                     <CardTitle className="text-base">Import readiness</CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
-                                    <div className="flex items-end justify-between gap-3">
-                                        <div>
-                                            <div
-                                                className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
-                                            >
-                                                {workbenchSummary?.score ?? NO_DATA_YET}
-                                            </div>
-                                            <p className="text-[11px] text-muted-foreground mt-1">
-                                                {workbenchSummary?.label ?? 'No saved preflight run yet'}
+                                    {readinessFailed ? (
+                                        <>
+                                            <p className="text-sm font-medium text-foreground">Couldn&apos;t load</p>
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Import readiness is unavailable right now. The rest of this dashboard can still be used.
                                             </p>
-                                        </div>
-                                        <Badge
-                                            variant="secondary"
-                                            className={`text-label ${
-                                                (workbenchSummary?.unresolved_fix_count ?? 0) > 0
-                                                    ? 'bg-re-warning-muted0/10 text-re-warning'
-                                                    : 'bg-re-brand-muted text-re-brand'
-                                            }`}
-                                        >
-                                            {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
-                                        </Badge>
-                                    </div>
-                                    <div className="space-y-2 text-[11px] text-muted-foreground">
-                                        <div className="flex items-center justify-between">
-                                            <span>Export eligible</span>
-                                            <span className="font-medium text-foreground">{workbenchSummary?.export_eligible ? 'Yes' : 'Not yet'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span>Latest run</span>
-                                            <span className="font-mono text-label text-foreground">
-                                                {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : 'none'}
-                                            </span>
-                                        </div>
-                                    </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 text-xs"
+                                                onClick={() => { void fetchWorkbenchSummary(); }}
+                                            >
+                                                Retry
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex items-end justify-between gap-3">
+                                                <div>
+                                                    <div
+                                                        className={`text-4xl font-bold tabular-nums ${workbenchSummary?.score != null ? scoreTextClass(workbenchSummary.score) : 'text-re-text-muted'}`}
+                                                    >
+                                                        {workbenchSummary?.score ?? NO_DATA_YET}
+                                                    </div>
+                                                    <p className="text-[11px] text-muted-foreground mt-1">
+                                                        {workbenchSummary?.label ?? 'No saved preflight run yet'}
+                                                    </p>
+                                                </div>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={`text-label ${
+                                                        (workbenchSummary?.unresolved_fix_count ?? 0) > 0
+                                                            ? 'bg-re-warning-muted0/10 text-re-warning'
+                                                            : 'bg-re-brand-muted text-re-brand'
+                                                    }`}
+                                                >
+                                                    {workbenchSummary?.unresolved_fix_count ?? 0} open fix{(workbenchSummary?.unresolved_fix_count ?? 0) === 1 ? '' : 'es'}
+                                                </Badge>
+                                            </div>
+                                            <div className="space-y-2 text-[11px] text-muted-foreground">
+                                                <div className="flex items-center justify-between">
+                                                    <span>Export eligible</span>
+                                                    <span className="font-medium text-foreground">{workbenchSummary?.export_eligible ? 'Yes' : 'Not yet'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <span>Latest run</span>
+                                                    <span className="font-mono text-label text-foreground">
+                                                        {workbenchSummary?.run_id ? workbenchSummary.run_id.slice(0, 16) : 'none'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </CardContent>
                             </Card>
 
@@ -756,8 +838,8 @@ export default function ComplianceDashboardPage() {
                     </motion.div>
                 )}
 
-                {/* Empty state - no score and not loading */}
-                {!score && !loading && !error && isLoggedIn && (
+                {/* Empty / unavailable score — still offer setup paths (SEL-616) */}
+                {!score && !loading && isLoggedIn && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}

@@ -223,9 +223,23 @@ describe('shared dashboard load errors', () => {
         const user = userEvent.setup();
         renderWithQuery(<CompliancePage />);
 
-        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load this page.');
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load the compliance score.');
+        // SEL-616: score failure must not blank Import readiness / setup paths
+        expect(await screen.findByText('Import readiness')).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Retry' }));
         await waitFor(() => expect(fetchComplianceScoreMock).toHaveBeenCalledTimes(2));
+    });
+
+    it('keeps Import readiness visible when score and readiness both fail (SEL-616)', async () => {
+        fetchComplianceScoreMock.mockRejectedValue(apiError(401, 'Unauthorized', crypto.randomUUID()));
+        fetchWorkbenchSummaryMock.mockRejectedValue(apiError(503, 'Service Unavailable', crypto.randomUUID()));
+        renderWithQuery(<CompliancePage />);
+
+        expect(await screen.findByRole('alert')).toHaveTextContent('We could not load the compliance score.');
+        expect(await screen.findByText('Import readiness')).toBeInTheDocument();
+        expect(screen.getByText(/Import readiness is unavailable right now/i)).toBeInTheDocument();
+        expect(screen.queryByText('We could not load this page.')).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Retry import readiness' })).toBeInTheDocument();
     });
 
     it('lets recall report retry a failed request in place', async () => {
