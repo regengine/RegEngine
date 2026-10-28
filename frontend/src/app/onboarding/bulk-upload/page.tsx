@@ -480,7 +480,7 @@ export default function BulkUploadPage() {
               {csvPreview.sampleRows.length > 0 && (
                 <div className="mb-4">
                   <p className="text-[11px] sm:text-xs font-bold uppercase tracking-widest text-[var(--re-text-disabled)] mb-2">
-                    Sample Data (first {csvPreview.sampleRows.length} rows)
+                    First {csvPreview.sampleRows.length} rows of your file
                   </p>
                   <div className="overflow-x-auto rounded-lg border border-[var(--re-surface-border)]">
                     <table className="w-full text-[11px] sm:text-xs">

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import { useAgentReviewDecision, useAgentReviewItems } from '@/hooks/use-agent-reviews';
+import { getErrorRequestId } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { cn } from '@/lib/utils';
@@ -636,7 +637,7 @@ export function AgentReviewDashboard() {
                                     <p className="text-ui text-re-text-tertiary">Loading agent reviews...</p>
                                 </div>
                             ) : query.error ? (
-                                <ErrorState message="We could not load this page." onRetry={() => query.refetch()} retrying={query.isFetching} className="m-4" />
+                                <ErrorState message="We could not load this page." onRetry={() => query.refetch()} retrying={query.isFetching} requestId={getErrorRequestId(query.error)} className="m-4" />
                             ) : sortedItems.length === 0 ? (
                                 <EmptyState
                                     bare

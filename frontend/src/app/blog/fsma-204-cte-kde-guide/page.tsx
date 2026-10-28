@@ -424,7 +424,7 @@ export default function CTEKDEGuidePage() {
 
           <Card variant="inset" padding="spacious" className="mb-8">
             <p className="text-re-text-secondary mb-4">
-              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS-oriented export workflows.
+              Ready to implement FSMA 204 traceability in your business? See how RegEngine handles CTE/KDE capture, validation, and EPCIS-oriented export workflows (Preview).
             </p>
             <div className="flex flex-col flex-wrap gap-3 sm:flex-row">
               <Button asChild size="lg">

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorState } from '@/components/ui/error-state';
 import { Spinner } from '@/components/ui/spinner';
 import { useReviewItems, useApproveReviewItem, useRejectReviewItem } from '@/hooks/use-review';
+import { getErrorRequestId } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth-context';
 
 type DecisionAction = 'approve' | 'reject';
@@ -61,7 +62,7 @@ export function CuratorReview() {
   }
 
   if (error) {
-    return <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isFetching} />;
+    return <ErrorState message="We could not load this page." onRetry={() => refetch()} retrying={isFetching} requestId={getErrorRequestId(error)} />;
   }
 
   if (sortedItems.length === 0) {

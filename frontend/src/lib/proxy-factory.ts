@@ -183,11 +183,18 @@ export function createJsonProxy(config: JsonProxyConfig): MethodHandlers {
                         targetUrl,
                         detail: data,
                     });
-                    return proxyError(`${config.serviceName} request failed`, response.status);
+                    return proxyError(`${config.serviceName} request failed`, response.status, {
+                        requestId: response.headers.get('x-request-id') ?? undefined,
+                    });
                 }
+                const clientHeaders = new Headers();
+                const requestId = response.headers.get('x-request-id');
+                if (requestId) clientHeaders.set('x-request-id', requestId);
+                const retryAfter = response.headers.get('retry-after');
+                if (retryAfter) clientHeaders.set('retry-after', retryAfter);
                 return NextResponse.json(
                     { error: detail ?? `${config.serviceName} request failed` },
-                    { status: response.status },
+                    { status: response.status, headers: clientHeaders },
                 );
             }
 
@@ -247,7 +254,9 @@ const DEFAULT_STREAM_RESPONSE_HEADERS = [
     'content-type',
     'content-disposition',
     'cache-control',
+    'retry-after',
     'x-fda-record-count',
+    'x-request-id',
 ];
 const AUTH_BROWSER_NONCE_COOKIE = 'regengine_auth_browser_nonce';
 const OPAQUE_SESSION_COOKIE = '__Host-regengine_session';
@@ -417,7 +426,9 @@ export function createStreamProxy(config: StreamProxyConfig): MethodHandlers {
                             targetUrl,
                             upstreamError: await readUpstreamErrorForLog(response),
                         });
-                        return proxyError(`${config.serviceName} request failed`, response.status);
+                        return proxyError(`${config.serviceName} request failed`, response.status, {
+                            requestId: response.headers.get('x-request-id') ?? undefined,
+                        });
                     }
 
                     const outgoing = new Headers();
