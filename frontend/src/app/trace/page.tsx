@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { PageContainer } from '@/components/layout/page-container';
 import { PageHeader } from '@/components/layout/page-header';
@@ -49,8 +50,11 @@ interface TraceResult {
 
 export default function TracePage() {
   const { hasTenantSession } = useAuth();
+  // A scanned label QR (/01/{gtin}/10/{lot}/21/{serial}) lands here with
+  // ?tlc= so the lot is already in the box.
+  const searchParams = useSearchParams();
 
-  const [tlcInput, setTlcInput] = useState('');
+  const [tlcInput, setTlcInput] = useState(searchParams.get('tlc') ?? '');
   const [isLoading, setIsLoading] = useState(false);
   const [traceResult, setTraceResult] = useState<TraceResult | null>(null);
   const [error, setError] = useState<string | null>(null);

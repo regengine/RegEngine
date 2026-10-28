@@ -11,6 +11,15 @@ vi.mock('@/lib/auth-context', () => ({
     useAuth: () => mockUseAuth(),
 }));
 
+// The global setup mock returns empty search params; this one lets a case
+// arrive the way a scanned label QR does, with ?tlc= set.
+const mockSearchParams = vi.hoisted(() => ({ query: '' }));
+vi.mock('next/navigation', () => ({
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
+    usePathname: () => '/trace',
+    useSearchParams: () => new URLSearchParams(mockSearchParams.query),
+}));
+
 vi.mock('@/lib/api-client', () => ({
     apiClient: {
         getSupplierFDAExportPreview: (...args: any[]) => getSupplierFDAExportPreviewMock(...args),
@@ -72,6 +81,7 @@ vi.mock('lucide-react', () => {
 describe('TracePage', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockSearchParams.query = '';
         getSupplierFDAExportPreviewMock.mockResolvedValue({
             total_count: 1,
             rows: [
@@ -107,6 +117,16 @@ describe('TracePage', () => {
                 'TLC-2026-SAL-0001',
             );
         });
+    });
+
+    it('prefills the lot from ?tlc= so a scanned label QR lands ready to trace', () => {
+        mockUseAuth.mockReturnValue({ hasTenantSession: true });
+        mockSearchParams.query = 'tlc=LOT-2024%2F001';
+
+        render(<TracePage />);
+
+        expect(screen.getByPlaceholderText(/enter tlc/i)).toHaveValue('LOT-2024/001');
+        expect(screen.getByRole('button', { name: 'Trace' })).toBeEnabled();
     });
 
     it('keeps trace actions disabled when no tenant session is available', async () => {

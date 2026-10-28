@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest';
+import { LABEL_FIELD_MAX_LENGTH, parseLabelLink, traceHrefForLot } from '@/lib/label-link';
+
+// GTIN-14 with a correct check digit (mod-10, weights 3/1 from the right).
+const VALID_GTIN = '00012345678905';
+const SERIAL = '000123456789012345'; // SSCC-18, what labels.py puts in AI 21
+
+describe('parseLabelLink', () => {
+    it('accepts the segments labels.py prints and reports a valid check digit', () => {
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2026-SAL-0001', serial: SERIAL })).toEqual({
+            gtin: VALID_GTIN,
+            lot: 'LOT-2026-SAL-0001',
+            serial: SERIAL,
+            gtinCheckDigitValid: true,
+        });
+    });
+
+    it('decodes the raw segment the page component receives', () => {
+        // What labels.py printed for lot "LOT-2024/001", as Next hands it to page.tsx.
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2024%2F001', serial: SERIAL })?.lot).toBe('LOT-2024/001');
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%25B', serial: SERIAL })?.lot).toBe('A%B');
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'A%20B', serial: SERIAL })?.lot).toBe('A B');
+    });
+
+    it('leaves an already-decoded segment alone, as generateMetadata receives it', () => {
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'LOT-2024/001', serial: SERIAL })?.lot).toBe('LOT-2024/001');
+    });
+
+    it('keeps a segment with a broken escape instead of throwing', () => {
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: '100%', serial: SERIAL })?.lot).toBe('100%');
+    });
+
+    it('reports a wrong check digit instead of rejecting the label', () => {
+        // labels.py only checks for 14 digits, so a real label can carry this.
+        const link = parseLabelLink({ gtin: '00012345678901', lot: 'L1', serial: SERIAL });
+        expect(link).not.toBeNull();
+        expect(link?.gtinCheckDigitValid).toBe(false);
+    });
+
+    it('rejects a GTIN that is not exactly 14 digits', () => {
+        expect(parseLabelLink({ gtin: '0001234567890', lot: 'L1', serial: SERIAL })).toBeNull();
+        expect(parseLabelLink({ gtin: '000123456789050', lot: 'L1', serial: SERIAL })).toBeNull();
+        expect(parseLabelLink({ gtin: '0001234567890X', lot: 'L1', serial: SERIAL })).toBeNull();
+        expect(parseLabelLink({ lot: 'L1', serial: SERIAL })).toBeNull();
+    });
+
+    it('rejects an empty or oversized lot or serial', () => {
+        const tooLong = 'x'.repeat(LABEL_FIELD_MAX_LENGTH + 1);
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: '', serial: SERIAL })).toBeNull();
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: tooLong, serial: SERIAL })).toBeNull();
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: '' })).toBeNull();
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'L1', serial: tooLong })).toBeNull();
+        expect(parseLabelLink({ gtin: VALID_GTIN, lot: 'x'.repeat(LABEL_FIELD_MAX_LENGTH), serial: SERIAL })).not.toBeNull();
+    });
+});
+
+describe('traceHrefForLot', () => {
+    it('encodes the lot so a slash survives the query string', () => {
+        expect(traceHrefForLot('LOT-2024/001')).toBe('/trace?tlc=LOT-2024%2F001');
+    });
+});
