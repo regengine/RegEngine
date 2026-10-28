@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -50,8 +51,7 @@ _VALID_FSMA_TLC = "00012345678901-LOT001"
 # 106-char ISA header (index 105 is the segment terminator the parser
 # sniffs). Shared by every envelope below; only ISA13 varies.
 _ISA_TEMPLATE = (
-    "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     "
-    "*260310*1200*U*00401*{isa13}*0*P*>~"
+    "ISA*00*          *00*          *ZZ*SENDERID       *ZZ*RECEIVERID     *260310*1200*U*00401*{isa13}*0*P*>~"
 )
 _GS_856 = "GS*SH*SENDERID*RECEIVERID*20260310*1200*1*X*004010~"
 
@@ -374,9 +374,7 @@ def test_2978_unmapped_unit_warns_and_fails_closed_on_document_route(
 # ---------------------------------------------------------------------------
 
 
-def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(client: TestClient, captured_payload: dict) -> None:
     """Repeated SN1 lines each become a CTE. Last-line-wins and summing
     both drop a lot from the recall record.
     """
@@ -417,9 +415,7 @@ def test_2974_multi_sn1_856_quantity_is_summed_not_last_wins(
         isa13="000029742",
     )
     zero_extracted = _extract_fields_for_set("856", _parse_x12_segments(raw_zero.decode("utf-8")))
-    assert zero_extracted["line_items"][0]["quantity"] is None, (
-        "#2974: SN1**0*CA must not fabricate a quantity of 1.0"
-    )
+    assert zero_extracted["line_items"][0]["quantity"] is None, "#2974: SN1**0*CA must not fabricate a quantity of 1.0"
 
 
 def test_blank_quantity_element_is_present_and_not_synthesized() -> None:
@@ -447,14 +443,16 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
 
     The ship-from, ASN, BOL and other text elements contain no names,
     with SN1 quantity blank. The document must be refused with 422
-    edi_non_positive_quantity and nothing persisted.
+    edi_non_positive_quantity and nothing persisted. The BSN date is
+    yesterday so the earlier event-date gate passes.
     """
+    ship_date = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y%m%d").encode()
     raw = (
         b"ISA*00*          *00*          *ZZ*               *ZZ*               "
         b"*      *    *U*00401*         *0*P*>~"
         b"GS*SH*****1*X*004010~"
         b"ST*856*1~"
-        b"BSN*00**~"
+        b"BSN*00**" + ship_date + b"~"
         b"HL*1**S~"
         b"N1*SF*~"
         b"SN1***CA~"
@@ -481,8 +479,7 @@ def test_856_blank_sn1_quantity_is_rejected(client: TestClient, captured_payload
 
 
 def test_sn1_lines_with_different_units_stay_separate_events(client: TestClient, captured_payload: dict) -> None:
-    """120 cases and 80 pounds are two CTEs. They are not 200 of either unit.
-    """
+    """120 cases and 80 pounds are two CTEs. They are not 200 of either unit."""
     raw = _interchange(
         [
             _856_set(
@@ -505,9 +502,7 @@ def test_sn1_lines_with_different_units_stay_separate_events(client: TestClient,
     ]
 
 
-def test_2976_legacy_856_endpoint_refuses_a_batched_interchange(
-    client: TestClient, captured_payload: dict
-) -> None:
+def test_2976_legacy_856_endpoint_refuses_a_batched_interchange(client: TestClient, captured_payload: dict) -> None:
     """The legacy single-ASN endpoint extracts from the flat segment list,
     so a batched interchange would merge every ST/SE pair into its one
     event. It must refuse and point the caller at ``/document``.
@@ -588,8 +583,7 @@ def test_2976_batched_interchange_never_half_lands(client: TestClient, captured_
 
 
 def test_sn1_equivalent_unit_codes_stay_on_their_own_lines():
-    """CA and CS both mean cases, and each SN1 still keeps its own quantity.
-    """
+    """CA and CS both mean cases, and each SN1 still keeps its own quantity."""
     from app.edi_ingestion.extractors import _extract_856_fields
     from app.edi_ingestion.parser import _parse_x12_segments
     from app.edi_ingestion.utils import _resolve_unit_code
@@ -629,9 +623,7 @@ def test_two_unmappable_unit_codes_stay_on_their_lines():
     assert [line["unit_of_measure"] for line in data["line_items"]] == ["QQ", "ZZ"]
 
 
-def test_scalar_overrides_are_refused_for_a_batched_interchange(
-    client: TestClient, captured_payload: dict
-):
+def test_scalar_overrides_are_refused_for_a_batched_interchange(client: TestClient, captured_payload: dict):
     """A scalar form override describes ONE shipment.
 
     Applying it across a batch would overwrite each transaction set's own
@@ -662,9 +654,7 @@ def test_scalar_overrides_are_refused_for_a_batched_interchange(
     assert "payload" not in captured_payload, "nothing may land when overrides are refused"
 
 
-def test_scalar_overrides_still_work_for_a_single_transaction_set(
-    client: TestClient, captured_payload: dict
-):
+def test_scalar_overrides_still_work_for_a_single_transaction_set(client: TestClient, captured_payload: dict):
     """The guard must not break the ordinary single-shipment override path."""
     raw = _interchange(
         [_856_set(control="0001", asn="ASN-SOLO", ship_from="Valley Fresh Farms", bol="BOL-SOLO")],

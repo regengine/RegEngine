@@ -29,7 +29,7 @@ A browser verifier and a downloadable Python bundle verifier let reviewers inspe
 | Tenant-scoped records and tamper-evident chains | [Tenant authority](../services/shared/tenant_context.py), [canonical persistence](../services/shared/canonical_persistence/writer.py), [canonical chain verification](../services/shared/canonical_persistence/verification.py), [admin audit integrity](../services/admin/app/audit_integrity.py). See [persistence cutover](persistence/dual-write-cutover.md). |
 | FDA-oriented exports and request-response packages | Release-enabled: [FDA export](../services/ingestion/app/fda_export/router.py), [request workflow](../services/ingestion/app/request_workflow_router.py), [auditor API](../services/ingestion/app/auditor_router.py). |
 | Readiness assessments and recall reporting | Release-enabled: [readiness](../services/ingestion/app/readiness_router.py), [recall reports](../services/ingestion/app/recall_report.py). |
-| Public proof and recall-drill endpoint | [Proof page](https://regengine.co/proof), [browser verifier](https://regengine.co/verify), [verifier source](../frontend/public/sdk/verify_chain.py). Synthetic verification artifacts; the recall-drill endpoint currently returns no drill data. |
+| Bundle verifier and recall-drill endpoint | [Browser verifier](https://regengine.co/verify), [verifier source](../frontend/public/sdk/verify_chain.py). The recall-drill endpoint currently returns no drill data. |
 | Supplier manifest remediation and correction links | Implemented in [remediation](../services/ingestion/app/remediation/) and the [buyer dashboard](../frontend/src/app/remediation/page.tsx); excluded from the production router allowlist. Notification delivery also requires recipient/provider configuration. |
 | EPCIS JSON-LD export and broader recall simulations | Implemented in [EPCIS export](../services/ingestion/app/epcis_export.py) and [simulations](../services/ingestion/app/recall_simulations.py); these routers are experimental and excluded from the production allowlist. Public sample EPCIS downloads are a separate proof surface. |
 | Inbound email CSV ingestion | [Postmark integration](../services/ingestion/app/email_ingest/); excluded from the production allowlist, with no self-service provisioning UI. See [rollout notes](engineering/EMAIL_INGESTION.md). |
@@ -48,7 +48,7 @@ A browser verifier and a downloadable Python bundle verifier let reviewers inspe
 
 ## Talking-track opener
 
-RegEngine turns supplier and ERP records into traceability evidence for food businesses. Import records, identify missing or inconsistent CTEs and KDEs, resolve issues, and assemble FDA-oriented exports with verifiable audit evidence. Inflow Workbench prepares the data; RegEngine stores and verifies the evidence. Inspect the synthetic examples at [regengine.co/proof](https://regengine.co/proof) and check a bundle at [regengine.co/verify](https://regengine.co/verify).
+RegEngine turns supplier and ERP records into traceability evidence for food businesses. Import records, identify missing or inconsistent CTEs and KDEs, resolve issues, and assemble FDA-oriented exports with verifiable audit evidence. Inflow Workbench prepares the data; RegEngine stores and verifies the evidence. Check a bundle at [regengine.co/verify](https://regengine.co/verify).
 
 ## Maintenance rule
 

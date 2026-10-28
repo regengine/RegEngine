@@ -20,7 +20,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { getServiceURL } from '@/lib/api-config';
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
-import { apiError } from '@/lib/api-error';
+import { apiError, requestIdFromResponse } from '@/lib/api-error';
 
 type ServiceName = 'ingestion' | 'admin' | 'compliance' | 'graph';
 
@@ -46,7 +46,7 @@ async function authFetch<T>(
     if (!res.ok) {
         // Keep the status machine-readable so callers can tell 401 (session
         // expired, redirect to login) from 403 (forbidden) without parsing text.
-        throw apiError(res.status, res.statusText);
+        throw apiError(res.status, res.statusText, requestIdFromResponse(res));
     }
 
     return res.json();
