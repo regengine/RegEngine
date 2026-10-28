@@ -6,9 +6,10 @@ on:
   # the four rollouts between 2026-07-23 and 2026-07-29 (CI + CLI paths) all
   # passed /readiness on the first attempt, and per-container memory sits at
   # ~1.3 GB against a 24 GB replica limit. The wait-for-ci job below still
-  # blocks any SHA without a green Backend CI Status Gate, and the
-  # Concurrency preserves the in-flight rollout and keeps only the newest
-  # pending deploy, collapsing push storms without cancelling railway up.
+  # blocks any SHA without a green Backend CI Status Gate. Railway rollouts
+  # are serialized at job level while CI waits run in parallel. Concurrency
+  # preserves the in-flight rollout and keeps only the newest pending deploy,
+  # collapsing push storms without cancelling railway up.
   push:
     branches: ["main"]
     # Deploy only on backend-relevant changes. This list MUST stay a subset
@@ -35,10 +36,6 @@ on:
 permissions:
   checks: read
   contents: read
-
-concurrency:
-  group: deploy-main
-  cancel-in-progress: false
 
 jobs:
   # Gate: manual deploys must wait for a green CI Status Gate check on the
@@ -80,6 +77,9 @@ jobs:
 
   deploy:
     name: Deploy RegEngine Service
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
     needs: [wait-for-ci]
     runs-on: ubuntu-latest
     timeout-minutes: 30
