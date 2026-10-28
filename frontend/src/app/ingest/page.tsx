@@ -32,6 +32,7 @@ import {
   parseEpcisJson,
   normalizeEpcisIngestResult,
   epcisErrorMessage,
+  epcisErrorEventMessages,
   type ParsedEpcisJson,
 } from '@/lib/epcis-upload';
 import { notifyDashboardRefresh } from '@/hooks/use-dashboard-refresh';
@@ -122,6 +123,9 @@ export default function IngestPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string>('queued');
   const [statusError, setStatusError] = useState<string | null>(null);
+  // URL-tab error for a failed API-key save; URL ingest errors otherwise come
+  // from ingestMutation, which has no setter.
+  const [urlError, setUrlError] = useState<string | null>(null);
   // Dashboard "No data yet" tiles deep-link to /ingest?tab=file (CSV upload).
   const [activeTab, setActiveTab] = useState<string>(() => {
     const tab = searchParams.get('tab');
@@ -133,6 +137,7 @@ export default function IngestPage() {
   const [epcisFile, setEpcisFile] = useState<File | null>(null);
   const [epcisResult, setEpcisResult] = useState<NormalizedEpcisResult | null>(null);
   const [epcisError, setEpcisError] = useState<string | null>(null);
+  const [epcisErrorEvents, setEpcisErrorEvents] = useState<string[]>([]);
   const [epcisValidation, setEpcisValidation] = useState<{
     checked: number;
     valid: number;
@@ -171,6 +176,7 @@ export default function IngestPage() {
       setEpcisFile(e.target.files[0]);
       setEpcisResult(null);
       setEpcisError(null);
+      setEpcisErrorEvents([]);
       setEpcisValidation(null);
     }
   };
@@ -210,6 +216,26 @@ export default function IngestPage() {
   // browser proxy reads it from the cookie, then clear prior result state.
   // Returns false when the caller should stop without sending any request.
   const prepareSubmit = async (): Promise<boolean> => {
+    // Clear the previous upload's results and errors first, so a failed
+    // API-key save below never leaves stale error lines on screen.
+    setJobId(null);
+    setJobStatus('queued');
+    setStatusError(null);
+    setCsvResult(null);
+    setCsvError(null);
+    setCteSuggestion(null);
+    setErrorColumnSuggestions([]);
+    setEpcisResult(null);
+    setEpcisError(null);
+    setEpcisErrorEvents([]);
+    setEpcisValidation(null);
+    setUrlError(null);
+    ingestMutation.reset();
+    ingestFileMutation.reset();
+    ingestEpcisEventMutation.reset();
+    ingestEpcisBatchMutation.reset();
+    ingestEpcisXmlMutation.reset();
+    validateEpcisMutation.reset();
     // Store the API key for future use
     if (!isAuthenticated && apiKey !== storedApiKey) {
       // The browser proxy reads the cookie written by setApiKey and ignores
@@ -221,20 +247,10 @@ export default function IngestPage() {
         const message = error instanceof Error ? error.message : 'Unable to save API key';
         if (activeTab === 'file') setCsvError(message);
         else if (activeTab === 'epcis') setEpcisError(message);
-        else setStatusError(message);
+        else setUrlError(message);
         return false;
       }
     }
-    setJobId(null);
-    setJobStatus('queued');
-    setStatusError(null);
-    setCsvResult(null);
-    setCsvError(null);
-    setCteSuggestion(null);
-    setErrorColumnSuggestions([]);
-    setEpcisResult(null);
-    setEpcisError(null);
-    setEpcisValidation(null);
     return true;
   };
 
@@ -308,6 +324,7 @@ export default function IngestPage() {
       notifyDashboardRefresh();
     } catch (error) {
       setEpcisError(epcisErrorMessage(error));
+      setEpcisErrorEvents(epcisErrorEventMessages(error));
     } finally {
       submitInFlightRef.current = false;
       setIsSubmitting(false);
@@ -818,14 +835,17 @@ export default function IngestPage() {
                     </Callout>
                   )}
 
-                  {((activeTab === 'url' && ingestMutation.isError) || (activeTab === 'file' && csvError) || (activeTab === 'epcis' && epcisError)) && (
+                  {((activeTab === 'url' && (urlError || ingestMutation.isError)) || (activeTab === 'file' && csvError) || (activeTab === 'epcis' && epcisError)) && (
                     <Callout tone="danger" role="alert" className="mt-4">
                       <h4 className="font-medium text-re-text-primary">
                         Ingestion Failed
                       </h4>
                       <p className="mt-1">
-                        {(activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : ingestMutation.error?.message) || 'An error occurred during ingestion'}
+                        {(activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : urlError || ingestMutation.error?.message) || 'An error occurred during ingestion'}
                       </p>
+                      {activeTab === 'epcis' && epcisErrorEvents.map((message, index) => (
+                        <p key={index} className="mt-2">{message}</p>
+                      ))}
                       {activeTab === 'file' && (
                         <ColumnSuggestionList suggestions={errorColumnSuggestions} />
                       )}
@@ -878,7 +898,9 @@ export default function IngestPage() {
                         setEpcisFile(null);
                         setEpcisResult(null);
                         setEpcisError(null);
+                        setEpcisErrorEvents([]);
                         setEpcisValidation(null);
+                        setUrlError(null);
                         setJobId(null);
                         setJobStatus('queued');
                         ingestMutation.reset();
