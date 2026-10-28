@@ -116,12 +116,14 @@ def is_location_description_complete(
     address: Optional[str] = None,
     gln: Optional[str] = None,
 ) -> bool:
-    """Check location completeness under 21 CFR 1.1310, not GLN validity."""
+    """Require name, phone and address, or a structurally valid GS1 GLN (21 CFR 1.1310)."""
 
     def present(value: Optional[str]) -> bool:
         return isinstance(value, str) and bool(value.strip())
 
-    return present(gln) or all(present(value) for value in (name, phone, address))
+    return (present(gln) and len(gln) == 13 and gln.isascii() and gln.isdigit() and validate_gln(gln).is_valid) or all(
+        present(value) for value in (name, phone, address)
+    )
 
 
 def validate_gln(gln: str) -> ValidationResult:

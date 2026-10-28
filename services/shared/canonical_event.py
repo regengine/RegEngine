@@ -772,6 +772,8 @@ def normalize_webhook_event(
             "unit_of_measure": event.unit_of_measure,
             "location_gln": event.location_gln,
             "location_name": event.location_name,
+            "location_phone": event.location_phone,
+            "location_address": event.location_address,
             "timestamp": event.timestamp,
             "kdes": event.kdes,
         }
@@ -781,6 +783,10 @@ def normalize_webhook_event(
     # Extract facility references from KDEs
     kdes = dict(event.kdes) if event.kdes else {}
     kdes.setdefault("ingest_source", source)
+    for field in ("location_phone", "location_address"):
+        value = getattr(event, field, None)
+        if isinstance(value, str) and value.strip():
+            kdes.setdefault(field, value)
 
     # Promote input_traceability_lot_codes into kdes so _create_transformation_links()
     # can find them under the expected "input_lot_codes" key.  The webhook model keeps
@@ -1038,8 +1044,7 @@ def _resolve_bizstep_to_cte_type(biz_step: Any) -> CTEType:
     raw = "" if biz_step is None else str(biz_step).strip()
     if not raw:
         raise UnmappedBizStepError(
-            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. "
-            "Supply a CBV or FSMA bizStep URI. (#2815)"
+            "EPCIS event has no bizStep — cannot derive an FSMA 204 CTE type. Supply a CBV or FSMA bizStep URI. (#2815)"
         )
 
     lowered = raw.lower()

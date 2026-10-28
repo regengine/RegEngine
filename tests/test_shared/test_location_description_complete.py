@@ -14,7 +14,7 @@ VALUES = (None, "", " ", "x")
 
 @pytest.mark.parametrize("name,phone,address,gln", product(VALUES, repeat=4))
 def test_completeness_presence_permutations(name, phone, address, gln):
-    expected = gln == "x" or all(value == "x" for value in (name, phone, address))
+    expected = all(value == "x" for value in (name, phone, address))
     assert is_location_description_complete(name=name, phone=phone, address=address, gln=gln) is expected
 
 
@@ -50,11 +50,8 @@ def test_webhook_description_presence(name, phone, address, prefix):
 @pytest.mark.parametrize("value", VALUES)
 def test_webhook_kde_gln_presence(key, value):
     kwargs = event_kwargs() | {"kdes": {key: value}}
-    if value == "x":
+    with pytest.raises(ValueError, match=r"21 CFR 1\.1310"):
         IngestEvent(**kwargs)
-    else:
-        with pytest.raises(ValueError, match=r"21 CFR 1\.1310"):
-            IngestEvent(**kwargs)
 
 
 def test_webhook_top_level_and_kde_description():
@@ -81,3 +78,54 @@ def test_cannot_combine_different_locations():
 def test_location_schema_phone_is_optional(model):
     assert not model.model_fields["phone"].is_required()
     assert model(phone="x").phone == "x"
+
+
+def test_canonical_preserves_top_level_location_description():
+    from unittest.mock import patch
+
+    from shared.canonical_event import normalize_webhook_event
+
+    event = IngestEvent(
+        **(
+            event_kwargs()
+            | {
+                "cte_type": WebhookCTEType.SHIPPING,
+                "location_name": "x",
+                "location_phone": "x",
+                "location_address": "x",
+            }
+        )
+    )
+    # Capture normalization without creating tenant/event IDs or persisted records.
+    with patch("shared.canonical_event.TraceabilityEvent") as model:
+        normalize_webhook_event(event, source="x", tenant_id=None)
+    canonical = model.call_args.kwargs
+    for field in ("location_phone", "location_address"):
+        assert canonical["raw_payload"][field] == getattr(event, field)
+        assert canonical["kdes"][field] == getattr(event, field)
+    assert event.kdes == {}
+
+
+def test_canonical_location_description_preserves_existing_kdes():
+    from unittest.mock import patch
+
+    from shared.canonical_event import normalize_webhook_event
+
+    event = IngestEvent(
+        **(
+            event_kwargs()
+            | {
+                "cte_type": WebhookCTEType.SHIPPING,
+                "location_name": "x",
+                "location_phone": "x",
+                "location_address": "x",
+                "kdes": {"location_phone": " ", "location_address": " "},
+            }
+        )
+    )
+    # Capture normalization without creating tenant/event IDs or persisted records.
+    with patch("shared.canonical_event.TraceabilityEvent") as model:
+        normalize_webhook_event(event, source="x", tenant_id=None)
+    canonical = model.call_args.kwargs
+    assert canonical["kdes"]["location_phone"] == " "
+    assert canonical["kdes"]["location_address"] == " "

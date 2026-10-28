@@ -722,6 +722,8 @@ async def ingest_edi_856(
                 product_description=product_name,
                 quantity=resolved_quantity,
                 unit_of_measure=resolved_unit,
+                # EDI supplies name and GLN only; incomplete locations without a valid
+                # GLN fail IngestEvent validation by design.
                 location_gln=ship_from_gln,
                 location_name=ship_from_name,
                 timestamp=timestamp,
@@ -1013,6 +1015,8 @@ def _build_ingest_event_for_set(
         product_description=product_name,
         quantity=resolved_quantity,
         unit_of_measure=resolved_unit,
+        # EDI supplies name and GLN only; incomplete locations without a valid
+        # GLN fail IngestEvent validation by design.
         location_gln=location_gln,
         location_name=location_name,
         timestamp=timestamp,
