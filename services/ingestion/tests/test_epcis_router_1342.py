@@ -310,19 +310,19 @@ class TestExportEpcis:
 
         resp = client.get("/api/v1/epcis/export")
         assert resp.status_code == 200
-        meta = resp.json()["metadata"]
-        assert meta["event_count"] == 1
-        assert meta["limit"] == persistence_mod.EXPORT_EVENT_LIMIT == 2000
-        assert meta["truncated"] is True
-        assert meta["ordering"] == "event_timestamp desc"
+        meta = resp.json()["regengine:metadata"]
+        assert meta["regengine:event_count"] == 1
+        assert meta["regengine:limit"] == persistence_mod.EXPORT_EVENT_LIMIT == 2000
+        assert meta["regengine:truncated"] is True
+        assert meta["regengine:ordering"] == "event_timestamp desc"
 
     def test_db_path_not_truncated_when_under_cap(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(router_mod, "_list_events_from_db_detailed", lambda *a, **kw: _page([{"type": "ObjectEvent"}]))
         monkeypatch.setattr(router_mod, "_allow_in_memory_fallback", lambda: False)
 
-        meta = client.get("/api/v1/epcis/export").json()["metadata"]
-        assert meta["truncated"] is False
-        assert meta["limit"] == 2000
+        meta = client.get("/api/v1/epcis/export").json()["regengine:metadata"]
+        assert meta["regengine:truncated"] is False
+        assert meta["regengine:limit"] == 2000
 
     def test_fallback_path_reports_no_cap(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """The in-memory fallback is uncapped, so the response must not claim a limit."""
@@ -334,10 +334,10 @@ class TestExportEpcis:
             lambda t: {"k": {"normalized_cte": {}, "epcis_document": {"type": "ObjectEvent"}}},
         )
 
-        meta = client.get("/api/v1/epcis/export").json()["metadata"]
-        assert meta["event_count"] == 1
-        assert meta["limit"] is None
-        assert meta["truncated"] is False
+        meta = client.get("/api/v1/epcis/export").json()["regengine:metadata"]
+        assert meta["regengine:event_count"] == 1
+        assert meta["regengine:limit"] is None
+        assert meta["regengine:truncated"] is False
 
     def test_db_error_without_fallback_returns_503(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Line 225: DB error + fallback disabled → 503."""
