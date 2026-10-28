@@ -48,7 +48,13 @@ from ...exporters import (
 from ...fsma_utils import find_gaps, find_orphaned_lots, trace_backward, trace_forward
 from ...neo4j_utils import Neo4jClient
 
-router = APIRouter(tags=["Compliance"])
+# Validate the API key before any endpoint parameter. The handlers below declare
+# ``Depends(get_current_tenant_id)`` ahead of ``Depends(require_api_key)``, and FastAPI
+# resolves endpoint dependencies in declaration order, so the tenant lookup ran first,
+# found no principal on ``request.state`` (#2524 fallback) and returned 401 before the
+# key was checked. Router-level dependencies resolve before endpoint parameters, and
+# the per-request dependency cache means the key is still validated exactly once.
+router = APIRouter(tags=["Compliance"], dependencies=[Depends(require_api_key)])
 logger = structlog.get_logger("fsma-compliance")
 
 
