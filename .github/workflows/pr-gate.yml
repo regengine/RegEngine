@@ -42,12 +42,14 @@
 name: PR Gate
 
 on:
+  merge_group:
+    types: [checks_requested]
   pull_request:
     branches: [main]
 
 concurrency:
-  group: pr-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: pr-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions: {}
 
@@ -67,8 +69,8 @@ jobs:
       - name: Detect backend-relevant changes
         id: detect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import os, subprocess
@@ -110,7 +112,7 @@ jobs:
         if: steps.detect.outputs.changed == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CHECK_NAME: "Backend CI Status Gate"
         with:
           github-token: ${{ github.token }}
@@ -271,12 +273,13 @@ jobs:
       actions: read
     name: "PR Gate: Frontend"
     runs-on: ubuntu-latest
-    # Short bound: when the runner queue is backed up the Status Gate may not
+    # Short PR bound: when the runner queue is backed up the Status Gate may not
     # exist yet. pr-gate-frontend-rerun.yml re-runs this job when Frontend
     # CI/CD completes, so a timeout here is recovered automatically.
-    timeout-minutes: 15
+    # Merge groups cannot use the PR-only rerun helper, so wait for real CI.
+    timeout-minutes: ${{ github.event_name == 'merge_group' && 150 || 15 }}
     concurrency:
-      group: pr-gate-frontend-${{ github.event.pull_request.number }}
+      group: pr-gate-frontend-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
@@ -285,8 +288,8 @@ jobs:
       - name: Detect frontend-relevant changes
         id: detect
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import os, subprocess
@@ -334,20 +337,22 @@ jobs:
         if: steps.detect.outputs.changed == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           CHECK_NAME: "Frontend CI Status Gate"
         with:
           github-token: ${{ github.token }}
           # "Frontend CI Status Gate" is created only after earlier frontend
           # jobs finish. A gate that is missing or still queued is pending, not
-          # failed: we poll up to 12 minutes, then fail with an explicit
+          # failed: PRs poll up to 12 minutes (merge groups: 140), then fail with an explicit
           # "still pending" message. pr-gate-frontend-rerun.yml re-runs this job
           # once Frontend CI/CD completes, which then mirrors the real result.
           script: |
             const { owner, repo } = context.repo;
             const sha = process.env.HEAD_SHA;
             const CHECK_NAME = process.env.CHECK_NAME;
-            const deadline = Date.now() + 12 * 60 * 1000;
+            // Merge groups have no PR metadata for the rerun helper.
+            const waitMinutes = context.eventName === 'merge_group' ? 140 : 12;
+            const deadline = Date.now() + waitMinutes * 60 * 1000;
             const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
             const callWithRetry = async (fn) => {
@@ -466,9 +471,8 @@ jobs:
             }
 
             core.setFailed(
-              `${CHECK_NAME} is still pending (not created yet or queued) after 12 minutes; ` +
-              `this is a CI queue delay, not a frontend failure. This job is re-run ` +
-              `automatically when Frontend CI/CD completes (pr-gate-frontend-rerun.yml).`
+              `${CHECK_NAME} is still pending (not created yet or queued) after ${waitMinutes} minutes; ` +
+              `inspect the Frontend CI/CD run for this SHA.`
             );
       - name: No frontend-relevant changes
         if: steps.detect.outputs.changed != 'true'
@@ -522,7 +526,7 @@ jobs:
           gitleaks version
       - name: Scan PR commits with gitleaks
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: |
           gitleaks detect \
             --source . \
@@ -570,6 +574,7 @@ jobs:
 
   # Shared PR file detection. Required gate jobs above remain unconditional.
   changes:
+    if: github.event_name == 'pull_request'
     name: "PR Gate: Path Detection"
     runs-on: ubuntu-latest
     permissions:
@@ -602,6 +607,7 @@ jobs:
   # Jobs migrated from PR Quality Gate.
   # ── PR Size Check ───────────────────────────────────────
   pr-size:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -643,6 +649,7 @@ jobs:
   # ── Conventional Commits ────────────────────────────────
 
   commit-lint:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -692,6 +699,7 @@ jobs:
   # ── Copy Lint: Ban A-F Grade / Verdict UIs in /tools ────
 
   copy-lint-tools-grade-verdicts:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -733,6 +741,7 @@ jobs:
   # ── Label PR ────────────────────────────────────────────
 
   label:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -761,6 +770,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   supabase-patterns:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -821,6 +831,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   source-hygiene:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -885,6 +896,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   audit-trail:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -986,6 +998,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   sql-safety:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -1019,6 +1032,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   tenant-isolation:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read
@@ -1093,6 +1107,7 @@ jobs:
   # ──────────────────────────────────────────────
 
   react-patterns:
+    if: github.event_name == 'pull_request'
     needs: changes
     permissions:
       contents: read

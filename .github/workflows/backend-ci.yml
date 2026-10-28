@@ -1,6 +1,8 @@
 name: Backend Services CI/CD
 
 on:
+  merge_group:
+    types: [checks_requested]
   # Nightly run against main. The push/pull_request triggers below are
   # path-filtered, so a stretch of docs- or frontend-only merges leaves the
   # backend gauntlet unexercised — that let seven gates rot silently on main
@@ -72,6 +74,20 @@ permissions:
   contents: read
 
 jobs:
+  # Compile without dependencies so syntax errors fail before image startup.
+  compile-check:
+    name: Python compile check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v6
+      - name: Setup Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Compile backend Python sources
+        run: python -m compileall -q -j 0 -x '(^|/)(tests|node_modules)(/|$)' server services alembic plugins/fsma scripts
+
   # ── Dependency Lock Freshness ────────────────────────────
   dependency-lock:
     name: Dependency Lock Freshness
@@ -1486,11 +1502,12 @@ jobs:
     # jobs that were aborted mid-flight. `!cancelled()` does not relax the
     # script below: every dependency still has to be success.
     if: always() && !cancelled()
-    needs: [dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
+    needs: [compile-check, dependency-lock, test, lint, lint-shared, lint-repo-roots, ingestion-full-suite, repo-root-suite, seeded-migration-rehearsal, live-db-suite, docker-build, security, rls-fallback-check, alembic-revision-check, dep-version-check, tenant-id-uuid-check]
     runs-on: ubuntu-latest
     steps:
       - name: Check results
         run: |
+          echo "Python compile:    ${{ needs.compile-check.result }}"
           echo "Dependency lock:   ${{ needs.dependency-lock.result }}"
           echo "Test:              ${{ needs.test.result }}"
           echo "Lint:              ${{ needs.lint.result }}"
@@ -1510,7 +1527,8 @@ jobs:
           # have caught PR #1482's NLP NameError class of bugs if this
           # gate had been enforcing. Promoting lint to a hard gate so
           # the next occurrence trips on PR open rather than in prod.
-          if [[ "${{ needs.dependency-lock.result }}" != "success" \
+          if [[ "${{ needs.compile-check.result }}" != "success" \
+             || "${{ needs.dependency-lock.result }}" != "success" \
              || "${{ needs.test.result }}" != "success" \
              || "${{ needs.lint.result }}" != "success" \
              || "${{ needs.lint-shared.result }}" != "success" \

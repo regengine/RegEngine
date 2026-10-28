@@ -7,7 +7,8 @@ on:
   # passed /readiness on the first attempt, and per-container memory sits at
   # ~1.3 GB against a 24 GB replica limit. The wait-for-ci job below still
   # blocks any SHA without a green Backend CI Status Gate, and the
-  # cancel-in-progress concurrency group collapses push storms.
+  # Concurrency preserves the in-flight rollout and keeps only the newest
+  # pending deploy, collapsing push storms without cancelling railway up.
   push:
     branches: ["main"]
     # Deploy only on backend-relevant changes. This list MUST stay a subset
@@ -37,7 +38,7 @@ permissions:
 
 concurrency:
   group: deploy-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Gate: manual deploys must wait for a green CI Status Gate check on the
