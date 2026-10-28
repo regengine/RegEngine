@@ -290,8 +290,8 @@ BEGIN
         REVOKE ALL ON public.partner_file_deletion_log FROM authenticated;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
-        GRANT SELECT, INSERT, UPDATE ON public.partner_files TO regengine;
-        GRANT SELECT, INSERT, UPDATE ON public.partner_file_derived TO regengine;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_files TO regengine;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_file_derived TO regengine;
         -- Append-only audit: INSERT + SELECT only. Never UPDATE/DELETE.
         GRANT SELECT, INSERT ON public.partner_file_deletion_log TO regengine;
         REVOKE UPDATE, DELETE ON public.partner_file_deletion_log FROM regengine;
@@ -358,6 +358,25 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Retention hard-delete (cleanup_deleted_records_job) needs DELETE on the
+    # two sweep targets. Revoke that privilege before DROP so a partial
+    # downgrade cannot leave a dangling DELETE grant if DROP is interrupted.
+    # partner_file_deletion_log never received DELETE (append-only).
+    op.execute(
+        """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
+        IF to_regclass('public.partner_files') IS NOT NULL THEN
+            REVOKE DELETE ON TABLE public.partner_files FROM regengine;
+        END IF;
+        IF to_regclass('public.partner_file_derived') IS NOT NULL THEN
+            REVOKE DELETE ON TABLE public.partner_file_derived FROM regengine;
+        END IF;
+    END IF;
+END $$;
+"""
+    )
 
     op.execute(
         """

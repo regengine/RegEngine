@@ -30,18 +30,11 @@ from sqlalchemy import create_engine, text
 from tests.migrations.scratch_db import scratch_database_engine
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MIGRATION_PATH = (
-    REPO_ROOT
-    / "alembic"
-    / "versions"
-    / "20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py"
-)
+MIGRATION_PATH = REPO_ROOT / "alembic" / "versions" / "20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py"
 
 
 def _load_migration():
-    spec = importlib.util.spec_from_file_location(
-        f"v138_partner_{uuid4().hex}", MIGRATION_PATH
-    )
+    spec = importlib.util.spec_from_file_location(f"v138_partner_{uuid4().hex}", MIGRATION_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -70,11 +63,7 @@ def test_no_runtime_semicolon_splitter() -> None:
     assert "def _statements" not in src
     assert "_UPGRADE_STATEMENTS" in src
     tree = ast.parse(src)
-    names = {
-        node.name
-        for node in tree.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    names = {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
     assert "upgrade" in names and "downgrade" in names
     assert "_statements" not in names
 
@@ -85,11 +74,7 @@ def test_commented_semicolon_and_dollar_body_are_single_statements() -> None:
     # Header comment with an intentional semicolon survives inside a statement.
     assert any("trigger-maintained; UTC" in s for s in stmts)
     # Function body is one statement containing the dollar-quoted block.
-    fn = [
-        s
-        for s in stmts
-        if "CREATE OR REPLACE FUNCTION public.partner_files_set_delete_after" in s
-    ]
+    fn = [s for s in stmts if "CREATE OR REPLACE FUNCTION public.partner_files_set_delete_after" in s]
     assert len(fn) == 1
     assert "AS $$" in fn[0]
     assert "interval '30 days'" in fn[0]
@@ -268,13 +253,14 @@ def test_delete_after_recomputed_on_direct_update(pg_engine, monkeypatch) -> Non
         ).scalar_one()
         assert cleared is None
 
+
 def test_runtime_grant_includes_storage_url_insert() -> None:
     """v138 must GRANT INSERT (storage_url) and inventory must list it.
 
     Structural only — no live DB / no partner payloads.
     """
-    from pathlib import Path
     import importlib.util
+    from pathlib import Path
 
     alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py")
     text = alembic.read_text(encoding="utf-8")
@@ -290,3 +276,47 @@ def test_runtime_grant_includes_storage_url_insert() -> None:
     assert "storage_url" in cols
     assert "created_at" not in cols
 
+
+def test_runtime_grant_includes_partner_files_delete_for_retention_sweep() -> None:
+    """v138 + cutover inventory must grant DELETE on the two sweep targets.
+
+    cleanup_deleted_records_job hard-deletes expired partner_files /
+    partner_file_derived rows as the regengine role. Without DELETE the sweep
+    fails on privileges and retries forever (Claude FAIL on #3729).
+    partner_file_deletion_log stays append-only (no DELETE).
+    Structural only — no live DB / no partner payloads.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py")
+    text = alembic.read_text(encoding="utf-8")
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_files TO regengine" in text
+    assert "GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_file_derived TO regengine" in text
+    assert "GRANT SELECT, INSERT ON public.partner_file_deletion_log TO regengine" in text
+    assert "REVOKE UPDATE, DELETE ON public.partner_file_deletion_log FROM regengine" in text
+    assert "REVOKE DELETE ON TABLE public.partner_files FROM regengine" in text
+    assert "REVOKE DELETE ON TABLE public.partner_file_derived FROM regengine" in text
+
+    inv_path = Path("alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py")
+    spec = importlib.util.spec_from_file_location("v111_grants_partner_delete", inv_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    assert mod.REGENGINE_TABLE_GRANTS["public.partner_files"] == (
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+    )
+    assert mod.REGENGINE_TABLE_GRANTS["public.partner_file_derived"] == (
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+    )
+    assert mod.REGENGINE_TABLE_GRANTS["public.partner_file_deletion_log"] == (
+        "SELECT",
+        "INSERT",
+    )
+    assert "DELETE" not in mod.REGENGINE_TABLE_GRANTS["public.partner_file_deletion_log"]

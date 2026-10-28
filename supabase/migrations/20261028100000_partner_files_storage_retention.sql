@@ -222,8 +222,8 @@ BEGIN
         REVOKE ALL ON public.partner_file_deletion_log FROM authenticated;
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine') THEN
-        GRANT SELECT, INSERT, UPDATE ON public.partner_files TO regengine;
-        GRANT SELECT, INSERT, UPDATE ON public.partner_file_derived TO regengine;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_files TO regengine;
+        GRANT SELECT, INSERT, UPDATE, DELETE ON public.partner_file_derived TO regengine;
         -- Append-only audit: INSERT + SELECT only. Never UPDATE/DELETE.
         GRANT SELECT, INSERT ON public.partner_file_deletion_log TO regengine;
         REVOKE UPDATE, DELETE ON public.partner_file_deletion_log FROM regengine;

@@ -577,6 +577,11 @@ REGENGINE_TABLE_GRANTS = {
     "public.scheduler_seen_items": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.tenant_compliance_status": ("SELECT", "INSERT", "UPDATE"),
     "public.tenant_product_profile": ("SELECT",),
+    # v138 partner-file storage. Hard-delete sweep needs DELETE on the two
+    # soft-delete targets; partner_file_deletion_log stays append-only.
+    "public.partner_files": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "public.partner_file_derived": ("SELECT", "INSERT", "UPDATE", "DELETE"),
+    "public.partner_file_deletion_log": ("SELECT", "INSERT"),
 }
 
 # Explicit mutable data-plane inventory for the enabled ingestion/workflow
@@ -752,6 +757,10 @@ REGENGINE_SYSADMIN_TABLE_GRANTS = {
     "public.webauthn_challenges": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.webauthn_credentials": ("SELECT", "INSERT", "UPDATE", "DELETE"),
     "public.webhook_outbox": ("SELECT", "INSERT", "UPDATE"),
+    # v138 partner-file storage — control-plane read only.
+    "public.partner_files": ("SELECT",),
+    "public.partner_file_derived": ("SELECT",),
+    "public.partner_file_deletion_log": ("SELECT",),
 }
 
 REGENGINE_SYSADMIN_COLUMN_GRANTS = {
