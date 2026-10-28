@@ -46,7 +46,7 @@ def _reject_zpl_unsafe(value: str | None, *, field: str) -> str | None:
 # ✅ KEEP: Versioning & Logging
 router = APIRouter(tags=["Traceability Labels"])
 logger = structlog.get_logger("label-inception")
-TRACEABILITY_DOMAIN = os.getenv("TRACEABILITY_DOMAIN", "https://trace.regengine.ai")
+TRACEABILITY_DOMAIN = os.getenv("TRACEABILITY_DOMAIN", "https://regengine.co")
 
 # ============================================================================
 # MODELS (Preserved + Enhanced)
