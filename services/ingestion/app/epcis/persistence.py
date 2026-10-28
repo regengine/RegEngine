@@ -493,12 +493,9 @@ def _ingest_single_event_fallback(tenant_id: str, event: dict) -> tuple[dict, in
         normalized["fsma_validation_status"] = "passed"
     else:
         if _fsma_strict_mode():
-            logger.warning(
-                "epcis_fsma_validation_rejected tenant=%s tlc=%s event=%s",
-                tenant_id,
-                normalized.get("tlc"),
-                normalized.get("event_time"),
-            )
+            # CodeQL py/clear-text-logging: tenant id, TLC and event time are
+            # not logged; the 422 detail and audit trail carry the context.
+            logger.warning("epcis_fsma_validation_rejected")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -628,11 +625,7 @@ def _prepare_event_for_persistence(tenant_id: str, event: dict) -> dict:
         kde_map["fsma_validation_status"] = "passed"
     else:
         if _fsma_strict_mode():
-            logger.warning(
-                "epcis_fsma_validation_rejected_db tenant=%s tlc=%s",
-                tenant_id,
-                normalized.get("tlc"),
-            )
+            logger.warning("epcis_fsma_validation_rejected_db")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -983,7 +976,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
         if exc.status_code == 422 and detail.get("error") == "fsma_validation_failed" and _fsma_strict_mode():
-            logger.warning("epcis_single_event_refused_unvalidated tenant=%s", tenant_id)
+            logger.warning("epcis_single_event_refused_unvalidated")
             raise ValueError("E_EPCIS_UNVALIDATED") from exc
         raise
 
@@ -995,11 +988,7 @@ def _ingest_single_event_db(tenant_id: str, event: dict) -> tuple[dict, int]:
     kde_map = prepared.get("kde_map") or {}
     fsma_status = kde_map.get("fsma_validation_status")
     if fsma_status != "passed" and _fsma_strict_mode():
-        logger.warning(
-            "epcis_single_event_refused_unvalidated tenant=%s status=%r",
-            tenant_id,
-            fsma_status,
-        )
+        logger.warning("epcis_single_event_refused_unvalidated status_present=%s", fsma_status is not None)
         raise ValueError("E_EPCIS_UNVALIDATED")
 
     db_session = get_db_safe()
@@ -1063,11 +1052,10 @@ def _ingest_batch_events_db_atomic(tenant_id: str, events: list[dict]) -> list[t
     except Exception as exc:
         db_session.rollback()
         logger.warning(
-            "epcis_batch_rollback tenant=%s failed_index=%s batch_size=%s error=%s",
-            tenant_id,
+            "epcis_batch_rollback failed_index=%s batch_size=%s error_type=%s",
             failing_index,
             len(prepared_events),
-            str(exc),
+            type(exc).__name__,
         )
         raise HTTPException(
             status_code=400,
@@ -1100,7 +1088,7 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # instead of silently falling back to in-memory (that's what
         # let malformed events into the graph pre-fix).
         if str(exc) == "E_EPCIS_UNVALIDATED":
-            logger.warning("epcis_ingest_refused_unvalidated tenant=%s", tenant_id)
+            logger.warning("epcis_ingest_refused_unvalidated")
             raise HTTPException(
                 status_code=422,
                 detail={
@@ -1126,9 +1114,8 @@ def _ingest_single_event(tenant_id: str, event: dict) -> tuple[dict, int]:
         # ``RULES_ENGINE_ENFORCE=off`` too, not only under enforcement.
         if type(exc).__name__ == "UnmappedBizStepError" or ("is not a recognized FSMA 204 CTE type" in str(exc)):
             logger.warning(
-                "epcis_ingest_refused_unsupported_cte_type tenant=%s error=%s",
-                tenant_id,
-                str(exc),
+                "epcis_ingest_refused_unsupported_cte_type error_type=%s",
+                type(exc).__name__,
             )
             raise HTTPException(
                 status_code=422,

@@ -21,6 +21,7 @@ import {
 } from '../lib/record-validator';
 import { cn } from '@/lib/utils';
 import { trackToolRunStarted, trackToolRunCompleted } from '@/lib/conversion-events';
+import { usePostHog } from '@/lib/posthog-provider';
 
 type Phase = 'scenario' | 'upload' | 'analyzing' | 'results' | 'report';
 
@@ -41,6 +42,7 @@ const analysisStages = [
 ];
 
 export function DrillSimulatorClient() {
+    const posthog = usePostHog();
     const [state, setState] = useState<DrillState>({
         uploadedFile: null,
         validationResult: null,
@@ -151,6 +153,7 @@ export function DrillSimulatorClient() {
         if (!state.uploadedFile || analysisInFlightRef.current) return;
         analysisInFlightRef.current = true;
         trackToolRunStarted('drill-simulator');
+        posthog?.capture('tool_started', { tool_id: 'drill-simulator' });
 
         setState({ ...state, phase: 'analyzing' });
         setCurrentStage(0);

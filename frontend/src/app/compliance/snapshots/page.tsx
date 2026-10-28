@@ -129,7 +129,7 @@ async function loadSnapshotsForTenant(tenantId: string): Promise<{
 export default function SnapshotsPage() {
     const { tenantId } = useTenant();
     const { user } = useAuth();
-    const userEmail = user?.email || `admin@tenant-${tenantId.slice(0, 8)}.regengine.io`;
+    const userEmail = user?.email || `admin@tenant-${tenantId.slice(0, 8)}.regengine.co`;
     const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState<string | null>(null);

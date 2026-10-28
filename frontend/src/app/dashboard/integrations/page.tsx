@@ -131,6 +131,8 @@ export default function DashboardIntegrationsPage() {
     const [profiles, setProfiles] = useState<IntegrationProfile[]>([]);
     const [profilesStatus, setProfilesStatus] = useState<'idle' | 'loading' | 'error'>('loading');
     const [profileError, setProfileError] = useState<string | null>(null);
+    const [saveProfileError, setSaveProfileError] = useState<string | null>(null);
+    const [profilesRetryNonce, setProfilesRetryNonce] = useState(0);
     const [profileName, setProfileName] = useState('');
     const [supplierName, setSupplierName] = useState('');
     const [sourceType, setSourceType] = useState<IntegrationProfileSourceType>('csv');
@@ -170,6 +172,9 @@ export default function DashboardIntegrationsPage() {
             setProfileError(null);
 
             try {
+                // Bounded by the api-client timeout (8s): a slow backend fails
+                // fast into the error state with Retry instead of hanging on
+                // "Loading saved profiles..." until the default 30s gives up.
                 const response = await apiClient.listIntegrationProfiles();
                 if (!cancelled) {
                     setProfiles(response.profiles ?? []);
@@ -190,7 +195,7 @@ export default function DashboardIntegrationsPage() {
         return () => {
             cancelled = true;
         };
-    }, [isAuthenticated, tenantId]);
+    }, [isAuthenticated, tenantId, profilesRetryNonce]);
 
     const notConnected = meta?.status === 'not_connected';
     const reviewCount = items.filter((item) => item.status !== 'mapped').length;
@@ -206,7 +211,7 @@ export default function DashboardIntegrationsPage() {
         if (!profileName.trim() || savingProfile) return;
 
         setSavingProfile(true);
-        setProfileError(null);
+        setSaveProfileError(null);
         try {
             const request: CreateIntegrationProfileRequest = {
                 display_name: profileName.trim(),
@@ -225,7 +230,7 @@ export default function DashboardIntegrationsPage() {
             setSupplierName('');
             setProfileNotes('');
         } catch {
-            setProfileError('Unable to save the integration profile. Check workspace access and try again.');
+            setSaveProfileError('Unable to save the integration profile. Check workspace access and try again.');
         } finally {
             setSavingProfile(false);
         }
@@ -414,8 +419,22 @@ export default function DashboardIntegrationsPage() {
                                 Sign in to create workspace-scoped supplier profiles and attach them to portal invites.
                             </Callout>
                         )}
-                        {profileError && (
-                            <Callout tone="danger" role="alert">{profileError}</Callout>
+                        {profilesStatus === 'error' && profileError && (
+                            <Callout
+                                tone="danger"
+                                role="alert"
+                                action={
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => setProfilesRetryNonce((nonce) => nonce + 1)}
+                                    >
+                                        Retry
+                                    </Button>
+                                }
+                            >
+                                {profileError}
+                            </Callout>
                         )}
 
                         <div className="grid gap-6 lg:grid-cols-2">
@@ -493,6 +512,25 @@ export default function DashboardIntegrationsPage() {
                                         rows={3}
                                     />
                                 </Field>
+
+                                {saveProfileError && (
+                                    <Callout
+                                        tone="danger"
+                                        role="alert"
+                                        action={
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={handleCreateProfile}
+                                                disabled={savingProfile}
+                                            >
+                                                Retry save
+                                            </Button>
+                                        }
+                                    >
+                                        {saveProfileError}
+                                    </Callout>
+                                )}
 
                                 <Button
                                     onClick={handleCreateProfile}
