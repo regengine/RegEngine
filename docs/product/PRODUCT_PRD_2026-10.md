@@ -1,6 +1,6 @@
 # RegEngine Product PRD, October 2026
 
-Date: 2026-10-27. Status: draft v1 for founder review. Owner: founder / product.
+Date: 2026-10-27. Status: draft v1 for founder review. Product status: Beta, pre-revenue. Owner: founder / product.
 Supersedes for product scope: `PRODUCT_OVERVIEW.md` and `PRODUCT_ROADMAP.md` (2026-04-30). Does not replace `PRODUCTION_REMEDIATION_PRD_2026-05-01.md`, which is a fix program; its six open questions are carried into section 9.
 Verification basis: `server/main.py`, `server/router_policy.py`, `PRODUCTION_SURFACE.md`, `frontend/src/lib/capabilities.ts`, Linear project P-SEL-2 as of 2026-10-27. Anything not checked against one of these is marked "not verified".
 
@@ -28,7 +28,7 @@ Data shape in both: supplier CSV, ERP export, spreadsheet or email-derived file,
 
 ## 4. What is built today
 
-Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py` (25 routers); a missing, extra or unknown name aborts startup. Routers not on the list return 404 in production. Line numbers below are the `_router_enabled` guards in `server/main.py`.
+Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/router_policy.py` (25 routers); a missing, extra or unknown name aborts startup. Routers not on the list return 404 in production. Line numbers below are the `_router_enabled` guards in `server/main.py`. Mounted in production does not mean live: only CSV upload and the JSON events API are live. Every other customer-facing surface below is Beta or Preview, and EPCIS export stays Preview.
 
 ### 4.1 Production routers, grouped by product stage
 
@@ -38,17 +38,17 @@ Production mounts the exact allowlist `PRODUCTION_ENABLED_ROUTERS` in `server/ro
 | Ingest | `csv` (596) | Per-CTE CSV templates and `POST /api/v1/ingest/csv` | `services/ingestion/app/csv_templates.py`; registry: live |
 | Ingest | `epcis_ingestion` (636) | EPCIS 2.0 events, batch, XML, validate, export under `/api/v1/epcis` | `services/ingestion/app/epcis/router.py`; registry: preview |
 | Ingest | `edi` (606) | EDI import under `/api/v1/ingest/edi` | `services/ingestion/app/edi_ingestion/routes.py`; registry: off. Mounted but not claimed; see Q6 |
-| Ingest | `core_ingest` (545), `status` (553) | Document, URL and regulation ingest; ingestion status | `services/ingestion/app/routes_ingest.py`, `routes_status.py` |
-| Preflight | `inflow_workbench` (579) | Runs, readiness preview and summary, fix queue, commit gate, scenarios under `/api/v1/inflow-workbench` | `services/ingestion/app/inflow_workbench.py`; tables `fsma.inflow_workbench_*` |
-| Validate | `rules` (743), `exceptions` (748), `score` (611), `readiness` (782), `compliance_metrics` (777), `fsma_compliance` (980) | Versioned rules engine (27 critical, 9 warning rules seeded as of 2026-07-28), exception queue, compliance score, readiness wizard, metrics, advisory `POST /validate` and snapshots | `services/shared/rules/`, `docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md`, `services/compliance/app/` |
+| Ingest | `core_ingest` (545), `status` (553) | Document, URL and regulation ingest; ingestion status | `services/ingestion/app/routes_ingest.py`, `routes_status.py`; status: Beta |
+| Preflight | `inflow_workbench` (579) | Runs, readiness preview and summary, fix queue, commit gate, scenarios under `/api/v1/inflow-workbench` | `services/ingestion/app/inflow_workbench.py`; tables `fsma.inflow_workbench_*`; status: Beta |
+| Validate | `rules` (743), `exceptions` (748), `score` (611), `readiness` (782), `compliance_metrics` (777), `fsma_compliance` (980) | Versioned rules engine (27 critical, 9 warning rules seeded as of 2026-07-28), exception queue, compliance score, readiness wizard, metrics, advisory `POST /validate` and snapshots | `services/shared/rules/`, `docs/runbooks/RULES_ENGINE_ENFORCE_ROLLOUT.md`, `services/compliance/app/`; status: Beta |
 | Validate | enforcement switch | `RULES_ENGINE_ENFORCE` is `off` by default; `cte_only` and `all` exist; no-verdict events are accepted in every mode | `services/shared/rules/enforcement.py` |
 | Persist | `canonical_records` (738) | Tenant-scoped reads over `fsma.traceability_events` | `services/ingestion/app/canonical_router.py:120` |
 | Persist | `chain_verification` (799), `audit_export_log` (804), `sla_tracking` (809), `export_monitoring` (814) | Hash-chain verification job, export log, FDA SLA requests, export monitoring | `services/ingestion/app/` modules of the same names |
-| Export | `fda_export` (584) | `/api/v1/fda/export`, `/export/v2`, `/export/recall`, `/export/all`, `/export/history`, `/export/verify`, Merkle root and proof, `/trace/{tlc}` | `services/ingestion/app/fda_export/router.py` |
+| Export | `fda_export` (584) | `/api/v1/fda/export`, `/export/v2`, `/export/recall`, `/export/all`, `/export/history`, `/export/verify`, Merkle root and proof, `/trace/{tlc}` | `services/ingestion/app/fda_export/router.py`; status: Beta |
 | Export | `proof_verify` (589), `proof_recall` (694) | Public, unauthenticated bundle verifier; recall drill endpoint returns no data | `PRODUCTION_SURFACE.md` "Public, tenantless" section |
-| Workflow | `request_workflow` (762), `auditor` (772), `recall` (684), `onboarding` (679), `portal` (616) | FDA request workflow, auditor review, recall report, onboarding, supplier portal | `services/ingestion/app/` modules of the same names |
-| Commercial | `billing` (656) | Stripe checkout for plans `growth` and `scale` (aliases `base`, `standard`), a contact-only third tier, metered label events; prices come from `STRIPE_PRICE_*` env vars | `services/ingestion/app/stripe_billing/plans.py`; pricing page shows an unavailable state when prices are unset |
-| Admin | `admin` (853) | Tenants, users, invites, API keys, passwordless OTP and passkey auth, supplier onboarding, facilities, supplier compliance (data gaps, gap time to fix, FDA records export preview), bulk upload, review queue, admin audit, tool lead capture, erasure, data export | `services/admin/app/`; `services/admin/app/supplier_compliance_routes.py`; migration v135 `data_gap_events` (PR 3572) |
+| Workflow | `request_workflow` (762), `auditor` (772), `recall` (684), `onboarding` (679), `portal` (616) | FDA request workflow, auditor review, recall report, onboarding, supplier portal | `services/ingestion/app/` modules of the same names; status: Beta |
+| Commercial | `billing` (656) | Stripe checkout for plans `growth` and `scale` (aliases `base`, `standard`), a contact-only third tier, metered label events; prices come from `STRIPE_PRICE_*` env vars | `services/ingestion/app/stripe_billing/plans.py`; pricing page shows an unavailable state when prices are unset; status: Beta |
+| Admin | `admin` (853) | Tenants, users, invites, API keys, passwordless OTP and passkey auth, supplier onboarding, facilities, supplier compliance (data gaps, gap time to fix, FDA records export preview), bulk upload, review queue, admin audit, tool lead capture, erasure, data export | `services/admin/app/`; `services/admin/app/supplier_compliance_routes.py`; migration v135 `data_gap_events` (PR 3572); status: Beta |
 | System | `/health`, `/readiness`, `/metrics`, scheduler status (1005) | Liveness, bounded dependency readiness, metrics behind a key | `server/main.py` readiness section |
 
 ### 4.2 Built but not in the production allowlist
@@ -70,10 +70,15 @@ Tenant isolation through authenticated principal state and Postgres RLS (least-p
 
 ## 5. What is in flight
 
+Current focus as of 2026-10-27 PT, in order: SEL-474 (end to end with real data), SEL-409, SEL-410 and SEL-414 (signed-in app fixes), SEL-487 (production deploy), and SEL-534 (passing as of about 8:52 PM PT).
+
 Linear issues under SEL-361 in a started state on 2026-10-27 (In Review = code exists, awaiting merge or verification; In Progress = being worked):
 
 | Issue | State | What |
 | --- | --- | --- |
+| SEL-474 | Current focus | End to end with real data: one real feed through ingest, preflight, validation and a verified export (R1) |
+| SEL-487 | Current focus | Production deploy (R6) |
+| SEL-534 | Passing | Passing as of about 8:52 PM PT on 2026-10-27 |
 | SEL-409 | In Review | Owner sees "Invalid or missing API key" on records, rules, exceptions, requests (fix merged) |
 | SEL-412 | In Review | Navigation: no trace view, no on-demand FDA export |
 | SEL-410, SEL-414 | In Review | Error states without retry; dashboard placeholder cards and skeletons |
@@ -93,11 +98,12 @@ Linear issues under SEL-361 in a started state on 2026-10-27 (In Review = code e
 
 | Requirement | Acceptance criteria | Owner |
 | --- | --- | --- |
-| R1. One real feed through the loop | Given a design partner CSV or JSON feed, when it is run through Inflow Workbench, then a readiness score, at least one fix item and a commit-gate decision are recorded with run ID, and a verified export package is produced from the committed records | founder session, product |
+| R1. One real feed through the loop (SEL-474) | Given a design partner CSV or JSON feed, when it is run through Inflow Workbench, then a readiness score, at least one fix item and a commit-gate decision are recorded with run ID, and a verified export package is produced from the committed records | founder session, product |
 | R2. Signed-in app truthful and working | SEL-409 verified on staging by the owner account; SEL-412 trace view and on-demand export reachable from navigation; SEL-450 EDI, SFTP and unlabeled EPCIS no longer shown as live; SEL-447 no invented data on any surface the partner sees | product, frontend |
 | R3. Home page states the problem and offers a free check | Per the 2026-10-27 plan note: hook, two-sentence problem, free-check CTA first, both copy lints green, SEL-447 and SEL-406 fixed on the page; decisions D1 to D3 answered | founder, separate session |
 | R4. Supplier remediation production decision | Either `remediation` enters `PRODUCTION_ENABLED_ROUTERS` with the route-security manifest and tenant tests updated, or the frontend hides correction links and the pitch drops them until it does | founder decides, backend |
 | R5. Pilot paper | Pilot agreement and DPA (`docs/DATA_PROCESSING_AGREEMENT.md` template) ready to send; price or free-pilot terms chosen; Stripe prices set in production or invoicing done by hand (price env state: not verified) | founder |
+| R6. Production deploy (SEL-487) | The current main is deployed to production, and the health and readiness checks pass on the production domain | DevOps, backend |
 
 ### P1, fast follows during the pilot
 
