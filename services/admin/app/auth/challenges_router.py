@@ -71,9 +71,13 @@ def _client_ip(request: Request) -> str:
 
 
 def _browser_nonce_for_request(request: Request, crypto_service: AuthCryptoService) -> str:
-    existing_nonce = request.cookies.get(AUTH_BROWSER_NONCE_COOKIE)
-    if existing_nonce and _BROWSER_NONCE_RE.fullmatch(existing_nonce):
-        return existing_nonce
+    """Mint a server-side browser nonce for Set-Cookie.
+
+    Never reflect the client cookie into Set-Cookie (CodeQL py/cookie-injection).
+    ``request`` is accepted for call-site compatibility; the cookie is ignored.
+    Well-formed client cookies are still accepted later when verifying a challenge.
+    """
+    del request  # binding is established by the Set-Cookie we return, not by echoing input
     return crypto_service.generate_opaque_session_token()
 
 
@@ -301,7 +305,7 @@ def _browser_binding_matches(
     crypto_service: AuthCryptoService,
 ) -> bool:
     browser_nonce = request.cookies.get(AUTH_BROWSER_NONCE_COOKIE)
-    if not browser_nonce:
+    if not browser_nonce or not _BROWSER_NONCE_RE.fullmatch(browser_nonce):
         return False
     browser_binding_hash = crypto_service.hash_session_token(browser_nonce)
     return hmac.compare_digest(browser_binding_hash, str(challenge.browser_binding_hash))
