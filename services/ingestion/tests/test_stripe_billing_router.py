@@ -446,6 +446,11 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_123")
     monkeypatch.setattr(authz, "consume_tenant_rate_limit", lambda **_kwargs: (True, 42))
 
+    # Derive fixture cents from the live catalog so a retired Scale
+    # $1,999 cents literal cannot reappear after A-2155 list/founding pricing.
+    list_cents = int(stripe_billing.PLANS["list"]["price_monthly"]) * 100
+    founding_cents = int(stripe_billing.PLANS["founding"]["price_monthly"]) * 100
+
     stripe_billing._store_subscription_mapping(
         tenant_id,
         {
@@ -453,7 +458,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             "session_id": "",
             "customer_id": "cus_invoice_1",
             "subscription_id": "sub_invoice_1",
-            "plan_id": "growth",
+            "plan_id": "list",
             "billing_period": "monthly",
             "status": "active",
             "customer_email": "billing@acme.example",
@@ -465,8 +470,8 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
         data = [
             {
                 "id": "in_1",
-                "amount_due": 99900,
-                "amount_paid": 99900,
+                "amount_due": list_cents,
+                "amount_paid": list_cents,
                 "currency": "usd",
                 "status": "paid",
                 "created": 1700000000,
@@ -475,7 +480,7 @@ def test_invoice_list_returns_paginated_results(monkeypatch: pytest.MonkeyPatch)
             },
             {
                 "id": "in_2",
-                "amount_due": 199900,
+                "amount_due": founding_cents,
                 "amount_paid": 0,
                 "currency": "usd",
                 "status": "open",
