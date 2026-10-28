@@ -652,10 +652,10 @@ REGENGINE_COLUMN_GRANTS = {
     # plane data.
     "public.tenants": {"SELECT": ("id",)},
     # v126 -- POST /api/v1/ingest/csv (#3122) retains each upload verbatim
-    # in the ingest transaction (webhook_compat._open_ingestion_run). INSERT
-    # is limited to the columns that statement writes, so storage_url and
-    # created_at cannot be forged; reads, updates and deletes stay denied
-    # (the disabled remediation surface keeps its contract). The composite
+    # in the ingest transaction (webhook_compat._open_ingestion_run).
+    # v138 extends INSERT with storage_url for partner-uploads pointer rows;
+    # created_at stays ungated so timestamps cannot be forged. Reads, updates
+    # and deletes stay denied (disabled remediation surface). The composite
     # (ingestion_run_id, tenant_id) foreign key pins a blob to its own
     # tenant's run.
     "fsma.manifest_blobs": {
@@ -667,6 +667,7 @@ REGENGINE_COLUMN_GRANTS = {
             "original_filename",
             "content_type",
             "uploaded_by",
+            "storage_url",
         )
     },
     # v126 -- the agent-artifact worker (shared.agent_task_bridge) reads only
