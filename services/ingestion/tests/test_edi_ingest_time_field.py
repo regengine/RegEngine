@@ -226,9 +226,12 @@ def test_main_passes_psycopg_url_to_create_engine(monkeypatch):
 def test_sql_filters_edi_source_and_rejects_invalid_dates():
     sql = check.MISMATCH_SQL
     assert "e.source LIKE 'edi%'" in sql
-    assert "to_date" in sql
-    assert "to_char" in sql
+    assert "to_date" not in sql
+    assert "to_char" not in sql
+    assert "CASE WHEN" in sql
     assert "edi%" in check.INVALID_DATE_SQL
+    assert "to_date" not in check.INVALID_DATE_SQL
+    assert "NOT (" in check.INVALID_DATE_SQL
 
 
 def test_r1_time_to_fix_reads_ingest_clocks_not_event_time():
