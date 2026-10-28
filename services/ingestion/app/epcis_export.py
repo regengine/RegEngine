@@ -152,7 +152,7 @@ _CTE_TO_BIZSTEP = {
     "shipping": "urn:epcglobal:cbv:bizstep:shipping",
     "transformation": "urn:epcglobal:cbv:bizstep:commissioning",
     "initial_packing": "urn:epcglobal:cbv:bizstep:packing",
-    "harvesting": "urn:epcglobal:cbv:bizstep:collecting",
+    "harvesting": "urn:epcglobal:cbv:bizstep:creating_class_instance",
     "cooling": "urn:epcglobal:cbv:bizstep:storing",
     "first_land_based_receiving": "urn:epcglobal:cbv:bizstep:receiving",
 }
