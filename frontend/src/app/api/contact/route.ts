@@ -36,11 +36,24 @@ function utmValue(value: unknown): string | null {
   return value.trim().toLowerCase().slice(0, 100) || null;
 }
 
-// Pragmatic email regex — rejects obvious garbage, accepts anything that
-// looks plausible. Final delivery is the real validator.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// RFC 5321 path limit; checked before EMAIL_RE so long input never reaches the regex.
+// Pragmatic email check — rejects obvious garbage without a backtracking
+// regex (code-scanning js/polynomial-redos alert 61). Final delivery is
+// the real validator.
 const MAX_EMAIL_LENGTH = 254;
+
+function isWellFormedEmail(email: string): boolean {
+  // Single-pass structural checks; no quantified overlapping patterns.
+  const at = email.indexOf("@");
+  if (at <= 0 || at !== email.lastIndexOf("@")) return false;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!local || !domain) return false;
+  if (/\s/.test(local) || /\s/.test(domain)) return false;
+  const dot = domain.indexOf(".");
+  if (dot <= 0 || dot === domain.length - 1) return false;
+  if (domain.startsWith(".") || domain.endsWith(".")) return false;
+  return true;
+}
 
 const DESTINATION = 'christopher@regengine.co';
 const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
@@ -136,7 +149,7 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (email.length > MAX_EMAIL_LENGTH || !EMAIL_RE.test(email)) {
+  if (email.length > MAX_EMAIL_LENGTH || !isWellFormedEmail(email)) {
     return NextResponse.json(
       { error: 'invalid_email', detail: 'email address is not well-formed' },
       { status: 400 },
