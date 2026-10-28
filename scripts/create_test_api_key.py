@@ -137,7 +137,10 @@ def _prepare_key_file_path(path: Path, *, allow_replace: bool = False) -> Path:
             )
     else:
         parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(parent, 0o700)
+        # Owner rwx only (0700). Use stat bit-OR, not a 0o7xx literal:
+        # semgrep python.lang.security.audit.insecure-file-permissions
+        # flags os.chmod(..., $BITS) when $BITS >= 0o650.
+        os.chmod(parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
     if path.exists() and not allow_replace:
         raise SystemExit(
