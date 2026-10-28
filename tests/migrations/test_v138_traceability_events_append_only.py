@@ -52,8 +52,8 @@ def _load_migration():
 
 def test_revision_chain_and_shape() -> None:
     mod = _load_migration()
-    assert mod.revision == "08c7cf36ddbe"
-    assert mod.down_revision == "a3f7ce361b0e"
+    assert mod.revision == "08c7cf36ddbe"  # pragma: allowlist secret
+    assert mod.down_revision == "a3f7ce361b0e"  # pragma: allowlist secret
     tree = ast.parse(MIGRATION.read_text())
     names = {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
     assert {"upgrade", "downgrade"} <= names

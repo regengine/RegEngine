@@ -31,8 +31,9 @@ its only production user.
 
 The comparison is ``to_jsonb(NEW) - allowlist = to_jsonb(OLD) - allowlist``
 rather than a list of frozen column names, so the trigger is correct on
-every catalog variant of the table (the Supabase twin has ``tenant_id
-TEXT`` and no ``ingested_at``) and keeps protecting columns added later.
+every catalog variant of the table (the Supabase twin types the tenant
+column as text and has no ``ingested_at``) and keeps protecting columns
+added later.
 
 Idempotent: ``CREATE OR REPLACE`` functions, ``DROP TRIGGER IF EXISTS``
 before ``CREATE TRIGGER``, ``to_regclass`` guard. No grant changes (v111
