@@ -91,11 +91,15 @@ export function normalizeEpcisIngestResult(data: EpcisIngestResponse | null | un
       ? record.rejected
       : Math.max(total - accepted, 0);
   const errorMessages: string[] = [];
+  const seenErrors = new Set<string>();
   if (Array.isArray(record.errors)) {
     for (const entry of record.errors) {
       if (!entry || typeof entry !== 'object') continue;
       const message = resultItemMessage(entry as { index?: number; detail?: unknown });
-      if (message) errorMessages.push(message);
+      if (message && !seenErrors.has(message)) {
+        seenErrors.add(message);
+        errorMessages.push(message);
+      }
     }
   }
   if (Array.isArray(record.results)) {
@@ -105,7 +109,10 @@ export function normalizeEpcisIngestResult(data: EpcisIngestResponse | null | un
       const failed = typeof statusCode === 'number' && statusCode >= 400;
       if (!failed) continue;
       const message = resultItemMessage(item as { index?: number; detail?: unknown; errors?: unknown; message?: string });
-      if (message && !errorMessages.includes(message)) errorMessages.push(message);
+      if (message && !seenErrors.has(message)) {
+        seenErrors.add(message);
+        errorMessages.push(message);
+      }
     }
   }
   return { total, accepted, rejected, errorMessages };
@@ -124,10 +131,14 @@ export function epcisErrorEventMessages(error: unknown): string[] {
   const source = isRecord(data.detail) ? data.detail : data;
   if (!Array.isArray(source.errors)) return [];
   const messages: string[] = [];
+  const seenMessages = new Set<string>();
   for (const entry of source.errors) {
     if (!isRecord(entry) || typeof entry.index !== 'number') continue;
     const message = resultItemMessage(entry as { index?: number; detail?: unknown });
-    if (message && !messages.includes(message)) messages.push(message);
+    if (message && !seenMessages.has(message)) {
+      seenMessages.add(message);
+      messages.push(message);
+    }
   }
   return messages;
 }

@@ -139,6 +139,11 @@ export default function IngestPage() {
     const tab = searchParams.get('tab');
     return tab === 'file' || tab === 'epcis' ? tab : 'url';
   });
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    setUrlError(null);
+  };
   const [file, setFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<IngestCSVResponse | null>(null);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -188,6 +193,7 @@ export default function IngestPage() {
   const isPending = isSubmitting || ingestMutation.isPending || ingestFileMutation.isPending || epcisPending;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrlError(null);
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setCsvResult(null);
@@ -198,6 +204,7 @@ export default function IngestPage() {
   };
 
   const handleEpcisFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUrlError(null);
     if (e.target.files && e.target.files[0]) {
       setEpcisFile(e.target.files[0]);
       setEpcisResult(null);
@@ -341,26 +348,12 @@ export default function IngestPage() {
   // browser proxy reads it from the cookie, then clear prior result state.
   // Returns false when the caller should stop without sending any request.
   const prepareSubmit = async (): Promise<boolean> => {
-    // Clear the previous upload's results and errors first, so a failed
-    // API-key save below never leaves stale error lines on screen.
-    setJobId(null);
-    setJobStatus('queued');
-    setStatusError(null);
-    setCsvResult(null);
+    // Clear previous save-error states first so stale save errors do not stack.
+    setUrlError(null);
     setCsvError(null);
-    setCteSuggestion(null);
-    setErrorColumnSuggestions([]);
-    setEpcisResult(null);
     setEpcisError(null);
     setEpcisErrorEvents([]);
-    setEpcisValidation(null);
-    setUrlError(null);
-    ingestMutation.reset();
-    ingestFileMutation.reset();
-    ingestEpcisEventMutation.reset();
-    ingestEpcisBatchMutation.reset();
-    ingestEpcisXmlMutation.reset();
-    validateEpcisMutation.reset();
+
     // Store the API key for future use
     if (!isAuthenticated && apiKey !== storedApiKey) {
       // The browser proxy reads the cookie written by setApiKey and ignores
@@ -376,6 +369,25 @@ export default function IngestPage() {
         return false;
       }
     }
+
+    // Once the API key is successfully saved, clear prior results, errors,
+    // and mutation states, and reset job tracking for the new upload.
+    // A failed API-key save keeps the previous job and receipt data intact.
+    setStatusError(null);
+    setCsvResult(null);
+    setCteSuggestion(null);
+    setErrorColumnSuggestions([]);
+    setEpcisResult(null);
+    setEpcisErrorEvents([]);
+    setEpcisValidation(null);
+    ingestMutation.reset();
+    ingestFileMutation.reset();
+    ingestEpcisEventMutation.reset();
+    ingestEpcisBatchMutation.reset();
+    ingestEpcisXmlMutation.reset();
+    validateEpcisMutation.reset();
+    setJobId(null);
+    setJobStatus('queued');
     return true;
   };
 
@@ -553,9 +565,10 @@ export default function IngestPage() {
       ? 'success'
       : 'warning'
     : 'neutral';
+  const activeSaveError = activeTab === 'file' ? csvError : activeTab === 'epcis' ? epcisError : urlError;
 
   return (
-    <PageContainer className={statusError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
+    <PageContainer className={statusError || urlError || csvError || epcisError || ingestMutation.isError || jobStatus === 'failed' ? 'workspace-load-error' : undefined}>
       <div className="mb-6">
         <WorkflowStepper currentStep="ingest" completedSteps={isAuthenticated || storedApiKey ? ['setup'] : []} />
       </div>
@@ -640,7 +653,7 @@ export default function IngestPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setActiveTab('file')}
+                      onClick={() => handleTabChange('file')}
                       trailingIcon={<ArrowRight strokeWidth={1.75} aria-hidden="true" />}
                     >
                       Continue File Mapping
@@ -720,7 +733,7 @@ export default function IngestPage() {
                       )}
                     </div>}
 
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                       <TabsList className="w-full">
                         <TabsTrigger value="url">URL Ingestion</TabsTrigger>
                         <TabsTrigger value="file">File Upload</TabsTrigger>
@@ -755,7 +768,7 @@ export default function IngestPage() {
                                 type="button"
                                 onClick={() => {
                                   setUrl(example.url);
-                                  setActiveTab('url');
+                                  handleTabChange('url');
                                 }}
                               >
                                 {example.label}
@@ -1052,8 +1065,14 @@ export default function IngestPage() {
                     </Button>
                   </div>
 
+                  {activeSaveError && (
+                    <Callout tone="danger" role="alert">
+                      {activeSaveError}
+                    </Callout>
+                  )}
+
                   <NormalizedDocumentViewer
-                    documentId={ingestMutation.data?.document_id || 'DEMO-DOC-ID'}
+                    documentId={ingestMutation.data?.document_id || ingestMutation.data?.doc_id || ingestMutation.data?.job_id || 'DEMO-DOC-ID'}
                   />
                 </CardContent>
               </Card>
