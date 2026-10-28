@@ -181,7 +181,8 @@ def main() -> None:
     # names that are absent, each as a string literal (auth_crypto pattern),
     # so CodeQL cannot trace printed text from REQUIRED_SECRETS, PAYLOAD_KEYS,
     # or the credential payload (alerts 19 / 20 / 82).
-    missing_count = sum(1 for name in REQUIRED_SECRETS if not payload.get(name))
+    # Count via validate_payload; do not log its returned name list.
+    missing_count = len(validate_payload(payload))
 
     if missing_count:
         print(
