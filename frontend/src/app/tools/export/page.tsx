@@ -46,12 +46,12 @@ const PACKAGE_PARTS = [
   {
     icon: Shield,
     title: 'Chain Verification',
-    body: 'SHA-256 hash chain proving record integrity. Each event cryptographically linked to its predecessor.',
+    body: 'SHA-256 hash chains support tamper detection where enabled. Hashing is a RegEngine feature, not an FDA requirement.',
   },
   {
     icon: FileCheck,
     title: 'Package Manifest',
-    body: 'Cryptographic manifest with file checksums. Independent verification without RegEngine.',
+    body: 'Manifest with file checksums for checking content hashes where enabled.',
   },
 ];
 

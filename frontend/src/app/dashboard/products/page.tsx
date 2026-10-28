@@ -33,6 +33,7 @@ import {
 
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
+import { getErrorRequestId, withRequestId } from '@/lib/api-error';
 import { useDashboardRefresh } from '@/hooks/use-dashboard-refresh';
 
 /* ── Types matching ProductCatalogResponse ── */
@@ -78,7 +79,7 @@ async function apiFetchProducts(tenantId: string): Promise<ProductCatalogRespons
     });
     if (!res.ok) {
         console.error(`Products fetch failed: ${res.status} ${res.statusText}`);
-        throw new Error("Couldn't load your product catalog.");
+        throw withRequestId(new Error("Couldn't load your product catalog."), res);
     }
     return res.json();
 }
@@ -290,7 +291,7 @@ export default function ProductCatalogPage() {
                     </div>
                 )}
 
-                {error && <ErrorState message="We could not load this page." onRetry={() => loadProducts()} />}
+                {error && <ErrorState message="We could not load this page." onRetry={() => loadProducts()} requestId={getErrorRequestId(error)} />}
 
                 {isLoggedIn && !error && products.length > 0 && (
                     <>

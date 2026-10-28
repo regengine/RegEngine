@@ -72,6 +72,6 @@ it reactively at flip time.**
 
 - `REPO_PURPOSE.md` — the scope these files fall outside of.
 - `SECURITY.md` — reporting and disclosure posture.
-- The public proof surface (`/proof`, `/verify`) already provides
+- The public verifier (`/verify`) already provides
   transparency and audit **without** requiring source visibility. It is the
   reason the README's public-repository claim sounded plausible.
