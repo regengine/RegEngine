@@ -349,9 +349,10 @@ def score_shipping_readiness(
     )
 
 
-def _csv_row_to_kdes(row: Mapping[str, str]) -> tuple[dict[str, Any], dict[str, Any], list[FlagRecord]]:
-    """Map a shipping CSV row into KDE + buyer dicts; flag unknown columns."""
-    known = set(_SHIPPING_REQUIRED) | set(ALBERTSONS_BUYER_FIELDS) | {
+_CSV_KNOWN_COLUMNS: frozenset[str] = frozenset(
+    set(_SHIPPING_REQUIRED)
+    | set(ALBERTSONS_BUYER_FIELDS)
+    | {
         "cte_type",
         "ship_from_gln",
         "ship_to_gln",
@@ -363,6 +364,16 @@ def _csv_row_to_kdes(row: Mapping[str, str]) -> tuple[dict[str, Any], dict[str, 
         "lot_code",
         "tlc",
     }
+)
+
+
+def _csv_row_to_kdes(
+    row: Mapping[str, str],
+    *,
+    flag_unknown_columns: bool = True,
+) -> tuple[dict[str, Any], dict[str, Any], list[FlagRecord]]:
+    """Map a shipping CSV row into KDE + buyer dicts; optionally flag unknown columns."""
+    known = _CSV_KNOWN_COLUMNS
     flags: list[FlagRecord] = []
     extras: dict[str, str] = {}
     for col, val in row.items():
@@ -370,13 +381,14 @@ def _csv_row_to_kdes(row: Mapping[str, str]) -> tuple[dict[str, Any], dict[str, 
         if not key:
             continue
         if key not in known:
-            flags.append(
-                FlagRecord(
-                    reason="unrecognized_column",
-                    field=key,
-                    detail="Unknown column kept; not mapped to a shipping KDE",
+            if flag_unknown_columns:
+                flags.append(
+                    FlagRecord(
+                        reason="unrecognized_column",
+                        field=key,
+                        detail="Unknown column kept; not mapped to a shipping KDE",
+                    )
                 )
-            )
             if val is not None and str(val).strip() != "":
                 extras[key] = str(val)
 
@@ -455,18 +467,36 @@ def dry_run_shipping_csv(
 ) -> dict[str, Any]:
     """Preflight dry run: score every row and tally flags by reason.
 
-    Does not ingest. Unknown columns are flagged and kept on the KDE dict.
+    Does not ingest. Unknown columns are flagged once (header-level, same
+    spirit as #3682) and their cell values are still kept on each row's KDEs.
     """
     reader = csv.DictReader(io.StringIO(text))
+    fieldnames = list(reader.fieldnames or [])
     rows = list(reader)
     results: list[ShippingReadinessResult] = []
     flag_counts: dict[str, int] = {}
     status_counts = {"pass": 0, "gap": 0, "failure": 0}
 
+    header_flags: list[FlagRecord] = []
+    for col in fieldnames:
+        key = (col or "").strip()
+        if key and key not in _CSV_KNOWN_COLUMNS:
+            header_flags.append(
+                FlagRecord(
+                    reason="unrecognized_column",
+                    field=key,
+                    detail="Unknown column kept; not mapped to a shipping KDE",
+                    row_number=1,
+                )
+            )
+    for f in header_flags:
+        flag_counts[f.reason] = flag_counts.get(f.reason, 0) + 1
+
     for idx, row in enumerate(rows, start=2):  # header is row 1
         cte = (row.get("cte_type") or "").strip().lower()
-        kdes, buyer, flags = _csv_row_to_kdes(row)
-        if cte and cte not in {"shipping", "ship", "s", "distribute"}:
+        kdes, buyer, flags = _csv_row_to_kdes(row, flag_unknown_columns=False)
+        wrong_cte = bool(cte and cte not in {"shipping", "ship", "s", "distribute"})
+        if wrong_cte:
             flags.append(
                 FlagRecord(
                     reason="unknown_cte_type",
@@ -475,18 +505,22 @@ def dry_run_shipping_csv(
                     row_number=idx,
                 )
             )
-        numbered = [
+        # Attach header unknown-column flags to row 2 only so they appear on a result
+        row_flags = list(header_flags) if idx == 2 else []
+        row_flags.extend(
             FlagRecord(reason=f.reason, field=f.field, detail=f.detail, row_number=f.row_number or idx)
             for f in flags
-        ]
-        for f in numbered:
-            flag_counts[f.reason] = flag_counts.get(f.reason, 0) + 1
-        scored = score_shipping_readiness(kdes, buyer, flags=numbered, source=f"{source}:row{idx}")
-        if cte and cte not in {"shipping", "ship", "s", "distribute"}:
-            # Scope break: never a pass for this readiness case
-            if scored.status == "pass":
-                scored.status = "failure"
-                scored.failures.append({"kind": "wrong_cte_scope", "detail": f"cte_type={cte!r}"})
+        )
+        for f in row_flags:
+            if f.reason == "unrecognized_column" and f.row_number == 1 and idx != 2:
+                continue
+            if not (f.reason == "unrecognized_column" and f.row_number == 1):
+                flag_counts[f.reason] = flag_counts.get(f.reason, 0) + 1
+        scored = score_shipping_readiness(kdes, buyer, flags=row_flags, source=f"{source}:row{idx}")
+        if wrong_cte:
+            # Fail-case §2.7: wrong CTE is a scope break, never pass/gap-as-ok
+            scored.status = "failure"
+            scored.failures.append({"kind": "wrong_cte_scope", "detail": f"cte_type={cte!r}"})
         results.append(scored)
         status_counts[scored.status] = status_counts.get(scored.status, 0) + 1
 
