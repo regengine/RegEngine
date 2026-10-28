@@ -153,12 +153,19 @@ def test_gs1_check_digit_independent_mod10_and_published_examples():
     Generated IDs are minted with the test-local mod-10, then checked by the
     exporter so a reversed weight in production would fail.
     """
-    # Published GS1 textbook examples (data + expected check digit).
+    # Published GS1 examples (data + expected check digit), each cited from a
+    # GS1 document on ref.gs1.org / gs1.org — no third-party pages.
     published = (
-        ("0950600013435", "2", 14),   # GTIN-14
-        ("061414100000", "5", 13),    # GLN-13
-        ("400638133393", "1", 13),    # EAN-13
-        ("10614141123456789", "7", 18),  # SSCC-18
+        # GTIN-14 09506000134352 — GS1 General Specifications Release 26.0
+        # §1.2.4.4 (JSON-LD example gs1:gtin); also QR Code powered by GS1
+        # best practices (2023), Best practice 1.
+        ("0950600013435", "2", 14),
+        # GLN-13 0614141000005 — GS1 Verifiable Credentials White Paper on
+        # Data Model and Validations 1.0.1 §5.1.2 (partyGLN for GS1 US).
+        ("061414100000", "5", 13),
+        # SSCC-18 376104250021234569 — GS1 General Specifications Release 26.0
+        # §7.9.1 Table 7-9 (18-digit check digit calculation example).
+        ("37610425002123456", "9", 18),
     )
     for data, expected_cd, length in published:
         assert _independent_gs1_mod10_check_digit(data) == int(expected_cd)
