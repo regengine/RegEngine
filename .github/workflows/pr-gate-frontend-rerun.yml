@@ -1,0 +1,96 @@
+# Re-runs a "PR Gate: Frontend" job that gave up while Frontend CI/CD was
+# still queued. pr-gate.yml polls for "Frontend CI Status Gate" for at most
+# 12 minutes; when the runner queue is backed up the gate may not exist yet.
+# Once Frontend CI/CD finishes for the same head SHA, this workflow re-runs
+# the failed PR Gate: Frontend job, which then mirrors the real gate result.
+# This also covers a gate that timed out just after Frontend CI completed.
+# Skips SHAs that are no longer the PR head and stops after run attempt 3.
+#
+# Runs on the default branch (workflow_run) and never checks out PR code.
+name: PR Gate Frontend Rerun
+
+on:
+  workflow_run:
+    workflows: ["Frontend CI/CD"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: pr-gate-frontend-rerun-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  rerun:
+    name: "Re-run PR Gate: Frontend"
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - name: "Re-run a failed PR Gate: Frontend job for this head SHA"
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = process.env.HEAD_SHA;
+            // Skip stale SHAs: only re-run when this SHA is still the PR head,
+            // so an old run can never cancel the current head's gate.
+            let prs = context.payload.workflow_run.pull_requests || [];
+            if (prs.length === 0) {
+              const assoc = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner, repo, commit_sha: sha,
+              });
+              prs = assoc.data.filter(p => p.state === 'open');
+            }
+            let isCurrentHead = false;
+            for (const p of prs) {
+              const pr = await github.rest.pulls.get({ owner, repo, pull_number: p.number });
+              if (pr.data.state === 'open' && pr.data.head.sha === sha) {
+                isCurrentHead = true;
+                break;
+              }
+            }
+            if (!isCurrentHead) {
+              core.info(`${sha} is not the current head of an open PR; skipping re-run.`);
+              return;
+            }
+
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner, repo, head_sha: sha, event: 'pull_request', per_page: 50,
+            });
+            const gateRuns = runs.data.workflow_runs
+              .filter(r => r.name === 'PR Gate')
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            if (gateRuns.length === 0) {
+              core.info(`No PR Gate run for ${sha}; nothing to re-run.`);
+              return;
+            }
+            const latest = gateRuns[0];
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner, repo, run_id: latest.id, filter: 'latest', per_page: 100,
+            });
+            const job = jobs.data.jobs.find(j => j.name === 'PR Gate: Frontend');
+            if (!job) {
+              core.info(`PR Gate run ${latest.id} has no PR Gate: Frontend job.`);
+              return;
+            }
+            if (job.status !== 'completed' || !['failure', 'timed_out', 'cancelled'].includes(job.conclusion)) {
+              core.info(`PR Gate: Frontend is ${job.status}/${job.conclusion}; no re-run needed.`);
+              return;
+            }
+            // Cap re-runs so a persistently failing gate can't loop.
+            if ((latest.run_attempt || 1) >= 3) {
+              core.info(`PR Gate run ${latest.id} is already on attempt ${latest.run_attempt}; not re-running again.`);
+              return;
+            }
+            core.info(`Re-running PR Gate: Frontend job ${job.id} (run ${latest.id}) for ${sha}.`);
+            await github.request('POST /repos/{owner}/{repo}/actions/jobs/{job_id}/rerun', {
+              owner, repo, job_id: job.id,
+            });

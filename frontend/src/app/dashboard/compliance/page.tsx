@@ -32,6 +32,7 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTenant } from '@/lib/tenant-context';
 import { fetchComplianceScore, fetchWorkbenchReadinessSummary } from '@/lib/api-hooks';
+import { getErrorRequestId } from '@/lib/api-error';
 import { ErrorState } from '@/components/ui/error-state';
 import { filterExperimentalLinks } from '@/lib/experimental-features';
 import { NO_DATA_YET } from '@/lib/empty-values';
@@ -457,7 +458,7 @@ export default function ComplianceDashboardPage() {
 
                 {/* Error */}
                 {error && (
-                    <ErrorState message="We could not load this page." onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }} />
+                    <ErrorState message="We could not load this page." onRetry={() => { fetchScore(); fetchWorkbenchSummary(); }} requestId={getErrorRequestId(error)} />
                 )}
 
                 {/* Score Content */}

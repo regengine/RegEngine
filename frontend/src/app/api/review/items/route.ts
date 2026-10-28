@@ -38,9 +38,10 @@ export async function GET(request: NextRequest) {
 
         if (!res.ok) {
             const error = await res.json().catch(() => ({}));
+            const requestId = res.headers.get('x-request-id');
             return NextResponse.json(
                 { error: error.detail || 'Failed to load review queue' },
-                { status: res.status },
+                requestId ? { status: res.status, headers: { 'x-request-id': requestId } } : { status: res.status },
             );
         }
 
@@ -70,7 +71,10 @@ export async function GET(request: NextRequest) {
             extracted_data: item.extraction || {},
         }));
 
-        return NextResponse.json(items);
+        const requestId = res.headers.get('x-request-id');
+        return requestId
+            ? NextResponse.json(items, { headers: { 'x-request-id': requestId } })
+            : NextResponse.json(items);
 
     } catch (error: unknown) {
         console.error('Review queue fetch failed:', error);

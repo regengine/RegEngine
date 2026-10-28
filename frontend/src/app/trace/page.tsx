@@ -340,7 +340,7 @@ export default function TracePage() {
                 <div className="min-w-0">
                   <CardTitle>CTE Event Timeline</CardTitle>
                   <CardDescription className="mt-1">
-                    Each event is cryptographically hashed (SHA-256) for tamper-evident traceability
+                    Events are SHA-256 hashed where enabled. Hashing is a RegEngine feature, not an FDA requirement.
                   </CardDescription>
                 </div>
               </CardHeader>

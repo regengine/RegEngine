@@ -7,6 +7,7 @@ and explicit commit-gate decisions between sandbox/staging/evidence modes.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import logging
@@ -359,12 +360,17 @@ def _store_path(tenant_id: str) -> Path:
     interpolated so each tenant gets its own file (no cross-tenant
     commingling). Falls back to a per-tenant file under /tmp in dev.
     """
-    base = os.getenv("REGENGINE_INFLOW_WORKBENCH_PATH")
+    base = os.getenv("REGENGINE_INFLOW_WORKBENCH_PATH") or "/tmp/regengine_inflow_workbench.json"
+    base_path = Path(base)
     slug = _tenant_store_slug(tenant_id)
-    if base:
-        base_path = Path(base)
-        return base_path.with_name(f"{base_path.stem}.{slug}{base_path.suffix}")
-    return Path(f"/tmp/regengine_inflow_workbench.{slug}.json")
+    root = os.path.realpath(base_path.parent)
+    path = os.path.join(root, f"{base_path.stem}.{slug}{base_path.suffix}")
+    normalized = os.path.realpath(path)
+    # Validate the normalized path at the filesystem boundary, including
+    # symlinks to another tenant's file inside the configured directory.
+    if not normalized.startswith(os.path.join(root, "")) or normalized != path:
+        raise HTTPException(status_code=503, detail="Workbench persistence unavailable")
+    return Path(normalized)
 
 
 def _empty_store() -> dict[str, Any]:
@@ -373,11 +379,12 @@ def _empty_store() -> dict[str, Any]:
 
 def _read_store(tenant_id: str) -> dict[str, Any]:
     path = _store_path(tenant_id)
-    if not path.exists():
-        return _empty_store()
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "r", encoding="utf-8") as store_file:
+            payload = json.load(store_file)
+    except (OSError, json.JSONDecodeError) as exc:
+        if isinstance(exc, OSError) and exc.errno == errno.ELOOP:
+            raise HTTPException(status_code=503, detail="Workbench persistence unavailable") from None
         return _empty_store()
     return {
         "scenarios": list(payload.get("scenarios") or []),
@@ -389,7 +396,10 @@ def _read_store(tenant_id: str) -> dict[str, Any]:
 def _write_store(tenant_id: str, store: dict[str, Any]) -> None:
     path = _store_path(tenant_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(store, indent=2, sort_keys=True), encoding="utf-8")
+    # O_NOFOLLOW also closes a symlink swap between path validation and open.
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    with os.fdopen(os.open(path, flags, 0o600), "w", encoding="utf-8") as store_file:
+        json.dump(store, store_file, indent=2, sort_keys=True)
 
 
 def _db_list_scenarios(tenant_id: str) -> Optional[list[WorkbenchScenario]]:

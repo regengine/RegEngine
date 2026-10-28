@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { fetchWithCsrf } from '@/lib/fetch-with-csrf';
+import { withRequestId } from '@/lib/api-error';
 import type {
     AgentReviewDecisionInput,
     AgentReviewDecisionResponse,
@@ -53,7 +54,7 @@ async function parseAgentReviewError(response: Response): Promise<Error> {
             : typeof errorBody?.detail === 'string'
                 ? errorBody.detail
                 : `Agent review request failed: ${response.status} ${response.statusText}`;
-    return new Error(message);
+    return withRequestId(new Error(message), response);
 }
 
 async function readJsonResponse<T>(response: Response): Promise<T | null> {
