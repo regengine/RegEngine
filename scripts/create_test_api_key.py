@@ -19,7 +19,7 @@ Usage:
 
 The raw key is never printed in full. It is written once to a file only
 you can read (``--key-file``, default ``~/.regengine/test-api-key``, mode
-0600) and the console shows only its key id plus a short fingerprint. Only
+0600) and the console shows only its key id and metadata. Only
 its hash lands in the ``api_keys`` table. Remember: in development the backend validates DB-backed
 keys only when ``ENABLE_DB_API_KEYS=true`` (shared.auth.get_key_store falls
 back to the in-memory store otherwise).
@@ -34,7 +34,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import errno
 import os
+import shlex
+import stat
 import sys
 import uuid
 from dataclasses import dataclass
@@ -94,18 +97,45 @@ TEST_TENANT_ID = "11111111-1111-1111-1111-111111111111"
 DEFAULT_KEY_FILE = Path.home() / ".regengine" / "test-api-key"
 
 
-def _write_key_file(raw_key: str, path: Path) -> Path:
-    """Write the raw key to ``path`` with owner-only (0600) permissions."""
+def _write_key_file(raw_key: str, path: Path) -> None:
+    """Write the raw key to ``path`` with owner-only (0600) permissions.
+
+    Rejects a symlink as the final path component (``O_NOFOLLOW``). An
+    existing parent must already be private (no group/other bits); a
+    missing parent is created as ``0700``. Returns nothing so the raw key
+    never taints the console summary path.
+    """
     path = path.expanduser()
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    parent = path.parent
+    if parent.exists():
+        parent_mode = stat.S_IMODE(parent.stat().st_mode)
+        if parent_mode & 0o077:
+            raise SystemExit(
+                f"Refusing to write key file: parent {parent} is group/world "
+                f"accessible (mode {oct(parent_mode)}). Use a private directory."
+            )
+    else:
+        parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(parent, 0o700)
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError as exc:
+        # ELOOP: final component is a symlink.
+        if getattr(exc, "errno", None) == errno.ELOOP:
+            raise SystemExit(
+                f"Refusing to write key file: {path} is a symlink"
+            ) from exc
+        raise
     try:
         # Tighten permissions even if the file already existed.
         os.fchmod(fd, 0o600)
         os.write(fd, (raw_key + "\n").encode("utf-8"))
     finally:
         os.close(fd)
-    return path
 
 
 @dataclass(frozen=True)
@@ -119,6 +149,7 @@ class _KeySummary:
 
 def _format_summary(summary: _KeySummary, key_path: Path, billing_note: str) -> str:
     """Console summary. Never includes the raw key."""
+    quoted_path = shlex.quote(str(key_path))
     return f"""
 API key created. The raw key is NOT shown; it was written once to:
 
@@ -134,7 +165,7 @@ Billing status for tenant: {billing_note}
 
 Use it:
 
-  export REGENGINE_TEST_API_KEY="$(cat {key_path})"
+  export REGENGINE_TEST_API_KEY="$(cat {quoted_path})"
   curl -H "X-RegEngine-API-Key: $REGENGINE_TEST_API_KEY" http://localhost:8000/<endpoint>
 
 Delete the file when you no longer need the key.
@@ -359,7 +390,10 @@ async def _main() -> None:
     else:
         billing_note = _seed_billing_status(args.tenant_id, args.allow_production)
 
-    key_path = _write_key_file(key.raw_key, args.key_file)
+    # Resolve the path before touching the raw key so the console summary
+    # never receives a value tainted by the secret (CodeQL alert 81).
+    key_path = args.key_file.expanduser()
+    _write_key_file(key.raw_key, key_path)
     summary = _KeySummary(
         key_id=key.key_id,
         tenant_id=key.tenant_id,

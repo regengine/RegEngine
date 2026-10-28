@@ -50,9 +50,11 @@ def _raw_key() -> str:
 
 def test_key_file_is_owner_only_and_holds_raw_key(keygen, tmp_path):
     raw = _raw_key()
-    path = keygen._write_key_file(raw, tmp_path / "nested" / "key")
+    path = tmp_path / "nested" / "key"
+    keygen._write_key_file(raw, path)
     assert path.read_text().strip() == raw
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
 
 
 def test_key_file_permissions_tightened_on_overwrite(keygen, tmp_path):
@@ -61,6 +63,25 @@ def test_key_file_permissions_tightened_on_overwrite(keygen, tmp_path):
     target.chmod(0o644)
     keygen._write_key_file(_raw_key(), target)
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_key_file_rejects_symlink_target(keygen, tmp_path):
+    real = tmp_path / "real-target"
+    real.write_text("placeholder")
+    link = tmp_path / "key-link"
+    link.symlink_to(real)
+    with pytest.raises(SystemExit, match="symlink"):
+        keygen._write_key_file(_raw_key(), link)
+    # Symlink target must not have been overwritten with the raw key.
+    assert real.read_text() == "placeholder"
+
+
+def test_key_file_rejects_group_writable_parent(keygen, tmp_path):
+    parent = tmp_path / "shared"
+    parent.mkdir(mode=0o755)
+    parent.chmod(0o755)
+    with pytest.raises(SystemExit, match="group/world"):
+        keygen._write_key_file(_raw_key(), parent / "key")
 
 
 def test_summary_never_contains_raw_key(keygen, tmp_path):
@@ -80,6 +101,23 @@ def test_summary_never_contains_raw_key(keygen, tmp_path):
     assert secret not in text
     assert key_id in text
     assert str(path) in text
+
+
+def test_summary_shell_quotes_key_path_with_spaces(keygen, tmp_path):
+    summary = keygen._KeySummary(
+        key_id="rge_demo",
+        tenant_id=str(uuid.uuid4()),
+        scopes=["webhooks.ingest"],
+        billing_tier="ENTERPRISE",
+        expires_at=None,
+    )
+    path = tmp_path / "my key file"
+    text = keygen._format_summary(summary, path, "set to 'trialing'")
+    assert f'cat {path}' not in text  # unquoted path must not appear
+    assert "cat 'my key file'" in text or 'cat "my key file"' in text or "cat 'my key file'" in text.replace(str(tmp_path)+"/", "")
+    # shlex.quote on POSIX wraps spaces in single quotes
+    import shlex
+    assert f"cat {shlex.quote(str(path))}" in text
 
 
 def test_key_file_flag_defaults_outside_repo(keygen, monkeypatch):
