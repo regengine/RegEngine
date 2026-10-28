@@ -332,6 +332,23 @@ ALTER TABLE fsma.manifest_blobs
         OR (storage_url IS NOT NULL AND length(btrim(storage_url)) > 0)
     )
 """,
+    """
+DO $$
+BEGIN
+    -- v138: runtime role must INSERT storage_url for partner-uploads pointer rows.
+    -- Inventory (v111 REGENGINE_COLUMN_GRANTS) also lists storage_url so
+    -- apply_runtime_role_cutover.py keeps the grant across deploys.
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')
+       AND EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'fsma'
+               AND table_name = 'manifest_blobs'
+               AND column_name = 'storage_url'
+       ) THEN
+        GRANT INSERT (storage_url) ON TABLE fsma.manifest_blobs TO regengine;
+    END IF;
+END $$
+""",
 )
 
 
@@ -341,6 +358,23 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+
+    op.execute(
+        """
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'regengine')
+       AND EXISTS (
+            SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'fsma'
+               AND table_name = 'manifest_blobs'
+               AND column_name = 'storage_url'
+       ) THEN
+        REVOKE INSERT (storage_url) ON TABLE fsma.manifest_blobs FROM regengine;
+    END IF;
+END $$;
+"""
+    )
 
     op.execute(
         """

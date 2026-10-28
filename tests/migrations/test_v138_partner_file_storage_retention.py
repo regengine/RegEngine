@@ -267,3 +267,26 @@ def test_delete_after_recomputed_on_direct_update(pg_engine, monkeypatch) -> Non
             {"id": file_id},
         ).scalar_one()
         assert cleared is None
+
+def test_runtime_grant_includes_storage_url_insert() -> None:
+    """v138 must GRANT INSERT (storage_url) and inventory must list it.
+
+    Structural only — no live DB / no partner payloads.
+    """
+    from pathlib import Path
+    import importlib.util
+
+    alembic = Path("alembic/versions/20261028_b8c1e4f2a901_v138_partner_file_storage_retention.py")
+    text = alembic.read_text(encoding="utf-8")
+    assert "GRANT INSERT (storage_url) ON TABLE fsma.manifest_blobs TO regengine" in text
+    assert "REVOKE INSERT (storage_url) ON TABLE fsma.manifest_blobs FROM regengine" in text
+
+    inv_path = Path("alembic/versions/20260803_b71d9e4c2a60_v111_runtime_role_grants.py")
+    spec = importlib.util.spec_from_file_location("v111_grants", inv_path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    cols = mod.REGENGINE_COLUMN_GRANTS["fsma.manifest_blobs"]["INSERT"]
+    assert "storage_url" in cols
+    assert "created_at" not in cols
+
