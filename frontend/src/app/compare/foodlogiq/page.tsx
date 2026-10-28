@@ -27,7 +27,7 @@ const FEATURES = [
   { feature: "Per-event compliance scoring", regengine: "check", competitor: "partial", note: "Advisory readiness signal computed per event vs batch reporting" },
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Recall simulation drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
+  { feature: "Recall drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
   { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price from $849/mo (Founding rates from $425/mo, billed annually) vs custom enterprise quotes" },
 ];
 

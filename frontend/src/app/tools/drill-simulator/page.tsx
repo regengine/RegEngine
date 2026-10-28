@@ -5,13 +5,13 @@ import { EmailGate } from "@/components/tools/EmailGate";
 import { RelatedTools } from "@/components/tools/RelatedTools";
 
 export const metadata: Metadata = {
-    title: "24 Hour Drill Simulator | FSMA 204 §1.1455(c) Records-Request Rehearsal | RegEngine",
+    title: "Recall drill (Preview) | FSMA 204 §1.1455(c) Records-Request Rehearsal | RegEngine",
     description: "Self-paced rehearsal for the §1.1455(c) records-on-request workflow. Educational; not an FDA simulation and not a compliance determination.",
     alternates: {
         canonical: "https://regengine.co/tools/drill-simulator",
     },
     openGraph: {
-        title: "24 Hour Drill Simulator | RegEngine",
+        title: "Recall drill (Preview) | RegEngine",
         description: "Self-paced rehearsal for the §1.1455(c) records-on-request workflow. Educational; not a compliance determination.",
         type: "website",
         url: "https://regengine.co/tools/drill-simulator",
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const jsonLd = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    "name": "24 Hour Drill Simulator",
+    "name": "Recall drill (Preview)",
     "operatingSystem": "All",
     "applicationCategory": "BusinessApplication",
     "description": "Scenario-based simulation for FSMA 204 record retrieval drills.",

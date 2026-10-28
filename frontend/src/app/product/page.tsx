@@ -50,7 +50,7 @@ const inflowEffects = [
   },
   {
     title: "Gate",
-    detail: "The commit decision separates sandbox/preflight work from production evidence.",
+    detail: "The commit decision separates preflight work from production evidence.",
     icon: GitCommitHorizontal,
   },
 ];
@@ -76,7 +76,7 @@ const engineResults = [
 const controls = [
   ["Tenant isolation", "Records are scoped to the authenticated tenant via row-level policies; cross-tenant hardening is in active rollout."],
   ["Provenance", "Evidence commits require traceable source and run context."],
-  ["Mode separation", "Sandbox work cannot silently become production evidence."],
+  ["Mode separation", "Preflight work cannot silently become production evidence."],
   ["Hash verification", "Committed evidence carries content hashes so downstream consumers can re-check it independently. Strict downstream verification is rolling out."],
 ];
 
@@ -111,7 +111,7 @@ function InflowImpactDiagram() {
           </div>
 
           <ul className="mt-5 grid gap-2">
-            {["unmapped columns", "missing KDEs", "broken handoffs", "sandbox source mode"].map((label) => (
+            {["unmapped columns", "missing KDEs", "broken handoffs", "preflight source mode"].map((label) => (
               <li key={label} className="flex items-center justify-between gap-3 rounded-md border border-re-border-subtle bg-re-surface-inset px-3 py-2">
                 <span className="text-ui text-re-text-secondary">{label}</span>
                 <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-re-text-tertiary" aria-hidden="true" />

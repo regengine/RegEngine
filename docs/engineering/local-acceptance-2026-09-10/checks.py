@@ -21,6 +21,9 @@ access = Path(sys.argv[1])
 assert access.parent.name.startswith("regengine-operational-") and access.is_file()
 config = json.loads(access.read_text())
 assert config["base_url"].startswith("http://127.0.0.1:")
+redis_port = int(config["redis_port"])
+assert 1 <= redis_port <= 65535
+redis_url = f"redis://127.0.0.1:{redis_port}/0"
 os.environ.clear()
 os.environ.update(
     {
@@ -31,7 +34,7 @@ os.environ.update(
         "ENVIRONMENT": "test",
         "DATABASE_URL": config["runtime_url"],
         "ADMIN_DATABASE_URL": config["runtime_url"],
-        "REDIS_URL": config["redis_url"],
+        "REDIS_URL": redis_url,
         "AWS_EC2_METADATA_DISABLED": "true",
     }
 )
@@ -40,6 +43,15 @@ import httpx
 from shared.canonical_persistence import CanonicalEventStore
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+
+# Resolve HMAC from disposable DB (never from access.json — CodeQL clear-text-storage).
+_meta_engine = create_engine(config["owner_url"])
+with _meta_engine.connect() as _meta_conn:
+    hmac_secret = _meta_conn.execute(
+        text("SELECT value FROM probe_harness_meta WHERE key = 'webhook_hmac_secret'")
+    ).scalar_one()
+_meta_engine.dispose()
+assert isinstance(hmac_secret, str) and hmac_secret
 
 results = []
 
@@ -92,7 +104,7 @@ def post(client, body, tenant=0, key=None, override=None):
     raw = json.dumps(body).encode()
     hdr = headers(tenant, key) | {
         "Content-Type": "application/json",
-        "X-Webhook-Signature": "sha256=" + hmac.new(config["hmac_secret"].encode(), raw, hashlib.sha256).hexdigest(),
+        "X-Webhook-Signature": "sha256=" + hmac.new(hmac_secret.encode(), raw, hashlib.sha256).hexdigest(),
     }
     if override:
         hdr.update(override)
