@@ -20,14 +20,14 @@ import { Badge } from '@/components/ui/badge';
 import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FOUNDING_PRICE, FOUNDING_PRICE_LINE, LIST_PRICE, LIST_PRICE_LINE, PILOT_LINE } from '@/lib/pricing-terms';
+import { PRICING_SUMMARY } from '@/lib/pricing-terms';
 
 export const metadata: Metadata = {
     title: 'Why RegEngine | FSMA 204 Recordkeeping, API-First',
-    description: 'API-first architecture, published pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
+    description: 'API-first architecture, per-facility pricing, and a self-serve path to your first FSMA 204 export. See how RegEngine compares to Trustwell, SafetyChain, and ReposiTrak.',
     openGraph: {
         title: 'Why RegEngine | FSMA 204 Recordkeeping Built Different',
-        description: 'API-first, transparent pricing, and a self-serve path to a first FSMA 204 export in days. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
+        description: 'API-first, per-facility pricing, and a self-serve path to a first FSMA 204 export in days. See how RegEngine outpaces Trustwell, SafetyChain, and legacy competitors.',
         url: 'https://regengine.co/why-regengine',
         type: 'website',
     },
@@ -48,13 +48,6 @@ const COMPARISON_DATA: ComparisonRow[] = [
         trustwell: false,
         safetychain: false,
         repositrak: false,
-    },
-    {
-        feature: 'Transparent, Published Pricing',
-        regengine: `${LIST_PRICE} list (founding design partner price ${FOUNDING_PRICE})`,
-        trustwell: 'Contact sales',
-        safetychain: 'Contact sales',
-        repositrak: 'Contact sales',
     },
     {
         feature: 'Time to first export',
@@ -138,10 +131,9 @@ const DIFFERENTIATORS = [
     },
     {
         icon: DollarSign,
-        title: 'Transparent Pricing',
-        description:
-            `No hidden sales calls. List price is ${LIST_PRICE}. Pricing is published, so you do not need to "contact sales."`,
-        detail: 'Compare directly to competitors who make you "contact sales." We believe pricing transparency builds trust and moves faster.',
+        title: 'Per-facility pricing',
+        description: PRICING_SUMMARY,
+        detail: 'We scope facility count, pilot terms and onboarding with you in writing before you sign.',
     },
     {
         icon: Zap,
@@ -191,7 +183,7 @@ export default function WhyRegEnginePage() {
                         </span>
                     </h1>
                     <p className="mb-8 max-w-[68ch] text-body text-re-text-secondary">
-                        RegEngine pairs an API-first architecture with published pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
+                        RegEngine pairs an API-first architecture with per-facility pricing and a self-serve onboarding path designed to get your first FSMA 204 export ready for review in days, not months.
                     </p>
                     <div className="flex flex-col gap-3 sm:flex-row">
                         <Button asChild size="lg">
@@ -438,35 +430,33 @@ HTTP 201
                         <Card padding="spacious" className="order-2 hidden md:order-1 md:block">
                             <div className="space-y-4">
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">List price</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$999/mo</p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Per month, per facility</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Pricing</p>
+                                    <p className="text-title text-re-text-primary">Contact us for pricing</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Priced per facility</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
-                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Founding design partner price</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$499/mo</p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">Per month, per facility</p>
+                                    <p className="mb-1 font-mono text-label uppercase text-re-text-muted">Founding design partner</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">Terms set in a written proposal</p>
                                 </Card>
                                 <Card variant="inset" padding="compact">
                                     <p className="mb-1 font-mono text-label uppercase text-re-text-muted">90-day pilot</p>
-                                    <p className="text-title tabular-nums text-re-text-primary">$2,000</p>
-                                    <p className="mt-2 text-small text-re-text-tertiary">1 facility. $1,500 if you convert to a subscription within 30 days. Pilot fee credited toward your first subscription invoice.</p>
+                                    <p className="mt-2 text-small text-re-text-tertiary">1 facility. Terms set in a written proposal. Pilot fee credited toward your first subscription invoice.</p>
                                 </Card>
                             </div>
                         </Card>
                         <div className="order-1 md:order-2">
                             <h3 className="mb-4 font-display text-heading-lg text-re-text-primary">
-                                Pricing You Can See Before You Sign
+                                Pricing Scoped to Your Facilities
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Open pricing builds trust. We list prices on our website. No "contact sales" gatekeeping. No surprise enterprise minimums.
+                                Contact us for pricing. We scope facility count and terms with you in writing before you sign. No surprise enterprise minimums.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
-                                {LIST_PRICE_LINE} {FOUNDING_PRICE_LINE} {PILOT_LINE}
+                                {PRICING_SUMMARY}
                             </p>
                             <ul className="space-y-2">
                                 {[
-                                    'Prices are per month, per facility',
+                                    'Priced per facility',
                                     'API access for contracted workspaces',
                                     'Pilot fee credited toward your first subscription invoice on conversion',
                                 ].map((item, idx) => (
@@ -613,7 +603,7 @@ HTTP 201
                             <p className="mb-4 text-ui text-re-text-tertiary">RegEngine is built for companies like:</p>
                             <ul className="space-y-2">
                                 {[
-                                    'Regional produce distributors ($5M to $50M annual revenue)',
+                                    'Regional produce distributors',
                                     'Specialty food brands and co-packers',
                                     'Organic/specialty retailers and wholesalers',
                                     'Small farms and grower cooperatives',
@@ -631,7 +621,7 @@ HTTP 201
                                 Built for SMBs, Not Enterprises Only
                             </h3>
                             <p className="mb-4 max-w-[68ch] text-body text-re-text-secondary">
-                                Compliance shouldn't require a 50-person implementation team. You need FSMA 204 records organized, fast and cheap. Self-serve signup, no minimums, no sales calls.
+                                Compliance shouldn't require a 50-person implementation team. You need FSMA 204 records organized, fast and cheap. Self-serve signup and no minimums.
                             </p>
                             <p className="mb-6 max-w-[68ch] text-ui text-re-text-tertiary">
                                 Legacy platforms built for 100+ facility enterprises. RegEngine scales from 1 to 1,000 facilities. You start small; you grow without ripping out the platform.
@@ -720,7 +710,7 @@ HTTP 201
                             {
                                 Icon: Zap,
                                 title: 'Founders & SMBs',
-                                detail: 'You need traceability records but can\'t afford enterprise fees. The founding design partner price is $499 per month, per facility.',
+                                detail: 'You need traceability records but can\'t afford enterprise fees. Contact us for founding design partner pricing.',
                             },
                             {
                                 Icon: Lightbulb,

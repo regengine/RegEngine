@@ -10,10 +10,10 @@ import { CheckCircle, XCircle, Minus, ArrowRight, Shield, Clock, Code, Zap } fro
 export const metadata: Metadata = {
   title: "RegEngine vs FoodLogiQ (Aptean): FSMA 204 Traceability Comparison",
   description:
-    "Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.",
+    "Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and per-facility pricing differ from enterprise-only deployment.",
   openGraph: {
     title: 'RegEngine vs FoodLogiQ (Aptean): FSMA 204 Traceability Comparison',
-    description: 'Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and transparent pricing differ from enterprise-only deployment.',
+    description: 'Compare RegEngine and FoodLogiQ for FSMA 204 traceability recordkeeping. See how self-serve setup, rule evaluation, and per-facility pricing differ from enterprise-only deployment.',
     url: 'https://regengine.co/compare/foodlogiq',
     type: 'website',
   },
@@ -28,7 +28,6 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify FoodLogiQ's current ingestion surface" },
   { feature: "Supplier portal with compliance scoring", regengine: "check", competitor: "check", note: "Both offer supplier management" },
   { feature: "Recall drills", regengine: "check", competitor: "check", note: "FoodLogiQ's original strength" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price $999 per month, per facility. Founding design partner price $499 per month, per facility. FoodLogiQ: custom enterprise quotes" },
 ];
 
 const WHY_SWITCH = [
@@ -38,7 +37,7 @@ const WHY_SWITCH = [
   { title: "Self-serve onboarding", desc: "RegEngine evaluates your first CSV against the FSMA 204 rule set on upload, with no implementation project to get a readiness answer. FoodLogiQ ships through enterprise implementation; verify current onboarding timelines with their team." },
   { title: "Purpose-built for FSMA 204", desc: "FoodLogiQ originated as recall management; FSMA 204 capabilities were added later per their public roadmap. RegEngine was designed for the Food Traceability Rule from day one with KDE validation and cross-event integrity checks." },
   { title: "Open data egress", desc: "RegEngine ships a public API, OpenAPI docs, and CSV export of every record. Confirm FoodLogiQ's current data-egress options with their team before committing." },
-  { title: "Published pricing", desc: "List price is $999 per month, per facility. The founding design partner price is $499 per month, per facility. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },
+  { title: "Per-facility pricing", desc: "RegEngine plans are priced per facility. Contact us for pricing. FoodLogiQ pricing is custom-quoted, so request both to compare for your facility count." },
 ];
 
 

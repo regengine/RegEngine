@@ -28,7 +28,6 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify ReposiTrak's current ingestion options" },
   { feature: "Retailer compliance network", regengine: "partial", competitor: "check", note: "ReposiTrak's core strength" },
   { feature: "Supplier portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price $999 per month, per facility. Founding design partner price $499 per month, per facility. ReposiTrak: custom retailer quotes" },
 ];
 
 const WHY_SWITCH = [

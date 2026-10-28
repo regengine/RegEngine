@@ -14,7 +14,7 @@ import { PricingCheckoutButton } from '@/components/billing/PricingCheckoutButto
 import { analytics } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import {
-    FOUNDING_PRICE, LIST_PRICE, PILOT_CONVERSION_PRICE, PILOT_CREDIT, PILOT_PRICE,
+    PILOT_TERMS, PRICING_BASIS, PRICING_CONTACT, PROPOSAL_TERMS,
 } from '@/lib/pricing-terms';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -75,19 +75,17 @@ export function PricingPageClient({
             <Container as="section" width="marketing" className="pb-10">
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-5">
                     <Card padding="spacious">
-                        <p className="mb-2 font-mono text-label uppercase text-re-text-muted">List price</p>
-                        <p className="text-title tabular-nums text-re-text-primary">{LIST_PRICE}</p>
+                        <p className="mb-2 font-mono text-label uppercase text-re-text-muted">Pricing</p>
+                        <p className="text-title text-re-text-primary">{PRICING_CONTACT}</p>
+                        <p className="mt-2 text-small text-re-text-tertiary">{PRICING_BASIS}</p>
                     </Card>
                     <Card padding="spacious" className="border-re-border-strong">
-                        <p className="mb-2 font-mono text-label uppercase text-re-text-muted">Founding design partner price</p>
-                        <p className="text-title tabular-nums text-re-text-primary">{FOUNDING_PRICE}</p>
+                        <p className="mb-2 font-mono text-label uppercase text-re-text-muted">Founding design partner</p>
+                        <p className="text-small text-re-text-tertiary">{PROPOSAL_TERMS}</p>
                     </Card>
                     <Card padding="spacious">
                         <p className="mb-2 font-mono text-label uppercase text-re-text-muted">90-day pilot</p>
-                        <p className="text-title tabular-nums text-re-text-primary">{PILOT_PRICE}</p>
-                        <p className="mt-2 text-small text-re-text-tertiary">
-                            Or {PILOT_CONVERSION_PRICE}. {PILOT_CREDIT}
-                        </p>
+                        <p className="text-small text-re-text-tertiary">{PILOT_TERMS}</p>
                     </Card>
                 </div>
             </Container>
@@ -119,7 +117,7 @@ export function PricingPageClient({
                                     </div>
                                     <p className="mb-3 text-small text-re-text-tertiary">{tier.description}</p>
                                     <p className="mb-5 text-small text-re-text-tertiary">
-                                        {LIST_PRICE} list. Founding design partner price {FOUNDING_PRICE}.
+                                        {PRICING_CONTACT}
                                     </p>
 
                                     <PricingCheckoutButton
@@ -151,7 +149,7 @@ export function PricingPageClient({
                         Founding Design Partner Program
                     </p>
                     <p className="mx-auto mb-2 max-w-[60ch] text-ui leading-relaxed text-re-text-secondary">
-                        Founding design partner price: {FOUNDING_PRICE}, under an executed design-partner agreement. White-glove onboarding, custom integration scoping, and direct founder support.
+                        Founding design partner terms are set in a written proposal under an executed design-partner agreement. White-glove onboarding, custom integration scoping, and direct founder support.
                     </p>
                     <p className="mx-auto mb-3 max-w-[60ch] text-small leading-relaxed text-re-text-tertiary">
                         We are accepting a limited number of early testers ahead of the July 2028 FSMA 204 enforcement window. Your agreement controls scope for facilities, add-ons, and taxes.
@@ -197,7 +195,7 @@ export function PricingPageClient({
                         RegEngine is priced around facility operations, not a long enterprise procurement cycle.
                     </p>
                     <p className="mx-auto mb-10 max-w-[64ch] text-center text-small leading-relaxed text-re-text-tertiary">
-                        A GMA/FMI study found that the average major food recall costs companies over $10 million in lost product, logistics, and brand damage. RegEngine list price is {LIST_PRICE}.
+                        {PRICING_BASIS} {PRICING_CONTACT}
                     </p>
                     <div className="overflow-x-auto rounded-lg border border-re-border bg-re-surface-card">
                         <table className="w-full min-w-[640px] border-collapse text-ui">
@@ -254,7 +252,7 @@ export function PricingPageClient({
                         Become a founding design partner
                     </h2>
                     <p className="mx-auto mb-8 mt-3 max-w-[64ch] text-body text-re-text-secondary">
-                        Founding design partner price: {FOUNDING_PRICE}. Apply now and get the product shaped around real supplier data.
+                        Contact us for founding design partner pricing. Apply now and get the product shaped around real supplier data.
                     </p>
                     <div className="flex flex-wrap justify-center gap-3">
                         <Button asChild size="lg">

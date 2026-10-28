@@ -17,6 +17,11 @@ import {
 import { RelatedTools } from '@/components/layout/related-tools';
 import { FREE_TOOLS } from '@/lib/fsma-tools-data';
 
+/** Hours per year, rounded. The public site shows no dollar amounts. */
+function formatHours(hours: number): string {
+    return `~${Math.round(hours).toLocaleString('en-US')} hrs/yr`;
+}
+
 export function ROICalculatorClient() {
     const posthog = usePostHog();
 
@@ -37,30 +42,24 @@ export function ROICalculatorClient() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <StatTile
                         label="Labor Time, Illustrative"
-                        value={`~$${(results.laborSavings / 1000).toFixed(1)}k`}
+                        value={formatHours(results.laborHours)}
                     >
-                        <p className="text-small text-re-text-tertiary">Modeled labor-time avoided based on your reported manual hours. Illustrative only.</p>
-                    </StatTile>
-                    <StatTile
-                        label="Risk Concentration, Illustrative"
-                        value={`~$${(results.riskReduction / 1000).toFixed(1)}k`}
-                    >
-                        <p className="text-small text-re-text-tertiary">A small fraction of revenue used as a placeholder for compliance-event exposure. Illustrative; not a forecast or fine schedule.</p>
+                        <p className="text-small text-re-text-tertiary">Modeled labor time avoided per year based on your reported manual hours. Illustrative only.</p>
                     </StatTile>
                     <StatTile
                         label="Operational Time, Illustrative"
-                        value={`~$${(results.operationalEfficiency / 1000).toFixed(1)}k`}
+                        value={formatHours(results.operationalHours)}
                     >
-                        <p className="text-small text-re-text-tertiary">Modeled time saved per record. Illustrative only.</p>
+                        <p className="text-small text-re-text-tertiary">Modeled time saved per record, per year. Illustrative only.</p>
                     </StatTile>
                     <StatTile
-                        label="Modeled Benefit Minus Platform"
-                        value={`~$${(results.netBenefit / 1000).toFixed(1)}k`}
+                        label="Total Modeled Time, Illustrative"
+                        value={formatHours(results.totalHours)}
                     >
-                        <p className="text-small text-re-text-tertiary">Modeled annual benefit minus an estimated platform cost. Illustrative only.</p>
+                        <p className="text-small text-re-text-tertiary">Sum of the two tiles. Illustrative only, not a forecast.</p>
                     </StatTile>
                 </div>
 
@@ -80,7 +79,7 @@ export function ROICalculatorClient() {
                             Book a call
                         </a>{' '}
                         and we&apos;ll model it against your actual record volume and current
-                        spend. The figures above are an illustrative starting point, not a commitment.
+                        workload. The figures above are an illustrative starting point, not a commitment.
                     </p>
                 </Callout>
 
@@ -88,11 +87,11 @@ export function ROICalculatorClient() {
                     <CardContent className="p-4">
                         <h5 className="mb-2 text-label text-re-text-muted">Methodology Note</h5>
                         <p className="text-small leading-relaxed text-re-text-tertiary">
-                            Estimates use simple multipliers applied to your reported hours, record volume, and revenue.
+                            Estimates use simple multipliers applied to your reported hours and record volume, and are shown
+                            in hours per year, not dollars.
                             We don&apos;t have verified customer ROI data yet, and the founding design partner price reflects that.
                             FDA has said it will not enforce the Food Traceability Rule before July 20, 2028, following a Congressional directive.
-                            No public fine schedule exists, so the
-                            risk-concentration tile is illustrative only. Actual results depend on your contracts,
+                            Actual results depend on your contracts,
                             existing systems, staffing, and data hygiene.
                         </p>
                     </CardContent>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { PricingPageClient } from '@/components/pricing/PricingPageClient';
 import type { PricingComparisonRow, PricingFaqItem } from '@/components/pricing/PricingPageClient';
-import { FOUNDING_PRICE_LINE, LIST_PRICE_LINE, PILOT_LINE, PRICING_SUMMARY } from '@/lib/pricing-terms';
+import { PILOT_TERMS, PRICING_BASIS, PRICING_SUMMARY } from '@/lib/pricing-terms';
 
 export const metadata: Metadata = {
     title: 'FSMA 204 Pricing | RegEngine',
@@ -15,9 +15,9 @@ export const metadata: Metadata = {
 };
 
 // Cache plan copy for 1 hour server-side so the page stays fast even when
-// the billing service is slow. Prices come from the approved terms in
-// lib/pricing-terms; the billing service only refines plan descriptions
-// and feature lists.
+// the billing service is slow. Public pricing copy comes from
+// lib/pricing-terms and carries no dollar amounts; the billing service only
+// refines plan descriptions and feature lists.
 export const revalidate = 3600;
 
 interface BillingPlan {
@@ -57,8 +57,8 @@ async function fetchBillingPlans(): Promise<BillingPlan[] | null> {
     }
 }
 
-// Static tier copy (names, feature lists, CTAs). Prices come only from
-// lib/pricing-terms; nothing here may carry a price.
+// Static tier copy (names, feature lists, CTAs). Nothing here may carry a
+// price; pricing copy comes only from lib/pricing-terms.
 const PRICING_TIERS = [
     {
         id: 'base',
@@ -124,7 +124,7 @@ const COMPETITOR_COMPARISON: PricingComparisonRow[] = [
     { feature: 'Self-Serve Signup', regengine: 'Available in staged rollout', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Hash-manifested audit trail', regengine: 'Supported where export workflow creates manifests', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
     { feature: 'Free Trial', regengine: 'Design-partner terms', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
-    { feature: 'Pricing Model', regengine: 'Published per-facility pricing; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
+    { feature: 'Pricing Model', regengine: 'Per-facility pricing on request; agreement controls', foodlogiq: 'Validate directly', repositrak: 'Validate directly', tracegains: 'Validate directly' },
 ];
 
 /** Keep Preview on any live billing feature string that names EPCIS without a status label. */
@@ -138,10 +138,10 @@ function ensureEpcisPreviewLabel(features: string[]): string[] {
 
 const FAQ: PricingFaqItem[] = [
     { q: 'How do I choose between Base, Standard, and Premium?', a: 'It comes down to facility count. Base covers 1 facility with up to 500 CTEs/month. Standard (Beta) handles 2 to 3 facilities with unlimited CTEs. Premium (Beta) is for 4+ facilities with dedicated support and quarterly compliance reviews.' },
-    { q: 'What does RegEngine cost?', a: `${LIST_PRICE_LINE} ${FOUNDING_PRICE_LINE} The founding design partner price applies under an executed design-partner agreement.` },
-    { q: 'How does the pilot work?', a: PILOT_LINE },
+    { q: 'What does RegEngine cost?', a: `${PRICING_SUMMARY} Founding design partner terms apply under an executed design-partner agreement.` },
+    { q: 'How does the pilot work?', a: PILOT_TERMS },
     { q: 'Can I switch plans anytime?', a: 'Plan changes are handled under your executed order form or design-partner agreement. We scope upgrades, downgrades, facility count, and billing changes before applying them.' },
-    { q: 'How is billing set up?', a: 'Published prices are per month, per facility. Your executed order form or design-partner agreement controls scope, taxes, add-ons, and renewal.' },
+    { q: 'How is billing set up?', a: `${PRICING_BASIS} Your executed order form or design-partner agreement controls scope, taxes, add-ons, and renewal.` },
     { q: 'What integrations are available?', a: 'Core APIs and export flows are available today. ERP, retailer, and partner-system integrations are evaluated per delivery mode: CSV upload, the JSON events API, or custom-scoped implementation. EPCIS 2.0 is in Preview.' },
     { q: 'What am I paying for if I must archive externally?', a: 'FSMA 204 requires at least two-year retention of traceability records under 21 CFR 1.1455. RegEngine is a compliance evidence layer with contract-defined retention, not a long-term archive. Your subscription pays for workspace access, ingestion, validation, and export workflows. You keep off-platform archives for long-term retention. See the Trust Center retention guidance for export and archive posture.' },
     { q: 'What if the FDA delays enforcement again?', a: 'Major retailers are already requiring traceability data from suppliers regardless of the FDA timeline. RegEngine gives you the tooling and records to support either trigger: the FDA rule or a retailer mandate.' },
@@ -153,7 +153,7 @@ const FAQ: PricingFaqItem[] = [
 export default async function PricingPage() {
     // Live plan copy refines descriptions and features when billing is
     // reachable; otherwise the static tier copy is shown. Prices never come
-    // from here.
+    // from here and never appear on this page.
     const livePlans = await fetchBillingPlans();
 
     const pricingTiers = PRICING_TIERS.map((tier) => {

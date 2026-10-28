@@ -28,7 +28,6 @@ const FEATURES = [
   { feature: "CSV upload and JSON events API", regengine: "check", competitor: "partial", note: "Both; verify TraceGains' current ingestion options" },
   { feature: "Supplier document management (COAs, specs)", regengine: "partial", competitor: "check", note: "TraceGains' core strength" },
   { feature: "Supplier onboarding portal", regengine: "check", competitor: "check", note: "Both offer supplier management" },
-  { feature: "Published pricing on website", regengine: "check", competitor: "x", note: "List price $999 per month, per facility. Founding design partner price $499 per month, per facility. TraceGains: custom quotes" },
 ];
 
 const WHY_SWITCH = [

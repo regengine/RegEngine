@@ -64,7 +64,7 @@ const PRINCIPLES = [
     Icon: Target,
     title: "Accessible by default",
     description:
-      "Mid-market food companies deserve modern recordkeeping tools for FSMA 204. List price is $999 per month, per facility. The founding design partner price is $499 per month, per facility.",
+      "Mid-market food companies deserve modern recordkeeping tools for FSMA 204. Plans are priced per facility, and we set terms with you in a written proposal.",
   },
   {
     Icon: Shield,
@@ -76,7 +76,7 @@ const PRINCIPLES = [
     Icon: Lightbulb,
     title: "Transparent operations",
     description:
-      "Published pricing. Public trust center. Open security posture. No enterprise sales gates hiding what you actually get.",
+      "Per-facility pricing set in writing. Public trust center. Open security posture. No enterprise sales gates hiding what you actually get.",
   },
   {
     Icon: Sparkles,

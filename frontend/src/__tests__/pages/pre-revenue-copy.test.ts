@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
+// A dollar sign followed by a digit (template literals like `${x}` do not match).
+const DOLLAR_AMOUNT = /\$\s?\d/;
+
 const PUBLIC_FILES = [
     'src/components/pricing/PricingPageClient.tsx',
     'src/app/pricing/page.tsx',
@@ -60,13 +63,43 @@ describe('pre-revenue public copy', () => {
         expect(page).toContain('How does the pilot work?');
     });
 
-    it('approved terms module carries the A-2155 prices and pilot terms', () => {
+    it('approved terms module carries no dollar amounts, only per-facility and contact copy (A-2169)', () => {
         const terms = read('src/lib/pricing-terms.ts');
-        expect(terms).toContain("'$999 per month, per facility'");
-        expect(terms).toContain("'$499 per month, per facility'");
-        expect(terms).toContain("'$2,000 for 90 days on 1 facility'");
-        expect(terms).toContain("'$1,500 if you convert to a subscription within 30 days'");
+        expect(terms).not.toMatch(DOLLAR_AMOUNT);
+        expect(terms).toContain("'Contact us for pricing.'");
+        expect(terms).toContain("'Plans are priced per facility.'");
+        expect(terms).toContain('90 days on 1 facility');
         expect(terms).toContain('credited toward your first subscription invoice');
+    });
+
+    it.each([
+        ...PUBLIC_FILES,
+        'src/app/about/page.tsx',
+        'src/app/buyer-programs/page.tsx',
+        'src/lib/pricing-terms.ts',
+        'src/lib/roi-calculator-data.ts',
+    ])('%s carries no dollar amounts and no published-pricing claim (A-2169)', (file) => {
+        const source = read(file);
+        expect(source, `${file} still shows a dollar amount`).not.toMatch(DOLLAR_AMOUNT);
+        expect(source, `${file} still claims published pricing`).not.toMatch(/published pricing|transparent pricing|list prices on our website/i);
+    });
+
+    it('ROI calculator shows hours, with no hidden platform cost, payback or ROI', () => {
+        const data = read('src/lib/roi-calculator-data.ts');
+        expect(data).not.toMatch(/platformCost|paybackMonths|netBenefit|annual-revenue/);
+        const client = read('src/app/tools/roi-calculator/components/ROICalculatorClient.tsx');
+        expect(client).toContain('hrs/yr');
+        expect(client).not.toMatch(/netBenefit|riskReduction|platform cost/i);
+    });
+
+    it('buyer-programs carries no Walmart or Kroger dates', () => {
+        const source = read('src/app/buyer-programs/page.tsx');
+        const start = source.indexOf('Walmart');
+        const end = source.indexOf('What we export', start);
+        expect(start).toBeGreaterThan(-1);
+        const retailerBlock = source.slice(start, end > start ? end : undefined);
+        expect(retailerBlock).not.toMatch(/\b(January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b/);
+        expect(retailerBlock).not.toMatch(/August 1, 2025|June 30, 2025|December 2023|January 20, 2026|87 FR 70910|90 FR 38084/);
     });
 
     it.each([
