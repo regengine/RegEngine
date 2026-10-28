@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from .audit import AuditLogger
 from .auth.identity_helpers import EmailOwnershipConflictError, ensure_passwordless_identity
-from .database import get_session
+from .database import arm_global_admin_context, disarm_global_admin_context, get_session
 from .dependencies import PermissionChecker, get_current_user
 from .e2e_safety import assert_e2e_mode_allowed, e2e_mode_enabled
 from .models import TenantContext
@@ -537,53 +537,58 @@ async def accept_invite(
     if invite.revoked_at or invite.accepted_at:
         raise generic_400
 
-    # Check if user exists (Global). The comparison is case-insensitive so
-    # an invite addressed to a case variant of an existing user's email
-    # attaches to that user instead of creating a duplicate account that
-    # would then claim their verified email row.
+    # SEL-612: global identity RLS requires explicit pre-auth admin context.
     try:
-        user = db.execute(
-            select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
-        ).scalar_one_or_none()
-    except MultipleResultsFound:
-        # Two users rows differ only by email case. The column is unique
-        # only on the raw value, so both rows are legal. Do not pick one;
-        # fail closed with the same uniform 400 as every other unusable
-        # invite state. A data cleanup plus a lower(email) unique index
-        # is the durable fix.
-        logger.warning(
-            "accept_invite_ambiguous_case_variant_user",
-            email=mask_email(invite.email),
-        )
-        db.rollback()
-        raise generic_400
-
-    if user is not None:
-        # Both status fields gate authentication (see user_routes: a user
-        # can only hold a session when users.status AND
-        # users.global_status are 'active'). Checking only `status` let a
-        # globally-suspended user accept an invite and gain a live
-        # membership plus fresh passwordless identity rows.
-        if user.status != "active" or getattr(user, "global_status", "active") != "active":
-            # Do not reinstate erased / suspended users via invite (#1337).
+        arm_global_admin_context(db)
+        # Check if user exists (Global). The comparison is case-insensitive so
+        # an invite addressed to a case variant of an existing user's email
+        # attaches to that user instead of creating a duplicate account that
+        # would then claim their verified email row.
+        try:
+            user = db.execute(
+                select(UserModel).where(func.lower(UserModel.email) == invite.email.strip().lower())
+            ).scalar_one_or_none()
+        except MultipleResultsFound:
+            # Two users rows differ only by email case. The column is unique
+            # only on the raw value, so both rows are legal. Do not pick one;
+            # fail closed with the same uniform 400 as every other unusable
+            # invite state. A data cleanup plus a lower(email) unique index
+            # is the durable fix.
             logger.warning(
-                "accept_invite_inactive_user_blocked",
+                "accept_invite_ambiguous_case_variant_user",
                 email=mask_email(invite.email),
-                status=user.status,
             )
+            db.rollback()
             raise generic_400
 
-    else:
-        # Path A — create a passwordless user from an invite token. Store the
-        # normalized address so a later lookup by any case variant resolves to
-        # this same row instead of a case-split duplicate identity.
-        user = UserModel(
-            email=invite.email.strip().lower(),
-            status="active",
-            is_sysadmin=False,
-        )
-        db.add(user)
-        db.flush()  # get ID
+        if user is not None:
+            # Both status fields gate authentication (see user_routes: a user
+            # can only hold a session when users.status AND
+            # users.global_status are 'active'). Checking only `status` let a
+            # globally-suspended user accept an invite and gain a live
+            # membership plus fresh passwordless identity rows.
+            if user.status != "active" or getattr(user, "global_status", "active") != "active":
+                # Do not reinstate erased / suspended users via invite (#1337).
+                logger.warning(
+                    "accept_invite_inactive_user_blocked",
+                    email=mask_email(invite.email),
+                    status=user.status,
+                )
+                raise generic_400
+
+        else:
+            # Path A — create a passwordless user from an invite token. Store the
+            # normalized address so a later lookup by any case variant resolves to
+            # this same row instead of a case-split duplicate identity.
+            user = UserModel(
+                email=invite.email.strip().lower(),
+                status="active",
+                is_sysadmin=False,
+            )
+            db.add(user)
+            db.flush()  # get ID
+    finally:
+        disarm_global_admin_context(db)
 
     # Check membership (idempotency + defense-in-depth).
     existing_membership = db.execute(
@@ -610,6 +615,7 @@ async def accept_invite(
     # silently suppressed. The invite token is proof of mailbox control.
     invite_role = db.get(RoleModel, invite.role_id)
     try:
+        arm_global_admin_context(db)
         ensure_passwordless_identity(
             db,
             user=user,
@@ -617,6 +623,8 @@ async def accept_invite(
             organization_id=invite.tenant_id,
             role_name=invite_role.name if invite_role is not None else None,
         )
+        # Flush identity writes while their global RLS context is still armed.
+        db.flush()
     except EmailOwnershipConflictError:
         # The invited address (up to case) belongs to a different user.
         # Refuse without revealing which account holds it (uniform 400).
@@ -626,6 +634,8 @@ async def accept_invite(
         )
         db.rollback()
         raise generic_400
+    finally:
+        disarm_global_admin_context(db)
 
     # Update Invite (single-use).
     accepted_at = datetime.now(timezone.utc)

@@ -71,6 +71,7 @@ class _FailClosedRlsSession:
         self.committed = False
         self.sysadmin_armed = False
         self.flushed_users = []
+        self.flushed_identities = []
 
     # -- the RLS behaviour under test -----------------------------------
     def execute(self, statement, params=None):
@@ -109,13 +110,17 @@ class _FailClosedRlsSession:
         self.added.append(obj)
 
     def flush(self):
-        from app.sqlalchemy_models import UserModel
+        from app.sqlalchemy_models import OrganizationMembershipModel, UserEmailModel, UserModel
 
         for obj in self.added:
             if isinstance(obj, UserModel) and obj not in self.flushed_users:
                 if not self.sysadmin_armed:
                     raise RuntimeError("users INSERT requires regengine.is_sysadmin=true")
                 self.flushed_users.append(obj)
+            if isinstance(obj, (UserEmailModel, OrganizationMembershipModel)) and obj not in self.flushed_identities:
+                if not self.sysadmin_armed:
+                    raise RuntimeError("identity INSERT requires regengine.is_sysadmin=true")
+                self.flushed_identities.append(obj)
             if getattr(obj, "id", None) is None:
                 obj.id = uuid.uuid4()
 
@@ -157,12 +162,12 @@ def _starlette_request():
     )
 
 
-async def _call(db):
+async def _call(db, identity_effect=None):
     from app.invite_routes import AcceptInviteRequest, accept_invite
 
     payload = AcceptInviteRequest(token="raw-token", name="Invitee")
     with (
-        patch("app.invite_routes.ensure_passwordless_identity"),
+        patch("app.invite_routes.ensure_passwordless_identity", side_effect=identity_effect),
         patch("app.invite_routes.AuditLogger.log_event"),
         patch("app.invite_routes.supplier_graph_sync"),
     ):
@@ -187,6 +192,7 @@ async def test_accept_invite_succeeds_under_enforced_rls_with_no_tenant_context(
 
     assert result["status"] == "success"
     assert db.committed is True
+    assert not db.sysadmin_armed
 
 
 @pytest.mark.asyncio
@@ -276,4 +282,50 @@ async def test_new_invitee_user_insert_requires_global_admin_context():
     assert result["user_id"] == str(db.flushed_users[0].id)
     assert db.flushed_users[0].is_sysadmin is False
     assert db.committed
+    assert not db.sysadmin_armed
+
+
+@pytest.mark.asyncio
+async def test_identity_failure_disarms_global_context_without_commit():
+    tenant_id = uuid.uuid4()
+    db = _FailClosedRlsSession(
+        invite=_make_invite(tenant_id, hashlib.sha256(b"raw-token").hexdigest()),
+        user=_make_user(),
+        lookup_tenant=tenant_id,
+    )
+
+    def fail_identity(*args, **kwargs):
+        assert db.sysadmin_armed
+        raise RuntimeError("identity provisioning failed")
+
+    with pytest.raises(RuntimeError, match="identity provisioning failed"):
+        await _call(db, identity_effect=fail_identity)
+
+    assert not db.sysadmin_armed
+    assert not db.committed
+
+
+@pytest.mark.asyncio
+async def test_identity_writes_flush_before_disarming():
+    from app.sqlalchemy_models import OrganizationMembershipModel, UserEmailModel
+
+    tenant_id = uuid.uuid4()
+    db = _FailClosedRlsSession(
+        invite=_make_invite(tenant_id, hashlib.sha256(b"raw-token").hexdigest()),
+        user=_make_user(),
+        lookup_tenant=tenant_id,
+    )
+    pending_identities = [
+        UserEmailModel(user_id=db._user.id, email="invitee@example.com", is_verified=True),
+        OrganizationMembershipModel(user_id=db._user.id, organization_id=tenant_id, role="member"),
+    ]
+
+    def provision_identity(*args, **kwargs):
+        assert db.sysadmin_armed
+        for identity in pending_identities:
+            db.add(identity)
+
+    await _call(db, identity_effect=provision_identity)
+
+    assert db.flushed_identities == pending_identities
     assert not db.sysadmin_armed
